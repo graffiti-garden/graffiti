@@ -5,7 +5,7 @@
 Create a file at ```/etc/uwsgi/ours.ini``` containing:
 
     [uwsgi]
-    chdir = PATH_TO_OURS_DIRECTORY
+    chdir = PATH_TO_OURS
     wsgi-file = gateway.py
     plugins = python
 
@@ -37,6 +37,6 @@ Restart ```nginx```:
 
     sudo systemctl restart nginx
 
-The gateway should now be live at ```http://URL:PORT```. If you modify the gateway, it can be reloaded by running:
+The gateway should now be live at ```http://URL:PORT```. If not, check your router's port forwarding settings. If you modify the gateway, it can be reloaded by running:
 
     sudo systemctl restart uwsgi@ours

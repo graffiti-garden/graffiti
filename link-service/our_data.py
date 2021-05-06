@@ -23,7 +23,7 @@ class OurData:
         if not isinstance(addr, bytes):
             raise TypeError("Address must be bytes")
         if len(addr) != HASH.digest_size:
-            raise ValueError("Address must have length " + HASH.digest_size)
+            raise ValueError("Address must have length " + str(HASH.digest_size))
 
     def set_data(self, data):
         self.assert_data(data)
@@ -34,25 +34,25 @@ class OurData:
         self.assert_addr(addr)
         self.addr = addr
         self.data = None
-
-    def get_filename(self):
-        return os.path.join(PIN_DIR, self.addr.hex())
         
     def get_addr(self):
         if self.addr:
             return self.addr
-        if not self.data:
+        if not self.get_data():
             raise Exception("No data to make address with")
 
         # Hash the object
-        HASH.update(self.data)
+        HASH.update(self.get_data())
         self.addr = HASH.digest()
         return self.addr
+
+    def get_filename(self):
+        return os.path.join(PIN_DIR, self.get_addr().hex())
 
     def get_data(self):
         if self.data:
             return self.data
-        if not self.addr:
+        if not self.get_addr():
             raise Exception("No address to get data with")
 
         # Lookup the address
