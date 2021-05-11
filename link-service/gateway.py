@@ -10,6 +10,7 @@ def application(env, http):
     uri = env['REQUEST_URI'].split('/')
     uri = list(filter(None, uri))
     if not uri:
+        # If no address, redirect to the default page
         http('307', [('Location', DEFAULT)])
         return
 
@@ -21,91 +22,94 @@ def application(env, http):
         tag = uri[1]
         uri_stripped += '/' + tag
     if uri_stripped != env['REQUEST_URI']:
+        # If the address is dirty, redirect to it cleaned
         http('301', [('Location', uri_stripped)])
         return
 
-    # Determine what media type to use
-    accept = env['HTTP_ACCEPT']
-    html_priority  =     media_priority('text/html' , accept)
-    plain_priority = max(media_priority('text/plain', accept),
-                         media_priority('text/*'    , accept),
-                         media_priority('*/*'       , accept))
-    if html_priority == plain_priority == 0:
-        http('406', [('Content-Type', 'text/html')])
-        title = "406 Not Acceptable"
-        description = "No valid media type in \"%s\"" % accept
-        return error_page(title, description, 'text/html')
-    elif html_priority >= plain_priority:
-        content_type = 'text/html'
-    else:
-        content_type = 'text/plain'
-    headers = [('Vary', 'Accept'), ('Content-Type', content_type)]
-
     # Initialize the address, if valid
     try:
-        addr_b = bytes.fromhex(addr)
-        od = OurData(addr=addr_b)
+        od = OurData(addr)
     except ValueError:
-        http('400', headers)
-        title = "400 Bad Request"
-        description = "Invalid address: " + addr
-        return error_page(title, description, content_type)
+        return error_page(http, '400',
+                "Bad Request",
+                "Invalid address: " + addr)
 
+    accept = env['HTTP_ACCEPT']
     if tag == 'children':
         children = od.get_children()
 
-        http('200', headers)
-        if content_type == 'text/html':
-            children_links = []
-            for child in children:
-                addr = child.hex()
-                link = "<a href=../%s>%s<a>" % (addr, addr)
-                children_links.append(link)
-            return wrap_html('<br>'.join(children_links).encode())
+        media_type = max('text/ours', 'text/html',
+                         key=lambda t: media_priority(accept, t))
+
+        if media_type == 'text/html':
+            children_links = ["<a href=../%s>%s<a>" % (c, c) for c in children]
+            data = wrap('<br>'.join(children_links).encode())
         else:
-            return ''.join(children)
+            data= ','.join(children).encode()
+
+        return data_out(http, accept, media_type, data)
+
     elif tag == '':
-        # Fetch the data
         try:
+            media_type = od.get_media_type()
             data = od.get_data()
         except:
-            http('404', headers)
-            title = "404 Not Found"
-            description = "Nothing pinned at " + od.get_addr().hex()
-            return error_page(title, description, content_type)
+            return error_page(http, '404',
+                    "Not Found",
+                    "Nothing pinned at " + od.get_addr())
 
-        http('200', headers)
-        return wrap_html(data)
+        # Wrap the html data if necessary
+        if media_type == 'text/ours':
+            ours_priority = media_priority(accept, 'text/ours')
+            html_priority = media_priority(accept, 'text/html')
+            if html_priority > ours_priority:
+                data = wrap(data)
+                media_type = 'text/html'
 
-def media_priority(media, accept):
-    start_index = accept.find(media)
-    if start_index < 0:
-        return 0.
-    end_index = (accept + ',').find(',', start_index)
-    content_type_q = accept[start_index:end_index].split(';')
-    if len(content_type_q) > 1:
-        return float(content_type_q[1].split('=')[1])
-    else:
-        return 1.
+        return data_out(http, accept, media_type, data)
 
-def wrap_html(text):
+def data_out(http, accept, media_type, data):
+    if media_priority(accept, media_type) == 0:
+        return error_page(http, '406',
+                "Not Acceptable"
+                "Requested types are invalid: \"%s\"" % accept)
+
+    headers = [('Vary', 'Accept'), ('Content-Type', media_type)]
+    http('200', headers)
+    return data
+
+def media_priority(accept, media_type):
+    t, subt = media_type.split('/')
+    priority = 0.
+    for t in [t+'/'+subt, t+'/*', '*/*']:
+        start_index = accept.find(t)
+        if start_index < 0:
+            continue
+        end_index = (accept + ',').find(',', start_index)
+        content_type_q = accept[start_index:end_index].split(';')
+        if len(content_type_q) > 1:
+            priority = max(priority, float(content_type_q[1].split('=')[1]))
+        else:
+            priority = 1.
+    return priority
+
+def wrap(text):
     return b"""\
+<!DOCTYPE html>
 <html>
 <head>
-<title>Ours Gateway</title>
+<title>Our Gateway</title>
 <body>%s</body>
-<html>""" % text
+</html>""" % text
 
-def error_page(title, description, content_type):
+def error_page(http, code, title, description):
+    http(code, [('Content-Type', 'text/html')])
     ep = """\
 <center>
-<h1>%s</h1>
+<h1>%s %s</h1>
 <hr>
 %s
 <br><br>
-- Ours Gateway -
-</center>""" % (title, description)
-    if content_type == 'text/html':
-        return wrap_html(ep.encode())
-    else:
-        return ep.encode()
+- Our Gateway -
+</center>""" % (code, title, description)
+    return wrap(ep.encode())
