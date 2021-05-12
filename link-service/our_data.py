@@ -4,7 +4,7 @@ import hashlib
 import os
 
 PIN_DIR = "pins"
-HASH = hashlib.sha256()
+HASH = hashlib.sha256
 
 class OurData:
     def __init__(self, addr=None, data=None, media_type=None):
@@ -27,8 +27,8 @@ class OurData:
     @staticmethod
     def assert_addr(addr):
         addr_b = bytes.fromhex(addr)
-        if len(addr_b) != HASH.digest_size:
-            raise ValueError("Address must have length " + 2*str(HASH.digest_size))
+        if len(addr_b) != HASH().digest_size:
+            raise ValueError("Address has length %i not %i." % (2*len(addr_b), 2*str(HASH().digest_size)))
 
     def set_data(self, data, media_type):
         self.assert_data(data)
@@ -47,11 +47,12 @@ class OurData:
         if self.addr:
             return self.addr
         if not self.data:
-            raise Exception("No data to make address with")
+            raise Exception("No data to make address")
 
         # Hash the object
-        HASH.update(self.data)
-        self.addr = HASH.digest().hex()
+        h = HASH()
+        h.update(self.data)
+        self.addr = h.hexdigest()
         return self.addr
 
     def get_filename(self, ext):
@@ -59,13 +60,12 @@ class OurData:
 
     def read_from_ext(self, ext):
         if not self.addr:
-            raise Exception("No address")
+            raise Exception("No address to fetch data")
 
         # Lookup the address
         fn = self.get_filename(ext)
         if not os.path.isfile(fn):
-            print(fn)
-            raise Exception("Address has not been pinned")
+            raise KeyError("Address has not been pinned")
 
         # Read the file
         with open(fn, "rb") as f:
@@ -111,7 +111,7 @@ class OurData:
         with open(fn, "r") as f:
             children = f.read()
 
-        s = 2*HASH.digest_size
+        s = 2*HASH().digest_size
         return [children[i*s:(i+1)*s] for i in range(int(len(children)/s))]
 
 if __name__ == "__main__":

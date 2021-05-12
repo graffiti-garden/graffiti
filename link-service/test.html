@@ -1,0 +1,42 @@
+<textarea id="comment_box"></textarea>
+<button onclick="add_child()"> comment </button>
+
+<script>
+  function ourData() {
+    this.http = new XMLHttpRequest();
+    this.home = "http://tfh.sh:40385";
+    this.address = window.location.pathname;
+  }
+
+  ourData.prototype.put = function(data) {
+    this.http.open("PUT", "/", false);
+    this.http.setRequestHeader(
+      'Content-type', 'text/ours');
+    this.http.send(data);
+    return this.http.responseText;
+  }
+
+  ourData.prototype.add_child = function(address) {
+    this.http.open("PUT", this.address, false);
+    this.http.send(address);
+  }
+
+  ourData.prototype.get_children = function()  {
+    this.http.open("GET", this.address + "/children", false);
+    this.http.setRequestHeader(
+      'Content-type', 'text/ours');
+    this.http.send(null);
+    return this.http.responseText;
+  }
+
+
+</script>
+<script>
+  function add_child() {
+    const od = new ourData;
+    const data = document.getElementById('comment_box').value;
+    const child = od.put(data);
+    od.add_child(child);
+    console.log('hello');
+  }
+</script>
