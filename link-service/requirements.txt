@@ -1,4 +1,4 @@
-eventlet
-redis
-flask
-flask-socketio
+werkzeug
+aioredis
+fastapi
+uvicorn[standard]
