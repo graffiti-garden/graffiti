@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-# Usage: ./add_file.sh file mimetype
+# Usage: ./add_file.sh file parent1 parent2 ...
 
-curl -X POST localhost:5000 -H "Content-Type: $2" --data-binary @$1
+parents=""
+for parent in ${@:2}
+do
+  parents="${parents} -F \"parents=${parent}\""
+done
+eval "curl localhost:5000 -F \"data=@$1\"$parents"
 echo ""

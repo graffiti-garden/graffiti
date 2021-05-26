@@ -4,8 +4,9 @@ import uuid
 from uuid import UUID
 import aioredis
 import uvicorn
-from fastapi import FastAPI, Request, WebSocket, Response, HTTPException, WebSocketDisconnect
-from fastapi.responses import PlainTextResponse
+from typing import Optional, Set
+from fastapi import FastAPI, Request, WebSocket, Response, HTTPException, File, Form, UploadFile
+from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from werkzeug.http import parse_accept_header
@@ -14,38 +15,53 @@ from werkzeug.datastructures import MIMEAccept, FileStorage
 app = FastAPI(default_response_class=PlainTextResponse)
 
 @app.post('/')
-async def add_content(request: Request):
-    # Fetch the media type
-    if 'content-type' in request.headers:
-        media_type = request.headers['content-type']
-    else:
-        raise HTTPException(status_code=400, detail="Content-Type not specified")
-    if '/' not in media_type:
-        raise HTTPException(status_code=400, detail=f"\"{media_type}\" is not a valid media type")
+async def add_media(
+        data: UploadFile = File(...),
+        parents: Optional[Set[UUID]] = Form({})):
 
-    # Fetch the data
-    data = await request.body()
+    # Read the data
+    datab = await data.read()
 
     # Compute the address
-    addr = uuid.uuid5(uuid.NAMESPACE_URL, media_type + str(data))
+    addr = uuid.uuid5(uuid.NAMESPACE_URL,
+            str(datab)        + \
+            data.content_type + \
+            ''.join([str(p) for p in parents])
+            )
 
-    # Write it to the database
+    # See if the media already exists
     r = await open_redis()
-    await r.hset(addr.bytes, 'media_type', media_type.encode())
-    await r.hset(addr.bytes, 'data', data)
+    if await r.hexists(addr.bytes, 'data'):
+        await close_redis(r)
+        return str(addr)
+
+    # If not, add it
+    await r.hset(addr.bytes, 'media_type', data.content_type.encode())
+    await r.hset(addr.bytes, 'data', datab)
+
+    # And add the parents
+    for parent in parents:
+        await r.xadd(parent.bytes + b'c', {b'c': addr.bytes})
+        # TODO: add parents to data itself?
+        # await r.xadd(addr.bytes + b'p', {b'p': parent.bytes})
     await close_redis(r)
 
     # Return the address
     return str(addr)
 
 @app.get('/{addr}')
-async def get_content(addr: UUID, request: Request):
-    # Fetch the media type
+async def get_media(request: Request, addr: UUID):
+    # See if the data exists
     r = await open_redis()
+    if not await r.hexists(addr.bytes, 'data'):
+        await close_redis(r)
+        raise HTTPException(status_code=404, detail=f"No data at address {str(addr)}")
+
+    # Fetch the media type
     media_type = await r.hget(addr.bytes, 'media_type')
     if not media_type:
         await close_redis(r)
-        raise HTTPException(status_code=404, detail=f"No media type found for {str(addr)}")
+        raise HTTPException(status_code=404, detail=f"No media type at address {str(addr)}")
     media_type = media_type.decode()
 
     # See if the media type is accepted
@@ -66,8 +82,6 @@ async def get_content(addr: UUID, request: Request):
     # Fetch the data
     data = await r.hget(addr.bytes, 'data')
     await close_redis(r)
-    if not data:
-        raise HTTPException(status_code=404, detail=f"No data at {str(addr)}")
 
     # Wrap text/ours if necessary
     if wrap:
@@ -77,23 +91,6 @@ async def get_content(addr: UUID, request: Request):
 
     # Return the data
     return Response(data, media_type=media_type)
-
-@app.post('/{addr}')
-async def add_child(addr: UUID, request: Request):
-    # Get the child address
-    body = await request.body()
-    try:
-        child_addr = UUID(body.decode())
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"\"{body.decode()}\" is not a UUID")
-
-    # Write the child to the stream
-    r = await open_redis()
-    await r.xadd(addr.bytes + b'c', {b'c': child_addr.bytes})
-    await close_redis(r)
-
-    # Return success
-    return f"Added {str(child_addr)} to {str(addr)}"
 
 @app.websocket("/{addr}")
 async def get_children(ws: WebSocket, addr: UUID):
@@ -124,9 +121,7 @@ async def http_exception_handler(request, exc):
     return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    return PlainTextResponse(
-            f"\"{request.path_params['addr']}\" is not a UUID",
-            status_code=400)
+    return PlainTextResponse(str(exc), status_code=400)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5000, debug=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
