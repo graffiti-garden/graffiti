@@ -11,8 +11,12 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from werkzeug.http import parse_accept_header
 from werkzeug.datastructures import MIMEAccept, FileStorage
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(default_response_class=PlainTextResponse)
+
+# Serve javascript files
+app.mount("/js", StaticFiles(directory="js"), name="js")
 
 @app.post('/')
 async def add_media(

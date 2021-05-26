@@ -1,5 +1,6 @@
 werkzeug
 aioredis
 python-multipart
+aiofiles
 fastapi
 uvicorn[standard]
