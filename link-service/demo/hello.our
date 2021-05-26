@@ -1,5 +1,4 @@
-<div id="output"></div>
-<script>
-  var our = new Our();
-  document.getElementById("output").innerHTML = our.hello();
-</script>
+This is my great article, wow :^)
+
+<our-mentions addr="ce7b61ef-3cf1-5305-a3f9-04fe83fa2a21">
+</our-mentions>
