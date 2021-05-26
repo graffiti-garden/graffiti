@@ -4,32 +4,48 @@ import uuid
 from uuid import UUID
 import aioredis
 import uvicorn
+import mimetypes
 from typing import Optional, Set
 from fastapi import FastAPI, Request, WebSocket, Response, HTTPException, File, Form, UploadFile
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from werkzeug.http import parse_accept_header
-from werkzeug.datastructures import MIMEAccept, FileStorage
+from werkzeug.datastructures import MIMEAccept
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 app = FastAPI(default_response_class=PlainTextResponse)
 
 # Serve javascript files
 app.mount("/js", StaticFiles(directory="js"), name="js")
 
+# Serve wrapped HTML files
+templates = Jinja2Templates(directory="templates")
+wrapper = templates.get_template("wrapper.html")
+
+# Add the text/our mimetype
+mimetypes.add_type('text/our', '.our')
+
 @app.post('/')
 async def add_media(
         data: UploadFile = File(...),
-        parents: Optional[Set[UUID]] = Form({})):
+        parents: Optional[Set[UUID]] = Form({}),
+        # TODO: signature(s?)
+        ):
 
     # Read the data
     datab = await data.read()
 
+    # Get the media type
+    media_type = mimetypes.guess_type(data.filename)[0]
+    if media_type is None:
+        media_type = 'application/octet-stream'
+
     # Compute the address
     addr = uuid.uuid5(uuid.NAMESPACE_URL,
-            str(datab)        + \
-            data.content_type + \
+            str(datab) + \
+            media_type + \
             ''.join([str(p) for p in parents])
             )
 
@@ -40,7 +56,7 @@ async def add_media(
         return str(addr)
 
     # If not, add it
-    await r.hset(addr.bytes, 'media_type', data.content_type.encode())
+    await r.hset(addr.bytes, 'media_type', media_type.encode())
     await r.hset(addr.bytes, 'data', datab)
 
     # And add the parents
@@ -69,19 +85,18 @@ async def get_media(request: Request, addr: UUID):
     media_type = media_type.decode()
 
     # See if the media type is accepted
-    mimetype = FileStorage(content_type=media_type).mimetype
     if 'accept' in request.headers:
         accept_str = request.headers['accept']
     else:
         accept_str = '*/*'
     accept = parse_accept_header(accept_str, MIMEAccept)
     wrap = False
-    if 'text/ours' in mimetype:
-        mimetype = accept.best_match([mimetype, 'text/html'])
-        wrap = (mimetype == 'text/html')
-    if mimetype not in accept:
+    if 'text/our' in media_type:
+        media_type = accept.best_match([media_type, 'text/html'])
+        wrap = (media_type == 'text/html')
+    if media_type not in accept:
         await close_redis(r)
-        raise HTTPException(status_code=406, detail=f"\"{mimetype}\" not accepted by \"{accept_str}\"")
+        raise HTTPException(status_code=406, detail=f"\"{media_type}\" not accepted by \"{accept_str}\"")
 
     # Fetch the data
     data = await r.hget(addr.bytes, 'data')
@@ -89,9 +104,9 @@ async def get_media(request: Request, addr: UUID):
 
     # Wrap text/ours if necessary
     if wrap:
-        # TODO
-        media_type = 'text/html'
-        pass
+        text = data.decode(errors='replace')
+        html = wrapper.render(body=text)
+        data = html.encode()
 
     # Return the data
     return Response(data, media_type=media_type)

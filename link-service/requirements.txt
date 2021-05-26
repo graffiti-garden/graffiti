@@ -1,6 +1,9 @@
-werkzeug
-aioredis
-python-multipart
-aiofiles
-fastapi
-uvicorn[standard]
+aioredis # Database
+
+werkzeug          # For parsing request headers
+python-multipart  # For parsing multipart form data
+aiofiles          # For serving static files and templates
+jinja2            # For filling templates
+fastapi           # Web framework
+
+uvicorn[standard] # ASGI server

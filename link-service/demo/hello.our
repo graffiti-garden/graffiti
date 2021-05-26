@@ -1,0 +1,5 @@
+<div id="output"></div>
+<script>
+  var our = new Our();
+  document.getElementById("output").innerHTML = our.hello();
+</script>
