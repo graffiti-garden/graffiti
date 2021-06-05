@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import asyncio
 import uuid
 from uuid import UUID
 import aioredis
@@ -14,6 +15,10 @@ from werkzeug.http import parse_accept_header
 from werkzeug.datastructures import MIMEAccept
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+# The rate that websockets are kept alive
+PING_PONG_INTERVAL = 2
+CHILDREN_INTERVAL = 5
 
 app = FastAPI(default_response_class=PlainTextResponse)
 
@@ -31,7 +36,10 @@ mimetypes.add_type('text/our', '.our')
 async def add_media(
         data: UploadFile = File(...),
         parents: Optional[Set[UUID]] = Form({}),
-        # TODO: signature(s?)
+        # TODO:
+        # signature(s?)
+        # time stamps?
+        # semantics?
         ):
 
     # Read the data
@@ -59,11 +67,11 @@ async def add_media(
     await r.hset(addr.bytes, 'media_type', media_type.encode())
     await r.hset(addr.bytes, 'data', datab)
 
-    # And add the parents
+    # Add the children to the parents
+    # and vice versa
     for parent in parents:
         await r.xadd(parent.bytes + b'c', {b'c': addr.bytes})
-        # TODO: add parents to data itself?
-        # await r.xadd(addr.bytes + b'p', {b'p': parent.bytes})
+        await r.xadd(addr.bytes + b'p', {b'p': parent.bytes})
     await close_redis(r)
 
     # Return the address
@@ -113,19 +121,39 @@ async def get_media(request: Request, addr: UUID):
 
 @app.websocket("/{addr}")
 async def get_children(ws: WebSocket, addr: UUID):
+    # Open the websocket connection
     await ws.accept()
     r = await open_redis()
+
+    # Fetch ancient children
     latest_id = '0'
-    while True:
-        events = await r.xread([addr.bytes + b'c'], latest_ids=[latest_id])
+
+    # Check that the socket is still alive
+    while await is_websocket_active(ws):
+
+        # Wait for new children
+        events = await r.xread([addr.bytes + b'c'],
+                               latest_ids=[latest_id],
+                               timeout=CHILDREN_INTERVAL)
+
+        # Send the children
         for _, e_id, e in events:
             latest_id = e_id
             child = UUID(bytes=e[b'c'])
             try:
                 await ws.send_text(str(child))
             except:
-                await close_redis(r)
-                return
+                break
+
+    await close_redis(r)
+
+async def is_websocket_active(ws: WebSocket) -> bool:
+    try:
+        await ws.send_text('ping')
+        message = await asyncio.wait_for(ws.receive_text(), PING_PONG_INTERVAL)
+    except:
+        return False
+    return message == 'pong'
 
 # Open and close a redis connection
 async def open_redis():

@@ -16,6 +16,12 @@ class OurMentions extends HTMLElement {
   }
 
   async onMessage(e) {
+    // ping pong
+    if (e.data == 'ping') {
+      this.ws.send('pong');
+      return;
+    }
+
     // Create a child element
     let response = await fetch("http://localhost:5000/" + e.data);
     if (response.ok) {
