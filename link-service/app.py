@@ -113,7 +113,7 @@ async def get_media(request: Request, addr: UUID):
     # Wrap text/ours if necessary
     if wrap:
         text = data.decode(errors='replace')
-        html = wrapper.render(body=text)
+        html = wrapper.render(body=text, addr=str(addr))
         data = html.encode()
 
     # Return the data

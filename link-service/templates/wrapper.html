@@ -3,9 +3,11 @@
 <head>
   <title>Our Gateway</title>
   <meta charset="UTF-8"/>
-  <script src="/js/our.js"></script>
+  <script type="module" src="/js/our.js"></script>
 </head>
 <body>
-  {{body|safe}}
+<our-namespace addr="{{addr}}">
+{{body|safe}}
+</our-namespace>
 </body>
 </html>

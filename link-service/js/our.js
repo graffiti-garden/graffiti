@@ -1,36 +1,13 @@
-class OurMentions extends HTMLElement {
-  constructor() {
-    // Always call super first in constructor
-    super();
+import OurNamespace  from  './namespace.js';
+import OurTransclude from './transclude.js';
 
-    // Create a shadow root
-    this.shadow = this.attachShadow({mode: 'open'});
-  }
+customElements.define('our-namespace' , OurNamespace );
+customElements.define('our-transclude', OurTransclude);
 
-  connectedCallback() {
-    if(this.hasAttribute('addr')) {
-      let addr = this.getAttribute('addr');
-      this.ws = new WebSocket("ws://localhost:5000/" + addr);
-      this.ws.onmessage = this.onMessage.bind(this);
-    }
-  }
-
-  async onMessage(e) {
-    // ping pong
-    if (e.data == 'ping') {
-      this.ws.send('pong');
-      return;
-    }
-
-    // Create a child element
-    let response = await fetch("http://localhost:5000/" + e.data);
-    if (response.ok) {
-      let mention = document.createElement('div');
-      mention.setAttribute('class','mention');
-      mention.innerHTML = await response.text();
-      this.shadow.appendChild(mention);
-    }
-  }
-}
-
-customElements.define("our-mentions", OurMentions);
+// TODO
+// Comment list
+// like/endorse counters
+// comment box
+// like/endorse button
+// functional address changes
+// Filters
