@@ -4,4 +4,4 @@ COPY requirements.txt /tmp/
 RUN pip install -r /tmp/requirements.txt
 
 WORKDIR /code
-CMD python app.py
+CMD python hctp.py

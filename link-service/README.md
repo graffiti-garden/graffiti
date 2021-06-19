@@ -1,4 +1,4 @@
-# Our Gateway
+# Hypercommunity Gateway
 
 ## Run
 
