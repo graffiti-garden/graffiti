@@ -1,9 +1,64 @@
-import OurNamespace  from  './namespace.js';
-import OurTransclude from './transclude.js';
+import Transclude from './transclude.js';
 
-customElements.define('our-namespace' , OurNamespace );
-customElements.define('our-transclude', OurTransclude);
+customElements.define('hc-transclude', Transclude);
 
+// theia
+// a link with name theia,
+// I can filter content by:
+// type (e.g. hcml)
+// rel (e.g. main/comment)
+// signature
+// timestamp
+//
+// as for rel:
+// comments on a dynamic page seem pretty useless...
+// my comment on it means nothing to your comment.
+//
+// Where should comments point if I name a page "theia" and then change it.
+//
+// The version I see is dependent on my social distance from the author...?
+// but what about timestamp.
+// What if both are equally distant.
+//
+// hctp://Computer Lib#?main=Whatever mn"
+//
+// hctp://facebook.hcml
+
+// theia.hcml
+
+// hyper community markup language
+//
+// theia.hcml:
+//
+// <template>
+// </temlate>
+//
+// <children num=1 type="main" reload="live">
+// </children>
+
+// Whenever you add content you give it parents.
+// name=theia.hcml, rel=main, 
+// name=theia.hcml, rel=comment, 
+//
+// I can get all data from a particular address:
+// the content type is implicit in the name.
+// I can filter by type
+// (rel),
+// timestamp
+// and signature.
+// everything else happens in post.
+//
+// how can i talk about something that doesn't have a "main" tag?
+// everything is given an implicit hash, which I can also fetch.
+
+// THERE ARE NO ADDRESSES
+//
+// address "theia" just means: Show me the last thing that someone attached to theia.
+// address "theia's website/my_public_key" means: show me the last thing that someone:
+//
+// theia#?focus=theias-books
+// theia#?focus=theias-music
+//
 // TODO
 //
 // The top level uris have the form:

@@ -29,8 +29,8 @@ app.mount("/js", StaticFiles(directory="js"), name="js")
 templates = Jinja2Templates(directory="templates")
 wrapper = templates.get_template("wrapper.html")
 
-# Add the text/our mimetype
-mimetypes.add_type('text/our', '.our')
+# Add the text/hcml mimetype
+mimetypes.add_type('text/hcml', '.hcml')
 
 @app.post('/')
 async def add_media(
@@ -99,9 +99,9 @@ async def get_media(request: Request, addr: UUID):
         accept_str = '*/*'
     accept = parse_accept_header(accept_str, MIMEAccept)
     wrap = False
-    if 'text/our' in media_type:
+    if 'text/hcml' in media_type:
         media_type = accept.best_match([media_type, 'text/html'])
-        wrap = (media_type == 'text/html')
+        wrap = True
     if media_type not in accept:
         await close_redis(r)
         raise HTTPException(status_code=406, detail=f"\"{media_type}\" not accepted by \"{accept_str}\"")
@@ -110,7 +110,7 @@ async def get_media(request: Request, addr: UUID):
     data = await r.hget(addr.bytes, 'data')
     await close_redis(r)
 
-    # Wrap text/ours if necessary
+    # Wrap text/hcml if necessary
     if wrap:
         text = data.decode(errors='replace')
         html = wrapper.render(body=text, addr=str(addr))
