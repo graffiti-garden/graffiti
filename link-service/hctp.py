@@ -1,159 +1,199 @@
 #!/usr/bin/env python3
 
 import asyncio
-import uuid
-from uuid import UUID
 import aioredis
 import uvicorn
+import hashlib
 import mimetypes
-from typing import Optional, Set
-from fastapi import FastAPI, Request, WebSocket, Response, HTTPException, File, Form, UploadFile
-from fastapi.responses import PlainTextResponse, HTMLResponse
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from werkzeug.http import parse_accept_header
-from werkzeug.datastructures import MIMEAccept
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, WebSocket, Response, HTTPException, File, UploadFile, Depends, Response
 
 # The rate that websockets are kept alive
 PING_PONG_INTERVAL = 2
 CHILDREN_INTERVAL = 5
 
-app = FastAPI(default_response_class=PlainTextResponse)
+@app.put('/{url}')
+async def put(
+        url: str,
+        user: str = Depends(token_to_user),
+        urlinv: Optional(str) = None,
+        data: UploadFile = File(...)):
 
-# Serve javascript files
-app.mount("/js", StaticFiles(directory="js"), name="js")
-
-# Serve wrapped HTML files
-templates = Jinja2Templates(directory="templates")
-wrapper = templates.get_template("wrapper.html")
-
-# Add the text/hcml mimetype
-mimetypes.add_type('text/hcml', '.hcml')
-
-@app.post('/')
-async def add_media(
-        data: UploadFile = File(...),
-        parents: Optional[Set[UUID]] = Form({}),
-        # TODO:
-        # signature(s?)
-        # time stamps?
-        # semantics?
-        ):
-
-    # Read the data
-    datab = await data.read()
-
-    # Get the media type
-    media_type = mimetypes.guess_type(data.filename)[0]
-    if media_type is None:
-        media_type = 'application/octet-stream'
-
-    # Compute the address
-    addr = uuid.uuid5(uuid.NAMESPACE_URL,
-            str(datab) + \
-            media_type + \
-            ''.join([str(p) for p in parents])
-            )
-
-    # See if the media already exists
+    # Connect to the database
     r = await open_redis()
-    if await r.hexists(addr.bytes, 'data'):
-        await close_redis(r)
-        return str(addr)
 
-    # If not, add it
-    await r.hset(addr.bytes, 'media_type', media_type.encode())
-    await r.hset(addr.bytes, 'data', datab)
-
-    # Add the children to the parents
-    # and vice versa
-    for parent in parents:
-        await r.xadd(parent.bytes + b'c', {b'c': addr.bytes})
-        await r.xadd(addr.bytes + b'p', {b'p': parent.bytes})
-    await close_redis(r)
-
-    # Return the address
-    return str(addr)
-
-@app.get('/{addr}')
-async def get_media(request: Request, addr: UUID):
-    # See if the data exists
-    r = await open_redis()
-    if not await r.hexists(addr.bytes, 'data'):
-        await close_redis(r)
-        raise HTTPException(status_code=404, detail=f"No data at address {str(addr)}")
-
-    # Fetch the media type
-    media_type = await r.hget(addr.bytes, 'media_type')
-    if not media_type:
-        await close_redis(r)
-        raise HTTPException(status_code=404, detail=f"No media type at address {str(addr)}")
-    media_type = media_type.decode()
-
-    # See if the media type is accepted
-    if 'accept' in request.headers:
-        accept_str = request.headers['accept']
+    if not urlinv:
+        # Make sure the URL is assigned to the user
+        if not user == await r.hget(url, 'user'):
+            await close_redis(r)
+            raise HTTPException(status=403, detail=f"{user} doesn't have permission to write to {url}")
     else:
-        accept_str = '*/*'
-    accept = parse_accept_header(accept_str, MIMEAccept)
-    wrap = False
-    if 'text/hcml' in media_type:
-        media_type = accept.best_match([media_type, 'text/html'])
-        wrap = True
-    if media_type not in accept:
+        # Check to see if the user can prove their claim
+        url_ = hashlib.sha256(urlinv.encode()).hexdigest()
+        if url != url_:
+            await close_redis(r)
+            raise HTTPException(status_code=400, detail=f"incorrect hash, {url} can't be allocated to {user}")
+        await r.hset(url, 'user', user)
+
+    # Set the data
+    media_type = mimetypes.guess_type(data.filename)[0]
+    await r.hset(url, 'media_type', media_type)
+    datab = await data.read()
+    await r.hset(url, 'data', datab)
+
+    # Disconnect 
+    await close_redis(r)
+    return "success"
+
+
+@app.get('/{url}')
+async def get(url: str):
+
+    # Connect to the database
+    r = await open_redis()
+
+    # Check if the URL exists
+    if not await r.hexists(url, 'data'):
         await close_redis(r)
-        raise HTTPException(status_code=406, detail=f"\"{media_type}\" not accepted by \"{accept_str}\"")
+        raise HTTPException(status=404, detail="Not found")
 
     # Fetch the data
-    data = await r.hget(addr.bytes, 'data')
+    datab      = await r.hget(url, 'data')
+    media_type = await r.hset(url, 'media_type')
+
+    # Disconnect 
     await close_redis(r)
-
-    # Wrap text/hcml if necessary
-    if wrap:
-        text = data.decode(errors='replace')
-        html = wrapper.render(body=text, addr=str(addr))
-        data = html.encode()
-
-    # Return the data
     return Response(data, media_type=media_type)
 
-@app.websocket("/{addr}")
-async def get_children(ws: WebSocket, addr: UUID):
+
+@app.delete('/{url}')
+async def delete(url: str, user = Depends(token_to_user)):
+
+    # Connect to the database
+    r = await open_redis()
+
+    # Make sure it is owned by the user
+    if not user == await r.hget(url, 'user'):
+        await close_redis(r)
+        raise HTTPException(status=403, detail=f"{user} doesn't have permission to delete {url}")
+
+    # Delete the data and mimetype (keep ownership)
+    r.hdel(url, 'data', 'mimetype')
+
+    # Disconnect
+    await close_redis(r)
+    return "success"
+
+
+async def key_url_to_uuid(key: str, url: str):
+    # Concatenate the hashes of the key and url
+    # This prevents trickiness where
+    # key+url is ambiguous
+    key_hash = hashlib.sha256(key.encode()).digest()
+    url_hash = hashlib.sha256(url.encode()).digest()
+    return key_hash + url_hash
+
+@app.post('/perform')
+async def perform(
+        key: str, url: str,
+        user = Depends(token_to_user)):
+
+    # Connect to the database
+    r = await open_redis()
+
+    # Get a unique id that describes the key/url pair
+    uuid = key_url_to_uuid(key + url)
+
+    # Check to see if the pair is new
+    if r.scard(uuid) == 0:
+        # If it is, add it to the stream
+        xid = await r.xadd(key, url)
+        # Map the uuid to its stream id
+        # so it can be deleted.
+        await r.hset(uuid, 'xid', xid)
+
+    # TODO: I think there's a concurrency
+    # bug here if a user sends two requests
+    # at the same time
+
+    # Add the user to the pair's performers
+    r.sadd(uuid, user)
+
+    # Disconnect
+    await close_redis(r)
+    return "success"
+
+
+@app.post('/retire')
+async def retire(
+        key: str, url: str,
+        user = Depends(token_to_user)):
+
+    # Connect to the database
+    r = await open_redis()
+
+    # Get a unique id that describes the key/url pair
+    uuid = key_url_to_uuid(key + url)
+
+    # Remove the user from the pair's performers
+    r.srem(uuid, user)
+
+    # If no one is performing,
+    # remove the pair from the stream
+    if r.scard(uuid) == 0:
+        # Get the stream ID of the pair
+        xid = await r.hget(uuid, 'xid')
+        # Remove it from the stream
+        await r.xdel(uuid, xid)
+
+    # Connect to the database
+    return "success"
+
+
+@app.websocket("/")
+async def attend(ws:  WebSocket):
+
     # Open the websocket connection
     await ws.accept()
     r = await open_redis()
 
+    # Initialize list to attend to
+    attending = []
+
     # Fetch ancient children
     latest_id = '0'
+    events = None
 
-    # Check that the socket is still alive
-    while await is_websocket_active(ws):
+    while True:
+        # Initialize a JSON object
 
-        # Wait for new children
-        events = await r.xread([addr.bytes + b'c'],
+        # If there are events, send them
+        if events:
+            for key, e_id, url in events:
+                latest_id = e_id
+
+                try:
+                    await ws.send_text(str(child))
+                except:
+                    break
+
+        try:
+            await ws.send_text(str(child))
+        except:
+            break
+
+        # Wait for a list of new streams to add or delete, which could be none.
+        message = await asyncio.wait_for(ws.receive_text(), PONG_INTERVAL)
+        # Add or delete them from the list
+        attending += message
+
+        # Wait for new events
+        events = await r.xread(attending,
                                latest_ids=[latest_id],
                                timeout=CHILDREN_INTERVAL)
 
-        # Send the children
-        for _, e_id, e in events:
-            latest_id = e_id
-            child = UUID(bytes=e[b'c'])
-            try:
-                await ws.send_text(str(child))
-            except:
-                break
-
+    # Disconnect 
     await close_redis(r)
 
-async def is_websocket_active(ws: WebSocket) -> bool:
-    try:
-        await ws.send_text('ping')
-        message = await asyncio.wait_for(ws.receive_text(), PING_PONG_INTERVAL)
-    except:
-        return False
-    return message == 'pong'
 
 # Open and close a redis connection
 async def open_redis():
@@ -162,13 +202,5 @@ async def close_redis(r):
     r.close()
     await r.wait_closed()
 
-# Return all exceptions as plain text
-@app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(request, exc):
-    return PlainTextResponse(str(exc.detail), status_code=exc.status_code)
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    return PlainTextResponse(str(exc), status_code=400)
-
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("weave:app", host="0.0.0.0", port=5000, reload=True)
