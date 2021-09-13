@@ -11,6 +11,15 @@ from fastapi import FastAPI, WebSocket, Response, HTTPException, File, UploadFil
 PING_PONG_INTERVAL = 2
 CHILDREN_INTERVAL = 5
 
+async def token_to_user(token: str):
+    # TODO implement user account creation and OAuth token
+    # creation. Then make a map from allocated tokens -> users
+    # First verify that the token is allocated (if not, 400),
+    # otherwise return the associated user.
+    if not token:
+        raise HTTPException(status_code=400, detail="invalid token")
+    return token
+
 @app.put('/{url}')
 async def put(
         url: str,

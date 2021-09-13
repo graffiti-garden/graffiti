@@ -1,5 +1,13 @@
 export default class OurElement extends HTMLElement {
-  constructor() {super();}
+  constructor() {
+    super();
+
+    // Parse the gateway domain for AJAX
+    this.gateway =
+       location.hostname +
+      (location.port ? ':'+location.port: '') +
+      '/';
+  }
 
   async connectedCallback() {
     // Fetch the inherited address from
