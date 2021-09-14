@@ -24,9 +24,9 @@ async def alloc(user: str = Depends(token_to_user)):
 
     # Add the user to it
     r = await open_redis()
-    await r.hset(url, 'user', user)
+    await r.hset('url' + url, 'user', user)
 
-    return {"url": url}
+    return {'url': url}
 
 
 @app.put('/{url}')
@@ -39,7 +39,7 @@ async def put(
     r = await open_redis()
 
     # Make sure the URL is assigned to the user
-    owner = await r.hget(url, 'user')
+    owner = await r.hget('url' + url, 'user')
     if not owner or user != owner.decode():
         raise HTTPException(status_code=403, detail=f"{user} doesn't have permission to write to {url}")
 
@@ -47,11 +47,11 @@ async def put(
     media_type = mimetypes.guess_type(data.filename)[0]
     if not media_type:
         media_type = "application/octet-stream"
-    await r.hset(url, 'media_type', media_type)
+    await r.hset('url' + url, 'media_type', media_type)
     datab = await data.read()
-    await r.hset(url, 'data', datab)
+    await r.hset('url' + url, 'data', datab)
 
-    return "success"
+    return "Success"
 
 
 @app.get('/{url}')
@@ -62,11 +62,11 @@ async def get(url: str):
 
     # Check if the URL exists
     if not await r.hexists(url, 'data'):
-        raise HTTPException(status_code=404, detail="not found")
+        raise HTTPException(status_code=404, detail="Not Found")
 
     # Fetch the data
-    datab      = await r.hget(url, 'data')
-    media_type = (await r.hget(url, 'media_type')).decode()
+    datab      = await r.hget('url' + url, 'data')
+    media_type = (await r.hget('url' + url, 'media_type')).decode()
 
     return Response(datab, media_type=media_type)
 
@@ -78,17 +78,17 @@ async def delete(url: str, user = Depends(token_to_user)):
     r = await open_redis()
 
     # Make sure it is owned by the user
-    owner = await r.hget(url, 'user')
+    owner = await r.hget('url' + url, 'user')
     if not owner or user != owner.decode():
         raise HTTPException(status_code=403, detail=f"{user} doesn't have permission to delete {url}")
 
     # Delete the data and mimetype (keep ownership)
-    await r.hdel(url, 'data', 'mimetype')
+    await r.hdel('url' + url, 'data', 'mimetype')
 
-    return "success"
+    return "Success"
 
 
-async def key_url_to_uuid(key: str, url: str):
+def key_url_to_uuid(key: str, url: str):
     # Concatenate the hashes of the key and url
     # This prevents trickiness where
     # key+url is ambiguous
@@ -96,33 +96,35 @@ async def key_url_to_uuid(key: str, url: str):
     url_hash = hashlib.sha256(url.encode()).digest()
     return key_hash + url_hash
 
+
 @app.post('/perform')
 async def perform(
         key: str, url: str,
         user = Depends(token_to_user)):
 
-    # Connect to the database
+    # Get a unique performer id that
+    # describes the key/url pair
+    per = key_url_to_uuid(key, url)
+
+    # Connect to the database and lock
     r = await open_redis()
+    lock = r.lock(b'loc' + per)
+    await lock.acquire()
 
-    # Get a unique id that describes the key/url pair
-    uuid = key_url_to_uuid(key + url)
-
-    # Check to see if the pair is new
-    if r.scard(uuid) == 0:
-        # If it is, add it to the stream
-        xid = await r.xadd(key, url)
-        # Map the uuid to its stream id
+    # If the performance is new
+    if await r.scard(b'per' + per) == 0:
+        # Add it to the stream
+        xid = await r.xadd('key' + key, {'url': url})
+        # Map the id to its stream id
         # so it can be deleted.
-        await r.hset(uuid, 'xid', xid)
+        await r.hset(b'xid' + per, 'xid', xid)
 
-    # TODO: I think there's a concurrency
-    # bug here if a user sends two requests
-    # at the same time
+    # Add the member to the set
+    await r.sadd(b'per' + per, user)
 
-    # Add the user to the pair's performers
-    r.sadd(uuid, user)
-
-    return "success"
+    # Release
+    await lock.release()
+    return "Success"
 
 
 @app.post('/retire')
@@ -130,25 +132,31 @@ async def retire(
         key: str, url: str,
         user = Depends(token_to_user)):
 
-    # Connect to the database
+    # Get a unique performer id that
+    # describes the key/url pair
+    per = key_url_to_uuid(key, url)
+
+    # Connect to the database and lock
     r = await open_redis()
+    lock = r.lock(b'loc' + per)
+    await lock.acquire()
 
-    # Get a unique id that describes the key/url pair
-    uuid = key_url_to_uuid(key + url)
-
-    # Remove the user from the pair's performers
-    r.srem(uuid, user)
+    # Remove the user from the performance
+    await r.srem(b'per' + per, user)
 
     # If no one is performing,
-    # remove the pair from the stream
-    if r.scard(uuid) == 0:
+    # remove the performance from the stream
+    if await r.scard(b'per' + per) == 0:
         # Get the stream ID of the pair
-        xid = await r.hget(uuid, 'xid')
-        # Remove it from the stream
-        await r.xdel(uuid, xid)
+        xid = await r.hget(b'xid' + per, 'xid')
+        if xid:
+            # Remove it from the stream
+            await r.xdel('key' + key, xid)
+            await r.hdel(b'xid' + per, 'xid')
 
-    # Connect to the database
-    return "success"
+    # Release
+    await lock.release()
+    return "Success"
 
 
 @app.websocket("/")
