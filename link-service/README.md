@@ -4,4 +4,4 @@
 
     sudo docker-compose up --build
 
-http://localhost:5000/docs
+To test out the API go to [http://localhost:5000/docs](http://localhost:5000/docs).
