@@ -9,12 +9,15 @@ import random
 import string
 from typing import Optional
 from fastapi import FastAPI, WebSocket, Response, HTTPException, File, UploadFile, Depends, Response
+from fastapi.staticfiles import StaticFiles
 
 from config import *
 from security import token_to_user, router as security_router
 
 app = FastAPI()
 app.include_router(security_router)
+
+app.mount('/www', StaticFiles(directory="../www"))
 
 
 @app.post('/alloc')
@@ -159,47 +162,66 @@ async def retire(
     return "Success"
 
 
-@app.websocket("/")
-async def attend(ws:  WebSocket):
+class Attend:
 
-    # Open the websocket connection
+    def __init__(self, ws: WebSocket):
+        # Initialize attendance
+        self.attending = {}
+        self.ws = ws
+        self.t  = None
+
+    async def on_receive(self, msg):
+        # TODO: also implement removes
+        self.attending['key' + msg] = '0'
+
+        # TODO: Send back a properly formatted ack
+        await self.ws.send_text(f"Listening to: {msg}")
+
+        # Kill the task and create a new one
+        if self.t:
+            self.t.cancel()
+        self.t = asyncio.create_task(self.attend())
+
+    async def attend(self):
+        # Connect to the database
+        r = await open_redis()
+
+        while True:
+            # Wait for new events
+            events = await r.xread(self.attending,
+                                   block=ATTEND_INTERVAL)
+
+            # Extract the URLs
+            urls = {}
+            for key, keysevents in events:
+                key = key.decode()[3:]
+                urls[key] = set()
+                for id_, event in keysevents:
+                    self.attending['key' + key] = id_
+                    urls[key].add(event[b'url'].decode())
+
+            # Send the output
+            try:
+                # TODO: Do this as JSON
+                await self.ws.send_text(f"Received: {urls}")
+            except:
+                break
+
+
+@app.websocket("/attend")
+async def attend(ws: WebSocket):
+    # Accept and create class object
     await ws.accept()
-    r = await open_redis()
+    at = Attend(ws)
 
-    # Initialize list to attend to
-    attending = []
-
-    # Fetch ancient children
-    latest_id = '0'
-    events = None
-
+    # Listen for updates
     while True:
-        # Initialize a JSON object
-
-        # If there are events, send them
-        if events:
-            for key, e_id, url in events:
-                latest_id = e_id
-
-                try:
-                    await ws.send_text(str(child))
-                except:
-                    break
-
-        try:
-            await ws.send_text(str(child))
-        except:
+        message = await ws.receive()
+        if message["type"] == "websocket.receive":
+            data = message["text"]
+            await at.on_receive(data)
+        elif message["type"] == "websocket.disconnect":
             break
-
-        # Wait for a list of new streams to add or delete, which could be none.
-        message = await asyncio.wait_for(ws.receive_text(), PONG_INTERVAL)
-        # Add or delete them from the list
-        attending += message
-
-        # Wait for new events
-        events = await r.xread(attending,
-                               latest_ids=[latest_id],
-                               timeout=CHILDREN_INTERVAL)
 
 
 # Open and close a redis connection
