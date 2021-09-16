@@ -8,7 +8,7 @@ import mimetypes
 import random
 import string
 from typing import Optional
-from fastapi import FastAPI, WebSocket, Response, HTTPException, File, UploadFile, Depends, Response
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, HTTPException, File, UploadFile, Depends, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import *
@@ -105,7 +105,7 @@ async def perform(
         scene: str, url: str,
         user = Depends(token_to_user)):
 
-    # Get a unique performer id that
+    # Get a unique performance ID that
     # describes the scene/url pair
     per = scene_url_to_uuid(scene, url)
 
@@ -114,15 +114,15 @@ async def perform(
     lock = r.lock(b'loc' + per)
     await lock.acquire()
 
-    # If the performance is new
+    # If no user is already performing
     if await r.scard(b'per' + per) == 0:
         # Add it to the stream
         xid = await r.xadd('scn' + scene, {'url': url})
-        # Map the id to its stream id
-        # so it can be deleted.
+        # Map the performance to its
+        # stream ID so it can be deleted.
         await r.hset(b'xid' + per, 'xid', xid)
 
-    # Add the member to the set
+    # Add the user to the performance
     await r.sadd(b'per' + per, user)
 
     # Release
@@ -135,7 +135,7 @@ async def retire(
         scene: str, url: str,
         user = Depends(token_to_user)):
 
-    # Get a unique performer id that
+    # Get a unique performance id that
     # describes the scene/url pair
     per = scene_url_to_uuid(scene, url)
 
@@ -147,10 +147,10 @@ async def retire(
     # Remove the user from the performance
     await r.srem(b'per' + per, user)
 
-    # If no one is performing,
+    # If no user is performing
     # remove the performance from the stream
     if await r.scard(b'per' + per) == 0:
-        # Get the stream ID of the pair
+        # Get the stream ID of the performance
         xid = await r.hget(b'xid' + per, 'xid')
         if xid:
             # Remove it from the stream
@@ -170,27 +170,41 @@ async def attend(ws: WebSocket):
 
     # Listen for updates
     while True:
-        message = await ws.receive()
-        if message["type"] == "websocket.receive":
-            data = message["text"]
-            await at.receive(ws, data)
-        elif message["type"] == "websocket.disconnect":
+        try:
+            msg = await ws.receive_json()
+        except WebSocketDisconnect:
             break
 
-class Attend:
-    attending = {}
-    task  = None
+        # Send it to the object
+        await at.receive(ws, msg)
 
-    async def receive(self, ws: WebSocket, msg: str):
+class Attend:
+
+    def __init__(self):
+        self.attending = {}
+        self.task  = None
+
+    async def receive(self, ws: WebSocket, msg):
         # Kill the task if it exists
         if self.task: self.task.cancel()
 
-        # TODO: also implement removes
-        self.attending['scn' + msg] = '0'
+        # Add any new scenes to attend to
+        for scene in msg.get('add', []):
+            if not scene: continue
+            key = 'scn' + scene
+            if key not in self.attending:
+                self.attending[key] = '0'
 
-        # TODO: Send back a properly formatted ack
-        await ws.send_text(f"Listening to: {msg}")
+        # And remove scenes
+        for scene in msg.get('rem', []):
+            if not scene: continue
+            self.attending.pop('scn' + scene, None)
 
+        # Return the attending list as acknowledgment
+        ack = {'attending': [scene[3:] for scene in self.attending.keys()]}
+        await ws.send_json(ack)
+
+        # Start a background listening task if non-empty
         if self.attending:
             self.task = asyncio.create_task(self.attend(ws))
         else:
@@ -209,15 +223,15 @@ class Attend:
             urls = {}
             for scene, sceneevents in events:
                 scene = scene.decode()[3:]
-                urls[scene] = set()
-                for id_, event in scenesevents:
+                urls[scene] = []
+                for id_, event in sceneevents:
                     self.attending['scn' + scene] = id_
-                    urls[scene].add(event[b'url'].decode())
+                    urls[scene].append(event[b'url'].decode())
 
             # Send the output
+            obs = {'observed': urls}
             try:
-                # TODO: Do this as JSON
-                await ws.send_text(f"Received: {urls}")
+                await ws.send_json(obs)
             except:
                 break
 

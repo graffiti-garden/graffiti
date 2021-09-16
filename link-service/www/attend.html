@@ -1,31 +1,44 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>Chat</title>
-    </head>
-    <body>
-        <h1>WebSocket Chat</h1>
-        <form action="" onsubmit="sendMessage(event)">
-            <input type="text" id="messageText" autocomplete="off"/>
-            <button>Send</button>
-        </form>
-        <ul id='messages'>
-        </ul>
-        <script>
-            var ws = new WebSocket("ws://localhost:5000/attend");
-            ws.onmessage = function(event) {
-                var messages = document.getElementById('messages')
-                var message = document.createElement('li')
-                var content = document.createTextNode(event.data)
-                message.appendChild(content)
-                messages.appendChild(message)
-            };
-            function sendMessage(event) {
-                var input = document.getElementById("messageText")
-                ws.send(input.value)
-                input.value = ''
-                event.preventDefault()
-            }
-        </script>
-    </body>
+  <head>
+    <title>Attend</title>
+  </head>
+  <body>
+    <h1>Attend</h1>
+    <p>Go to the <a href="http://localhost:5000/docs">Swagger UI</a> to perform or retire actions within a scene</p>
+    <p>Comma-separate to add or remove multiple scenes at once.</p>
+    <form action="" onsubmit="updateAttending(event)">
+      <label for="add">Add:</label>
+      <input type="text" id="add" autocomplete="off"/>
+      </br>
+      <label for="remove">Remove:</label>
+      <input type="text" id="remove" autocomplete="off"/>
+      </br>
+      <button>Update Scenes to Attend</button>
+    </form>
+    <ul id='messages'></ul>
+    <script>
+      var ws = new WebSocket("ws://localhost:5000/attend");
+
+      ws.onmessage = function(event) {
+        var messages = document.getElementById('messages')
+        var message  = document.createElement('li')
+        var content  = document.createTextNode(event.data)
+        message.appendChild(content)
+        messages.appendChild(message)
+      };
+
+      function updateAttending(event) {
+        var add = document.getElementById("add");
+        var rem = document.getElementById("remove");
+        var msg = new Object();
+        msg["add"] = add.value.split(',');
+        msg["rem"] = rem.value.split(',');
+        ws.send(JSON.stringify(msg));
+        add.value = '';
+        rem.value = '';
+        event.preventDefault();
+      }
+    </script>
+  </body>
 </html>
