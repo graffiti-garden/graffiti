@@ -91,23 +91,23 @@ async def delete(url: str, user = Depends(token_to_user)):
     return "Success"
 
 
-def key_url_to_uuid(key: str, url: str):
-    # Concatenate the hashes of the key and url
+def scene_url_to_uuid(scene: str, url: str):
+    # Concatenate the hashes of the scene and url
     # This prevents trickiness where
-    # key+url is ambiguous
-    key_hash = hashlib.sha256(key.encode()).digest()
-    url_hash = hashlib.sha256(url.encode()).digest()
-    return key_hash + url_hash
+    # scene+url is ambiguous
+    scene_hash = hashlib.sha256(scene.encode()).digest()
+    url_hash   = hashlib.sha256(  url.encode()).digest()
+    return scene_hash + url_hash
 
 
 @app.post('/perform')
 async def perform(
-        key: str, url: str,
+        scene: str, url: str,
         user = Depends(token_to_user)):
 
     # Get a unique performer id that
-    # describes the key/url pair
-    per = key_url_to_uuid(key, url)
+    # describes the scene/url pair
+    per = scene_url_to_uuid(scene, url)
 
     # Connect to the database and lock
     r = await open_redis()
@@ -117,7 +117,7 @@ async def perform(
     # If the performance is new
     if await r.scard(b'per' + per) == 0:
         # Add it to the stream
-        xid = await r.xadd('key' + key, {'url': url})
+        xid = await r.xadd('scn' + scene, {'url': url})
         # Map the id to its stream id
         # so it can be deleted.
         await r.hset(b'xid' + per, 'xid', xid)
@@ -132,12 +132,12 @@ async def perform(
 
 @app.post('/retire')
 async def retire(
-        key: str, url: str,
+        scene: str, url: str,
         user = Depends(token_to_user)):
 
     # Get a unique performer id that
-    # describes the key/url pair
-    per = key_url_to_uuid(key, url)
+    # describes the scene/url pair
+    per = scene_url_to_uuid(scene, url)
 
     # Connect to the database and lock
     r = await open_redis()
@@ -154,7 +154,7 @@ async def retire(
         xid = await r.hget(b'xid' + per, 'xid')
         if xid:
             # Remove it from the stream
-            await r.xdel('key' + key, xid)
+            await r.xdel('scn' + scene, xid)
             await r.hdel(b'xid' + per, 'xid')
 
     # Release
@@ -186,7 +186,7 @@ class Attend:
         if self.task: self.task.cancel()
 
         # TODO: also implement removes
-        self.attending['key' + msg] = '0'
+        self.attending['scn' + msg] = '0'
 
         # TODO: Send back a properly formatted ack
         await ws.send_text(f"Listening to: {msg}")
@@ -207,12 +207,12 @@ class Attend:
 
             # Extract the URLs
             urls = {}
-            for key, keysevents in events:
-                key = key.decode()[3:]
-                urls[key] = set()
-                for id_, event in keysevents:
-                    self.attending['key' + key] = id_
-                    urls[key].add(event[b'url'].decode())
+            for scene, sceneevents in events:
+                scene = scene.decode()[3:]
+                urls[scene] = set()
+                for id_, event in scenesevents:
+                    self.attending['scn' + scene] = id_
+                    urls[scene].add(event[b'url'].decode())
 
             # Send the output
             try:
