@@ -162,27 +162,41 @@ async def retire(
     return "Success"
 
 
+@app.websocket("/attend")
+async def attend(ws: WebSocket):
+    # Accept and create object
+    await ws.accept()
+    at = Attend()
+
+    # Listen for updates
+    while True:
+        message = await ws.receive()
+        if message["type"] == "websocket.receive":
+            data = message["text"]
+            await at.receive(ws, data)
+        elif message["type"] == "websocket.disconnect":
+            break
+
 class Attend:
+    attending = {}
+    task  = None
 
-    def __init__(self, ws: WebSocket):
-        # Initialize attendance
-        self.attending = {}
-        self.ws = ws
-        self.t  = None
+    async def receive(self, ws: WebSocket, msg: str):
+        # Kill the task if it exists
+        if self.task: self.task.cancel()
 
-    async def on_receive(self, msg):
         # TODO: also implement removes
         self.attending['key' + msg] = '0'
 
         # TODO: Send back a properly formatted ack
-        await self.ws.send_text(f"Listening to: {msg}")
+        await ws.send_text(f"Listening to: {msg}")
 
-        # Kill the task and create a new one
-        if self.t:
-            self.t.cancel()
-        self.t = asyncio.create_task(self.attend())
+        if self.attending:
+            self.task = asyncio.create_task(self.attend(ws))
+        else:
+            self.task = None
 
-    async def attend(self):
+    async def attend(self, ws: WebSocket):
         # Connect to the database
         r = await open_redis()
 
@@ -203,25 +217,9 @@ class Attend:
             # Send the output
             try:
                 # TODO: Do this as JSON
-                await self.ws.send_text(f"Received: {urls}")
+                await ws.send_text(f"Received: {urls}")
             except:
                 break
-
-
-@app.websocket("/attend")
-async def attend(ws: WebSocket):
-    # Accept and create class object
-    await ws.accept()
-    at = Attend(ws)
-
-    # Listen for updates
-    while True:
-        message = await ws.receive()
-        if message["type"] == "websocket.receive":
-            data = message["text"]
-            await at.on_receive(data)
-        elif message["type"] == "websocket.disconnect":
-            break
 
 
 # Open and close a redis connection
