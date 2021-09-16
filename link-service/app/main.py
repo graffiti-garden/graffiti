@@ -91,23 +91,23 @@ async def delete(url: str, user = Depends(token_to_user)):
     return "Success"
 
 
-def scene_url_to_uuid(scene: str, url: str):
-    # Concatenate the hashes of the scene and url
+def scene_action_to_uuid(scene: str, action: str):
+    # Concatenate the hashes of the scene and action
     # This prevents trickiness where
-    # scene+url is ambiguous
-    scene_hash = hashlib.sha256(scene.encode()).digest()
-    url_hash   = hashlib.sha256(  url.encode()).digest()
-    return scene_hash + url_hash
+    # scene+action is ambiguous
+    scene_hash  = hashlib.sha256( scene.encode()).digest()
+    action_hash = hashlib.sha256(action.encode()).digest()
+    return scene_hash + action_hash
 
 
 @app.post('/perform')
 async def perform(
-        scene: str, url: str,
+        scene: str, action: str,
         user = Depends(token_to_user)):
 
     # Get a unique performance ID that
-    # describes the scene/url pair
-    per = scene_url_to_uuid(scene, url)
+    # describes the scene/action pair
+    per = scene_action_to_uuid(scene, action)
 
     # Connect to the database and lock
     r = await open_redis()
@@ -117,7 +117,7 @@ async def perform(
     # If no user is already performing
     if await r.scard(b'per' + per) == 0:
         # Add it to the stream
-        xid = await r.xadd('scn' + scene, {'url': url})
+        xid = await r.xadd('scn' + scene, {'act': action})
         # Map the performance to its
         # stream ID so it can be deleted.
         await r.hset(b'xid' + per, 'xid', xid)
@@ -132,12 +132,12 @@ async def perform(
 
 @app.post('/retire')
 async def retire(
-        scene: str, url: str,
+        scene: str, action: str,
         user = Depends(token_to_user)):
 
     # Get a unique performance id that
-    # describes the scene/url pair
-    per = scene_url_to_uuid(scene, url)
+    # describes the scene/action pair
+    per = scene_action_to_uuid(scene, action)
 
     # Connect to the database and lock
     r = await open_redis()
@@ -220,16 +220,16 @@ class Attend:
                                    block=ATTEND_INTERVAL)
 
             # Extract the URLs
-            urls = {}
+            actions = {}
             for scene, sceneevents in events:
                 scene = scene.decode()[3:]
-                urls[scene] = []
+                actions[scene] = []
                 for id_, event in sceneevents:
                     self.attending['scn' + scene] = id_
-                    urls[scene].append(event[b'url'].decode())
+                    actions[scene].append(event[b'act'].decode())
 
             # Send the output
-            obs = {'observed': urls}
+            obs = {'observed': actions}
             try:
                 await ws.send_json(obs)
             except:
