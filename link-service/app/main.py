@@ -17,7 +17,7 @@ from security import token_to_user, router as security_router
 app = FastAPI()
 app.include_router(security_router)
 
-app.mount('/www', StaticFiles(directory="../www"))
+app.mount('/test', StaticFiles(directory="test"))
 
 
 @app.post('/alloc')

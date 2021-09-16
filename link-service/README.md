@@ -4,11 +4,13 @@
 
     sudo docker-compose up --build
 
-To test out the API go to [http://localhost:5000/docs](http://localhost:5000/docs).
+## Test
+
+Use the [Swagger UI](http://localhost:5000/docs) to test out most API calls.
+To test out the WebSocket-based attend API, go to the [attend test page](http://localhost:5000/test/attend.html).
 
 ## TODO
 
-- Make test HTML+JS page for perform/retire/attend.
 - Host to CSAIL
 - Make separate web extension
 - Make homepage and demos
