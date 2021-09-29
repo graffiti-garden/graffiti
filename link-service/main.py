@@ -11,13 +11,11 @@ from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, HTTPException, File, UploadFile, Depends, Response
 from fastapi.staticfiles import StaticFiles
 
-from config import *
-from security import token_to_user, router as security_router
+from theaterpy.config import *
+from theaterpy.security import token_to_user, router as security_router
 
 app = FastAPI()
 app.include_router(security_router)
-
-app.mount('/test', StaticFiles(directory="test"))
 
 
 @app.post('/alloc')
@@ -32,7 +30,7 @@ async def alloc(user: str = Depends(token_to_user)):
     return {'url': url}
 
 
-@app.put('/{url}')
+@app.put('/pod/{url}')
 async def put(
         url: str,
         user: str = Depends(token_to_user),
@@ -57,7 +55,7 @@ async def put(
     return "Success"
 
 
-@app.get('/{url}')
+@app.get('/pod/{url}')
 async def get(url: str):
 
     # Connect to the database
@@ -75,7 +73,7 @@ async def get(url: str):
     return Response(datab, media_type=media_type)
 
 
-@app.delete('/{url}')
+@app.delete('/pod/{url}')
 async def delete(url: str, user = Depends(token_to_user)):
 
     # Connect to the database
@@ -236,6 +234,11 @@ class Attend:
             except:
                 break
 
+# Mount the static files all the way
+# at the end here so the '/' route doesn't
+# conflict with the routes above.
+app.mount('/js', StaticFiles(directory="js"))
+app.mount('/', StaticFiles(directory='html', html=True))
 
 # Open and close a redis connection
 async def open_redis():
