@@ -64,7 +64,8 @@ async def get(url: str):
     r = await open_redis()
 
     # Check if the URL exists
-    if not await r.hexists(url, 'data'):
+    if not await r.hexists('url' + url, 'data'):
+        print("nope")
         raise HTTPException(status_code=404, detail="Not Found")
 
     # Fetch the data
