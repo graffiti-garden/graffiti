@@ -1,52 +1,76 @@
-window.onload = function() {
-  // Create a sidebar that allows you to login
-  
-  // Once you login it stores a cookie so other
-  // sites use the same login.
-  
-  // Once logged in, The sidebar also contains costumes.
-  // You can select which one to use
-  // A costume is an activty pub "actor" which contains
-  // a name, blurb, profile photo, website link, etc.
-  // also a public/private key
-  // you can also choose anonymous
+class Theater {
 
-  // to find the costumes you go to:
-  // loginkey/costumes
-  // there will be a Point action there that points to
-  // the URL where they are actually stored
-  // there might also be
-  // loginkey/contacts
-  // loginkey/bestfriends
-  // ...
-  
-  // The library also exposes these functions
-  // for the page to use:
+  #msg = {'add': [], 'remove': []}
 
-  // Pod functions
-  // url = self.put.note(message)
-  //       self.delete(url)
-  //       get(url)
+  constructor() {
+    this.callbacks = {}
 
-  // Perform functions:
-  // self.perform.create(location, url)
-  // self.perform.delete(location, url)
-  // self.perform.update(location, url)
+    // Open up a WebSocket with the server
+    this.connected = false
+    this.ws = new WebSocket("ws://localhost:5000/attend")
+    this.ws.onopen    = this.#onSocketOpen   .bind(this)
+    this.ws.onmessage = this.#onSocketMessage.bind(this)
+  }
 
-  // Attend functions:
-  // attend = me.attend(callback=mycallback)
-  // attend.add(stage)
-  // attend.remove(stage)
+  async #onSocketOpen(event) {
+    this.connected = true
+    this.#updateAttending()
+  }
 
-  // mycallback():
-  //  if type=create:
-  //    if the item is mine:
-  //      do x
-  //  if type=delete:
-  //    undo x
-  //  if type=update:
-  //    refresh x
-  //    make an alert
-  //  else:
-  //    do something with the default text
-};
+  async #onSocketMessage(event) {
+    const data = JSON.parse(event.data)
+
+    // Send each action to the appropriate callback
+    if ('observed' in data) {
+      const stages = data['observed']
+      for (const stage in stages) {
+        const actions = stages[stage]
+        for (const action of actions) {
+          this.callbacks[stage](stage, action)
+        }
+      }
+    }
+  }
+
+  async #updateAttending() {
+    if (this.connected) {
+      await this.ws.send(JSON.stringify(this.#msg))
+      this.#msg['add'] = []
+      this.#msg['rem'] = []
+    }
+  }
+
+  async attend(stages, callback) {
+    this.#msg['add'] = this.#msg['add'].concat(stages)
+    for (const stage of stages) {
+      this.callbacks[stage] = callback
+    }
+
+    this.#updateAttending()
+  }
+
+  async unattend(stages, callback) {
+    this.#msg['rem'] = this.#msg['rem'].concat(stages)
+    this.#updateAttending()
+  }
+
+}
+
+// TODO
+//
+// Add a login so you can do things like:
+//
+// self.perform.create(location, url)
+// self.perform.delete(location, url)
+// self.perform.update(location, url)
+//
+// Pod functions
+// url = self.put.note(message)
+//       self.delete(url)
+//       get(url)
+//
+// and reference private variables like
+// th.attend(['~mythings'], myCallback)
+//
+// There are multiple costumes once you login
+// that define different actor profiles

@@ -1,9 +1,45 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>Theater</title>
   <script src="js/theater.js"></script>
+  <script src="https://unpkg.com/vue"></script>
 </head>
 <body>
-  Welcome to the Theater.
+  <div id="app">
+    <h1>Messages:</h1>
+    <ol>
+      <li v-for="message in messages">
+        {{ message }}
+      </li>
+    </ol>
+  </div>
+
+  <script>
+    // Initialize data used above
+    const app = new Vue({
+      el: '#app',
+      data: {
+        messages: []
+      }
+    })
+
+    // Initialize the theater
+    const th = new Theater()
+
+    function myCallback(stage, action) {
+      app.messages.push(action)
+
+      // if (action.type == 'create') {
+      //   add it to the messages array
+      // } else if (action.type == 'edit') {
+      //   refresh the message content
+      //   and add an edited flag
+      //   the above parses that in italics
+      // }
+    }
+
+    th.attend(['myStage'], myCallback)
+  </script>
 </body>
 </html>
