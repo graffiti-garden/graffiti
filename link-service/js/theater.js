@@ -1,23 +1,26 @@
 class Theater {
 
-  #msg = {'add': [], 'remove': []}
+  msg = {'add': [], 'remove': []}
 
   constructor() {
     this.callbacks = {}
 
     // Open up a WebSocket with the server
     this.connected = false
-    this.ws = new WebSocket("ws://localhost:5000/attend")
-    this.ws.onopen    = this.#onSocketOpen   .bind(this)
-    this.ws.onmessage = this.#onSocketMessage.bind(this)
+    this.ws = new WebSocket("wss://theater.csail.mit.edu/attend")
+    this.ws.onopen    = this.onSocketOpen   .bind(this)
+    this.ws.onmessage = this.onSocketMessage.bind(this)
+
+    // Fetch the login token
+
   }
 
-  async #onSocketOpen(event) {
+  async onSocketOpen(event) {
     this.connected = true
-    this.#updateAttending()
+    this.updateAttending()
   }
 
-  async #onSocketMessage(event) {
+  async onSocketMessage(event) {
     const data = JSON.parse(event.data)
 
     // Send each action to the appropriate callback
@@ -32,26 +35,27 @@ class Theater {
     }
   }
 
-  async #updateAttending() {
+  async updateAttending() {
     if (this.connected) {
-      await this.ws.send(JSON.stringify(this.#msg))
-      this.#msg['add'] = []
-      this.#msg['rem'] = []
+      await this.ws.send(JSON.stringify(this.msg))
+      this.msg['add'] = []
+      this.msg['rem'] = []
     }
   }
 
   async attend(stages, callback) {
-    this.#msg['add'] = this.#msg['add'].concat(stages)
+    this.msg['add'] = this.msg['add'].concat(stages)
     for (const stage of stages) {
       this.callbacks[stage] = callback
     }
 
-    this.#updateAttending()
+    await this.updateAttending()
   }
 
   async unattend(stages, callback) {
-    this.#msg['rem'] = this.#msg['rem'].concat(stages)
-    this.#updateAttending()
+    this.msg['rem'] = this.msg['rem'].concat(stages)
+
+    await this.updateAttending()
   }
 
 }

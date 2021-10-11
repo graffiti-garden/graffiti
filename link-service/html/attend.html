@@ -5,7 +5,7 @@
   </head>
   <body>
     <h1>Attend</h1>
-    <p>Go to the <a href="http://localhost:5000/docs">Swagger UI</a> to perform or retire actions within a scene</p>
+    <p>Go to the <a href="https://theater.csail.mit.edu/docs">Swagger UI</a> to perform or retire actions within a scene</p>
     <p>Comma-separate to add or remove multiple scenes at once.</p>
     <form action="" onsubmit="updateAttending(event)">
       <label for="add">Add:</label>
@@ -18,7 +18,7 @@
     </form>
     <ul id='messages'></ul>
     <script>
-      var ws = new WebSocket("ws://localhost:5000/attend");
+      var ws = new WebSocket("wss://theater.csail.mit.edu/attend");
 
       ws.onmessage = function(event) {
         var messages = document.getElementById('messages')
