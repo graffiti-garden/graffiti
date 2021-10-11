@@ -18,7 +18,7 @@ app = FastAPI()
 app.include_router(security_router)
 
 
-@app.post('/alloc')
+@app.post('/pod/alloc')
 async def alloc(user: str = Depends(token_to_user)):
     # Create a random URL
     url = ''.join(random.choice(string.ascii_letters) for _ in range(URL_SIZE))
@@ -245,4 +245,4 @@ async def open_redis():
     return await aioredis.from_url("redis://redis")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=80, reload=True)
