@@ -1,8 +1,8 @@
-import aiosmtplib
+from os import getenv
+from aiosmtplib import send as sendEmail
 from email.message import EmailMessage
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from .config import MAIL_FROM, MAIL_HOST, MAIL_PORT
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -10,15 +10,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 @router.post("/login")
 async def login(email: str):
     message = EmailMessage()
-    message["From"] = MAIL_FROM
+    message["From"] = getenv('MAIL_FROM')
     message["To"] = email
     message["Subject"] = "Sign-In Link"
     message.set_content("Here is your magic link :^)")
 
-    await aiosmtplib.send(
+    await sendEmail(
             message,
-            hostname=MAIL_HOST,
-            port=MAIL_PORT
+            hostname=getenv('MAIL_HOST'),
+            port=getenv('MAIL_PORT')
             )
 
     return "Success"

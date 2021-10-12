@@ -1,7 +1,7 @@
 import hashlib
 from fastapi import APIRouter, Depends
 from .login import token_to_user
-from .config import open_redis
+from .db import open_redis
 
 router = APIRouter()
 

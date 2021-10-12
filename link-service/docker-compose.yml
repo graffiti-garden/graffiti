@@ -21,10 +21,8 @@ services:
       - ./config/postfix-accounts.cf:/tmp/docker-mailserver/postfix-accounts.cf
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - /etc/localtime:/etc/localtime:ro
-    ports:
-      - 25:25
-      - 465:465
-      - 587:587
+    expose:
+      - 25
     env_file: config/mailserver.env
     cap_add:
       - NET_ADMIN
@@ -43,6 +41,7 @@ services:
     volumes:
       - ./app:/mount/theater
       - ./www:/mount/www
+    env_file: config/theater.env
     depends_on:
       - mailserver
       - redis
