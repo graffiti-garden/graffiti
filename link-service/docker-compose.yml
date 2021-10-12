@@ -1,4 +1,5 @@
-version: '2'
+version: '3.7'
+
 services:
 
   nginx:
@@ -9,17 +10,38 @@ services:
     ports:
       - 80:80
       - 443:443
+    depends_on:
+      - theatercontainer
+
+  mailserver:
+    image: mailserver/docker-mailserver:10.2.0
+    hostname: theater.csail.mit.edu
+    domainname: theater.csail.mit.edu
+    volumes:
+      - ./config/postfix-accounts.cf:/tmp/docker-mailserver/postfix-accounts.cf
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - 25:25
+      - 465:465
+      - 587:587
+    env_file: config/mailserver.env
+    cap_add:
+      - NET_ADMIN
+      - SYS_PTRACE
+    restart: always
 
   redis:
     image: redis:6.2.3-alpine
     environment:
       - REDIS_APPENDONLY=yes
 
-  theater:
+  theatercontainer:
     build: .
     expose:
       - 80
     volumes:
       - .:/code
     depends_on:
+      - mailserver
       - redis

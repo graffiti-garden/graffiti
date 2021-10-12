@@ -4,14 +4,15 @@ An imagining of a social web.
 
 ## Setup
 
-### Docker
+Put SSL certs in ```/etc/ssl/certs/```.
+
+Also generate openkdim keys. Put them and this line in the DNS record:
+
+    theater.csail.mit.edu. 1800 IN TXT "v=spf1 a -all"
+
+Then launch the application through docker:
 
     sudo docker-compose up --build
-
-### Nginx
-
-    sudo ln -s $(pwd)/config/nginx.conf /etc/nginx/
-    sudo service nginx start
 
 ## Test
 
