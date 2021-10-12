@@ -1,7 +1,6 @@
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-
-from .config import ATTEND_INTERVAL, open_redis
+from .config import ATTEND_WS_INTERVAL, open_redis
 
 router = APIRouter()
 
@@ -20,7 +19,6 @@ async def attend(ws: WebSocket):
 
         # Send it to the object
         await at.receive(ws, msg)
-
 
 class Attend:
 
@@ -61,7 +59,7 @@ class Attend:
         while True:
             # Wait for new events
             events = await r.xread(self.attending,
-                                   block=ATTEND_INTERVAL)
+                                   block=ATTEND_WS_INTERVAL)
 
             # Extract the URLs
             actions = {}

@@ -2,8 +2,7 @@ import random
 import string
 import mimetypes
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
-
-from .config import URL_SIZE, open_redis
+from .config import POD_URL_SIZE, open_redis
 from .login import token_to_user
 
 router = APIRouter(prefix='/pod')
@@ -11,7 +10,7 @@ router = APIRouter(prefix='/pod')
 @router.post('/alloc')
 async def alloc(user: str = Depends(token_to_user)):
     # Create a random URL
-    url = ''.join(random.choice(string.ascii_letters) for _ in range(URL_SIZE))
+    url = ''.join(random.choice(string.ascii_letters) for _ in range(POD_URL_SIZE))
 
     # Add the user to it
     r = await open_redis()
