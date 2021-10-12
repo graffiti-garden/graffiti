@@ -18,6 +18,7 @@ async def attend(ws: WebSocket):
         try:
             msg = await ws.receive_json()
         except WebSocketDisconnect:
+            at.cancel()
             break
 
         # Send it to the object
@@ -29,9 +30,13 @@ class Attend:
         self.attending = {}
         self.task  = None
 
+    def cancel(self):
+        if self.task:
+            self.task.cancel()
+
     async def receive(self, ws: WebSocket, msg):
         # Kill the task if it exists
-        if self.task: self.task.cancel()
+        self.cancel()
 
         # Add any new stages to attend to
         for stage in msg.get('add', []):
