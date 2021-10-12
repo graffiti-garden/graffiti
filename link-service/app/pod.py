@@ -17,7 +17,7 @@ async def alloc(user: str = Depends(token_to_user)):
 
     # Add the user to it
     r = await open_redis()
-    await r.hset('url' + url, 'user', user)
+    await r.hset('pod' + url, 'user', user)
 
     return {'url': url}
 
@@ -31,7 +31,7 @@ async def put(
     r = await open_redis()
 
     # Make sure the URL is assigned to the user
-    owner = await r.hget('url' + url, 'user')
+    owner = await r.hget('pod' + url, 'user')
     if not owner or user != owner.decode():
         raise HTTPException(status_code=403, detail=f"{user} doesn't have permission to write to {url}")
 
@@ -39,9 +39,9 @@ async def put(
     media_type = mimetypes.guess_type(data.filename)[0]
     if not media_type:
         media_type = "application/octet-stream"
-    await r.hset('url' + url, 'media_type', media_type)
+    await r.hset('pod' + url, 'media_type', media_type)
     datab = await data.read()
-    await r.hset('url' + url, 'data', datab)
+    await r.hset('pod' + url, 'data', datab)
 
     return "Success"
 
@@ -52,13 +52,13 @@ async def get(url: str):
     r = await open_redis()
 
     # Check if the URL exists
-    if not await r.hexists('url' + url, 'data'):
+    if not await r.hexists('pod' + url, 'data'):
         print("nope")
         raise HTTPException(status_code=404, detail="Not Found")
 
     # Fetch the data
-    datab      = await r.hget('url' + url, 'data')
-    media_type = (await r.hget('url' + url, 'media_type')).decode()
+    datab      = await r.hget('pod' + url, 'data')
+    media_type = (await r.hget('pod' + url, 'media_type')).decode()
 
     return Response(datab, media_type=media_type)
 
@@ -69,11 +69,11 @@ async def delete(url: str, user = Depends(token_to_user)):
     r = await open_redis()
 
     # Make sure it is owned by the user
-    owner = await r.hget('url' + url, 'user')
+    owner = await r.hget('pod' + url, 'user')
     if not owner or user != owner.decode():
         raise HTTPException(status_code=403, detail=f"{user} doesn't have permission to delete {url}")
 
     # Delete the data and mimetype (keep ownership)
-    await r.hdel('url' + url, 'data', 'mimetype')
+    await r.hdel('pod' + url, 'data', 'mimetype')
 
     return "Success"
