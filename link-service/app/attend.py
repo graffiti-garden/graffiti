@@ -1,9 +1,9 @@
-import os
 import asyncio
+from os import getenv
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .db import open_redis
 
-ws_interval = int(os.getenv('ATTEND_WS_INTERVAL'))
+ws_interval = int(getenv('ATTEND_WS_INTERVAL'))
 
 router = APIRouter()
 

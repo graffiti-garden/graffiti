@@ -17,8 +17,8 @@ async def login(email: str):
 
     await sendEmail(
             message,
-            hostname=getenv('MAIL_HOST'),
-            port=getenv('MAIL_PORT')
+            hostname="mailserver",
+            port=25
             )
 
     return "Success"

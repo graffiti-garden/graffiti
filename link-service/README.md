@@ -4,7 +4,12 @@ An imagining of a social web.
 
 ## Setup
 
-Put SSL certs in ```/etc/ssl/certs/```.
+Copy your SSL certificates to ```/etc/ssl/certs/``` and name them ```theater.key``` and ```theater.pem```.
+
+If needed, make changes to:
+- ```config/theater.env```,
+- the host/domainname in ```docker-compose.yml```,
+- the account name in ```config/postfix-accounts.cf```.
 
 Also generate openkdim keys. Put them and this line in the DNS record:
 

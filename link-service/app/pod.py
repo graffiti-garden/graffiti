@@ -1,12 +1,12 @@
-import os
 import random
 import string
 import mimetypes
+from os import getenv
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from .login import token_to_user
 from .db import open_redis
 
-url_size = int(os.getenv('POD_URL_SIZE'))
+url_size = int(getenv('POD_URL_SIZE'))
 
 router = APIRouter(prefix='/pod')
 
