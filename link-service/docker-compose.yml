@@ -11,7 +11,7 @@ services:
       - 80:80
       - 443:443
     depends_on:
-      - theatercontainer
+      - theater-container
 
   mailserver:
     image: mailserver/docker-mailserver:10.2.0
@@ -36,7 +36,7 @@ services:
     environment:
       - REDIS_APPENDONLY=yes
 
-  theatercontainer:
+  theater-container:
     build: .
     expose:
       - 80
