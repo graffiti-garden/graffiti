@@ -7,5 +7,5 @@ RUN apt-get install -y --no-install-recommends \
 COPY requirements.txt /tmp/
 RUN pip install -r /tmp/requirements.txt
 
-WORKDIR /code
-CMD python main.py
+WORKDIR /mount
+CMD python -m theater.main

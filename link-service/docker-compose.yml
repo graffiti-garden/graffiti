@@ -41,7 +41,8 @@ services:
     expose:
       - 80
     volumes:
-      - .:/code
+      - ./app:/mount/theater
+      - ./www:/mount/www
     depends_on:
       - mailserver
       - redis

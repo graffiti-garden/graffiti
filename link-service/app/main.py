@@ -11,8 +11,8 @@ from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Response, HTTPException, File, UploadFile, Depends, Response
 from fastapi.staticfiles import StaticFiles
 
-from theaterpy.config import *
-from theaterpy.security import token_to_user, router as security_router
+from .config import *
+from .security import token_to_user, router as security_router
 
 app = FastAPI()
 app.include_router(security_router)
@@ -237,12 +237,11 @@ class Attend:
 # Mount the static files all the way
 # at the end here so the '/' route doesn't
 # conflict with the routes above.
-app.mount('/js', StaticFiles(directory="js"))
-app.mount('/', StaticFiles(directory='html', html=True))
+app.mount('/', StaticFiles(directory='www', html=True))
 
 # Open and close a redis connection
 async def open_redis():
     return await aioredis.from_url("redis://redis")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=80, reload=True)
+    uvicorn.run("theater.main:app", host="0.0.0.0", port=80, reload=True)
