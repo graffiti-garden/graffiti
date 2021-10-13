@@ -1,4 +1,4 @@
-import asyncio
+from asyncio import create_task
 from os import getenv
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .db import open_redis
@@ -56,7 +56,7 @@ class Attend:
 
         # Start a background listening task if non-empty
         if self.attending:
-            self.task = asyncio.create_task(self.attend(ws))
+            self.task = create_task(self.attend(ws))
         else:
             self.task = None
 

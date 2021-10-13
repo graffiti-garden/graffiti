@@ -1,6 +1,6 @@
 import random
-import string
-import mimetypes
+from string import ascii_letters
+from mimetypes import guess_type
 from os import getenv
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from .login import token_to_user
@@ -13,7 +13,7 @@ router = APIRouter(prefix='/pod')
 @router.post('/alloc')
 async def alloc(user: str = Depends(token_to_user)):
     # Create a random URL
-    url = ''.join(random.choice(string.ascii_letters) for _ in range(url_size))
+    url = ''.join(random.choice(ascii_letters) for _ in range(url_size))
 
     # Add the user to it
     r = await open_redis()
@@ -36,7 +36,7 @@ async def put(
         raise HTTPException(status_code=403, detail=f"{user} doesn't have permission to write to {url}")
 
     # Set the data
-    media_type = mimetypes.guess_type(data.filename)[0]
+    media_type = guess_type(data.filename)[0]
     if not media_type:
         media_type = "application/octet-stream"
     await r.hset('pod' + url, 'media_type', media_type)

@@ -1,4 +1,4 @@
-import hashlib
+from hashlib import sha256
 from fastapi import APIRouter, Depends
 from .login import token_to_user
 from .db import open_redis
@@ -9,8 +9,8 @@ def stage_action_to_uuid(stage: str, action: str):
     # Concatenate the hashes of the stage and action
     # This prevents trickiness where
     # stage+action is ambiguous
-    stage_hash  = hashlib.sha256( stage.encode()).digest()
-    action_hash = hashlib.sha256(action.encode()).digest()
+    stage_hash  = sha256( stage.encode()).digest()
+    action_hash = sha256(action.encode()).digest()
     return stage_hash + action_hash
 
 @router.post('/perform')
