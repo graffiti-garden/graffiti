@@ -8,16 +8,23 @@ Copy your SSL certificates to ```/etc/ssl/certs/``` and name them ```theater.key
 
 If needed, make changes to:
 - ```config/theater.env```,
-- the host/domainname in ```docker-compose.yml```,
-- the account name in ```config/postfix-accounts.cf```.
+- the mailserver host/domainname in ```docker-compose.yml```,
+- the account name in ```config/mailserver/postfix-accounts.cf```.
 
-Also generate openkdim keys. Put them and this line in the DNS record:
-
-    theater.csail.mit.edu. 1800 IN TXT "v=spf1 a -all"
-
-Then launch the application through docker:
+The launch the docker application:
 
     sudo docker-compose up --build
+
+Then create domain keys:
+
+    sudo docker exec theater_mailserver_1 setup config dkim
+
+Copy the entry in ```config/mailserver/opendkim/keys/theater.csail.mit.edu/mail.txt``` to your DNS.
+
+In addition, add these lines to your DNS:
+
+    theater.csail.mit.edu. 1800 IN TXT "v=spf1 a -all"
+    _domainkey.theater.csail.mit.edu. 1800 IN TXT "o=-"
 
 ## Test
 

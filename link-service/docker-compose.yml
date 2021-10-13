@@ -18,7 +18,7 @@ services:
     hostname: theater.csail.mit.edu
     domainname: theater.csail.mit.edu
     volumes:
-      - ./config/postfix-accounts.cf:/tmp/docker-mailserver/postfix-accounts.cf
+      - ./config/mailserver:/tmp/docker-mailserver/
       - /etc/ssl/certs:/etc/ssl/certs:ro
       - /etc/localtime:/etc/localtime:ro
     expose:
