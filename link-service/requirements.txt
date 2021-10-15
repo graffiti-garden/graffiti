@@ -1,5 +1,6 @@
 aioredis # Database
 aiosmtplib # Email
+pyjwt # tokens
 
 python-multipart  # For parsing multipart form data
 aiofiles          # For serving static files and templates
