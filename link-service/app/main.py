@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
-routes = ['login', 'pod', 'perform', 'attend']
+routes = ['perform', 'attend', 'pod', 'login']
 for r in routes:
     module = __import__('theater.' + r, fromlist=['router'])
     app.include_router(module.router)

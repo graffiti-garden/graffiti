@@ -80,7 +80,7 @@ async def token(client_id: str = Form(...), code: str = Form(...)):
     # the expiration window and look for a match
     time_in_minutes = int(time.time()/60)
     for i in range(0, code_expiration_time):
-        possible_code = generate_code(client_id, time_in_minutes - i)
+        possible_code = generate_code(client_id, i)
         if code == possible_code:
             break
     else:
