@@ -7,12 +7,13 @@
 </head>
 <body>
   <div id="app">
-    <h1>Messages:</h1>
-    <ol>
-      <li v-for="message in messages">
-        {{ message }}
+    <input v-model="myPost" placeholder="What's happening?">
+    <button v-on:click="submitPost">Post</button>
+    <ul>
+      <li v-for="post in posts.slice().reverse()">
+        {{ post }}
       </li>
-    </ol>
+    </ul>
   </div>
 
   <script>
@@ -20,26 +21,23 @@
     const app = new Vue({
       el: '#app',
       data: {
-        messages: []
+        th: new Theater(),
+        myPost: "",
+        posts: [],
+        stage: 'myStage',
+      },
+      methods: {
+        submitPost: function() {
+          this.th.perform(this.stage, this.myPost)
+          this.myPost = ""
+        },
+        retrievePost: function(stage, action) {
+          app.posts.push(action)
+        }
       }
     })
 
-    // Initialize the theater
-    const th = new Theater()
-
-    function myCallback(stage, action) {
-      app.messages.push(action)
-
-      // if (action.type == 'create') {
-      //   add it to the messages array
-      // } else if (action.type == 'edit') {
-      //   refresh the message content
-      //   and add an edited flag
-      //   the above parses that in italics
-      // }
-    }
-
-    th.attend(['myStage'], myCallback)
+    app.th.attend([app.stage], app.retrievePost)
   </script>
 </body>
 </html>

@@ -2,6 +2,7 @@ class Theater {
 
   msg = {'add': [], 'remove': []}
   domain = "theater.csail.mit.edu"
+  token = null
 
   constructor() {
     this.callbacks = {}
@@ -11,11 +12,23 @@ class Theater {
     this.ws = new WebSocket(`wss://${this.domain}/attend`)
     this.ws.onopen    = this.onSocketOpen   .bind(this)
     this.ws.onmessage = this.onSocketMessage.bind(this)
-
-    this.login()
   }
 
-  async login() {
+  async perform(stage, action) {
+    const token = await this.get_token()
+
+    await fetch(`https://${this.domain}/perform?stage=${stage}&action=${action}`, {
+      method: 'post',
+      headers: new Headers({
+        'Authorization': 'Bearer ' + token
+      }),
+    })
+  }
+
+  async get_token() {
+    // If the token exists, just use it
+    if (this.token) return this.token
+
     // Generate a random client secret
     const client_secret = Math.random().toString(36).substr(2)
 
@@ -29,35 +42,45 @@ class Theater {
     // Open the login window
     var redirect_uri = `https://${this.domain}/login_redirect`
     redirect_uri = encodeURIComponent(redirect_uri)
-    var state = encodeURIComponent("*")
-    var login = window.open(`https://${this.domain}/login?client_id=${client_id}&redirect_uri=${redirect_uri}&state=${state}`)
+    const state = encodeURIComponent("*")
+    const auth_window = window.open(`https://${this.domain}/login?client_id=${client_id}&redirect_uri=${redirect_uri}&state=${state}`)
 
-    // Listen for messages from it
-    window.addEventListener("message", (event) => {
-      if (event.origin !==`https://${this.domain}`)
+    // Create a callback function to parse the
+    // code event and retrieve the token.
+    async function code_to_token(th, event, resolve) {
+      // Make sure the message is from theater
+      if (event.origin !==`https://${th.domain}`)
+        return
+      // And that it is from the same window as expected
+      if (event.source !== auth_window)
         return
 
-      if (event.source !== login)
-        return
+      window.removeEventListener("message", code_to_token)
 
+      // Construct the body of the POST
       const code = event.data
-
-      // Get a token from the code
       let form = new FormData();
       form.append('client_id', client_id)
       form.append('client_secret', client_secret)
       form.append('code', code)
-      fetch(`https://${this.domain}/token`,
-        {
+
+      // Ask to exchange the code for a token
+      const response = await fetch(`https://${th.domain}/token`, {
           body: form,
-          method: 'post'
-        })
-      .then(res => res.json())
-      .then(data => {
-        console.log(data)
-        alert("logged in!")
-      })
-    }, {once: true});
+          method: 'post'})
+      const data = await response.json()
+
+      // Store and return the token
+      const token = data.access_token
+      th.token = token
+      resolve(token)
+    }
+
+    // Listen for the code
+    return new Promise((resolve, reject) => {
+      window.addEventListener("message",
+        event => code_to_token(this, event, resolve))
+    })
   }
 
   async onSocketOpen(event) {

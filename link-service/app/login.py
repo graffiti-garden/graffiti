@@ -11,14 +11,18 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2AuthorizationCodeBearer
 
 # TODO:
+# security:
+# - Account for errors in reponse (i.e. if email is invalid)
 # - encrypt email (https://stackoverflow.com/questions/27335726/how-do-i-encrypt-and-decrypt-a-string-in-python)
 # - make a real secret (random every time)
-# - Token expiration
-# - Refresh tokens
-# - Scopes
-# - Magic link
 # - CORS
+# - Token expiration + refresh tokens
+# UI:
 # - code size to all capital letters
+# - Magic link rather than code
+# - Prettier interface
+# Both kind of:
+# - Scopes
 
 mail_from = getenv('MAIL_FROM')
 secret = "secret" 
@@ -101,7 +105,7 @@ async def token(
     except:
         raise HTTPException(status_code=400, detail="Malformed code.")
     if not code["type"] == "code":
-        raise HTTPException(status_code=400, detail="Malformed code.")
+        raise HTTPException(status_code=400, detail="Wrong code type.")
 
     # Assert that the code has not expired
     if code["time"] + expiration_time*60 < time.time():
@@ -130,6 +134,6 @@ async def token_to_user(token: str = Depends(oauth2_scheme)):
     except:
         raise HTTPException(status_code=400, detail="Malformed token")
     if not token["type"] == "token":
-        raise HTTPException(status_code=400, detail="Malformed token.")
+        raise HTTPException(status_code=400, detail="Wrong code type.")
 
     return token["email"]
