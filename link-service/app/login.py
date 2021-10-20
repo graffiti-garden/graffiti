@@ -18,10 +18,12 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 # - Scopes
 # - Magic link
 # - CORS
+# - code size to all capital letters
 
 mail_from = getenv('MAIL_FROM')
 secret = "secret" 
 expiration_time = 5 # minutes
+code_size = 6
 
 router = APIRouter()
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
@@ -37,9 +39,10 @@ async def login(
     <script>
         const email = prompt("Enter your email to be sent a login code:")
         fetch(`https://theater.csail.mit.edu/email_code?client_id={client_id}&email=${{email}}`, {{method: 'Post'}})
-        .then(response => {{
-            const code = prompt("Enter your login code:")
-            window.location.replace(`{redirect_uri}?state={state}&code=${{code}}`)
+        .then(res => res.json())
+        .then(code_start => {{
+            const code_end = prompt("Enter your login code:")
+            window.location.replace(`{redirect_uri}?state={state}&code=${{code_start}}${{code_end}}`)
         }})
     </script>
     """
@@ -58,6 +61,8 @@ async def email_magic(client_id: str, email: str, request: Request):
     # Make sure the request is being called from another theater page
     # request.origin
 
+    # Encrypt the email
+
     # Construct a code
     code = jwt.encode({
         "type": "code",
@@ -66,8 +71,9 @@ async def email_magic(client_id: str, email: str, request: Request):
         "time": time.time()
         }, secret, algorithm="HS256")
 
-    # Put the code in an email
-    message = MIMEText(code)
+    # Email part of the signature for verification
+    email_code = code[-code_size:]
+    message = MIMEText(email_code)
     message["Subject"] = Header("Login Code")
     message["From"] = mail_from
     message["To"] = email
@@ -80,7 +86,8 @@ async def email_magic(client_id: str, email: str, request: Request):
     except:
         raise HTTPException(status_code=422, detail="Invalid email.")
 
-    return "Success"
+    # Return the rest of the code
+    return code[:-code_size]
 
 @router.post("/token")
 async def token(
