@@ -22,6 +22,7 @@ for r in routes:
     app.include_router(module.router)
 
 # Serve the static files
+app.mount('/js', StaticFiles(directory='js'))
 app.mount('/', StaticFiles(directory='www', html=True))
 
 if __name__ == "__main__":

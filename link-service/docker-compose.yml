@@ -41,6 +41,7 @@ services:
     volumes:
       - ./app:/mount/theater
       - ./www:/mount/www
+      - ./js:/mount/js
     env_file: config/theater.env
     depends_on:
       - mailserver
