@@ -1,79 +1,76 @@
-import random
-from string import ascii_letters
+from hashlib import sha256
 from mimetypes import guess_type
 from os import getenv
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from .login import token_to_user
 from .db import open_redis
 
-url_size = int(getenv('POD_URL_SIZE'))
+# TODO: give these scope
+
+# TODO: make this actually secret
+secret = "secret"
 
 router = APIRouter(prefix='/pod')
 
-@router.post('/alloc')
-async def alloc(user: str = Depends(token_to_user)):
-    # Create a random URL
-    url = ''.join(random.choice(ascii_letters) for _ in range(url_size))
+def pathToHash(path: str, user: str = Depends(token_to_user)):
+    # TODO: pad these to prevent ambiguity
+    inp = path + user + secret
+    return sha256(inp.encode()).hexdigest()
 
-    # Add the user to it
-    r = await open_redis()
-    await r.hset('pod' + url, 'user', user)
-
-    return {'url': url}
-
-@router.put('/{url}')
+@router.put('/{path}')
 async def put(
-        url: str,
-        user: str = Depends(token_to_user),
+        path: str,
+        hash_: str = Depends(pathToHash),
         data: UploadFile = File(...)):
+
+    # Make sure it is a file name.
+    if path[-1] == "/":
+        raise HTTPException(status_code=400, detail="Cannot put a directory")
 
     # Connect to the database
     r = await open_redis()
-
-    # Make sure the URL is assigned to the user
-    owner = await r.hget('pod' + url, 'user')
-    if not owner or user != owner.decode():
-        raise HTTPException(status_code=403, detail=f"{user} doesn't have permission to write to {url}")
 
     # Set the data
     media_type = guess_type(data.filename)[0]
     if not media_type:
         media_type = "application/octet-stream"
-    await r.hset('pod' + url, 'media_type', media_type)
+    await r.hset('pod' + hash_, 'media_type', media_type)
     datab = await data.read()
-    await r.hset('pod' + url, 'data', datab)
+    await r.hset('pod' + hash_, 'data', datab)
 
-    return "Success"
+    # TODO: Make it so the data can be ls'd
 
-@router.get('/{url}')
-async def get(url: str):
+    return hash_
 
+@router.get('/{path}')
+async def get(hash_: str = Depends(pathToHash)):
+    return await get_public(hash_)
+
+@router.get('/public/{hash_}')
+async def get_public(hash_: str):
     # Connect to the database
     r = await open_redis()
 
-    # Check if the URL exists
-    if not await r.hexists('pod' + url, 'data'):
-        print("nope")
-        raise HTTPException(status_code=404, detail="Not Found")
+    # Check if the hash exists
+    if not await r.hexists('pod' + hash_, 'data'):
+        raise HTTPException(status_code=404, detail="Not found")
 
     # Fetch the data
-    datab      = await r.hget('pod' + url, 'data')
-    media_type = (await r.hget('pod' + url, 'media_type')).decode()
+    datab      =  await r.hget('pod' + hash_, 'data')
+    media_type = (await r.hget('pod' + hash_, 'media_type')).decode()
 
     return Response(datab, media_type=media_type)
 
-@router.delete('/{url}')
-async def delete(url: str, user = Depends(token_to_user)):
-
+@router.delete('/{path}')
+async def delete(hash_: str = Depends(pathToHash)):
     # Connect to the database
     r = await open_redis()
 
-    # Make sure it is owned by the user
-    owner = await r.hget('pod' + url, 'user')
-    if not owner or user != owner.decode():
-        raise HTTPException(status_code=403, detail=f"{user} doesn't have permission to delete {url}")
+    # Check if the hash exists
+    if not await r.hexists('pod' + hash_, 'data'):
+        raise HTTPException(status_code=404, detail="Not Found")
 
-    # Delete the data and mimetype (keep ownership)
-    await r.hdel('pod' + url, 'data', 'mimetype')
+    # Delete the data and mimetype
+    await r.hdel('pod' + hash_, 'data', 'mimetype')
 
     return "Success"
