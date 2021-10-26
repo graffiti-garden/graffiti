@@ -17,6 +17,7 @@ class Theater {
   async perform(stage, action) {
     const token = await this.get_token()
 
+    action = encodeURIComponent(JSON.stringify(action))
     await fetch(`https://${this.domain}/perform?stage=${stage}&action=${action}`, {
       method: 'post',
       headers: new Headers({
@@ -97,7 +98,11 @@ class Theater {
       for (const stage in stages) {
         const actions = stages[stage]
         for (const action of actions) {
-          this.callbacks[stage](stage, action)
+          try {
+            const action_json = JSON.parse(action)
+            this.callbacks[stage](stage, action_json)
+          } catch (error) {
+          }
         }
       }
     }
@@ -127,22 +132,3 @@ class Theater {
   }
 
 }
-
-// TODO
-//
-// Add a login so you can do things like:
-//
-// self.perform.create(location, url)
-// self.perform.delete(location, url)
-// self.perform.update(location, url)
-//
-// Pod functions
-// url = self.put.note(message)
-//       self.delete(url)
-//       get(url)
-//
-// and reference private variables like
-// th.attend(['~mythings'], myCallback)
-//
-// There are multiple costumes once you login
-// that define different actor profiles

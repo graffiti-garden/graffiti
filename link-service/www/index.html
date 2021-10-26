@@ -24,15 +24,27 @@
         th: new Theater(),
         myPost: "",
         posts: [],
-        stage: 'myStage',
+        stage: 'some-cool-stage',
       },
       methods: {
         submitPost: function() {
-          this.th.perform(this.stage, this.myPost)
+          const action = {
+            actor: "Anonymous",
+            type: "Create",
+            object: {
+              type: "Note",
+              content: this.myPost,
+            },
+          }
+          this.th.perform(this.stage, action)
           this.myPost = ""
         },
         retrievePost: function(stage, action) {
-          app.posts.push(action)
+          if (action.type == "Create") {
+            if (action.object.type == "Note") {
+              app.posts.push(action.object.content)
+            }
+          }
         }
       }
     })
