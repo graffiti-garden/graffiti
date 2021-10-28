@@ -31,10 +31,10 @@ export default class Auth {
     const client_id = client_id_array.map(b => b.toString(16).padStart(2, '0')).join('')
 
     // Open the login window
-    var redirect_uri = `https://${this.domain}/login_redirect`
+    var redirect_uri = `https://${this.domain}/auth_redirect`
     redirect_uri = encodeURIComponent(redirect_uri)
     const state = encodeURIComponent("*")
-    const auth_window = window.open(`https://${this.domain}/login?client_id=${client_id}&redirect_uri=${redirect_uri}&state=${state}`)
+    const auth_window = window.open(`https://${this.domain}/auth?client_id=${client_id}&redirect_uri=${redirect_uri}&state=${state}`)
 
     // Create a callback function to parse the
     // code event and retrieve the token.

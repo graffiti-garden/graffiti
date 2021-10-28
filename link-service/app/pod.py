@@ -2,7 +2,7 @@ from hashlib import sha256
 from mimetypes import guess_type
 from os import getenv
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
-from .login import token_to_user
+from .auth import token_to_user
 from .db import open_redis
 
 # TODO: give these scope

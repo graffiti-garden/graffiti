@@ -1,6 +1,6 @@
 from hashlib import sha256
 from fastapi import APIRouter, Depends
-from .login import token_to_user
+from .auth import token_to_user
 from .db import open_redis
 
 router = APIRouter()

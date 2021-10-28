@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 # Serve the API
-routes = ['perform', 'attend', 'pod', 'login']
+routes = ['perform', 'attend', 'pod', 'auth']
 for r in routes:
     module = __import__('theater.' + r, fromlist=['router'])
     app.include_router(module.router)
