@@ -42,7 +42,7 @@ async def login(
     return f"""
     <script>
         const email = prompt("Enter your email to be sent a login code:")
-        fetch(`https://theater.csail.mit.edu/email_code?client_id={client_id}&email=${{email}}`, {{method: 'Post'}})
+        fetch(`https://theater.csail.mit.edu/login_email?client_id={client_id}&email=${{email}}`, {{method: 'Post'}})
         .then(res => res.json())
         .then(code_start => {{
             const code_end = prompt("Enter your login code:")
@@ -60,8 +60,8 @@ async def login_redirect(state: str, code: str):
     </script>
     """
 
-@router.post("/email_code")
-async def email_magic(client_id: str, email: str, request: Request):
+@router.post("/login_email")
+async def login_email(client_id: str, email: str, request: Request):
     # Make sure the request is being called from another theater page
     # request.origin
 

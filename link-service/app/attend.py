@@ -1,5 +1,5 @@
-from asyncio import create_task
 from os import getenv
+from asyncio import create_task
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .db import open_redis
 
@@ -27,35 +27,28 @@ async def attend(ws: WebSocket):
 class Attend:
 
     def __init__(self):
-        self.attending = {}
+        self.stages = {}
         self.task  = None
 
     def cancel(self):
         if self.task:
             self.task.cancel()
 
-    async def receive(self, ws: WebSocket, msg):
+    async def receive(self, ws: WebSocket, msg: dict):
         # Kill the task if it exists
         self.cancel()
 
-        # Add any new stages to attend to
-        for stage in msg.get('add', []):
-            if not stage: continue
-            key = 'stg' + stage
-            if key not in self.attending:
-                self.attending[key] = '0'
-
-        # And remove stage
-        for stage in msg.get('rem', []):
-            if not stage: continue
-            self.attending.pop('stg' + stage, None)
-
-        # Return the attending list as acknowledgment
-        ack = {'attending': [stage[3:] for stage in self.attending.keys()]}
-        await ws.send_json(ack)
+        # Update the stage attendance and return an acknowledgment
+        for stage in msg['stages']:
+            if stage not in self.stages:
+                self.stages[stage] = msg['stages'][stage]
+        for stage in self.stages:
+            if stage not in msg['stages']:
+                del self.stages[stage]
+        await ws.send_json({'stages': self.stages})
 
         # Start a background listening task if non-empty
-        if self.attending:
+        if self.stages:
             self.task = create_task(self.attend(ws))
         else:
             self.task = None
@@ -66,7 +59,8 @@ class Attend:
 
         while True:
             # Wait for new events
-            events = await r.xread(self.attending,
+            stages = {'stg' + stage: id_ for stage, id_ in self.stages.items()}
+            events = await r.xread(stages,
                                    block=ws_interval)
 
             # Extract the URLs
@@ -75,12 +69,14 @@ class Attend:
                 stage = stage.decode()[3:]
                 actions[stage] = []
                 for id_, event in stageevents:
-                    self.attending['stg' + stage] = id_
+                    self.stages[stage] = id_.decode()
                     actions[stage].append(event[b'act'].decode())
 
             # Send the output
-            obs = {'observed': actions}
             try:
-                await ws.send_json(obs)
+                await ws.send_json({
+                    'actions': actions,
+                    'stages' : self.stages
+                    })
             except:
                 break

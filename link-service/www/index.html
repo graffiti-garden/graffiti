@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>Theater</title>
-  <script src="js/theater.js"></script>
-  <script src="https://unpkg.com/vue"></script>
 </head>
+
 <body>
+
   <div id="app">
     <input v-model="myPost" placeholder="What's happening?">
     <button v-on:click="submitPost">Post</button>
@@ -16,17 +17,22 @@
     </ul>
   </div>
 
-  <script>
+  <script type="module">
+    import Vue     from 'https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.esm.browser.js'
+    import Theater from 'https://theater.csail.mit.edu/js/theater.js'
+
     // Initialize data used above
     const app = new Vue({
       el: '#app',
+
       data: {
-        th: new Theater(),
+        th: new Theater('theater.csail.mit.edu'),
         myPost: "",
         posts: [],
-        stage: 'some-cool-stage',
       },
+
       methods: {
+
         submitPost: function() {
           const action = {
             actor: "Anonymous",
@@ -36,9 +42,10 @@
               content: this.myPost,
             },
           }
-          this.th.perform(this.stage, action)
+          this.th.perform('some-cool-stage', action)
           this.myPost = ""
         },
+
         retrievePost: function(stage, action) {
           if (action.type == "Create") {
             if (action.object.type == "Note") {
@@ -46,10 +53,11 @@
             }
           }
         }
+
       }
     })
 
-    app.th.attend([app.stage], app.retrievePost)
+    app.th.attend.add('some-cool-stage', app.retrievePost)
   </script>
 </body>
 </html>
