@@ -40,12 +40,7 @@ export default class Attend {
       for (const stage in actionStages) {
         const actions = actionStages[stage]
         for (const action of actions) {
-          try {
-            const action_json = JSON.parse(action)
-            this.callbacks[stage](stage, action_json)
-          } catch (error) {
-            // TODO
-          }
+          this.callbacks[stage](stage, action)
         }
       }
     }

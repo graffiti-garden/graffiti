@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>Theater</title>
+  <title>Feed</title>
 </head>
 
 <body>
@@ -42,7 +42,7 @@
               content: this.myPost,
             },
           }
-          this.th.perform('some-cool-stage', action)
+          this.th.perform('somecoolstage', action)
           this.myPost = ""
         },
 
@@ -57,7 +57,7 @@
       }
     })
 
-    app.th.attend.add('some-cool-stage', app.retrievePost)
+    app.th.attend.add('somecoolstage', app.retrievePost)
   </script>
 </body>
 </html>

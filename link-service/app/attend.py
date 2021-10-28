@@ -1,3 +1,4 @@
+import json
 from os import getenv
 from asyncio import create_task
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -63,14 +64,16 @@ class Attend:
             events = await r.xread(stages,
                                    block=ws_interval)
 
-            # Extract the URLs
+            # Extract the actions
             actions = {}
             for stage, stageevents in events:
                 stage = stage.decode()[3:]
                 actions[stage] = []
                 for id_, event in stageevents:
                     self.stages[stage] = id_.decode()
-                    actions[stage].append(event[b'act'].decode())
+                    # Decode the binary to JSON
+                    action = json.loads(event[b'action'])
+                    actions[stage].append(action)
 
             # Send the output
             try:
