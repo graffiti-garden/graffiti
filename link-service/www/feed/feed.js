@@ -18,7 +18,7 @@ app.methods.postMyNote = async function() {
     type: "Note",
     attributedTo: "~/actor",
     content: this.myNote
-  }, "notes/#")
+  }, "~/notes/#")
 
   const action = {
     type: "Create",

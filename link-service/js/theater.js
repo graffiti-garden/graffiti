@@ -1,11 +1,13 @@
 import Attend  from './attend.js'
 import Auth    from './auth.js'
+import Pod     from './pod.js'
 
 export default class Theater {
 
   constructor(domain) {
-    this.attend = new Attend(domain)
     this.auth   = new Auth  (domain)
+    this.attend = new Attend(domain)
+    this.pod    = new Pod   (this.auth)
   }
 
   async perform(stage, action) {

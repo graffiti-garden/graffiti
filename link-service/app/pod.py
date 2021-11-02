@@ -8,7 +8,7 @@ router = APIRouter(prefix='/pod')
 def path_to_hash(path: str, user: str = Depends(token_to_user)):
     return strings_to_hash([path, user]).hex()
 
-@router.put('/{path}')
+@router.put('/{path:path}')
 async def put(
         path: str, data: str,
         hash_: str = Depends(path_to_hash)):
@@ -32,7 +32,7 @@ async def put(
     # Return public URL
     return {'hash': hash_}
 
-@router.get('/{path}')
+@router.get('/{path:path}')
 async def get(hash_: str = Depends(path_to_hash)):
     return await get_public(hash_)
 
@@ -49,7 +49,7 @@ async def get_public(hash_: str):
     data =  await r.hget('pod' + hash_, 'data')
     return json.loads(data)
 
-@router.delete('/{path}')
+@router.delete('/{path:path}')
 async def delete(hash_: str = Depends(path_to_hash)):
     # Connect to the database
     r = await open_redis()

@@ -11,12 +11,14 @@ export default class Auth {
       await this.authorize()
     }
 
-    await fetch(`https://${this.domain}/${query}`, {
-      method: 'post',
+    const response = await fetch(`https://${this.domain}/${query}`, {
+      method: method,
       headers: new Headers({
         'Authorization': 'Bearer ' + this.token
       }),
     })
+
+    return await response.json()
   }
 
   async authorize() {
@@ -64,7 +66,7 @@ export default class Auth {
 
       // Store and return the token
       th.token = data.access_token
-      resolve(token)
+      resolve(th.token)
     }
 
     // Listen for the code

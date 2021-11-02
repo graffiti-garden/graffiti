@@ -14,28 +14,6 @@
     <button v-on:click="saveCostume">Save Costume</button>
   </div>
 
-  <script type="module">
-    import Theater from 'https://theater.csail.mit.edu/js/theater.js'
-    import Vue     from 'https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.esm.browser.js'
-
-    const app = new Vue({
-      el: '#app',
-
-      data: {
-        th: new Theater('theater.csail.mit.edu'),
-        costume: {}
-      },
-
-      methods: {
-
-        saveCostume: function() {
-          app.th.pod.put_json('costume', costume)
-        },
-
-      }
-    })
-
-    app.costume = th.pod.get_json('costume')
-  </script>
+  <script type="module" src="costume.js"></script>
 </body>
 </html>
