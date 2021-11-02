@@ -61,8 +61,7 @@ class Attend:
         while True:
             # Wait for new events
             stages = {'stg' + stage: id_ for stage, id_ in self.stages.items()}
-            events = await r.xread(stages,
-                                   block=ws_interval)
+            events = await r.xread(stages, block=ws_interval)
 
             # Extract the actions
             actions = {}

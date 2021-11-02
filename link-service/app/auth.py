@@ -26,7 +26,7 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 # - Scopes
 
 mail_from = getenv('MAIL_FROM')
-secret = "secret" 
+secret    = getenv('SECRET')
 expiration_time = 5 # minutes
 code_size = 6
 
@@ -40,6 +40,7 @@ async def auth(
         client_id: str,
         redirect_uri: str,
         state: str,
+        response: Response,
         token: Optional[str] = Cookie(None)):
 
     # If there is no token, ask user to log in.
@@ -51,7 +52,7 @@ async def auth(
         try:
             user = token_to_user(token)
         except HTTPException:
-            reponse.delete_cookie("token")
+            response.delete_cookie("token")
             return login(client_id, redirect_uri, state)
 
         # Otherwise, generate a new authorization code and let the

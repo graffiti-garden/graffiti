@@ -1,49 +1,39 @@
-from hashlib import sha256
-from mimetypes import guess_type
-from os import getenv
-from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
+import json
+from fastapi import APIRouter, Depends, HTTPException
 from .auth import token_to_user
-from .db import open_redis
-
-# TODO: give these scope
-
-# TODO: make this actually secret
-secret = "secret"
+from .db import open_redis, strings_to_hash
 
 router = APIRouter(prefix='/pod')
 
-def pathToHash(path: str, user: str = Depends(token_to_user)):
-    # TODO: pad these to prevent ambiguity
-    inp = path + user + secret
-    return sha256(inp.encode()).hexdigest()
+def path_to_hash(path: str, user: str = Depends(token_to_user)):
+    return strings_to_hash([path, user]).hex()
 
 @router.put('/{path}')
 async def put(
-        path: str,
-        hash_: str = Depends(pathToHash),
-        data: UploadFile = File(...)):
+        path: str, data: str,
+        hash_: str = Depends(path_to_hash)):
 
     # Make sure it is a file name.
     if path[-1] == "/":
         raise HTTPException(status_code=400, detail="Cannot put a directory")
 
+    # Make sure the data is valid JSON
+    try:
+        json.loads(data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Data is not valid json")
+
     # Connect to the database
     r = await open_redis()
 
     # Set the data
-    media_type = guess_type(data.filename)[0]
-    if not media_type:
-        media_type = "application/octet-stream"
-    await r.hset('pod' + hash_, 'media_type', media_type)
-    datab = await data.read()
-    await r.hset('pod' + hash_, 'data', datab)
+    await r.hset('pod' + hash_, 'data', data)
 
-    # TODO: Make it so the data can be ls'd
-
-    return hash_
+    # Return public URL
+    return {'hash': hash_}
 
 @router.get('/{path}')
-async def get(hash_: str = Depends(pathToHash)):
+async def get(hash_: str = Depends(path_to_hash)):
     return await get_public(hash_)
 
 @router.get('/public/{hash_}')
@@ -55,14 +45,12 @@ async def get_public(hash_: str):
     if not await r.hexists('pod' + hash_, 'data'):
         raise HTTPException(status_code=404, detail="Not found")
 
-    # Fetch the data
-    datab      =  await r.hget('pod' + hash_, 'data')
-    media_type = (await r.hget('pod' + hash_, 'media_type')).decode()
-
-    return Response(datab, media_type=media_type)
+    # Fetch and decode the data
+    data =  await r.hget('pod' + hash_, 'data')
+    return json.loads(data)
 
 @router.delete('/{path}')
-async def delete(hash_: str = Depends(pathToHash)):
+async def delete(hash_: str = Depends(path_to_hash)):
     # Connect to the database
     r = await open_redis()
 
@@ -70,7 +58,6 @@ async def delete(hash_: str = Depends(pathToHash)):
     if not await r.hexists('pod' + hash_, 'data'):
         raise HTTPException(status_code=404, detail="Not Found")
 
-    # Delete the data and mimetype
-    await r.hdel('pod' + hash_, 'data', 'mimetype')
-
+    # Delete the data
+    await r.hdel('pod' + hash_, 'data')
     return "Success"
