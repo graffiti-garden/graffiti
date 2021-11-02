@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Feed</title>
+</head>
+
+<body>
+
+  <div id="app">
+
+    <input v-model="myNote" placeholder="What's happening?">
+
+    <button v-on:click="postMyNote">Post</button>
+
+    <ul>
+      <template v-for="action in actions">
+        <li v-if="action.type == 'Create' && action.object.type == 'Note'">
+          <b>
+            {{ action.object.attributedTo.name }}
+          </b> :
+          {{ action.object.content }}
+        </li>
+        <li v-else>
+          {{ object.summary }}
+        </li>
+      </template>
+    </ul>
+
+  </div>
+
+  <script type="module" src="feed.js"></script>
+  </body>
+</html>
