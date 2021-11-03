@@ -7,12 +7,14 @@ export default class Pod {
   }
 
   async get(path) {
-    return await this.auth.request('get', `pod/${path}`)
+    path = encodeURIComponent(path)
+    return await this.auth.request('get', `get?path=${path}`)
   }
 
   async put(data, path) {
+    path = encodeURIComponent(path)
     data = encodeURIComponent(JSON.stringify(data))
-    await this.auth.request('put', `pod/${path}?data=${data}`)
+    return await this.auth.request('put', `put?path=${path}&data=${data}`)
   }
 
 }

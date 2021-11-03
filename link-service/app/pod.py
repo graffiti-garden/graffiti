@@ -101,7 +101,7 @@ async def get_expand(id_: str, redis, public: bool, user: str = None, recursion_
     # Stop infinite loops and 404's
     if recursion_depth > max_recursion_depth:
         return {'id': id_}
-    if not await redis.hexists('pod' + hash_, 'data'):
+    if not await redis.hexists('pod' + hash_, 'user'):
         return {'id': id_}
 
     # Fetch and decode the data

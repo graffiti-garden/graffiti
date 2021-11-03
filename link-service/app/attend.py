@@ -67,12 +67,12 @@ class Attend:
             # Extract the actions
             actions = {}
             for stage, stageevents in events:
-                stage = stage.decode()[3:]
+                stage = stage.decode()[5:]
                 actions[stage] = []
                 for id_, event in stageevents:
                     self.stages[stage] = id_.decode()
                     # Get the event from the pod
-                    action = get_public(event[b'hash'])
+                    action = await get_public(event[b'hash'].decode())
                     actions[stage].append(action)
 
             # Send the output
