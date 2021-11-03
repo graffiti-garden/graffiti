@@ -26,6 +26,8 @@ def path_and_hash(path: str, user: str):
     # also to prevent this function from being
     # publicly computable.
     inp = secret.join((path, user))
+
+    # Return the updated path with the hash
     return path, sha256(inp.encode()).hexdigest()
 
 @router.put('/put')
@@ -39,9 +41,9 @@ async def put(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Data is not valid json")
     if not isinstance(data, dict):
-        raise HTTPException(status_code=400, detail="Root is not a dictionary")
+        raise HTTPException(status_code=400, detail="Data root is not a dictionary")
 
-    # If the data has an ID, remove it
+    # If the data already has an ID, remove it
     data.pop('id', None)
 
     # Expand the path and compute hash
@@ -50,7 +52,7 @@ async def put(
     # Connect to the database
     r = await open_redis()
 
-    # Set the data and user
+    # Store the data and user under the hash
     await r.hset('pod' + hash_, mapping={
         'data': json.dumps(data),
         'user': user
@@ -61,20 +63,23 @@ async def put(
 
 @router.get('/get')
 async def get(path: str, user: str = Depends(token_to_user)):
-    # Connect to the database and recurse
+    # Connect to the database and recursively
+    # get the data, the data it references, etc.
     r = await open_redis()
     return await get_expand(path, r, False, user)
 
 @router.get('/pod/{hash_}')
 async def get_public(hash_: str):
-    # Connect to the database and recurse
+    # Connect to the database and recursively
+    # get the data, the data it references, etc.
     r = await open_redis()
     return await get_expand(hash_, r, True)
 
 def iterate_pod_references(data, keys=()):
-    # Recursively iterate until reaching
-    # references to the pod.
-    # The references start with '~/'
+    # Recurse down to the leaves of a
+    # data JSON blob. If a leaf is a string
+    # starting with '~/' it is a reference
+    # to a pod file, so add it to the iterator.
     if isinstance(data, dict):
         for k, v in data.items():
             yield from iterate_pod_references(v, keys + (k,))
@@ -86,16 +91,18 @@ def iterate_pod_references(data, keys=()):
             yield keys, data
 
 def set_nested_value(data, keys, value):
+    # Set the value in a JSON blob located
+    # at data[keys[0]][keys[1]][...]
     for key in keys[:-1]:
         data = data.setdefault(key, {})
     data[keys[-1]] = value
 
 async def get_expand(id_: str, redis, public: bool, user: str = None, recursion_depth: int = 0):
     if public:
-        # The hash is the public id
+        # Use the hash as the public ID
         hash_ = id_
     else:
-        # The path is the private id
+        # Expand the path and use it as the private ID
         id_, hash_ = path_and_hash(id_, user)
 
     # Stop infinite loops and 404's
@@ -112,8 +119,10 @@ async def get_expand(id_: str, redis, public: bool, user: str = None, recursion_
     # Walk through all references to the pod and expand them
     for keys, path in iterate_pod_references(data):
         if public:
+            # Compute the hash to get a public ID
             _, nested_id = path_and_hash(path, user)
         else:
+            # Just use the path as the private ID
             nested_id = path
         nested_value = await get_expand(nested_id, redis, public, user, recursion_depth+1)
         set_nested_value(data, keys, nested_value)
