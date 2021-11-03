@@ -15,7 +15,7 @@ const app = new Vue({
 
     this.th.attend.add(
       stage, 
-      (stage, action) => this.actions.push(action)
+      (stage, action) => this.actions.unshift(action)
     )
   },
 

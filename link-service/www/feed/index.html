@@ -3,27 +3,27 @@
 
 <head>
   <title>Feed</title>
+  <link rel="stylesheet" type="text/css" href="feed.css">
 </head>
 
 <body>
 
   <div id="app">
 
-    <input v-model="myNote" placeholder="What's happening?">
+    <div class="noteEntry">
+      <textarea v-model="myNote" placeholder="What's happening?"></textarea>
+      <button v-on:click="postMyNote">Post</button>
+    </div>
 
-    <button v-on:click="postMyNote">Post</button>
-
-    <ul>
-      <template v-for="action in actions">
-        <li v-if="action.type == 'Create' && action.object.type == 'Note'">
-          <b>{{ action.actor.name }}</b>:
-          {{ action.object.content }}
-        </li>
-        <li v-else>
-          {{ action.summary }}
-        </li>
-      </template>
-    </ul>
+    <template v-for="action in actions">
+      <div class="note" v-if="action.type == 'Create' && action.object.type == 'Note'">
+        <div class="noteAuthor"> {{ action.actor.name }} </div>
+        {{ action.object.content }}
+      </div>
+      <li v-else>
+        {{ action.summary }}
+      </li>
+    </template>
 
   </div>
 
