@@ -17,12 +17,12 @@
       <template v-for="action in actions">
         <li v-if="action.type == 'Create' && action.object.type == 'Note'">
           <b>
-            {{ action.object.attributedTo.name }}
-          </b> :
+            {{ action.actor.name }}
+          </b>:
           {{ action.object.content }}
         </li>
         <li v-else>
-          {{ object.summary }}
+          {{ action.summary }}
         </li>
       </template>
     </ul>

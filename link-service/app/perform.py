@@ -1,68 +1,62 @@
-import json
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from .auth import token_to_user
-from .db import open_redis, strings_to_hash
+from .db import open_redis
+from .pod import put, get
 
 router = APIRouter()
 
-def stage_action_to_hash(stage: str, action: str):
-    return strings_to_hash([stage, action])
+def stage_to_path(stage: str):
+    return f"~/performances/{stage}/"
 
 @router.post('/perform')
 async def perform(
-        stage: str, action: str,
-        perform_hash = Depends(stage_action_to_hash),
+        action: str, stage: str,
         user = Depends(token_to_user)):
 
-    # Make sure the action is valid JSON
-    try:
-        json.loads(action)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Action is not valid json.")
+    # Store the performance in the pod
+    path = stage_to_path(stage)
+    pod_id = await put(action, path, user)
+    hash_ = pod_id['hash']
 
     # Connect to the database and lock
     r = await open_redis()
-    lock = r.lock(b'loc' + perform_hash)
+    lock = r.lock('lock' + hash_)
     await lock.acquire()
 
-    # If no user is already performing
-    if await r.scard(b'per' + perform_hash) == 0:
-        # Add it to the stream
-        xid = await r.xadd('stg' + stage, {'action': action})
-        # Map the performance to its
-        # stream ID so it can be deleted.
-        await r.hset(b'xid' + perform_hash, 'xid', xid)
+    # Find out whether it is already in the stream
+    xid = await r.hget('performance' + hash_, 'xid')
+    if not xid:
+        # Add the performance to a stream
+        xid = await r.xadd('stage' + stage, pod_id)
+        await r.hset('performance' + hash_, mapping={
+            'xid': xid,
+            'stage': stage
+            })
 
-    # Add the user to the performance
-    await r.sadd(b'per' + perform_hash, user)
-
-    # Release
+    # Return the result
     await lock.release()
-    return "Success"
+    return pod_id
 
 @router.post('/retire')
 async def retire(
-        stage: str, action: str,
-        perform_hash = Depends(stage_action_to_hash),
+        hash_: str,
         user = Depends(token_to_user)):
 
     # Connect to the database and lock
     r = await open_redis()
-    lock = r.lock(b'loc' + perform_hash)
+    lock = r.lock('lock' + hash_)
     await lock.acquire()
 
-    # Remove the user from the performance
-    await r.srem(b'per' + perform_hash, user)
-
-    # If no user is performing
-    # remove the performance from the stream
-    if await r.scard(b'per' + perform_hash) == 0:
-        # Get the stream ID of the performance
-        xid = await r.hget(b'xid' + perform_hash, 'xid')
-        if xid:
-            # Remove it from the stream
-            await r.xdel('stg' + stage, xid)
-            await r.hdel(b'xid' + perform_hash, 'xid')
+    # Find out whether it is already in the stream
+    xid = await r.hget('performance' + hash_, 'xid')
+    if xid:
+        # If it is, remove it from the stream
+        stage = await r.hget('performance' + hash_, 'stage')
+        await r.xdel(b'stage' + stage, xid)
+        await r.hdel('performance' + hash_, 'xid', 'stage')
+    else:
+        await lock.release()
+        raise HTTPException(status_code=404)
 
     # Release
     await lock.release()

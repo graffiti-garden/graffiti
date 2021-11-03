@@ -3,6 +3,7 @@ from os import getenv
 from asyncio import create_task
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .db import open_redis
+from .pod import get_public
 
 ws_interval = int(getenv('ATTEND_WS_INTERVAL'))
 
@@ -60,7 +61,7 @@ class Attend:
 
         while True:
             # Wait for new events
-            stages = {'stg' + stage: id_ for stage, id_ in self.stages.items()}
+            stages = {'stage' + stage: id_ for stage, id_ in self.stages.items()}
             events = await r.xread(stages, block=ws_interval)
 
             # Extract the actions
@@ -70,8 +71,8 @@ class Attend:
                 actions[stage] = []
                 for id_, event in stageevents:
                     self.stages[stage] = id_.decode()
-                    # Decode the binary to JSON
-                    action = json.loads(event[b'action'])
+                    # Get the event from the pod
+                    action = get_public(event[b'hash'])
                     actions[stage].append(action)
 
             # Send the output
