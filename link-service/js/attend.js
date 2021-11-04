@@ -12,12 +12,14 @@ export default class Attend {
   }
 
   async add(stage, callback) {
+    // Attend a stage
     this.stages[stage] = '0'
     this.callbacks[stage] = callback
     await this.updateAttending()
   }
 
   async del(stage, callback) {
+    // Stop attending a stage
     if (this.stages.hasKey(stage)) {
       delete this.stages[stage]
       delete this.clallbacks[stage]
@@ -45,6 +47,9 @@ export default class Attend {
       }
     }
 
+    // Update the latest ID received in each
+    // stage so we don't get the same message
+    // more than once, even if we reconnect.
     if ('stages' in data) {
       this.stages = data['stages']
     }
@@ -61,6 +66,9 @@ export default class Attend {
   async onSocketOpen(event) {
     console.log('Attend socket is open.')
     this.connected = true
+
+    // Send updates to the attendance list
+    // that haven't gotten through yet
     this.updateAttending()
   }
 
