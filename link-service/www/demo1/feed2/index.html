@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Feed</title>
+  <link rel="stylesheet" type="text/css" href="../demo1.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+
+  <div id="app">
+
+    <div class="note" v-for="note of rankedNotes">
+      {{ note.content }}
+      <div class="like">
+        {{ note.likes }}
+        <div v-if="notes[note.id].actors.has(myActor)">
+          <button v-on:click="unlike(note.id)">👍</button>
+        </div>
+        <div v-else>
+          <button v-on:click="like(note.id)">👍</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="feed2.js"></script>
+
+</body>
+</html>

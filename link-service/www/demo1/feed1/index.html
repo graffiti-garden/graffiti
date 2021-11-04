@@ -2,8 +2,8 @@
 <html>
 
 <head>
-  <title>Feed</title>
-  <link rel="stylesheet" type="text/css" href="feed.css">
+  <title>Feed 1</title>
+  <link rel="stylesheet" type="text/css" href="../demo1.css">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
@@ -21,14 +21,14 @@
         <div class="noteAuthor"> {{ action.actor.name }} </div>
         {{ action.object.content }}
       </div>
-      <li v-else>
-        {{ action.summary }}
-      </li>
+      <div class="note" v-else>
+        {{ action }}
+      </div>
     </template>
 
   </div>
 
-  <script type="module" src="feed.js"></script>
+  <script type="module" src="feed1.js"></script>
 
 </body>
 </html>
