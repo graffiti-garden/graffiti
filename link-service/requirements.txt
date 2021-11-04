@@ -2,6 +2,7 @@ aioredis # Database
 aiosmtplib # Email
 pyjwt # tokens
 
+jinja2            # For templating
 python-multipart  # For parsing multipart form data
 aiofiles          # For serving static files and templates
 fastapi           # Web framework

@@ -46,7 +46,7 @@ export default class Auth {
 
     // Open the login window
     const redirectURI = encodeURIComponent(window.location)
-    window.location.replace(`https://${this.domain}/auth?client_id=${clientID}&redirect_uri=${redirectURI}&state=null`)
+    window.location.replace(`https://${this.domain}/auth?client_id=${clientID}&redirect_uri=${redirectURI}`)
   }
 
   getAndDeleteCookie(param) {

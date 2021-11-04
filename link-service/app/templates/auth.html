@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+Would you like to authorize with the account {{email}}?
+
+<input type="button" value="Authorize" onclick="authorize()" />
+
+<input type="button" value="Choose Another Account" onclick="logOut()" />
+
+<script>
+  function authorize() {
+    let redirect = new URL('{{redirect_uri}}')
+    redirect.searchParams.set('state', '{{state}}')
+    redirect.searchParams.set('code', '{{code}}')
+    window.location.replace(redirect)
+  }
+
+  function logOut() {
+    document.cookie = 'token=; max-age=0; SameSite=Strict'
+    window.location.reload()
+  }
+</script>
+{% endblock %}

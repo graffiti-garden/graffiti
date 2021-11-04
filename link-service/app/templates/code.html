@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+To authorize you need to be logged in.
+
+Enter the log in code sent to <code>{{email}}</code>. 
+
+<input type="text" id="code" />
+
+<input type="button" value="Authorize and Log In" onclick="logIn()" />
+
+<script>
+  function logIn() {
+    const code_end = document.getElementById('code').value
+    let redirect = new URL('{{redirect_uri}}')
+    redirect.searchParams.set('state', '{{state}}')
+    redirect.searchParams.set('code', '{{code_start}}' + code_end)
+    window.location.replace(redirect)
+  }
+</script>
+{% endblock %}

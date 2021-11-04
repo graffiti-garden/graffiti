@@ -10,20 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, Cookie
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2AuthorizationCodeBearer
-
-# TODO:
-# security:
-# - Account for errors in reponse (i.e. if email is invalid)
-# - encrypt email (https://stackoverflow.com/questions/27335726/how-do-i-encrypt-and-decrypt-a-string-in-python)
-# - make a real secret (random every time)
-# - CORS
-# - Token expiration + refresh tokens
-# UI:
-# - code size to all capital letters
-# - Magic link rather than code
-# - Prettier interface
-# Both kind of:
-# - Scopes
+from fastapi.templating import Jinja2Templates
 
 mail_from = getenv('MAIL_FROM')
 secret    = getenv('SECRET')
@@ -35,70 +22,79 @@ oauth2_scheme = OAuth2AuthorizationCodeBearer(
         authorizationUrl = "auth",
         tokenUrl = "token")
 
+templates = Jinja2Templates(directory="theater/templates")
+
 @router.get("/auth", response_class=HTMLResponse)
 async def auth(
         client_id: str,
         redirect_uri: str,
-        state: str,
+        request: Request,
         response: Response,
+        state: Optional[str] = "",
         token: Optional[str] = Cookie(None)):
 
-    # If there is no token, ask user to log in.
-    if not token:
-        return login(client_id, redirect_uri, state)
+    # Determine which site is asking for access
+    client = request.headers['referer']
 
+    # Check if there is a token...
     if token:
-        # If the token is bad, delete it and ask the user to log in.
+        # ... and whether or not it is valid.
         try:
-            user = token_to_user(token)
+            email = token_to_user(token)
         except HTTPException:
             response.delete_cookie("token")
-            return login(client_id, redirect_uri, state)
+            token = False
 
-        # Otherwise, generate a new authorization code and let the
-        # user choose if they want to send it or not.
-        code = auth_code(client_id, user)
-        return template(
-                prompt=f"Would you like to authorize with the account connected to {user}?",
-                options={
-                    "Choose Another Account": "document.cookie = 'token='; window.location.reload()",
-                    "Authorize": f"window.location.replace('{redirect_uri}?state={state}&code={code}')"
-                })
+    # If there is no valid token, ask the user to log in
+    if not token:
+        return templates.TemplateResponse("login.html", {
+            'request': request,
+            'client': client,
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
+            'state': state,
+            'email': ''
+        })
 
-def login(client_id: str, redirect_uri: str, state: str):
-    return template(
-            prompt="To authorize access, you must log in.<br>Enter your email to be sent a login code:",
-            input_id="email",
-            options={
-                "Email Login Code": f"""
-                var email = document.getElementById('email').value;
-                window.location.replace(`login_email?client_id={client_id}&redirect_uri={redirect_uri}&state={state}&email=${{email}}`);
-                """
-            })
+    # Otherwise, the user must be logged in.
+    # Generate a new authorization code and let the user
+    # choose if they want to send it or not.
+    code = auth_code(client_id, email)
+    return templates.TemplateResponse("auth.html", {
+        'request': request,
+        'client': client,
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'code': code
+    })
 
-def auth_code(client_id: str, email: str):
-    # TODO:
-    # - Encrypt the email
-    # - Add scope
-
+def auth_code(client_id: str, email: str, remember: bool = False):
     return jwt.encode({
         "type": "code",
         "client_id": client_id,
         "email": email,
-        "time": time.time()
-        }, secret, algorithm="HS256")
+        "time": time.time(),
+        "remember": remember
+    }, secret, algorithm="HS256")
 
-@router.get("/login_email", response_class=HTMLResponse)
-async def login_email(client_id: str, redirect_uri: str, state: str, email: str, request: Request):
-    # TODO: Make sure this page is being loaded from another theater page
-    # request.origin
-    # All that does is protect the email.. right?
-    # They could also fake scopes. That would be bad.
+@router.get("/email", response_class=HTMLResponse)
+async def email(
+        client: str,
+        client_id: str,
+        redirect_uri: str,
+        state: str,
+        email: str,
+        remember: bool,
+        request: Request):
 
-    code = auth_code(client_id, email)
+    # Generate an authorization code
+    code = auth_code(client_id, email, remember)
 
-    # Email part of the signature for verification
+    # Split it into two parts
     code_end = code[-code_size:]
+    code_start = code[:-code_size]
+
+    # Email the smaller part for verification
     message = MIMEText(code_end)
     message["Subject"] = Header("Login Code")
     message["From"] = mail_from
@@ -110,30 +106,26 @@ async def login_email(client_id: str, redirect_uri: str, state: str, email: str,
     try:
         await sendEmail(message, hostname="mailserver", port=25)
     except:
-        # TODO: redirect back to auth with invalid email
-        # "email could not be sent, please enter a valid email"
-        raise HTTPException(status_code=422, detail="Invalid email.")
+        # Return to login with an error
+        return templates.TemplateResponse("login.html", {
+            'request': request,
+            'client': client,
+            'client_id': client_id,
+            'redirect_uri': redirect_uri,
+            'state': state,
+            'email': email
+        })
 
-    # Return a form that will combine the pieces and return the code
-    code_start = code[:-code_size]
-    return template(
-            prompt="Enter your login code to log in and authorize",
-            input_id="code_end",
-            options={
-                "Login and Authorize": f"""
-                var code_end = document.getElementById('code_end').value;
-                window.location.replace(`{redirect_uri}?state={state}&code={code_start}${{code_end}}`)
-                """
-            })
-
-@router.get("/auth_redirect", response_class=HTMLResponse)
-async def auth_redirect(state: str, code: str):
-    return f"""
-    <script>
-        window.opener.postMessage("{code}", "{state}")
-        window.close()
-    </script>
-    """
+    # Return a form that will combine the code pieces
+    # and then send it to the redirect_uri
+    return templates.TemplateResponse("code.html", {
+        'request': request,
+        'client': client,
+        'email': email,
+        'redirect_uri': redirect_uri,
+        'state': state,
+        'code_start': code_start
+    })
 
 @router.post("/token")
 def token(
@@ -148,13 +140,13 @@ def token(
     except:
         raise HTTPException(status_code=400, detail="Malformed code.")
     if not code["type"] == "code":
-        raise HTTPException(status_code=400, detail="Wrong code type.")
+        raise HTTPException(status_code=400, detail="Malformed code.")
 
     # Assert that the code has not expired
     if code["time"] + expiration_time*60 < time.time():
-        raise HTTPException(status_code=400, detail="Expired code.")
+        raise HTTPException(status_code=400, detail="Code has expired.")
 
-    # Assert the client_id is paired to the token
+    # Assert that the client_id is paired to the token
     if client_id != code["client_id"]:
         raise HTTPException(status_code=400, detail="Client ID does not match code.")
 
@@ -169,7 +161,8 @@ def token(
         }, secret, algorithm="HS256")
 
     # Store cookie for repeat logins
-    response.set_cookie("token", token, samesite="strict")
+    if code["remember"]:
+        response.set_cookie("token", token, samesite="strict")
 
     return {"access_token": token, "token_type": "bearer"}
 
@@ -184,28 +177,12 @@ def token_to_user(token: str = Depends(oauth2_scheme)):
 
     return token["email"]
 
-def template(prompt: str, options: dict, input_id: str = None):
-    options["Cancel"] = "window.close()"
-
-    buttonHTML = ""
-    for key in options:
-        buttonHTML += f'<input type="button" value="{key}" onclick="{options[key]}" />'
-
-    inputHTML = ""
-    if input_id:
-        inputHTML = f'<br><input type="text" id="{input_id}">'
-
-    return f"""\
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Theater Authorization</title>
-</head>
-<body>
-    {prompt}
-    {inputHTML}
-    <br>
-    {buttonHTML}
-</body>
-</html>\
-"""
+# TODO:
+# UI:
+# - code size to all capital letters
+# security:
+# - Scopes
+# - encrypt email (https://stackoverflow.com/questions/27335726/how-do-i-encrypt-and-decrypt-a-string-in-python)
+# - make a real secret (random every time)
+# - CORS
+# - Token expiration + refresh tokens
