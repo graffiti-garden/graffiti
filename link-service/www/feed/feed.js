@@ -23,7 +23,7 @@ const app = new Vue({
 
     postMyNote: async function() {
 
-      const myPodNote = await this.th.pod.put({
+      const myPodNote = await this.th.put({
         type: "Note",
         content: this.myNote
       }, "~/notes/")

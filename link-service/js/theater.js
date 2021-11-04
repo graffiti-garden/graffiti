@@ -1,22 +1,35 @@
 import Attend  from './attend.js'
 import Auth    from './auth.js'
-import Pod     from './pod.js'
 
 export default class Theater {
 
   constructor(domain) {
     this.auth   = new Auth  (domain)
     this.attend = new Attend(domain)
-    this.pod    = new Pod   (this.auth)
+  }
+
+  async get(path) {
+    return await this.auth.request('get', 'get', {path: path})
+  }
+
+  async put(data, path) {
+    return await this.auth.request('put', 'put', {
+      path: path,
+      data: JSON.stringify(data)
+    })
   }
 
   async perform(stage, action) {
-    action = encodeURIComponent(JSON.stringify(action))
-    await this.auth.request('post', `perform?stage=${stage}&action=${action}`)
+    return await this.auth.request('post', 'perform', {
+      stage: stage,
+      action: JSON.stringify(action)
+    })
   }
 
   async retire(stage, action) {
-    action = encodeURIComponent(JSON.stringify(action))
-    await this.auth.request('post', `retire?stage=${stage}&action=${action}`)
+    await this.auth.request('post', 'retire', {
+      hash: hash
+    })
   }
+
 }

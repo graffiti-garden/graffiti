@@ -9,12 +9,12 @@ let app = new Vue({
   },
 
   created: async function() {
-    this.costume = await this.th.pod.get('~/actor')
+    this.costume = await this.th.get('~/actor')
   },
 
   methods: {
     saveCostume: async function() {
-      await this.th.pod.put(this.costume, '~/actor')
+      await this.th.put(this.costume, '~/actor')
     }
   },
 })
