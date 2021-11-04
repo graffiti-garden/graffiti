@@ -7,12 +7,17 @@ const app = new Vue({
   el: '#app',
   data: {
     th: new Theater('theater.csail.mit.edu'),
+    myActor: "",
     notes: {},
     likes: {},
     rankedNotes: []
   },
 
   created: function() {
+
+    this.th.hash("~/actor").then(
+      hash => {this.myActor = hash}
+    )
 
     this.th.attend.add(
       stage, 
@@ -23,8 +28,8 @@ const app = new Vue({
             const note = action.object
             this.notes[note.id] = {
               note: note,
-              likes: new Set(),
-              actors: new Set()
+              actors: new Set(),
+              actorsToLikes: {},
             }
             note.likes = 0
             this.rankedNotes.push(note)
@@ -39,8 +44,8 @@ const app = new Vue({
 
             // Don't allow double liking
             if (!this.notes[noteID].actors.has(actorID)) {
-              this.notes[noteID].likes.add(likeID)
               this.notes[noteID].actors.add(actorID)
+              this.notes[noteID].actorsToLikes[actorID] = likeID
               this.likes[likeID] = action
 
               const rank = this.rankedNotes.findIndex(note => note.id == noteID)
@@ -50,15 +55,15 @@ const app = new Vue({
         }
 
         if (action.type == "Undo") {
-          if (action.object.id in likes) {
+          if (action.object.id in this.likes) {
             const likeID = action.object.id
             const noteID = this.likes[likeID].object.id
             const actorID = action.actor.id
 
             // Don't allow undoing someone else's like
             if (actorID == this.likes[likeID].actor.id) {
-              this.notes[noteID].likes.delete(likeID)
               this.notes[noteID].actors.delete(actorID)
+              delete this.notes[noteID].actorsToLikes[actorID]
               delete this.likes[likeID]
 
               const rank = this.rankedNotes.findIndex(note => note.id == noteID)
@@ -87,17 +92,23 @@ const app = new Vue({
 
     },
 
-    unlike: async function(likeID) {
+    unlike: async function(noteID) {
 
-      const myUnlike = {
-        type: "Undo",
-        actor: "~/actor",
-        object: {id: likeID}
+      if (noteID in this.notes) {
+        if (this.notes[noteID].actors.has(this.myActor)) {
+          const likeID = this.notes[noteID].actorsToLikes[this.myActor]
+
+          const myUnlike = {
+            type: "Undo",
+            actor: "~/actor",
+            object: {id: likeID}
+          }
+
+          await this.th.perform(stage, myUnlike)
+        }
       }
 
-      await this.th.perform(stage, myUnlike)
-
-    },
+    }
 
   },
 })

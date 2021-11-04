@@ -61,6 +61,11 @@ async def put(
     # Return both the private path and public hash
     return {'path': path, 'hash': hash_}
 
+@router.post('/hash')
+async def toHash(path: str, user: str = Depends(token_to_user)):
+    _, hash_ = path_and_hash(path, user)
+    return hash_
+
 @router.get('/get')
 async def get(path: str, user: str = Depends(token_to_user)):
     # Connect to the database and recursively

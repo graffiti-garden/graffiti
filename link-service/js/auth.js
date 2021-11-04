@@ -26,7 +26,7 @@ export default class Auth {
   async authorize() {
     // Send a warning alert
     alert(
-      `This application requires access to your account on ${this.domain}.
+      `This application requires access to your Theater.
       \n\nClick OK to continue to the authorization page.`
     )
 

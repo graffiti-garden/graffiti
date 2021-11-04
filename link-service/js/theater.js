@@ -12,6 +12,10 @@ export default class Theater {
     return await this.auth.request('get', 'get', {path: path})
   }
 
+  async hash(path) {
+    return await this.auth.request('post', 'hash', {path: path})
+  }
+
   async put(data, path) {
     return await this.auth.request('put', 'put', {
       path: path,
