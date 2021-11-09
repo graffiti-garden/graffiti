@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
-Would you like to authorize with the account {{email}}?
+Would you like to authorize with this account?
+
+<div class="userCode">{{email}}</div>
 
 <input type="button" value="Authorize" onclick="authorize()" />
 

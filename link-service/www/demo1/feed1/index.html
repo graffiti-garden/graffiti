@@ -13,7 +13,7 @@
 
     <div class="noteEntry">
       <textarea v-model="myNote" placeholder="What's happening?"></textarea>
-      <button v-on:click="postMyNote">Post</button>
+      <button class="postButton" v-on:click="postMyNote">Post</button>
     </div>
 
     <template v-for="action in actions">
@@ -22,7 +22,7 @@
         {{ action.object.content }}
       </div>
       <div class="note" v-else>
-        {{ action }}
+        <i>{{ action.summary }}</i>
       </div>
     </template>
 

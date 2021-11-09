@@ -1,7 +1,7 @@
 import Vue     from 'https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.esm.browser.js'
 import Theater from 'https://theater.csail.mit.edu/js/theater.js'
 
-const stage = "a-generic-feed"
+const stage = "a_generic_feed"
 
 const app = new Vue({
   el: '#app',

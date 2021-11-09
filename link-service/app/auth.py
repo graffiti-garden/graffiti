@@ -62,6 +62,7 @@ async def auth(
     code = auth_code(client_id, email)
     return templates.TemplateResponse("auth.html", {
         'request': request,
+        'email': email,
         'client': client,
         'redirect_uri': redirect_uri,
         'state': state,

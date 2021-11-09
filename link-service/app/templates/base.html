@@ -3,12 +3,59 @@
 <head>
   <title>Theater Authorization</title>
   <style>
+    html {
+      background-color: #657786;
+      font-family: "Helvetica Neue", Roboto, Arial;
+      font-size: 16px;
+      height: 100%;
+    }
+    
+    h1 {
+      text-align: center;
+    }
+
+    .userCode {
+      font-family: monospace;
+      text-align: center;
+      margin: 1em;
+    }
+
     body {
       color:#14171A;
       background-color:#FFFFFF;
       max-width: 30em;
-      min-height: 100%;
       margin: 0 auto;
+      padding: 1em;
+    }
+
+    input {
+      margin-top: 0.5em;
+      margin-bottom: 0.5em;
+    }
+
+    input[type=button] {
+      width: 100%;
+      background-color: #1DA1F2;
+      font-size: 2em;
+      color: white;
+      border: 0;
+      border-radius: 2em;
+      front-weight: bold;
+      padding-top: 0.5em;
+      padding-bottom: 0.5em;
+      margin: 0.1em;
+    }
+
+    input[type=text] {
+      width: 100%;
+      border: 3px solid #E1E8ED;
+      box-sizing: border-box;
+      font-size: 1.5em;
+      text-align: center;
+    }
+
+    input[type=checkbox] {
+      background: #1DA1F2;
     }
   </style>
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -16,7 +63,9 @@
 <body>
   <h1> Theater Authorization </h1>
 
-  <code>{{client}}</code> is requesting access to your Theater.
+  The following application is requesting access to your Theater:
+  
+  <div class="userCode">{{client}}</div>
 
   {% block content %}
   {% endblock %}

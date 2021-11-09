@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>Costume Creator</title>
+  <title>Profile Creator</title>
   <link rel="stylesheet" type="text/css" href="../demo1.css">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
@@ -11,11 +11,14 @@
 
   <div id="app">
     <label for="name">Name:</label>
-    <input id="name" v-model="costume.name">
+    <input id="name" v-model="actor.name">
     <br>
-    <button v-on:click="saveCostume">Save Costume</button>
+    <button v-on:click="saveProfile">Save Profile</button>
+    <div v-if="success">
+      Success!
+    </div>
   </div>
 
-  <script type="module" src="costume.js"></script>
+  <script type="module" src="profile_creator.js"></script>
 </body>
 </html>

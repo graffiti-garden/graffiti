@@ -1,13 +1,14 @@
 import Vue     from 'https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.esm.browser.js'
 import Theater from 'https://theater.csail.mit.edu/js/theater.js'
 
-const stage = "a-generic-feed"
+const stage = "a_generic_feed"
 
 const app = new Vue({
   el: '#app',
   data: {
     th: new Theater('theater.csail.mit.edu'),
     myActor: "",
+    myName: "",
     notes: {},
     likes: {},
     rankedNotes: []
@@ -17,6 +18,10 @@ const app = new Vue({
 
     this.th.hash("~/actor").then(
       hash => {this.myActor = hash}
+    )
+
+    this.th.get("~/actor").then(
+      actor => {this.myName = actor.name}
     )
 
     this.th.attend.add(
@@ -32,6 +37,7 @@ const app = new Vue({
               actorsToLikes: {},
             }
             note.likes = 0
+            note.actor = action.actor
             this.rankedNotes.push(note)
           }
         }
@@ -85,7 +91,8 @@ const app = new Vue({
       const myLike = {
         type: "Like",
         actor: "~/actor",
-        object: {id: noteID}
+        object: {id: noteID},
+        summary: `${this.myName} liked a note by ${this.notes[noteID].note.actor.name}`
       }
 
       await this.th.perform(stage, myLike)
@@ -101,7 +108,8 @@ const app = new Vue({
           const myUnlike = {
             type: "Undo",
             actor: "~/actor",
-            object: {id: likeID}
+            object: {id: likeID},
+            summary: `${this.myName} unliked a note by ${this.notes[noteID].note.actor.name}`
           }
 
           await this.th.perform(stage, myUnlike)

@@ -5,16 +5,18 @@ let app = new Vue({
   el: '#app',
   data: {
     th: new Theater('theater.csail.mit.edu'),
-    costume: {}
+    success: false,
+    actor: {}
   },
 
   created: async function() {
-    this.costume = await this.th.get('~/actor')
+    this.actor = await this.th.get('~/actor')
   },
 
   methods: {
-    saveCostume: async function() {
-      await this.th.put(this.costume, '~/actor')
+    saveProfile: async function() {
+      await this.th.put(this.actor, '~/actor')
+      this.success = true
     }
   },
 })
