@@ -24,12 +24,6 @@ export default class Auth {
   }
 
   async authorize() {
-    // Send a warning alert
-    alert(
-      `This application requires access to your Theater.
-      \n\nClick OK to continue to the authorization page.`
-    )
-
     // Generate a random client secret
     const clientSecret = Math.random().toString(36).substr(2)
 
@@ -110,8 +104,6 @@ export default class Auth {
     // And make sure that the token is valid
     if (!this.token) {
       return this.authorizationError("could not parse token.")
-    } else {
-      alert("Authorized!")
     }
 
   }
