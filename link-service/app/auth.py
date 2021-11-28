@@ -12,8 +12,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.templating import Jinja2Templates
 
-mail_from = getenv('MAIL_FROM')
+debug     = (getenv('DEBUG') == 'true')
 secret    = getenv('SECRET')
+mail_from = getenv('MAIL_FROM')
 expiration_time = 5 # minutes
 code_size = 6
 
@@ -94,27 +95,32 @@ async def email(
     code_end = code[-code_size:]
     code_start = code[:-code_size]
 
-    # Email the smaller part for verification
-    message = MIMEText(code_end)
-    message["Subject"] = Header("Login Code")
-    message["From"] = mail_from
-    message["To"] = email
-    message["Message-ID"] = make_msgid()
-    message["Date"] = formatdate()
+    # Send the user the smaller part for verification
+    if debug:
+        # In debug mode, just print the code
+        print("Login code: ", code_end)
+    else:
+        # Otherwise, construct an email
+        message = MIMEText(code_end)
+        message["Subject"] = Header("Login Code")
+        message["From"] = mail_from
+        message["To"] = email
+        message["Message-ID"] = make_msgid()
+        message["Date"] = formatdate()
 
-    # Send!
-    try:
-        await sendEmail(message, hostname="mailserver", port=25)
-    except:
-        # Return to login with an error
-        return templates.TemplateResponse("login.html", {
-            'request': request,
-            'client': client,
-            'client_id': client_id,
-            'redirect_uri': redirect_uri,
-            'state': state,
-            'email': email
-        })
+        # Send!
+        try:
+            await sendEmail(message, hostname="mailserver", port=25)
+        except:
+            # Return to login with an error
+            return templates.TemplateResponse("login.html", {
+                'request': request,
+                'client': client,
+                'client_id': client_id,
+                'redirect_uri': redirect_uri,
+                'state': state,
+                'email': email
+            })
 
     # Return a form that will combine the code pieces
     # and then send it to the redirect_uri
@@ -182,7 +188,7 @@ def token_to_user(token: str = Depends(oauth2_scheme)):
 # - code size to all capital letters
 # security:
 # - Scopes
-# - encrypt email (https://stackoverflow.com/questions/27335726/how-do-i-encrypt-and-decrypt-a-string-in-python)
+# - hide email
 # - make a real secret (random every time)
 # - CORS
 # - Token expiration + refresh tokens

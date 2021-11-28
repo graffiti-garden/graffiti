@@ -1,12 +1,12 @@
 export default class Attend {
 
-  constructor(domain, auth) {
+  constructor(origin, auth) {
     // Initialize
-    this.domain = domain
+    this.origin = origin
+    this.auth = auth
     this.stages = {}
     this.callbacks = {}
     this.connected = false
-    this.auth = auth
 
     // Open up a WebSocket with the server
     this.connect()
@@ -58,7 +58,14 @@ export default class Attend {
 
   async connect() {
     const token = await this.auth.token
-    this.ws = new WebSocket(`wss://${this.domain}/attend?token=${token}`)
+    const wsURL = new URL('attend', this.origin)
+    if (wsURL.protocol == 'https:') {
+      wsURL.protocol = 'wss:'
+    } else {
+      wsURL.protocol = 'ws:'
+    }
+    wsURL.searchParams.set('token', token)
+    this.ws = new WebSocket(wsURL)
     this.ws.onopen    = this.onSocketOpen   .bind(this)
     this.ws.onmessage = this.onSocketMessage.bind(this)
     this.ws.onclose   = this.onSocketClose  .bind(this)

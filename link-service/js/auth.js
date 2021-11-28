@@ -1,11 +1,11 @@
 export default class Auth {
 
-  constructor(domain) {
-    this.domain = domain
+  constructor(origin) {
+    this.origin = origin
 
     // Check to see if we're redirecting back
     // from an authorization with a code.
-    const url = new URL(window.location);
+    const url = new URL(window.location)
     if (url.searchParams.has('code')) {
 
       // Get the code and strip it out of the URL
@@ -39,15 +39,17 @@ export default class Auth {
     document.cookie = `clientID=${clientID}; SameSite=Strict`
 
     // Open the login window
-    const redirectURI = encodeURIComponent(window.location)
-    window.location.replace(`https://${this.domain}/auth?client_id=${clientID}&redirect_uri=${redirectURI}`)
+    const authURL = new URL('auth', this.origin)
+    authURL.searchParams.set('client_id', clientID)
+    authURL.searchParams.set('redirect_uri', window.location)
+    window.location.replace(authURL)
   }
 
   getAndDeleteCookie(param) {
     // Decode the cookie string
     const decodedCookies = decodeURIComponent(document.cookie);
 
-    // Delete the cookie if ey exists
+    // Delete the cookie if it exists
     document.cookie = param + '=; max-age=0; SameSite=Strict'
 
     // Find the cookie if it exists
@@ -80,7 +82,8 @@ export default class Auth {
     form.append('code', code)
 
     // Ask to exchange the code for a token
-    const response = await fetch(`https://${this.domain}/token`, {
+    const tokenURL = new URL('token', this.origin)
+    const response = await fetch(tokenURL, {
         method: 'post',
         body: form
     })
@@ -121,8 +124,11 @@ export default class Auth {
 
   async request(method, path, params) {
     // Send the request to the server
-    const paramsString = (new URLSearchParams(params)).toString()
-    const response = await fetch(`https://${this.domain}/${path}?${paramsString}`, {
+    const requestURL = new URL(path, this.origin)
+    for (const param in params) {
+      requestURL.searchParams.set(param, params[param])
+    }
+    const response = await fetch(requestURL, {
       method: method,
       headers: new Headers({
         'Authorization': 'Bearer ' + (await this.token)

@@ -1,0 +1,9 @@
+version: '3.7'
+
+services:
+
+  theater-container:
+    ports:
+      - 5000:5000
+    environment:
+      DEBUG: 'true'

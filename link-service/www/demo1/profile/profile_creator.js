@@ -1,10 +1,10 @@
-import Theater from 'https://theater.csail.mit.edu/js/theater.js'
 import Vue     from 'https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.esm.browser.js'
+import Theater from '/js/theater.js'
 
 let app = new Vue({
   el: '#app',
   data: {
-    th: new Theater('theater.csail.mit.edu'),
+    th: new Theater(window.location.origin),
     success: false,
     actor: {}
   },

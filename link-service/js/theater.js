@@ -3,9 +3,9 @@ import Auth    from './auth.js'
 
 export default class Theater {
 
-  constructor(domain) {
-    this.auth   = new Auth  (domain)
-    this.attend = new Attend(domain, this.auth)
+  constructor(origin) {
+    this.auth   = new Auth  (origin)
+    this.attend = new Attend(origin, this.auth)
   }
 
   async get(path) {

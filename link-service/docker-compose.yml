@@ -2,47 +2,21 @@ version: '3.7'
 
 services:
 
-  nginx:
-    image: nginx:1.20.1
-    volumes:
-      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/ssl/certs:/etc/ssl/certs:ro
-    ports:
-      - 80:80
-      - 443:443
-    depends_on:
-      - theater-container
-
-  mailserver:
-    image: mailserver/docker-mailserver:10.2.0
-    hostname: theater.csail.mit.edu
-    domainname: theater.csail.mit.edu
-    volumes:
-      - ./config/mailserver:/tmp/docker-mailserver/
-      - /etc/ssl/certs:/etc/ssl/certs:ro
-      - /etc/localtime:/etc/localtime:ro
-    expose:
-      - 25
-    env_file: config/mailserver.env
-    cap_add:
-      - NET_ADMIN
-      - SYS_PTRACE
-    restart: always
-
   redis:
     image: redis:6.2.3-alpine
     environment:
-      - REDIS_APPENDONLY=yes
+      REDIS_APPENDONLY: 'yes'
 
   theater-container:
     build: .
-    expose:
-      - 80
     volumes:
       - ./app:/mount/theater
       - ./www:/mount/www
       - ./js:/mount/js
-    env_file: config/theater.env
+    environment:
+      DEBUG: 'true'
+      ATTEND_WS_INTERVAL: '5000' # milliseconds
+      ATTEND_WS_ACTIONS_PER_MESSAGE: '10'
+      SECRET: 'secret'
     depends_on:
-      - mailserver
       - redis

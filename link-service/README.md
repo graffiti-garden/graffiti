@@ -2,18 +2,28 @@
 
 An imagining of a social web.
 
-## Setup
+## Usage
+
+### Local
+
+Make changes to the parameters in ```docker-compose.yml```.
+Then launch the application:
+
+    sudo docker-compose up --build
+
+Then visit the site at localhost:5000
+
+### Deployment
 
 Copy your SSL certificates to ```/etc/ssl/certs/``` and name them ```theater.key``` and ```theater.pem```.
 
 If needed, make changes to:
-- ```config/theater.env```,
-- the mailserver host/domainname in ```docker-compose.yml```,
+- the mailserver host/domainname in ```docker-compose.deploy.yml```,
 - the account name in ```config/mailserver/postfix-accounts.cf```.
 
 Then launch the docker application:
 
-    sudo docker-compose up --build
+    sudo docker-compose up --build -f docker-compose.deploy.yml
 
 Once the docker application is running, create domain keys (the exact container name may be different):
 

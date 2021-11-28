@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import uvicorn
+from os import getenv
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,4 +27,8 @@ app.mount('/js', StaticFiles(directory='js'))
 app.mount('/', StaticFiles(directory='www', html=True))
 
 if __name__ == "__main__":
-    uvicorn.run('theater.main:app', host='0.0.0.0', port=80, reload=True)
+    if getenv('DEBUG') == 'true':
+        args = {'port': 5000, 'reload': True}
+    else:
+        args = {'port': 80, 'proxy_headers': True}
+    uvicorn.run('theater.main:app', host='0.0.0.0', **args)
