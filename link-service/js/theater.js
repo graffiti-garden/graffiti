@@ -5,7 +5,7 @@ export default class Theater {
 
   constructor(domain) {
     this.auth   = new Auth  (domain)
-    this.attend = new Attend(domain)
+    this.attend = new Attend(domain, this.auth)
   }
 
   async get(path) {
@@ -16,9 +16,8 @@ export default class Theater {
     return await this.auth.request('post', 'hash', {path: path})
   }
 
-  async put(data, path) {
-    return await this.auth.request('put', 'put', {
-      path: path,
+  async put(data) {
+    return await this.auth.request('post', 'put', {
       data: JSON.stringify(data)
     })
   }

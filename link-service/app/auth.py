@@ -36,9 +36,8 @@ async def auth(
     # Determine which site is asking for access
     client = request.headers['referer']
 
-    # Check if there is a token...
+    # Check if we are already logged in...
     if token:
-        # ... and whether or not it is valid.
         try:
             email = token_to_user(token)
         except HTTPException:

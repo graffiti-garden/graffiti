@@ -99,27 +99,33 @@ export default class Auth {
 
     // Parse out the token
     const data = await response.json()
-    this.token = data.access_token
+    this.token_const = data.access_token
 
     // And make sure that the token is valid
-    if (!this.token) {
+    if (!this.token_const) {
       return this.authorizationError("could not parse token.")
     }
 
   }
 
-  async request(method, path, params) {
-    // If the token doesn't already exist wait for it
-    while (!this.token) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
+  get token() {
+    return (async () => {
+      // If the token doesn't already exist wait for it
+      while (!this.token_const) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
 
+      return this.token_const
+    })();
+  }
+
+  async request(method, path, params) {
     // Send the request to the server
     const paramsString = (new URLSearchParams(params)).toString()
     const response = await fetch(`https://${this.domain}/${path}?${paramsString}`, {
       method: method,
       headers: new Headers({
-        'Authorization': 'Bearer ' + this.token
+        'Authorization': 'Bearer ' + (await this.token)
       }),
     })
 
