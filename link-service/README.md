@@ -6,12 +6,12 @@ An imagining of a social web.
 
 ### Local
 
-Make changes to the parameters in ```docker-compose.yml```.
-Then launch the application:
+To launch this application locally for testing, run:
 
     sudo docker-compose up --build
 
-Then visit the site at localhost:5000
+The application will be available at [http://localhost:5000](http://localhost:5000).
+An Swagger interface for testing the API is available at [http://localhost:5000/docs](http://localhost:5000/docs).
 
 ### Deployment
 

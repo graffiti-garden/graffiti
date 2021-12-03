@@ -69,7 +69,7 @@ async def put_with_metadata(
     return hash_
 
 @router.get('/get')
-async def get(hash_: str, user: str = Depends(token_to_user)):
+async def get(hash_: str):
     # Connect to the database
     r = await open_redis()
 

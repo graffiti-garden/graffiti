@@ -84,7 +84,7 @@ class Attend:
 
                     # Fetch the action from the pod
                     try:
-                        action = await get(event[b'hash'].decode(), self.user)
+                        action = await get(event[b'hash'].decode())
                     except Exception as e:
                         continue
 
