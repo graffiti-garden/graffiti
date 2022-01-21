@@ -1,7 +1,5 @@
-import Vue     from 'https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.esm.browser.js'
+import Vue     from 'https://cdnjs.cloudflare.com/ajax/libs/vue/3.2.23/vue.esm-browser.min.js'
 import Theater from '/js/theater.js'
-
-const stage = "a_generic_feed"
 
 const app = new Vue({
   el: '#app',

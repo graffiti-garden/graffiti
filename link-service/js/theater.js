@@ -1,38 +1,50 @@
-import Attend  from './attend.js'
-import Auth    from './auth.js'
 
-export default class Theater {
+export default {
+  install(app, origin) {
+    app.mixin({
 
-  constructor(origin) {
-    this.auth   = new Auth  (origin)
-    this.attend = new Attend(origin, this.auth)
+      data() {
+        return {
+          cache: {},
+          foo: "foo"
+        }
+      },
+
+      methods: {
+
+        handlerGet(obj, property, receiver) {
+          if (property == "foo") {
+            console.log("i'm fooing")
+            return this.foo
+          }
+          return Reflect.get(...arguments);
+        },
+
+        put(address, value) {
+          // Check to see if it's already in the cache
+          if ( !(address in this.cache) ) {
+            // Store it in the cache
+            this.cache.address = value
+          }
+
+          const podHandler = {
+            get: this.handlerGet.bind(this)
+          }
+
+          console.log(this.foo)
+
+          return new Proxy(this.cache.address, podHandler)
+        },
+
+        flipFoo() {
+          if (this.foo == "foo") {
+            this.foo = "bar"
+          } else {
+            this.foo = "foo"
+          }
+        }
+
+      }
+    });
   }
-
-  async get(path) {
-    return await this.auth.request('get', 'get', {path: path})
-  }
-
-  async hash(path) {
-    return await this.auth.request('post', 'hash', {path: path})
-  }
-
-  async put(data) {
-    return await this.auth.request('post', 'put', {
-      data: JSON.stringify(data)
-    })
-  }
-
-  async perform(stage, action) {
-    return await this.auth.request('post', 'perform', {
-      stage: stage,
-      action: JSON.stringify(action)
-    })
-  }
-
-  async retire(stage, action) {
-    await this.auth.request('post', 'retire', {
-      hash: hash
-    })
-  }
-
 }

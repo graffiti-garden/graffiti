@@ -12,6 +12,9 @@ const app = new Vue({
   },
 
   created: function() {
+    this.actor = this.th.put({
+      content
+    })
 
     this.th.attend.add(
       stage, 
@@ -26,12 +29,12 @@ const app = new Vue({
       const myPodNote = await this.th.put({
         type: "Note",
         content: this.myNote
-      }, "~/notes/")
+      })
 
       const action = {
         type: "Create",
         actor: "~/actor",
-        object: myPodNote.path
+        object: myPodNote
       }
 
       await this.th.perform(stage, action)
@@ -41,3 +44,16 @@ const app = new Vue({
 
   },
 })
+
+// Write a Vuejs plugin to do the following:
+//
+// Objects are reactive components. I.e. if an object is a placeholder and it's contents change, it and it's dependencies will change as well.
+// There is also an object cache so that 
+// Create a cache
+// ID -> thing
+// Have lazy expansion with getter/setter object
+//
+// await myPodNote.object
+// Will fetch things from the cache or get them from the network
+// If it is a placeholder it will attend and dynamically update
+// can this be reactive?

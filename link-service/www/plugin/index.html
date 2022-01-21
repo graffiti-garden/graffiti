@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Plugin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+
+<div id="app">
+  <button v-on:click="addElement">add element</button>
+  <button v-on:click="flipFoo">flip</button>
+  <template v-for="l in myList">
+    <p>
+      {{ l }}
+      <br>
+      {{ l.foo }}
+    </p>
+  </template>
+</div>
+
+<script type="module" src="plugin.js"></script>
+
+</body>
+</html>
