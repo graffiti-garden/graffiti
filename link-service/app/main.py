@@ -3,7 +3,6 @@
 import uvicorn
 from os import getenv
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -17,18 +16,14 @@ app.add_middleware(
 )
 
 # Serve the API
-routes = ['perform', 'attend', 'pod', 'auth']
+routes = ['put', 'auth']
 for r in routes:
-    module = __import__('theater.' + r, fromlist=['router'])
+    module = __import__('graffiti.' + r, fromlist=['router'])
     app.include_router(module.router)
-
-# Serve the static files
-app.mount('/js', StaticFiles(directory='js'))
-app.mount('/', StaticFiles(directory='www', html=True))
 
 if __name__ == "__main__":
     if getenv('DEBUG') == 'true':
         args = {'port': 5000, 'reload': True}
     else:
         args = {'port': 80, 'proxy_headers': True}
-    uvicorn.run('theater.main:app', host='0.0.0.0', **args)
+    uvicorn.run('graffiti.main:app', host='0.0.0.0', **args)

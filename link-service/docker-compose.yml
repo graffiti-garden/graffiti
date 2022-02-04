@@ -1,22 +1,23 @@
-version: '3.7'
+version: '3.8'
 
 services:
 
-  redis:
-    image: redis:6.2.3-alpine
-    environment:
-      REDIS_APPENDONLY: 'yes'
+  db:
+    image: mongo:5.0.6
+    restart: always
+    #environment:
+      #MONGO_INITDB_ROOT_USERNAME: root
+      #MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - ./db:/data/db
 
-  theater-container:
+  graffiti-container:
     build: .
     volumes:
-      - ./app:/mount/theater
-      - ./www:/mount/www
-      - ./js:/mount/js
+      - ./app:/mount/graffiti
     environment:
-      DEBUG: 'true'
       ATTEND_WS_INTERVAL: '5000' # milliseconds
       ATTEND_WS_ACTIONS_PER_MESSAGE: '10'
       SECRET: 'secret'
     depends_on:
-      - redis
+      - db

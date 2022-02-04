@@ -1,8 +1,8 @@
-version: '3.7'
+version: '3.8'
 
 services:
 
-  theater-container:
+  graffiti-container:
     ports:
       - 5000:5000
     environment:

@@ -1,10 +1,11 @@
-aioredis # Database
+pymongo==4.0.1     # Database
+
 aiosmtplib # Email
 pyjwt # tokens
 
 jinja2            # For templating
 python-multipart  # For parsing multipart form data
 aiofiles          # For serving static files and templates
-fastapi           # Web framework
 
+fastapi           # Web framework
 uvicorn[standard] # ASGI server

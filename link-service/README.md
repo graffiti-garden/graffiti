@@ -13,6 +13,11 @@ To launch this application locally for testing, run:
 The application will be available at [http://localhost:5000](http://localhost:5000).
 An Swagger interface for testing the API is available at [http://localhost:5000/docs](http://localhost:5000/docs).
 
+To test:
+
+    docker compose exec graffiti-container python -m graffi
+ti.put
+
 ### Deployment
 
 Copy your SSL certificates to ```/etc/ssl/certs/``` and name them ```graffiti.key``` and ```graffiti.pem```.
