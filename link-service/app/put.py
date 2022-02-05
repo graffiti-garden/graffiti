@@ -1,13 +1,18 @@
+from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional, List, Dict
+import asyncio
+from motor.motor_asyncio import AsyncIOMotorClient
 import time
 import json
 from uuid import UUID
-from pymongo import MongoClient
-from typing import Optional, List, Dict
-from fastapi import APIRouter, Depends, HTTPException
 from .auth import token_to_user
 
 router = APIRouter()
-db = MongoClient('db').graffiti
+
+# Connect to the database
+client = AsyncIOMotorClient('db')
+client.get_io_loop = asyncio.get_running_loop
+db = client.test
 
 @router.put('/put')
 async def put(
@@ -29,7 +34,9 @@ async def put(
     }
 
     # Insert it into the database
-    output = db.activities.insert_one(data)
+    output = await db.activities.insert_one(data)
+
+    print(output)
 
     return 'OK'
 
@@ -42,17 +49,18 @@ def parse_activity(activity):
         raise HTTPException(status_code=400, detail=f"JSON root is not a dictionary: {activity}")
     return activity
 
-if __name__ == "__main__":
-    import asyncio
+async def main():
     from uuid import uuid4
-
     activity = {"type": "Note", "content": "Hello World 2"}
-    uri = asyncio.run(put(
+    await put(
         json.dumps(activity),
         [], [], uuid4()
-        ))
+        )
 
     # Print out the activities
     cursor = db.activities.find({})
-    for document in cursor:
+    async for document in cursor:
           print(document)
+
+if __name__ == "__main__":
+    asyncio.run(main())

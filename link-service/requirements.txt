@@ -1,4 +1,4 @@
-pymongo==4.0.1     # Database
+motor==2.5.1     # Async MongoDB Database
 
 aiosmtplib # Email
 pyjwt # tokens
