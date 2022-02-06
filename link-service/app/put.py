@@ -10,7 +10,7 @@ from .auth import token_to_user
 router = APIRouter()
 
 # Connect to the database
-client = AsyncIOMotorClient('db')
+client = AsyncIOMotorClient('mongo1')
 client.get_io_loop = asyncio.get_running_loop
 db = client.test
 
@@ -18,7 +18,7 @@ db = client.test
 async def put(
         activity:    Optional[str] = None,
         near_misses: Optional[List[str]] = [],
-        access:      Optional[List[UUID]] = [],
+        access:      Optional[List[UUID]] = None,
         user:        UUID = Depends(token_to_user)):
 
     # Sign and date the activity
@@ -28,9 +28,9 @@ async def put(
 
     # Combine it into one big document
     data = {
-        "activity": activity,
+        "activity": [activity],
         "near_misses": [parse_activity(nm) for nm in near_misses],
-        "access": [str(i) for i in access]
+        "access": access
     }
 
     # Insert it into the database
@@ -51,14 +51,15 @@ def parse_activity(activity):
 
 async def main():
     from uuid import uuid4
-    activity = {"type": "Note", "content": "Hello World 2"}
+    activity = {"type": "Note", "content": "asdlkfjd"}
+    near_miss = {"type": "Note2", "content": "blah"}
     await put(
         json.dumps(activity),
-        [], [], uuid4()
+        [json.dumps(near_miss)], None, uuid4()
         )
 
     # Print out the activities
-    cursor = db.activities.find({})
+    cursor = db.activities.find()
     async for document in cursor:
           print(document)
 

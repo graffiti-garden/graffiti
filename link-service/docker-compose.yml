@@ -2,22 +2,27 @@ version: '3.8'
 
 services:
 
-  db:
-    image: mongo:5.0.6
-    restart: always
-    #environment:
-      #MONGO_INITDB_ROOT_USERNAME: root
-      #MONGO_INITDB_ROOT_PASSWORD: example
-    volumes:
-      - ./db:/data/db
-
   graffiti-container:
     build: .
     volumes:
       - ./app:/mount/graffiti
     environment:
-      ATTEND_WS_INTERVAL: '5000' # milliseconds
-      ATTEND_WS_ACTIONS_PER_MESSAGE: '10'
       SECRET: 'secret'
     depends_on:
-      - db
+      - mongo1
+      - mongo2
+      - mongo3
+
+  mongo1:
+    image: mongo:5.0.6
+    volumes:
+      - ./db:/data/db
+    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0" ]
+
+  mongo2:
+    image: mongo:5.0.6
+    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0" ]
+
+  mongo3:
+    image: mongo:5.0.6
+    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0" ]
