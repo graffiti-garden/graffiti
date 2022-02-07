@@ -22,7 +22,7 @@ async def attend(ws: WebSocket, token: str, query: str):
     # Make sure the query is valid json
 
     # Accept the connection
-    # await ws.accept()
+    await ws.accept()
 
     pipeline = [
         { "$match": {

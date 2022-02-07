@@ -23,7 +23,7 @@ oauth2_scheme = OAuth2AuthorizationCodeBearer(
         authorizationUrl = "auth",
         tokenUrl = "token")
 
-templates = Jinja2Templates(directory="theater/templates")
+templates = Jinja2Templates(directory="graffiti/templates")
 
 @router.get("/auth", response_class=HTMLResponse)
 async def auth(

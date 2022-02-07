@@ -10,7 +10,7 @@ from .auth import token_to_user
 router = APIRouter()
 
 # Connect to the database
-client = AsyncIOMotorClient('mongo1')
+client = AsyncIOMotorClient('mongo')
 client.get_io_loop = asyncio.get_running_loop
 db = client.test
 
@@ -35,8 +35,6 @@ async def put(
 
     # Insert it into the database
     output = await db.activities.insert_one(data)
-
-    print(output)
 
     return 'OK'
 

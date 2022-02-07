@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
 
-  graffiti-container:
+  graffiti:
     ports:
       - 5000:5000
     environment:

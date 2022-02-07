@@ -2,27 +2,21 @@ version: '3.8'
 
 services:
 
-  graffiti-container:
+  graffiti:
     build: .
     volumes:
       - ./app:/mount/graffiti
     environment:
       SECRET: 'secret'
     depends_on:
-      - mongo1
-      - mongo2
-      - mongo3
+      - mongo
 
-  mongo1:
+  mongo:
     image: mongo:5.0.6
     volumes:
       - ./db:/data/db
-    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0" ]
-
-  mongo2:
-    image: mongo:5.0.6
-    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0" ]
-
-  mongo3:
-    image: mongo:5.0.6
-    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0" ]
+    command: mongod --bind_ip_all --replSet rs0 --quiet --logpath /dev/null
+    healthcheck:
+      test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
