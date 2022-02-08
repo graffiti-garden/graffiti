@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional, List, Dict
+from typing import Optional, List
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 import time
@@ -46,20 +46,3 @@ def parse_activity(activity):
     if not isinstance(activity, dict):
         raise HTTPException(status_code=400, detail=f"JSON root is not a dictionary: {activity}")
     return activity
-
-async def main():
-    from uuid import uuid4
-    activity = {"type": "Note", "content": "asdlkfjd"}
-    near_miss = {"type": "Note2", "content": "blah"}
-    await put(
-        json.dumps(activity),
-        [json.dumps(near_miss)], None, uuid4()
-        )
-
-    # Print out the activities
-    cursor = db.activities.find()
-    async for document in cursor:
-          print(document)
-
-if __name__ == "__main__":
-    asyncio.run(main())

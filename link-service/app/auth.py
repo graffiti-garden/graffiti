@@ -11,9 +11,11 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.templating import Jinja2Templates
+from uuid import uuid5, NAMESPACE_DNS
 
 debug     = (getenv('DEBUG') == 'true')
 secret    = getenv('SECRET')
+secret_namespace = uuid5(NAMESPACE_DNS, secret)
 mail_from = getenv('MAIL_FROM')
 expiration_time = 5 # minutes
 code_size = 6
@@ -163,7 +165,7 @@ def token(
     # If authorized, create a token
     token = jwt.encode({
         "type": "token",
-        "email": code["email"],
+        "email": uuid5(secret_namespace, code["email"]).hex,
         }, secret, algorithm="HS256")
 
     # Store cookie for repeat logins

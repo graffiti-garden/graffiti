@@ -15,8 +15,7 @@ An Swagger interface for testing the API is available at [http://localhost:5000/
 
 To test:
 
-    docker compose exec graffiti-container python -m graffi
-ti.put
+    docker compose exec graffiti python -m graffiti.query
 
 ### Deployment
 
