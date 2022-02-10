@@ -190,7 +190,6 @@ def token_to_user(token: str = Depends(oauth2_scheme)):
 # - code size to all capital letters
 # security:
 # - Scopes
-# - hide email
 # - make a real secret (random every time)
 # - CORS
 # - Token expiration + refresh tokens

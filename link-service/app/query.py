@@ -8,18 +8,23 @@ from .auth import token_to_user
 router = APIRouter()
 
 # Connect to the database
-client = AsyncIOMotorClient('mongo1')
+client = AsyncIOMotorClient('mongo')
 client.get_io_loop = asyncio.get_running_loop
 db = client.test
 
-@router.websocket("/attend")
-async def attend(ws: WebSocket, token: str, query: str):
+@router.websocket("/query")
+async def query(ws: WebSocket, token: str, query: str):
 
     # Make sure the token is valid
-    # user = token_to_user(token)
-    user = token
+    user = token_to_user(token)
 
     # Make sure the query is valid json
+    try:
+        query = json.loads(query)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {query}")
+    if not isinstance(query, dict):
+        raise HTTPException(status_code=400, detail=f"JSON root is not a dictionary: {query}")
 
     # Accept the connection
     await ws.accept()
@@ -46,9 +51,3 @@ async def attend(ws: WebSocket, token: str, query: str):
             ) as change_stream:
         async for change in change_stream:
             await ws.send_json(change['fullDocument']['activity'][0])
-
-async def main():
-    await attend(None, None, {"type": "Note"})
-
-if __name__ == "__main__":
-    asyncio.run(main())
