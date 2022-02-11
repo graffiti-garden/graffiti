@@ -1,12 +1,14 @@
-version: '3.7'
+version: '3.8'
 
 services:
 
   nginx:
     image: nginx:1.21.6
+    container_name: graffiti-nginx
     volumes:
       - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - /etc/letsencrypt/live/graffiti.csail.mit.edu/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/graffiti.csail.mit.edu/privkey.pem:/etc/ssl/certs/privkey.pem:ro
     ports:
       - 80:80
       - 443:443
@@ -15,11 +17,13 @@ services:
 
   mailserver:
     image: mailserver/docker-mailserver:10.2.0
-    hostname: theater.csail.mit.edu
-    domainname: theater.csail.mit.edu
+    container_name: graffiti-mailserver
+    hostname: graffiti.csail.mit.edu
+    domainname: graffiti.csail.mit.edu
     volumes:
       - ./config/mailserver:/tmp/docker-mailserver/
-      - /etc/ssl/certs:/etc/ssl/certs:ro
+      - /etc/letsencrypt/live/graffiti.csail.mit.edu/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/graffiti.csail.mit.edu/privkey.pem:/etc/ssl/certs/privkey.pem:ro
       - /etc/localtime:/etc/localtime:ro
     expose:
       - 25
@@ -29,11 +33,11 @@ services:
       - SYS_PTRACE
     restart: always
 
-  theater-container:
+  graffiti:
     environment:
       DEBUG: 'false'
       AUTH_CODE_MAIL_FROM: 'Graffiti <noreply@graffiti.csail.mit.edu>'
     expose:
-      - 80
+      - 5000
     depends_on:
       - mailserver

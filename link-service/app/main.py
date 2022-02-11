@@ -25,5 +25,5 @@ if __name__ == "__main__":
     if getenv('DEBUG') == 'true':
         args = {'port': 5000, 'reload': True}
     else:
-        args = {'port': 80, 'proxy_headers': True}
+        args = {'port': 5000, 'proxy_headers': True}
     uvicorn.run('graffiti.main:app', host='0.0.0.0', **args)

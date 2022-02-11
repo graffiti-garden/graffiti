@@ -3,6 +3,7 @@ version: '3.8'
 services:
 
   graffiti:
+    container_name: graffiti
     build: .
     volumes:
       - ./app:/mount/graffiti
@@ -16,9 +17,9 @@ services:
 
   mongo:
     image: mongo:5.0.6
-    restart: always
-    container_name: mongo
+    container_name: graffiti-mongo
     hostname: mongo
+    restart: always
     volumes:
       - ./db:/data/db
     command: "--bind_ip_all --replSet rs0 --quiet --logpath /dev/null"

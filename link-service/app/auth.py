@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from uuid import uuid5, NAMESPACE_DNS
 
 debug = (getenv('DEBUG') == 'true')
-mail_from = getenv('AUTH_MAIL_FROM')
+mail_from = getenv('AUTH_CODE_MAIL_FROM')
 expiration_time = float(getenv('AUTH_CODE_EXP_TIME')) # minutes
 code_size = int(getenv('AUTH_CODE_SIZE'))
 secret = getenv('AUTH_SECRET')
@@ -38,7 +38,10 @@ async def auth(
         token: Optional[str] = Cookie(None)):
 
     # Determine which site is asking for access
-    client = request.headers['referer']
+    if 'referer' in request.headers:
+        client = request.headers['referer']
+    else:
+        client = ''
 
     # Check if we are already logged in...
     if token:

@@ -13,45 +13,50 @@ To launch this application locally for testing, run:
 The application will be available at [http://localhost:5000](http://localhost:5000).
 An Swagger interface for testing the API is available at [http://localhost:5000/docs](http://localhost:5000/docs).
 
-To test:
-
-    docker compose exec graffiti python -m graffiti.query
-
 ### Deployment
 
-Copy your SSL certificates to ```/etc/ssl/certs/``` and name them ```graffiti.key``` and ```graffiti.pem```.
+Install docker via [these instructions](https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository) and docker compose v2 via [these instructions](https://docs.docker.com/compose/cli-command/#install-on-linux). Make sure docker compose is installed to root.
 
-If needed, make changes to:
-- the mailserver host/domainname in ```docker-compose.deploy.yml```,
-- the account name in ```config/mailserver/postfix-accounts.cf```.
+Install certbot according to [these instructions](https://certbot.eff.org/instructions?).
+Then generate an SSL certificate with:
+
+    sudo certbot certonly --standalone
+
+This will generate the following files:
+
+    /etc/letsencrypt/live/YOUR_DOMAIN/fullchain.pem
+    /etc/letsencrypt/live/YOUR_DOMAIN/privkey.pem
+
+Modify the corresponding SSL paths under `nginx` and `mailserver` in `docker-compose.deploy.yml`. Additionally make changes to:
+
+- `hostname` and `domainname` under `mailserver`
+- `AUTH_CODE_MAIL_FROM` under `graffiti`
+- The email address in `config/mailserver/postfix-accounts.cf`
 
 Then launch the docker application:
 
-    sudo docker-compose up --build -f docker-compose.deploy.yml
+    sudo docker compose -f docker-compose.yml -f docker-compose.deploy.yml up --build
 
-Once the docker application is running, create domain keys (the exact container name may be different):
+Once the docker application is running, create domain keys for the mail server:
 
-    sudo docker exec graffiti_mailserver_1 setup config dkim
+    sudo docker exec graffiti-mailserver setup config dkim
 
-Copy the entry in ```config/mailserver/opendkim/keys/graffiti.csail.mit.edu/mail.txt``` to your DNS.
+Copy the generated entry in `config/mailserver/opendkim/keys/YOUR_DOMAIN/mail.txt` to your DNS.
+To get things to work on the [CSAIL DNS](https://webdns.csail.mit.edu/), the entire `mail.txt` needs to be on a single line, but split up into segments of less than 256 charachters.
+The generated file should already be split, but the sections are on new lines. Replace the new lines with spaces so it looks like this:
 
-<details>
-  <summary>On the CSAIL DNS this requires a little bit of reformatting.</summary>
-
-  To get things to work on the CSAIL DNS, split the ```mail.txt``` public key up into segments of < 256 charachters. Then concatenate them onto a single line but with quote marks and spaces between each segment. Like this:
-
-  ```mail._domainkey.graffiti.csail.mit.edu. 1800 IN TXT "v=DKIM1; h=sha256; k=rsa; p=" "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAyF0CezaT4xRn8OcZZh3SPYiVatL3nDYtflxh7RkJzfJgIarYKszK4rVlXLESECYW7uTlUXsXGUq85Q2N79oBa6+R35Bq+siY/AHc8i3WfOoEG6BUFlK19EpFLv0xwxl+HGbsSIv7TLG0zCgzyXsxiS5bH29SiL" "6yLlejzHJr50DYNEB/EdpsPSap1a4Rkp8K6xKQ0stYo63jxSLA4re7GxaLAurva5gGzJxhKdA7cZJurqNT8j1NJ+NfkOmzkzT9nI/SdDcV5zLW3XflFQ8NAwmco4SB02Bc0j5N23YtYeD5SLb+qCgW/Mnsrirv/NxjgNXQ+z57TMjKUUV3NS6IyctWKL/s1Uqv7VVbHUND" "nNf+ssGD8KzUU0feLO33MZIiCCreFOFafvgqQYtMcN3sC7ovG29vYmXPoHXgLKyXqOkbCEEU2fB+fXja/eGGszFeFwCM4lv16twcCQ/BLwve9ncRZ3xG50HDxD+jYXtVaublPUplAdCYs22/ddm1aOszdfTeSUG+6OpjHr94kjIyiZsKUwxztwuEXlP0v6YcDeUHawupPU" "hwB2dm6AZwyzxPw5LdF/J2MquWMxajXcaMJMaWP8V7cWhIXmOe9O908swPOyeEW/NKp3CEmpaVpNp3HC35CVbtQUIOjDh+Kmyd/uDUVnfiKI3GZsMjoeutr+MCAwEAAQ=="
-  ```
-</details>
+    mail._domainkey.YOUR_DOMAIN. 1800 IN TXT "v=DKIM1; h=sha256; k=rsa; p=" "MII...SiL" "6yL...UND" ...
 
 In addition, add these lines to your DNS to turn on DKIM and add SPF:
 
-    _domainkey.graffiti.csail.mit.edu. 1800 IN TXT "o=-"
-    graffiti.csail.mit.edu. 1800 IN TXT "v=spf1 a -all"
+    _domainkey.YOUR_DOMAIN. 1800 IN TXT "o=-"
+    YOUR_DOMAIN. 1800 IN TXT "v=spf1 a -all"
 
 The server with email functionality should now be up and running.
+Once the DNS propogates, you can test that it's working by going to
+`https://YOUR_DOMAIN/auth?client_id=&redirect_uri=`.
+Send an email to `test@allaboutspam.com` then go to [All About Spam](http://www.allaboutspam.com/email-server-test-report/index.php) and enter `noreply@YOUR_DOMAIN` to see your test report.
 
-## Test
+To shut down the server run:
 
-Use the [Swagger UI](https://graffiti.csail.mit.edu/docs) to test out most API calls.
-To test out the WebSocket-based attend API, go to the [attend test page](https://graffiti.csail.mit.edu/attend.html).
+    sudo docker compose down --remove-orphans
