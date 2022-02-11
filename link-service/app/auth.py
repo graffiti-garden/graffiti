@@ -1,5 +1,6 @@
 import time
 import jwt
+import base64
 from hashlib import sha256
 from os import getenv
 from aiosmtplib import send as sendEmail
@@ -13,12 +14,12 @@ from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.templating import Jinja2Templates
 from uuid import uuid5, NAMESPACE_DNS
 
-debug     = (getenv('DEBUG') == 'true')
-secret    = getenv('SECRET')
+debug = (getenv('DEBUG') == 'true')
+mail_from = getenv('AUTH_MAIL_FROM')
+expiration_time = float(getenv('AUTH_CODE_EXP_TIME')) # minutes
+code_size = int(getenv('AUTH_CODE_SIZE'))
+secret = getenv('AUTH_SECRET')
 secret_namespace = uuid5(NAMESPACE_DNS, secret)
-mail_from = getenv('MAIL_FROM')
-expiration_time = 5 # minutes
-code_size = 6
 
 router = APIRouter()
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
@@ -75,7 +76,7 @@ def auth_code(client_id: str, email: str, remember: bool = False):
     return jwt.encode({
         "type": "code",
         "client_id": client_id,
-        "email": email,
+        "user": str(uuid5(secret_namespace, email)),
         "time": time.time(),
         "remember": remember
     }, secret, algorithm="HS256")
@@ -93,17 +94,26 @@ async def email(
     # Generate an authorization code
     code = auth_code(client_id, email, remember)
 
-    # Split it into two parts
-    code_end = code[-code_size:]
-    code_start = code[:-code_size]
+    # Take the last part of the code (the signature)
+    header, payload, signature = code.split('.')
+
+    # Reencode into base 32 (only capitals and ints)
+    while len(signature) % 4 != 0:
+        signature += "="
+    signature_bytes = base64.urlsafe_b64decode(signature)
+    signature_32 = base64.b32encode(signature_bytes).decode()
+
+    # The first part will be the secret sent in the email
+    signature_32_secret = signature_32[:code_size]
+    signature_32_known = signature_32[code_size:]
 
     # Send the user the smaller part for verification
     if debug:
         # In debug mode, just print the code
-        print("Login code: ", code_end)
+        print("Login code: ", signature_32_secret)
     else:
         # Otherwise, construct an email
-        message = MIMEText(code_end)
+        message = MIMEText(signature_32_secret)
         message["Subject"] = Header("Login Code")
         message["From"] = mail_from
         message["To"] = email
@@ -132,7 +142,8 @@ async def email(
         'email': email,
         'redirect_uri': redirect_uri,
         'state': state,
-        'code_start': code_start
+        'code_body': header + '.' + payload,
+        'signature_32_known': signature_32_known
     })
 
 @router.post("/token")
@@ -144,7 +155,11 @@ def token(
 
     # Assert that the code is valid
     try:
-        code = jwt.decode(code, secret, algorithms=["HS256"])
+        # Re-encode in base 64
+        code_body, signature_32 = code.split('~')
+        signature_bytes = base64.b32decode(signature_32)
+        signature = base64.urlsafe_b64encode(signature_bytes).decode()
+        code = jwt.decode(code_body + '.' + signature, secret, algorithms=["HS256"])
     except:
         raise HTTPException(status_code=400, detail="Malformed code.")
     if not code["type"] == "code":
@@ -165,7 +180,7 @@ def token(
     # If authorized, create a token
     token = jwt.encode({
         "type": "token",
-        "email": uuid5(secret_namespace, code["email"]).hex,
+        "user": code["user"]
         }, secret, algorithm="HS256")
 
     # Store cookie for repeat logins
@@ -183,13 +198,4 @@ def token_to_user(token: str = Depends(oauth2_scheme)):
     if not token["type"] == "token":
         raise HTTPException(status_code=400, detail="Wrong code type.")
 
-    return token["email"]
-
-# TODO:
-# UI:
-# - code size to all capital letters
-# security:
-# - Scopes
-# - make a real secret (random every time)
-# - CORS
-# - Token expiration + refresh tokens
+    return token["user"]

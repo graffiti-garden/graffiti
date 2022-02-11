@@ -7,7 +7,9 @@ services:
     volumes:
       - ./app:/mount/graffiti
     environment:
-      SECRET: 'secret'
+      AUTH_SECRET: 'secret'
+      AUTH_CODE_SIZE: '6'
+      AUTH_CODE_EXP_TIME: '5' # minutes
       QUERY_HEARTBEAT: '5'
     depends_on:
       - mongo

@@ -32,7 +32,7 @@ services:
   theater-container:
     environment:
       DEBUG: 'false'
-      MAIL_FROM: 'Theater <noreply@theater.csail.mit.edu>'
+      AUTH_CODE_MAIL_FROM: 'Graffiti <noreply@graffiti.csail.mit.edu>'
     expose:
       - 80
     depends_on:
