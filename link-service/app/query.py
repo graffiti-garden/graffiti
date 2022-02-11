@@ -2,11 +2,14 @@ import json
 import asyncio
 import bson
 from uuid import uuid4
+from os import getenv
 from motor.motor_asyncio import AsyncIOMotorClient
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 from .auth import token_to_user
 
 router = APIRouter()
+
+heartbeat_interval = float(getenv('QUERY_HEARTBEAT'))
 
 # Connect to the database
 client = AsyncIOMotorClient('mongo')
@@ -45,10 +48,10 @@ class Query:
         while True:
             try:
                 await self.ws.send_json("ping")
-            except WebSocketDisconnect:
+            except:
                 self.cancel()
                 break
-            await asyncio.sleep(2)
+            await asyncio.sleep(heartbeat_interval)
 
 
     async def listener(self):
@@ -56,15 +59,15 @@ class Query:
         while True:
             try:
                 msg = await self.ws.receive_text()
-            except WebSocketDisconnect:
+            except:
                 self.cancel()
                 break
             await self.receive(msg)
 
 
-    async def cancel(self):
+    def cancel(self):
         # Kill all tasks
-        if task in self.tasks.values():
+        for task in self.tasks.values():
             task.cancel()
 
 
