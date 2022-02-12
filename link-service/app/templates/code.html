@@ -1,17 +1,24 @@
 {% extends "base.html" %}
-{% block content %}
-To authorize you need to be logged in.
 
-Enter the log in code sent to
+{% block prompt %}
+enter the code emailed to
 
-<div class="userCode">{{email}}</div>
+<div class="usertext" >
+  {{email}}
+</div>
 
-<input type="text" id="code" />
+to log in.
+{% endblock %}
 
-<input type="button" value="Log In and Authorize" onclick="logIn()" />
+{% block form %}
+<form style="display:flex;" onsubmit="logIn(event)" />
+  <input type="text" style="text-transform: uppercase;" id="code" placeholder="ABC123" autocomplete="off" autofocus/>
+  <input type="submit" value="submit code" />
+</form>
 
 <script>
-  function logIn() {
+  function logIn(e) {
+    e.preventDefault()
     const signature_32_secret = document.getElementById('code').value
     let redirect = new URL('{{redirect_uri}}')
     redirect.searchParams.set('state', '{{state}}')

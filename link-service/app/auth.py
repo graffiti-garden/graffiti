@@ -8,7 +8,7 @@ from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import formatdate, make_msgid
 from typing import Optional
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, Cookie
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.templating import Jinja2Templates
@@ -34,8 +34,7 @@ async def auth(
         redirect_uri: str,
         request: Request,
         response: Response,
-        state: Optional[str] = "",
-        token: Optional[str] = Cookie(None)):
+        state: Optional[str] = ""):
 
     # Determine which site is asking for access
     if 'referer' in request.headers:
@@ -43,46 +42,15 @@ async def auth(
     else:
         client = ''
 
-    # Check if we are already logged in...
-    if token:
-        try:
-            email = token_to_user(token)
-        except HTTPException:
-            response.delete_cookie("token")
-            token = False
-
-    # If there is no valid token, ask the user to log in
-    if not token:
-        return templates.TemplateResponse("login.html", {
-            'request': request,
-            'client': client,
-            'client_id': client_id,
-            'redirect_uri': redirect_uri,
-            'state': state,
-            'email': ''
-        })
-
-    # Otherwise, the user must be logged in.
-    # Generate a new authorization code and let the user
-    # choose if they want to send it or not.
-    code = auth_code(client_id, email)
-    return templates.TemplateResponse("auth.html", {
+    # Ask the user to log in
+    return templates.TemplateResponse("login.html", {
         'request': request,
-        'email': email,
         'client': client,
+        'client_id': client_id,
         'redirect_uri': redirect_uri,
         'state': state,
-        'code': code
+        'email': ''
     })
-
-def auth_code(client_id: str, email: str, remember: bool = False):
-    return jwt.encode({
-        "type": "code",
-        "client_id": client_id,
-        "user": str(uuid5(secret_namespace, email)),
-        "time": time.time(),
-        "remember": remember
-    }, secret, algorithm="HS256")
 
 @router.get("/email", response_class=HTMLResponse)
 async def email(
@@ -91,16 +59,20 @@ async def email(
         redirect_uri: str,
         state: str,
         email: str,
-        remember: bool,
         request: Request):
 
     # Generate an authorization code
-    code = auth_code(client_id, email, remember)
+    code = jwt.encode({
+        "type": "code",
+        "client_id": client_id,
+        "user": str(uuid5(secret_namespace, email)),
+        "time": time.time()
+    }, secret, algorithm="HS256")
 
     # Take the last part of the code (the signature)
     header, payload, signature = code.split('.')
 
-    # Reencode into base 32 (only capitals and ints)
+    # Re-encode into base 32 (only capitals and ints)
     while len(signature) % 4 != 0:
         signature += "="
     signature_bytes = base64.urlsafe_b64decode(signature)
@@ -185,10 +157,6 @@ def token(
         "type": "token",
         "user": code["user"]
         }, secret, algorithm="HS256")
-
-    # Store cookie for repeat logins
-    if code["remember"]:
-        response.set_cookie("token", token, samesite="strict")
 
     return {"access_token": token, "token_type": "bearer"}
 

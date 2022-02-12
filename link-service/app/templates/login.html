@@ -1,31 +1,53 @@
 {% extends "base.html" %}
-{% block content %}
-To authorize you need to be logged in.
-Enter your email to be sent a log in code.
 
-<input type="text" id="email" placeholder="user@example.com" />
+{% block prompt %}
+{% if not email %}
 
-<input type="checkbox" id="remember" />
-<label for="remember">Remember me?</label>
+the application
 
-<input type="button" value="Email Log In Code" onclick="emailLogInCode()" />
-
-{% if email %}
-<div class="error">
-  Error: Could not send an email to <code>{{email}}</code>.
+<div class="usertext" >
+  <a href="{{client}}">{{client}}</a>
 </div>
+
+is requesting access to your graffiti.
+
+{% else %}
+
+error: could not send an email to
+
+<div class="usertext" >
+  {{email}}
+</div>
+
 {% endif %}
+{% endblock %}
+
+{% block form %}
+
+<div id="logIn" style="display:flex;justify-content:center;"/>
+  <input type="button" value="log in via email" onclick="enterEmail()" />
+</div>
+
+<form id="enterEmail" style="display:none;" onsubmit="emailLogInCode(event)" />
+  <input type="text" id="email" placeholder="name@example.com" autocomplete="off" />
+  <input type="submit" style="float:right" value="send" />
+</form>
 
 <script>
-  function emailLogInCode() {
+  function enterEmail() {
+    document.getElementById('logIn').style.display = 'none'
+    document.getElementById('enterEmail').style.display = 'flex'
+    document.getElementById('email').focus()
+  }
+
+  function emailLogInCode(e) {
+    e.preventDefault();
     const email = document.getElementById('email').value
-    const remember = document.getElementById('remember').checked
     const params = new URLSearchParams({
       client: '{{client}}',
       client_id: '{{client_id}}',
       redirect_uri: '{{redirect_uri}}',
       state: '{{state}}',
-      remember: remember,
       email: email
     })
     window.location.replace(`email?${params.toString()}`)
