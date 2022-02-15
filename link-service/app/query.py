@@ -71,33 +71,56 @@ class Query:
             task.cancel()
 
 
-    async def receive(self,  msg: str):
+    async def receive(self,  msg_str: str):
         # Make sure the message is valid json
         try:
-            msg = json.loads(msg)
+            msg = json.loads(msg_str)
         except json.JSONDecodeError:
-            return await self.error(f"Message is not JSON: {msg}")
+            return await self.reject(f'"{msg_str}"', "Message is not JSON.")
         if not isinstance(msg, dict):
-            return await self.error(f"Message is not an object: {msg}")
+            return await self.reject(msg_str, "Message is not an object.")
 
         # Parse what action it is performing
-        if not 'action' in msg:
-            return await self.error(f"Message does not specify an action: {msg}")
-        if msg['action'] == 'add':
-            return await self.add_query(msg['query'])
-        elif msg['action'] == 'delete':
-            return await self.del_query(msg['query_id'])
+        if not 'type' in msg:
+            return await self.reject(msg_str, "Message does not specify a type.")
+
+        if msg['type'] == 'Add':
+            if not 'query' in msg:
+                return await self.reject(msg_str, "A message of type 'Add' must have a query.")
+            if not 'query_id' in msg:
+                return await self.reject(msg_str, "A message of type 'Add' must have a query_id.")
+            if not 'timestamp' in msg:
+                # Start queries at the beginning of time
+                timestamp = bson.timestamp.Timestamp(0, 1)
+            else:
+                try:
+                    timestamp = bson.timestamp.Timestamp(
+                            msg['timestamp']['time'],
+                            msg['timestamp']['inc']
+                            )
+                except:
+                    return await self.reject(msg_str, f"Timestamp could not be parsed: {msg['timestamp']}")
+            return await self.add_query(msg_str, msg['query'], msg['query_id'], timestamp)
+        elif msg['type'] == 'Remove':
+            if not 'query_id' in msg:
+                return await self.reject(msg_str, "A message of type 'Remove' must have a query_id.")
+            return await self.remove_query(msg['query_id'])
         else:
-            return await self.error(f"Unrecognized action type in message: {msg}")
+            return await self.reject(msg_str, "Message must have type 'Add' or 'Remove'.")
 
 
-    async def add_query(self, query):
+    async def add_query(self, msg_str, query, query_id, timestamp):
         # Make sure the query is valid
         if not isinstance(query, dict):
-            return await self.error(f"Query is not an object: {query}")
+            return await self.reject(msg_str, f"query is not an object: {query}")
 
-        # Give the query a random ID
-        query_id = str(uuid4())
+        # Make sure the query_id is a string
+        if not isinstance(query_id, str):
+            return await self.reject(msg_str, f"query_id is not a string: {query_id}")
+
+        # If the query id already exists, stop it
+        if query_id in self.tasks:
+            self.kill_query(query_id)
 
         # Construct a modified query
         pipeline = [
@@ -119,35 +142,55 @@ class Query:
         change_stream = db.activities.watch(
                 pipeline,
                 full_document='updateLookup',
-                start_at_operation_time=bson.timestamp.Timestamp(0, 1)
+                start_at_operation_time=timestamp
                 )
 
+        # Whenever a task is received, send it.
         async def task():
             async with change_stream as cs:
                 async for change in cs:
                     await self.ws.send_json({
                         'query_id': query_id,
-                        'activity': change['fullDocument']['activity'][0]
+                        'timestamp': {
+                            'time': change['clusterTime'].time,
+                            'inc':  change['clusterTime'].inc
+                        },
+                        'activity': change['fullDocument']['activity'][0],
+                        'near_misses': change['fullDocument']['near_misses'],
+                        'access': change['fullDocument']['access']
                     })
-
         self.tasks[query_id] = asyncio.create_task(task())
 
         # Send back an acknowledgment that the query has been added
-        await self.ws.send_json({'type': 'QueryAdded', 'query_id': query_id, 'query': query})
+        await self.accept(msg_str)
 
 
-    async def del_query(self, query_id):
+    async def remove_query(self, msg_str, query_id):
+        # Make sure the query_id is a string
+        if not isinstance(query_id, str):
+            return await self.reject(msg_str, f"query_id is not a string: {query_id}")
+
         # Make sure the query_id exists
         if query_id not in self.tasks:
-            self.error(f"Query is not running: {query_id}")
+            self.reject(f"query has not been added: {query_id}")
 
         # Cancel and delete
+        self.kill_query(query_id)
+
+        # Send an acknowledgment
+        await self.accept(msg_str)
+
+    def kill_query(self, query_id):
         self.tasks[query_id].cancel()
         del self.tasks[query_id]
 
-        # Send an acknowledgment
-        await self.ws.send_json({'type': 'QueryDeleted', 'query_id': query_id})
+    async def reply(self, type_, msg_str, content=""):
+        if content:
+            content = f', "content": "{content}"'
+        await self.ws.send_text(f'{{"type": "{type_}", "object": {msg_str}{content}}}')
 
+    async def reject(self, msg_str, content):
+        await self.reply('Reject', msg_str, content)
 
-    async def error(self, detail):
-        await self.ws.send_json({'type': 'Error', 'content': detail})
+    async def accept(self, msg_str):
+        await self.reply('Accept', msg_str)
