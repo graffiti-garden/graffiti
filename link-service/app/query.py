@@ -1,20 +1,15 @@
 import json
 import asyncio
 import bson
-from uuid import uuid4
 from os import getenv
-from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import APIRouter, WebSocket
 from .auth import token_to_user
-
-router = APIRouter()
+from .db import get_db
 
 heartbeat_interval = float(getenv('QUERY_HEARTBEAT'))
 
-# Connect to the database
-client = AsyncIOMotorClient('mongo')
-client.get_io_loop = asyncio.get_running_loop
-db = client.test
+router = APIRouter()
+db = get_db()
 
 @router.websocket("/query")
 async def query(ws: WebSocket, token: str):
@@ -125,13 +120,13 @@ class Query:
         # Construct a modified query
         pipeline = [
             { "$match": {
-                # The activity must match the query
-                "fullDocument.activity": { "$elemMatch": query },
+                # The object must match the query
+                "fullDocument.object": { "$elemMatch": query },
                 # The near misses must NOT match the query
                 "fullDocument.near_misses": { "$not": { "$elemMatch": query } },
                 # The user must be the author, have access, or access must be open
                 "$or": [
-                    { "fullDocument.activity.signed": self.user },
+                    { "fullDocument.object.signed": self.user },
                     { "fullDocument.access": self.user },
                     { "fullDocument.access": None }
                 ]
@@ -139,7 +134,7 @@ class Query:
         ]
 
         # Construct an iterator
-        change_stream = db.activities.watch(
+        change_stream = db.watch(
                 pipeline,
                 full_document='updateLookup',
                 start_at_operation_time=timestamp
@@ -155,7 +150,7 @@ class Query:
                             'time': change['clusterTime'].time,
                             'inc':  change['clusterTime'].inc
                         },
-                        'activity': change['fullDocument']['activity'][0],
+                        'object': change['fullDocument']['object'][0],
                         'near_misses': change['fullDocument']['near_misses'],
                         'access': change['fullDocument']['access']
                     })

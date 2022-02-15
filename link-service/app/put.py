@@ -1,48 +1,46 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
-import asyncio
-from motor.motor_asyncio import AsyncIOMotorClient
 import time
 import json
-from uuid import UUID
+from uuid import UUID, uuid4
 from .auth import token_to_user
+from .db import get_db
 
 router = APIRouter()
-
-# Connect to the database
-client = AsyncIOMotorClient('mongo')
-client.get_io_loop = asyncio.get_running_loop
-db = client.test
+db = get_db()
 
 @router.put('/put')
 async def put(
-        activity:    Optional[str] = None,
+        obj: str,
         near_misses: Optional[List[str]] = [],
         access:      Optional[List[UUID]] = None,
         user:        UUID = Depends(token_to_user)):
 
-    # Sign and date the activity
-    activity = parse_activity(activity)
-    activity['signed'] = str(user)
-    activity['created'] = time.time_ns()
+    # Sign the object and give it a random ID
+    obj = parse_object(obj)
+    obj['signed'] = str(user)
+    obj['uuid'] = str(uuid4())
 
     # Combine it into one big document
     data = {
-        "activity": [activity],
-        "near_misses": [parse_activity(nm) for nm in near_misses],
+        "object": [obj],
+        "near_misses": [parse_object(nm) for nm in near_misses],
         "access": access
     }
 
     # Insert it into the database
-    output = await db.activities.insert_one(data)
+    result = await db.insert_one(data)
+    if result.acknowledged:
+        print(data)
+        return {"type": "Accept", "uuid": obj['uuid']}
+    else:
+        raise HTTPException(status_code=400, detail=f"Object could not be written to the database")
 
-    return 'OK'
-
-def parse_activity(activity):
+def parse_object(obj):
     try:
-        activity = json.loads(activity)
+        obj = json.loads(obj)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {activity}")
-    if not isinstance(activity, dict):
-        raise HTTPException(status_code=400, detail=f"JSON root is not a dictionary: {activity}")
-    return activity
+        raise HTTPException(status_code=400, detail=f"Object has invalid JSON: {obj}")
+    if not isinstance(obj, dict):
+        raise HTTPException(status_code=400, detail=f"Object root is not an object: {obj}")
+    return obj
