@@ -7,7 +7,7 @@ export default class Query {
     this.connected = false
     this.queries = {}
     this.callbacks = {}
-    this.timestamp = {}
+    this.timestamps = {}
     this.query_queue = []
 
     // Open up a WebSocket with the server
@@ -46,10 +46,10 @@ export default class Query {
   }
 
   async removeQuery(query_id) {
-    if (!(query_id in this.queries) {
+    if (!(query_id in this.queries)) {
       throw {
         type: 'Error',
-        content: `query_id, {{query_id}} does not exist!`
+        content: `query_id, ${query_id} does not exist!`
       }
     }
 
@@ -60,8 +60,8 @@ export default class Query {
 
     // Push the update to the server
     this.query_queue.push({
-      'Remove',
-      query_id
+      type: 'Remove',
+      query_id: query_id
     })
     await this.updateQueries()
   }
@@ -92,17 +92,25 @@ export default class Query {
       // Update the timestamp of the latest message
       this.timestamps[data.query_id] = data.timestamp
       // And call the callback
-      this.callbacks[data.query_id](
+      await this.callbacks[data.query_id](
         data.object,
         data.near_misses,
         data.accept
       )
-    } else if (data.type == 'Accept') {
-      // nothing to do
     } else if (data.type == 'Reject') {
       throw {
         type: 'Error',
         content: 'A query update was rejected',
+        object: data
+      }
+    } else if (data.type == 'Accept') {
+      // nothing to do
+    } else if (data.type == 'Ping') {
+      // nothing to do
+    } else {
+      throw {
+        type: 'Error',
+        content: `Unrecognized type, '${data.type}'`,
         object: data
       }
     }
@@ -118,9 +126,9 @@ export default class Query {
       this.query_queue.push({
         type: 'Add',
         query_id: query_id,
-        query: this.queries[query_id]
+        query: this.queries[query_id],
         timestamp: this.timestamps[query_id]
-      }))
+      })
     }
 
     console.log('Attend socket is closed. Will attempt to reconnect in 5 seconds...')
