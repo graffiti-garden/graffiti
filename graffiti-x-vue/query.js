@@ -122,7 +122,7 @@ export default class Query {
     // Reset the queue too add all
     // of the existing queries
     this.query_queue = []
-    for (let query_id in queries) {
+    for (let query_id in this.queries) {
       this.query_queue.push({
         type: 'Add',
         query_id: query_id,
@@ -131,7 +131,7 @@ export default class Query {
       })
     }
 
-    console.log('Attend socket is closed. Will attempt to reconnect in 5 seconds...')
+    console.log('Query socket is closed. Will attempt to reconnect in 5 seconds...')
     setTimeout(this.connect.bind(this), 5000)
   }
 
