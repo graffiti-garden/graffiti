@@ -12,7 +12,7 @@ db = get_db()
 @router.put('/put')
 async def put(
         obj: str,
-        near_misses: Optional[List[str]] = [],
+        near_misses: Optional[str] = '[]',
         access:      Optional[List[UUID]] = None,
         user:        UUID = Depends(token_to_user)):
 
@@ -21,10 +21,18 @@ async def put(
     obj['signed'] = str(user)
     obj['uuid'] = str(uuid4())
 
+    # TODO: clean this up
+    try:
+        near_misses = json.loads(near_misses)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail=f"Object has invalid JSON: {obj}")
+    if not isinstance(near_misses, list):
+        raise HTTPException(status_code=400, detail=f"Object root is not an list: {obj}")
+
     # Combine it into one big document
     data = {
         "object": [obj],
-        "near_misses": [parse_object(nm) for nm in near_misses],
+        "near_misses": near_misses,
         "access": access
     }
 
