@@ -42,7 +42,7 @@ class Query:
         # Send a heartbeat
         while True:
             try:
-                await self.ws.send_json("ping")
+                await self.ws.send_json({'type': 'Ping'})
             except:
                 self.cancel()
                 break
@@ -84,7 +84,7 @@ class Query:
                 return await self.reject(msg_str, "A message of type 'Add' must have a query.")
             if not 'query_id' in msg:
                 return await self.reject(msg_str, "A message of type 'Add' must have a query_id.")
-            if not 'timestamp' in msg:
+            if (not 'timestamp' in msg) or (msg['timestamp'] is None):
                 # Start queries at the beginning of time
                 timestamp = bson.timestamp.Timestamp(0, 1)
             else:
@@ -145,6 +145,7 @@ class Query:
             async with change_stream as cs:
                 async for change in cs:
                     await self.ws.send_json({
+                        'type': 'Update',
                         'query_id': query_id,
                         'timestamp': {
                             'time': change['clusterTime'].time,
