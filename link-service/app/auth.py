@@ -158,7 +158,7 @@ def token(
         "user": code["user"]
         }, secret, algorithm="HS256")
 
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token, "user": code["user"], "token_type": "bearer"}
 
 def token_to_user(token: str = Depends(oauth2_scheme)):
     # Assert that the token is valid
