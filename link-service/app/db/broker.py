@@ -53,7 +53,7 @@ class QueryBroker:
                     doc = await self.db.find_one(query)
                 except Exception as e:
                     # There's an error with the query!
-                    await self.remove_queries(socket_id, [query_id], self.sockets[socket_id].user)
+                    await self.remove_query(socket_id, query_id, self.sockets[socket_id].user)
                     await self.sockets[socket_id].error(query_id, str(e))
                     continue
 

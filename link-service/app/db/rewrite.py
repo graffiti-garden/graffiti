@@ -1,3 +1,6 @@
+import time
+from uuid import uuid4
+
 def query_rewrite(query, user):
     return {
         # The object must match the query
@@ -12,7 +15,7 @@ def query_rewrite(query, user):
         ]
     }
 
-def object_rewrite(obj, near_misses, access):
+def object_rewrite(obj, near_misses, access, user):
     # Sign and date the object and give it a random ID
     obj['signed'] = user
     obj['created'] = time.time_ns()

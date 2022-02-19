@@ -38,7 +38,7 @@ async def insert(
         access: list[str]|None=None,
         user: str=Depends(token_to_user)):
 
-    data = object_rewrite(obj, near_misses, access)
+    data = object_rewrite(obj, near_misses, access, user)
 
     # Insert it into the database
     await qo.db.insert_one(data)
@@ -111,7 +111,7 @@ async def replace(
     obj["uuid"] = old_data["object"]["uuid"]
     obj["created"] = old_data["object"]["created"]
     # Rewrite the new data
-    new_data = object_rewrite(obj, near_misses, access)
+    new_data = object_rewrite(obj, near_misses, access, user)
 
     # Replace the old data with the new
     result = await qo.db.replace_one({"object.uuid": obj_id}, new_data)
