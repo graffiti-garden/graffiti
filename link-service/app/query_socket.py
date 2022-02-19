@@ -1,6 +1,6 @@
 import asyncio
 from os import getenv
-from fastapi import APIRouter, Depends, WebSocket, HTTPException
+from fastapi import APIRouter, Depends, WebSocket, HTTPException, Body
 from uuid import uuid4
 from .auth import token_to_user
 from .db import get_db
@@ -17,8 +17,8 @@ async def start_query_sockets():
 
 @router.post('/add_socket_queries')
 async def add_socket_queries(
-        socket_id: str,
         queries: dict[str, dict],
+        socket_id: str = Body(...),
         user: str = Depends(token_to_user)):
 
     try:
@@ -29,8 +29,8 @@ async def add_socket_queries(
 
 @router.post('/remove_socket_queries')
 async def remove_socket_queries(
-        socket_id: str,
         query_ids: list[str],
+        socket_id: str = Body(...),
         user: str = Depends(token_to_user)):
 
     try:
@@ -143,9 +143,9 @@ class QuerySocketMessenger:
                 # the document containing the changed object.
                 try:
                     query = self.queries[socket_id][query_id]
-                    doc = await db.find_one({
+                    doc = await self.db.find_one({
                         # The object must be the one that is changing
-                        "object.id": object_id,
+                        "object.uuid": object_id,
                         # The object must match the query
                         "object": { "$elemMatch": query },
                         # The near misses must NOT match the query
@@ -159,13 +159,13 @@ class QuerySocketMessenger:
                     })
                 except Exception as e:
                     # There's an error with the query!
-                    self.remove_queries(socket_id, [query_id], self.sockets[socket_id].user)
-                    self.sockets[socket_id].error(query_id, str(e))
+                    await self.remove_queries(socket_id, [query_id], self.sockets[socket_id].user)
+                    await self.sockets[socket_id].error(query_id, str(e))
                     continue
 
                 # If there's a match, send it to the relevant socket
                 if doc is not None:
-                    self.sockets[socket_id].match(query_id, doc)
+                    await self.sockets[socket_id].match(query_id, doc)
 
     async def add_socket(self, socket):
         async with self.query_lock:
