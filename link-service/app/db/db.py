@@ -107,11 +107,11 @@ async def replace(
         # Error!
         return
 
+    # Making sure that ID and created stamp are preserved
+    obj["uuid"] = old_data["object"]["uuid"]
+    obj["created"] = old_data["object"]["created"]
     # Rewrite the new data
     new_data = object_rewrite(obj, near_misses, access)
-    # Making sure that ID and created stamp are preserved
-    new_data["object"]["uuid"] = old_data["object"]["uuid"]
-    new_data["object"]["created"] = old_data["object"]["created"]
 
     # Replace the old data with the new
     result = await qo.db.replace_one({"object.uuid": obj_id}, new_data)
