@@ -1,33 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional, List
+from fastapi import APIRouter, Depends
 import time
-import json
-from uuid import UUID, uuid4
+from uuid import uuid4
 from .auth import token_to_user
 from .db import get_db
 
 router = APIRouter()
-db = get_db()
+
+@router.on_event("startup")
+async def start_db():
+    global db
+    db = await get_db()
 
 @router.put('/put')
 async def put(
-        obj: str,
-        near_misses: Optional[str] = '[]',
-        access:      Optional[List[UUID]] = None,
-        user:        UUID = Depends(token_to_user)):
+        obj: dict,
+        near_misses: list[dict],
+        access: list[str]|None=None,
+        user: str=Depends(token_to_user)):
 
-    # Sign the object and give it a random ID
-    obj = parse_object(obj)
-    obj['signed'] = str(user)
+    # Sign and date the object and give it a random ID
+    obj['signed'] = user
+    obj['created'] = time.time_ns()
     obj['uuid'] = str(uuid4())
 
-    # TODO: clean this up
-    try:
-        near_misses = json.loads(near_misses)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail=f"Object has invalid JSON: {obj}")
-    if not isinstance(near_misses, list):
-        raise HTTPException(status_code=400, detail=f"Object root is not an list: {obj}")
+    # Fill in the near misses with object values
+    # if they are not specified.
+    for near_miss in near_misses:
+        fill_with_template(near_miss, obj)
 
     # Combine it into one big document
     data = {
@@ -37,18 +36,14 @@ async def put(
     }
 
     # Insert it into the database
-    result = await db.insert_one(data)
-    if result.acknowledged:
-        print(data)
-        return {"type": "Accept", "uuid": obj['uuid']}
-    else:
-        raise HTTPException(status_code=400, detail=f"Object could not be written to the database")
+    await db.insert_one(data)
+    return {'type': 'Accept', 'uuid': obj['uuid'], 'created': obj['created']}
 
-def parse_object(obj):
-    try:
-        obj = json.loads(obj)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail=f"Object has invalid JSON: {obj}")
-    if not isinstance(obj, dict):
-        raise HTTPException(status_code=400, detail=f"Object root is not an object: {obj}")
-    return obj
+def fill_with_template(target, template):
+    for entry in template:
+        if entry not in target:
+            target[entry] = template[entry]
+        else:
+            if isinstance(target[entry], dict) and isinstance(template[entry], dict):
+                # Recursively fill
+                fill_with_template(target[entry], template[entry])

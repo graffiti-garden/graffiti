@@ -1,8 +1,13 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-import asyncio
 
-def get_db():
+async def get_db():
     # Connect to the database
     client = AsyncIOMotorClient('mongo')
-    client.get_io_loop = asyncio.get_running_loop
-    return client.test2.objects
+    db = client.test3.objects
+
+    # Create indexes if they don't already exist
+    await db.create_index('obj.uuid')
+    await db.create_index('obj.created')
+    await db.create_index('obj.signed')
+
+    return db

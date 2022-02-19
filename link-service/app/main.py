@@ -16,7 +16,7 @@ app.add_middleware(
 )
 
 # Serve the API
-routes = ['put', 'auth', 'query']
+routes = ['put', 'auth', 'query_socket']
 for r in routes:
     module = __import__('graffiti.' + r, fromlist=['router'])
     app.include_router(module.router)
