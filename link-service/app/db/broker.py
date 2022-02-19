@@ -40,6 +40,9 @@ class QueryBroker:
 
     async def match_object_to_open_queries(self, object_id):
 
+        # Keep track of bad queries we'll have to delete
+        malformed_queries = []
+
         # For all open queries
         for socket_id in self.queries:
             for query_id in self.queries[socket_id]:
@@ -53,13 +56,18 @@ class QueryBroker:
                     doc = await self.db.find_one(query)
                 except Exception as e:
                     # There's an error with the query!
-                    await self.remove_query(socket_id, query_id, self.sockets[socket_id].user)
+                    malformed_queries.append((socket_id, query_id))
+                    # And send the error to the socket
                     await self.sockets[socket_id].error(query_id, str(e))
                     continue
 
                 # If there's a match, send it to the relevant socket
                 if doc is not None:
                     await self.sockets[socket_id].match(query_id, doc)
+
+        # Delete all the bad queries
+        for socket_id, query_id in malformed_queries:
+            del self.queries[socket_id][query_id]
 
     async def add_socket(self, socket):
         async with self.query_lock:
