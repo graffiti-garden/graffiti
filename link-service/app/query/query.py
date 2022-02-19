@@ -1,3 +1,4 @@
+from os import getenv
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, WebSocket, HTTPException, Body
 from ..auth import token_to_user
@@ -5,6 +6,8 @@ from ..db import get_db
 from .broker import QueryBroker
 from .socket import QuerySocket
 from .rewrite import query_rewrite
+
+max_limit = float(getenv('QUERY_LIMIT'))
 
 router = APIRouter()
 
@@ -21,16 +24,17 @@ async def start_query_sockets():
     # to messages forever
     qo.qb = QueryBroker(qo.db)
 
-@router.websocket("/query")
+@router.post("/query")
 async def query(
         query: dict,
-        time: int = Body(...),
-        limit: int = Body(...),
-        skip: int = 0,
+        time: int = Body(default=0, ge=0),
+        limit: int = Body(default=max_limit, gt=0, le=max_limit),
+        skip: int = Body(default=0, ge=0),
         user: str = Depends(token_to_user)):
 
-    # Clip the limit
-    limit = min(limit, max_limit)
+    # If no time specified, use the latest time
+    if not time:
+        time = qo.qb.latest_time
 
     # Do rewriting for near misses and access control
     query = query_rewrite(query, user)
@@ -50,11 +54,11 @@ async def query(
     cursor.close()
     return results
 
-@router.websocket("/query_one")
+@router.post("/query_one")
 async def query_one(
         query: dict,
-        time: int = Body(...),
-        skip: int = 0,
+        time: int = Body(default=0, gt=0),
+        skip: int = Body(default=0, ge=0),
         user: str = Depends(token_to_user)):
 
     results = await query(query, time, 1, skip, user)
