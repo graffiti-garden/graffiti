@@ -1,14 +1,14 @@
-export default class Query {
+export default class QuerySocket {
 
   constructor(origin, auth) {
     // Initialize
     this.origin = origin
     this.auth = auth
-    this.socket_id = null
+    this.socket_id_const = null
     this.queries = {}
     this.callbacks = {}
-    this.add_queue = {}
-    this.remove_queue = []
+    this.dropped_queries = {}
+    this.dropped_callbacks = {}
 
     // Open up a WebSocket with the server
     this.connect()
@@ -29,49 +29,41 @@ export default class Query {
     this.ws.onerror   = this.onSocketError  .bind(this)
   }
 
+  get socket_id() {
+    return (async () => {
+      // If the socket ID doesn't already exist, wait for it
+      while (!this.socket_id_const) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
+      return this.socket_id_const
+    })()
+  }
+
   async addQuery(query_id, query, callback) {
     // Add the query internally
     this.queries[query_id] = query
     this.callbacks[query_id] = callback
 
-    // Push the update to the server
-    this.add_queue[query_id] = query
-    await this.updateQueries()
+    return await this.auth.request(
+      'post', 'query_socket_add', {
+        socket_id: await this.socket_id,
+        query_id: query_id,
+        query: query
+      }
+    )
   }
 
   async removeQuery(query_id) {
-    // Remove the query from anywhere it could be
-    if (query_id in this.queries) {
-      delete this.queries[query_id]
-      delete this.callbacks[query_id]
-    }
-    if (query_id in this.add_queue) {
-      delete this.add_queue[query_id]
-    }
+    delete this.queries[query_id]
+    delete this.callbacks[query_id]
 
-    // Push the update to the server
-    this.remove_queue.push(query_id)
-    await this.updateQueries()
-  }
-
-  async updateQueries() {
-    if (this.socket_id != null) {
-      // Send all of the updates waiting in the queue
-      if (Object.keys(this.add_queue)) {
-        let add_time = await this.auth.request(
-          'post', 'query_socket_add', {
-          socket_id: this.socket_id,
-          queries: this.add_queue
-        })
+    return await this.auth.request(
+      'post', 'query_socket_remove', {
+        socket_id: await this.socket_id,
+        query_id: query_id,
       }
-      if (this.remove_queue.length) {
-        let remove_time = await this.auth.request(
-          'post', 'query_socket_remove', {
-          socket_id: this.socket_id,
-          query_ids: this.remove_queue
-        })
-      }
-    }
+    )
   }
 
   async onSocketMessage(event) {
@@ -79,10 +71,9 @@ export default class Query {
 
     if (data.type == 'Ping') {
       // Store the socket ID
-      if (this.socket_id == null) {
-        this.socket_id = data.socket_id
-        console.log(`Query socket is open with id '${this.socket_id}'`)
-        this.updateQueries()
+      if (!this.socket_id_const) {
+        this.socket_id_const = data.socket_id
+        console.log(`Query socket is open with id '${this.socket_id_const}'`)
       }
     } else if (data.type == 'Update') {
       // Call the callback
@@ -108,18 +99,31 @@ export default class Query {
 
   async onSocketClose(event) {
     // Forget the socket id
-    this.socket_id = null
+    this.socket_id_const = null
 
-    // Reset the queue too add all
-    // of the existing queries
+    // Remove all open queries
+    // and add them to the "dropped queries"
     for (let query_id in this.queries) {
-      if (!(query_id in this.add_queue)) {
-        this.add_queue[query_id] = this.queries[query_id]
-      }
+      this.dropped_queries[query_id] = this.queries[query_id]
+      this.dropped_callbacks[query_id] = this.callbacks[query_id]
+      delete this.queries[query_id]
+      delete this.callbacks[query_id]
     }
 
     console.log('Query socket is closed. Will attempt to reconnect in 5 seconds...')
     setTimeout(this.connect.bind(this), 5000)
+  }
+
+  async onConnect(event) {
+    // Add back all the queries that got dropped
+    for (let query_id in this.dropped_queries) {
+      await this.addQuery(
+        query_id,
+        this.dropped_queries[query_id],
+        this.dropped_callbacks[query_id])
+      delete this.dropped_queries[query_id]
+      delete this.dropped_callbacks[query_id]
+    }
   }
 
   async onSocketError(error) {
