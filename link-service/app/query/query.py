@@ -1,11 +1,11 @@
 from os import getenv
 from pydantic import BaseModel
+from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import APIRouter, Depends, WebSocket, HTTPException, Body
 from ..auth import token_to_user
-from ..db import get_db
 from .broker import QueryBroker
 from .socket import QuerySocket
-from .rewrite import query_rewrite
+from .rewrite import object_rewrite, query_rewrite
 
 max_limit = float(getenv('QUERY_LIMIT'))
 
@@ -18,11 +18,31 @@ qo = QueryObjects()
 
 @router.on_event("startup")
 async def start_query_sockets():
-    qo.db = await get_db()
+    # Connect to the database
+    client = AsyncIOMotorClient('mongo')
+    qo.db = client.test3.objects
+
+    # Create indexes if they don't already exist
+    await qo.db.create_index('obj.uuid')
+    await qo.db.create_index('obj.created')
+    await qo.db.create_index('obj.signed')
 
     # Create a broker and listen
     # to messages forever
     qo.qb = QueryBroker(qo.db)
+
+@router.post('/insert')
+async def insert(
+        obj: dict,
+        near_misses: list[dict],
+        access: list[str]|None=None,
+        user: str=Depends(token_to_user)):
+
+    data = object_rewrite(obj, near_misses, access)
+
+    # Insert it into the database
+    await qo.db.insert_one(data)
+    return {'type': 'Accept', 'uuid': obj['uuid'], 'created': obj['created']}
 
 @router.post("/query")
 async def query(
@@ -67,6 +87,23 @@ async def query_one(
         return results[0]
     else:
         return None
+
+@router.post('/replace')
+async def replace(
+        obj_id: str,
+        obj: dict,
+        near_misses: list[dict],
+        access: list[str]|None=None,
+        user: str=Depends(token_to_user)):
+
+    data = object_rewrite(obj, near_misses, access)
+
+@router.post('/delete')
+async def delete(
+        obj_id: str,
+        user: str=Depends(token_to_user)):
+
+    pass
 
 @router.websocket("/query_socket")
 async def query_socket(ws: WebSocket, token: str):
