@@ -59,14 +59,14 @@ export default class Query {
       // Send all of the updates waiting in the queue
       if (Object.keys(this.add_queue)) {
         let add_time = await this.auth.request(
-          'post', 'add_socket_queries', {
+          'post', 'query_socket_add', {
           socket_id: this.socket_id,
           queries: this.add_queue
         })
       }
       if (this.remove_queue.length) {
         let remove_time = await this.auth.request(
-          'post', 'remove_socket_queries', {
+          'post', 'query_socket_remove', {
           socket_id: this.socket_id,
           query_ids: this.remove_queue
         })
