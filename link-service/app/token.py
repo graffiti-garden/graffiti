@@ -1,6 +1,9 @@
 import jwt
+from os import getenv
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2AuthorizationCodeBearer
+
+secret = getenv('AUTH_SECRET')
 
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
         authorizationUrl = "auth",

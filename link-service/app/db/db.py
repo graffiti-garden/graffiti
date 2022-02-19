@@ -141,24 +141,25 @@ async def query_socket(ws: WebSocket, token: str):
 
 @router.post('/query_socket_add')
 async def query_socket_add(
-        queries: dict[str, dict],
+        query: dict,
+        query_id: str = Body(...),
         socket_id: str = Body(...),
         user: str = Depends(token_to_user)):
 
     try:
-        # Add the queries and return the time that happens
-        return await qo.qb.add_queries(socket_id, queries, user)
+        # Add the query and return the time that happens
+        return await qo.qb.add_query(socket_id, query_id, query, user)
     except Exception as e:
         raise HTTPException(status=400, detail=str(e))
 
 @router.post('/query_socket_remove')
 async def query_socket_remove(
-        query_ids: list[str],
+        query_id: str = Body(...),
         socket_id: str = Body(...),
         user: str = Depends(token_to_user)):
 
     try:
-        # Remove the queries and return the time that happens
-        return await qo.qb.remove_queries(socket_id, query_ids, user)
+        # Remove the query and return the time that happens
+        return await qo.qb.remove_queries(socket_id, query_id, user)
     except Exception as e:
         raise HTTPException(status=400, detail=str(e))

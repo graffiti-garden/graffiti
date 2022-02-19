@@ -71,18 +71,16 @@ class QueryBroker:
             del self.sockets[socket.id]
             del self.queries[socket.id]
 
-    async def add_queries(self, socket_id, queries, user):
+    async def add_query(self, socket_id, query_id, query, user):
         async with self.query_lock:
             self.validate_socket(socket_id, user)
-            for query_id in queries:
-                self.queries[socket_id][query_id] = query_rewrite(queries[query_id], user)
+            self.queries[socket_id][query_id] = query_rewrite(query, user)
             return self.latest_time
 
-    async def remove_queries(self, socket_id, query_ids, user):
+    async def remove_query(self, socket_id, query_id, user):
         async with self.query_lock:
             self.validate_socket(socket_id, user)
-            for query_id in query_ids:
-                del self.queries[socket_id][query_id]
+            del self.queries[socket_id][query_id]
             return self.latest_time
 
     def validate_socket(self, socket_id, user):
