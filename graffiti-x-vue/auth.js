@@ -131,17 +131,16 @@ export default class Auth {
     })()
   }
 
-  async request(method, path, params) {
+  async request(method, path, body) {
     // Send the request to the server
     const requestURL = new URL(path, this.origin)
-    for (const param in params) {
-      requestURL.searchParams.set(param, params[param])
-    }
     const response = await fetch(requestURL, {
       method: method,
       headers: new Headers({
+        'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + (await this.token)
       }),
+      body: JSON.stringify(body)
     })
 
     // Make sure it went OK

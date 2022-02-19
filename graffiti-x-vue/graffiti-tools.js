@@ -11,8 +11,8 @@ export default class GraffitiTools {
 
   async put(object, near_misses=[], access=null) {
     return await this.auth.request('put', 'put', {
-      obj: JSON.stringify(object),
-      near_misses: JSON.stringify(near_misses),
+      obj: object,
+      near_misses: near_misses,
       access: access
     })
   }

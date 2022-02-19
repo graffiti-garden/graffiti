@@ -4,11 +4,11 @@ export default class Query {
     // Initialize
     this.origin = origin
     this.auth = auth
-    this.connected = false
+    this.socket_id = null
     this.queries = {}
     this.callbacks = {}
-    this.timestamps = {}
-    this.query_queue = []
+    this.add_queue = {}
+    this.remove_queue = []
 
     // Open up a WebSocket with the server
     this.connect()
@@ -16,7 +16,7 @@ export default class Query {
 
   async connect() {
     const token = await this.auth.token
-    const wsURL = new URL('query', this.origin)
+    const wsURL = new URL('query_socket', this.origin)
     if (wsURL.protocol == 'https:') {
       wsURL.protocol = 'wss:'
     } else {
@@ -24,74 +24,68 @@ export default class Query {
     }
     wsURL.searchParams.set('token', token)
     this.ws = new WebSocket(wsURL)
-    this.ws.onopen    = this.onSocketOpen   .bind(this)
     this.ws.onmessage = this.onSocketMessage.bind(this)
     this.ws.onclose   = this.onSocketClose  .bind(this)
     this.ws.onerror   = this.onSocketError  .bind(this)
   }
 
   async addQuery(query_id, query, callback) {
-    // Add the query to internal storage
+    // Add the query internally
     this.queries[query_id] = query
     this.callbacks[query_id] = callback
-    this.timestamps[query_id] = null
 
     // Push the update to the server
-    this.query_queue.push({
-      type: 'Add',
-      query_id: query_id,
-      query: query,
-    })
+    this.add_queue[query_id] = query
     await this.updateQueries()
   }
 
   async removeQuery(query_id) {
-    if (!(query_id in this.queries)) {
-      throw {
-        type: 'Error',
-        content: `query_id, ${query_id} does not exist!`
-      }
+    // Remove the query from anywhere it could be
+    if (query_id in this.queries) {
+      delete this.queries[query_id]
+      delete this.callbacks[query_id]
+    }
+    if (query_id in this.add_queue) {
+      delete this.add_queue[query_id]
     }
 
-    // Remove the query from internal storage
-    delete this.queries[query_id]
-    delete this.callbacks[query_id]
-    delete this.timestamps[query_id]
-
     // Push the update to the server
-    this.query_queue.push({
-      type: 'Remove',
-      query_id: query_id
-    })
+    this.remove_queue.push(query_id)
     await this.updateQueries()
   }
 
   async updateQueries() {
-    if (this.connected) {
+    if (this.socket_id != null) {
       // Send all of the updates waiting in the queue
-      while (this.query_queue.length > 0) {
-        await this.ws.send(
-          JSON.stringify(
-            this.query_queue.pop()
-          )
-        )
+      if (Object.keys(this.add_queue)) {
+        let add_time = await this.auth.request(
+          'post', 'add_socket_queries', {
+          socket_id: this.socket_id,
+          queries: this.add_queue
+        })
+      }
+      if (this.remove_queue.length) {
+        let remove_time = await this.auth.request(
+          'post', 'remove_socket_queries', {
+          socket_id: this.socket_id,
+          query_ids: this.remove_queue
+        })
       }
     }
-  }
-
-  async onSocketOpen(event) {
-    console.log('Query socket is open.')
-    this.connected = true
-    this.updateQueries()
   }
 
   async onSocketMessage(event) {
     const data = JSON.parse(event.data)
 
-    if (data.type == 'Update') {
-      // Update the timestamp of the latest message
-      this.timestamps[data.query_id] = data.timestamp
-      // And call the callback
+    if (data.type == 'Ping') {
+      // Store the socket ID
+      if (this.socket_id == null) {
+        this.socket_id = data.socket_id
+        console.log(`Query socket is open with id '${this.socket_id}'`)
+        this.updateQueries()
+      }
+    } else if (data.type == 'Update') {
+      // Call the callback
       await this.callbacks[data.query_id](
         data.object,
         data.near_misses,
@@ -103,10 +97,6 @@ export default class Query {
         content: 'A query update was rejected',
         object: data
       }
-    } else if (data.type == 'Accept') {
-      // nothing to do
-    } else if (data.type == 'Ping') {
-      // nothing to do
     } else {
       throw {
         type: 'Error',
@@ -117,18 +107,15 @@ export default class Query {
   }
 
   async onSocketClose(event) {
-    this.connected = false
+    // Forget the socket id
+    this.socket_id = null
 
     // Reset the queue too add all
     // of the existing queries
-    this.query_queue = []
     for (let query_id in this.queries) {
-      this.query_queue.push({
-        type: 'Add',
-        query_id: query_id,
-        query: this.queries[query_id],
-        timestamp: this.timestamps[query_id]
-      })
+      if (!(query_id in this.add_queue)) {
+        this.add_queue[query_id] = this.queries[query_id]
+      }
     }
 
     console.log('Query socket is closed. Will attempt to reconnect in 5 seconds...')
