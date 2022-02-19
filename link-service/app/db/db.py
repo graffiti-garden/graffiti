@@ -90,20 +90,43 @@ async def query_one(
 
 @router.post('/replace')
 async def replace(
-        obj_id: str,
         obj: dict,
         near_misses: list[dict],
         access: list[str]|None=None,
+        obj_id: str = Body(...),
         user: str=Depends(token_to_user)):
 
-    data = object_rewrite(obj, near_misses, access)
+    # First check that the object that already exists
+    # and that it is owned by the user
+    old_data = query_one({
+        "object.uuid": obj_id,
+        "object.signed": user},
+        user=user)
+
+    if not old_data:
+        # Error!
+        return
+
+    # Rewrite the new data
+    new_data = object_rewrite(obj, near_misses, access)
+    # Making sure that ID and created stamp are preserved
+    new_data["object"]["uuid"] = old_data["object"]["uuid"]
+    new_data["object"]["created"] = old_data["object"]["created"]
+
+    # Replace the old data with the new
+    result = await qo.db.replace_one({"object.uuid": obj_id}, new_data)
+    return result
 
 @router.post('/delete')
 async def delete(
-        obj_id: str,
+        obj_id: str = Body(...),
         user: str=Depends(token_to_user)):
 
-    pass
+    result = await qo.db.delete_one({
+        "object.uuid": obj_id,
+        "object.signed": user})
+
+    return result
 
 @router.websocket("/query_socket")
 async def query_socket(ws: WebSocket, token: str):
