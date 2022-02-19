@@ -8,9 +8,8 @@ from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import formatdate, make_msgid
 from typing import Optional
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response
+from fastapi import APIRouter, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
-from fastapi.security import OAuth2AuthorizationCodeBearer
 from fastapi.templating import Jinja2Templates
 from uuid import uuid5, NAMESPACE_DNS
 
@@ -22,11 +21,8 @@ secret = getenv('AUTH_SECRET')
 secret_namespace = uuid5(NAMESPACE_DNS, secret)
 
 router = APIRouter()
-oauth2_scheme = OAuth2AuthorizationCodeBearer(
-        authorizationUrl = "auth",
-        tokenUrl = "token")
 
-templates = Jinja2Templates(directory="graffiti/templates")
+templates = Jinja2Templates(directory="graffiti/auth/templates")
 
 @router.get("/auth", response_class=HTMLResponse)
 async def auth(
@@ -159,14 +155,3 @@ def token(
         }, secret, algorithm="HS256")
 
     return {"access_token": token, "user": code["user"], "token_type": "bearer"}
-
-def token_to_user(token: str = Depends(oauth2_scheme)):
-    # Assert that the token is valid
-    try:
-        token = jwt.decode(token, secret, algorithms=["HS256"])
-    except:
-        raise HTTPException(status_code=400, detail="Malformed token")
-    if not token["type"] == "token":
-        raise HTTPException(status_code=400, detail="Wrong code type.")
-
-    return token["user"]

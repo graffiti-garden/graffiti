@@ -2,7 +2,7 @@ from os import getenv
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import APIRouter, Depends, WebSocket, HTTPException, Body
-from ..auth import token_to_user
+from ..token import token_to_user
 from .broker import QueryBroker
 from .socket import QuerySocket
 from .rewrite import object_rewrite, query_rewrite
