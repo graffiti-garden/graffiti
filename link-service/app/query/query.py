@@ -4,6 +4,7 @@ from ..auth import token_to_user
 from ..db import get_db
 from .broker import QueryBroker
 from .socket import QuerySocket
+from .rewrite import query_rewrite
 
 router = APIRouter()
 
@@ -23,20 +24,45 @@ async def start_query_sockets():
 @router.websocket("/query")
 async def query(
         query: dict,
-        num: int = Body(...),
         time: int = Body(...),
+        limit: int = Body(...),
+        skip: int = 0,
         user: str = Depends(token_to_user)):
-    # TODO: add constant queries
-    # i.e. get N posts matching query before TIME
-    # with a maximum N
-    pass
+
+    # Clip the limit
+    limit = min(limit, max_limit)
+
+    # Do rewriting for near misses and access control
+    query = query_rewrite(query, user)
+
+    # Only find queries that happened before the time
+    query["object.created"] = { "$lte": time }
+
+    # Perform the query
+    cursor = await qo.db.find(
+            query,
+            limit=limit,
+            sort=[('object.created', 1)],
+            skip=skip)
+    results = cursor.to_list(length=limit)
+
+    # Close the cursor and return
+    cursor.close()
+    return results
 
 @router.websocket("/query_one")
 async def query_one(
         query: dict,
         time: int = Body(...),
+        skip: int = 0,
         user: str = Depends(token_to_user)):
-    return query(query, 1, time, user)
+
+    results = await query(query, time, 1, skip, user)
+
+    if results:
+        return results[0]
+    else:
+        return None
 
 @router.websocket("/query_socket")
 async def query_socket(ws: WebSocket, token: str):
@@ -56,8 +82,8 @@ async def query_socket_add(
         user: str = Depends(token_to_user)):
 
     try:
-        time = await qo.qb.add_queries(socket_id, queries, user)
-        return {'type': 'Accept', 'time': time}
+        # Add the queries and return the time that happens
+        return await qo.qb.add_queries(socket_id, queries, user)
     except Exception as e:
         raise HTTPException(status=400, detail=str(e))
 
@@ -68,7 +94,7 @@ async def query_socket_remove(
         user: str = Depends(token_to_user)):
 
     try:
-        time = await qo.qb.remove_queries(socket_id, query_ids, user)
-        return {'type': 'Accept', 'time': time}
+        # Remove the queries and return the time that happens
+        return await qo.qb.remove_queries(socket_id, query_ids, user)
     except Exception as e:
         raise HTTPException(status=400, detail=str(e))

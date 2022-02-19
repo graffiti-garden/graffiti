@@ -1,4 +1,5 @@
 import asyncio
+from .rewrite import query_rewrite
 
 """
 Listens to changes in the database and
@@ -47,20 +48,9 @@ class QueryBroker:
                 # the document containing the changed object.
                 try:
                     query = self.queries[socket_id][query_id]
-                    doc = await self.db.find_one({
-                        # The object must be the one that is changing
-                        "object.uuid": object_id,
-                        # The object must match the query
-                        "object": { "$elemMatch": query },
-                        # The near misses must NOT match the query
-                        "near_misses": { "$not": { "$elemMatch": query } },
-                        # The user must be the author, have access, or access must be open
-                        "$or": [
-                            { "object.signed": self.sockets[socket_id].user },
-                            { "access": self.sockets[socket_id].user },
-                            { "access": None }
-                        ]
-                    })
+                    # Only run the query on the object that is changing
+                    query["object.uuid"] = object_id
+                    doc = await self.db.find_one(query)
                 except Exception as e:
                     # There's an error with the query!
                     await self.remove_queries(socket_id, [query_id], self.sockets[socket_id].user)
@@ -85,7 +75,7 @@ class QueryBroker:
         async with self.query_lock:
             self.validate_socket(socket_id, user)
             for query_id in queries:
-                self.queries[socket_id][query_id] = queries[query_id]
+                self.queries[socket_id][query_id] = query_rewrite(queries[query_id], user)
             return self.latest_time
 
     async def remove_queries(self, socket_id, query_ids, user):
