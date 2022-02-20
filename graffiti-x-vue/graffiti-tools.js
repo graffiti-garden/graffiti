@@ -17,11 +17,19 @@ export default class GraffitiTools {
     })
   }
 
-  async query(query, time=0, limit=100, skip=0) {
-    return await this.auth.request('post', 'query', {
+  async queryMany(query, time=0, limit=100, skip=0) {
+    return await this.auth.request('post', 'query_many', {
       query: query,
       time: time,
       limit: limit,
+      skip: skip
+    })
+  }
+
+  async queryOne(query, time=0, skip=0) {
+    return await this.auth.request('post', 'query_one', {
+      query: query,
+      time: time,
       skip: skip
     })
   }
