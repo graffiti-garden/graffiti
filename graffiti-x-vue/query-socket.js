@@ -77,11 +77,11 @@ export default class QuerySocket {
       }
     } else if (data.type == 'Update') {
       // Call the callback
-      await this.callbacks[data.query_id](
-        data.object,
-        data.near_misses,
-        data.accept
-      )
+      await this.callbacks[data.query_id]({
+        object: data.object,
+        near_misses: data.near_misses,
+        accept: data.accept
+      })
     } else if (data.type == 'Reject') {
       throw {
         type: data.type,

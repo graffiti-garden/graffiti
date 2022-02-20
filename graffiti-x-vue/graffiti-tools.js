@@ -17,6 +17,15 @@ export default class GraffitiTools {
     })
   }
 
+  async query(query, time=0, limit=100, skip=0) {
+    return await this.auth.request('post', 'query', {
+      query: query,
+      time: time,
+      limit: limit,
+      skip: skip
+    })
+  }
+
   async querySocketAdd(query_id, query, callback) {
     return await this.querySocket.addQuery(query_id, query, callback)
   }
