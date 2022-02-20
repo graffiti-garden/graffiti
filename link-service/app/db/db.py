@@ -153,7 +153,9 @@ async def query_socket_add(
 
     try:
         # Add the query and return the time that happens
-        return await qo.qb.add_query(socket_id, query_id, query, user)
+        time = await qo.qb.add_query(socket_id, query_id, query, user)
+        # The time is quite large so make it a string for JS
+        return str(time)
     except Exception as e:
         raise HTTPException(status=400, detail=str(e))
 
@@ -165,6 +167,8 @@ async def query_socket_remove(
 
     try:
         # Remove the query and return the time that happens
-        return await qo.qb.remove_queries(socket_id, query_id, user)
+        time = await qo.qb.remove_queries(socket_id, query_id, user)
+        # The time is quite large so make it a string for JS
+        return str(time)
     except Exception as e:
         raise HTTPException(status=400, detail=str(e))
