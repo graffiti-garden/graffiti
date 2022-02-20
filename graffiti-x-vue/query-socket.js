@@ -84,9 +84,10 @@ export default class QuerySocket {
       )
     } else if (data.type == 'Reject') {
       throw {
-        type: 'Error',
-        content: 'A query update was rejected',
-        object: data
+        type: data.type,
+        content: 'A query was rejected. ' + data.content,
+        query_id: data.query_id,
+        query: this.queries[data.query_id],
       }
     } else {
       throw {
