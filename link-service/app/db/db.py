@@ -44,8 +44,8 @@ async def insert(
     await qo.db.insert_one(data)
     return {'type': 'Accept', 'uuid': obj['uuid'], 'created': obj['created']}
 
-@router.post("/query")
-async def query(
+@router.post("/query_many")
+async def query_many(
         query: dict,
         time: int = Body(default=0, ge=0),
         limit: int = Body(default=max_limit, gt=0, le=max_limit),
@@ -82,11 +82,11 @@ async def query(
 @router.post("/query_one")
 async def query_one(
         query: dict,
-        time: int = Body(default=0, gt=0),
+        time: int = Body(default=0, ge=0),
         skip: int = Body(default=0, ge=0),
         user: str = Depends(token_to_user)):
 
-    results = await query(query, time, 1, skip, user)
+    results = await query_many(query, time, 1, skip, user)
 
     if results:
         return results[0]
