@@ -63,15 +63,20 @@ async def query(
     query["object.created"] = { "$lte": time }
 
     # Perform the query
-    cursor = await qo.db.find(
+    cursor = qo.db.find(
             query,
             limit=limit,
-            sort=[('object.created', 1)],
+            sort=[('object.created', -1)],
             skip=skip)
-    results = cursor.to_list(length=limit)
+    results = await cursor.to_list(length=limit)
+    await cursor.close()
 
-    # Close the cursor and return
-    cursor.close()
+    results = [{
+        'object': r['object'][0],
+        'near_misses': r['near_misses'],
+        'access': r['access']
+        } for r in results]
+
     return results
 
 @router.post("/query_one")

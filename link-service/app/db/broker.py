@@ -1,4 +1,5 @@
 import asyncio
+import time
 from .rewrite import query_rewrite
 
 """
@@ -13,7 +14,7 @@ class QueryBroker:
         self.query_lock = asyncio.Lock()
         self.queries = {}
         self.sockets = {}
-        self.latest_time = 0
+        self.latest_time = time.time_ns()
 
         asyncio.create_task(self.watch())
 
