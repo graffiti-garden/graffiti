@@ -103,7 +103,7 @@ export default class Auth {
     // Parse out the token
     const data = await response.json()
     this.token_const = data.access_token
-    this.user_const = data.user
+    this.mySignature_const = data.user
 
     // And make sure that the token is valid
     if (!this.token_const) {
@@ -123,11 +123,11 @@ export default class Auth {
     })()
   }
 
-  get user() {
+  get mySignature() {
     return (async () => {
       // Make sure we have a token
       await this.token
-      return this.user_const
+      return this.mySignature_const
     })()
   }
 

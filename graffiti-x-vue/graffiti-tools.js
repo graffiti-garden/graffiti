@@ -9,6 +9,12 @@ export default class GraffitiTools {
     this.querySocket = new QuerySocket(this.origin, this.auth)
   }
 
+  get mySignature() {
+    return (async () => {
+      return await this.auth.mySignature
+    })()
+  }
+
   async insert(object, near_misses=[], access=null) {
     return await this.auth.request('post', 'insert', {
       obj: object,
