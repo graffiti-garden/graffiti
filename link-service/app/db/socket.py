@@ -36,13 +36,20 @@ class QuerySocket:
                 })
             await asyncio.sleep(heartbeat_interval)
 
-    async def match(self, query_id, doc):
+    async def update(self, query_id, doc):
         await self.send_msg({
             'type': 'Update',
             'query_id': query_id,
             'object': doc['object'][0],
             'near_misses': doc['near_misses'],
             'access': doc['access']
+        })
+
+    async def delete(self, query_id, object_id):
+        await self.send_msg({
+            'type': 'Delete',
+            'query_id': query_id,
+            'object_id': object_id
         })
 
     async def error(self, query_id, detail):
