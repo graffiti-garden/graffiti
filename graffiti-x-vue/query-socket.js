@@ -6,9 +6,11 @@ export default class QuerySocket {
     this.auth = auth
     this.socket_id_const = null
     this.queries = {}
-    this.callbacks = {}
+    this.updateCallbacks = {}
+    this.deleteCallbacks = {}
     this.dropped_queries = {}
-    this.dropped_callbacks = {}
+    this.droppedUpdateCallbacks = {}
+    this.droppedDeleteCallbacks = {}
 
     // Open up a WebSocket with the server
     this.connect()
@@ -40,10 +42,11 @@ export default class QuerySocket {
     })()
   }
 
-  async addQuery(query_id, query, callback) {
+  async addQuery(query_id, query, updateCallback, deleteCallback) {
     // Add the query internally
     this.queries[query_id] = query
-    this.callbacks[query_id] = callback
+    this.updateCallbacks[query_id] = updateCallback
+    this.deleteCallbacks[query_id] = deleteCallback
 
     return await this.auth.request(
       'post', 'query_socket_add', {
@@ -56,7 +59,8 @@ export default class QuerySocket {
 
   async removeQuery(query_id) {
     delete this.queries[query_id]
-    delete this.callbacks[query_id]
+    delete this.updateCallbacks[query_id]
+    delete this.deleteCallbacks[query_id]
 
     return await this.auth.request(
       'post', 'query_socket_remove', {
@@ -76,12 +80,15 @@ export default class QuerySocket {
         console.log(`Query socket is open with id '${this.socket_id_const}'`)
       }
     } else if (data.type == 'Update') {
-      // Call the callback
-      await this.callbacks[data.query_id]({
+      // Call the update callback
+      await this.updateCallbacks[data.query_id]({
         object: data.object,
         near_misses: data.near_misses,
         accept: data.accept
       })
+    } else if (data.type == 'Delete') {
+      // Call the delete callback
+      await this.deleteCallbacks[data.query_id](data.object_id)
     } else if (data.type == 'Reject') {
       throw {
         type: data.type,
@@ -106,9 +113,11 @@ export default class QuerySocket {
     // and add them to the "dropped queries"
     for (let query_id in this.queries) {
       this.dropped_queries[query_id] = this.queries[query_id]
-      this.dropped_callbacks[query_id] = this.callbacks[query_id]
+      this.droppedUpdateCallbacks[query_id] = this.updateCallbacks[query_id]
+      this.droppedDeleteCallbacks[query_id] = this.deleteCallbacks[query_id]
       delete this.queries[query_id]
-      delete this.callbacks[query_id]
+      delete this.updateCallbacks[query_id]
+      delete this.deleteCallbacks[query_id]
     }
 
     console.log('Query socket is closed. Will attempt to reconnect in 5 seconds...')
@@ -121,9 +130,12 @@ export default class QuerySocket {
       await this.addQuery(
         query_id,
         this.dropped_queries[query_id],
-        this.dropped_callbacks[query_id])
+        this.droppedUpdateCallbacks[query_id],
+        this.droppedDeleteCallbacks[query_id]
+      )
       delete this.dropped_queries[query_id]
-      delete this.dropped_callbacks[query_id]
+      delete this.droppedUpdateCallbacks[query_id]
+      delete this.droppedDeleteCallbacks[query_id]
     }
   }
 
