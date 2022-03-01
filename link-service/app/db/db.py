@@ -41,7 +41,7 @@ async def insert(
         user: str=Depends(token_to_user)):
 
     # Date and sign the object
-    obj['created'] = time.time_ns()
+    obj['created'] = time.time()
     obj['uuid'] = str(uuid4())
     data = object_rewrite(obj, near_misses, access, user)
 
