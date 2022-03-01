@@ -1,3 +1,5 @@
+import time
+from uuid import uuid4
 from os import getenv
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -38,6 +40,9 @@ async def insert(
         access: list[str]|None=None,
         user: str=Depends(token_to_user)):
 
+    # Date and sign the object
+    obj['created'] = time.time_ns()
+    obj['uuid'] = str(uuid4())
     data = object_rewrite(obj, near_misses, access, user)
 
     # Insert it into the database
@@ -103,24 +108,24 @@ async def replace(
 
     # First check that the object that already exists
     # and that it is owned by the user
-    old_data = query_one({
-        "object.uuid": obj_id,
-        "object.signed": user},
+    old_data = await query_one({
+        "uuid": obj_id,
+        "signed": user},
+        time=0,
+        skip=0,
         user=user)
-
     if not old_data:
-        # Error!
-        return
+        raise HTTPException(status_code=400)
 
-    # Making sure that ID and created stamp are preserved
-    obj["uuid"] = old_data["object"]["uuid"]
+    # Making sure the date and object are preserved
     obj["created"] = old_data["object"]["created"]
+
     # Rewrite the new data
     new_data = object_rewrite(obj, near_misses, access, user)
 
     # Replace the old data with the new
-    result = await qo.db.replace_one({"object.uuid": obj_id}, new_data)
-    return result
+    await qo.db.replace_one({"object.uuid": obj_id}, new_data)
+    return {'type': 'Accept', 'uuid': obj['uuid'], 'created': obj['created']}
 
 @router.post('/delete')
 async def delete(
@@ -157,7 +162,7 @@ async def query_socket_add(
         # The time is quite large so make it a string for JS
         return str(time)
     except Exception as e:
-        raise HTTPException(status=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.post('/query_socket_remove')
 async def query_socket_remove(
@@ -171,4 +176,4 @@ async def query_socket_remove(
         # The time is quite large so make it a string for JS
         return str(time)
     except Exception as e:
-        raise HTTPException(status=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))

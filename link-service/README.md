@@ -8,7 +8,7 @@ An imagining of a social web.
 
 To launch this application locally for testing, run:
 
-    sudo docker-compose up --build
+    sudo docker compose up --build
 
 The application will be available at [http://localhost:5000](http://localhost:5000).
 An Swagger interface for testing the API is available at [http://localhost:5000/docs](http://localhost:5000/docs).
