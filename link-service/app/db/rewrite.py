@@ -1,4 +1,4 @@
-def query_rewrite(query, user):
+def query_rewrite(query, signature):
     return {
         # The object must match the query
         "object": { "$elemMatch": query },
@@ -6,24 +6,24 @@ def query_rewrite(query, user):
         "near_misses": { "$not": { "$elemMatch": query } },
         # The user must be the author, have access, or access must be open
         "$or": [
-            { "object.signed": user },
-            { "access": user },
+            { "object.signature": signature },
+            { "access": signature },
             { "access": None }
         ]
     }
 
-def object_rewrite(obj, near_misses, access, user):
-    # Sign and date the object and give it a random ID
-    obj['signed'] = user
+def object_rewrite(object, near_misses, access, signature):
+    # Sign the object
+    object['signature'] = signature
 
     # Fill in the near misses with object values
     # if they are not specified.
     for near_miss in near_misses:
-        fill_with_template(near_miss, obj)
+        fill_with_template(near_miss, object)
 
     # Combine it into one big document
     return {
-        "object": [obj],
+        "object": [object],
         "near_misses": near_misses,
         "access": access
     }

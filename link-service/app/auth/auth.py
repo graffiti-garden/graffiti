@@ -61,7 +61,7 @@ async def email(
     code = jwt.encode({
         "type": "code",
         "client_id": client_id,
-        "user": str(uuid5(secret_namespace, email)),
+        "signature": str(uuid5(secret_namespace, email)),
         "time": time.time()
     }, secret, algorithm="HS256")
 
@@ -151,7 +151,7 @@ def token(
     # If authorized, create a token
     token = jwt.encode({
         "type": "token",
-        "user": code["user"]
+        "signature": code["signature"]
         }, secret, algorithm="HS256")
 
-    return {"access_token": token, "user": code["user"], "token_type": "bearer"}
+    return {"access_token": token, "signature": code["signature"], "token_type": "bearer"}

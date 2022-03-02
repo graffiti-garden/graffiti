@@ -9,7 +9,7 @@ oauth2_scheme = OAuth2AuthorizationCodeBearer(
         authorizationUrl = "auth",
         tokenUrl = "token")
 
-def token_to_user(token: str = Depends(oauth2_scheme)):
+def token_to_signature(token: str = Depends(oauth2_scheme)):
     # Assert that the token is valid
     try:
         token = jwt.decode(token, secret, algorithms=["HS256"])
@@ -18,4 +18,4 @@ def token_to_user(token: str = Depends(oauth2_scheme)):
     if not token["type"] == "token":
         raise HTTPException(status_code=400, detail="Wrong code type.")
 
-    return token["user"]
+    return token["signature"]

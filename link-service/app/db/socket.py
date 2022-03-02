@@ -6,8 +6,8 @@ heartbeat_interval = float(getenv('QUERY_HEARTBEAT'))
 
 class QuerySocket:
 
-    def __init__(self, user, ws, qb):
-        self.user = user
+    def __init__(self, signature, ws, qb):
+        self.signature = signature
         self.ws = ws # Websocket
         self.qb = qb # QueryBroker
         self.alive = True

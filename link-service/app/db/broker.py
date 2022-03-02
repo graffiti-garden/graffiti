@@ -13,7 +13,6 @@ class QueryBroker:
         self.query_lock = asyncio.Lock()
         self.sockets = {} # socket_id -> socket
         self.queries = {} # socket_id -> {query_id -> query}
-        self.latest_time = 0
 
     async def change(self, object_id, delete=False):
 
@@ -32,7 +31,7 @@ class QueryBroker:
                     try:
                         query = self.queries[socket_id][query_id]
                         # Only run the query on the object that is changing
-                        query["object.uuid"] = object_id
+                        query["object.id"] = object_id
                         doc = await self.db.find_one(query)
                     except Exception as e:
                         # There's an error with the query!
@@ -47,7 +46,6 @@ class QueryBroker:
                         if delete:
                             await self.sockets[socket_id].delete(query_id, object_id)
                         else:
-                            self.latest_time = max(self.latest_time, doc['object'][0]['created'])
                             await self.sockets[socket_id].update(query_id, doc)
 
             # Delete all the bad queries
@@ -64,18 +62,16 @@ class QueryBroker:
             del self.sockets[socket.id]
             del self.queries[socket.id]
 
-    async def add_query(self, socket_id, query_id, query, user):
+    async def add_query(self, socket_id, query_id, query, signature):
         async with self.query_lock:
-            self.validate_socket(socket_id, user)
-            self.queries[socket_id][query_id] = query_rewrite(query, user)
-            return self.latest_time
+            self.validate_socket(socket_id, signature)
+            self.queries[socket_id][query_id] = query_rewrite(query, signature)
 
-    async def remove_query(self, socket_id, query_id, user):
+    async def remove_query(self, socket_id, query_id, signature):
         async with self.query_lock:
-            self.validate_socket(socket_id, user)
+            self.validate_socket(socket_id, signature)
             del self.queries[socket_id][query_id]
-            return self.latest_time
 
-    def validate_socket(self, socket_id, user):
-        if self.sockets[socket_id].user != user:
-            raise RuntimeError(f'socket_id, "{socket_id}", is not owner by user "{user}"')
+    def validate_socket(self, socket_id, signature):
+        if self.sockets[socket_id].signature != signature:
+            raise RuntimeError(f'socket_id, "{socket_id}", is not owned by "{signature}"')
