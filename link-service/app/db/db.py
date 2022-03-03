@@ -81,7 +81,7 @@ async def delete(
     # Check that the object that already exists
     # and that it is owned by the signer
     old_doc = await db.find_one({
-        "object.id": object['id'],
+        "object.id": object_id,
         "object.signature": signature})
     if not old_doc:
         raise HTTPException(status_code=400, detail="The object you're trying to delete either doesn't exist or you don't have permission to replace it.")
@@ -90,9 +90,7 @@ async def delete(
     await qb.change(object_id, delete=True)
 
     # Perform deletion
-    await db.delete_one({
-        "object.id": object['id'],
-        "object.signature": signature})
+    await db.delete_one({"object.id": object_id})
 
     return object_id
 

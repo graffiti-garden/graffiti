@@ -36,7 +36,7 @@ class QuerySocket:
                 'socket_id': self.id,
                 # Timestamp in milliseconds to be
                 # consistent with JS's Date.now()
-                'timestamp': time.time() * 1000
+                'timestamp': int(time.time() * 1000)
                 })
             await asyncio.sleep(heartbeat_interval)
 
