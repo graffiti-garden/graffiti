@@ -18,6 +18,10 @@ export default class GraffitiTools {
     })()
   }
 
+  logOut() {
+    this.auth.logOut()
+  }
+
   async now() {
     return await this.querySocket.now()
   }

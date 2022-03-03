@@ -18,8 +18,14 @@ export default class Auth {
       this.codeToToken(code)
 
     } else {
-      // Initiate authorization
-      this.authorize()
+      // Check to see if we have cookies
+      this.tokenConst = this.getCookie('token')
+      this.mySignatureConst = this.getCookie('mySignature')
+
+      // Otherwise initiate authorization
+      if (!this.tokenConst || !this.mySignatureConst) {
+        this.authorize()
+      }
     }
   }
 
@@ -35,8 +41,8 @@ export default class Auth {
     const clientID = clientIDArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
     // Store the client ID and secret in a cookie
-    document.cookie = `clientSecret=${clientSecret}; SameSite=Strict`
-    document.cookie = `clientID=${clientID}; SameSite=Strict`
+    this.storeCookie('clientSecret', clientSecret)
+    this.storeCookie('clientID', clientID)
 
     // Open the login window
     const authURL = new URL('auth', this.origin)
@@ -45,12 +51,13 @@ export default class Auth {
     window.location.replace(authURL)
   }
 
-  getAndDeleteCookie(param) {
+  storeCookie(param, data) {
+    document.cookie = `${param}=${data}; SameSite=Strict`
+  }
+
+  getCookie(param) {
     // Decode the cookie string
     const decodedCookies = decodeURIComponent(document.cookie)
-
-    // Delete the cookie if it exists
-    document.cookie = param + '=; max-age=0; SameSite=Strict'
 
     // Find the cookie if it exists
     for (const cookie of decodedCookies.split(';')) {
@@ -60,6 +67,11 @@ export default class Auth {
     }
   }
 
+  deleteCookie(param) {
+    // Delete the cookie if it exists
+    document.cookie = param + '=; max-age=0; SameSite=Strict'
+  }
+
   authorizationError(reason) {
     alert(`Authorization Error: ${reason}\n\nClick OK to reload.`)
     window.location.reload()
@@ -67,8 +79,10 @@ export default class Auth {
 
   async codeToToken(code) {
     // Read the stored client cookies
-    const clientSecret = this.getAndDeleteCookie('clientSecret')
-    const clientID     = this.getAndDeleteCookie('clientID')
+    const clientSecret = this.getCookie('clientSecret')
+    const clientID     = this.getCookie('clientID')
+    this.deleteCookie(clientSecret)
+    this.deleteCookie(clientID)
 
     // Make sure they actually exist
     if (!clientSecret || !clientID) {
@@ -110,6 +124,15 @@ export default class Auth {
       return this.authorizationError("could not parse token.")
     }
 
+    // Store the token and signature in cookies
+    this.storeCookie('token', this.tokenConst)
+    this.storeCookie('mySignature', this.mySignatureConst)
+  }
+
+  logOut() {
+    this.deleteCookie('token')
+    this.deleteCookie('mySignature')
+    window.location.reload()
   }
 
   get token() {
