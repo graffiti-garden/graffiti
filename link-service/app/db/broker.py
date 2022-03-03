@@ -22,6 +22,9 @@ class QueryBroker:
             # Keep track of bad queries we'll have to delete
             malformed_queries = []
 
+            deletions = []
+            updates = []
+
             # For all open queries
             for socket_id in self.queries:
                 for query_id in self.queries[socket_id]:
@@ -42,15 +45,23 @@ class QueryBroker:
 
                     # If there's a match
                     if doc is not None:
-                        # Either send a document update or deletion, depending
+                        # Keep track of updates or deletions, depending
                         if delete:
-                            await self.sockets[socket_id].delete(query_id, object_id)
+                            deletions.append((socket_id, query_id, object_id))
                         else:
-                            await self.sockets[socket_id].update(query_id, doc)
+                            updates.append((socket_id, query_id, doc))
 
             # Delete all the bad queries
             for socket_id, query_id in malformed_queries:
                 del self.queries[socket_id][query_id]
+
+        # Push the updates (do this afterwards to avoid locking)
+        for socket_id, query_id, object_id in deletions:
+            if socket_id in self.sockets:
+                await self.sockets[socket_id].delete(query_id, object_id)
+        for socket_id, query_id, doc in updates:
+            if socket_id in self.sockets:
+                await self.sockets[socket_id].update(query_id, doc)
 
     async def add_socket(self, socket):
         async with self.query_lock:
