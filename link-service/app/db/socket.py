@@ -1,6 +1,7 @@
 from os import getenv
 import asyncio
 from uuid import uuid4
+import time
 
 heartbeat_interval = float(getenv('QUERY_HEARTBEAT'))
 
@@ -32,7 +33,10 @@ class QuerySocket:
         while self.alive:
             await self.send_msg({
                 'type': 'Ping',
-                'socket_id': self.id
+                'socket_id': self.id,
+                # Timestamp in milliseconds to be
+                # consistent with JS's Date.now()
+                'timestamp': time.time() * 1000
                 })
             await asyncio.sleep(heartbeat_interval)
 

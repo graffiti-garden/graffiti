@@ -25,7 +25,7 @@ async def start_query_sockets():
     # they don't already exist.
     await db.create_index('object.id')
     await db.create_index('object.signature')
-    await db.create_index('object.clock')
+    await db.create_index('object.timestamp')
     await db.create_index('object.tags')
 
 @router.post('/insert')
@@ -100,8 +100,7 @@ async def delete(
 async def query_many(
         query: dict,
         limit: int = Body(..., gt=0, le=max_limit),
-        skip: int = Body(default=0, gt=0),
-        sort: list[tuple[str,int]] = [('object.clock', -1)],
+        sort: list[tuple[str,int]] = [('object.timestamp', -1), ('object.id', -1)],
         signature: str = Depends(token_to_signature)):
 
     # Do rewriting for near misses and access control
@@ -112,8 +111,7 @@ async def query_many(
         cursor = db.find(
                 query,
                 sort=sort,
-                limit=limit,
-                skip=skip)
+                limit=limit)
         results = await cursor.to_list(length=limit)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -130,11 +128,10 @@ async def query_many(
 @router.post("/query_one")
 async def query_one(
         query: dict,
-        skip: int = Body(default=0, ge=0),
-        sort: list[tuple[str,int]] = [('object.clock', -1)],
+        sort: list[tuple[str,int]] = [('object.timestamp', -1), ('object.id', -1)],
         signature: str = Depends(token_to_signature)):
 
-    results = await query_many(query, 1, skip, sort, signature)
+    results = await query_many(query, 1, sort, signature)
 
     if results:
         return results[0]
