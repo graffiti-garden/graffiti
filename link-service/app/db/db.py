@@ -31,7 +31,7 @@ async def start_query_sockets():
 @router.post('/insert')
 async def insert(
         object: dict,
-        near_misses: list[dict],
+        near_misses: list[dict] = [],
         access: list[str]|None = None,
         signature: str = Depends(token_to_signature)):
 
@@ -50,7 +50,7 @@ async def insert(
 @router.post('/replace')
 async def replace(
         object: dict,
-        near_misses: list[dict],
+        near_misses: list[dict] = [],
         access: list[str]|None = None,
         signature: str = Depends(token_to_signature)):
 
