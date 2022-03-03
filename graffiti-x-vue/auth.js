@@ -102,11 +102,11 @@ export default class Auth {
 
     // Parse out the token
     const data = await response.json()
-    this.token_const = data.access_token
-    this.mySignature_const = data.user
+    this.tokenConst = data.access_token
+    this.mySignatureConst = data.signature
 
     // And make sure that the token is valid
-    if (!this.token_const) {
+    if (!this.tokenConst) {
       return this.authorizationError("could not parse token.")
     }
 
@@ -115,11 +115,11 @@ export default class Auth {
   get token() {
     return (async () => {
       // If the token doesn't already exist wait for it
-      while (!this.token_const) {
+      while (!this.tokenConst) {
         await new Promise(resolve => setTimeout(resolve, 100))
       }
 
-      return this.token_const
+      return this.tokenConst
     })()
   }
 
@@ -127,7 +127,7 @@ export default class Auth {
     return (async () => {
       // Make sure we have a token
       await this.token
-      return this.mySignature_const
+      return this.mySignatureConst
     })()
   }
 

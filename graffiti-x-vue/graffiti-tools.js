@@ -18,18 +18,21 @@ export default class GraffitiTools {
     })()
   }
 
-  async insert(object, nearMisses=[], access=null) {
+  async now() {
+    return await this.querySocket.now()
+  }
+
+  async insert(object, nearMisses, access) {
     return await this.auth.request('post', 'insert', {
-      obj: object,
+      object: object,
       near_misses: nearMisses,
       access: access
     })
   }
 
-  async replace(objectID, object, nearMisses=[], access=null) {
+  async replace(object, nearMisses, access) {
     return await this.auth.request('post', 'replace', {
-      obj_id: objectID,
-      obj: object,
+      object: object,
       near_misses: nearMisses,
       access: access
     })
@@ -37,66 +40,75 @@ export default class GraffitiTools {
 
   async delete(objectID) {
     return await this.auth.request('post', 'delete', {
-      obj_id: objectID
+      object_id: objectID
     })
   }
 
-  async queryMany(query, limit, skip=0) {
+  async queryMany(query, limit, sort) {
     return await this.auth.request('post', 'query_many', {
       query: query,
       limit: limit,
-      skip: skip
+      sort: sort
     })
   }
 
-  async queryOne(query, skip=0) {
+  async queryOne(query, sort) {
     return await this.auth.request('post', 'query_one', {
       query: query,
-      skip: skip
+      sort: sort
     })
   }
 }
 
 function querySubscriber(querySocket, queryMany) {
   return class {
-    constructor(query) {
+    constructor(query, updateCallback, deleteCallback) {
       this.query = query
-      this.numPreceding = 0
+      this.updateCallback = updateCallback
+      this.beforeEarliest = {}
 
       // Generate a random query ID
       this.queryID = Math.random().toString(16).substr(2, 14)
-    }
 
-    async open(updateCallback, deleteCallback) {
-      this.updateCallback = updateCallback
-      const queryTime = await querySocket.addQuery(
+      querySocket.addQuery(
         this.queryID,
-        this.query,
+        query,
         updateCallback,
         deleteCallback
       )
-      this.query.created = { "$lte": parseFloat(queryTime) }
     }
 
     async close() {
-      this.numPreceding = 0
       return await this.querySocket.removeQuery(this.queryID)
     }
 
     async rewind(limit) {
       // Fetch #(limit) preceding query matches
-      const preceding = await queryMany(
-        this.query,
-        limit,
-        this.numPreceding
+      const earlier = await queryMany(
+        { "$and": [ this.query, this.beforeEarliest ] },
+        limit
       )
-      this.numPreceding += preceding.length
 
-      // Call the update callback on each of them
-      preceding.map(this.updateCallback)
+      // If there are any matches
+      if (earlier.length) {
+        // Call the update callback on each of them
+        earlier.map(this.updateCallback)
+
+        // Get the earliest match
+        const earliest = earlier[earlier.length-1].object
+
+        // And next time only look for things even earlier
+        this.beforeEarliest = { "$or": [
+          { "timestamp": { "$lt": earliest.timestamp } },
+          {
+            "timestamp": { "$eq": earliest.timestamp },
+            "id": { "$lt": earliest.id }
+          }
+        ]}
+      }
 
       // Return whether or not we have completed
-      return preceding.length < limit
+      return earlier.length < limit
     }
   }
 }

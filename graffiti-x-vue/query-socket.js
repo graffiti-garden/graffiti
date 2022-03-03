@@ -1,7 +1,6 @@
 export default class QuerySocket {
 
   constructor(origin, auth) {
-    // Initialize
     this.origin = origin
     this.auth = auth
     this.socket_id_const = null
@@ -42,6 +41,11 @@ export default class QuerySocket {
     })()
   }
 
+  async now() {
+    await this.socket_id
+    return Date.now() - this.localPingTime + this.serverPingTime
+  }
+
   async addQuery(query_id, query, updateCallback, deleteCallback) {
     // Add the query internally
     this.queries[query_id] = query
@@ -74,6 +78,9 @@ export default class QuerySocket {
     const data = JSON.parse(event.data)
 
     if (data.type == 'Ping') {
+      // Sync with the server time
+      this.serverPingTime = data.timestamp
+      this.localPingTime = Date.now()
       // Store the socket ID
       if (!this.socket_id_const) {
         this.socket_id_const = data.socket_id
