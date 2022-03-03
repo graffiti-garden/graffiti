@@ -108,7 +108,7 @@ function querySubscriber(querySocket, queryMany) {
       }
 
       // Return whether or not we have completed
-      return earlier.length < limit
+      return earlier.length == limit
     }
   }
 }
