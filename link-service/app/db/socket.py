@@ -19,7 +19,7 @@ class QuerySocket:
             try:
                 await self.ws.send_json(msg)
             except Exception as e:
-                await self.qb.remove_socket(self)
+                self.qb.remove_socket(self)
                 self.alive = False
 
     async def heartbeat(self):
@@ -27,7 +27,7 @@ class QuerySocket:
         await self.ws.accept()
 
         # Register ourselves with the query process
-        await self.qb.add_socket(self)
+        self.qb.add_socket(self)
 
         # Send a heartbeat
         while self.alive:

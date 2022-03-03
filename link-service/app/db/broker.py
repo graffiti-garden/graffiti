@@ -1,4 +1,3 @@
-import asyncio
 from .rewrite import query_rewrite
 
 """
@@ -10,78 +9,77 @@ class QueryBroker:
 
     def __init__(self, db):
         self.db = db
-        self.query_lock = asyncio.Lock()
         self.sockets = {} # socket_id -> socket
-        self.queries = {} # socket_id -> {query_id -> query}
+        self.queries = {} # socket_id+query_id -> query
+        self.socket_to_queries = {} # socket_id -> set of query_ids
 
     async def change(self, object_id, delete=False):
+        if not self.queries: return
 
-        # Freeze updates to the queries
-        async with self.query_lock:
+        # See if the object matches any open queries
+        matches = self.db.aggregate([
+            # Only look at the document that is changing
+            { "$match": { "object.id": object_id } },
+            # Pass it through all the queries
+            { "$facet" : self.queries }
+        ])
 
-            # Keep track of bad queries we'll have to delete
-            malformed_queries = []
+        async for match in matches:
+            for ids, docs in match.items():
+                if docs is not None:
+                    # Extract the IDs
+                    socket_id, query_id = self.string_to_ids(ids)
 
-            deletions = []
-            updates = []
-
-            # For all open queries
-            for socket_id in self.queries:
-                for query_id in self.queries[socket_id]:
-
-                    # Check to see if the query matches
-                    # the document containing the changed object.
-                    try:
-                        query = self.queries[socket_id][query_id]
-                        # Only run the query on the object that is changing
-                        query["object.id"] = object_id
-                        doc = await self.db.find_one(query)
-                    except Exception as e:
-                        # There's an error with the query!
-                        malformed_queries.append((socket_id, query_id))
-                        # And send the error to the socket
-                        await self.sockets[socket_id].error(query_id, str(e))
+                    # If the socket has been removed during this
+                    # loop, don't try to do anything
+                    if socket_id not in self.sockets:
                         continue
 
-                    # If there's a match
-                    if doc is not None:
-                        # Keep track of updates or deletions, depending
-                        if delete:
-                            deletions.append((socket_id, query_id, object_id))
-                        else:
-                            updates.append((socket_id, query_id, doc))
+                    # There can only ever be one document
+                    doc = docs[0]
 
-            # Delete all the bad queries
-            for socket_id, query_id in malformed_queries:
-                del self.queries[socket_id][query_id]
+                    # Otherwise, try to send the updates back to the sockets
+                    if delete:
+                        await self.sockets[socket_id].delete(query_id, object_id)
+                    else:
+                        await self.sockets[socket_id].update(query_id, doc)
 
-        # Push the updates (do this afterwards to avoid locking)
-        for socket_id, query_id, object_id in deletions:
-            if socket_id in self.sockets:
-                await self.sockets[socket_id].delete(query_id, object_id)
-        for socket_id, query_id, doc in updates:
-            if socket_id in self.sockets:
-                await self.sockets[socket_id].update(query_id, doc)
 
-    async def add_socket(self, socket):
-        async with self.query_lock:
-            self.sockets[socket.id] = socket
-            self.queries[socket.id] = {}
+    def add_socket(self, socket):
+        self.sockets[socket.id] = socket
+        self.socket_to_queries[socket.id] = set()
 
-    async def remove_socket(self, socket):
-        async with self.query_lock:
-            del self.sockets[socket.id]
-            del self.queries[socket.id]
+    def remove_socket(self, socket):
+        for query_id in self.socket_to_queries[socket.id]:
+            del self.queries[self.ids_to_string(socket.id, query_id)]
+        del self.socket_to_queries[socket.id]
+        del self.sockets[socket.id]
 
     async def add_query(self, socket_id, query_id, query, signature):
-        async with self.query_lock:
-            self.validate_socket(socket_id, signature)
-            self.queries[socket_id][query_id] = query_rewrite(query, signature)
+        # Rewrite the query and check if its valid
+        query = query_rewrite(query, signature)
+        # Check if it is valid (if it isn't this will error)
+        await self.db.find_one(query)
 
-    async def remove_query(self, socket_id, query_id, signature):
-        async with self.query_lock:
-            self.validate_socket(socket_id, signature)
-            del self.queries[socket_id][query_id]
+         # Make sure the socket is valid too
+        self.validate_socket(socket_id, signature)
+
+        # Add the query
+        self.queries[self.ids_to_string(socket_id, query_id)] = [{ "$match": query }]
+        self.socket_to_queries[socket_id].add(query_id)
+
+    def remove_query(self, socket_id, query_id, signature):
+        self.validate_socket(socket_id, signature)
+
+        # Remove it
+        del self.queries[self.ids_to_string(socket_id, query_id)]
+        self.socket_to_queries[socket_id].remove(query_id)
+
+    def ids_to_string(self, socket_id, query_id):
+        return socket_id + '&&' + query_id
+
+    def string_to_ids(self, s):
+        return s.split('&&', 1)
 
     def validate_socket(self, socket_id, signature):
         if self.sockets[socket_id].signature != signature:

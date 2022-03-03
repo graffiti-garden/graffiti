@@ -166,6 +166,6 @@ async def query_socket_remove(
         signature: str = Depends(token_to_signature)):
 
     try:
-        await qb.remove_query(socket_id, query_id, signature)
+        qb.remove_query(socket_id, query_id, signature)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
