@@ -16,6 +16,7 @@ router = APIRouter()
 client = AsyncIOMotorClient('mongo')
 db = client.graffiti.objects
 qb = QueryBroker(db)
+open_sockets = {}
 
 @router.on_event("startup")
 async def start_query_sockets():
@@ -42,8 +43,13 @@ async def insert(
     # Insert it into the database
     await db.insert_one(doc)
 
-    # Propagate the insertion to socket queries
-    await qb.change(object['id'])
+    # Check what queries the object matches after insertion
+    matches = await qb.change(object['id'])
+    # And send the updates to sockets
+    for socket_id, query_id in matches.items():
+        if socket_id not in open_sockets:
+            continue
+        await open_sockets[socket_id].update(query_id, doc)
 
     return object['id']
 
@@ -65,11 +71,28 @@ async def replace(
     # Rewrite the new document
     new_doc = object_rewrite(object, near_misses, access, signature)
 
+    # Check what queries the object matches before replacement
+    matches_before = await qb.change(object['id'])
+
     # Replace the old document with the new
     await db.replace_one({"object.id": object['id']}, new_doc)
 
-    # Propagate the replace to socket queries
-    await qb.change(object['id'])
+    # Check what queries the object matches before replacement
+    matches_after = await qb.change(object['id'])
+
+    # If it matched before but not after, the object has gone
+    # out of scope for that query so send a deletion.
+    for socket_id, query_id in matches_before.items():
+        if socket_id not in open_sockets:
+            continue
+        if (socket_id, query_id) not in matches_after:
+            await open_sockets[socket_id].delete(query_id, object['id'])
+
+    # Otherwise send a replacement
+    for socket_id, query_id in matches_after.items():
+        if socket_id not in open_sockets:
+            continue
+        await open_sockets[socket_id].update(query_id, new_doc)
 
     return object['id']
 
@@ -86,11 +109,17 @@ async def delete(
     if not old_doc:
         raise HTTPException(status_code=400, detail="The object you're trying to delete either doesn't exist or you don't have permission to replace it.")
 
-    # Propagate the deletion to socket queries
-    await qb.change(object_id, delete=True)
+    # Check what queries this object affects
+    matches = await qb.change(object_id)
 
     # Perform deletion
     await db.delete_one({"object.id": object_id})
+
+    # Propagate the changes to the sockets
+    for socket_id, query_id in matches.items():
+        if socket_id not in open_sockets:
+            continue
+        await open_sockets[socket_id].delete(query_id, object_id)
 
     return object_id
 
@@ -142,10 +171,16 @@ async def query_socket(ws: WebSocket, token: str):
     signature = token_to_signature(token)
 
     # Open a query socket
-    qs = QuerySocket(signature, ws, qb)
+    socket_id = str(uuid4())
+    open_sockets[socket_id] = QuerySocket(signature, ws)
+    qb.add_socket(socket_id)
 
     # Wait until it dies
-    await qs.heartbeat()
+    await open_sockets[socket_id].heartbeat(socket_id)
+
+    # Remove the query
+    qb.remove_socket(socket_id)
+    del open_sockets[socket_id]
 
 @router.post('/query_socket_add')
 async def query_socket_add(
@@ -154,8 +189,18 @@ async def query_socket_add(
         socket_id: str = Body(...),
         signature: str = Depends(token_to_signature)):
 
+    # Rewrite the query and check if its valid
+    query = query_rewrite(query, signature)
+    # (if it isn't this will error)
     try:
-        await qb.add_query(socket_id, query_id, query, signature)
+        await db.find_one(query)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Make sure the socket is valid and add
+    validate_socket(socket_id, signature)
+    try:
+        qb.add_query(socket_id, query_id, query)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -165,7 +210,15 @@ async def query_socket_remove(
         socket_id: str = Body(...),
         signature: str = Depends(token_to_signature)):
 
+    # Make sure the socket is valid and remove
+    validate_socket(socket_id, signature)
     try:
-        qb.remove_query(socket_id, query_id, signature)
+        qb.remove_query(socket_id, query_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+def validate_socket(socket_id, signature):
+    if not socket_id in open_sockets:
+        raise HTTPException(status_code=400, detail=f"a socket with id {socket_id} is not open")
+    if open_sockets[socket_id].signature != signature:
+        raise HTTPException(status_code=400, detail=f"a socket with id {socket_id} is not owned by {signature}")

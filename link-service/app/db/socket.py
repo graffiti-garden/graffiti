@@ -1,39 +1,32 @@
 from os import getenv
 import asyncio
-from uuid import uuid4
 import time
 
 heartbeat_interval = float(getenv('QUERY_HEARTBEAT'))
 
 class QuerySocket:
 
-    def __init__(self, signature, ws, qb):
+    def __init__(self, signature, ws):
         self.signature = signature
         self.ws = ws # Websocket
-        self.qb = qb # QueryBroker
         self.alive = True
-        self.id = str(uuid4())
 
     async def send_msg(self, msg):
         if self.alive:
             try:
                 await self.ws.send_json(msg)
             except Exception as e:
-                self.qb.remove_socket(self)
                 self.alive = False
 
-    async def heartbeat(self):
+    async def heartbeat(self, socket_id):
         # Accept the connection
         await self.ws.accept()
-
-        # Register ourselves with the query process
-        self.qb.add_socket(self)
 
         # Send a heartbeat
         while self.alive:
             await self.send_msg({
                 'type': 'Ping',
-                'socket_id': self.id,
+                'socket_id': socket_id,
                 # Timestamp in milliseconds to be
                 # consistent with JS's Date.now()
                 'timestamp': int(time.time() * 1000)
@@ -54,11 +47,4 @@ class QuerySocket:
             'type': 'Delete',
             'query_id': query_id,
             'object_id': object_id
-        })
-
-    async def error(self, query_id, detail):
-        await self.send_msg({
-            'type': 'Reject',
-            'query_id': query_id,
-            'content': detail
         })
