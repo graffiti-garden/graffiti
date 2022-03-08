@@ -74,7 +74,7 @@ export default class QuerySocket {
     )
   }
 
-  async onSocketMessage(event) {
+  onSocketMessage(event) {
     const data = JSON.parse(event.data)
 
     if (data.type == 'Ping') {
@@ -88,14 +88,10 @@ export default class QuerySocket {
       }
     } else if (data.type == 'Update') {
       // Call the update callback
-      await this.updateCallbacks[data.query_id]({
-        object: data.object,
-        near_misses: data.near_misses,
-        accept: data.accept
-      })
+      this.updateCallbacks[data.query_id](data)
     } else if (data.type == 'Delete') {
       // Call the delete callback
-      await this.deleteCallbacks[data.query_id](data.object_id)
+      this.deleteCallbacks[data.query_id](data.object_id)
     } else if (data.type == 'Reject') {
       throw {
         type: data.type,

@@ -26,20 +26,12 @@ export default class GraffitiTools {
     return await this.querySocket.now()
   }
 
-  async insert(object, nearMisses, access) {
-    return await this.auth.request('post', 'insert', {
-      object: object,
-      near_misses: nearMisses,
-      access: access
-    })
+  async insert(object) {
+    return await this.auth.request('post', 'insert', serverFormat(object))
   }
 
-  async replace(object, nearMisses, access) {
-    return await this.auth.request('post', 'replace', {
-      object: object,
-      near_misses: nearMisses,
-      access: access
-    })
+  async replace(object) {
+    return await this.auth.request('post', 'replace', serverFormat(object))
   }
 
   async delete(objectID) {
@@ -49,19 +41,45 @@ export default class GraffitiTools {
   }
 
   async queryMany(query, limit, sort) {
-    return await this.auth.request('post', 'query_many', {
+    let data = await this.auth.request('post', 'query_many', {
       query: query,
       limit: limit,
       sort: sort
     })
+    return data.map(clientFormat)
   }
 
   async queryOne(query, sort) {
-    return await this.auth.request('post', 'query_one', {
+    let data = await this.auth.request('post', 'query_one', {
       query: query,
       sort: sort
     })
+    return clientFormat(data)
   }
+}
+
+function serverFormat(object) {
+  // Copy the object so we don't modify the original
+  let objectCopy = Object.assign({}, object)
+
+  // Extract fields from the object
+  // (they're passed in separately on the
+  // server for type verification)
+  delete objectCopy.nearMisses
+  delete objectCopy.access
+  return {
+    object: objectCopy,
+    near_misses: object.nearMisses,
+    access: object.access
+  }
+}
+
+function clientFormat(data) {
+  if (!data) return data
+  let object = data.object
+  object.nearMisses = data.near_misses
+  object.access = data.access
+  return object
 }
 
 function querySubscriber(querySocket, queryMany) {
@@ -77,7 +95,7 @@ function querySubscriber(querySocket, queryMany) {
       querySocket.addQuery(
         this.queryID,
         query,
-        updateCallback,
+        x => updateCallback(clientFormat(x)),
         deleteCallback
       )
     }
@@ -99,7 +117,7 @@ function querySubscriber(querySocket, queryMany) {
         earlier.map(this.updateCallback)
 
         // Get the earliest match
-        const earliest = earlier[earlier.length-1].object
+        const earliest = earlier[earlier.length-1]
 
         // And next time only look for things even earlier
         this.beforeEarliest = { "$or": [
