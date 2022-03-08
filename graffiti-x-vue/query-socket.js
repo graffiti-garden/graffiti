@@ -7,9 +7,6 @@ export default class QuerySocket {
     this.queries = {}
     this.updateCallbacks = {}
     this.deleteCallbacks = {}
-    this.dropped_queries = {}
-    this.droppedUpdateCallbacks = {}
-    this.droppedDeleteCallbacks = {}
 
     // Open up a WebSocket with the server
     this.connect()
@@ -112,33 +109,9 @@ export default class QuerySocket {
     // Forget the socket id
     this.socket_id_const = null
 
-    // Remove all open queries
-    // and add them to the "dropped queries"
-    for (let query_id in this.queries) {
-      this.dropped_queries[query_id] = this.queries[query_id]
-      this.droppedUpdateCallbacks[query_id] = this.updateCallbacks[query_id]
-      this.droppedDeleteCallbacks[query_id] = this.deleteCallbacks[query_id]
-      delete this.queries[query_id]
-      delete this.updateCallbacks[query_id]
-      delete this.deleteCallbacks[query_id]
-    }
-
-    console.log('Query socket is closed. Will attempt to reconnect in 5 seconds...')
-    setTimeout(this.connect.bind(this), 5000)
-  }
-
-  async onConnect(event) {
-    // Add back all the queries that got dropped
-    for (let query_id in this.dropped_queries) {
-      await this.addQuery(
-        query_id,
-        this.dropped_queries[query_id],
-        this.droppedUpdateCallbacks[query_id],
-        this.droppedDeleteCallbacks[query_id]
-      )
-      delete this.dropped_queries[query_id]
-      delete this.droppedUpdateCallbacks[query_id]
-      delete this.droppedDeleteCallbacks[query_id]
+    const shouldReload = confirm("lost connection to the graffiti server.\n\nonce you've established an internet connection, select \"OK\" to reload or select \"Cancel\" to remain on the page and save any data.")
+    if (shouldReload) {
+      window.location.reload()
     }
   }
 
