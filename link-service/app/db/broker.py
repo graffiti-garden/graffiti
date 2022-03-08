@@ -20,7 +20,7 @@ class QueryBroker:
 
         async for match in matches:
             for ids, docs in match.items():
-                if docs is not None:
+                if docs:
                     # Extract the IDs
                     socket_id, query_id = self.string_to_ids(ids)
 
