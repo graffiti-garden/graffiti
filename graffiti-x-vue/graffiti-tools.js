@@ -101,7 +101,7 @@ function querySubscriber(querySocket, queryMany) {
     }
 
     async close() {
-      return await this.querySocket.removeQuery(this.queryID)
+      return await querySocket.removeQuery(this.queryID)
     }
 
     async rewind(limit) {
