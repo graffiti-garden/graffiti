@@ -16,7 +16,7 @@ class QueryBroker:
             { "$facet" : self.queries }
         ])
 
-        changes = {}
+        changes = []
 
         async for match in matches:
             for ids, docs in match.items():
@@ -24,7 +24,7 @@ class QueryBroker:
                     # Extract the IDs
                     socket_id, query_id = self.string_to_ids(ids)
 
-                    changes[socket_id] = query_id
+                    changes.append((socket_id, query_id))
 
         return changes
 

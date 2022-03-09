@@ -46,10 +46,10 @@ async def insert(
     # Check what queries the object matches after insertion
     matches = await qb.change(object['id'])
     # And send the updates to sockets
-    for socket_id, query_id in matches.items():
+    for socket_id, query_ids in matches:
         if socket_id not in open_sockets:
             continue
-        await open_sockets[socket_id].update(query_id, doc)
+        await open_sockets[socket_id].update(query_ids, doc)
 
     return object['id']
 
@@ -82,14 +82,14 @@ async def replace(
 
     # If it matched before but not after, the object has gone
     # out of scope for that query so send a deletion.
-    for socket_id, query_id in matches_before.items():
+    for socket_id, query_id in matches_before:
         if socket_id not in open_sockets:
             continue
         if (socket_id, query_id) not in matches_after:
             await open_sockets[socket_id].delete(query_id, object['id'])
 
     # Otherwise send a replacement
-    for socket_id, query_id in matches_after.items():
+    for socket_id, query_id in matches_after:
         if socket_id not in open_sockets:
             continue
         await open_sockets[socket_id].update(query_id, new_doc)
@@ -116,7 +116,7 @@ async def delete(
     await db.delete_one({"object.id": object_id})
 
     # Propagate the changes to the sockets
-    for socket_id, query_id in matches.items():
+    for socket_id, query_id in matches:
         if socket_id not in open_sockets:
             continue
         await open_sockets[socket_id].delete(query_id, object_id)
