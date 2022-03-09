@@ -132,7 +132,6 @@ export default class Auth {
   logOut() {
     this.deleteCookie('token')
     this.deleteCookie('mySignature')
-    window.location.reload()
   }
 
   get token() {
