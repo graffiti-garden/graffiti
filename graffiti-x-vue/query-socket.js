@@ -7,6 +7,12 @@ export default class QuerySocket {
     this.queries = {}
     this.updateCallbacks = {}
     this.deleteCallbacks = {}
+    this.isUnloading = false
+
+    // Close silently
+    window.addEventListener(
+      "beforeunload",
+      (e => {this.isUnloading=true}).bind(this));
 
     // Open up a WebSocket with the server
     this.connect()
@@ -106,12 +112,14 @@ export default class QuerySocket {
   }
 
   async onSocketClose(event) {
-    // Forget the socket id
-    this.socket_id_const = null
+    if (!this.isUnloading) {
+      // Forget the socket id
+      this.socket_id_const = null
 
-    const shouldReload = confirm("lost connection to the graffiti server.\n\nonce you've established an internet connection, select \"OK\" to reload or select \"Cancel\" to remain on the page and save any data.")
-    if (shouldReload) {
-      window.location.reload()
+      const shouldReload = confirm("lost connection to the graffiti server.\n\nonce you've established an internet connection, select \"OK\" to reload or select \"Cancel\" to remain on the page and save any data.")
+      if (shouldReload) {
+        window.location.reload()
+      }
     }
   }
 

@@ -52,7 +52,7 @@ export default class Auth {
   }
 
   storeCookie(param, data) {
-    document.cookie = `${param}=${data}; SameSite=Strict`
+    document.cookie = `${param}=${data}; path=/; SameSite=Strict`
   }
 
   getCookie(param) {
@@ -69,7 +69,7 @@ export default class Auth {
 
   deleteCookie(param) {
     // Delete the cookie if it exists
-    document.cookie = param + '=; max-age=0; SameSite=Strict'
+    document.cookie = param + '=; max-age=0; path=/; SameSite=Strict'
   }
 
   authorizationError(reason) {
