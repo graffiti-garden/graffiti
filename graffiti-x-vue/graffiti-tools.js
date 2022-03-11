@@ -26,12 +26,8 @@ export default class GraffitiTools {
     return await this.querySocket.now()
   }
 
-  async insert(object) {
-    return await this.auth.request('post', 'insert', serverFormat(object))
-  }
-
-  async replace(object) {
-    return await this.auth.request('post', 'replace', serverFormat(object))
+  async update(object) {
+    return await this.auth.request('post', 'update', serverFormat(object))
   }
 
   async delete(objectID) {
