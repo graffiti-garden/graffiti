@@ -57,6 +57,10 @@ async def email(
         email: str,
         request: Request):
 
+    # Make email lowercase so one email
+    # doesn't become multiple accounts
+    email = email.lower()
+
     # Generate an authorization code
     code = jwt.encode({
         "type": "code",
