@@ -25,62 +25,54 @@ async def start_query_sockets():
     # Create indexes for common fields if
     # they don't already exist.
     await db.create_index('object.id')
+    await db.create_index('object.type')
     await db.create_index('object.signature')
     await db.create_index('object.timestamp')
     await db.create_index('object.tags')
 
-@router.post('/insert')
-async def insert(
+@router.post('/update')
+async def update(
         object: dict,
         near_misses: list[dict] = [],
         access: list[str]|None = None,
         signature: str = Depends(token_to_signature)):
-
-    # Sign the object
-    object['id'] = str(uuid4())
-    doc = object_rewrite(object, near_misses, access, signature)
-
-    # Insert it into the database
-    await db.insert_one(doc)
-
-    # Check what queries the object matches after insertion
-    matches = await qb.change(object['id'])
-    # And send the updates to sockets
-    for socket_id, query_ids in matches:
-        if socket_id not in open_sockets:
-            continue
-        await open_sockets[socket_id].update(query_ids, doc)
-
-    return object['id']
-
-@router.post('/replace')
-async def replace(
-        object: dict,
-        near_misses: list[dict] = [],
-        access: list[str]|None = None,
-        signature: str = Depends(token_to_signature)):
-
-    # Check that the object that already exists
-    # and that it is owned by the signer
-    old_doc = await db.find_one({
-        "object.id": object['id'],
-        "object.signature": signature})
-    if not old_doc:
-        raise HTTPException(status_code=400, detail="The object you're trying to replace either doesn't exist or you don't have permission to replace it.")
 
     # Rewrite the new document
     new_doc = object_rewrite(object, near_misses, access, signature)
 
-    # Check what queries the object matches before replacement
-    matches_before = await qb.change(object['id'])
+    # First check if the object includes an ID field
+    # This tells us if we're inserting or replacing
+    if 'id' in object:
+        # We're replacing.
+        # Check that the object that already exists
+        # and that it is owned by the signer
+        old_doc = await db.find_one({
+            "object.id": object['id'],
+            "object.signature": signature})
+        if not old_doc:
+            raise HTTPException(status_code=400, detail="The object you're trying to replace either doesn't exist or you don't have permission to replace it.")
 
-    # Replace the old document with the new
-    await db.replace_one({"object.id": object['id']}, new_doc)
+        # Check what queries the object matches before replacement
+        matches_before = await qb.change(object['id'])
 
-    # Check what queries the object matches before replacement
+        # Replace the old document with the new
+        await db.replace_one({"object.id": object['id']}, new_doc)
+
+    else:
+        # Otherwise, we're inserting.
+        # Create a new random ID
+        object['id'] = str(uuid4())
+
+        # The object is new so nothing previously matched
+        matches_before = []
+
+        # And insert it into the database
+        await db.insert_one(new_doc)
+
+    # Check what queries the object matches after it's inserted
     matches_after = await qb.change(object['id'])
 
-    # If it matched before but not after, the object has gone
+    # If a query matched before but not after, the object has gone
     # out of scope for that query so send a deletion.
     for socket_id, query_id in matches_before:
         if socket_id not in open_sockets:
