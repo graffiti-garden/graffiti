@@ -3,7 +3,7 @@ export default class QuerySocket {
   constructor(origin, auth) {
     this.origin = origin
     this.auth = auth
-    this.socket_id_const = null
+    this.socketID = null
     this.queries = {}
     this.updateCallbacks = {}
     this.deleteCallbacks = {}
@@ -33,19 +33,13 @@ export default class QuerySocket {
     this.ws.onerror   = this.onSocketError  .bind(this)
   }
 
-  get socket_id() {
-    return (async () => {
-      // If the socket ID doesn't already exist, wait for it
-      while (!this.socket_id_const) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-
-      return this.socket_id_const
-    })()
+  async isInitialized() {
+    while (!this.socketID) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
   }
 
-  async now() {
-    await this.socket_id
+  now() {
     return Date.now() - this.localPingTime + this.serverPingTime
   }
 
@@ -57,7 +51,7 @@ export default class QuerySocket {
 
     return await this.auth.request(
       'post', 'query_socket_add', {
-        socket_id: await this.socket_id,
+        socket_id: this.socketID,
         query_id: query_id,
         query: query
       }
@@ -71,7 +65,7 @@ export default class QuerySocket {
 
     return await this.auth.request(
       'post', 'query_socket_remove', {
-        socket_id: await this.socket_id,
+        socket_id: this.socketID,
         query_id: query_id,
       }
     )
@@ -85,9 +79,9 @@ export default class QuerySocket {
       this.serverPingTime = data.timestamp
       this.localPingTime = Date.now()
       // Store the socket ID
-      if (!this.socket_id_const) {
-        this.socket_id_const = data.socket_id
-        console.log(`Query socket is open with id '${this.socket_id_const}'`)
+      if (!this.socketID) {
+        this.socketID = data.socket_id
+        console.log(`Query socket is open with id '${this.socketID}'`)
       }
     } else if (data.type == 'Update') {
       // Call the update callback
@@ -113,9 +107,6 @@ export default class QuerySocket {
 
   async onSocketClose(event) {
     if (!this.isUnloading) {
-      // Forget the socket id
-      this.socket_id_const = null
-
       const shouldReload = confirm("lost connection to the graffiti server.\n\nonce you've established an internet connection, select \"OK\" to reload or select \"Cancel\" to remain on the page and save any data.")
       if (shouldReload) {
         window.location.reload()

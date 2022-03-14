@@ -19,11 +19,11 @@ export default class Auth {
 
     } else {
       // Check to see if we have cookies
-      this.tokenConst = this.getCookie('token')
-      this.mySignatureConst = this.getCookie('mySignature')
+      this.token = this.getCookie('token')
+      this.mySignature = this.getCookie('mySignature')
 
       // Otherwise initiate authorization
-      if (!this.tokenConst || !this.mySignatureConst) {
+      if (!this.token || !this.mySignature) {
         this.authorize()
       }
     }
@@ -116,17 +116,17 @@ export default class Auth {
 
     // Parse out the token
     const data = await response.json()
-    this.tokenConst = data.access_token
-    this.mySignatureConst = data.signature
+    this.token = data.access_token
+    this.mySignature = data.signature
 
     // And make sure that the token is valid
-    if (!this.tokenConst) {
+    if (!this.token) {
       return this.authorizationError("could not parse token.")
     }
 
     // Store the token and signature in cookies
-    this.storeCookie('token', this.tokenConst)
-    this.storeCookie('mySignature', this.mySignatureConst)
+    this.storeCookie('token', this.token)
+    this.storeCookie('mySignature', this.mySignature)
   }
 
   logOut() {
@@ -134,33 +134,23 @@ export default class Auth {
     this.deleteCookie('mySignature')
   }
 
-  get token() {
-    return (async () => {
-      // If the token doesn't already exist wait for it
-      while (!this.tokenConst) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-
-      return this.tokenConst
-    })()
-  }
-
-  get mySignature() {
-    return (async () => {
-      // Make sure we have a token
-      await this.token
-      return this.mySignatureConst
-    })()
+  async isInitialized() {
+    while (!this.token) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
   }
 
   async request(method, path, body) {
+    // Make sure we have a token
+    await this.isInitialized()
+
     // Send the request to the server
     const requestURL = new URL(path, this.origin)
     const response = await fetch(requestURL, {
       method: method,
       headers: new Headers({
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (await this.token)
+        'Authorization': 'Bearer ' + this.token
       }),
       body: JSON.stringify(body)
     })

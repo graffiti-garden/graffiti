@@ -12,18 +12,21 @@ export default class GraffitiTools {
       this.queryMany.bind(this))
   }
 
+  async isInitialized() {
+    await this.auth.isInitialized()
+    await this.querySocket.isInitialized()
+  }
+
   get mySignature() {
-    return (async () => {
-      return await this.auth.mySignature
-    })()
+    return this.auth.mySignature
   }
 
   logOut() {
     this.auth.logOut()
   }
 
-  async now() {
-    return await this.querySocket.now()
+  now() {
+    return this.querySocket.now()
   }
 
   async update(object) {
