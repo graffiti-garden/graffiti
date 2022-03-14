@@ -30,7 +30,7 @@ export default class GraffitiTools {
   }
 
   async update(object) {
-    return await this.auth.request('post', 'update', serverFormat(object))
+    return await this.auth.request('post', 'update', this.serverFormat(object))
   }
 
   async delete(objectID) {
@@ -55,21 +55,24 @@ export default class GraffitiTools {
     })
     return clientFormat(data)
   }
-}
 
-function serverFormat(object) {
-  // Copy the object so we don't modify the original
-  let objectCopy = Object.assign({}, object)
+  serverFormat(object) {
+    // Copy the object so we don't modify the original
+    let objectCopy = Object.assign({}, object)
 
-  // Extract fields from the object
-  // (they're passed in separately on the
-  // server for type verification)
-  delete objectCopy.nearMisses
-  delete objectCopy.access
-  return {
-    object: objectCopy,
-    near_misses: object.nearMisses,
-    access: object.access
+    // Add a timestamp if not specified
+    objectCopy.timestamp = this.now()
+
+    // Extract fields from the object
+    // (they're passed in separately on the
+    // server for type verification)
+    delete objectCopy.nearMisses
+    delete objectCopy.access
+    return {
+      object: objectCopy,
+      near_misses: object.nearMisses,
+      access: object.access
+    }
   }
 }
 
@@ -103,7 +106,7 @@ function querySubscriber(querySocket, queryMany) {
       return await querySocket.removeQuery(this.queryID)
     }
 
-    async rewind(limit) {
+    async rewind(limit=100) {
       // Fetch #(limit) preceding query matches
       const earlier = await queryMany(
         { "$and": [ this.query, this.beforeEarliest ] },
