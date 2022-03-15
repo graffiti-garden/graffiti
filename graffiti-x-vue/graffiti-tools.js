@@ -55,12 +55,12 @@ export default class GraffitiTools {
     return clientFormat(data)
   }
 
-  subscriber(results) {
+  querySubscriber(results) {
     // Generate a random query ID
     const queryID = Math.random().toString(16).substr(2, 14)
 
     // Supply a function that updates the query
-    const updateQuery = (async function(query) {
+    const update = (async function(query) {
       // Clear the results
       for (var r in results) delete results[r]
 
@@ -74,14 +74,14 @@ export default class GraffitiTools {
     }).bind(this)
 
     // Add a hook to properly close the query
-    const deleteQuery = (async function() {
+    const delete_ = (async function() {
       delete this.rewindQueries[queryID]
       this.querySocket.deleteQuery(queryID)
     }).bind(this)
 
     // And finally add a function that lets you rewind the query
     this.rewindQueries[queryID] = {}
-    const rewindQuery = (async function(limit=100) {
+    const rewind = (async function(limit=100) {
 
       // Remember the query
       const query = this.querySocket.getQuery(queryID)
@@ -114,6 +114,6 @@ export default class GraffitiTools {
       return earlier.length == limit
     }).bind(this)
 
-    return { updateQuery, deleteQuery, rewindQuery }
+    return { update, delete: delete_, rewind }
   }
 }
