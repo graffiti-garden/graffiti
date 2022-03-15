@@ -63,6 +63,7 @@ export default class GraffitiTools {
     const update = (async function(query) {
       // Clear the results
       for (var r in results) delete results[r]
+      this.rewindQueries[queryID] = {}
 
       // Update the query
       await this.querySocket.updateQuery(
@@ -80,7 +81,6 @@ export default class GraffitiTools {
     }).bind(this)
 
     // And finally add a function that lets you rewind the query
-    this.rewindQueries[queryID] = {}
     const rewind = (async function(limit=100) {
 
       // Remember the query
