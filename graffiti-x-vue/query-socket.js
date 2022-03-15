@@ -19,14 +19,15 @@ export default class QuerySocket {
   }
 
   async connect() {
-    const token = await this.auth.token
+    await this.auth.isInitialized()
+
     const wsURL = new URL('query_socket', this.origin)
     if (wsURL.protocol == 'https:') {
       wsURL.protocol = 'wss:'
     } else {
       wsURL.protocol = 'ws:'
     }
-    wsURL.searchParams.set('token', token)
+    wsURL.searchParams.set('token', this.auth.token)
     this.ws = new WebSocket(wsURL)
     this.ws.onmessage = this.onSocketMessage.bind(this)
     this.ws.onclose   = this.onSocketClose  .bind(this)
@@ -40,37 +41,47 @@ export default class QuerySocket {
   }
 
   now() {
+    if (!this.serverPingTime) {
+      throw {
+        type: 'Error',
+        content: 'The query socket has not yet been initialized. await isInitialized() before calling now()'
+      }
+    }
     return Date.now() - this.localPingTime + this.serverPingTime
   }
 
-  getQuery(query_id) {
-    return this.queries[query_id]
+  getQuery(queryID) {
+    return this.queries[queryID]
   }
 
-  async updateQuery(query_id, query, updateCallback, deleteCallback) {
+  async updateQuery(queryID, query, updateCallback, deleteCallback) {
+    await this.isInitialized()
+
     // Add the query internally
-    this.queries[query_id] = query
-    this.updateCallbacks[query_id] = updateCallback
-    this.deleteCallbacks[query_id] = deleteCallback
+    this.queries[queryID] = query
+    this.updateCallbacks[queryID] = updateCallback
+    this.deleteCallbacks[queryID] = deleteCallback
 
     return await this.auth.request(
       'post', 'update_socket_query', {
         socket_id: this.socketID,
-        query_id: query_id,
+        query_id: queryID,
         query: query
       }
     )
   }
 
-  async deleteQuery(query_id) {
-    delete this.queries[query_id]
-    delete this.updateCallbacks[query_id]
-    delete this.deleteCallbacks[query_id]
+  async deleteQuery(queryID) {
+    await this.isInitialized()
+
+    delete this.queries[queryID]
+    delete this.updateCallbacks[queryID]
+    delete this.deleteCallbacks[queryID]
 
     return await this.auth.request(
       'post', 'delete_socket_query', {
         socket_id: this.socketID,
-        query_id: query_id,
+        query_id: queryID,
       }
     )
   }
@@ -97,7 +108,7 @@ export default class QuerySocket {
       throw {
         type: data.type,
         content: 'A query was rejected. ' + data.content,
-        query_id: data.query_id,
+        queryID: data.query_id,
         query: this.queries[data.query_id],
       }
     } else {

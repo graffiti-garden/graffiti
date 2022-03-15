@@ -83,7 +83,6 @@ export default class GraffitiTools {
       for (var r in results) delete results[r]
 
       // Update the query
-      await this.querySocket.isInitialized()
       await this.querySocket.updateQuery(
         queryID,
         query,

@@ -140,6 +140,20 @@ export default class Auth {
     }
   }
 
+  get mySignature() {
+    if (!this.mySignatureValue) {
+      throw {
+        type: 'Error',
+        content: 'Authorization has not yet completed. await isInitialized() before calling mySignature'
+      }
+    }
+    return this.mySignatureValue
+  }
+
+  set mySignature(val) {
+    this.mySignatureValue = val
+  }
+
   async request(method, path, body) {
     // Make sure we have a token
     await this.isInitialized()
