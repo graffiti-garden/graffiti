@@ -87,7 +87,7 @@ export default class GraffitiTools {
       await this.querySocket.updateQuery(
         queryID,
         query,
-        result => results[result.id] = clientFormat(result),
+        result => results[clientFormat(result).id] = clientFormat(result),
         resultID => delete results[resultID]
       )
     }).bind(this)
