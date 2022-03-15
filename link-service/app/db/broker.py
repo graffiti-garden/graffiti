@@ -6,7 +6,7 @@ class QueryBroker:
         self.socket_to_queries = {} # socket_id -> set of query_ids
 
     async def change(self, object_id):
-        if not self.queries: return []
+        if not self.queries: return
 
         # See if the object matches any open queries
         matches = self.db.aggregate([
@@ -32,16 +32,16 @@ class QueryBroker:
     def add_socket(self, socket_id):
         self.socket_to_queries[socket_id] = set()
 
-    def remove_socket(self, socket_id):
+    def delete_socket(self, socket_id):
         for query_id in self.socket_to_queries[socket_id]:
             del self.queries[self.ids_to_string(socket_id, query_id)]
         del self.socket_to_queries[socket_id]
 
-    def add_query(self, socket_id, query_id, query):
+    def update_query(self, socket_id, query_id, query):
         self.queries[self.ids_to_string(socket_id, query_id)] = [{ "$match": query }]
         self.socket_to_queries[socket_id].add(query_id)
 
-    def remove_query(self, socket_id, query_id):
+    def delete_query(self, socket_id, query_id):
         del self.queries[self.ids_to_string(socket_id, query_id)]
         self.socket_to_queries[socket_id].remove(query_id)
 
@@ -50,4 +50,3 @@ class QueryBroker:
 
     def string_to_ids(self, s):
         return s.split('&&', 1)
-

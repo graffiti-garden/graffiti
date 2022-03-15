@@ -19,7 +19,7 @@ qb = QueryBroker(db)
 open_sockets = {}
 
 @router.on_event("startup")
-async def start_query_sockets():
+async def startup():
     client.get_io_loop = asyncio.get_running_loop
 
     # Create indexes for common fields if
@@ -171,11 +171,11 @@ async def query_socket(ws: WebSocket, token: str):
     await open_sockets[socket_id].heartbeat(socket_id)
 
     # Remove the query
-    qb.remove_socket(socket_id)
+    qb.delete_socket(socket_id)
     del open_sockets[socket_id]
 
-@router.post('/query_socket_add')
-async def query_socket_add(
+@router.post("/update_socket_query")
+async def update_socket_query(
         query: dict,
         query_id: str = Body(...),
         socket_id: str = Body(...),
@@ -192,12 +192,12 @@ async def query_socket_add(
     # Make sure the socket is valid and add
     validate_socket(socket_id, signature)
     try:
-        qb.add_query(socket_id, query_id, query)
+        qb.update_query(socket_id, query_id, query)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post('/query_socket_remove')
-async def query_socket_remove(
+@router.post("/delete_socket_query")
+async def delete_socket_query(
         query_id: str = Body(...),
         socket_id: str = Body(...),
         signature: str = Depends(token_to_signature)):
@@ -205,7 +205,7 @@ async def query_socket_remove(
     # Make sure the socket is valid and remove
     validate_socket(socket_id, signature)
     try:
-        qb.remove_query(socket_id, query_id)
+        qb.delete_query(socket_id, query_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
