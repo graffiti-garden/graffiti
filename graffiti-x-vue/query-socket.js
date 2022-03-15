@@ -43,7 +43,11 @@ export default class QuerySocket {
     return Date.now() - this.localPingTime + this.serverPingTime
   }
 
-  async addQuery(query_id, query, updateCallback, deleteCallback) {
+  getQuery(query_id) {
+    return this.queries[query_id]
+  }
+
+  async updateQuery(query_id, query, updateCallback, deleteCallback) {
     // Add the query internally
     this.queries[query_id] = query
     this.updateCallbacks[query_id] = updateCallback
@@ -58,7 +62,8 @@ export default class QuerySocket {
     )
   }
 
-  async removeQuery(query_id) {
+
+  async deleteQuery(query_id) {
     delete this.queries[query_id]
     delete this.updateCallbacks[query_id]
     delete this.deleteCallbacks[query_id]

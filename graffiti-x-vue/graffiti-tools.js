@@ -7,9 +7,7 @@ export default class GraffitiTools {
     this.origin = origin
     this.auth = new Auth(this.origin)
     this.querySocket = new QuerySocket(this.origin, this.auth)
-    this.QuerySubscriber = querySubscriber(
-      this.querySocket,
-      this.queryMany.bind(this))
+    this.rewindQueries = {}
   }
 
   async isInitialized() {
@@ -74,55 +72,55 @@ export default class GraffitiTools {
       access: object.access
     }
   }
-}
 
-function clientFormat(data) {
-  if (!data) return data
-  let object = data.object
-  object.nearMisses = data.near_misses
-  object.access = data.access
-  return object
-}
+  subscriber(results) {
+    // Generate a random query ID
+    const queryID = Math.random().toString(16).substr(2, 14)
 
-function querySubscriber(querySocket, queryMany) {
-  return class {
-    constructor(query, updateCallback, deleteCallback) {
-      this.query = query
-      this.updateCallback = updateCallback
-      this.beforeEarliest = {}
+    // Supply a function that updates the query
+    const updateQuery = (async function(query) {
+      // Clear the results
+      for (var r in results) delete results[r]
 
-      // Generate a random query ID
-      this.queryID = Math.random().toString(16).substr(2, 14)
-
-      querySocket.addQuery(
-        this.queryID,
+      // Update the query
+      await this.querySocket.isInitialized()
+      await this.querySocket.updateQuery(
+        queryID,
         query,
-        x => updateCallback(clientFormat(x)),
-        deleteCallback
+        result => results[result.id] = clientFormat(result),
+        resultID => delete results[resultID]
       )
-    }
+    }).bind(this)
 
-    async close() {
-      return await querySocket.removeQuery(this.queryID)
-    }
+    // Add a hook to properly close the query
+    const deleteQuery = (async function() {
+      delete this.rewindQueries[queryID]
+      this.querySocket.deleteQuery(queryID)
+    }).bind(this)
 
-    async rewind(limit=100) {
+    // And finally add a function that lets you rewind the query
+    this.rewindQueries[queryID] = {}
+    const rewindQuery = (async function(limit=100) {
+
+      // Remember the query
+      const query = this.querySocket.getQuery(queryID)
+
       // Fetch #(limit) preceding query matches
-      const earlier = await queryMany(
-        { "$and": [ this.query, this.beforeEarliest ] },
+      const earlier = await this.queryMany(
+        { "$and": [query, this.rewindQueries[queryID] ] },
         limit
       )
 
       // If there are any matches
       if (earlier.length) {
         // Call the update callback on each of them
-        earlier.map(this.updateCallback)
+        earlier.map(result => results[result.id] = result)
 
         // Get the earliest match
         const earliest = earlier[earlier.length-1]
 
         // And next time only look for things even earlier
-        this.beforeEarliest = { "$or": [
+        this.rewindQueries[queryID] = { "$or": [
           { "timestamp": { "$lt": earliest.timestamp } },
           {
             "timestamp": { "$eq": earliest.timestamp },
@@ -133,6 +131,16 @@ function querySubscriber(querySocket, queryMany) {
 
       // Return whether or not we have completed
       return earlier.length == limit
-    }
+    }).bind(this)
+
+    return { updateQuery, deleteQuery, rewindQuery }
   }
+}
+
+function clientFormat(data) {
+  if (!data) return data
+  let object = data.object
+  object.nearMisses = data.near_misses
+  object.access = data.access
+  return object
 }
