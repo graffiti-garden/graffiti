@@ -1,6 +1,6 @@
-import Auth from './auth.js'
-import QuerySocket from './query-socket.js'
-import { clientFormat, serverFormat } from './object-formatting.js'
+import Auth from './src/auth.js'
+import QuerySocket from './src/query-socket.js'
+import { clientFormat, serverFormat } from './src/object-formatting.js'
 
 export default class GraffitiTools {
 

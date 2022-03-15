@@ -1,4 +1,4 @@
-import GraffitiTools from './graffiti-tools.js'
+import GraffitiTools from './vanilla.js'
 
 GraffitiTools.prototype.querySubscriberVue =
   function(vue, resultsName) {
