@@ -54,7 +54,7 @@ export default class QuerySocket {
     this.deleteCallbacks[query_id] = deleteCallback
 
     return await this.auth.request(
-      'post', 'query_socket_add', {
+      'post', 'update_socket_query', {
         socket_id: this.socketID,
         query_id: query_id,
         query: query
@@ -62,14 +62,13 @@ export default class QuerySocket {
     )
   }
 
-
   async deleteQuery(query_id) {
     delete this.queries[query_id]
     delete this.updateCallbacks[query_id]
     delete this.deleteCallbacks[query_id]
 
     return await this.auth.request(
-      'post', 'query_socket_remove', {
+      'post', 'delete_socket_query', {
         socket_id: this.socketID,
         query_id: query_id,
       }
