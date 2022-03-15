@@ -1,3 +1,5 @@
+import { clientFormat } from './object-formatting.js'
+
 export default class QuerySocket {
 
   constructor(origin, auth) {
@@ -59,7 +61,7 @@ export default class QuerySocket {
 
     // Add the query internally
     this.queries[queryID] = query
-    this.updateCallbacks[queryID] = updateCallback
+    this.updateCallbacks[queryID] = x => updateCallback(clientFormat(x))
     this.deleteCallbacks[queryID] = deleteCallback
 
     return await this.auth.request(

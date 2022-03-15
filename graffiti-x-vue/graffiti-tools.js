@@ -1,5 +1,6 @@
 import Auth from './auth.js'
 import QuerySocket from './query-socket.js'
+import { clientFormat, serverFormat } from './object-formatting.js'
 
 export default class GraffitiTools {
 
@@ -28,7 +29,7 @@ export default class GraffitiTools {
   }
 
   async update(object) {
-    return await this.auth.request('post', 'update', this.serverFormat(object))
+    return await this.auth.request('post', 'update', serverFormat(object, this.now()))
   }
 
   async delete(objectID) {
@@ -54,25 +55,6 @@ export default class GraffitiTools {
     return clientFormat(data)
   }
 
-  serverFormat(object) {
-    // Copy the object so we don't modify the original
-    let objectCopy = Object.assign({}, object)
-
-    // Add a timestamp if not specified
-    objectCopy.timestamp = this.now()
-
-    // Extract fields from the object
-    // (they're passed in separately on the
-    // server for type verification)
-    delete objectCopy.nearMisses
-    delete objectCopy.access
-    return {
-      object: objectCopy,
-      near_misses: object.nearMisses,
-      access: object.access
-    }
-  }
-
   subscriber(results) {
     // Generate a random query ID
     const queryID = Math.random().toString(16).substr(2, 14)
@@ -86,7 +68,7 @@ export default class GraffitiTools {
       await this.querySocket.updateQuery(
         queryID,
         query,
-        result => results[clientFormat(result).id] = clientFormat(result),
+        result => results[result.id] = result,
         resultID => delete results[resultID]
       )
     }).bind(this)
@@ -134,12 +116,4 @@ export default class GraffitiTools {
 
     return { updateQuery, deleteQuery, rewindQuery }
   }
-}
-
-function clientFormat(data) {
-  if (!data) return data
-  let object = data.object
-  object.nearMisses = data.near_misses
-  object.access = data.access
-  return object
 }
