@@ -10,11 +10,11 @@ export function serverFormat(clientObject, now) {
   // Extract fields from the object
   // (they're passed in separately on the
   // server for type verification)
-  delete objectCopy.nearMisses
+  delete objectCopy.contexts
   delete objectCopy.access
   return {
     object: objectCopy,
-    near_misses: clientObject.nearMisses,
+    contexts: clientObject.contexts,
     access: clientObject.access
   }
 }
@@ -22,7 +22,7 @@ export function serverFormat(clientObject, now) {
 export function clientFormat(serverObject) {
   if (!serverObject) return serverObject
   const clientObject = serverObject.object
-  clientObject.nearMisses = serverObject.near_misses
+  clientObject.contexts = serverObject.contexts
   clientObject.access = serverObject.access
   return clientObject
 }
