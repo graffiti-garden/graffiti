@@ -2,29 +2,49 @@ def query_rewrite(query, signature):
     return {
         # The object must match the query
         "object": { "$elemMatch": query },
-        # The near misses must NOT match the query
-        "near_misses": { "$not": { "$elemMatch": query } },
-        # The user must be the author, have access, or access must be open
-        "$or": [
-            { "object.signature": signature },
-            { "access": signature },
-            { "access": None }
+        "$and": [
+            { "$or": [
+                # Either there are no contexts
+                { "contexts": { "$size": 0 } },
+                # Or the object must match at least one of the contexts
+                { "contexts": { "$elemMatch": {
+                    # None of the near misses can match the query
+                    "nearMisses": {
+                        "$not": { "$elemMatch": query }
+                    },
+                    # All of the neighbors must match the query
+                    "neighbors": {
+                        "$not": {
+                            # Which is the negation of:
+                            # "some neighbor does not match the query"
+                            "$elemMatch": { "$nor": [ query ] }
+                        }
+                    }
+                }}}
+            ]},
+            # The user must be the author, have access, or access must be open
+            { "$or": [
+                { "object.signature": signature },
+                { "access": signature },
+                { "access": None }
+            ]}
         ]
     }
 
-def object_rewrite(object, near_misses, access, signature):
+def object_rewrite(object, contexts, access, signature):
     # Sign the object
     object['signature'] = signature
 
-    # Fill in the near misses with object values
-    # if they are not specified.
-    for near_miss in near_misses:
-        fill_with_template(near_miss, object)
+    for context in contexts:
+        for near_miss in context["nearMisses"]:
+            fill_with_template(near_miss, object)
+        for neighbor in context["neighbors"]:
+            fill_with_template(neighbor, object)
 
     # Combine it into one big document
     return {
         "object": [object],
-        "near_misses": near_misses,
+        "contexts": contexts,
         "access": access
     }
 

@@ -2,6 +2,7 @@ import time
 from uuid import uuid4
 from os import getenv
 import asyncio
+from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import APIRouter, Depends, WebSocket, HTTPException, Body
 from ..token import token_to_signature
@@ -30,15 +31,20 @@ async def startup():
     await db.create_index('object.timestamp')
     await db.create_index('object.tags')
 
+class Context(BaseModel):
+    nearMisses: list[dict] = []
+    neighbors: list[dict] = []
+
 @router.post('/update')
 async def update(
         object: dict,
-        near_misses: list[dict] = [],
+        contexts: list[Context] = [],
         access: list[str]|None = None,
         signature: str = Depends(token_to_signature)):
 
     # Rewrite the new document
-    new_doc = object_rewrite(object, near_misses, access, signature)
+    contexts = [context.dict() for context in contexts]
+    new_doc = object_rewrite(object, contexts, access, signature)
 
     # First check if the object includes an ID field
     # This tells us if we're inserting or replacing
@@ -138,7 +144,7 @@ async def query_many(
     await cursor.close()
     results = [{
         'object': r['object'][0],
-        'near_misses': r['near_misses'],
+        'contexts': r['contexts'],
         'access': r['access']
         } for r in results]
 

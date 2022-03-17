@@ -38,7 +38,7 @@ class QuerySocket:
             'type': 'Update',
             'query_id': query_id,
             'object': doc['object'][0],
-            'near_misses': doc['near_misses'],
+            'contexts': doc['contexts'],
             'access': doc['access']
         })
 
