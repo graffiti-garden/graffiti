@@ -55,41 +55,65 @@ export default class GraffitiTools {
     return clientFormat(data)
   }
 
-  querySubscriber(results) {
+  QuerySubscriber(results, live=false) {
     // Generate a random query ID
-    const queryID = Math.random().toString(16).substr(2, 14)
+    if (live) {
+      const queryID = Math.random().toString(16).substr(2, 14)
+    }
+
+    let query = {}
+    let queryStart = 0
+    let pollQueries = {}
 
     // Supply a function that updates the query
-    const update = (async function(query) {
+    const update = (async function(q) {
+      await this.isInitialized()
+
       // Clear the results
       for (var r in results) delete results[r]
-      this.rewindQueries[queryID] = {}
 
-      // Update the query
-      await this.querySocket.updateQuery(
-        queryID,
-        query,
-        result => results[result.id] = result,
-        resultID => delete results[resultID]
-      )
+      // Reset poll queries and store the query
+      query = q
+      queryStart = this.now()
+      pollQueries = {}
+
+      // If we're live, start subscribing
+      if (live) {
+        await this.querySocket.updateQuery(
+          queryID,
+          query,
+          result => results[result.id] = result,
+          resultID => delete results[resultID]
+        )
+      }
     }).bind(this)
 
     // Add a hook to properly close the query
     const delete_ = (async function() {
-      delete this.rewindQueries[queryID]
-      this.querySocket.deleteQuery(queryID)
+      await this.isInitialized()
+
+      if (live) {
+        this.querySocket.deleteQuery(queryID)
+      }
     }).bind(this)
 
-    // And finally add a function that lets you rewind the query
-    const rewind = (async function(limit=100) {
+    const poll = (async function(direction, limit) {
+      await this.isInitialized()
 
-      // Remember the query
-      const query = this.querySocket.getQuery(queryID)
+      if (limit == 0) return false
+
+      const comparator = (direction < 0) ? "$lte" : "$gt"
+
+      if (!(comparator in pollQueries)) {
+        pollQueries[comparator] =
+          { "timestamp": { [comparator]: queryStart } }
+      }
 
       // Fetch #(limit) preceding query matches
       const earlier = await this.queryMany(
-        { "$and": [query, this.rewindQueries[queryID] ] },
-        limit
+        { "$and": [query, pollQueries[comparator] ] },
+        limit,
+        [['object.timestamp', direction], ['object.id', -1]]
       )
 
       // If there are any matches
@@ -101,11 +125,11 @@ export default class GraffitiTools {
         const earliest = earlier[earlier.length-1]
 
         // And next time only look for things even earlier
-        this.rewindQueries[queryID] = { "$or": [
-          { "timestamp": { "$lt": earliest.timestamp } },
+        pollQueries[comparator] = { "$or": [
+          { "timestamp": { [comparator]: earlier.timestamp } },
           {
-            "timestamp": { "$eq": earliest.timestamp },
-            "id": { "$lt": earliest.id }
+            "timestamp": { "$eq": earlier.timestamp },
+            "id": { "$lt": earlier.id }
           }
         ]}
       }
@@ -114,6 +138,15 @@ export default class GraffitiTools {
       return earlier.length == limit
     }).bind(this)
 
-    return { update, delete: delete_, rewind }
+    // And finally add a function that lets you rewind the query
+    const rewind = (async function(limit=100) {
+      return poll(-1, limit)
+    }).bind(this)
+
+    const play = (async function(limit=100) {
+      if (live) return poll(1, limit)
+    }).bind(this)
+
+    return { update, delete: delete_, rewind, play }
   }
 }
