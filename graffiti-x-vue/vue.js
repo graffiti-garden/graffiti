@@ -91,7 +91,11 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
 
     watch: {
       query: {
-        handler: async function(newQuery) {
+        handler: async function(newQuery, oldQuery) {
+          // Don't update if the query hasn't actually changed
+          // (it can get triggered twice because of immediate)
+          if (JSON.stringify(newQuery) == JSON.stringify(oldQuery)) return
+
           // Update the query and rewind
           await this.querySubscriber.update(newQuery)
           this.canRewind = await this.rewind(this.queue)
