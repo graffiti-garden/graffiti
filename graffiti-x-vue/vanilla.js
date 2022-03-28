@@ -29,6 +29,7 @@ export default class GraffitiTools {
   }
 
   async update(object) {
+    await this.isInitialized()
     return await this.auth.request('post', 'update', serverFormat(object, this.now()))
   }
 
@@ -57,9 +58,7 @@ export default class GraffitiTools {
 
   QuerySubscriber(results, live=false) {
     // Generate a random query ID
-    if (live) {
-      const queryID = Math.random().toString(16).substr(2, 14)
-    }
+    const queryID = Math.random().toString(16).substr(2, 14)
 
     let query = {}
     let queryStart = 0
@@ -102,7 +101,7 @@ export default class GraffitiTools {
 
       if (limit == 0) return false
 
-      const comparator = (direction < 0) ? "$lte" : "$gt"
+      const comparator = (direction < 0) ? "$lt" : "$gt"
 
       if (!(comparator in pollQueries)) {
         pollQueries[comparator] =
@@ -126,10 +125,10 @@ export default class GraffitiTools {
 
         // And next time only look for things even earlier
         pollQueries[comparator] = { "$or": [
-          { "timestamp": { [comparator]: earlier.timestamp } },
+          { "timestamp": { [comparator]: earliest.timestamp } },
           {
-            "timestamp": { "$eq": earlier.timestamp },
-            "id": { "$lt": earlier.id }
+            "timestamp": { "$eq": earliest.timestamp },
+            "id": { "$lt": earliest.id }
           }
         ]}
       }
@@ -144,7 +143,7 @@ export default class GraffitiTools {
     }).bind(this)
 
     const play = (async function(limit=100) {
-      if (live) return poll(1, limit)
+      if (!live) return poll(1, limit)
     }).bind(this)
 
     return { update, delete: delete_, rewind, play }
