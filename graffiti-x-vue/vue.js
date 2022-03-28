@@ -98,7 +98,7 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
 
           // Update the query and rewind
           await this.querySubscriber.update(newQuery)
-          this.canRewind = await this.rewind(this.queue)
+          await this.rewind(this.queue)
         },
         deep: true,
         immediate: true
@@ -107,11 +107,12 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
 
     methods: {
       async rewind(limit) {
-        await this.querySubscriber.rewind(limit)
+        this.canRewind = await this.querySubscriber.rewind(limit)
+        return this.canRewind
       },
 
       async play(limit) {
-        await this.querySubscriber.play(limit)
+        return await this.querySubscriber.play(limit)
       },
 
       async update(object) {

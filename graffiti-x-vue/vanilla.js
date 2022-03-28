@@ -99,7 +99,7 @@ export default class GraffitiTools {
     const poll = (async function(direction, limit) {
       await this.isInitialized()
 
-      if (limit == 0) return false
+      if (limit == 0) return true
 
       const comparator = (direction < 0) ? "$lt" : "$gt"
 
@@ -139,11 +139,11 @@ export default class GraffitiTools {
 
     // And finally add a function that lets you rewind the query
     const rewind = (async function(limit=100) {
-      return poll(-1, limit)
+      return await poll(-1, limit)
     }).bind(this)
 
     const play = (async function(limit=100) {
-      if (!live) return poll(1, limit)
+      if (!live) return await poll(1, limit)
     }).bind(this)
 
     return { update, delete: delete_, rewind, play }
