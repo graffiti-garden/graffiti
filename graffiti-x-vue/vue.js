@@ -30,8 +30,10 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       // The way that objects are sorted
       sort: {
         type: Function,
+        // by default newest -> oldest
+        // so that objects[0] is the newest
         default: function(a, b) {
-          return a.timestamp - b.timestamp
+          return b.timestamp - a.timestamp
         },
       },
 
