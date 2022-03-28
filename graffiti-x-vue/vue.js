@@ -10,23 +10,19 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       // The base form that all objects should fit
       base: {
         type: Object,
-        default: function() {
-          return {}
-        }
+        default: () => ({})
       },
 
       // The additional filter that all
       // objects should adhere to
       filter: {
         type: Object,
-        default: function() {
-          return {}
-        }
+        default: () => ({})
       },
 
       // How many objects should be
       // pre-loaded from the start
-      rewindInit: {
+      queue: {
         type: Number,
         default: 0,
       },
@@ -48,10 +44,16 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       },
     },
 
-    data: function() {
-      return {
-        canRewind: true,
-      }
+    data: () => ({
+      canRewind: true,
+      mySignature: ""
+    }),
+
+    beforeMount() {
+      // Use our signature
+      graffiti.isInitialized().then(() => {
+        this.mySignature = graffiti.mySignature
+      })
     },
 
     computed: {
@@ -62,10 +64,13 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
 
       // The actual query sent to the server
       query() {
+        // Start with the base, but let the
+        // object overwrite, if desired.
+        const basedFilter = Object.assign({}, this.base)
+        Object.assign(basedFilter, this.filter)
         return {
           "$and": [
-            this.base,
-            this.filter,
+            basedFilter,
             { timestamp: { "$type": "long" } }
           ]
         }
@@ -89,7 +94,7 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
         handler: async function(newQuery) {
           // Update the query and rewind
           await this.querySubscriber.update(newQuery)
-          this.canRewind = await this.rewind(this.rewindInit)
+          this.canRewind = await this.rewind(this.queue)
         },
         deep: true,
         immediate: true
@@ -106,11 +111,10 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       },
 
       async update(object) {
-        console.log("i'm updating!")
-        // Apply the object to the base
+        // Start with the base, but let the object
+        // overwrite it if desired.
         const basedObject = Object.assign({}, this.base)
         Object.assign(basedObject, object)
-        console.log(basedObject)
 
         // Send it to the server
         const id = await graffiti.update(basedObject)
@@ -135,7 +139,7 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       },
 
       async delete_(id) {
-        if (!(id in objectMap)) {
+        if (!(id in this.objectMap)) {
           throw {
             type: 'Error',
             content: 'An ID was supposed to be deleted, but it is not in this collection',
@@ -143,7 +147,7 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
           }
         }
         await graffiti.delete(id)
-        delete objectMap[id]
+        delete this.objectMap[id]
       },
     },
 
@@ -152,6 +156,7 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
     <slot
       :objects       = "objects"
       :canRewind     = "canRewind"
+      :mySignature   = "mySignature"
       :update        = "update"
       :delete        = "delete_"
       :play          = "play"
