@@ -23,8 +23,3 @@ services:
     restart: always
     volumes:
       - ./db:/data/db
-    command: "--bind_ip_all --replSet rs0 --quiet --logpath /dev/null"
-    healthcheck:
-      test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo --quiet) -eq 1
-      interval: 10s
-      start_period: 30s
