@@ -1,12 +1,7 @@
 import GraffitiTools from './vanilla.js'
 
-export default function GraffitiCollection(
-  vue,
-  graffitiURL='https://graffiti.csail.mit.edu',
-  token=null,
-  mySignature=null
-) {
-  const graffiti = new GraffitiTools(graffitiURL, token, mySignature)
+export default function GraffitiCollection(vue, graffitiURL='https://graffiti.csail.mit.edu') {
+  const graffiti = new GraffitiTools(graffitiURL)
 
   return {
 
@@ -53,15 +48,16 @@ export default function GraffitiCollection(
 
     data: () => ({
       canRewind: true,
+      loggedIn: false,
       mySignature: ""
     }),
 
     beforeMount() {
-      // Use our signature
-      graffiti.isInitialized().then(() => {
+      // If we logged in via cache, update
+      if (graffiti.loggedIn) {
+        this.loggedIn = graffiti.loggedIn
         this.mySignature = graffiti.mySignature
-        this.token = graffiti.token
-      })
+      }
     },
 
     computed: {
@@ -123,6 +119,15 @@ export default function GraffitiCollection(
         return await this.querySubscriber.play(limit)
       },
 
+      async logIn() {
+        this.loggedIn = await graffiti.logIn()
+      },
+
+      logOut() {
+        graffiti.logOut()
+        this.loggedIn = false
+      },
+
       async update(object) {
         // Start with the base, but let the object
         // overwrite it if desired.
@@ -172,9 +177,9 @@ export default function GraffitiCollection(
       :delete        = "delete_"
       :play          = "play"
       :rewind        = "rewind"
+      :logOut        = "logOut"
       :canRewind     = "canRewind"
       :mySignature   = "mySignature"
-      :token         = "token"
     ></slot>`
   }
 }

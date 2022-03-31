@@ -9,19 +9,22 @@ export default class QuerySocket {
     this.queries = {}
     this.updateCallbacks = {}
     this.deleteCallbacks = {}
+    this.connected = false
     this.isUnloading = false
 
     // Close silently
     window.addEventListener(
       "beforeunload",
       (e => {this.isUnloading=true}).bind(this));
-
-    // Open up a WebSocket with the server
-    this.connect()
   }
 
-  async connect() {
-    await this.auth.isInitialized()
+  connect() {
+    if (!this.auth.loggedIn) {
+      throw {
+        type: 'Error',
+        content: 'not logged in'
+      }
+    }
 
     const wsURL = new URL('query_socket', this.origin)
     if (wsURL.protocol == 'https:') {
@@ -34,11 +37,24 @@ export default class QuerySocket {
     this.ws.onmessage = this.onSocketMessage.bind(this)
     this.ws.onclose   = this.onSocketClose  .bind(this)
     this.ws.onerror   = this.onSocketError  .bind(this)
+    this.connected = true
+  }
+
+  disconnect() {
+    this.connected = false
+    this.ws.close()
   }
 
   async isInitialized() {
     while (!this.socketID) {
-      await new Promise(resolve => setTimeout(resolve, 100))
+      if (this.connected) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      } else {
+        throw {
+          type: 'Error',
+          content: 'The query socket is disconnected'
+        }
+      }
     }
   }
 
@@ -123,7 +139,8 @@ export default class QuerySocket {
   }
 
   async onSocketClose(event) {
-    if (!this.isUnloading) {
+    if (this.connected && !this.isUnloading) {
+      this.connected = false
       const shouldReload = confirm("lost connection to the graffiti server.\n\nonce you've established an internet connection, select \"OK\" to reload or select \"Cancel\" to remain on the page and save any data.")
       if (shouldReload) {
         window.location.reload()
@@ -132,6 +149,6 @@ export default class QuerySocket {
   }
 
   async onSocketError(error) {
-    this.ws.close();
+    this.ws.close()
   }
 }

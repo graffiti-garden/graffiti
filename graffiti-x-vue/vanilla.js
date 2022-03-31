@@ -4,16 +4,15 @@ import { clientFormat, serverFormat } from './src/object-formatting.js'
 
 export default class GraffitiTools {
 
-  constructor(origin, token=null, mySignature=null) {
+  constructor(origin) {
     this.origin = origin
-    this.auth = new Auth(this.origin, token, mySignature)
-    this.querySocket = new QuerySocket(this.origin, this.auth)
     this.rewindQueries = {}
-  }
 
-  async isInitialized() {
-    await this.auth.isInitialized()
-    await this.querySocket.isInitialized()
+    this.auth = new Auth(this.origin)
+    this.querySocket = new QuerySocket(this.origin, this.auth)
+
+    // If the authorization is already logged in, start up the sockets
+    if (this.auth.loggedIn) this.querySocket.connect()
   }
 
   get mySignature() {
@@ -24,8 +23,23 @@ export default class GraffitiTools {
     return this.auth.token
   }
 
+  get loggedIn() {
+    return this.auth.loggedIn
+  }
+
+  async logIn() {
+    if (await this.auth.logIn()) {
+      this.querySocket.connect()
+      await this.querySocket.isInitialized()
+      return true
+    } else {
+      return false
+    }
+  }
+
   logOut() {
     this.auth.logOut()
+    this.querySocket.disconnect()
   }
 
   now() {
@@ -33,7 +47,6 @@ export default class GraffitiTools {
   }
 
   async update(object) {
-    await this.isInitialized()
     return await this.auth.request('post', 'update', serverFormat(object, this.now()))
   }
 
@@ -70,7 +83,7 @@ export default class GraffitiTools {
 
     // Supply a function that updates the query
     const update = (async function(q) {
-      await this.isInitialized()
+      await this.querySocket.isInitialized()
 
       // Clear the results
       for (var r in results) delete results[r]
@@ -93,7 +106,7 @@ export default class GraffitiTools {
 
     // Add a hook to properly close the query
     const delete_ = (async function() {
-      await this.isInitialized()
+      await this.querySocket.isInitialized()
 
       if (live) {
         this.querySocket.deleteQuery(queryID)
@@ -101,7 +114,7 @@ export default class GraffitiTools {
     }).bind(this)
 
     const poll = (async function(direction, limit) {
-      await this.isInitialized()
+      await this.querySocket.isInitialized()
 
       if (limit == 0) return true
 

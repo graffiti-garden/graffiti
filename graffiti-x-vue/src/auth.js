@@ -1,39 +1,23 @@
 export default class Auth {
 
-  constructor(origin, token=null, mySignature=null) {
+  constructor(origin) {
     this.origin = origin
-    if (token && signature) {
-      this.token = token
-      this.mySignature = mySignature
-    }
 
-    // Check to see if we're redirecting back
-    // from an authorization with a code.
-    const url = new URL(window.location)
-    if (url.searchParams.has('code')) {
-
-      // Get the code and strip it out of the URL
-      const code = url.searchParams.get('code')
-      url.searchParams.delete('code')
-      url.searchParams.delete('state')
-      window.history.replaceState({}, '', url)
-
-      // Exchange it for a token
-      this.codeToToken(code)
-
-    } else {
-      // Check to see if we have cookies
-      this.token = this.getCookie('token')
-      this.mySignature = this.getCookie('mySignature')
-
-      // Otherwise initiate authorization
-      if (!this.token || !this.mySignature) {
-        this.authorize()
-      }
-    }
+    // Check to see if we have cookies
+    this.token = this.getCookie('token')
+    this.mySignature = this.getCookie('mySignature')
   }
 
-  async authorize() {
+  get loggedIn() {
+    return this.token && this.mySignature
+  }
+
+  async logIn() {
+    if (this.loggedIn) return true
+
+    // Reset the error flag
+    this.error = false
+
     // Generate a random client secret
     const clientSecret = Math.random().toString(36).substr(2)
 
@@ -44,15 +28,50 @@ export default class Auth {
     const clientIDArray = Array.from(new Uint8Array(clientIDBuffer))
     const clientID = clientIDArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
-    // Store the client ID and secret in a cookie
-    this.storeCookie('clientSecret', clientSecret)
-    this.storeCookie('clientID', clientID)
+    // Establish bidirectional communication with the server
+    const wsURL = new URL('auth_socket', this.origin)
+    if (wsURL.protocol == 'https:') {
+      wsURL.protocol = 'wss:'
+    } else {
+      wsURL.protocol = 'ws:'
+    }
+    wsURL.searchParams.set('client_id', clientID)
+    let ws = new WebSocket(wsURL)
 
-    // Open the login window
-    const authURL = new URL('auth', this.origin)
-    authURL.searchParams.set('client_id', clientID)
-    authURL.searchParams.set('redirect_uri', window.location)
-    window.location.replace(authURL)
+    // When we connect, open an authorization window
+    ws.onopen = () => {
+      // Open the login window
+      const authURL = new URL('auth', this.origin)
+      authURL.searchParams.set('client_id', clientID)
+
+      // Our redirect URI should send a message back to the socket
+      const redirectURL = new URL('auth_socket_send', this.origin)
+      redirectURL.searchParams.set('client_id', clientID)
+      authURL.searchParams.set('redirect_uri', redirectURL)
+
+      window.open(authURL)
+    }
+
+    // When we receive a code, convert it to a token
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.type == 'Accept') {
+        this.codeToToken(data.code, clientID, clientSecret)
+      }
+    }
+
+    ws.onerror = () => {
+      return this.authorizationError("lost connection to the graffiti server")
+    }
+
+    // Wait until we have logged in
+    while (!this.error && !this.token) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    ws.close()
+
+    return !this.error
   }
 
   storeCookie(param, data) {
@@ -77,22 +96,11 @@ export default class Auth {
   }
 
   authorizationError(reason) {
-    alert(`Authorization Error: ${reason}\n\nClick OK to reload.`)
-    window.location.reload()
+    this.error = true
+    alert(`Authorization Error: ${reason}\n\n`)
   }
 
-  async codeToToken(code) {
-    // Read the stored client cookies
-    const clientSecret = this.getCookie('clientSecret')
-    const clientID     = this.getCookie('clientID')
-    this.deleteCookie(clientSecret)
-    this.deleteCookie(clientID)
-
-    // Make sure they actually exist
-    if (!clientSecret || !clientID) {
-      return this.authorizationError("missing client secret - are cookies enabled?")
-    }
-
+  async codeToToken(code, clientID, clientSecret) {
     // Construct the body of the POST
     let form = new FormData()
     form.append('client_id', clientID)
@@ -136,19 +144,15 @@ export default class Auth {
   logOut() {
     this.deleteCookie('token')
     this.deleteCookie('mySignature')
-  }
-
-  async isInitialized() {
-    while (!this.token) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
+    this.token = null
+    this.mySignature = null
   }
 
   get mySignature() {
     if (!this.mySignatureValue) {
       throw {
         type: 'Error',
-        content: 'Authorization has not yet completed. await isInitialized() before calling mySignature'
+        content: 'Not logged in'
       }
     }
     return this.mySignatureValue
@@ -159,8 +163,13 @@ export default class Auth {
   }
 
   async request(method, path, body) {
-    // Make sure we have a token
-    await this.isInitialized()
+    // if not logged in
+    if (!this.loggedIn) {
+      throw {
+        type: 'Error',
+        content: 'Not logged in'
+      }
+    }
 
     // Send the request to the server
     const requestURL = new URL(path, this.origin)
