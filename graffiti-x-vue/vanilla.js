@@ -4,9 +4,9 @@ import { clientFormat, serverFormat } from './src/object-formatting.js'
 
 export default class GraffitiTools {
 
-  constructor(origin) {
+  constructor(origin, token=null, mySignature=null) {
     this.origin = origin
-    this.auth = new Auth(this.origin)
+    this.auth = new Auth(this.origin, token, mySignature)
     this.querySocket = new QuerySocket(this.origin, this.auth)
     this.rewindQueries = {}
   }
@@ -18,6 +18,10 @@ export default class GraffitiTools {
 
   get mySignature() {
     return this.auth.mySignature
+  }
+
+  get token() {
+    return this.auth.token
   }
 
   logOut() {

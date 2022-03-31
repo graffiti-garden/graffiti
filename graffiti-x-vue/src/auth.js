@@ -1,7 +1,11 @@
 export default class Auth {
 
-  constructor(origin) {
+  constructor(origin, token=null, mySignature=null) {
     this.origin = origin
+    if (token && signature) {
+      this.token = token
+      this.mySignature = mySignature
+    }
 
     // Check to see if we're redirecting back
     // from an authorization with a code.

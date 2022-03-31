@@ -1,7 +1,12 @@
 import GraffitiTools from './vanilla.js'
 
-export default function GraffitiCollection(vue, graffitiURL='https://graffiti.csail.mit.edu') {
-  const graffiti = new GraffitiTools(graffitiURL)
+export default function GraffitiCollection(
+  vue,
+  graffitiURL='https://graffiti.csail.mit.edu',
+  token=null,
+  mySignature=null
+) {
+  const graffiti = new GraffitiTools(graffitiURL, token, mySignature)
 
   return {
 
@@ -55,6 +60,7 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       // Use our signature
       graffiti.isInitialized().then(() => {
         this.mySignature = graffiti.mySignature
+        this.token = graffiti.token
       })
     },
 
@@ -162,12 +168,13 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
     template: `
     <slot
       :objects       = "objects"
-      :canRewind     = "canRewind"
-      :mySignature   = "mySignature"
       :update        = "update"
       :delete        = "delete_"
       :play          = "play"
       :rewind        = "rewind"
+      :canRewind     = "canRewind"
+      :mySignature   = "mySignature"
+      :token         = "token"
     ></slot>`
   }
 }
