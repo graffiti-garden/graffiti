@@ -19,10 +19,6 @@ export default class GraffitiTools {
     return this.auth.mySignature
   }
 
-  get token() {
-    return this.auth.token
-  }
-
   get loggedIn() {
     return this.auth.loggedIn
   }

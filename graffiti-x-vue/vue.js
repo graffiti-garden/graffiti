@@ -178,6 +178,8 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       :play          = "play"
       :rewind        = "rewind"
       :logOut        = "logOut"
+      :logIn         = "logIn"
+      :loggedIn      = "loggedIn"
       :canRewind     = "canRewind"
       :mySignature   = "mySignature"
     ></slot>`
