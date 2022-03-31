@@ -2,7 +2,7 @@ from os import getenv
 import asyncio
 import time
 
-heartbeat_interval = float(getenv('QUERY_HEARTBEAT'))
+heartbeat_interval = float(getenv('SOCKET_HEARTBEAT'))
 
 class QuerySocket:
 

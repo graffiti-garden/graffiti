@@ -1,6 +1,7 @@
 import time
 import jwt
 import base64
+import asyncio
 from hashlib import sha256
 from os import getenv
 from aiosmtplib import send as sendEmail
@@ -8,7 +9,7 @@ from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import formatdate, make_msgid
 from typing import Optional
-from fastapi import APIRouter, Form, HTTPException, Request, Response
+from fastapi import APIRouter, Form, HTTPException, Request, Response, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from uuid import uuid5, NAMESPACE_DNS
@@ -17,6 +18,7 @@ debug = (getenv('DEBUG') == 'true')
 mail_from = getenv('AUTH_CODE_MAIL_FROM')
 expiration_time = float(getenv('AUTH_CODE_EXP_TIME')) # minutes
 code_size = int(getenv('AUTH_CODE_SIZE'))
+heartbeat_interval = float(getenv('SOCKET_HEARTBEAT'))
 secret = getenv('AUTH_SECRET')
 secret_namespace = uuid5(NAMESPACE_DNS, secret)
 
@@ -159,3 +161,38 @@ def token(
         }, secret, algorithm="HS256")
 
     return {"access_token": token, "signature": code["signature"], "token_type": "bearer"}
+
+
+# Use the socket to let authorization happen in a new window
+
+sockets = {}
+
+@router.websocket("/auth_socket")
+async def auth_socket(ws: WebSocket, client_id: str):
+    await ws.accept()
+    sockets[client_id] = ws
+
+    # Keep alive
+    while True:
+        try:
+            await ws.send_json({'type': 'Ping'})
+        except Exception as e:
+            break
+        await asyncio.sleep(heartbeat_interval)
+
+    del sockets[client_id]
+
+@router.get("/auth_socket_send", response_class=HTMLResponse)
+async def auth_socket_send(client_id: str, state: str, code: str):
+    if client_id in sockets:
+        ws = sockets[client_id]
+        try:
+            await ws.send_json({
+                'type': 'Accept',
+                'state': state,
+                'code': code
+            })
+        except:
+            pass
+        ws.close()
+    return "<script>window.close()</script>"

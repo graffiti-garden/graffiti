@@ -11,7 +11,7 @@ services:
       AUTH_SECRET: 'secret'
       AUTH_CODE_SIZE: '6' # characters
       AUTH_CODE_EXP_TIME: '5' # minutes
-      QUERY_HEARTBEAT: '5' # seconds
+      SOCKET_HEARTBEAT: '5' # seconds
       QUERY_LIMIT: '100' # max number of items returned at once
     depends_on:
       - mongo
