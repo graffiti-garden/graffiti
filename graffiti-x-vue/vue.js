@@ -1,9 +1,59 @@
 import GraffitiTools from './vanilla.js'
 
-export default function GraffitiCollection(vue, graffitiURL='https://graffiti.csail.mit.edu') {
+export default function GraffitiComponents(vue, graffitiURL='https://graffiti.csail.mit.edu') {
+
   const graffiti = new GraffitiTools(graffitiURL)
 
-  return {
+  const GraffitiLogin = {
+    data: () => ({
+      loggedIn: false,
+      mySignature: ""
+    }),
+
+    beforeMount() {
+      // If we logged in via cache, update
+      if (graffiti.loggedIn) {
+        this.loggedIn = graffiti.loggedIn
+        this.mySignature = graffiti.mySignature
+      }
+    },
+
+    methods: {
+
+      async logIn() {
+        this.loggedIn = await graffiti.logIn()
+        this.mySignature = graffiti.mySignature
+      },
+
+      logOut() {
+        graffiti.logOut()
+        this.loggedIn = false
+      },
+
+    },
+
+    template: `
+    <div>
+      <template v-if="loggedIn">
+        <a href="" @click.prevent="logOut">log out</a>
+      </template>
+      <template v-else>
+        <a href="" @click.prevent="logIn">log in</a>
+      </template>
+    </div>
+
+    <template v-if="loggedIn">
+      <slot
+        :logOut        = "logOut"
+        :logIn         = "logIn"
+        :loggedIn      = "loggedIn"
+        :mySignature   = "mySignature"
+      ></slot>
+    </template>
+    `
+  }
+
+  const GraffitiCollection = {
 
     props: {
 
@@ -48,17 +98,7 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
 
     data: () => ({
       canRewind: true,
-      loggedIn: false,
-      mySignature: ""
     }),
-
-    beforeMount() {
-      // If we logged in via cache, update
-      if (graffiti.loggedIn) {
-        this.loggedIn = graffiti.loggedIn
-        this.mySignature = graffiti.mySignature
-      }
-    },
 
     computed: {
       // Objects sorted by the sort function
@@ -119,15 +159,6 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
         return await this.querySubscriber.play(limit)
       },
 
-      async logIn() {
-        this.loggedIn = await graffiti.logIn()
-      },
-
-      logOut() {
-        graffiti.logOut()
-        this.loggedIn = false
-      },
-
       async update(object) {
         // Start with the base, but let the object
         // overwrite it if desired.
@@ -177,11 +208,29 @@ export default function GraffitiCollection(vue, graffitiURL='https://graffiti.cs
       :delete        = "delete_"
       :play          = "play"
       :rewind        = "rewind"
-      :logOut        = "logOut"
-      :logIn         = "logIn"
-      :loggedIn      = "loggedIn"
       :canRewind     = "canRewind"
-      :mySignature   = "mySignature"
     ></slot>`
+  }
+
+  return { 
+    'graffiti-login': GraffitiLogin, 
+    'graffiti-collection': GraffitiCollection 
+  }
+}
+
+
+
+
+// If this script is imported globally,
+// create a vue app automatically
+// equivalent to if __name__ == "main" in python
+const scripts = document.getElementsByTagName("script")
+for (let i = 0; i < scripts.length; ++i) {
+  const src = scripts[i].getAttribute('src')
+  if (typeof src === 'string' && src.includes('graffiti-tools/vue.js')) {
+    const app = Vue.createApp({
+      components: GraffitiComponents(Vue),
+    })
+    app.mount("#app")
   }
 }

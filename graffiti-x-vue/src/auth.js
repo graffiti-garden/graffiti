@@ -9,7 +9,7 @@ export default class Auth {
   }
 
   get loggedIn() {
-    return this.token && this.mySignature
+    return (this.token != null) && (this.mySignature != null)
   }
 
   async logIn() {
@@ -150,10 +150,7 @@ export default class Auth {
 
   get mySignature() {
     if (!this.mySignatureValue) {
-      throw {
-        type: 'Error',
-        content: 'Not logged in'
-      }
+      return null
     }
     return this.mySignatureValue
   }
