@@ -224,22 +224,19 @@ class GraffitiApp extends HTMLElement {
 
     // Get the data
     const dataStr = this.getAttribute('data');
-    let data;
+    let data = {}
     if (dataStr) {
       try {
         data = JSON.parse(dataStr)
       } catch(e) {
         console.error('data is not valid JSON:', e.message);
       }
-    } else {
-      data = {}
     }
 
-    const graffitiURL = this.getAttribute('graffitiURL')
+    let graffitiURL = this.getAttribute('graffitiURL')
     if (!graffitiURL) {
       graffitiURL = 'https://graffiti.csail.mit.edu'
     }
-    console.log(graffitiURL)
 
     // Create the app
     const app = Vue.createApp({
