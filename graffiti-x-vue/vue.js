@@ -218,19 +218,47 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
   }
 }
 
+class GraffitiApp extends HTMLElement {
+  constructor() {
+    super();
 
+    // Get the data
+    const dataStr = this.getAttribute('data');
+    let data;
+    if (dataStr) {
+      try {
+        data = JSON.stringify(dataStr)
+      } catch {
+        throw "Data is not valid JSON!"
+      }
+    } else {
+      data = {}
+    }
 
+    const graffitiURL = this.getAttribute('graffitiURL')
+    if (!graffitiURL) {
+      graffitiURL = 'https://graffiti.csail.mit.edu'
+    }
+    console.log(graffitiURL)
 
-// If this script is imported globally,
-// create a vue app automatically
-// equivalent to if __name__ == "main" in python
-const scripts = document.getElementsByTagName("script")
-for (let i = 0; i < scripts.length; ++i) {
-  const src = scripts[i].getAttribute('src')
-  if (typeof src === 'string' && src.includes('graffiti-tools/vue.js')) {
+    // Create the app
     const app = Vue.createApp({
-      components: GraffitiComponents(Vue),
+      components: GraffitiComponents(Vue, graffitiURL),
+      data: () => (data)
     })
-    app.mount("#app")
+
+    // Create a place for it to go
+    const shadow = this.attachShadow({mode: 'open'})
+    const appEl = document.createElement('div')
+    const graffitiLogin = document.createElement('graffiti-login')
+    graffitiLogin.setAttribute('v-slot', 'graffiti')
+    graffitiLogin.innerHTML = this.innerHTML
+    this.innerHTML = ""
+
+    // Mount
+    appEl.appendChild(graffitiLogin)
+    shadow.appendChild(appEl)
+    app.mount(appEl)
   }
 }
+customElements.define('graffiti-app', GraffitiApp)
