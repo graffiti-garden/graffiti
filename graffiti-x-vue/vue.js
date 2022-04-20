@@ -227,9 +227,9 @@ class GraffitiApp extends HTMLElement {
     let data;
     if (dataStr) {
       try {
-        data = JSON.stringify(dataStr)
-      } catch {
-        throw "Data is not valid JSON!"
+        data = JSON.parse(dataStr)
+      } catch(e) {
+        console.error('data is not valid JSON:', e.message);
       }
     } else {
       data = {}
