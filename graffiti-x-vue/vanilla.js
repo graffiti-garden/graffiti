@@ -15,8 +15,8 @@ export default class GraffitiTools {
     if (this.auth.loggedIn) this.querySocket.connect()
   }
 
-  get mySignature() {
-    return this.auth.mySignature
+  get myID() {
+    return this.auth.myID
   }
 
   get loggedIn() {
@@ -125,7 +125,7 @@ export default class GraffitiTools {
       const earlier = await this.queryMany(
         { "$and": [query, pollQueries[comparator] ] },
         limit,
-        [['object.timestamp', direction], ['object.id', -1]]
+        [['timestamp', direction], ['$id', -1]]
       )
 
       // If there are any matches
@@ -141,7 +141,7 @@ export default class GraffitiTools {
           { "timestamp": { [comparator]: earliest.timestamp } },
           {
             "timestamp": { "$eq": earliest.timestamp },
-            "id": { "$lt": earliest.id }
+            "$id": { "$lt": earliest['$id'] }
           }
         ]}
       }

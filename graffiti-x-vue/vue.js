@@ -7,14 +7,14 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
   const GraffitiLogin = {
     data: () => ({
       loggedIn: false,
-      mySignature: ""
+      myID: ""
     }),
 
     beforeMount() {
       // If we logged in via cache, update
       if (graffiti.loggedIn) {
         this.loggedIn = graffiti.loggedIn
-        this.mySignature = graffiti.mySignature
+        this.myID = graffiti.myID
       }
     },
 
@@ -22,7 +22,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
 
       async logIn() {
         this.loggedIn = await graffiti.logIn()
-        this.mySignature = graffiti.mySignature
+        this.myID = graffiti.myID
       },
 
       logOut() {
@@ -47,7 +47,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         :logOut        = "logOut"
         :logIn         = "logIn"
         :loggedIn      = "loggedIn"
-        :mySignature   = "mySignature"
+        :myID          = "myID"
       ></slot>
     </template>
     `

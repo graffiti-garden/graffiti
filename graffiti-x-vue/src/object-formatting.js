@@ -15,7 +15,6 @@ export function serverFormat(clientObject, now) {
   return {
     object: objectCopy,
     contexts: clientObject.contexts,
-    access: clientObject.access
   }
 }
 
@@ -23,6 +22,5 @@ export function clientFormat(serverObject) {
   if (!serverObject) return serverObject
   const clientObject = serverObject.object
   clientObject.contexts = serverObject.contexts
-  clientObject.access = serverObject.access
   return clientObject
 }

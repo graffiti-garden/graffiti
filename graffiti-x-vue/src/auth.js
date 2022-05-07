@@ -3,23 +3,50 @@ export default class Auth {
   constructor(origin) {
     this.origin = origin
 
-    // Check to see if we have cookies
-    this.token = this.getCookie('token')
-    this.mySignature = this.getCookie('mySignature')
+    // Check to see if we are already logged in
+    this.token = window.localStorage.getItem('graffitiToken')
+    this.myID  = window.localStorage.getItem('graffitiID')
+
+    if (!this.loggedIn) {
+      // Check to see if we are redirecting back
+      const url = new URL(window.location)
+
+      if (url.searchParams.has('code')) {
+        // Extract the code and state from the URL and strip it from the history
+        const code = url.searchParams.get('code')
+        const state = url.searchParams.get('state')
+        url.searchParams.delete('code')
+        url.searchParams.delete('state')
+        window.history.replaceState({}, '', url)
+
+        // Get stored variables and remove them
+        const clientSecret = window.localStorage.getItem('graffitiClientSecret')
+        const clientID     = window.localStorage.getItem('graffitiClientID')
+        const storedState  = window.localStorage.getItem('graffitiAuthState')
+        window.localStorage.removeItem('graffitiClientSecret')
+        window.localStorage.removeItem('graffitiClientID')
+        window.localStorage.removeItem('graffitiAuthState')
+
+        // Make sure state has been preserved
+        if (state != storedState) {
+          this.authorizationError('Wrong state!')
+        }
+
+        this.codeToToken(code, clientID, clientSecret)
+      }
+    }
   }
 
   get loggedIn() {
-    return (this.token != null) && (this.mySignature != null)
+    return (this.token != null) && (this.myID != null)
   }
 
   async logIn() {
-    if (this.loggedIn) return true
+    if (this.loggedIn) return
 
-    // Reset the error flag
-    this.error = false
-
-    // Generate a random client secret
+    // Generate a random client secret and state
     const clientSecret = Math.random().toString(36).substr(2)
+    const state = Math.random().toString(36).substr(2)
 
     // The client ID is the secret's hex hash
     const encoder = new TextEncoder()
@@ -28,75 +55,21 @@ export default class Auth {
     const clientIDArray = Array.from(new Uint8Array(clientIDBuffer))
     const clientID = clientIDArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
-    // Establish bidirectional communication with the server
-    const wsURL = new URL('auth_socket', this.origin)
-    if (wsURL.protocol == 'https:') {
-      wsURL.protocol = 'wss:'
-    } else {
-      wsURL.protocol = 'ws:'
-    }
-    wsURL.searchParams.set('client_id', clientID)
-    let ws = new WebSocket(wsURL)
+    // Store the client secret as a session variable
+    window.localStorage.setItem('graffitiClientSecret', clientSecret)
+    window.localStorage.setItem('graffitiClientID', clientID)
+    window.localStorage.setItem('graffitiAuthState', state)
 
-    // When we connect, open an authorization window
-    ws.onopen = () => {
-      // Open the login window
-      const authURL = new URL('auth', this.origin)
-      authURL.searchParams.set('client_id', clientID)
+    // Open the login window
+    const authURL = new URL('auth', this.origin)
+    authURL.searchParams.set('client_id', clientID)
+    authURL.searchParams.set('redirect_uri', window.location.href)
+    authURL.searchParams.set('state', state)
 
-      // Our redirect URI should send a message back to the socket
-      const redirectURL = new URL('auth_socket_send', this.origin)
-      redirectURL.searchParams.set('client_id', clientID)
-      authURL.searchParams.set('redirect_uri', redirectURL)
-
-      window.open(authURL)
-    }
-
-    // When we receive a code, convert it to a token
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.type == 'Accept') {
-        this.codeToToken(data.code, clientID, clientSecret)
-      }
-    }
-
-    ws.onerror = () => {
-      return this.authorizationError("lost connection to the graffiti server")
-    }
-
-    // Wait until we have logged in
-    while (!this.error && !this.token) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-
-    ws.close()
-
-    return !this.error
-  }
-
-  storeCookie(param, data) {
-    document.cookie = `${param}=${data}; path=/; SameSite=Strict`
-  }
-
-  getCookie(param) {
-    // Decode the cookie string
-    const decodedCookies = decodeURIComponent(document.cookie)
-
-    // Find the cookie if it exists
-    for (const cookie of decodedCookies.split(';')) {
-      // Trim off white-space and parse
-      const paramMap = cookie.trim().split(param + '=')
-      if (paramMap.length > 1) return paramMap[1]
-    }
-  }
-
-  deleteCookie(param) {
-    // Delete the cookie if it exists
-    document.cookie = param + '=; max-age=0; path=/; SameSite=Strict'
+    window.location.href = authURL
   }
 
   authorizationError(reason) {
-    this.error = true
     alert(`Authorization Error: ${reason}\n\n`)
   }
 
@@ -129,55 +102,42 @@ export default class Auth {
     // Parse out the token
     const data = await response.json()
     this.token = data.access_token
-    this.mySignature = data.signature
+    this.myID = data.signature
 
     // And make sure that the token is valid
     if (!this.token) {
       return this.authorizationError("could not parse token.")
     }
 
-    // Store the token and signature in cookies
-    this.storeCookie('token', this.token)
-    this.storeCookie('mySignature', this.mySignature)
+    // Store the token and ID
+    window.localStorage.setItem('graffitiToken', this.token)
+    window.localStorage.setItem('graffitiID', this.myID)
   }
 
   logOut() {
-    this.deleteCookie('token')
-    this.deleteCookie('mySignature')
-    this.token = null
-    this.mySignature = null
-  }
-
-  get mySignature() {
-    if (!this.mySignatureValue) {
-      return null
-    }
-    return this.mySignatureValue
-  }
-
-  set mySignature(val) {
-    this.mySignatureValue = val
+    window.localStorage.removeItem('graffitiToken')
+    window.localStorage.removeItem('graffitiID')
+    window.location.reload()
   }
 
   async request(method, path, body) {
-    // if not logged in
-    if (!this.loggedIn) {
-      throw {
-        type: 'Error',
-        content: 'Not logged in'
-      }
+    // Form basic request
+    const requestURL = new URL(path, this.origin)
+    const options = {
+      method: method,
+      body: JSON.stringify(body)
     }
 
-    // Send the request to the server
-    const requestURL = new URL(path, this.origin)
-    const response = await fetch(requestURL, {
-      method: method,
-      headers: new Headers({
+    // If logged in, add authorization
+    if (this.loggedIn) {
+      options.headers = new Headers({
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + this.token
-      }),
-      body: JSON.stringify(body)
-    })
+      })
+    }
+
+    // Send the request
+    const response = await fetch(requestURL, options)
 
     // Make sure it went OK
     if (!response.ok) {

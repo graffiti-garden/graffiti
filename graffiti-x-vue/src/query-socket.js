@@ -19,20 +19,12 @@ export default class QuerySocket {
   }
 
   connect() {
-    if (!this.auth.loggedIn) {
-      throw {
-        type: 'Error',
-        content: 'not logged in'
-      }
-    }
-
     const wsURL = new URL('query_socket', this.origin)
     if (wsURL.protocol == 'https:') {
       wsURL.protocol = 'wss:'
     } else {
       wsURL.protocol = 'ws:'
     }
-    wsURL.searchParams.set('token', this.auth.token)
     this.ws = new WebSocket(wsURL)
     this.ws.onmessage = this.onSocketMessage.bind(this)
     this.ws.onclose   = this.onSocketClose  .bind(this)
@@ -105,6 +97,7 @@ export default class QuerySocket {
   }
 
   onSocketMessage(event) {
+
     const data = JSON.parse(event.data)
 
     if (data.type == 'Ping') {
