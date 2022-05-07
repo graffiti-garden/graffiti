@@ -6,8 +6,7 @@ heartbeat_interval = float(getenv('SOCKET_HEARTBEAT'))
 
 class QuerySocket:
 
-    def __init__(self, signature, ws):
-        self.signature = signature
+    def __init__(self, ws):
         self.ws = ws # Websocket
         self.alive = True
 
@@ -39,7 +38,6 @@ class QuerySocket:
             'query_id': query_id,
             'object': doc['object'][0],
             'contexts': doc['contexts'],
-            'access': doc['access']
         })
 
     async def delete(self, query_id, object_id):

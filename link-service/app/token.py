@@ -7,9 +7,14 @@ secret = getenv('AUTH_SECRET')
 
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
         authorizationUrl = "auth",
-        tokenUrl = "token")
+        tokenUrl = "token",
+        # Allow unauthorized access
+        auto_error = False)
 
-def token_to_signature(token: str = Depends(oauth2_scheme)):
+def token_to_owner_id(token: str = Depends(oauth2_scheme)):
+    # In case no authorization was provided
+    if not token: return token
+
     # Assert that the token is valid
     try:
         token = jwt.decode(token, secret, algorithms=["HS256"])

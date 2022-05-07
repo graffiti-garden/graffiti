@@ -1,11 +1,10 @@
-import time
 from uuid import uuid4
 from os import getenv
 import asyncio
 from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi import APIRouter, Depends, WebSocket, HTTPException, Body
-from ..token import token_to_signature
+from ..token import token_to_owner_id
 from .broker import QueryBroker
 from .socket import QuerySocket
 from .rewrite import object_rewrite, query_rewrite
@@ -23,52 +22,56 @@ open_sockets = {}
 async def startup():
     client.get_io_loop = asyncio.get_running_loop
 
-    # Create indexes for common fields if
-    # they don't already exist.
-    await db.create_index('object.id')
-    await db.create_index('object.type')
-    await db.create_index('object.signature')
-    await db.create_index('object.timestamp')
-    await db.create_index('object.tags')
+    # Create indexes if they don't already exist
+    await db.create_index('owner_id')
+    await db.create_index('object.$id')
+    await db.create_index('object.$**')
+    await db.create_index('contexts.$**')
 
 class Context(BaseModel):
     nearMisses: list[dict] = []
-    neighbors: list[dict] = []
+    neighbors:  list[dict] = []
 
 @router.post('/update')
 async def update(
         object: dict,
         contexts: list[Context] = [],
-        access: list[str]|None = None,
-        signature: str = Depends(token_to_signature)):
+        owner_id: str = Depends(token_to_owner_id)):
 
-    # Rewrite the new document
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="You can't update an object without logging in.")
+
+    # Unpack the contexts
     contexts = [context.dict() for context in contexts]
-    new_doc = object_rewrite(object, contexts, access, signature)
+    
+    # If there is no ID, make one
+    replacing = ('$id' in object)
+    if not replacing:
+        object['$id'] = str(uuid4())
+    object_id = object['$id']
 
-    # First check if the object includes an ID field
-    # This tells us if we're inserting or replacing
-    if 'id' in object:
-        # We're replacing.
+    # Make a new document out of the object
+    # If the object includes any $by fields,
+    # make sure it is their owner_id.
+    new_doc = object_rewrite(object, contexts, owner_id)
+
+    if replacing:
+
         # Check that the object that already exists
-        # and that it is owned by the signer
+        # and that it is owned by the owner
         old_doc = await db.find_one({
-            "object.id": object['id'],
-            "object.signature": signature})
+            "object.$id": new_doc['object']['$id'],
+            "owner_id": owner_id})
         if not old_doc:
             raise HTTPException(status_code=400, detail="The object you're trying to replace either doesn't exist or you don't have permission to replace it.")
 
         # Check what queries the object matches before replacement
-        matches_before = await qb.change(object['id'])
+        matches_before = await qb.match_socket_queries(object_id)
 
         # Replace the old document with the new
-        await db.replace_one({"object.id": object['id']}, new_doc)
+        await db.replace_one({"object.$id": object_id}, new_doc)
 
     else:
-        # Otherwise, we're inserting.
-        # Create a new random ID
-        object['id'] = str(uuid4())
-
         # The object is new so nothing previously matched
         matches_before = []
 
@@ -76,7 +79,7 @@ async def update(
         await db.insert_one(new_doc)
 
     # Check what queries the object matches after it's inserted
-    matches_after = await qb.change(object['id'])
+    matches_after = await qb.match_socket_queries(object_id)
 
     # If a query matched before but not after, the object has gone
     # out of scope for that query so send a deletion.
@@ -84,7 +87,7 @@ async def update(
         if socket_id not in open_sockets:
             continue
         if (socket_id, query_id) not in matches_after:
-            await open_sockets[socket_id].delete(query_id, object['id'])
+            await open_sockets[socket_id].delete(query_id, object_id)
 
     # Otherwise send a replacement
     for socket_id, query_id in matches_after:
@@ -92,26 +95,30 @@ async def update(
             continue
         await open_sockets[socket_id].update(query_id, new_doc)
 
-    return object['id']
+    return object_id
 
 @router.post('/delete')
 async def delete(
         object_id: str = Body(..., embed=True),
-        signature: str = Depends(token_to_signature)):
+        owner_id: str = Depends(token_to_owner_id)):
+
+    if not owner_id:
+        raise HTTPException(status_code=401, detail="You can't delete an object without logging in.")
 
     # Check that the object that already exists
     # and that it is owned by the signer
     old_doc = await db.find_one({
-        "object.id": object_id,
-        "object.signature": signature})
+        "object.$id": object_id,
+        "owner_id": owner_id})
+
     if not old_doc:
         raise HTTPException(status_code=400, detail="The object you're trying to delete either doesn't exist or you don't have permission to replace it.")
 
     # Check what queries this object affects
-    matches = await qb.change(object_id)
+    matches = await qb.match_socket_queries(object_id)
 
     # Perform deletion
-    await db.delete_one({"object.id": object_id})
+    await db.delete_one({"object.$id": object_id})
 
     # Propagate the changes to the sockets
     for socket_id, query_id in matches:
@@ -125,11 +132,25 @@ async def delete(
 async def query_many(
         query: dict,
         limit: int = Body(..., gt=0, le=max_limit),
-        sort: list[tuple[str,int]] = [('object.timestamp', -1), ('object.id', -1)],
-        signature: str = Depends(token_to_signature)):
+        sort: list[tuple[str,int]] | None = None,
+        personal: bool = False,
+        owner_id: str = Depends(token_to_owner_id)):
 
-    # Do rewriting for near misses and access control
-    query = query_rewrite(query, signature)
+    if not personal:
+        # Do rewriting for contexts.
+        # If the query includes any $to fields,
+        # make sure it only includes the owner_id.
+        query = query_rewrite(query, owner_id)
+    else:
+        if not owner_id:
+            raise HTTPException(status_code=401, detail="You can't make a personal query without logging in.")
+        query = personal_query_rewrite(query, owner_id)
+
+    # Sort by ID
+    if sort is None:
+        sort = [('$id', -1)]
+    # Rewrite it to all be within the object scope
+    sort = [('object.' + s, i) for (s, i) in sort]
 
     # Perform the query
     try:
@@ -145,7 +166,6 @@ async def query_many(
     results = [{
         'object': r['object'][0],
         'contexts': r['contexts'],
-        'access': r['access']
         } for r in results]
 
     return results
@@ -153,10 +173,10 @@ async def query_many(
 @router.post("/query_one")
 async def query_one(
         query: dict,
-        sort: list[tuple[str,int]] = [('object.timestamp', -1), ('object.id', -1)],
-        signature: str = Depends(token_to_signature)):
+        sort: list[tuple[str,int]] | None = None,
+        owner_id: str = Depends(token_to_owner_id)):
 
-    results = await query_many(query, 1, sort, signature)
+    results = await query_many(query, limit=1, sort=sort, owner_id=owner_id)
 
     if results:
         return results[0]
@@ -164,13 +184,10 @@ async def query_one(
         return None
 
 @router.websocket("/query_socket")
-async def query_socket(ws: WebSocket, token: str):
-    # Validate and convert the token to a signature
-    signature = token_to_signature(token)
-
+async def query_socket(ws: WebSocket):
     # Open a query socket
     socket_id = str(uuid4())
-    open_sockets[socket_id] = QuerySocket(signature, ws)
+    open_sockets[socket_id] = QuerySocket(ws)
     qb.add_socket(socket_id)
 
     # Wait until it dies
@@ -185,10 +202,10 @@ async def update_socket_query(
         query: dict,
         query_id: str = Body(...),
         socket_id: str = Body(...),
-        signature: str = Depends(token_to_signature)):
+        owner_id: str = Depends(token_to_owner_id)):
 
     # Rewrite the query and check if its valid
-    query = query_rewrite(query, signature)
+    query = query_rewrite(query, owner_id)
     # (if it isn't this will error)
     try:
         await db.find_one(query)
@@ -196,7 +213,7 @@ async def update_socket_query(
         raise HTTPException(status_code=400, detail=str(e))
 
     # Make sure the socket is valid and add
-    validate_socket(socket_id, signature)
+    validate_socket(socket_id)
     try:
         qb.update_query(socket_id, query_id, query)
     except Exception as e:
@@ -205,18 +222,15 @@ async def update_socket_query(
 @router.post("/delete_socket_query")
 async def delete_socket_query(
         query_id: str = Body(...),
-        socket_id: str = Body(...),
-        signature: str = Depends(token_to_signature)):
+        socket_id: str = Body(...)):
 
-    # Make sure the socket is valid and remove
-    validate_socket(socket_id, signature)
+    # Make sure the socket is valid and delete
+    validate_socket(socket_id)
     try:
         qb.delete_query(socket_id, query_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-def validate_socket(socket_id, signature):
+def validate_socket(socket_id):
     if not socket_id in open_sockets:
         raise HTTPException(status_code=400, detail=f"a socket with id {socket_id} is not open")
-    if open_sockets[socket_id].signature != signature:
-        raise HTTPException(status_code=400, detail=f"a socket with id {socket_id} is not owned by {signature}")
