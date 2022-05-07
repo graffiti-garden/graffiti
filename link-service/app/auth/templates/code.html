@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 
 {% block prompt %}
-enter the code emailed to
+We've sent an email to:
 
 <div class="usertext" >
   <u>{{email}}</u>
 </div>
+
+To login, either click the link in your email or manually enter the code below:
 {% endblock %}
 
 {% block form %}
@@ -15,13 +17,24 @@ enter the code emailed to
 </form>
 
 <script>
-  function logIn(e) {
-    e.preventDefault()
-    const signature_32_secret = document.getElementById('code').value
+  function secretToRedirect(signature_32_secret) {
     let redirect = new URL('{{redirect_uri}}')
     redirect.searchParams.set('state', '{{state}}')
     redirect.searchParams.set('code', '{{code_body}}' + '~' + signature_32_secret + '{{signature_32_known}}')
     window.location.replace(redirect)
+  }
+
+  function logIn(e) {
+    e.preventDefault()
+    secretToRedirect(document.getElementById('code').value)
+  }
+
+  // Open a broadcast channel back channel
+  const bc = new BroadcastChannel('graffiti_auth')
+
+  // If someone sends a code, send back the login link and close
+  bc.onmessage = event => {
+    secretToRedirect(event.data)
   }
 </script>
 {% endblock %}

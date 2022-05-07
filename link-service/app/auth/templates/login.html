@@ -48,7 +48,8 @@ error: could not send an email to
       client_id: '{{client_id}}',
       redirect_uri: '{{redirect_uri}}',
       state: '{{state}}',
-      email: email
+      email: email,
+      origin: window.location.origin
     })
     window.location.replace(`email?${params.toString()}`)
   }

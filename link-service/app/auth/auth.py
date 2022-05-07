@@ -55,6 +55,7 @@ async def email(
         redirect_uri: str,
         state: str,
         email: str,
+        origin: str,
         request: Request):
 
     # Make email lowercase so one email
@@ -82,13 +83,21 @@ async def email(
     signature_32_secret = signature_32[:code_size]
     signature_32_known = signature_32[code_size:]
 
+    login_link = f"{origin}/redirect?signature_32_secret={signature_32_secret}"
+
     # Send the user the smaller part for verification
     if debug:
-        # In debug mode, just print the code
-        print("Login code: ", signature_32_secret)
+        # In debug mode, print the login link
+        print(f"login link: {login_link}")
     else:
         # Otherwise, construct an email
-        message = MIMEText(signature_32_secret)
+        message = MIMEText(f"""
+welcome to graffiti!
+
+click here to log in: {login_link}
+
+or manually type this code into the login tab: {signature_32_secret}
+""")
         message["Subject"] = Header("Login Code")
         message["From"] = mail_from
         message["To"] = email
@@ -119,6 +128,15 @@ async def email(
         'state': state,
         'code_body': header + '.' + payload,
         'signature_32_known': signature_32_known
+    })
+
+@router.get("/redirect", response_class=HTMLResponse)
+async def redirect(
+        signature_32_secret: str,
+        request: Request):
+    return templates.TemplateResponse("redirect.html", {
+        'request': request,
+        'signature_32_secret': signature_32_secret
     })
 
 @router.post("/token")
