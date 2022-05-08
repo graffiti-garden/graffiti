@@ -1,11 +1,16 @@
-from fastapi import HTTPException
+allowed_operators = {'eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice'}
 
 def query_rewrite(query, owner_id):
-    # If the query includes a $to field anywhere,
-    # make sure that it is equal to the owner_id
-    if owner_id:
-        assert_key_has_value(object, '$to', owner_id,
-            "You can't make a query with a '$to' field that is not equal to your ID.")
+    for k, v in json_iterator(query):
+
+        # Make sure only allowed operators are used
+        if k.startswith('$'):
+            if k[:1] not in allowed_operators:
+                raise Exception(f"{k} is not an allowed query operator")
+
+        # And ~to fields can't be forged
+        elif k == '~to' and v != owner_id:
+            raise Exception("you can only query for objects ~to yourself")
 
     return {
         # The object must match the query
@@ -31,17 +36,44 @@ def query_rewrite(query, owner_id):
         ]
     }
 
-def personal_query_rewrite(query, owner_id):
-    return {
-        "object": { "$elemMatch": query },
-        "owner_id": owner_id
-    }
-
 def object_rewrite(object, contexts, owner_id):
-    # If the object includes a $by field anywhere,
-    # make sure it is equal to the owner_id
-    assert_key_has_value(object, '$by', owner_id,
-        "You can't update an object with a '$by' field that is not equal to your ID.")
+    for k in object:
+
+        # Make sure timestamps are numbers
+        if k == '~timestamp':
+            if not (isinstance(object[k], int) or isinstance(object[k], float)):
+                raise Exception("~timestamp must be a number")
+
+        # Make sure the by field can't be forged
+        elif k == '~by':
+            if object[k] != owner_id:
+                raise Exception("you can only update objects ~by yourself")
+
+        # Make sure the to field is a list of strings
+        elif k == '~to':
+            if not isinstance(object[k], list):
+                raise Exception("~to must be a list of ids")
+            for v in object[k]:
+                if not isinstance(v, str):
+                    raise Exception(f"~to contains an invalid id, {v}")
+
+        # The id must be a string
+        elif k == '~id':
+            if not isinstance(object[k], str):
+                raise Exception("~id must be a string")
+
+        else:
+            if k.startswith('~'):
+                raise Exception("~ is reserved for graffiti fields")
+            for k_ in json_iterator(object[k]):
+                if k_.startswith('~'):
+                    raise Exception("~ is reserved for graffiti fields at the root level")
+
+    # If there is no id or timestamp, generate it
+    if '~id' not in object:
+        object['~id'] = str(uuid4())
+    if '~timestamp' not in object:
+        object['~timestamp'] = int(time.time() * 1000)
 
     # Combine it into one big document
     return {
@@ -50,13 +82,13 @@ def object_rewrite(object, contexts, owner_id):
         "contexts": contexts,
     }
 
-def assert_key_has_value(x, key, value, error_msg):
+def json_iterator(x):
     if isinstance(x, dict):
-        for k in x:
-            if k == key and x[k] != value:
-                raise HTTPException(status_code=401, detail=error_msg)
-            else:
-                assert_key_has_value(x[k], key, value, error_msg)
+        for k, v in x.items():
+            for k_, v_ in json_iterator(v):
+                yield k_, v_
+            yield k, v
     elif isinstance(x, list):
         for y in x:
-            assert_key_has_value(y, key, value, error_msg)
+            for k, v in json_iterator(y):
+                yield k, v

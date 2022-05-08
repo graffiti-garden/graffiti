@@ -24,7 +24,8 @@ async def startup():
 
     # Create indexes if they don't already exist
     await db.create_index('owner_id')
-    await db.create_index('object.$id')
+    await db.create_index('object.~id')
+    await db.create_index('object.~timestamp')
     await db.create_index('object.$**')
     await db.create_index('contexts.$**')
 
@@ -39,37 +40,36 @@ async def update(
         owner_id: str = Depends(token_to_owner_id)):
 
     if not owner_id:
-        raise HTTPException(status_code=401, detail="You can't update an object without logging in.")
+        raise HTTPException(status_code=401, detail="you can't update an object without logging in.")
 
     # Unpack the contexts
     contexts = [context.dict() for context in contexts]
     
-    # If there is no ID, make one
-    replacing = ('$id' in object)
-    if not replacing:
-        object['$id'] = str(uuid4())
-    object_id = object['$id']
+    # If there is no id, we are replacing
+    replacing = ('~id' in object)
 
     # Make a new document out of the object
-    # If the object includes any $by fields,
-    # make sure it is their owner_id.
-    new_doc = object_rewrite(object, contexts, owner_id)
+    try:
+        new_doc = object_rewrite(object, contexts, owner_id)
+    except Exception as e:
+        raise HTTPException(status_code=405, detail=f"improperly formatted object: {str(e)}")
+    object_id = new_doc['object'][0]['~id']
 
     if replacing:
 
         # Check that the object that already exists
         # and that it is owned by the owner
         old_doc = await db.find_one({
-            "object.$id": new_doc['object']['$id'],
+            "object.~id": object_id,
             "owner_id": owner_id})
         if not old_doc:
-            raise HTTPException(status_code=400, detail="The object you're trying to replace either doesn't exist or you don't have permission to replace it.")
+            raise HTTPException(status_code=404, detail="the object you're trying to replace either doesn't exist or you don't have permission to replace it.")
 
         # Check what queries the object matches before replacement
         matches_before = await qb.match_socket_queries(object_id)
 
         # Replace the old document with the new
-        await db.replace_one({"object.$id": object_id}, new_doc)
+        await db.replace_one({"object.~id": object_id}, new_doc)
 
     else:
         # The object is new so nothing previously matched
@@ -103,22 +103,22 @@ async def delete(
         owner_id: str = Depends(token_to_owner_id)):
 
     if not owner_id:
-        raise HTTPException(status_code=401, detail="You can't delete an object without logging in.")
+        raise HTTPException(status_code=401, detail="you can't delete an object without logging in.")
 
     # Check that the object that already exists
     # and that it is owned by the signer
     old_doc = await db.find_one({
-        "object.$id": object_id,
+        "object.~id": object_id,
         "owner_id": owner_id})
 
     if not old_doc:
-        raise HTTPException(status_code=400, detail="The object you're trying to delete either doesn't exist or you don't have permission to replace it.")
+        raise HTTPException(status_code=404, detail="the object you're trying to delete either doesn't exist or you don't have permission to replace it.")
 
     # Check what queries this object affects
     matches = await qb.match_socket_queries(object_id)
 
     # Perform deletion
-    await db.delete_one({"object.$id": object_id})
+    await db.delete_one({"object.~id": object_id})
 
     # Propagate the changes to the sockets
     for socket_id, query_id in matches:
@@ -133,22 +133,17 @@ async def query_many(
         query: dict,
         limit: int = Body(..., gt=0, le=max_limit),
         sort: list[tuple[str,int]] | None = None,
-        personal: bool = False,
         owner_id: str = Depends(token_to_owner_id)):
 
-    if not personal:
-        # Do rewriting for contexts.
-        # If the query includes any $to fields,
-        # make sure it only includes the owner_id.
+    # Do rewriting for contexts
+    try:
         query = query_rewrite(query, owner_id)
-    else:
-        if not owner_id:
-            raise HTTPException(status_code=401, detail="You can't make a personal query without logging in.")
-        query = personal_query_rewrite(query, owner_id)
+    except Exception as e:
+        raise HTTPException(status_code=405, detail=f"improperly formatted query: {str(e)}")
 
-    # Sort by ID
+    # Sort reverse chronological and by ID
     if sort is None:
-        sort = [('$id', -1)]
+        sort = [('~timestamp', -1), ('~id', -1)]
     # Rewrite it to all be within the object scope
     sort = [('object.' + s, i) for (s, i) in sort]
 
@@ -160,7 +155,7 @@ async def query_many(
                 limit=limit)
         results = await cursor.to_list(length=limit)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"query error: {str(e)}")
 
     await cursor.close()
     results = [{
@@ -210,14 +205,11 @@ async def update_socket_query(
     try:
         await db.find_one(query)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=f"query error: {str(e)}")
 
     # Make sure the socket is valid and add
     validate_socket(socket_id)
-    try:
-        qb.update_query(socket_id, query_id, query)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    qb.update_query(socket_id, query_id, query)
 
 @router.post("/delete_socket_query")
 async def delete_socket_query(
@@ -226,11 +218,8 @@ async def delete_socket_query(
 
     # Make sure the socket is valid and delete
     validate_socket(socket_id)
-    try:
-        qb.delete_query(socket_id, query_id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    qb.delete_query(socket_id, query_id)
 
 def validate_socket(socket_id):
     if not socket_id in open_sockets:
-        raise HTTPException(status_code=400, detail=f"a socket with id {socket_id} is not open")
+        raise HTTPException(status_code=404, detail=f"a socket with id {socket_id} is not open")

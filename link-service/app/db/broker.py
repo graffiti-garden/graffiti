@@ -11,7 +11,7 @@ class QueryBroker:
         # See if the object matches any open queries
         matches = self.db.aggregate([
             # Only look at the document that is changing
-            { "$match": { "object.$id": object_id } },
+            { "$match": { "object.~id": object_id } },
             # Pass it through all the queries
             { "$facet" : self.queries }
         ])
