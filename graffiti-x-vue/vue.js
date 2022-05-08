@@ -3,37 +3,36 @@ import GraffitiTools from './vanilla.js'
 export default function GraffitiComponents(vue, graffitiURL='https://graffiti.csail.mit.edu') {
 
   const graffiti = new GraffitiTools(graffitiURL)
+  const falseID = random().toString(36).substr(2)
 
   const GraffitiLogin = {
     data: () => ({
       loggedIn: false,
-      myID: ""
+      myID: falseID
     }),
 
-    beforeMount() {
-      // If we logged in via cache, update
-      if (graffiti.loggedIn) {
-        this.loggedIn = graffiti.loggedIn
-        this.myID = graffiti.myID
-      }
+    async created() {
+      // Wait for login
+      // (note that this won't necessarily load
+      //  before creation, hence the false ID)
+      this.loggedIn = await graffiti.loggedIn()
+      this.myID = await graffiti.myID()
     },
 
     methods: {
 
-      async logIn() {
-        this.loggedIn = await graffiti.logIn()
-        this.myID = graffiti.myID
+      logIn() {
+        graffiti.logIn()
       },
 
       logOut() {
         graffiti.logOut()
-        this.loggedIn = false
       },
 
     },
 
     template: `
-    <div>
+    <div class="topbar">
       <template v-if="loggedIn">
         <a href="" @click.prevent="logOut">log out</a>
       </template>
@@ -42,14 +41,12 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
       </template>
     </div>
 
-    <template v-if="loggedIn">
-      <slot
-        :logOut        = "logOut"
-        :logIn         = "logIn"
-        :loggedIn      = "loggedIn"
-        :myID          = "myID"
-      ></slot>
-    </template>
+    <slot
+      :logOut        = "logOut"
+      :logIn         = "logIn"
+      :loggedIn      = "loggedIn"
+      :myID          = "myID"
+    ></slot>
     `
   }
 
@@ -57,22 +54,15 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
 
     props: {
 
-      // The base form that all objects should fit
-      base: {
-        type: Object,
-        default: () => ({})
-      },
-
-      // The additional filter that all
-      // objects should adhere to
-      filter: {
+      // The query applied to objects in the collection
+      query: {
         type: Object,
         default: () => ({})
       },
 
       // How many objects should be
       // pre-loaded from the start
-      queue: {
+      pageSize: {
         type: Number,
         default: 0,
       },
@@ -105,20 +95,6 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
       objects() {
         return Object.values(this.objectMap).sort(this.sort)
       },
-
-      // The actual query sent to the server
-      query() {
-        // Start with the base, but let the
-        // object overwrite, if desired.
-        const basedFilter = Object.assign({}, this.base)
-        Object.assign(basedFilter, this.filter)
-        return {
-          "$and": [
-            basedFilter,
-            { timestamp: { "$type": "long" } }
-          ]
-        }
-      },
     },
 
     setup(props) {
@@ -138,11 +114,17 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         handler: async function(newQuery, oldQuery) {
           // Don't update if the query hasn't actually changed
           // (it can get triggered twice because of immediate)
-          if (JSON.stringify(newQuery) == JSON.stringify(oldQuery)) return
+          const newQueryJSON = JSON.stringify(newQuery)
+          const oldQueryJSON = JSON.stringify(oldQuery)
+          if (newQueryJSON == oldQueryJSON) return
+
+          // If the query includes the random string, continue.
+          // The query will update after login
+          if (newQuery.includes(falseID)) return
 
           // Update the query and rewind
           await this.querySubscriber.update(newQuery)
-          await this.rewind(this.queue)
+          await this.rewind(this.initialPageSize)
         },
         deep: true,
         immediate: true
@@ -150,28 +132,25 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
     },
 
     methods: {
-      async rewind(limit) {
-        this.canRewind = await this.querySubscriber.rewind(limit)
+      async rewind(pageSize=null) {
+        if (pageSize == null) pageSize = this.pageSize
+        this.canRewind = await this.querySubscriber.rewind(pageSize)
         return this.canRewind
       },
 
-      async play(limit) {
-        return await this.querySubscriber.play(limit)
+      async play(pageSize=null) {
+        if (pageSize == null) pageSize = this.pageSize
+        return await this.querySubscriber.play(pageSize)
       },
 
       async update(object) {
-        // Start with the base, but let the object
-        // overwrite it if desired.
-        const basedObject = Object.assign({}, this.base)
-        Object.assign(basedObject, object)
-
         // Send it to the server
-        const id = await graffiti.update(basedObject)
+        const id = await graffiti.update(object)
 
         // Then make sure it is returned in the query
         const output = await graffiti.queryOne({ "$and": [
           this.query,
-          { id: id }
+          { '$id': id }
         ]})
 
         if (!output) {
