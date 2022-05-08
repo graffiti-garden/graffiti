@@ -28,28 +28,12 @@ export default class QuerySocket {
     this.ws.onmessage = this.onSocketMessage.bind(this)
     this.ws.onclose   = this.onSocketClose  .bind(this)
     this.ws.onerror   = this.onSocketError  .bind(this)
-    this.connected = true
   }
 
-  async isInitialized() {
-    while (!this.socketID) {
-      if (this.connected) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      } else {
-        throw {
-          type: 'Error',
-          content: 'The query socket is disconnected'
-        }
-      }
-    }
-  }
-
-  now() {
-    if (!this.serverPingTime) {
-      throw {
-        type: 'Error',
-        content: 'The query socket has not yet been initialized. await isInitialized() before calling now()'
-      }
+  async now() {
+    // Wait for first ping
+    while (!this.serverPingTime || !this.localPingTime) {
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
     return Date.now() - this.localPingTime + this.serverPingTime
   }
@@ -122,8 +106,7 @@ export default class QuerySocket {
   }
 
   async onSocketClose(event) {
-    if (this.connected && !this.isUnloading) {
-      this.connected = false
+    if (!this.isUnloading) {
       const shouldReload = confirm("lost connection to the graffiti server.\n\nonce you've established an internet connection, select \"OK\" to reload or select \"Cancel\" to remain on the page and save any data.")
       if (shouldReload) {
         window.location.reload()

@@ -12,34 +12,28 @@ export default class GraffitiTools {
     this.querySocket = new QuerySocket(this.origin, this.auth)
   }
 
-  get myID() {
-    return this.auth.myID
-  }
-
-  get loggedIn() {
-    return this.auth.loggedIn
-  }
-
-  async logIn() {
-    if (await this.auth.logIn()) {
-      this.querySocket.connect()
-      await this.querySocket.isInitialized()
-      return true
-    } else {
-      return false
-    }
+  logIn() {
+    this.auth.login()
   }
 
   logOut() {
     this.auth.logOut()
   }
 
-  now() {
-    return this.querySocket.now()
+  async loggedIn() {
+    return this.auth.loggedIn()
+  }
+
+  async myID() {
+    return await this.auth.myID()
+  }
+
+  await now() {
+    return await this.querySocket.now()
   }
 
   async update(object) {
-    return await this.auth.request('post', 'update', serverFormat(object, this.now()))
+    return await this.auth.request('post', 'update', serverFormat(object, await this.now()))
   }
 
   async delete(objectID) {
@@ -75,14 +69,12 @@ export default class GraffitiTools {
 
     // Supply a function that updates the query
     const update = (async function(q) {
-      await this.querySocket.isInitialized()
-
       // Clear the results
       for (var r in results) delete results[r]
 
       // Reset poll queries and store the query
       query = q
-      queryStart = this.now()
+      queryStart = await this.now()
       pollQueries = {}
 
       // If we're live, start subscribing
@@ -98,16 +90,12 @@ export default class GraffitiTools {
 
     // Add a hook to properly close the query
     const delete_ = (async function() {
-      await this.querySocket.isInitialized()
-
       if (live) {
         this.querySocket.deleteQuery(queryID)
       }
     }).bind(this)
 
     const poll = (async function(direction, limit) {
-      await this.querySocket.isInitialized()
-
       if (limit == 0) return true
 
       const comparator = (direction < 0) ? "$lt" : "$gt"
