@@ -30,7 +30,6 @@ This will generate the following files:
 Modify the corresponding SSL paths under `nginx` and `mailserver` in `docker-compose.deploy.yml`. Additionally make changes to:
 
 - `hostname` and `domainname` under `mailserver`
-- `AUTH_CODE_MAIL_FROM` under `graffiti`
 - The email address in `config/mailserver/postfix-accounts.cf`
 - The postmaster address in `config/mailserver.env`
 

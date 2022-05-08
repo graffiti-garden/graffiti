@@ -36,7 +36,6 @@ services:
   graffiti:
     environment:
       DEBUG: 'false'
-      AUTH_CODE_MAIL_FROM: 'Graffiti <noreply@graffiti.csail.mit.edu>'
     expose:
       - 5000
     depends_on:

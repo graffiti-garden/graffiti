@@ -15,11 +15,10 @@ from fastapi.templating import Jinja2Templates
 from uuid import uuid5, NAMESPACE_DNS
 
 debug = (getenv('DEBUG') == 'true')
-mail_from = getenv('AUTH_CODE_MAIL_FROM')
 expiration_time = float(getenv('AUTH_CODE_EXP_TIME')) # minutes
-code_size = int(getenv('AUTH_CODE_SIZE'))
 secret = getenv('AUTH_SECRET')
-heartbeat_interval = float(getenv('SOCKET_HEARTBEAT'))
+heartbeat_interval = float(getenv('AUTH_SOCKET_HEARTBEAT'))
+signature_cache_size = int(getenv('AUTH_SIGNATURE_CACHE_SIZE'))
 secret_namespace = uuid5(NAMESPACE_DNS, secret)
 
 router = APIRouter()
@@ -82,13 +81,9 @@ async def email(
         print(f"login link: {login_link}")
     else:
         # Otherwise, construct an email
-        message = MIMEText(f"""
-welcome to graffiti!
-
-click here to log in: {login_link}
-""")
-        message["Subject"] = Header("Login Code")
-        message["From"] = mail_from
+        message = MIMEText(f"{login_link}")
+        message["Subject"] = Header("login link")
+        message["From"] = f"graffiti <noreply@{origin}>"
         message["To"] = email
         message["Message-ID"] = make_msgid()
         message["Date"] = formatdate()
@@ -175,7 +170,7 @@ async def auth_socket(ws: WebSocket, signature_hash: str):
                 await ws.send_json({'type': 'Ping'})
         except:
             break
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(heartbeat_interval)
 
 @router.get("/auth_socket_send", response_class=HTMLResponse)
 async def auth_socket_send(signature: str):
@@ -187,7 +182,7 @@ async def auth_socket_send(signature: str):
 
     # If we have too many hashes, delete an old one
     # (this could be a bug if too many people try to log in at exactly the same time)
-    if len(hash_to_signature) > 100:
+    if len(hash_to_signature) > signature_cache_size:
         hash_to_signature.pop(next(iter(hash_to_signature)))
 
     return "<script>window.close()</script>"
