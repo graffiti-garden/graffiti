@@ -41,6 +41,8 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
       </template>
     </div>
 
+    <hr>
+
     <slot
       :logOut        = "logOut"
       :logIn         = "logIn"
@@ -73,7 +75,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         // by default newest -> oldest
         // so that objects[0] is the newest
         default: function(a, b) {
-          return b.timestamp - a.timestamp
+          return b['~timestamp'] - a['~timestamp']
         },
       },
 
@@ -124,7 +126,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
 
           // Update the query and rewind
           await this.querySubscriber.update(newQuery)
-          await this.rewind(this.initialPageSize)
+          await this.rewind()
         },
         deep: true,
         immediate: true
@@ -150,7 +152,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         // Then make sure it is returned in the query
         const output = await graffiti.queryOne({ "$and": [
           this.query,
-          { '$id': id }
+          { '~id': id }
         ]})
 
         if (!output) {
@@ -205,11 +207,7 @@ class GraffitiApp extends HTMLElement {
     const dataStr = this.getAttribute('data');
     let data = {}
     if (dataStr) {
-      try {
-        data = JSON.parse(dataStr)
-      } catch(e) {
-        console.error('data is not valid JSON:', e.message);
-      }
+      data = JSON.parse(dataStr)
     }
 
     let graffitiURL = this.getAttribute('graffitiURL')

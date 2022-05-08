@@ -33,7 +33,7 @@ export default class GraffitiTools {
   }
 
   async update(object) {
-    return await this.auth.request('post', 'update', serverFormat(object, await this.now()))
+    return await this.auth.request('post', 'update', serverFormat(object))
   }
 
   async delete(objectID) {
@@ -43,18 +43,15 @@ export default class GraffitiTools {
   }
 
   async queryMany(query, limit, sort) {
-    let data = await this.auth.request('post', 'query_many', {
-      query: query,
-      limit: limit,
-      sort: sort
+    const data = await this.auth.request('post', 'query_many', {
+      query, limit, sort
     })
     return data.map(clientFormat)
   }
 
   async queryOne(query, sort) {
-    let data = await this.auth.request('post', 'query_one', {
-      query: query,
-      sort: sort
+    const data = await this.auth.request('post', 'query_one', {
+      query, sort
     })
     return clientFormat(data)
   }
@@ -82,7 +79,7 @@ export default class GraffitiTools {
         await this.querySocket.updateQuery(
           queryID,
           query,
-          result => results[result.id] = result,
+          result => results[result['~id']] = result,
           resultID => delete results[resultID]
         )
       }
@@ -102,30 +99,30 @@ export default class GraffitiTools {
 
       if (!(comparator in pollQueries)) {
         pollQueries[comparator] =
-          { "timestamp": { [comparator]: queryStart } }
+          { "~timestamp": { [comparator]: queryStart } }
       }
 
       // Fetch #(limit) preceding query matches
       const earlier = await this.queryMany(
         { "$and": [query, pollQueries[comparator] ] },
         limit,
-        [['timestamp', direction], ['$id', -1]]
+        [['~timestamp', direction], ['~id', -1]]
       )
 
       // If there are any matches
       if (earlier.length) {
         // Call the update callback on each of them
-        earlier.map(result => results[result.id] = result)
+        earlier.map(result => results[result['~id']] = result)
 
         // Get the earliest match
         const earliest = earlier[earlier.length-1]
 
         // And next time only look for things even earlier
         pollQueries[comparator] = { "$or": [
-          { "timestamp": { [comparator]: earliest.timestamp } },
+          { "~timestamp": { [comparator]: earliest['~timestamp'] } },
           {
-            "timestamp": { "$eq": earliest.timestamp },
-            "$id": { "$lt": earliest['$id'] }
+            "~timestamp": { "$eq": earliest['~timestamp'] },
+            "~id": { "$lt": earliest['~id'] }
           }
         ]}
       }
