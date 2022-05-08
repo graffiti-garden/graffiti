@@ -141,14 +141,15 @@ export default class Auth {
       method: method,
       body: JSON.stringify(body)
     }
+    const headers = {
+      'Content-Type': 'application/json',
+    }
 
     // If logged in, add authorization
     if (await this.loggedIn()) {
-      options.headers = new Headers({
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + this.token
-      })
+      headers.Authorization = 'Bearer ' + this.token
     }
+    options.headers = new Headers(headers)
 
     // Send the request
     const response = await fetch(requestURL, options)
