@@ -11,9 +11,9 @@ def query_rewrite(query, owner_id):
             if k[1:] not in allowed_operators:
                 raise Exception(f"{k} is not an allowed query operator")
 
-        # And ~to fields can't be forged
-        elif k == '~to' and v != owner_id:
-            raise Exception("you can only query for objects ~to yourself")
+        # And _to fields can't be forged
+        elif k == '_to' and v != owner_id:
+            raise Exception("you can only query for objects _to yourself")
 
     return {
         # The object must match the query
@@ -43,40 +43,40 @@ def object_rewrite(object, contexts, owner_id):
     for k in object:
 
         # Make sure timestamps are numbers
-        if k == '~timestamp':
+        if k == '_timestamp':
             if not (isinstance(object[k], int) or isinstance(object[k], float)):
-                raise Exception("~timestamp must be a number")
+                raise Exception("_timestamp must be a number")
 
         # Make sure the by field can't be forged
-        elif k == '~by':
+        elif k == '_by':
             if object[k] != owner_id:
-                raise Exception("you can only update objects ~by yourself")
+                raise Exception("you can only update objects _by yourself")
 
         # Make sure the to field is a list of strings
-        elif k == '~to':
+        elif k == '_to':
             if not isinstance(object[k], list):
-                raise Exception("~to must be a list of ids")
+                raise Exception("_to must be a list of ids")
             for v in object[k]:
                 if not isinstance(v, str):
-                    raise Exception(f"~to contains an invalid id, {v}")
+                    raise Exception(f"_to contains an invalid id, {v}")
 
         # The id must be a string
-        elif k == '~id':
+        elif k == '_id':
             if not isinstance(object[k], str):
-                raise Exception("~id must be a string")
+                raise Exception("_id must be a string")
 
         else:
-            if k.startswith('~'):
-                raise Exception("~ is reserved for graffiti fields")
+            if k.startswith('_'):
+                raise Exception("_ is reserved for graffiti fields")
             for k_ in json_iterator(object[k]):
-                if k_.startswith('~'):
-                    raise Exception("~ is reserved for graffiti fields at the root level")
+                if k_.startswith('_'):
+                    raise Exception("_ is reserved for graffiti fields at the root level")
 
     # If there is no id or timestamp, generate it
-    if '~id' not in object:
-        object['~id'] = str(uuid4())
-    if '~timestamp' not in object:
-        object['~timestamp'] = int(time.time() * 1000)
+    if '_id' not in object:
+        object['_id'] = str(uuid4())
+    if '_timestamp' not in object:
+        object['_timestamp'] = int(time.time() * 1000)
 
     # Combine it into one big document
     return {

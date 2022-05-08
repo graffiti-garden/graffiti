@@ -24,8 +24,8 @@ async def startup():
 
     # Create indexes if they don't already exist
     await db.create_index('owner_id')
-    await db.create_index('object.~id')
-    await db.create_index('object.~timestamp')
+    await db.create_index('object._id')
+    await db.create_index('object._timestamp')
     await db.create_index('object.$**')
     await db.create_index('contexts.$**')
 
@@ -46,21 +46,21 @@ async def update(
     contexts = [context.dict() for context in contexts]
     
     # If there is no id, we are replacing
-    replacing = ('~id' in object)
+    replacing = ('_id' in object)
 
     # Make a new document out of the object
     try:
         new_doc = object_rewrite(object, contexts, owner_id)
     except Exception as e:
         raise HTTPException(status_code=405, detail=f"improperly formatted object: {str(e)}")
-    object_id = new_doc['object'][0]['~id']
+    object_id = new_doc['object'][0]['_id']
 
     if replacing:
 
         # Check that the object that already exists
         # and that it is owned by the owner
         old_doc = await db.find_one({
-            "object.~id": object_id,
+            "object._id": object_id,
             "owner_id": owner_id})
         if not old_doc:
             raise HTTPException(status_code=404, detail="the object you're trying to replace either doesn't exist or you don't have permission to replace it.")
@@ -69,7 +69,7 @@ async def update(
         matches_before = await qb.match_socket_queries(object_id)
 
         # Replace the old document with the new
-        await db.replace_one({"object.~id": object_id}, new_doc)
+        await db.replace_one({"object._id": object_id}, new_doc)
 
     else:
         # The object is new so nothing previously matched
@@ -108,7 +108,7 @@ async def delete(
     # Check that the object that already exists
     # and that it is owned by the signer
     old_doc = await db.find_one({
-        "object.~id": object_id,
+        "object._id": object_id,
         "owner_id": owner_id})
 
     if not old_doc:
@@ -118,7 +118,7 @@ async def delete(
     matches = await qb.match_socket_queries(object_id)
 
     # Perform deletion
-    await db.delete_one({"object.~id": object_id})
+    await db.delete_one({"object._id": object_id})
 
     # Propagate the changes to the sockets
     for socket_id, query_id in matches:
@@ -143,7 +143,7 @@ async def query_many(
 
     # Sort reverse chronological and by ID
     if sort is None:
-        sort = [('~timestamp', -1), ('~id', -1)]
+        sort = [('_timestamp', -1), ('_id', -1)]
     # Rewrite it to all be within the object scope
     sort = [('object.' + s, i) for (s, i) in sort]
 
