@@ -1,3 +1,6 @@
+from uuid import uuid4
+import time
+
 allowed_operators = {'eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice'}
 
 def query_rewrite(query, owner_id):
@@ -5,7 +8,7 @@ def query_rewrite(query, owner_id):
 
         # Make sure only allowed operators are used
         if k.startswith('$'):
-            if k[:1] not in allowed_operators:
+            if k[1:] not in allowed_operators:
                 raise Exception(f"{k} is not an allowed query operator")
 
         # And ~to fields can't be forged
