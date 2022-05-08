@@ -8,16 +8,16 @@ export function serverFormat(clientObject) {
   // Extract fields from the object
   // (they're passed in separately on the
   // server for type verification)
-  delete objectCopy['~contexts']
+  delete objectCopy._contexts
   return {
     object: objectCopy,
-    contexts: clientObject['~contexts'],
+    contexts: clientObject._contexts,
   }
 }
 
 export function clientFormat(serverObject) {
   if (!serverObject) return serverObject
   const clientObject = serverObject.object
-  clientObject['~contexts'] = serverObject.contexts
+  clientObject._contexts = serverObject.contexts
   return clientObject
 }

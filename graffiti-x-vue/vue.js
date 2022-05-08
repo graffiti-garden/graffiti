@@ -75,7 +75,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         // by default newest -> oldest
         // so that objects[0] is the newest
         default: function(a, b) {
-          return b['~timestamp'] - a['~timestamp']
+          return b._timestamp - a._timestamp
         },
       },
 
@@ -152,7 +152,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         // Then make sure it is returned in the query
         const output = await graffiti.queryOne({ "$and": [
           this.query,
-          { '~id': id }
+          { _id: id }
         ]})
 
         if (!output) {

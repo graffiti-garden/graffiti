@@ -79,7 +79,7 @@ export default class GraffitiTools {
         await this.querySocket.updateQuery(
           queryID,
           query,
-          result => results[result['~id']] = result,
+          result => results[result._id] = result,
           resultID => delete results[resultID]
         )
       }
@@ -99,30 +99,30 @@ export default class GraffitiTools {
 
       if (!(comparator in pollQueries)) {
         pollQueries[comparator] =
-          { "~timestamp": { [comparator]: queryStart } }
+          { _timestamp: { [comparator]: queryStart } }
       }
 
       // Fetch #(limit) preceding query matches
       const earlier = await this.queryMany(
         { "$and": [query, pollQueries[comparator] ] },
         limit,
-        [['~timestamp', direction], ['~id', -1]]
+        [['_timestamp', direction], ['_id', -1]]
       )
 
       // If there are any matches
       if (earlier.length) {
         // Call the update callback on each of them
-        earlier.map(result => results[result['~id']] = result)
+        earlier.map(result => results[result._id] = result)
 
         // Get the earliest match
         const earliest = earlier[earlier.length-1]
 
         // And next time only look for things even earlier
         pollQueries[comparator] = { "$or": [
-          { "~timestamp": { [comparator]: earliest['~timestamp'] } },
+          { _timestamp: { [comparator]: earliest._timestamp } },
           {
-            "~timestamp": { "$eq": earliest['~timestamp'] },
-            "~id": { "$lt": earliest['~id'] }
+            _timestamp: { "$eq": earliest._timestamp },
+            _id: { "$lt": earliest._id }
           }
         ]}
       }
