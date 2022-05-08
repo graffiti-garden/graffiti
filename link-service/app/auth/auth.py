@@ -83,7 +83,7 @@ async def email(
         # Otherwise, construct an email
         message = MIMEText(f"{login_link}")
         message["Subject"] = Header("login link")
-        message["From"] = f"graffiti <noreply@{origin}>"
+        message["From"] = f"graffiti <noreply@{origin.split('://')[1]}>"
         message["To"] = email
         message["Message-ID"] = make_msgid()
         message["Date"] = formatdate()
