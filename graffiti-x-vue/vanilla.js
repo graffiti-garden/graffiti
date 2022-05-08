@@ -13,7 +13,7 @@ export default class GraffitiTools {
   }
 
   logIn() {
-    this.auth.login()
+    this.auth.logIn()
   }
 
   logOut() {
@@ -28,7 +28,7 @@ export default class GraffitiTools {
     return await this.auth.myID()
   }
 
-  await now() {
+  async now() {
     return await this.querySocket.now()
   }
 

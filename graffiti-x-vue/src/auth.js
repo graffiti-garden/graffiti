@@ -11,7 +11,7 @@ export default class Auth {
     window.location.reload()
   }
 
-  async initialize()
+  async initialize() {
     // Check to see if we are already logged in
     this.token = window.localStorage.getItem('graffitiToken')
     this.myIDValue  = window.localStorage.getItem('graffitiID')
@@ -44,6 +44,9 @@ export default class Auth {
         await this.codeToToken(code, clientID, clientSecret)
       }
     }
+
+    this.initialized = true
+  }
 
   async codeToToken(code, clientID, clientSecret) {
     // Construct the body of the POST

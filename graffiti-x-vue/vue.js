@@ -3,7 +3,7 @@ import GraffitiTools from './vanilla.js'
 export default function GraffitiComponents(vue, graffitiURL='https://graffiti.csail.mit.edu') {
 
   const graffiti = new GraffitiTools(graffitiURL)
-  const falseID = random().toString(36).substr(2)
+  const falseID = Math.random().toString(36).substr(2)
 
   const GraffitiLogin = {
     data: () => ({
@@ -120,7 +120,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
 
           // If the query includes the random string, continue.
           // The query will update after login
-          if (newQuery.includes(falseID)) return
+          if (newQueryJSON.includes(falseID)) return
 
           // Update the query and rewind
           await this.querySubscriber.update(newQuery)
