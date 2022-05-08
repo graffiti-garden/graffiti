@@ -5,38 +5,85 @@
   <style>
     * {
       font-family: "Courier New";
+      padding: 0;
+      margin: 0;
     }
 
     html {
       background-color: #a6a6a6;
       height: 100%;
       font-size: 20px;
+      display: flex;
+      flex-direction: row;
     }
     
-    h1 {
-      text-align: center;
-    }
-
     body {
       color: black;
       background-color: white;
-      max-width: 30em;
+      max-width: 600px;
+      min-width: 0;
       margin: 0 auto;
-      padding: 1em;
+      border: 2px solid dimgrey;
+      flex: 1;
+      align-self: flex-start;
+    }
+
+    @media screen and (max-width: 600px) {
+      html {
+        align-items: center;
+      }
+      body {
+        align-self: auto;
+        border-left: 0;
+        border-right: 0;
+      }
+    }
+
+    .blob {
+      padding: 4%;
+    }
+
+    h1 {
+      text-align: center;
+      padding: 0.5em;
     }
 
     a {
       color: black;
     }
 
+    a:hover {
+      font-weight:bold;
+    }
+
+    .usertext {
+      padding-left: 3%;
+      padding-right: 3%;
+      padding-top: 1em;
+      padding-bottom: 1em;
+      text-align: center;
+      overflow-wrap: break-word;
+    }
+
+    form {
+      padding-top: 5%;
+      display: flex;
+      flex-wrap: wrap;
+    }
+
     input {
       font-size: 1.5em;
       padding: 0.5em;
-      margin: 0;
     }
 
     input:focus {
       outline: none;
+    }
+
+    input[type=text] {
+      min-width: 0;
+      border: 3px solid #E1E8ED;
+      flex-grow: 4;
     }
 
     input[type=button],
@@ -46,30 +93,13 @@
       color: white;
       font-weight: bold;
       text-align: center;
+      flex-grow: 1;
+      white-space: normal;
     }
 
     input[type=submit]:focus,
     input[type=button]:focus {
       border: 3px inset #E1E8ED;
-    }
-
-    input[type=submit] {
-      float: right;
-    }
-
-    input[type=text] {
-      min-width: 0;
-      border: 3px solid #E1E8ED;
-      flex-grow:1;
-      border-right:none;
-    }
-
-    .usertext {
-      padding: 1em;
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
   </style>
@@ -80,14 +110,7 @@
 
   <hr>
 
-  <div style="padding:2em" >
-    <div style="padding-bottom:2em;" >
-      {% block prompt %}
-      {% endblock %}
-    </div>
-
-    {% block form %}
-    {% endblock %}
-  </div>
+  {% block contents %}
+  {% endblock %}
 </body>
 </html>

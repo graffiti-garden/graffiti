@@ -23,4 +23,4 @@ def token_to_owner_id(token: str = Depends(oauth2_scheme)):
     if not token["type"] == "token":
         raise HTTPException(status_code=400, detail="Wrong code type.")
 
-    return token["signature"]
+    return token["owner_id"]

@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import formatdate, make_msgid
 from typing import Optional
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from uuid import uuid5, NAMESPACE_DNS
@@ -19,6 +19,7 @@ mail_from = getenv('AUTH_CODE_MAIL_FROM')
 expiration_time = float(getenv('AUTH_CODE_EXP_TIME')) # minutes
 code_size = int(getenv('AUTH_CODE_SIZE'))
 secret = getenv('AUTH_SECRET')
+heartbeat_interval = float(getenv('SOCKET_HEARTBEAT'))
 secret_namespace = uuid5(NAMESPACE_DNS, secret)
 
 router = APIRouter()
@@ -66,24 +67,14 @@ async def email(
     code = jwt.encode({
         "type": "code",
         "client_id": client_id,
-        "signature": str(uuid5(secret_namespace, email)),
+        "owner_id": str(uuid5(secret_namespace, email)),
         "time": time.time()
     }, secret, algorithm="HS256")
 
     # Take the last part of the code (the signature)
     header, payload, signature = code.split('.')
 
-    # Re-encode into base 32 (only capitals and ints)
-    while len(signature) % 4 != 0:
-        signature += "="
-    signature_bytes = base64.urlsafe_b64decode(signature)
-    signature_32 = base64.b32encode(signature_bytes).decode()
-
-    # The first part will be the secret sent in the email
-    signature_32_secret = signature_32[:code_size]
-    signature_32_known = signature_32[code_size:]
-
-    login_link = f"{origin}/redirect?signature_32_secret={signature_32_secret}"
+    login_link = f"{origin}/auth_socket_send?signature={signature}"
 
     # Send the user the smaller part for verification
     if debug:
@@ -95,8 +86,6 @@ async def email(
 welcome to graffiti!
 
 click here to log in: {login_link}
-
-or manually type this code into the login tab: {signature_32_secret}
 """)
         message["Subject"] = Header("Login Code")
         message["From"] = mail_from
@@ -122,21 +111,11 @@ or manually type this code into the login tab: {signature_32_secret}
     # and then send it to the redirect_uri
     return templates.TemplateResponse("code.html", {
         'request': request,
-        'client': client,
         'email': email,
         'redirect_uri': redirect_uri,
         'state': state,
         'code_body': header + '.' + payload,
-        'signature_32_known': signature_32_known
-    })
-
-@router.get("/redirect", response_class=HTMLResponse)
-async def redirect(
-        signature_32_secret: str,
-        request: Request):
-    return templates.TemplateResponse("redirect.html", {
-        'request': request,
-        'signature_32_secret': signature_32_secret
+        'signature_hash': sha256(signature.encode()).hexdigest()
     })
 
 @router.post("/token")
@@ -147,11 +126,7 @@ def token(
 
     # Assert that the code is valid
     try:
-        # Re-encode in base 64
-        code_body, signature_32 = code.split('~')
-        signature_bytes = base64.b32decode(signature_32)
-        signature = base64.urlsafe_b64encode(signature_bytes).decode()
-        code = jwt.decode(code_body + '.' + signature, secret, algorithms=["HS256"])
+        code = jwt.decode(code, secret, algorithms=["HS256"])
     except:
         raise HTTPException(status_code=400, detail="Malformed code.")
     if not code["type"] == "code":
@@ -172,7 +147,43 @@ def token(
     # If authorized, create a token
     token = jwt.encode({
         "type": "token",
-        "signature": code["signature"]
+        "owner_id": code["owner_id"]
         }, secret, algorithm="HS256")
 
-    return {"access_token": token, "signature": code["signature"], "token_type": "bearer"}
+    return {"access_token": token, "owner_id": code["owner_id"], "token_type": "bearer"}
+
+# Use sockets for magic linking
+
+sockets = {}
+
+@router.websocket("/auth_socket")
+async def auth_socket(ws: WebSocket, signature_hash: str):
+    await ws.accept()
+    sockets[signature_hash] = ws
+
+    # Keep alive
+    while True:
+        try:
+            await ws.send_json({'type': 'Ping'})
+        except:
+            break
+        await asyncio.sleep(heartbeat_interval)
+
+    del sockets[signature_hash]
+
+@router.get("/auth_socket_send", response_class=HTMLResponse)
+async def auth_socket_send(signature: str):
+    # Take the hash of the signature
+    signature_hash = sha256(signature.encode()).hexdigest()
+
+    if signature_hash in sockets:
+        ws = sockets[signature_hash]
+        try:
+            await ws.send_json({
+                'type': 'Signature',
+                'signature': signature
+            })
+            await ws.close()
+        except:
+            pass
+    return "<script>window.close()</script>"

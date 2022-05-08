@@ -1,42 +1,51 @@
 {% extends "base.html" %}
+{% block contents %}
 
-{% block prompt %}
-{% if not email %}
+<div class="blob">
+  {% if not email %}
 
-the application
+  an application hosted at
 
-<div class="usertext" >
-  <a href="{{client}}">{{client}}</a>
+  <div class="usertext" >
+    <a href="{{client}}">{{client}}</a>
+  </div>
+
+  is requesting access to your graffiti.
+
+  {% else %}
+
+  error: could not send an email to
+
+  <div class="usertext" >
+    <u>{{email}}</u>
+  </div>
+
+  try again.
+
+  {% endif %}
+  
 </div>
 
-is requesting access to your graffiti.
-
-{% else %}
-
-error: could not send an email to
-
-<div class="usertext" >
-  <u>{{email}}</u>
+<div id="form" class="blob">
+  <form onsubmit="enterEmail(event)">
+    <input type="submit" value="log in via email" autofocus />
+  </form>
 </div>
 
-{% endif %}
-{% endblock %}
-
-{% block form %}
-
-<div id="logIn" style="display:flex;justify-content:center;"/>
-  <input type="button" value="log in via email" onclick="enterEmail()" autofocus />
-</div>
-
-<form id="enterEmail" style="display:none;" onsubmit="emailLogInCode(event)" />
-  <input type="text" id="email" placeholder="name@example.com" autocomplete="off" />
-  <input type="submit" style="float:right" value="send" />
-</form>
+<template id="enterEmail">
+  <form onsubmit="emailLogInCode(event)" >
+    <input type="text" id="email" placeholder="name@example.com" autocomplete="off" />
+    <input type="submit" value="send" />
+  </form>
+</template>
 
 <script>
-  function enterEmail() {
-    document.getElementById('logIn').style.display = 'none'
-    document.getElementById('enterEmail').style.display = 'flex'
+  function enterEmail(e) {
+    e.preventDefault();
+    const tmp = document.getElementById('enterEmail')
+    const frm = document.getElementById('form')
+    const clone = document.importNode(tmp.content, true)
+    frm.replaceChildren(clone)
     document.getElementById('email').focus()
   }
 

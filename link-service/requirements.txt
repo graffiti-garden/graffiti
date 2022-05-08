@@ -1,11 +1,11 @@
 motor==2.5.1     # Async MongoDB Database
 
-aiosmtplib # Email
-pyjwt # tokens
+aiosmtplib==1.1.6 # Email
+pyjwt==2.3.0      # tokens
 
-jinja2            # For templating
-python-multipart  # For parsing multipart form data
-aiofiles          # For serving static files and templates
+jinja2==3.1.2            # For templating
+python-multipart==0.0.5  # For parsing multipart form data
+aiofiles==0.8.0          # For serving static files and templates
 
-fastapi           # Web framework
-uvicorn[standard] # ASGI server
+fastapi==0.76.0           # Web framework
+uvicorn[standard]==0.17.6 # ASGI server

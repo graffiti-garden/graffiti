@@ -1,40 +1,38 @@
 {% extends "base.html" %}
+{% block contents %}
 
-{% block prompt %}
-We've sent an email to:
+<div class="blob">
 
-<div class="usertext" >
-  <u>{{email}}</u>
+  click the link emailed to
+
+  <div class="usertext" >
+    <u>{{email}}</u>
+  </div>
+
+  then return to this tab.
 </div>
 
-To login, either click the link in your email or manually enter the code below:
-{% endblock %}
-
-{% block form %}
-<form style="display:flex;" onsubmit="logIn(event)" />
-  <input type="text" style="text-transform: uppercase;" id="code" autocomplete="off" autofocus/>
-  <input type="submit" value="submit code" />
-</form>
-
 <script>
-  function secretToRedirect(signature_32_secret) {
-    let redirect = new URL('{{redirect_uri}}')
-    redirect.searchParams.set('state', '{{state}}')
-    redirect.searchParams.set('code', '{{code_body}}' + '~' + signature_32_secret + '{{signature_32_known}}')
-    window.location.replace(redirect)
+  // Open a websocket
+  const wsURL = new URL('auth_socket', window.location.origin)
+  if (wsURL.protocol == 'https:') {
+    wsURL.protocol = 'wss:'
+  } else {
+    wsURL.protocol = 'ws:'
   }
+  wsURL.searchParams.set('signature_hash', '{{signature_hash}}')
 
-  function logIn(e) {
-    e.preventDefault()
-    secretToRedirect(document.getElementById('code').value)
-  }
+  let ws = new WebSocket(wsURL)
 
-  // Open a broadcast channel back channel
-  const bc = new BroadcastChannel('graffiti_auth')
-
-  // If someone sends a code, send back the login link and close
-  bc.onmessage = event => {
-    secretToRedirect(event.data)
+  ws.onmessage = event => {
+    const data = JSON.parse(event.data)
+    if (data.type == 'Signature') {
+      let redirect = new URL('{{redirect_uri}}')
+      redirect.searchParams.set('state', '{{state}}')
+      redirect.searchParams.set('code', '{{code_body}}' + '.' + data.signature)
+      window.location.replace(redirect)
+    }
   }
 </script>
+
 {% endblock %}
