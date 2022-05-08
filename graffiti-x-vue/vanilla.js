@@ -10,9 +10,7 @@ export default class GraffitiTools {
 
     this.auth = new Auth(this.origin)
     this.querySocket = new QuerySocket(this.origin, this.auth)
-
-    // If the authorization is already logged in, start up the sockets
-    if (this.auth.loggedIn) this.querySocket.connect()
+    this.querySocket.connect()
   }
 
   get myID() {

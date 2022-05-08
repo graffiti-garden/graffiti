@@ -20,12 +20,12 @@ export default class Auth {
         window.history.replaceState({}, '', url)
 
         // Get stored variables and remove them
-        const clientSecret = window.localStorage.getItem('graffitiClientSecret')
-        const clientID     = window.localStorage.getItem('graffitiClientID')
-        const storedState  = window.localStorage.getItem('graffitiAuthState')
-        window.localStorage.removeItem('graffitiClientSecret')
-        window.localStorage.removeItem('graffitiClientID')
-        window.localStorage.removeItem('graffitiAuthState')
+        const clientSecret = window.sessionStorage.getItem('graffitiClientSecret')
+        const clientID     = window.sessionStorage.getItem('graffitiClientID')
+        const storedState  = window.sessionStorage.getItem('graffitiAuthState')
+        window.sessionStorage.removeItem('graffitiClientSecret')
+        window.sessionStorage.removeItem('graffitiClientID')
+        window.sessionStorage.removeItem('graffitiAuthState')
 
         // Make sure state has been preserved
         if (state != storedState) {
@@ -33,6 +33,8 @@ export default class Auth {
         }
 
         this.codeToToken(code, clientID, clientSecret)
+
+        alert("logged in!")
       }
     }
   }
@@ -56,9 +58,9 @@ export default class Auth {
     const clientID = clientIDArray.map(b => b.toString(16).padStart(2, '0')).join('')
 
     // Store the client secret as a session variable
-    window.localStorage.setItem('graffitiClientSecret', clientSecret)
-    window.localStorage.setItem('graffitiClientID', clientID)
-    window.localStorage.setItem('graffitiAuthState', state)
+    window.sessionStorage.setItem('graffitiClientSecret', clientSecret)
+    window.sessionStorage.setItem('graffitiClientID', clientID)
+    window.sessionStorage.setItem('graffitiAuthState', state)
 
     // Open the login window
     const authURL = new URL('auth', this.origin)
@@ -70,7 +72,8 @@ export default class Auth {
   }
 
   authorizationError(reason) {
-    alert(`Authorization Error: ${reason}\n\n`)
+    alert(`Authorization Error: ${reason}\n\nClick OK to reload.`)
+    window.location.reload()
   }
 
   async codeToToken(code, clientID, clientSecret) {
