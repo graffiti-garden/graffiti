@@ -5,20 +5,19 @@ export default class QuerySocket {
   constructor(origin, auth) {
     this.origin = origin
     this.auth = auth
+
     this.socketID = null
     this.queries = {}
     this.updateCallbacks = {}
     this.deleteCallbacks = {}
-    this.connected = false
-    this.isUnloading = false
 
     // Close silently
+    this.isUnloading = false
     window.addEventListener(
       "beforeunload",
       (e => {this.isUnloading=true}).bind(this));
-  }
 
-  connect() {
+    // Connect
     const wsURL = new URL('query_socket', this.origin)
     if (wsURL.protocol == 'https:') {
       wsURL.protocol = 'wss:'
@@ -30,11 +29,6 @@ export default class QuerySocket {
     this.ws.onclose   = this.onSocketClose  .bind(this)
     this.ws.onerror   = this.onSocketError  .bind(this)
     this.connected = true
-  }
-
-  disconnect() {
-    this.connected = false
-    this.ws.close()
   }
 
   async isInitialized() {
@@ -65,8 +59,6 @@ export default class QuerySocket {
   }
 
   async updateQuery(queryID, query, updateCallback, deleteCallback) {
-    await this.isInitialized()
-
     // Add the query internally
     this.queries[queryID] = query
     this.updateCallbacks[queryID] = x => updateCallback(clientFormat(x))
@@ -82,8 +74,6 @@ export default class QuerySocket {
   }
 
   async deleteQuery(queryID) {
-    await this.isInitialized()
-
     delete this.queries[queryID]
     delete this.updateCallbacks[queryID]
     delete this.deleteCallbacks[queryID]
@@ -107,7 +97,7 @@ export default class QuerySocket {
       // Store the socket ID
       if (!this.socketID) {
         this.socketID = data.socket_id
-        console.log(`Query socket is open with id '${this.socketID}'`)
+        console.log(`graffiti query socket is open with id '${this.socketID}'`)
       }
     } else if (data.type == 'Update') {
       // Call the update callback

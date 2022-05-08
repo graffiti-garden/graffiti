@@ -2,12 +2,21 @@ export default class Auth {
 
   constructor(origin) {
     this.origin = origin
+    this.initialized = false
+    this.initialize()
+  }
 
+  authorizationError(reason) {
+    alert(`Authorization Error: ${reason}\n\nClick OK to reload.`)
+    window.location.reload()
+  }
+
+  async initialize()
     // Check to see if we are already logged in
     this.token = window.localStorage.getItem('graffitiToken')
-    this.myID  = window.localStorage.getItem('graffitiID')
+    this.myIDValue  = window.localStorage.getItem('graffitiID')
 
-    if (!this.loggedIn) {
+    if (!this.token || !this.myIDValue) {
       // Check to see if we are redirecting back
       const url = new URL(window.location)
 
@@ -32,49 +41,9 @@ export default class Auth {
           this.authorizationError('Wrong state!')
         }
 
-        this.codeToToken(code, clientID, clientSecret)
-
-        alert("logged in!")
+        await this.codeToToken(code, clientID, clientSecret)
       }
     }
-  }
-
-  get loggedIn() {
-    return (this.token != null) && (this.myID != null)
-  }
-
-  async logIn() {
-    if (this.loggedIn) return
-
-    // Generate a random client secret and state
-    const clientSecret = Math.random().toString(36).substr(2)
-    const state = Math.random().toString(36).substr(2)
-
-    // The client ID is the secret's hex hash
-    const encoder = new TextEncoder()
-    const clientSecretData = encoder.encode(clientSecret)
-    const clientIDBuffer = await crypto.subtle.digest('SHA-256', clientSecretData)
-    const clientIDArray = Array.from(new Uint8Array(clientIDBuffer))
-    const clientID = clientIDArray.map(b => b.toString(16).padStart(2, '0')).join('')
-
-    // Store the client secret as a session variable
-    window.sessionStorage.setItem('graffitiClientSecret', clientSecret)
-    window.sessionStorage.setItem('graffitiClientID', clientID)
-    window.sessionStorage.setItem('graffitiAuthState', state)
-
-    // Open the login window
-    const authURL = new URL('auth', this.origin)
-    authURL.searchParams.set('client_id', clientID)
-    authURL.searchParams.set('redirect_uri', window.location.href)
-    authURL.searchParams.set('state', state)
-
-    window.location.href = authURL
-  }
-
-  authorizationError(reason) {
-    alert(`Authorization Error: ${reason}\n\nClick OK to reload.`)
-    window.location.reload()
-  }
 
   async codeToToken(code, clientID, clientSecret) {
     // Construct the body of the POST
@@ -105,7 +74,7 @@ export default class Auth {
     // Parse out the token
     const data = await response.json()
     this.token = data.access_token
-    this.myID = data.signature
+    this.myIDValue = data.owner_id
 
     // And make sure that the token is valid
     if (!this.token) {
@@ -114,7 +83,46 @@ export default class Auth {
 
     // Store the token and ID
     window.localStorage.setItem('graffitiToken', this.token)
-    window.localStorage.setItem('graffitiID', this.myID)
+    window.localStorage.setItem('graffitiID', this.myIDValue)
+  }
+
+  async loggedIn() {
+    while (!this.initialized) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+    return (this.token != null) && (this.myIDValue != null)
+  }
+
+  async myID() {
+    await this.loggedIn()
+    return this.myIDValue
+  }
+
+  async logIn() {
+    if (await this.loggedIn()) return
+
+    // Generate a random client secret and state
+    const clientSecret = Math.random().toString(36).substr(2)
+    const state = Math.random().toString(36).substr(2)
+
+    // The client ID is the secret's hex hash
+    const encoder = new TextEncoder()
+    const clientSecretData = encoder.encode(clientSecret)
+    const clientIDBuffer = await crypto.subtle.digest('SHA-256', clientSecretData)
+    const clientIDArray = Array.from(new Uint8Array(clientIDBuffer))
+    const clientID = clientIDArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+    // Store the client secret as a session variable
+    window.sessionStorage.setItem('graffitiClientSecret', clientSecret)
+    window.sessionStorage.setItem('graffitiClientID', clientID)
+    window.sessionStorage.setItem('graffitiAuthState', state)
+
+    // Redirect to the login window
+    const authURL = new URL('auth', this.origin)
+    authURL.searchParams.set('client_id', clientID)
+    authURL.searchParams.set('redirect_uri', window.location.href)
+    authURL.searchParams.set('state', state)
+    window.location.href = authURL
   }
 
   logOut() {
@@ -132,7 +140,7 @@ export default class Auth {
     }
 
     // If logged in, add authorization
-    if (this.loggedIn) {
+    if (await this.loggedIn()) {
       options.headers = new Headers({
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + this.token

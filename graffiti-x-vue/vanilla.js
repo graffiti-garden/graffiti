@@ -10,7 +10,6 @@ export default class GraffitiTools {
 
     this.auth = new Auth(this.origin)
     this.querySocket = new QuerySocket(this.origin, this.auth)
-    this.querySocket.connect()
   }
 
   get myID() {
@@ -33,7 +32,6 @@ export default class GraffitiTools {
 
   logOut() {
     this.auth.logOut()
-    this.querySocket.disconnect()
   }
 
   now() {
