@@ -13,7 +13,8 @@
 </div>
 
 <script>
-  // Open a websocket
+  // Listen for the signature over a websocket
+
   const wsURL = new URL('auth_socket', window.location.origin)
   if (wsURL.protocol == 'https:') {
     wsURL.protocol = 'wss:'
@@ -22,9 +23,7 @@
   }
   wsURL.searchParams.set('signature_hash', '{{signature_hash}}')
 
-  let ws = new WebSocket(wsURL)
-
-  ws.onmessage = event => {
+  function onmessage(event) {
     const data = JSON.parse(event.data)
     if (data.type == 'Signature') {
       let redirect = new URL('{{redirect_uri}}')
@@ -33,6 +32,26 @@
       window.location.replace(redirect)
     }
   }
+
+  async function reconnect() {
+    while (true) {
+      try {
+        connect()
+        break
+      } catch(error) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+  }
+
+  function connect() {
+    let ws = new WebSocket(wsURL)
+    ws.onmessage = onmessage
+    ws.onerror = reconnect
+    ws.onclose = reconnect
+  }
+
+  connect()
 </script>
 
 {% endblock %}

@@ -152,38 +152,42 @@ def token(
 
     return {"access_token": token, "owner_id": code["owner_id"], "token_type": "bearer"}
 
-# Use sockets for magic linking
+# Below: sockets for magic linking 
 
-sockets = {}
+hash_to_signature = {}
 
 @router.websocket("/auth_socket")
 async def auth_socket(ws: WebSocket, signature_hash: str):
     await ws.accept()
-    sockets[signature_hash] = ws
 
     # Keep alive
     while True:
         try:
-            await ws.send_json({'type': 'Ping'})
+            if signature_hash in hash_to_signature:
+                await ws.send_json({
+                    'type': 'Signature',
+                    'signature': hash_to_signature[signature_hash]
+                })
+                del hash_to_signature[signature_hash]
+                await ws.close()
+                break
+            else:
+                await ws.send_json({'type': 'Ping'})
         except:
             break
-        await asyncio.sleep(heartbeat_interval)
-
-    del sockets[signature_hash]
+        await asyncio.sleep(0.5)
 
 @router.get("/auth_socket_send", response_class=HTMLResponse)
 async def auth_socket_send(signature: str):
-    # Take the hash of the signature
+    # Take the hash of the signature, to make sure it's real
     signature_hash = sha256(signature.encode()).hexdigest()
 
-    if signature_hash in sockets:
-        ws = sockets[signature_hash]
-        try:
-            await ws.send_json({
-                'type': 'Signature',
-                'signature': signature
-            })
-            await ws.close()
-        except:
-            pass
+    # Confirm the hash
+    hash_to_signature[signature_hash] = signature
+
+    # If we have too many hashes, delete an old one
+    # (this could be a bug if too many people try to log in at exactly the same time)
+    if len(hash_to_signature) > 100:
+        hash_to_signature.pop(next(iter(hash_to_signature)))
+
     return "<script>window.close()</script>"
