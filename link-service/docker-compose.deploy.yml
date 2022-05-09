@@ -16,7 +16,7 @@ services:
       - graffiti
 
   mailserver:
-    image: mailserver/docker-mailserver:10.4.0
+    image: mailserver/docker-mailserver:10.5.0
     container_name: graffiti-mailserver
     hostname: graffiti.csail.mit.edu
     domainname: graffiti.csail.mit.edu

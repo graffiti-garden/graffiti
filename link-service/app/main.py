@@ -4,6 +4,7 @@ import uvicorn
 from os import getenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 app = FastAPI()
 
@@ -20,6 +21,11 @@ routes = ['auth.auth', 'db.db']
 for r in routes:
     module = __import__('graffiti.' + r, fromlist=['router'])
     app.include_router(module.router)
+
+# Redirect to landing page
+@app.get("/", response_class=RedirectResponse)
+async def home():
+    return "home"
 
 if __name__ == "__main__":
     if getenv('DEBUG') == 'true':
