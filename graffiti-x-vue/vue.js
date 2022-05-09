@@ -32,16 +32,14 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
     },
 
     template: `
-    <div class="topbar">
+    <div class="graffiti-log-in-bar">
       <template v-if="loggedIn">
-        <a href="" @click.prevent="logOut">log out</a>
+        <button class="graffiti-log-in-button" @click="logOut">log out of graffiti</button>
       </template>
       <template v-else>
-        <a href="" @click.prevent="logIn">log in</a>
+        <button class="graffiti-log-in-button" @click="logIn">log in to graffiti</button>
       </template>
     </div>
-
-    <hr>
 
     <slot
       :logOut        = "logOut"
@@ -66,7 +64,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
       // pre-loaded from the start
       pageSize: {
         type: Number,
-        default: 0,
+        default: 1,
       },
 
       // The way that objects are sorted
@@ -184,6 +182,7 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
     // Fill the inside with whatever
     template: `
     <slot
+      :object        = "objects[0]"
       :objects       = "objects"
       :update        = "update"
       :delete        = "delete_"
