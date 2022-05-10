@@ -25,7 +25,7 @@ for r in routes:
 # Redirect to landing page
 @app.get("/", response_class=RedirectResponse)
 async def home():
-    return "home"
+    return "home/"
 
 if __name__ == "__main__":
     if getenv('DEBUG') == 'true':
