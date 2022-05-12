@@ -164,6 +164,8 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         } else {
           this.objectMap[id] = output
         }
+        
+        return id
       },
 
       async delete_(id) {
