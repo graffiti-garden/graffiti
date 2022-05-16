@@ -17,8 +17,9 @@ client = AsyncIOMotorClient('mongo')
 db = client.graffiti.objects
 
 qb = QueryBroker(db)
+object_locks = {}
 open_sockets = {}
-deleting = set()
+
 
 @router.on_event("startup")
 async def startup():
@@ -33,6 +34,7 @@ async def startup():
 
     # Start up the query broker
     asyncio.create_task(broker_loop())
+
 
 """
 This function runs in the background and updates
@@ -54,42 +56,53 @@ async def broker_loop():
             # sleep so we don't go into an infinite loop
             await asyncio.sleep(0.01)
 
-class Context(BaseModel):
-    nearMisses: list[dict] = []
-    neighbors:  list[dict] = []
+
+@asynccontextmanager
+async def object_lock(object_id):
+    """
+    Make sure you can't perform multiple updates
+    or deletions on an object at the same time.
+    """
+    if object_id not in object_locks:
+        object_locks[object_id] = asyncio.Lock()
+    async with object_locks[id]:
+        yield
+    if len(object_locks[id]._waiters) == 0:
+        del object_locks[id]
+
 
 @router.post('/update')
 async def update(
         object: dict,
-        contexts: list[Context] = [],
         owner_id: str = Depends(token_to_owner_id)):
 
     if not owner_id:
         raise HTTPException(status_code=401, detail="you can't update an object without logging in.")
-
-    # Unpack the contexts
-    contexts = [context.dict() for context in contexts]
     
     # If there is no id, we are replacing
     replacing = ('_id' in object)
 
     # Make a new document out of the object
     try:
-        new_doc = object_rewrite(object, contexts, owner_id)
+        new_doc = object_rewrite(object, owner_id)
     except Exception as e:
         raise HTTPException(status_code=405, detail=f"improperly formatted object: {str(e)}")
     object_id = new_doc['object'][0]['_id']
 
-    if replacing:
-        # Delete the object
-        await delete(object_id, owner_id)
+    async with object_lock(object_id):
 
-    # Then insert it into the database
-    result = await db.insert_one(new_doc)
+        if replacing:
+            # Delete the object
+            await _delete(object_id, owner_id)
 
-    # Mark the new document for creation
-    qb.add_id(result.inserted_id)
+        # Then insert it into the database
+        result = await db.insert_one(new_doc)
+
+        # Mark the new document for creation
+        qb.add_id(result.inserted_id)
+
     return object_id
+
 
 @router.post('/delete')
 async def delete(
@@ -99,11 +112,13 @@ async def delete(
     if not owner_id:
         raise HTTPException(status_code=401, detail="you can't delete an object without logging in.")
 
-    # "Lock" to make sure we're not double deleting (and potentially double replacing)
-    if object_id in deleting:
-        raise HTTPException(status_code=404, detail="the object you are trying to modify is currently being modified.")
-    deleting.add(object_id)
+    async with object_lock(object_id):
+        await _delete(object_id, owner_id)
 
+    return object_id
+
+
+async def _delete(object_id, owner_id):
     # Check that the object that already exists
     # that it is owned by the owner_id,
     # and that it is not scheduled for deletion
@@ -116,10 +131,9 @@ async def delete(
         deleting.remove(object_id)
         raise HTTPException(status_code=404, detail="the object you're trying to modify either doesn't exist or you don't have permission to modify it.")
 
-    # Mark the document for deletion and unlock
+    # Mark the document for deletion
     qb.delete_id(old_doc["_id"])
-    deleting.remove(object_id)
-    return object_id
+
 
 @router.post("/query_many")
 async def query_many(

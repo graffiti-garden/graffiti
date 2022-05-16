@@ -21,11 +21,11 @@ class QueryBroker:
         self.add_ids = set()
         self.delete_ids = set()
 
-        # Mostly we don't care if we're adding or deleting
+        # Mostly, we don't care if we're adding or deleting
         changing_ids = self.adding_ids.union(self.deleting_ids)
 
         # See if the changing objects match any open queries
-        matches = self.db.aggregate([
+        facets = self.db.aggregate([
             # Only look at the documents that are changing
             { "$match": { "_id": list(changing_ids) } },
             # Sort the by _id (equivalent to causal)
@@ -34,12 +34,12 @@ class QueryBroker:
             { "$facet" : self.queries }
         ])
 
-        async for match in matches:
+        async for facet in facets:
             for query_hash, groups in match.items():
                 if groups:
                     yield query_hash, [
-                            ("delete", group["id"]) if group["doc"]["_id"] in self.deleting_ids
-                            else ("update", group["doc"])
+                            ("delete", group["_id"]) if group["mongo_id"] in self.deleting_ids
+                            else ("update", group["mongo_id"])
                             for group in groups]
 
         # Delete all marked items
@@ -63,12 +63,12 @@ class QueryBroker:
                 # Match the query
                 { "$match": query },
                 # And for each unique object ID,
-                # get the latest document (documents
-                # are already sorted in the global
-                # aggregation pipeline)
+                # get the latest document ID
+                # (documents are already sorted in the
+                # global aggregation pipeline)
                 { "$group": {
                     "_id" : "$object._id",
-                    "doc" : { "$last": "$$ROOT" }
+                    "mongo_id" : { "$last": "$_id" }
                 }}
             ]
         self.queries[query_hash] = query

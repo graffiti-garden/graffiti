@@ -39,7 +39,8 @@ def query_rewrite(query, owner_id):
         ]
     }
 
-def object_rewrite(object, contexts, owner_id):
+def object_rewrite(object, owner_id):
+    contexts = []
     for k in object:
 
         # Make sure timestamps are numbers
