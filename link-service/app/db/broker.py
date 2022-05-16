@@ -2,50 +2,79 @@ class QueryBroker:
 
     def __init__(self, db):
         self.db = db
-        self.queries = {} # socket_id+query_id -> query
-        self.socket_to_queries = {} # socket_id -> set of query_ids
 
-    async def match_socket_queries(self, object_id):
-        if not self.queries: return []
+        self.queries = {}
+        self.add_ids = set()
+        self.delete_ids = set()
+        self.adding_ids = set()
+        self.deleting_ids = set()
 
-        # See if the object matches any open queries
+    async def process_batch(self):
+        if not self.queries or not (self.add_ids or self.delete_ids):
+            # Nothing to do
+            return
+
+        # Mark the current batch as "in progress"
+        self.adding_ids = self.add_ids
+        self.deleting_ids = self.delete_ids
+        # Initialize placeholders for the next batch
+        self.add_ids = set()
+        self.delete_ids = set()
+
+        # Mostly we don't care if we're adding or deleting
+        changing_ids = self.adding_ids.union(self.deleting_ids)
+
+        # See if the changing objects match any open queries
         matches = self.db.aggregate([
-            # Only look at the document that is changing
-            { "$match": { "object._id": object_id } },
+            # Only look at the documents that are changing
+            { "$match": { "_id": list(changing_ids) } },
+            # Sort the by _id (equivalent to causal)
+            { "$sort": { "_id": 1 } },
             # Pass it through all the queries
             { "$facet" : self.queries }
         ])
 
-        changes = []
-
         async for match in matches:
-            for ids, docs in match.items():
-                if docs:
-                    # Extract the IDs
-                    socket_id, query_id = self.string_to_ids(ids)
+            for query_hash, groups in match.items():
+                if groups:
+                    yield query_hash, [
+                            ("delete", group["id"]) if group["doc"]["_id"] in self.deleting_ids
+                            else ("update", group["doc"])
+                            for group in groups]
 
-                    changes.append((socket_id, query_id))
+        # Delete all marked items
+        await self.db.deleteMany({ "_id": self.deleting_ids})
 
-        return changes
+    def add_id(_id):
+        self.add_ids.add(_id)
 
-    def add_socket(self, socket_id):
-        self.socket_to_queries[socket_id] = set()
+    def delete_id(_id):
+        self.delete_ids.add(_id)
 
-    def delete_socket(self, socket_id):
-        for query_id in self.socket_to_queries[socket_id]:
-            del self.queries[self.ids_to_string(socket_id, query_id)]
-        del self.socket_to_queries[socket_id]
+    async def add_query(self, query):
+        # Perform query rewriting
+        query, query_hash = query_rewrite(query)
 
-    def update_query(self, socket_id, query_id, query):
-        self.queries[self.ids_to_string(socket_id, query_id)] = [{ "$match": query }]
-        self.socket_to_queries[socket_id].add(query_id)
+        # Make sure the query is valid by doing a find-one
+        await self.db.find_one(query)
 
-    def delete_query(self, socket_id, query_id):
-        del self.queries[self.ids_to_string(socket_id, query_id)]
-        self.socket_to_queries[socket_id].remove(query_id)
+        # Formulate the aggregation pipeline
+        query = [
+                # Match the query
+                { "$match": query },
+                # And for each unique object ID,
+                # get the latest document (documents
+                # are already sorted in the global
+                # aggregation pipeline)
+                { "$group": {
+                    "_id" : "$object._id",
+                    "doc" : { "$last": "$$ROOT" }
+                }}
+            ]
+        self.queries[query_hash] = query
 
-    def ids_to_string(self, socket_id, query_id):
-        return socket_id + '&&' + query_id
+        return query_hash
 
-    def string_to_ids(self, s):
-        return s.split('&&', 1)
+    def delete_query(self, query_hash):
+        if query_hash in self.queries:
+            del self.queries[query_hash]

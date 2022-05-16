@@ -15,8 +15,10 @@ router = APIRouter()
 
 client = AsyncIOMotorClient('mongo')
 db = client.graffiti.objects
+
 qb = QueryBroker(db)
 open_sockets = {}
+deleting = set()
 
 @router.on_event("startup")
 async def startup():
@@ -28,6 +30,29 @@ async def startup():
     await db.create_index('object._timestamp')
     await db.create_index('object.$**')
     await db.create_index('contexts.$**')
+
+    # Start up the query broker
+    asyncio.create_task(broker_loop())
+
+"""
+This function runs in the background and updates
+sockets about added or deleted documents in batches.
+"""
+async def broker_loop():
+    while True:
+        something_happened = False
+        async for query_hash, result in qb.process_batch():
+            something_happened = True
+
+            # Find all the sockets associated with the query hash
+            # Send the result to them
+            print(query_hash)
+            print(result)
+
+        if not something_happened:
+            # If there was nothing to do,
+            # sleep so we don't go into an infinite loop
+            await asyncio.sleep(0.01)
 
 class Context(BaseModel):
     nearMisses: list[dict] = []
@@ -56,45 +81,14 @@ async def update(
     object_id = new_doc['object'][0]['_id']
 
     if replacing:
+        # Delete the object
+        await delete(object_id, owner_id)
 
-        # Check that the object that already exists
-        # and that it is owned by the owner
-        old_doc = await db.find_one({
-            "object._id": object_id,
-            "owner_id": owner_id})
-        if not old_doc:
-            raise HTTPException(status_code=404, detail="the object you're trying to replace either doesn't exist or you don't have permission to replace it.")
+    # Then insert it into the database
+    result = await db.insert_one(new_doc)
 
-        # Check what queries the object matches before replacement
-        matches_before = await qb.match_socket_queries(object_id)
-
-        # Replace the old document with the new
-        await db.replace_one({"object._id": object_id}, new_doc)
-
-    else:
-        # The object is new so nothing previously matched
-        matches_before = []
-
-        # And insert it into the database
-        await db.insert_one(new_doc)
-
-    # Check what queries the object matches after it's inserted
-    matches_after = await qb.match_socket_queries(object_id)
-
-    # If a query matched before but not after, the object has gone
-    # out of scope for that query so send a deletion.
-    for socket_id, query_id in matches_before:
-        if socket_id not in open_sockets:
-            continue
-        if (socket_id, query_id) not in matches_after:
-            await open_sockets[socket_id].delete(query_id, object_id)
-
-    # Otherwise send a replacement
-    for socket_id, query_id in matches_after:
-        if socket_id not in open_sockets:
-            continue
-        await open_sockets[socket_id].update(query_id, new_doc)
-
+    # Mark the new document for creation
+    qb.add_id(result.inserted_id)
     return object_id
 
 @router.post('/delete')
@@ -105,27 +99,26 @@ async def delete(
     if not owner_id:
         raise HTTPException(status_code=401, detail="you can't delete an object without logging in.")
 
+    # "Lock" to make sure we're not double deleting (and potentially double replacing)
+    if object_id in deleting:
+        raise HTTPException(status_code=404, detail="the object you are trying to modify is currently being modified.")
+    deleting.add(object_id)
+
     # Check that the object that already exists
-    # and that it is owned by the signer
+    # that it is owned by the owner_id,
+    # and that it is not scheduled for deletion
     old_doc = await db.find_one({
+        "id_": { "$nin": list(delete_ids.union(deleting_ids)) },
         "object._id": object_id,
         "owner_id": owner_id})
 
     if not old_doc:
-        raise HTTPException(status_code=404, detail="the object you're trying to delete either doesn't exist or you don't have permission to replace it.")
+        deleting.remove(object_id)
+        raise HTTPException(status_code=404, detail="the object you're trying to modify either doesn't exist or you don't have permission to modify it.")
 
-    # Check what queries this object affects
-    matches = await qb.match_socket_queries(object_id)
-
-    # Perform deletion
-    await db.delete_one({"object._id": object_id})
-
-    # Propagate the changes to the sockets
-    for socket_id, query_id in matches:
-        if socket_id not in open_sockets:
-            continue
-        await open_sockets[socket_id].delete(query_id, object_id)
-
+    # Mark the document for deletion and unlock
+    qb.delete_id(old_doc["_id"])
+    deleting.remove(object_id)
     return object_id
 
 @router.post("/query_many")
@@ -183,14 +176,13 @@ async def query_socket(ws: WebSocket):
     # Open a query socket
     socket_id = str(uuid4())
     open_sockets[socket_id] = QuerySocket(ws)
-    qb.add_socket(socket_id)
 
     # Wait until it dies
     await open_sockets[socket_id].heartbeat(socket_id)
 
     # Remove the query
-    qb.delete_socket(socket_id)
     del open_sockets[socket_id]
+    # Remove it from anything that uses it
 
 @router.post("/update_socket_query")
 async def update_socket_query(
@@ -199,17 +191,13 @@ async def update_socket_query(
         socket_id: str = Body(...),
         owner_id: str = Depends(token_to_owner_id)):
 
-    # Rewrite the query and check if its valid
-    query = query_rewrite(query, owner_id)
-    # (if it isn't this will error)
-    try:
-        await db.find_one(query)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"query error: {str(e)}")
-
     # Make sure the socket is valid and add
     validate_socket(socket_id)
-    qb.update_query(socket_id, query_id, query)
+
+    try:
+        await qb.add_query(query)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"query error: {str(e)}")
 
 @router.post("/delete_socket_query")
 async def delete_socket_query(
