@@ -40,9 +40,9 @@ app.mount("/style", StaticFiles(directory="auth/style"), name="style")
 templates = Jinja2Templates(directory="auth/templates")
 
 # For magic linking
-magic_events = {} # hash -> (event, signature)
+magic_events = {} # hash -> (event, signature, time)
 
-@app.get("/auth", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def auth(
         client_id: str,
         redirect_uri: str,
@@ -103,7 +103,7 @@ async def email(
             await sendEmail(message, hostname="mailserver", port=25)
         except:
             # Redirect back home with an error
-            home = "auth?" + urlencode({
+            home = "/?" + urlencode({
                 'client_id': client_id,
                 'redirect_uri': redirect_uri,
                 'state': state,
@@ -208,7 +208,5 @@ async def auth_socket_send(signature: str):
 
 if __name__ == "__main__":
     if getenv('DEBUG') == 'true':
-        args = {'port': 5000, 'reload': True}
-    else:
-        args = {'port': 5000, 'proxy_headers': True}
+        args = {'reload': True}
     uvicorn.run('auth.main:app', host='0.0.0.0', **args)

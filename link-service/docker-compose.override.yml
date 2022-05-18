@@ -3,7 +3,11 @@ version: '3.8'
 services:
 
   graffiti-auth:
-    ports:
-      - 5000:5000
     environment:
       DEBUG: 'true'
+
+  nginx:
+    volumes:
+      - ./config/nginx/debug.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - 5000:5000
