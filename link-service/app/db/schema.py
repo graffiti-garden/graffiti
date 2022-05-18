@@ -1,98 +1,96 @@
-from uuid import uuid4
-import time
-
-allowed_operators = {'eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice'}
-
-def query_rewrite(query, owner_id):
-    for k, v in json_iterator(query):
-
-        # Make sure only allowed operators are used
-        if k.startswith('$'):
-            if k[1:] not in allowed_operators:
-                raise Exception(f"{k} is not an allowed query operator")
-
-        # And _to fields can't be forged
-        elif k == '_to' and v != owner_id:
-            raise Exception("you can only query for objects _to yourself")
-
+def socket_schema(owner_id):
     return {
-        # The object must match the query
-        "object": { "$elemMatch": query },
-        "$or": [
-            # Either there are no contexts
-            { "contexts": { "$size": 0 } },
-            # Or the object must match at least one of the contexts
-            { "contexts": { "$elemMatch": {
-                # None of the near misses can match the query
-                "nearMisses": {
-                    "$not": { "$elemMatch": query }
-                },
-                # All of the neighbors must match the query
-                "neighbors": {
-                    "$not": {
-                        # Which is the negation of:
-                        # "some neighbor does not match the query"
-                        "$elemMatch": { "$nor": [ query ] }
-                    }
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "messageID": { "type": "string" },
+    },
+    "required": ["messageID", "type"],
+    "oneOf": [{
+        # UPDATE
+        "properties": {
+            "type": { "const": "update" },
+            "object": object_schema(owner_id)
+        },
+        "required": ["object"],
+    }, {
+        # DELETE
+        "properties": {
+            "type": { "const": "delete" },
+            "object_id": { "type": "string" }
+        },
+        "required": ["object_id"],
+    }, {
+        # SUBSCRIBE
+        "properties": {
+            "type": { "const": "subscribe" },
+            "query": query_schema(owner_id)
+        },
+        "required": ["query"],
+    }, {
+        # UNSUBSCRIBE
+        "properties": {
+            "type": { "const": "unsubscribe" },
+            "query_hash": { "type": "string" }
+        },
+        "required": ["query_hash"],
+    }]
+}
+
+def object_schema(owner_id):
+    return {
+    "type": "object",
+    "additionalProperties": False,
+    "patternProperties": {
+        # Anything not starting with a "_"
+        "^(?!_)\w+$": recurse
+    },
+    "properties": {
+        "_by": { "const": owner_id },
+        "_timestamp": { "type": "number" },
+        "_to": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "_id": { "type": "string" },
+        "_contexts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "_nearMisses": {
+                        "type": "array",
+                        "items": { "type": "object" }
+                    },
+                    "_neighbors": {
+                        "type": "array",
+                        "items": { "type": "object" }
+                    },
                 }
-            }}}
-        ]
+            }
+        }
     }
+}
 
-def object_rewrite(object, owner_id):
-    contexts = []
-    for k in object:
-
-        # Make sure timestamps are numbers
-        if k == '_timestamp':
-            if not (isinstance(object[k], int) or isinstance(object[k], float)):
-                raise Exception("_timestamp must be a number")
-
-        # Make sure the by field can't be forged
-        elif k == '_by':
-            if object[k] != owner_id:
-                raise Exception("you can only update objects _by yourself")
-
-        # Make sure the to field is a list of strings
-        elif k == '_to':
-            if not isinstance(object[k], list):
-                raise Exception("_to must be a list of ids")
-            for v in object[k]:
-                if not isinstance(v, str):
-                    raise Exception(f"_to contains an invalid id, {v}")
-
-        # The id must be a string
-        elif k == '_id':
-            if not isinstance(object[k], str):
-                raise Exception("_id must be a string")
-
-        else:
-            if k.startswith('_'):
-                raise Exception("_ is reserved for graffiti fields")
-            for k_ in json_iterator(object[k]):
-                if k_.startswith('_'):
-                    raise Exception("_ is reserved for graffiti fields at the root level")
-
-    # If there is no id or timestamp, generate it
-    if '_id' not in object:
-        object['_id'] = str(uuid4())
-    if '_timestamp' not in object:
-        object['_timestamp'] = int(time.time() * 1000)
-
-    # Combine it into one big document
+def query_schema(owner_id):
+    allowed_properties = { '$' + o: recurse for o in allowed_operators }
+    allowed_properties['_to'] = { "const": owner_id }
     return {
-        "owner_id": owner_id,
-        "object": [object],
-        "contexts": contexts,
-    }
+    "type": "object",
+    "additionalProperties": False,
+    "patternProperties": {
+        # Anything not starting with a "$"
+        "^(?!\$)\w+$": recurse
+    },
+    "properties": allowed_properties
+}
 
-def json_iterator(x):
-    if isinstance(x, dict):
-        for k, v in x.items():
-            for k_, v_ in json_iterator(v):
-                yield k_, v_
-            yield k, v
-    elif isinstance(x, list):
-        for y in x:
-            for k, v in json_iterator(y):
-                yield k, v
+allowed_operators = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
+
+recurse = { "oneOf": [
+    { "ref": "#" },
+    { "type": { "not": "object" } }
+]}

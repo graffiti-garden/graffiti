@@ -10,8 +10,10 @@ To launch this application locally for testing, run:
 
     sudo docker compose up --build
 
-The application will be available at [http://localhost:5000](http://localhost:5000).
-An Swagger interface for testing the API is available at [http://localhost:5000/docs](http://localhost:5000/docs).
+The application will be running at [http://localhost:5000](http://localhost:5000).
+Run test scripts with:
+
+    sudo docker compose exec graffiti test/sockets.py
 
 ### Deployment
 
