@@ -4,4 +4,4 @@ COPY requirements.txt /tmp/
 RUN pip install -r /tmp/requirements.txt
 
 WORKDIR /mount
-CMD python -m graffiti.main
+CMD python -m auth.main

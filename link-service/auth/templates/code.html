@@ -23,18 +23,29 @@
   }
   wsURL.searchParams.set('signature_hash', '{{signature_hash}}')
 
+  let redirecting = false
   function onmessage(event) {
     const data = JSON.parse(event.data)
-    if (data.type == 'Signature') {
+    if (data.type == 'signature') {
       let redirect = new URL('{{redirect_uri}}')
       redirect.searchParams.set('state', '{{state}}')
       redirect.searchParams.set('code', '{{code_body}}' + '.' + data.signature)
+      redirecting = true
       window.location.replace(redirect)
+    } else if (data.type == 'error') {
+      // Something went wrong, start again.
+      const params = new URLSearchParams({
+        client_id: '{{client_id}}',
+        redirect_uri: '{{redirect_uri}}',
+        state: '{{state}}'
+      })
+      redirecting = true
+      window.location.replace(`auth?${params.toString()}`)
     }
   }
 
   async function reconnect() {
-    while (true) {
+    while (!redirecting) {
       try {
         connect()
         break

@@ -2,19 +2,14 @@ version: '3.8'
 
 services:
 
-  graffiti:
-    container_name: graffiti
-    build: .
+  graffiti-auth:
+    container_name: graffiti-auth
+    build: auth
     volumes:
-      - ./app:/mount/graffiti
+      - ./auth:/mount/auth
     environment:
       AUTH_SECRET: 'secret'
       AUTH_CODE_EXP_TIME: '5' # minutes
-      MAGIC_LINK_CACHE_SIZE: '2000' # consecutive log ins
-      SOCKET_HEARTBEAT_INTERVAL: '5' # seconds
-      QUERY_LIMIT: '100' # max number of items returned at once
-    depends_on:
-      - mongo
 
   mongo:
     image: mongo:5.0.6

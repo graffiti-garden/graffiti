@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import time
 import jwt
 import asyncio
@@ -7,49 +9,58 @@ from aiosmtplib import send as sendEmail
 from email.mime.text import MIMEText
 from email.header import Header
 from email.utils import formatdate, make_msgid
-from fastapi import APIRouter, Form, HTTPException, Request, WebSocket
+from uuid import uuid5, NAMESPACE_DNS
+from urllib.parse import urlencode
+
+import uvicorn
+from fastapi import FastAPI, Form, HTTPException, Request, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from uuid import uuid5, NAMESPACE_DNS
 
 debug = (getenv('DEBUG') == 'true')
 expiration_time = 60*float(getenv('AUTH_CODE_EXP_TIME')) # min -> sec
 secret = getenv('AUTH_SECRET')
 secret_namespace = uuid5(NAMESPACE_DNS, secret)
 
-router = APIRouter()
+app = FastAPI()
 
-templates = Jinja2Templates(directory="graffiti/auth/templates")
+# Allow cross-origin requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# A static style for authentication
+app.mount("/style", StaticFiles(directory="auth/style"), name="style")
+
+templates = Jinja2Templates(directory="auth/templates")
 
 # For magic linking
 magic_events = {} # hash -> (event, signature)
 
-@router.get("/auth", response_class=HTMLResponse)
+@app.get("/auth", response_class=HTMLResponse)
 async def auth(
         client_id: str,
         redirect_uri: str,
         request: Request,
+        email: str|None = "",
         state: str|None = ""):
-
-    # Determine which site is asking for access
-    if 'referer' in request.headers:
-        client = request.headers['referer']
-    else:
-        client = ''
 
     # Ask the user to log in
     return templates.TemplateResponse("login.html", {
         'request': request,
-        'client': client,
         'client_id': client_id,
         'redirect_uri': redirect_uri,
         'state': state,
-        'email': ''
+        'email': email
     })
 
-@router.get("/email", response_class=HTMLResponse)
+@app.get("/email", response_class=HTMLResponse)
 async def email(
-        client: str,
         client_id: str,
         redirect_uri: str,
         state: str,
@@ -91,15 +102,14 @@ async def email(
         try:
             await sendEmail(message, hostname="mailserver", port=25)
         except:
-            # Return to login with an error
-            return templates.TemplateResponse("login.html", {
-                'request': request,
-                'client': client,
+            # Redirect back home with an error
+            home = "auth?" + urlencode({
                 'client_id': client_id,
                 'redirect_uri': redirect_uri,
                 'state': state,
                 'email': email
             })
+            return f"<script>window.location.replace('{home}')</script>"
 
     # Create an event
     now = time.time()
@@ -116,13 +126,14 @@ async def email(
     return templates.TemplateResponse("code.html", {
         'request': request,
         'email': email,
+        'client_id': client_id,
         'redirect_uri': redirect_uri,
         'state': state,
         'code_body': header + '.' + payload,
         'signature_hash': signature_hash
     })
 
-@router.post("/token")
+@app.post("/token")
 def token(
         client_id: str = Form(...),
         code:      str = Form(...),
@@ -156,11 +167,11 @@ def token(
 
     return {"access_token": token, "owner_id": code["owner_id"], "token_type": "bearer"}
 
-@router.websocket("/auth_socket")
+@app.websocket("/auth_socket")
 async def auth_socket(ws: WebSocket, signature_hash: str):
     await ws.accept()
 
-    if signature_hash not in signature_hash_events:
+    if signature_hash not in magic_events:
         await ws.send_json({
             'type': 'error',
             'detail': 'hash does not exist.'
@@ -169,7 +180,7 @@ async def auth_socket(ws: WebSocket, signature_hash: str):
         return
 
     # Wait for the event
-    event, signature = magic_events[signature_hash]
+    event, signature, _ = magic_events[signature_hash]
     await event.wait()
 
     # Send the signature and cleanup
@@ -179,7 +190,7 @@ async def auth_socket(ws: WebSocket, signature_hash: str):
     })
     await ws.close()
 
-@router.get("/auth_socket_send", response_class=HTMLResponse)
+@app.get("/auth_socket_send", response_class=HTMLResponse)
 async def auth_socket_send(signature: str):
     # Take the hash of the signature, to make sure it's real
     signature_hash = sha256(signature.encode()).hexdigest()
@@ -188,9 +199,16 @@ async def auth_socket_send(signature: str):
         raise HTTPException(status_code=400, detail="invalid signature hash.")
 
     # Set the event
-    event, signature = magic_events[signature_hash]
+    event, signature, _ = magic_events[signature_hash]
     event.set()
 
     # Cleanup and close
     del magic_events[signature_hash]
     return "<script>window.close()</script>"
+
+if __name__ == "__main__":
+    if getenv('DEBUG') == 'true':
+        args = {'port': 5000, 'reload': True}
+    else:
+        args = {'port': 5000, 'proxy_headers': True}
+    uvicorn.run('auth.main:app', host='0.0.0.0', **args)
