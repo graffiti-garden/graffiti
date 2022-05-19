@@ -1,6 +1,7 @@
 import json
 import asyncio
 from uuid import uuid4
+from aio_pika import Message
 from contextlib import asynccontextmanager
 
 from .rewrite import query_rewrite

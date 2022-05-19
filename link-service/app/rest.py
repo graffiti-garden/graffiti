@@ -1,5 +1,7 @@
+import json
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
+from aio_pika import Message
 from contextlib import asynccontextmanager
 
 from .rewrite import object_rewrite
@@ -28,7 +30,7 @@ class Rest:
                 'type': _type,
                 'id': _id
             }).encode()),
-            routing_key=self.modify_queue
+            routing_key=self.modify_queue.name
         )
 
     async def update(self, object, owner_id):
@@ -41,6 +43,7 @@ class Rest:
         # (this might raise an exception)
         object_id, doc = object_rewrite(object, owner_id)
 
+        # Make sure no one else is modifying the object
         async with self.object_lock(object_id):
 
             if replacing:
@@ -51,7 +54,7 @@ class Rest:
             result = await self.db.insert_one(doc)
 
             # Mark that the new document has been inserted
-            await self.modify('insert', result.inserted_id)
+            await self.modify('insert', str(result.inserted_id))
 
         return object_id
 
@@ -89,10 +92,10 @@ class Rest:
         """
         if object_id not in self.object_locks:
             self.object_locks[object_id] = asyncio.Lock()
-        async with self.object_locks[id]:
+        async with self.object_locks[object_id]:
             yield
-        if len(self.object_locks[id]._waiters) == 0:
-            del object_locks[id]
+        if not self.object_locks[object_id]._waiters:
+            del self.object_locks[object_id]
 
     def validate_owner_id(self, owner_id):
         if not owner_id:
