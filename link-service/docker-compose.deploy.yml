@@ -3,17 +3,13 @@ version: '3.8'
 services:
 
   nginx:
-    image: nginx:1.21.6
-    container_name: graffiti-nginx
     volumes:
-      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/deploy.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt/live/graffiti.csail.mit.edu/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
       - /etc/letsencrypt/live/graffiti.csail.mit.edu/privkey.pem:/etc/ssl/certs/privkey.pem:ro
     ports:
       - 80:80
       - 443:443
-    depends_on:
-      - graffiti
 
   mailserver:
     image: mailserver/docker-mailserver:10.5.0
@@ -33,10 +29,12 @@ services:
       - SYS_PTRACE
     restart: always
 
-  graffiti:
+  graffiti-auth:
     environment:
       DEBUG: 'false'
-    expose:
-      - 5000
+
+  graffiti-app:
+    environment:
+      DEBUG: 'false'
     depends_on:
       - mailserver

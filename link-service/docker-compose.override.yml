@@ -6,6 +6,10 @@ services:
     environment:
       DEBUG: 'true'
 
+  graffiti-app:
+    environment:
+      DEBUG: 'true'
+
   nginx:
     volumes:
       - ./config/nginx/debug.conf:/etc/nginx/nginx.conf:ro

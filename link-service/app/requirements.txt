@@ -1,0 +1,9 @@
+motor==2.5.1      # Async MongoDB interface
+aio-pika==7.2.0   # Async RabbitMQ interface
+
+jsonschema==4.5.1 # Validate JSON
+
+pyjwt==2.3.0      # Tokens
+
+fastapi==0.76.0           # Web framework
+uvicorn[standard]==0.17.6 # ASGI server

@@ -10,8 +10,15 @@ services:
     environment:
       AUTH_SECRET: 'secret'
       AUTH_CODE_EXP_TIME: '5' # minutes
-    expose:
-      - 5000
+
+  graffiti-app:
+    container_name: graffiti-app
+    build: app
+    volumes:
+      - ./app:/mount/app
+    depends_on:
+      - mongo
+      - rabbit
 
   nginx:
     image: nginx:1.21.6
@@ -22,7 +29,10 @@ services:
   mongo:
     image: mongo:5.0.6
     container_name: graffiti-mongo
-    hostname: mongo
     restart: always
     volumes:
       - ./db:/data/db
+
+  rabbit:
+    image: rabbitmq:3.10.1
+    container_name: graffiti-rabbit
