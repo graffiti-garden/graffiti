@@ -13,7 +13,7 @@ To launch this application locally for testing, run:
 The application will be running at [http://localhost:5000](http://localhost:5000).
 Run test scripts with:
 
-    sudo docker compose exec graffiti test/sockets.py
+    docker compose exec graffiti-app app/test/schema.py
 
 ### Deployment
 

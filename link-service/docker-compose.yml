@@ -19,6 +19,8 @@ services:
     depends_on:
       - mongo
       - rabbit
+    environment:
+      AUTH_SECRET: 'secret'
 
   nginx:
     image: nginx:1.21.6

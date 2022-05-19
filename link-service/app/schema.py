@@ -1,16 +1,15 @@
 def socket_schema(owner_id):
     return {
     "type": "object",
-    "additionalProperties": False,
     "properties": {
         "messageID": { "type": "string" },
     },
     "required": ["messageID", "type"],
-    "oneOf": [{
+    "anyOf": [{
         # UPDATE
         "properties": {
             "type": { "const": "update" },
-            "object": object_schema(owner_id)
+            "object": { "$ref": "#/definitions/object" }
         },
         "required": ["object"],
     }, {
@@ -24,7 +23,7 @@ def socket_schema(owner_id):
         # SUBSCRIBE
         "properties": {
             "type": { "const": "subscribe" },
-            "query": query_schema(owner_id)
+            "object": { "$ref": "#/definitions/query" }
         },
         "required": ["query"],
     }, {
@@ -34,63 +33,77 @@ def socket_schema(owner_id):
             "query_hash": { "type": "string" }
         },
         "required": ["query_hash"],
-    }]
-}
-
-def object_schema(owner_id):
-    return {
-    "type": "object",
-    "additionalProperties": False,
-    "patternProperties": {
-        # Anything not starting with a "_"
-        "^(?!_)\w+$": recurse
-    },
-    "properties": {
-        "_by": { "const": owner_id },
-        "_timestamp": { "type": "number" },
-        "_to": {
-            "type": "array",
-            "items": {
-                "type": "string"
-            }
-        },
-        "_id": { "type": "string" },
-        "_contexts": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "_nearMisses": {
-                        "type": "array",
-                        "items": { "type": "object" }
-                    },
-                    "_neighbors": {
-                        "type": "array",
-                        "items": { "type": "object" }
-                    },
+    }],
+    "definitions": {
+        "object": {
+            "type": "object",
+            "additionalProperties": False,
+            "patternProperties": {
+                # Anything not starting with a "_"
+                "^(?!_)\w+$": { "$ref": "#/definitions/objectProp" }
+            },
+            "properties": {
+                "_by": { "const": owner_id },
+                "_timestamp": { "type": "number" },
+                "_to": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "_id": { "type": "string" },
+                "_contexts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "_nearMisses": {
+                                "type": "array",
+                                "items": { "type": "object" }
+                            },
+                            "_neighbors": {
+                                "type": "array",
+                                "items": { "type": "object" }
+                            },
+                        }
+                    }
                 }
             }
-        }
+        },
+        "query": {
+            "type": "object",
+            "additionalProperties": False,
+            "patternProperties": {
+                # Anything not starting with a "$"
+                "^(?!\$)\w+$": { "$ref": "#/definitions/queryProp" }
+            },
+            "properties": allowed_query_properties(owner_id)
+        },
+        "objectProp": recursive_prop("object"),
+        "queryProp": recursive_prop("query")
     }
 }
 
-def query_schema(owner_id):
-    allowed_properties = { '$' + o: recurse for o in allowed_operators }
+allowed_query_operators = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
+
+def allowed_query_properties(owner_id):
+    allowed_properties = { '$' + o: { "$ref": "#/definitions/queryProp" } for o in allowed_query_operators }
     allowed_properties['_to'] = { "const": owner_id }
-    return {
-    "type": "object",
-    "additionalProperties": False,
-    "patternProperties": {
-        # Anything not starting with a "$"
-        "^(?!\$)\w+$": recurse
+    return allowed_properties
+
+def recursive_prop(name):
+    return { "oneOf": [
+    # Either a root object type
+    { "$ref": f"#/definitions/{name}" },
+    # A recursive array
+    { "type": "array",
+        "items": { "$ref": f"#/definitions/{name}Prop" }
     },
-    "properties": allowed_properties
-}
-
-allowed_operators = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
-
-recurse = { "oneOf": [
-    { "ref": "#" },
-    { "type": { "not": "object" } }
+    # Or something a constant
+    { "type": "string" },
+    { "type": "number" },
+    { "type": "integer" },
+    { "type": "boolean" },
+    { "type": "null" }
 ]}

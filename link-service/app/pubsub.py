@@ -47,7 +47,7 @@ class PubSub:
                 await self.unsubscribe(socket_id, query_hash)
             # And delete all references to it.
             del self.socket_to_queries[socket_id]
-            del self.socket[socket_id]
+            del self.sockets[socket_id]
 
     async def subscribe(self, socket_id, query, owner_id):
         # Rewrite
