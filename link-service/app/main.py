@@ -86,15 +86,14 @@ async def query_socket(ws: WebSocket, owner_id: str|None=Depends(token_to_owner_
 
 async def reply(ws, msg, schema, socket_id, owner_id):
     try:
+        # Initialize the output
+        output = {}
+
         # Make sure the message is formatted properly
         jsonschema.validate(msg, schema)
 
-        # Initialize the output
-        output = {
-            'type': 'success',
-            # echo the incoming message ID
-            'messageID': msg['messageID']
-        }
+        # echo the incoming message ID
+        output['messageID'] = msg['messageID']
 
         if msg['type'] == 'update':
             object_id = await app.rest.update(msg['object'], owner_id)
@@ -111,18 +110,17 @@ async def reply(ws, msg, schema, socket_id, owner_id):
             await app.pubsub.unsubscribe(socket_id, msg['queryHash'])
 
     except jsonschema.exceptions.ValidationError as e:
-        await ws.send_json({
-            'type': 'validationError',
-            'detail': str(e)
-        })
+        output['type'] = 'validationError'
+        output['detail'] = str(e)
+        await ws.send_json(output)
 
     except Exception as e:
-        await ws.send_json({
-            'type': 'error',
-            'detail': str(e)
-        })
+        output['type'] = 'error'
+        output['detail'] = str(e)
+        await ws.send_json(output)
 
     else:
+        output['type'] = 'success'
         await ws.send_json(output)
 
 if __name__ == "__main__":

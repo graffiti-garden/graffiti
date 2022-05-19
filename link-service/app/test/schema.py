@@ -7,9 +7,9 @@ import websockets
 from uuid import uuid4
 from os import getenv
 
-secret = getenv('AUTH_SECRET')
 async def main():
 
+    secret = getenv('AUTH_SECRET')
     my_id = str(uuid4())
     my_token = jwt.encode({
         "type": "token",
@@ -27,7 +27,6 @@ async def main():
             response = json.loads(await ws.recv())
             assert response["type"] == "validationError"
         print("All invalid requests failed, as expected")
-
 
 def valid_requests(my_id):
     return [{
@@ -75,6 +74,47 @@ def valid_requests(my_id):
     "type": "update",
     "object": {
         "_by": my_id
+    }
+}, {
+    # Weird fields
+    "messageID": str(uuid4()),
+    "type": "update",
+    "object": {
+        "~a": "b",
+    }
+}, {
+    # To myself
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "_to": my_id 
+    }
+}, {
+    # To myself nested
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "foo": {
+            "_to": my_id
+        }
+    }
+}, {
+    # Weird fields
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "~a": "b",
+    }
+}, {
+    # Valid args
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "x": { "$exists": "true" },
+        "$and": {
+            "y": "a",
+            "z": "b"
+        }
     }
 }]
 
@@ -133,7 +173,7 @@ invalid_requests = [{
     "messageID": str(uuid4()),
     "type": "update",
     "object": {
-        "_by": "notmyid"
+        "_by": str(uuid4())
     }
 }, {
     # nested fields should also follow convention
@@ -184,6 +224,38 @@ invalid_requests = [{
         "_contexts": [{
             "_nearMisses": {}
         }]
+    }
+}, {
+    # Invalid args
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "$asdf": "wassup"
+    }
+}, {
+    # Invalid args nested
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "foo": {
+            "$asdf": "wassup"
+        }
+    }
+}, {
+    # To someone else
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "_to": "notme"
+    }
+}, {
+    # To someone else nested
+    "messageID": str(uuid4()),
+    "type": "subscribe",
+    "query": {
+        "foo": {
+            "_to": "notme"
+        }
     }
 }]
 

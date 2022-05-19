@@ -58,13 +58,13 @@ class Rest:
 
         return object_id
 
-    async def delete(object_id, owner_id):
+    async def delete(self, object_id, owner_id):
         self.validate_owner_id(owner_id)
 
         async with self.object_lock(object_id):
-            _delete(object_id, owner_id)
+            self._delete(object_id, owner_id)
 
-    async def _delete(object_id, owner_id):
+    async def _delete(self, object_id, owner_id):
         # Check that the object that already exists
         # that it is owned by the owner_id,
         # and that it is not scheduled for deletion

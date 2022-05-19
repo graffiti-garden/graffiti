@@ -23,7 +23,7 @@ def socket_schema(owner_id):
         # SUBSCRIBE
         "properties": {
             "type": { "const": "subscribe" },
-            "object": { "$ref": "#/definitions/query" }
+            "query": { "$ref": "#/definitions/query" }
         },
         "required": ["query"],
     }, {
@@ -40,7 +40,7 @@ def socket_schema(owner_id):
             "additionalProperties": False,
             "patternProperties": {
                 # Anything not starting with a "_"
-                "^(?!_)\w+$": { "$ref": "#/definitions/objectProp" }
+                "^(?!_).*$": { "$ref": "#/definitions/objectProp" }
             },
             "properties": {
                 "_by": { "const": owner_id },
@@ -75,8 +75,8 @@ def socket_schema(owner_id):
             "type": "object",
             "additionalProperties": False,
             "patternProperties": {
-                # Anything not starting with a "$"
-                "^(?!\$)\w+$": { "$ref": "#/definitions/queryProp" }
+                # Anything not starting with a "$" or _to
+                "^(?!\$).*$": { "$ref": "#/definitions/queryProp" }
             },
             "properties": allowed_query_properties(owner_id)
         },
@@ -86,7 +86,6 @@ def socket_schema(owner_id):
 }
 
 allowed_query_operators = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
-
 def allowed_query_properties(owner_id):
     allowed_properties = { '$' + o: { "$ref": "#/definitions/queryProp" } for o in allowed_query_operators }
     allowed_properties['_to'] = { "const": owner_id }
