@@ -47,8 +47,9 @@ async def auth(
         client_id: str,
         redirect_uri: str,
         request: Request,
+        state: str|None = "",
         email: str|None = "",
-        state: str|None = ""):
+        expired: bool|None = ""):
 
     # Ask the user to log in
     return templates.TemplateResponse("login.html", {
@@ -56,7 +57,8 @@ async def auth(
         'client_id': client_id,
         'redirect_uri': redirect_uri,
         'state': state,
-        'email': email
+        'email': email,
+        'expired': expired
     })
 
 @app.get("/email", response_class=HTMLResponse)
@@ -117,9 +119,9 @@ async def email(
     magic_events[signature_hash] = (asyncio.Event(), signature, now)
 
     # Remove expired events
-    for sh in magic_events:
-        if magic_events[sh][2] + expiration_time < now:
-            del magic_events[sh]
+    expired_hashes = [h for h in magic_events if magic_events[h][2] + expiration_time < now]
+    for h in expired_hashes:
+        del magic_events[h]
 
     # Return a form that will combine the code pieces
     # and then send it to the redirect_uri
@@ -143,21 +145,21 @@ def token(
     try:
         code = jwt.decode(code, secret, algorithms=["HS256"])
     except:
-        raise HTTPException(status_code=400, detail="Malformed code.")
+        raise HTTPException(status_code=400, detail="malformed code.")
     if not code["type"] == "code":
-        raise HTTPException(status_code=400, detail="Malformed code.")
+        raise HTTPException(status_code=400, detail="invalid code type.")
 
     # Assert that the code has not expired
     if code["time"] + expiration_time < time.time():
-        raise HTTPException(status_code=400, detail="Code has expired.")
+        raise HTTPException(status_code=400, detail="code has expired.")
 
     # Assert that the client_id is paired to the token
     if client_id != code["client_id"]:
-        raise HTTPException(status_code=400, detail="Client ID does not match code.")
+        raise HTTPException(status_code=400, detail="client ID does not match code.")
 
     # Assert that the secret is valid
     if sha256(client_secret.encode()).hexdigest() != client_id:
-        raise HTTPException(status_code=400, detail="Invalid client secret.")
+        raise HTTPException(status_code=400, detail="invalid client secret.")
     
     # If authorized, create a token
     token = jwt.encode({
@@ -172,23 +174,35 @@ async def auth_socket(ws: WebSocket, signature_hash: str):
     await ws.accept()
 
     if signature_hash not in magic_events:
-        await ws.send_json({
-            'type': 'error',
-            'detail': 'hash does not exist.'
-        })
+        await ws.send_json({'type': 'error'})
         await ws.close()
         return
 
-    # Wait for the event
-    event, signature, _ = magic_events[signature_hash]
-    await event.wait()
+    event, signature, t = magic_events[signature_hash]
+    while t + expiration_time > time.time():
+        # Wait for the event
+        try:
+            await asyncio.wait_for(event.wait(), 1)
+        except asyncio.TimeoutError:
+            # Send a boop to keep alive
+            try:
+                await ws.send_json({'type': 'boop'})
+            except:
+                break
+        else:
+            # Send the signature and cleanup
+            await ws.send_json({
+                'type': 'signature',
+                'signature': signature
+            })
+            await ws.close()
+            break
+    else:
+        if signature_hash in magic_events:
+            del magic_events[signature_hash]
+        await ws.send_json({'type': 'error'})
+        await ws.close()
 
-    # Send the signature and cleanup
-    await ws.send_json({
-        'type': 'signature',
-        'signature': signature
-    })
-    await ws.close()
 
 @app.get("/auth_socket_send", response_class=HTMLResponse)
 async def auth_socket_send(signature: str):
@@ -196,7 +210,7 @@ async def auth_socket_send(signature: str):
     signature_hash = sha256(signature.encode()).hexdigest()
 
     if signature_hash not in magic_events:
-        raise HTTPException(status_code=400, detail="invalid signature hash.")
+        raise HTTPException(status_code=400, detail="link expired.")
 
     # Set the event
     event, signature, _ = magic_events[signature_hash]
@@ -207,6 +221,7 @@ async def auth_socket_send(signature: str):
     return "<script>window.close()</script>"
 
 if __name__ == "__main__":
+    args = {}
     if getenv('DEBUG') == 'true':
-        args = {'reload': True}
+        args['reload'] = True
     uvicorn.run('auth.main:app', host='0.0.0.0', **args)

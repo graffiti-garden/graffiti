@@ -33,14 +33,15 @@
       redirecting = true
       window.location.replace(redirect)
     } else if (data.type == 'error') {
-      // Something went wrong, start again.
+      // We timed out.
       const params = new URLSearchParams({
         client_id: '{{client_id}}',
         redirect_uri: '{{redirect_uri}}',
-        state: '{{state}}'
+        state: '{{state}}',
+        expired: true
       })
       redirecting = true
-      window.location.replace(`auth?${params.toString()}`)
+      window.location.replace(`/?${params.toString()}`)
     }
   }
 

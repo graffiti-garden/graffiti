@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block contents %}
 
+{% if expired %}
+<div class="blob" style="color:firebrick">
+  error: link expired.
+</div>
+<hr>
+{% endif %}
+
 <div class="blob">
   {% if not email %}
 
