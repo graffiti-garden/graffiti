@@ -1,56 +1,46 @@
 #!/usr/bin/env python3
 
-import jwt
-import json
 import asyncio
-import websockets
-from uuid import uuid4
-from os import getenv
+from utils import *
 
 async def main():
 
-    secret = getenv('AUTH_SECRET')
-    my_id = str(uuid4())
-    my_token = jwt.encode({
-        "type": "token",
-        "owner_id": my_id
-        }, secret, algorithm="HS256")
-
-    async with websockets.connect(f"ws://localhost:8000/?token={my_token}") as ws:
+    my_id, my_token = id_and_token()
+    async with websocket_connect(my_token) as ws:
         for request in valid_requests(my_id):
-            await ws.send(json.dumps(request))
-            response = json.loads(await ws.recv())
+            await send(ws, request)
+            response = await recv(ws)
             assert response["type"] != "validationError"
         print("All valid requests passed, as expected")
         for request in invalid_requests:
-            await ws.send(json.dumps(request))
-            response = json.loads(await ws.recv())
+            await send(ws, request)
+            response = await recv(ws)
             assert response["type"] == "validationError"
         print("All invalid requests failed, as expected")
 
 def valid_requests(my_id):
     return [{
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {}
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "delete",
-    "object_id": str(uuid4())
+    "objectID": random_id()
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {}
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "unsubscribe",
-    "query_hash": str(uuid4())
+    "queryHash": random_id()
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
-        "_id": str(uuid4()),
-        "_to": [str(uuid4()), str(uuid4())],
+        "_id": random_id(),
+        "_to": [random_id(), random_id()],
         "_timestamp": 12345,
         "foo": {
             "blah": "asdf",
@@ -70,28 +60,28 @@ def valid_requests(my_id):
         }]
     }
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_by": my_id
     }
 }, {
     # Weird fields
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "~a": "b",
     }
 }, {
     # To myself
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "_to": my_id 
     }
 }, {
     # To myself nested
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "foo": {
@@ -100,14 +90,14 @@ def valid_requests(my_id):
     }
 }, {
     # Weird fields
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "~a": "b",
     }
 }, {
     # Valid args
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "x": { "$exists": "true" },
@@ -124,60 +114,60 @@ invalid_requests = [{
     "object": {}
 }, {
     # Invalid message type
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "dupdate",
     "object": {}
 }, {
     # Missing required field
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update"
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "delete"
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe"
 }, {
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "unsubscribe"
 }, {
     # only special fields can start with _
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_notright": 12345
     }
 }, {
     # _id should be an string
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_id": 12345,
     }
 }, {
     # _to should be an array
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
-        "_to": str(uuid4())
+        "_to": random_id()
     }
 }, {
     # _to should include strings
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_to": [12345]
     }
 }, {
     # by can only be my id
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
-        "_by": str(uuid4())
+        "_by": random_id()
     }
 }, {
     # nested fields should also follow convention
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "foo": {
@@ -186,7 +176,7 @@ invalid_requests = [{
     }
 }, {
     # nested fields should also follow convention
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "foo": {
@@ -195,21 +185,21 @@ invalid_requests = [{
     }
 }, {
     # _contexts is an array
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_contexts": {}
     }
 }, {
     # _contexts only includes objects
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_contexts": ["asdf"]
     }
 }, {
     # objects only have relevant fields
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_contexts": [{
@@ -218,7 +208,7 @@ invalid_requests = [{
     }
 }, {
     # nearmisses is an array
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "update",
     "object": {
         "_contexts": [{
@@ -227,14 +217,14 @@ invalid_requests = [{
     }
 }, {
     # Invalid args
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "$asdf": "wassup"
     }
 }, {
     # Invalid args nested
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "foo": {
@@ -243,14 +233,14 @@ invalid_requests = [{
     }
 }, {
     # To someone else
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "_to": "notme"
     }
 }, {
     # To someone else nested
-    "messageID": str(uuid4()),
+    "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "foo": {

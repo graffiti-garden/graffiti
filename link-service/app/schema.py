@@ -16,9 +16,9 @@ def socket_schema(owner_id):
         # DELETE
         "properties": {
             "type": { "const": "delete" },
-            "object_id": { "type": "string" }
+            "objectID": { "type": "string" }
         },
-        "required": ["object_id"],
+        "required": ["objectID"],
     }, {
         # SUBSCRIBE
         "properties": {
@@ -30,9 +30,9 @@ def socket_schema(owner_id):
         # UNSUBSCRIBE
         "properties": {
             "type": { "const": "unsubscribe" },
-            "query_hash": { "type": "string" }
+            "queryHash": { "type": "string" }
         },
-        "required": ["query_hash"],
+        "required": ["queryHash"],
     }],
     "definitions": {
         "object": {
