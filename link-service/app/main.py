@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import jwt
+import time
 import uvicorn
 import jsonschema
 from os import getenv
@@ -62,7 +63,7 @@ async def startup():
             print("Waiting for message queue to come online...")
             await asyncio.sleep(1)
 
-    # Initialize rest and 
+    # Initialize database interfaces
     app.rest   = Rest  (db, mq)
     app.pubsub = PubSub(db, mq)
 
@@ -74,23 +75,23 @@ async def query_socket(ws: WebSocket, owner_id: str|None=Depends(token_to_owner_
     async with app.pubsub.register(ws) as socket_id:
 
         # Pre-compute this owner's schema
-        schema = socket_schema(owner_id)
+        validator = jsonschema.Draft7Validator(socket_schema(owner_id))
 
         # Send messages back and forth
         while True:
             try:
                 msg = await ws.receive_json()
-                await reply(ws, msg, schema, socket_id, owner_id)
+                await reply(ws, msg, validator, socket_id, owner_id)
             except:
                 break
 
-async def reply(ws, msg, schema, socket_id, owner_id):
-    try:
-        # Initialize the output
-        output = {}
+async def reply(ws, msg, validator, socket_id, owner_id):
+    # Initialize the output
+    output = {}
 
+    try:
         # Make sure the message is formatted properly
-        jsonschema.validate(msg, schema)
+        validator.validate(msg)
 
         # echo the incoming message ID
         output['messageID'] = msg['messageID']
