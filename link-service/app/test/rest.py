@@ -25,7 +25,7 @@ async def main():
         object_id = result['objectID']
         print("Added object")
 
-        # Try adding an object
+        # Try replacing the object
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',

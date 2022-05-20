@@ -9,7 +9,7 @@ from fastapi import FastAPI, Depends, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from motor.motor_asyncio import AsyncIOMotorClient
-from aio_pika import connect_robust
+import aioredis
 
 from .rest import Rest
 from .pubsub import PubSub
@@ -48,24 +48,19 @@ async def startup():
     db = client.graffiti.objects
 
     # Create indexes if they don't already exist
-    await db.create_index('owner_id')
-    await db.create_index('object._id')
-    await db.create_index('object._timestamp')
-    await db.create_index('object.$**')
-    await db.create_index('contexts.$**')
+    await db.create_index('_owner_id')
+    await db.create_index('_object._id')
+    await db.create_index('_object._timestamp')
+    await db.create_index('_object._tombstone')
+    await db.create_index('_object.$**')
+    await db.create_index('_contexts.$**')
 
-    # Initialize the message queue
-    while True:
-        try:
-            mq = await connect_robust("amqp://rabbit")
-            break
-        except:
-            print("Waiting for message queue to come online...")
-            await asyncio.sleep(1)
+    # Initialize the pubsub/locking system
+    redis = aioredis.from_url("redis://redis", decode_responses=True)
 
     # Initialize database interfaces
-    app.rest   = Rest  (db, mq)
-    app.pubsub = PubSub(db, mq)
+    app.rest   = Rest  (db, redis)
+    app.pubsub = PubSub(db, redis)
 
 @app.websocket("/")
 async def query_socket(ws: WebSocket, owner_id: str|None=Depends(token_to_owner_id)):

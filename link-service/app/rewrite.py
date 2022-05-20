@@ -23,6 +23,7 @@ def object_rewrite(object, owner_id):
         "_owner_id": owner_id,
         "_object": [object],
         "_contexts": contexts,
+        "_tombstone": False
     }
 
     return object_id, doc

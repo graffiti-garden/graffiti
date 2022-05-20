@@ -1,38 +1,17 @@
 import json
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
-from aio_pika import Message
 from contextlib import asynccontextmanager
 
 from .rewrite import object_rewrite
 
 class Rest:
 
-    def __init__(self, db, mq):
+    def __init__(self, db, redis):
         self.db = db
+        self.redis = redis
         self.object_locks = {}
         self.deleted_ids = set()
-
-        self.initialized = asyncio.Event()
-        asyncio.create_task(self.initialize(mq))
-
-    async def initialize(self, mq):
-        # Create a queue that updates the broker about
-        # insertions and deletions
-        self.channel = await mq.channel()
-        self.modify_queue = await self.channel.declare_queue(
-                'modifications')
-        self.initialized.set()
-
-    async def modify(self, _type, _id): 
-        await self.initialized.wait()
-        await self.channel.default_exchange.publish(
-            Message(json.dumps({
-                'type': _type,
-                'id': _id
-            }).encode()),
-            routing_key=self.modify_queue.name
-        )
 
     async def update(self, object, owner_id):
         self.validate_owner_id(owner_id)
@@ -41,12 +20,13 @@ class Rest:
         replacing = ('_id' in object)
 
         # Make a new document out of the object
-        # (this might raise an exception)
         object_id, doc = object_rewrite(object, owner_id)
 
-        # Make sure no one else is modifying the object
-        async with self.object_lock(object_id):
+        # Lock to make sure no one else is modifying the object
+        lock = self.redis.lock(object_id)
+        await lock.acquire()
 
+        try:
             if replacing:
                 # Delete the old document
                 await self._delete(object_id, owner_id)
@@ -55,24 +35,35 @@ class Rest:
             result = await self.db.insert_one(doc)
 
             # Mark that the new document has been inserted
-            await self.modify('insert', str(result.inserted_id))
+            await self.redis.publish("inserts", str(result.inserted_id))
+
+        finally:
+            await lock.release()
 
         return object_id
 
     async def delete(self, object_id, owner_id):
         self.validate_owner_id(owner_id)
 
-        async with self.object_lock(object_id):
+        lock = self.redis.lock(object_id)
+        await lock.acquire()
+        try:
             await self._delete(object_id, owner_id)
+        finally:
+            await lock.release()
 
     async def _delete(self, object_id, owner_id):
         # Check that the object that already exists
         # that it is owned by the owner_id,
         # and that it is not scheduled for deletion
-        doc = await self.db.find_one({
-            "_id": { "$nin": list(self.deleted_ids) },
+        # If so, schedule it for deletion
+        doc = await self.db.find_one_and_update({
             "_object._id": object_id,
-            "_owner_id": owner_id})
+            "_owner_id": owner_id,
+            "_tombstone": False
+        }, {
+            "$set": { "_tombstone": True }
+        })
 
         if not doc:
             raise Exception("\
@@ -80,28 +71,8 @@ class Rest:
             doesn't exist or you don't have permission\
             to modify it.")
 
-        # Mark the document for deletion
-        # (objects aren't fully deleted until
-        #  assessed by the broker)
-        doc_id = doc['_id']
-        self.deleted_ids.add(doc_id)
-        await self.modify('delete', str(doc_id))
-
-    @asynccontextmanager
-    async def object_lock(self, object_id):
-        """
-        Make sure you can't perform multiple updates
-        or deletions on one object at the same time.
-        """
-        if object_id not in self.object_locks:
-            self.object_locks[object_id] = asyncio.Lock()
-        try:
-            async with self.object_locks[object_id]:
-                yield
-        finally:
-            if not self.object_locks[object_id]._waiters:
-                del self.object_locks[object_id]
-
+        # And publish the change to the broker
+        await self.redis.publish("deletes", str(doc['_id']))
 
     def validate_owner_id(self, owner_id):
         if not owner_id:

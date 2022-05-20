@@ -1,36 +1,19 @@
 import json
 import asyncio
 from uuid import uuid4
-from aio_pika import Message
 from contextlib import asynccontextmanager
 
 from .rewrite import query_rewrite
 
 class PubSub:
 
-    def __init__(self, db, mq):
+    def __init__(self, db, redis):
         self.db = db
+        self.redis = redis
 
         self.sockets = {} # socket_id -> socket
         self.socket_to_queries = {} # socket_id -> set of query hashes
         self.query_to_sockets  = {} # query_hash -> set of socket ids
-
-        self.initialized = asyncio.Event()
-        asyncio.create_task(self.initialize(mq))
-
-    async def initialize(self, mq):
-        # Create queues to send subscription requests
-        # and then retrieve results from the broker
-        self.channel = await mq.channel()
-        self.request_queue = await self.channel.declare_queue(
-                'subscription_requests')
-        self.result_queue  = await self.channel.declare_queue(
-                'subscription_results')
-
-        # Start listening to results
-        await self.result_queue.consume(self.on_results, no_ack=True)
-
-        self.initialized.set()
 
     @asynccontextmanager
     async def register(self, ws):
@@ -60,17 +43,16 @@ class PubSub:
             # by performing a test query
             await self.db.find_one(query)
 
-        # If no one is *still* not subbed to the query
+        # If someone is *still* not subbed to the query
         # (someone might have during the async call)
         if query_hash not in query_to_sockets:
             # Allocate space for the query internally
             query_to_sockets[query_hash] = set()
             # And tell the broker about the subscription
-            await self.request({
-                'type': 'subscribe',
+            await self.redis.publish("subscribes", json.dumps({
                 'query_hash': query_hash,
-                'query': query,
-            })
+                'query': query
+            }))
 
         # Finally, add the requesting socket to the query
         query_to_sockets[query_hash].add(socket_id)
@@ -82,17 +64,7 @@ class PubSub:
         # If the query has no more subs, delete it entirely
         if not len(query_to_sockets(query_hash)):
             del query_to_sockets[query_hash]
-            await self.request({
-                'type': 'unsubscribe',
-                'query_hash': query_hash,
-            })
+            await self.redis.publish("unsubscribes", query_hash)
 
     async def on_results(self, msg):
         print(f"received updates: {msg}")
-
-    async def request(self, msg): 
-        await self.initialized.wait()
-        await self.channel.default_exchange.publish(
-            Message(json.dumps(msg).encode()),
-            routing_key=self.request_queue
-        )

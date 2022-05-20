@@ -1,5 +1,5 @@
 motor==2.5.1      # Async MongoDB interface
-aio-pika==7.2.0   # Async RabbitMQ interface
+aioredis==2.0.1   # Async Redis interface
 
 jsonschema==4.5.1 # Validate JSON
 
