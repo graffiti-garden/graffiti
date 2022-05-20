@@ -11,6 +11,7 @@ class Rest:
     def __init__(self, db, mq):
         self.db = db
         self.object_locks = {}
+        self.deleted_ids = set()
 
         self.initialized = asyncio.Event()
         asyncio.create_task(self.initialize(mq))
@@ -62,18 +63,18 @@ class Rest:
         self.validate_owner_id(owner_id)
 
         async with self.object_lock(object_id):
-            self._delete(object_id, owner_id)
+            await self._delete(object_id, owner_id)
 
     async def _delete(self, object_id, owner_id):
         # Check that the object that already exists
         # that it is owned by the owner_id,
         # and that it is not scheduled for deletion
-        old_doc = await db.find_one({
-            "id_": { "$nin": self.qb.deleted_ids() },
-            "object._id": object_id,
-            "owner_id": owner_id})
+        doc = await self.db.find_one({
+            "_id": { "$nin": list(self.deleted_ids) },
+            "_object._id": object_id,
+            "_owner_id": owner_id})
 
-        if not old_doc:
+        if not doc:
             raise Exception("\
             the object you're trying to modify either\
             doesn't exist or you don't have permission\
@@ -82,7 +83,9 @@ class Rest:
         # Mark the document for deletion
         # (objects aren't fully deleted until
         #  assessed by the broker)
-        await self.modify('delete', old_doc['_id'])
+        doc_id = doc['_id']
+        self.deleted_ids.add(doc_id)
+        await self.modify('delete', str(doc_id))
 
     @asynccontextmanager
     async def object_lock(self, object_id):
@@ -92,10 +95,13 @@ class Rest:
         """
         if object_id not in self.object_locks:
             self.object_locks[object_id] = asyncio.Lock()
-        async with self.object_locks[object_id]:
-            yield
-        if not self.object_locks[object_id]._waiters:
-            del self.object_locks[object_id]
+        try:
+            async with self.object_locks[object_id]:
+                yield
+        finally:
+            if not self.object_locks[object_id]._waiters:
+                del self.object_locks[object_id]
+
 
     def validate_owner_id(self, owner_id):
         if not owner_id:
