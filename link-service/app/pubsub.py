@@ -19,6 +19,23 @@ class PubSub:
         self.sockets = {} # socket_id -> socket
         self.subscriptions = {} # socket_id -> set of query_ids
 
+        # Listen for updates
+        listener = asyncio.create_task(self.listen())
+
+    async def listen(self):
+        async with self.redis.pubsub() as p:
+
+            await p.subscribe("results")
+            while True:
+                msg = await p.get_message(ignore_subscribe_messages=True)
+                if msg is not None:
+                    msg = json.loads(msg['data'])
+                    print(msg, flush=True)
+                    # Give the batch a chance to process
+                    await asyncio.sleep(0)
+                else:
+                    await asyncio.sleep(0.1)
+
     @asynccontextmanager
     async def register(self, ws):
         # Allocate space for this socket's subscriptions

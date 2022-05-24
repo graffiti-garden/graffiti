@@ -54,19 +54,24 @@ class Broker:
                         self.add_query(msg['query'], msg['query_id'])
                     elif channel == 'unsubscribes':
                         self.remove_query(msg['data'])
+                # Give the batch a chance to process
                 await asyncio.sleep(0)
 
     async def process_batches(self):
         # Continually process batches
         # and send the results back.
         while True:
-            async for change in self.process_batch():
+            async for query_hash, update_ids, delete_ids in self.process_batch():
+                # Unsubscribe might have happened in the background
+                if query_hash not in self.hash_to_ids:
+                    continue
+
                 # Publish the changes
-                print(change, flush=True)
-            # yield query_hash, [
-                    # ("delete", group["_id"]) if group["mongo_id"] in deleting_ids
-                    # else ("update", group["mongo_id"])
-                    # for group in groups]
+                await self.redis.publish("results", json.dumps({
+                    'query_ids':  list(self.hash_to_ids[query_hash]),
+                    'update_ids': update_ids,
+                    'delete_ids': delete_ids
+                }))
 
     async def process_batch(self):
         # Wait until we actually have something
@@ -75,16 +80,19 @@ class Broker:
         self.has_batch.clear()
 
         # These ids are now "in progress"
-        inserting_ids = [ObjectId(i) for i in self.insert_ids]
-        deleting_ids  = [ObjectId(i) for i in self.delete_ids]
+        inserting_ids = self.insert_ids
+        deleting_ids  = self.delete_ids
         # Initialize new sets for the next batch
         self.insert_ids = set()
         self.delete_ids = set()
 
+        inserting_mongo_ids = [ObjectId(i) for i in inserting_ids]
+        deleting_mongo_ids  = [ObjectId(i) for i in deleting_ids]
+
         # See if the changing objects match any open queries
         result = self.db.aggregate([
             # Only look at the documents that are changing
-            { "$match": { "_id": inserting_ids + deleting_ids } },
+            { "$match": { "_id": { "$in": inserting_mongo_ids + deleting_mongo_ids } } },
             # Sort the by _id (equivalent to causal)
             { "$sort": { "_id": 1 } },
             # Pass it through all the queries
@@ -95,10 +103,21 @@ class Broker:
         # that query either return "delete" or "update", depending
         facets = await result.next()
         for query_hash, groups in facets.items():
-            yield query_hash, groups
+            if groups:
+                update_ids = []
+                delete_ids = []
+                for group in groups:
+                    mongo_id = str(group["mongo_id"])
+                    if mongo_id in deleting_ids:
+                        delete_ids.append(mongo_id)
+                    else:
+                        object_id = group["_id"][0]
+                        update_ids.append(object_id)
+
+                yield query_hash, update_ids, delete_ids
 
         # Finally, delete all marked items
-        await self.db.delete_many({ "_id": deleting_ids })
+        await self.db.delete_many({ "_id": { "$in": deleting_mongo_ids } })
 
     def add_query(self, query, query_id):
         # Take the hash of the query
@@ -113,8 +132,11 @@ class Broker:
                     # get the latest document ID
                     # (documents are already sorted in the
                     # global aggregation pipeline)
+                    # This will mean that if an object
+                    # has been modified multiple times,
+                    # only the most recent one is used.
                     { "$group": {
-                        "_id" : "$object._id",
+                        "_id" : "$_object._id",
                         "mongo_id" : { "$last": "$_id" }
                     }}
                 ]
