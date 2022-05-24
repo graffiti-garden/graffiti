@@ -1,4 +1,43 @@
-def socket_schema(owner_id):
+import re
+import json
+import jsonschema
+from jsonschema.exceptions import ValidationError
+
+# Mongo Operators
+ALLOWED_QUERY_OPERATORS = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
+
+UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
+UUID_SCHEMA = {
+    "type": "string",
+    "pattern": f"^{UUID_PATTERN}$"
+}
+
+OBJECT_OWNER_PATTERN = re.compile(f'"_by": "({UUID_PATTERN})"')
+QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({UUID_PATTERN})"')
+
+def allowed_query_properties():
+    allowed_properties = { '$' + o: { "$ref": "#/definitions/queryProp" } for o in ALLOWED_QUERY_OPERATORS }
+    allowed_properties['_to'] = UUID_SCHEMA
+    return allowed_properties
+
+def recursive_property(name):
+    return { "oneOf": [
+    # Either a root object type
+    { "$ref": f"#/definitions/{name}" },
+    # A recursive array
+    { "type": "array",
+        "items": { "$ref": f"#/definitions/{name}Prop" }
+    },
+    # Or something a constant
+    { "type": "string" },
+    { "type": "number" },
+    { "type": "integer" },
+    { "type": "boolean" },
+    { "type": "null" }
+]}
+
+def socket_schema():
     return {
     "type": "object",
     "properties": {
@@ -16,7 +55,7 @@ def socket_schema(owner_id):
         # DELETE
         "properties": {
             "type": { "const": "delete" },
-            "objectID": { "type": "string" }
+            "objectID": UUID_SCHEMA
         },
         "required": ["objectID"],
     }, {
@@ -31,7 +70,7 @@ def socket_schema(owner_id):
         # UNSUBSCRIBE
         "properties": {
             "type": { "const": "unsubscribe" },
-            "queryID": { "type": "string" }
+            "queryID": UUID_SCHEMA
         },
         "required": ["queryID"],
     }],
@@ -44,15 +83,13 @@ def socket_schema(owner_id):
                 "^(?!_).*$": { "$ref": "#/definitions/objectProp" }
             },
             "properties": {
-                "_by": { "const": owner_id },
+                "_by": UUID_SCHEMA,
                 "_timestamp": { "type": "number" },
                 "_to": {
                     "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                    "items": UUID_SCHEMA
                 },
-                "_id": { "type": "string" },
+                "_id": UUID_SCHEMA,
                 "_contexts": {
                     "type": "array",
                     "items": {
@@ -76,34 +113,29 @@ def socket_schema(owner_id):
             "type": "object",
             "additionalProperties": False,
             "patternProperties": {
-                # Anything not starting with a "$" or _to
+                # Anything not starting with a "$"
                 "^(?!\$).*$": { "$ref": "#/definitions/queryProp" }
             },
-            "properties": allowed_query_properties(owner_id)
+            "properties": allowed_query_properties()
         },
-        "objectProp": recursive_prop("object"),
-        "queryProp": recursive_prop("query")
+        "objectProp": recursive_property("object"),
+        "queryProp": recursive_property("query")
     }
 }
 
-allowed_query_operators = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
-def allowed_query_properties(owner_id):
-    allowed_properties = { '$' + o: { "$ref": "#/definitions/queryProp" } for o in allowed_query_operators }
-    allowed_properties['_to'] = { "const": owner_id }
-    return allowed_properties
+# Initialize the schema validator
+VALIDATOR = jsonschema.Draft7Validator(socket_schema())
 
-def recursive_prop(name):
-    return { "oneOf": [
-    # Either a root object type
-    { "$ref": f"#/definitions/{name}" },
-    # A recursive array
-    { "type": "array",
-        "items": { "$ref": f"#/definitions/{name}Prop" }
-    },
-    # Or something a constant
-    { "type": "string" },
-    { "type": "number" },
-    { "type": "integer" },
-    { "type": "boolean" },
-    { "type": "null" }
-]}
+def validate(msg, owner_id):
+    VALIDATOR.validate(msg)
+
+    if msg['type'] == 'update':
+        matches = OBJECT_OWNER_PATTERN.findall(json.dumps(msg))
+        for match in matches:
+            if match != owner_id:
+                raise ValidationError("you can only create objects _by yourself")
+    elif msg['type'] == 'subscribe':
+        matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg))
+        for match in matches:
+            if match != owner_id:
+                raise ValidationError("you can only query for objects _to yourself")

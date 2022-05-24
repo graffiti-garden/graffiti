@@ -21,6 +21,7 @@ services:
       - redis
     environment:
       AUTH_SECRET: 'secret'
+      BATCH_SIZE: 100
 
   nginx:
     image: nginx:1.21.6

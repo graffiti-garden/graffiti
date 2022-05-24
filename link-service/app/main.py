@@ -3,17 +3,17 @@
 import jwt
 import time
 import uvicorn
-import jsonschema
 from os import getenv
 from fastapi import FastAPI, Depends, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from motor.motor_asyncio import AsyncIOMotorClient
+from jsonschema.exceptions import ValidationError
 import aioredis
 
 from .rest import Rest
 from .pubsub import PubSub
-from .schema import socket_schema
+from .schema import validate
 
 app = FastAPI()
 
@@ -69,24 +69,21 @@ async def query_socket(ws: WebSocket, owner_id: str|None=Depends(token_to_owner_
     # Register with the pub/sub manager
     async with app.pubsub.register(ws) as socket_id:
 
-        # Pre-compute this owner's schema
-        validator = jsonschema.Draft7Validator(socket_schema(owner_id))
-
         # Send messages back and forth
         while True:
             try:
                 msg = await ws.receive_json()
-                await reply(ws, msg, validator, socket_id, owner_id)
+                await reply(ws, msg, socket_id, owner_id)
             except:
                 break
 
-async def reply(ws, msg, validator, socket_id, owner_id):
+async def reply(ws, msg, socket_id, owner_id):
     # Initialize the output
     output = {}
 
     try:
         # Make sure the message is formatted properly
-        validator.validate(msg)
+        validate(msg, owner_id)
 
         # echo the incoming message ID
         output['messageID'] = msg['messageID']
@@ -109,7 +106,7 @@ async def reply(ws, msg, validator, socket_id, owner_id):
         elif msg['type'] == 'unsubscribe':
             await app.pubsub.unsubscribe(socket_id, msg['queryHash'])
 
-    except jsonschema.exceptions.ValidationError as e:
+    except ValidationError as e:
         output['type'] = 'validationError'
         output['detail'] = str(e)
         await ws.send_json(output)

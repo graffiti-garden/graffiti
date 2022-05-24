@@ -161,11 +161,11 @@ invalid_requests = [{
         "_to": random_id()
     }
 }, {
-    # _to should include strings
+    # _to should by UUIDs
     "messageID": random_id(),
     "type": "update",
     "object": {
-        "_to": [12345]
+        "_to": ["12345"]
     }
 }, {
     # by can only be my id
@@ -189,7 +189,7 @@ invalid_requests = [{
     "type": "update",
     "object": {
         "foo": {
-            "_id": 12345
+            "_id": "12345"
         }
     }
 }, {
@@ -225,14 +225,14 @@ invalid_requests = [{
         }]
     }
 }, {
-    # Invalid args
+    # Invalid operators
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "$asdf": "wassup"
     }
 }, {
-    # Invalid args nested
+    # Invalid operators nested
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
@@ -245,7 +245,7 @@ invalid_requests = [{
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "_to": "notme"
+        "_to": random_id()
     }
 }, {
     # To someone else nested
@@ -253,7 +253,7 @@ invalid_requests = [{
     "type": "subscribe",
     "query": {
         "foo": {
-            "_to": "notme"
+            "_to": random_id()
         }
     }
 }]
