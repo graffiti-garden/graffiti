@@ -2,6 +2,9 @@
 
 import asyncio
 from utils import *
+from os import getenv
+
+batch_size = int(getenv('BATCH_SIZE'))
 
 async def main():
 
@@ -37,8 +40,8 @@ async def main():
         assert result['complete']
         assert len(result['results']) == 10
 
-        print("adding 200 objects")
-        for i in range(200):
+        print(f"adding {2*batch_size} objects")
+        for i in range(2*batch_size):
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
@@ -65,12 +68,12 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'results'
         assert not result['complete']
-        assert len(result['results']) == 100
+        assert len(result['results']) == batch_size
         timestamp0 = result['results'][0]['_timestamp']
         result = await recv(ws)
         assert result['type'] == 'results'
         assert not result['complete']
-        assert len(result['results']) == 100
+        assert len(result['results']) == batch_size
         timestamp1 = result['results'][0]['_timestamp']
         result = await recv(ws)
         assert result['type'] == 'results'

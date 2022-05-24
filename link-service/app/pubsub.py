@@ -2,10 +2,13 @@ import json
 import asyncio
 from uuid import uuid4
 import datetime
+from os import getenv
 from bson.objectid import ObjectId
 from contextlib import asynccontextmanager
 
 from .rewrite import query_rewrite, doc_to_object
+
+batch_size = int(getenv('BATCH_SIZE'))
 
 class PubSub:
 
@@ -81,7 +84,7 @@ class PubSub:
             results.append(doc_to_object(doc))
             
             # Once the batch is full
-            if len(results) == 100:
+            if len(results) == batch_size:
                 # Send the results back
                 # And reset the batch
                 if not await self.publish_results(results, socket_id, query_id):
@@ -107,7 +110,6 @@ class PubSub:
             'results': results
         })
         return True
-
 
     async def unsubscribe(self, socket_id, query_id):
         if query_id not in self.subscriptions[socket_id]:
