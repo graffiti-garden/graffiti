@@ -66,14 +66,20 @@ async def main():
         assert result['type'] == 'results'
         assert not result['complete']
         assert len(result['results']) == 100
+        timestamp0 = result['results'][0]['_timestamp']
         result = await recv(ws)
         assert result['type'] == 'results'
         assert not result['complete']
         assert len(result['results']) == 100
+        timestamp1 = result['results'][0]['_timestamp']
         result = await recv(ws)
         assert result['type'] == 'results'
         assert result['complete']
         assert len(result['results']) == 10
+        timestamp2 = result['results'][0]['_timestamp']
+        # newest objects are returned first
+        assert timestamp0 > timestamp1
+        assert timestamp1 > timestamp2
 
         print("adding just a couple more objects")
         for i in range(20):
