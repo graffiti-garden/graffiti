@@ -23,6 +23,15 @@ services:
       AUTH_SECRET: 'secret'
       BATCH_SIZE: 100
 
+  graffiti-broker:
+    container_name: graffiti-broker
+    build: broker
+    volumes:
+      - ./broker:/mount/broker
+    depends_on:
+      - mongo
+      - redis
+
   nginx:
     image: nginx:1.21.6
     container_name: graffiti-nginx

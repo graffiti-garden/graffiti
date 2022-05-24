@@ -1,0 +1,2 @@
+motor==2.5.1      # Async MongoDB interface
+aioredis==2.0.1   # Async Redis interface

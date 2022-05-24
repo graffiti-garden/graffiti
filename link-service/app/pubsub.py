@@ -61,7 +61,6 @@ class PubSub:
         # Forward this subscription to the query broker
         await self.redis.publish("subscribes", json.dumps({
             'query': query,
-            'socket_id': socket_id,
             'query_id': query_id
         }))
 
@@ -119,6 +118,4 @@ class PubSub:
         self.subscriptions[socket_id].remove(query_id)
 
         # And push the result to the query broker
-        await self.redis.publish("unsubscribes", json.dumps({
-            'query_id': query_id,
-        }))
+        await self.redis.publish("unsubscribes", query_id)

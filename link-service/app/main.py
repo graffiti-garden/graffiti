@@ -108,7 +108,7 @@ async def reply(ws, msg, socket_id, owner_id):
 
     except ValidationError as e:
         output['type'] = 'validationError'
-        output['detail'] = str(e)
+        output['detail'] = str(e).split('\n')[0]
         await ws.send_json(output)
 
     except Exception as e:
