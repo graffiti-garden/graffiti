@@ -3,7 +3,7 @@ import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
 
-from .rewrite import object_rewrite
+from .rewrite import object_to_doc
 
 class Rest:
 
@@ -20,7 +20,7 @@ class Rest:
         replacing = ('_id' in object)
 
         # Make a new document out of the object
-        object_id, doc = object_rewrite(object, owner_id)
+        object_id, doc = object_to_doc(object, owner_id)
 
         # Lock to make sure no one else is modifying the object
         lock = self.redis.lock(object_id)

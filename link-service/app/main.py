@@ -99,8 +99,12 @@ async def reply(ws, msg, validator, socket_id, owner_id):
             await app.rest.delete(msg['objectID'], owner_id)
 
         elif msg['type'] == 'subscribe':
-            await app.pubsub.subscribe(socket_id, msg['query'], owner_id)
-            output['queryHash'] = query_hash
+            since = None
+            if 'since' in msg:
+                since = msg['since']
+            query_id, now = await app.pubsub.subscribe(msg['query'], since, socket_id)
+            output['queryID'] = query_id
+            output['now'] = now
 
         elif msg['type'] == 'unsubscribe':
             await app.pubsub.unsubscribe(socket_id, msg['queryHash'])

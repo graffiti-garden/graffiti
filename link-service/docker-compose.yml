@@ -18,7 +18,7 @@ services:
       - ./app:/mount/app
     depends_on:
       - mongo
-      - rabbit
+      - redis
     environment:
       AUTH_SECRET: 'secret'
 
@@ -34,7 +34,6 @@ services:
     restart: always
     volumes:
       - ./db:/data/db
-
 
   redis:
     image: redis:7.0.0

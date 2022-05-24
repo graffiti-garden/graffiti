@@ -23,16 +23,17 @@ def socket_schema(owner_id):
         # SUBSCRIBE
         "properties": {
             "type": { "const": "subscribe" },
-            "query": { "$ref": "#/definitions/query" }
+            "query": { "$ref": "#/definitions/query" },
+            "since": { "type": "string" }
         },
         "required": ["query"],
     }, {
         # UNSUBSCRIBE
         "properties": {
             "type": { "const": "unsubscribe" },
-            "queryHash": { "type": "string" }
+            "queryID": { "type": "string" }
         },
-        "required": ["queryHash"],
+        "required": ["queryID"],
     }],
     "definitions": {
         "object": {

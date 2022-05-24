@@ -3,7 +3,7 @@ import time
 from uuid import uuid4
 from hashlib import sha256
 
-def object_rewrite(object, owner_id):
+def object_to_doc(object, owner_id):
     # Separate out the contexts
     if '_contexts' in object:
         contexts = object['_contexts']
@@ -28,8 +28,13 @@ def object_rewrite(object, owner_id):
 
     return object_id, doc
 
+def doc_to_object(doc):
+    object = doc['_object'][0]
+    object['_contexts'] = doc['_contexts']
+    return object
+
 def query_rewrite(query):
-    query = {
+    return {
         # The object must match the query
         "_object": { "$elemMatch": query },
         "$or": [
@@ -52,6 +57,3 @@ def query_rewrite(query):
             }}}
         ]
     }
-
-    query_hash = sha256(json.dumps(query).encode()).hexdigest()
-    return query_hash, query

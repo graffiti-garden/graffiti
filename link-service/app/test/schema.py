@@ -10,11 +10,15 @@ async def main():
         for request in valid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
+            while response["type"] == "results":
+                response = await recv(ws)
             assert response["type"] != "validationError"
         print("All valid requests passed, as expected")
         for request in invalid_requests:
             await send(ws, request)
             response = await recv(ws)
+            while response["type"] == "results":
+                response = await recv(ws)
             assert response["type"] == "validationError"
         print("All invalid requests failed, as expected")
 
@@ -33,8 +37,13 @@ def valid_requests(my_id):
     "query": {}
 }, {
     "messageID": random_id(),
+    "type": "subscribe",
+    "query": {},
+    "since": "666f6f2d6261722d71757578"
+}, {
+    "messageID": random_id(),
     "type": "unsubscribe",
-    "queryHash": random_id()
+    "queryID": random_id()
 }, {
     "messageID": random_id(),
     "type": "update",
