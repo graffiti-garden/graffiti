@@ -81,12 +81,12 @@ class PubSub:
             results.append(doc_to_object(doc))
             
             # Once the batch is full
-            if len(results) > 100:
+            if len(results) == 100:
                 # Send the results back
                 # And reset the batch
                 if not await self.publish_results(results, socket_id, query_id):
                     break
-                results = {}
+                results = []
 
         else:
             # Publish any remainder
