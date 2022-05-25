@@ -104,7 +104,7 @@ async def reply(ws, msg, socket_id, owner_id):
             output['now'] = now
 
         elif msg['type'] == 'unsubscribe':
-            await app.pubsub.unsubscribe(socket_id, msg['queryHash'])
+            await app.pubsub.unsubscribe(socket_id, msg['queryID'])
 
     except ValidationError as e:
         output['type'] = 'validationError'

@@ -39,7 +39,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert len(result['results']) == 0
 
         print("querying with context")
@@ -53,7 +53,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert len(result['results']) == 1
 
         print("creating an object with one neighbor")
@@ -87,7 +87,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert len(result['results']) == 1
 
         print("querying with context")
@@ -101,7 +101,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert len(result['results']) == 0
 
         print("creating an object with complex context")
@@ -151,7 +151,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert len(result['results']) == 1
 
         print("querying for union")
@@ -165,7 +165,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert len(result['results']) == 1
 
         print("querying for intersections and unions of subsets")
@@ -180,7 +180,7 @@ async def main():
             result = await recv(ws)
             assert result['type'] == 'success'
             result = await recv(ws)
-            assert result['type'] == 'results'
+            assert result['type'] == 'updates'
             assert len(result['results']) == 0
 
             await send(ws, {
@@ -193,7 +193,7 @@ async def main():
             result = await recv(ws)
             assert result['type'] == 'success'
             result = await recv(ws)
-            assert result['type'] == 'results'
+            assert result['type'] == 'updates'
             assert len(result['results']) == 0
 
 if __name__ == "__main__":

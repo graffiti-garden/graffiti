@@ -35,10 +35,20 @@ async def main():
         })
         result = await recv(ws)
         assert result['type'] == 'success'
+        query_id = result['queryID']
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert result['complete']
         assert len(result['results']) == 10
+
+        print("unsubscribing")
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'unsubscribe',
+            'queryID': query_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
 
         print(f"adding {2*batch_size} objects")
         for i in range(2*batch_size):
@@ -63,26 +73,36 @@ async def main():
         })
         result = await recv(ws)
         assert result['type'] == 'success'
+        query_id = result['queryID']
         # Store now
         now = result['now']
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert not result['complete']
         assert len(result['results']) == batch_size
         timestamp0 = result['results'][0]['_timestamp']
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert not result['complete']
         assert len(result['results']) == batch_size
         timestamp1 = result['results'][0]['_timestamp']
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert result['complete']
         assert len(result['results']) == 10
         timestamp2 = result['results'][0]['_timestamp']
         # newest objects are returned first
         assert timestamp0 > timestamp1
         assert timestamp1 > timestamp2
+
+        print("unsubscribing")
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'unsubscribe',
+            'queryID': query_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
 
         print("adding just a couple more objects")
         for i in range(20):
@@ -109,7 +129,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'results'
+        assert result['type'] == 'updates'
         assert result['complete']
         assert len(result['results']) == 20
 

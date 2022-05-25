@@ -22,6 +22,9 @@ async def main():
         })
         result = await recv(ws)
         assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'updates'
+        assert len(result['results']) == 0
 
         print("adding an item for the listener")
         await send(ws, {
@@ -33,10 +36,14 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['type'] == 'results'
-
-        print("waiting for something...")
-        await asyncio.sleep(10)
+        print(result)
+        result = await recv(ws)
+        print(result)
+        result = await recv(ws)
+        print(result)
+        # assert result['type'] == 'success'
+        # result = await recv(ws)
+        # print(result)
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -30,7 +30,15 @@ class PubSub:
                 msg = await p.get_message(ignore_subscribe_messages=True)
                 if msg is not None:
                     msg = json.loads(msg['data'])
-                    print(msg, flush=True)
+
+                    # Process the results in the background
+                    # (no need for it to happen in-thread)
+                    asyncio.create_task(
+                        self.process_broker(
+                            msg['insert_ids'],
+                            msg['delete_ids'],
+                            msg['query_paths']))
+
                     # Give the batch a chance to process
                     await asyncio.sleep(0)
                 else:
@@ -67,35 +75,67 @@ class PubSub:
         # And add it to the list of subscriptions
         query_id = str(uuid4())
         self.subscriptions[socket_id].add(query_id)
+        query_path = (socket_id, query_id)
 
         # In the background, begin processing existing results
         if not since:
             since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
         else:
             since = ObjectId(since)
-        asyncio.create_task(self.query_existing(query, since, socket_id, query_id))
+        asyncio.create_task(self.process_existing(query, since, [query_path]))
 
         # Forward this subscription to the query broker
         await self.redis.publish("subscribes", json.dumps({
             'query': query,
-            'query_id': query_id
+            'query_path': query_path
         }))
 
         return query_id, str(ObjectId())
 
-    async def query_existing(self, query, since, socket_id, query_id):
-        # Start the query
-        results = []
-        cursor = self.db.find({
+    async def process_existing(self, query, since, query_paths):
+        # Rewrite
+        query = {
             "$and": [query, {
+                # So we don't get deleted objects
                 "_tombstone": False,
-                # So you can choose to only see
+                # And so you can choose to only see
                 # things that have changed recently
                 "_id": { "$gt": since }
             }]
-            # Return the latest elements first
-        }, sort=[('_id', -1)])
+        }
+
+        await self.stream_query(query, query_paths,
+            type='updates',
+            historical=True
+        )
+
+    async def process_broker(self, insert_ids, delete_ids, query_paths):
+        # Send the delete results
+        if delete_ids:
+            if not await self.publish_results(delete_ids, query_paths, type='deletes'):
+                return
+
+        # Send the insert results
+        if insert_ids:
+            query = {
+                "_id": { "$in": [ObjectId(insert_id) for insert_id in insert_ids] }
+            }
+            await self.stream_query(query, query_paths,
+                type='updates',
+                historical=False
+            )
+
+    async def stream_query(self, query, query_paths, **kwargs):
+
+        # For each element of the query
+        results = []
+        cursor = self.db.find(
+                query,
+                # Return the latest elements first
+                sort=[('_id', -1)])
+
         async for doc in cursor:
+
             # Add the doc to the batch
             results.append(doc_to_object(doc))
             
@@ -103,29 +143,36 @@ class PubSub:
             if len(results) == batch_size:
                 # Send the results back
                 # And reset the batch
-                if not await self.publish_results(results, socket_id, query_id):
+                if not await self.publish_results(results, query_paths, complete=False, **kwargs):
                     break
                 results = []
 
         else:
             # Publish any remainder
-            await self.publish_results(results, socket_id, query_id, complete=True)
+            await self.publish_results(results, query_paths, complete=True, **kwargs)
 
-    async def publish_results(self, results, socket_id, query_id, complete=False):
-        # If we have unsubscribed, break
-        if socket_id not in self.subscriptions:
-            return False
-        if query_id not in self.subscriptions[socket_id]:
-            return False
+    async def publish_results(self, results, query_paths, **kwargs):
 
-        await self.sockets[socket_id].send_json({
-            'type': 'results',
-            'historical': True,
-            'complete': complete,
-            'queryID': query_id,
-            'results': results
-        })
-        return True
+        num_successes = 0
+
+        for socket_id, query_id in query_paths:
+
+            # If we have unsubscribed, no good
+            if socket_id not in self.subscriptions:
+                continue
+            if query_id not in self.subscriptions[socket_id]:
+                continue
+
+            # Add the parameters and results
+            # to the output and send.
+            output = kwargs
+            output['query_id'] = query_id
+            output['results'] = results
+            await self.sockets[socket_id].send_json(output)
+
+            num_successes += 1
+
+        return num_successes > 0
 
     async def unsubscribe(self, socket_id, query_id):
         if query_id not in self.subscriptions[socket_id]:
@@ -135,4 +182,4 @@ class PubSub:
         self.subscriptions[socket_id].remove(query_id)
 
         # And push the result to the query broker
-        await self.redis.publish("unsubscribes", query_id)
+        await self.redis.publish("unsubscribes", json.dumps((socket_id, query_id)))
