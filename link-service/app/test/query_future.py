@@ -26,7 +26,7 @@ async def main():
         assert result['type'] == 'updates'
         assert len(result['results']) == 0
 
-        print("adding an item for the listener")
+        print("adding an item")
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
@@ -36,14 +36,24 @@ async def main():
             }
         })
         result = await recv(ws)
-        print(result)
+        assert result['type'] == 'success'
+        objectID = result['objectID']
         result = await recv(ws)
-        print(result)
+        assert result['type'] == 'updates'
+        assert len(result['results']) == 1
+
+        print("deleting an item")
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'delete',
+            'objectID': objectID
+        })
         result = await recv(ws)
-        print(result)
-        # assert result['type'] == 'success'
-        # result = await recv(ws)
-        # print(result)
+        assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'deletes'
+        assert len(result['results']) == 1
+        assert result['results'][0] == objectID
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -74,10 +74,10 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
         query_id = result['queryID']
-        # Store now
-        now = result['now']
         result = await recv(ws)
         assert result['type'] == 'updates'
+        # Store now
+        now = result['now']
         assert not result['complete']
         assert len(result['results']) == batch_size
         timestamp0 = result['results'][0]['_timestamp']
