@@ -164,8 +164,6 @@ export default function GraffitiComponents(vue, graffitiURL='https://graffiti.cs
         } else {
           this.objectMap[id] = output
         }
-        
-        return id
       },
 
       async delete_(id) {
@@ -223,6 +221,7 @@ class GraffitiApp extends HTMLElement {
     })
 
     // Create a place for it to go
+    const shadow = this.attachShadow({mode: 'open'})
     const appEl = document.createElement('div')
     const graffitiLogin = document.createElement('graffiti-login')
     graffitiLogin.setAttribute('v-slot', 'graffiti')
@@ -231,7 +230,7 @@ class GraffitiApp extends HTMLElement {
 
     // Mount
     appEl.appendChild(graffitiLogin)
-    this.appendChild(appEl)
+    shadow.appendChild(appEl)
     app.mount(appEl)
   }
 }

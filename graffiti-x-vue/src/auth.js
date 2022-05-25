@@ -1,7 +1,8 @@
 export default class Auth {
 
   constructor(origin) {
-    this.origin = origin
+    this.origin = new URL(origin)
+    this.origin.host = "auth." + this.origin.host
     this.initialized = false
     this.initialize()
   }
@@ -121,7 +122,7 @@ export default class Auth {
     window.sessionStorage.setItem('graffitiAuthState', state)
 
     // Redirect to the login window
-    const authURL = new URL('auth', this.origin)
+    const authURL = new URL(this.origin)
     authURL.searchParams.set('client_id', clientID)
     authURL.searchParams.set('redirect_uri', window.location.href)
     authURL.searchParams.set('state', state)
