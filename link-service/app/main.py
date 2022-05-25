@@ -99,9 +99,8 @@ async def reply(ws, msg, socket_id, owner_id):
             since = None
             if 'since' in msg:
                 since = msg['since']
-            query_id, now = await app.pubsub.subscribe(msg['query'], since, socket_id)
+            query_id = await app.pubsub.subscribe(msg['query'], since, socket_id)
             output['queryID'] = query_id
-            output['now'] = now
 
         elif msg['type'] == 'unsubscribe':
             await app.pubsub.unsubscribe(socket_id, msg['queryID'])

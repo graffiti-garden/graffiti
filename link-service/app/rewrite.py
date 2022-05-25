@@ -1,7 +1,5 @@
-import json
 import time
 from uuid import uuid4
-from hashlib import sha256
 
 def object_to_doc(object, owner_id):
     # Separate out the contexts

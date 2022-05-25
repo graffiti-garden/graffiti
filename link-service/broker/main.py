@@ -28,8 +28,8 @@ class Broker:
         listener = asyncio.create_task(self.listen())
         processor = asyncio.create_task(self.process_batches())
 
-        await listener
         await processor
+        await listener
 
     async def listen(self):
         async with self.redis.pubsub() as p:
@@ -61,7 +61,7 @@ class Broker:
         # Continually process batches
         # and send the results back.
         while True:
-            async for query_hash, insert_ids, delete_ids in self.process_batch():
+            async for now, query_hash, insert_ids, delete_ids in self.process_batch():
                 # Unsubscribe might have happened in the background
                 if query_hash not in self.hash_to_paths:
                     continue
@@ -70,7 +70,8 @@ class Broker:
                 await self.redis.publish("results", json.dumps({
                     'query_paths':  list(self.hash_to_paths[query_hash]),
                     'insert_ids': insert_ids,
-                    'delete_ids': delete_ids
+                    'delete_ids': delete_ids,
+                    'now': now
                 }))
 
     async def process_batch(self):
@@ -100,13 +101,20 @@ class Broker:
                 { "$match": { "_id": { "$in": inserting_mongo_ids + deleting_mongo_ids } } },
                 # Sort the by _id (equivalent to causal)
                 { "$sort": { "_id": 1 } },
-                # Pass it through all the queries
-                { "$facet" : self.queries }
+                { "$facet" :
+                    # Get the largest ID
+                    { 'now': [{ '$limit': 1 }, ] } |
+                    # And pass it through all the queries
+                    self.queries
+                }
             ])
+
+            # Extract the object ID
+            facets = await result.next()
+            now = str(facets.pop('now')[0]['_id'])
 
             # For each query and each change that matches
             # that query assign it as either an insert or delete
-            facets = await result.next()
             for query_hash, groups in facets.items():
                 if groups:
                     insert_ids = []
@@ -119,7 +127,7 @@ class Broker:
                         else:
                             insert_ids.append(mongo_id)
 
-                    yield query_hash, insert_ids, delete_ids
+                    yield now, query_hash, insert_ids, delete_ids
 
         # Finally, delete all marked items
         await self.db.delete_many({ "_id": { "$in": deleting_mongo_ids } })

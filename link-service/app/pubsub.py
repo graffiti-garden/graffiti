@@ -37,7 +37,8 @@ class PubSub:
                         self.process_broker(
                             msg['insert_ids'],
                             msg['delete_ids'],
-                            msg['query_paths']))
+                            msg['query_paths'],
+                            msg['now']))
 
                     # Give the batch a chance to process
                     await asyncio.sleep(0)
@@ -82,7 +83,8 @@ class PubSub:
             since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
         else:
             since = ObjectId(since)
-        asyncio.create_task(self.process_existing(query, since, [query_path]))
+        now = str(ObjectId())
+        asyncio.create_task(self.process_existing(query, since, [query_path], now))
 
         # Forward this subscription to the query broker
         await self.redis.publish("subscribes", json.dumps({
@@ -90,9 +92,9 @@ class PubSub:
             'query_path': query_path
         }))
 
-        return query_id, str(ObjectId())
+        return query_id
 
-    async def process_existing(self, query, since, query_paths):
+    async def process_existing(self, query, since, query_paths, now):
         # Rewrite
         query = {
             "$and": [query, {
@@ -106,13 +108,16 @@ class PubSub:
 
         await self.stream_query(query, query_paths,
             type='updates',
-            historical=True
+            historical=True,
+            now=now
         )
 
-    async def process_broker(self, insert_ids, delete_ids, query_paths):
+    async def process_broker(self, insert_ids, delete_ids, query_paths, now):
         # Send the delete results
         if delete_ids:
-            if not await self.publish_results(delete_ids, query_paths, type='deletes'):
+            if not await self.publish_results(delete_ids, query_paths,
+                    type='deletes',
+                    now=now):
                 return
 
         # Send the insert results
@@ -122,7 +127,8 @@ class PubSub:
             }
             await self.stream_query(query, query_paths,
                 type='updates',
-                historical=False
+                historical=False,
+                now=now
             )
 
     async def stream_query(self, query, query_paths, **kwargs):
