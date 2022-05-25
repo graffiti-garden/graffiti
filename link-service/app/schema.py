@@ -84,7 +84,6 @@ def socket_schema():
             },
             "properties": {
                 "_by": UUID_SCHEMA,
-                "_timestamp": { "type": "number" },
                 "_to": {
                     "type": "array",
                     "items": UUID_SCHEMA

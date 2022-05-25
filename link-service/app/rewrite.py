@@ -12,8 +12,6 @@ def object_to_doc(object, owner_id):
     # If there is no id or timestamp, generate it
     if '_id' not in object:
         object['_id'] = str(uuid4())
-    if '_timestamp' not in object:
-        object['_timestamp'] = int(time.time() * 1000)
 
     # Extract the ID and combine into one big doc
     object_id = object['_id']

@@ -3,6 +3,7 @@
 import asyncio
 from utils import *
 from os import getenv
+import time
 
 batch_size = int(getenv('BATCH_SIZE'))
 
@@ -19,7 +20,8 @@ async def main():
                 'type': 'update',
                 'object': {
                     'content': random_id(),
-                    'tags': [custom_tag]
+                    'tags': [custom_tag],
+                    'timestamp': time.time()
                 }
             })
             result = await recv(ws)
@@ -57,7 +59,8 @@ async def main():
                 'type': 'update',
                 'object': {
                     'content': random_id(),
-                    'tags': [custom_tag]
+                    'tags': [custom_tag],
+                    'timestamp': time.time()
                 }
             })
             result = await recv(ws)
@@ -80,17 +83,17 @@ async def main():
         now = result['now']
         assert not result['complete']
         assert len(result['results']) == batch_size
-        timestamp0 = result['results'][0]['_timestamp']
+        timestamp0 = result['results'][0]['timestamp']
         result = await recv(ws)
         assert result['type'] == 'updates'
         assert not result['complete']
         assert len(result['results']) == batch_size
-        timestamp1 = result['results'][0]['_timestamp']
+        timestamp1 = result['results'][0]['timestamp']
         result = await recv(ws)
         assert result['type'] == 'updates'
         assert result['complete']
         assert len(result['results']) == 10
-        timestamp2 = result['results'][0]['_timestamp']
+        timestamp2 = result['results'][0]['timestamp']
         # newest objects are returned first
         assert timestamp0 > timestamp1
         assert timestamp1 > timestamp2

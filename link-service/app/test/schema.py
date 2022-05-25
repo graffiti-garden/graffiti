@@ -50,11 +50,10 @@ def valid_requests(my_id):
     "object": {
         "_id": random_id(),
         "_to": [random_id(), random_id()],
-        "_timestamp": 12345,
         "foo": {
             "blah": "asdf",
             "bar": {
-                "_timestamp": 6789
+                "asdf": ["asdf"]
             }
         },
         "_contexts": [{

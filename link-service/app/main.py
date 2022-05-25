@@ -50,7 +50,6 @@ async def startup():
     # Create indexes if they don't already exist
     await db.create_index('_owner_id')
     await db.create_index('_object._id')
-    await db.create_index('_object._timestamp')
     await db.create_index('_object._tombstone')
     await db.create_index('_object.$**')
     await db.create_index('_contexts.$**')
