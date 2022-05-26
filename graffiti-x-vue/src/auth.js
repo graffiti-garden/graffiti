@@ -14,10 +14,10 @@ export default class Auth {
 
   async initialize() {
     // Check to see if we are already logged in
-    this.token = window.localStorage.getItem('graffitiToken')
+    this.tokenValue = window.localStorage.getItem('graffitiToken')
     this.myIDValue  = window.localStorage.getItem('graffitiID')
 
-    if (!this.token || !this.myIDValue) {
+    if (!this.tokenValue || !this.myIDValue) {
       // Check to see if we are redirecting back
       const url = new URL(window.location)
 
@@ -77,16 +77,16 @@ export default class Auth {
 
     // Parse out the token
     const data = await response.json()
-    this.token = data.access_token
+    this.tokenValue = data.access_token
     this.myIDValue = data.owner_id
 
     // And make sure that the token is valid
-    if (!this.token) {
+    if (!this.tokenValue) {
       return this.authorizationError("could not parse token.")
     }
 
     // Store the token and ID
-    window.localStorage.setItem('graffitiToken', this.token)
+    window.localStorage.setItem('graffitiToken', this.tokenValue)
     window.localStorage.setItem('graffitiID', this.myIDValue)
   }
 
@@ -94,12 +94,17 @@ export default class Auth {
     while (!this.initialized) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
-    return (this.token != null) && (this.myIDValue != null)
+    return (this.tokenValue != null) && (this.myIDValue != null)
   }
 
   async myID() {
     await this.loggedIn()
     return this.myIDValue
+  }
+
+  async token() {
+    await this.loggedIn()
+    return this.tokenValue
   }
 
   async logIn() {
@@ -133,41 +138,6 @@ export default class Auth {
     window.localStorage.removeItem('graffitiToken')
     window.localStorage.removeItem('graffitiID')
     window.location.reload()
-  }
-
-  async request(method, path, body) {
-    // Form basic request
-    const requestURL = new URL(path, this.origin)
-    const options = {
-      method: method,
-      body: JSON.stringify(body)
-    }
-    const headers = {
-      'Content-Type': 'application/json',
-    }
-
-    // If logged in, add authorization
-    if (await this.loggedIn()) {
-      headers.Authorization = 'Bearer ' + this.token
-    }
-    options.headers = new Headers(headers)
-
-    // Send the request
-    const response = await fetch(requestURL, options)
-
-    // Make sure it went OK
-    if (!response.ok) {
-      let reason = response.status + ": "
-      try {
-        reason += (await response.json()).detail
-      } catch (e) {
-        reason += response.statusText
-      }
-
-      throw new Error(reason)
-    }
-
-    return await response.json()
   }
 
 }
