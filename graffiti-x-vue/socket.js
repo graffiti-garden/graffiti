@@ -67,13 +67,13 @@ export default class GraffitiSocket {
       messageEvent.data = data
       document.dispatchEvent(messageEvent)
 
-    } else if (data.type in ['updates', 'deletes']) {
+    } else if (['updates', 'deletes'].includes(data.type)) {
       // Subscription data
       if (data.queryID in this.subscriptionData) {
         const sd = this.subscriptionData[data.queryID]
 
         // For each data point, either add or remove it
-        for (r in data.results) {
+        for (const r of data.results) {
           if (data.type == 'updates') {
             sd.output[r._id] = r
           } else {
@@ -86,7 +86,7 @@ export default class GraffitiSocket {
           if (data.historical) {
             sd.historyComplete = true
           }
-          if (d.historyComplete) {
+          if (sd.historyComplete) {
             sd.since = data.now
           }
         }
@@ -146,7 +146,7 @@ export default class GraffitiSocket {
   async onOpen() {
     console.log("connected to the graffiti socket")
     // Resubscribe to hanging queries
-    for (queryID in this.subscriptionData) {
+    for (const queryID in this.subscriptionData) {
       const sd = this.subscriptionData[queryID]
       await this.subscribe(sd.query, sd.since, sd.output, queryID, sd.historyComplete)
     }
