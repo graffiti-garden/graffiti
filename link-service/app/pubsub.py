@@ -31,17 +31,13 @@ class PubSub:
                 if msg is not None:
                     msg = json.loads(msg['data'])
 
-                    # Process the results in the background
-                    # (no need for it to happen in-thread)
-                    asyncio.create_task(
-                        self.process_broker(
+                    # Process the messages
+                    await self.process_broker(
                             msg['insert_ids'],
                             msg['delete_ids'],
                             msg['query_paths'],
-                            msg['now']))
+                            msg['now'])
 
-                    # Give the batch a chance to process
-                    await asyncio.sleep(0)
                 else:
                     await asyncio.sleep(0.1)
 
@@ -59,12 +55,23 @@ class PubSub:
             # Unsubscribe the socket from any hanging queries.
             while self.subscriptions[socket_id]:
                 query_id = next(iter(self.subscriptions[socket_id]))
-                await self.unsubscribe(socket_id, query_id)
+                await self.unsubscribe(socket_id, query_id, hashed=True)
             # And delete all references to it.
             del self.subscriptions[socket_id]
             del self.sockets[socket_id]
 
-    async def subscribe(self, query, since, socket_id):
+    async def subscribe(self, query, since, socket_id, query_id):
+        # Process since
+        if since == "always":
+            since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
+        elif since == "now":
+            since = ObjectId()
+        else:
+            since = ObjectId(since)
+
+        # Process the id
+        query_id = str(hash(query_id))
+
         # Rewrite the query to account for contexts
         query = query_rewrite(query)
 
@@ -74,17 +81,8 @@ class PubSub:
 
         # Generate a random subscription ID for this query
         # And add it to the list of subscriptions
-        query_id = str(uuid4())
         self.subscriptions[socket_id].add(query_id)
         query_path = (socket_id, query_id)
-
-        # In the background, begin processing existing results
-        if not since:
-            since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
-        else:
-            since = ObjectId(since)
-        now = str(ObjectId())
-        asyncio.create_task(self.process_existing(query, since, [query_path], now))
 
         # Forward this subscription to the query broker
         await self.redis.publish("subscribes", json.dumps({
@@ -92,9 +90,14 @@ class PubSub:
             'query_path': query_path
         }))
 
+        # In the background, begin processing existing results
+        now = str(ObjectId())
+        asyncio.create_task(self.process_existing(query, since, query_path, now))
+
         return query_id
 
-    async def process_existing(self, query, since, query_paths, now):
+
+    async def process_existing(self, query, since, query_path, now):
         # Rewrite
         query = {
             "$and": [query, {
@@ -106,7 +109,7 @@ class PubSub:
             }]
         }
 
-        await self.stream_query(query, query_paths,
+        await self.stream_query(query, [query_path],
             type='updates',
             historical=True,
             now=now
@@ -114,13 +117,15 @@ class PubSub:
 
     async def process_broker(self, insert_ids, delete_ids, query_paths, now):
         # Send the delete results
+        # (all at once because it's just a list of IDs)
         if delete_ids:
             if not await self.publish_results(delete_ids, query_paths,
                     type='deletes',
-                    now=now):
+                    now=now,
+                    complete=(not insert_ids)):
                 return
 
-        # Send the insert results
+        # Send the insert results in batches
         if insert_ids:
             query = {
                 "_id": { "$in": [ObjectId(insert_id) for insert_id in insert_ids] }
@@ -132,7 +137,6 @@ class PubSub:
             )
 
     async def stream_query(self, query, query_paths, **kwargs):
-
         # For each element of the query
         results = []
         cursor = self.db.find(
@@ -141,7 +145,6 @@ class PubSub:
                 sort=[('_id', -1)])
 
         async for doc in cursor:
-
             # Add the doc to the batch
             results.append(doc_to_object(doc))
             
@@ -159,7 +162,8 @@ class PubSub:
 
     async def publish_results(self, results, query_paths, **kwargs):
 
-        num_successes = 0
+        tasks = []
+        counter = { 'count': 0 }
 
         for socket_id, query_id in query_paths:
 
@@ -172,15 +176,27 @@ class PubSub:
             # Add the parameters and results
             # to the output and send.
             output = kwargs
-            output['query_id'] = query_id
+            output['queryID'] = query_id
             output['results'] = results
-            await self.sockets[socket_id].send_json(output)
 
-            num_successes += 1
+            tasks.append(self.attempt_send(socket_id, output, counter))
 
-        return num_successes > 0
 
-    async def unsubscribe(self, socket_id, query_id):
+        await asyncio.gather(*tasks)
+
+        return counter['count'] > 0
+
+    async def attempt_send(self, socket_id, msg, counter):
+        try:
+            await self.sockets[socket_id].send_json(msg)
+        except:
+            pass
+        else:
+            counter['count'] += 1
+
+    async def unsubscribe(self, socket_id, query_id, hashed=False):
+        if not hashed:
+            query_id = str(hash(query_id))
         if query_id not in self.subscriptions[socket_id]:
             raise Exception("query_id does not exist.")
 

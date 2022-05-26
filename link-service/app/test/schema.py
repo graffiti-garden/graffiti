@@ -12,14 +12,16 @@ async def main():
             response = await recv(ws)
             while response["type"] in ["updates", "deletes"]:
                 response = await recv(ws)
-            assert response["type"] != "validationError"
+            if response["type"] == "error":
+                assert response["reason"] != "validation"
         print("All valid requests passed, as expected")
         for request in invalid_requests:
             await send(ws, request)
             response = await recv(ws)
             while response["type"] in ["updates", "deletes"]:
                 response = await recv(ws)
-            assert response["type"] == "validationError"
+            assert response["type"] == "error"
+            assert response["reason"] == "validation"
         print("All invalid requests failed, as expected")
 
 def valid_requests(my_id):
@@ -34,12 +36,21 @@ def valid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "subscribe",
-    "query": {}
+    "query": {},
+    "since": "now",
+    "queryID": random_id()
 }, {
     "messageID": random_id(),
     "type": "subscribe",
     "query": {},
-    "since": "666f6f2d6261722d71757578"
+    "since": "always",
+    "queryID": "asdf"
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {},
+    "since": "666f6f2d6261722d71757578",
+    "queryID": random_id()
 }, {
     "messageID": random_id(),
     "type": "unsubscribe",
@@ -86,7 +97,9 @@ def valid_requests(my_id):
     "type": "subscribe",
     "query": {
         "_to": my_id 
-    }
+    },
+    "since": "now",
+    "queryID": random_id()
 }, {
     # To myself nested
     "messageID": random_id(),
@@ -95,14 +108,18 @@ def valid_requests(my_id):
         "foo": {
             "_to": my_id
         }
-    }
+    },
+    "since": "always",
+    "queryID": random_id()
 }, {
     # Weird fields
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "~a": "b",
-    }
+    },
+    "since": "now",
+    "queryID": random_id()
 }, {
     # Valid args
     "messageID": random_id(),
@@ -113,7 +130,9 @@ def valid_requests(my_id):
             "y": "a",
             "z": "b"
         }
-    }
+    },
+    "since": "now",
+    "queryID": random_id()
 }]
 
 invalid_requests = [{
@@ -135,6 +154,33 @@ invalid_requests = [{
 }, {
     "messageID": random_id(),
     "type": "subscribe"
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {}
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "since": "now"
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {},
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "since": "now",
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {},
+    "since": "now"
 }, {
     "messageID": random_id(),
     "type": "unsubscribe"
@@ -224,12 +270,20 @@ invalid_requests = [{
         }]
     }
 }, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {},
+    "since": "notnow",
+    "queryID": random_id()
+}, {
     # Invalid operators
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "$asdf": "wassup"
-    }
+    },
+    "since": "now",
+    "queryID": random_id()
 }, {
     # Invalid operators nested
     "messageID": random_id(),
@@ -238,14 +292,18 @@ invalid_requests = [{
         "foo": {
             "$asdf": "wassup"
         }
-    }
+    },
+    "since": "now",
+    "queryID": random_id()
 }, {
     # To someone else
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
         "_to": random_id()
-    }
+    },
+    "since": "now",
+    "queryID": random_id()
 }, {
     # To someone else nested
     "messageID": random_id(),
@@ -254,7 +312,9 @@ invalid_requests = [{
         "foo": {
             "_to": random_id()
         }
-    }
+    },
+    "since": "now",
+    "queryID": random_id()
 }]
 
 if __name__ == "__main__":

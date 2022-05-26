@@ -79,13 +79,12 @@ async def query_socket(ws: WebSocket, owner_id: str|None=Depends(token_to_owner_
 async def reply(ws, msg, socket_id, owner_id):
     # Initialize the output
     output = {}
+    if 'messageID' in msg:
+        output['messageID'] = msg['messageID']
 
     try:
         # Make sure the message is formatted properly
         validate(msg, owner_id)
-
-        # echo the incoming message ID
-        output['messageID'] = msg['messageID']
 
         if msg['type'] == 'update':
             object_id = await app.rest.update(msg['object'], owner_id)
@@ -95,22 +94,20 @@ async def reply(ws, msg, socket_id, owner_id):
             await app.rest.delete(msg['objectID'], owner_id)
 
         elif msg['type'] == 'subscribe':
-            since = None
-            if 'since' in msg:
-                since = msg['since']
-            query_id = await app.pubsub.subscribe(msg['query'], since, socket_id)
-            output['queryID'] = query_id
+            await app.pubsub.subscribe(msg['query'], msg['since'], socket_id, msg['queryID'])
 
         elif msg['type'] == 'unsubscribe':
             await app.pubsub.unsubscribe(socket_id, msg['queryID'])
 
     except ValidationError as e:
-        output['type'] = 'validationError'
+        output['type'] = 'error'
+        output['reason'] = 'validation'
         output['detail'] = str(e).split('\n')[0]
         await ws.send_json(output)
 
     except Exception as e:
         output['type'] = 'error'
+        output['reason'] = 'unknown'
         output['detail'] = str(e)
         await ws.send_json(output)
 

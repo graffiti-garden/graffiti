@@ -10,6 +10,7 @@ batch_size = int(getenv('BATCH_SIZE'))
 async def main():
 
     custom_tag = random_id()
+    query_id = random_id()
 
     my_id, my_token = id_and_token()
     async with websocket_connect(my_token) as ws:
@@ -33,11 +34,12 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'tags': custom_tag
-            }
+            },
+            "since": "always",
+            "queryID": query_id
         })
         result = await recv(ws)
         assert result['type'] == 'success'
-        query_id = result['queryID']
         result = await recv(ws)
         assert result['type'] == 'updates'
         assert result['complete']
@@ -66,19 +68,25 @@ async def main():
             result = await recv(ws)
             assert result['type'] == 'success'
 
+        print("waiting for these to be fully processed")
+        print("so they don't accidentally get sent as live updates")
+        await asyncio.sleep(1)
+
         print("querying for them")
         await send(ws, {
             'messageID': random_id(),
             'type': 'subscribe',
             'query': {
                 'tags': custom_tag
-            }
+            },
+            "since": "always",
+            "queryID": query_id
         })
         result = await recv(ws)
         assert result['type'] == 'success'
-        query_id = result['queryID']
         result = await recv(ws)
         assert result['type'] == 'updates'
+        assert result['historical']
         # Store now
         now = result['now']
         assert not result['complete']
@@ -86,11 +94,13 @@ async def main():
         timestamp0 = result['results'][0]['timestamp']
         result = await recv(ws)
         assert result['type'] == 'updates'
+        assert result['historical']
         assert not result['complete']
         assert len(result['results']) == batch_size
         timestamp1 = result['results'][0]['timestamp']
         result = await recv(ws)
         assert result['type'] == 'updates'
+        assert result['historical']
         assert result['complete']
         assert len(result['results']) == 10
         timestamp2 = result['results'][0]['timestamp']
@@ -127,7 +137,8 @@ async def main():
             'since': now,
             'query': {
                 'tags': custom_tag
-            }
+            },
+            'queryID': query_id
         })
         result = await recv(ws)
         assert result['type'] == 'success'

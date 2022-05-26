@@ -18,7 +18,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'tags': custom_tag
-            }
+            },
+            'since': 'now',
+            'queryID': random_id()
         })
         result = await recv(ws)
         assert result['type'] == 'success'

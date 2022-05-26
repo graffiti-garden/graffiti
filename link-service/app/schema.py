@@ -63,14 +63,19 @@ def socket_schema():
         "properties": {
             "type": { "const": "subscribe" },
             "query": { "$ref": "#/definitions/query" },
-            "since": { "type": "string" }
+            "since": {
+                "type": "string",
+                # Either now, always or a mongo object ID
+                "pattern": "^(now|always|[a-f\d]{24})$"
+            },
+            "queryID": { "type": "string" }
         },
-        "required": ["query"],
+        "required": ["query", "since", "queryID"],
     }, {
         # UNSUBSCRIBE
         "properties": {
             "type": { "const": "unsubscribe" },
-            "queryID": UUID_SCHEMA
+            "queryID": { "type": "string" }
         },
         "required": ["queryID"],
     }],

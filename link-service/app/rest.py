@@ -66,15 +66,14 @@ class Rest:
         })
 
         if not doc:
-            raise Exception("\
-            the object you're trying to modify either\
-            doesn't exist or you don't have permission\
-            to modify it.")
+            raise Exception("""\
+the object you're trying to modify either \
+doesn't exist or you don't have permission \
+to modify it.""")
 
         # And publish the change to the broker
         await self.redis.publish("deletes", str(doc['_id']))
 
     def validate_owner_id(self, owner_id):
         if not owner_id:
-            raise Exception(\
-            "you can't modify objects without logging in.")
+            raise Exception("you can't modify objects without logging in.")

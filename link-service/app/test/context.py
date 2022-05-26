@@ -34,7 +34,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'fieldA': common
-            }
+            },
+            'since': 'always',
+            'queryID': random_id()
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -48,7 +50,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'fieldB': special
-            }
+            },
+            'since': 'always',
+            'queryID': random_id()
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -82,7 +86,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'fieldA': common
-            }
+            },
+            'since': 'always',
+            'queryID': random_id()
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -96,7 +102,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'fieldB': special
-            }
+            },
+            'since': 'always',
+            'queryID': random_id()
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -146,7 +154,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'tags': { '$all': [a, b, c] }
-            }
+            },
+            'since': 'always',
+            'queryID': random_id()
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -160,7 +170,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'tags': { '$elemMatch': { '$in': [a, b, c] } }
-            }
+            },
+            'since': 'always',
+            'queryID': random_id()
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -175,7 +187,9 @@ async def main():
                 'type': 'subscribe',
                 'query': {
                     'tags': { '$all': subset }
-                }
+                },
+                'since': 'always',
+                'queryID': random_id()
             })
             result = await recv(ws)
             assert result['type'] == 'success'
@@ -188,7 +202,9 @@ async def main():
                 'type': 'subscribe',
                 'query': {
                     'tags': { '$elemMatch': { '$in': subset } }
-                }
+                },
+                'since': 'always',
+                'queryID': random_id()
             })
             result = await recv(ws)
             assert result['type'] == 'success'
