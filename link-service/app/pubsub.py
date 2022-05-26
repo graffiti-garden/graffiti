@@ -55,7 +55,7 @@ class PubSub:
             # Unsubscribe the socket from any hanging queries.
             while self.subscriptions[socket_id]:
                 query_id = next(iter(self.subscriptions[socket_id]))
-                await self.unsubscribe(socket_id, query_id, hashed=True)
+                await self.unsubscribe(socket_id, query_id)
             # And delete all references to it.
             del self.subscriptions[socket_id]
             del self.sockets[socket_id]
@@ -68,9 +68,6 @@ class PubSub:
             since = ObjectId()
         else:
             since = ObjectId(since)
-
-        # Process the id
-        query_id = str(hash(query_id))
 
         # Rewrite the query to account for contexts
         query = query_rewrite(query)
@@ -121,6 +118,7 @@ class PubSub:
         if delete_ids:
             if not await self.publish_results(delete_ids, query_paths,
                     type='deletes',
+                    historical=False,
                     now=now,
                     complete=(not insert_ids)):
                 return
@@ -194,9 +192,7 @@ class PubSub:
         else:
             counter['count'] += 1
 
-    async def unsubscribe(self, socket_id, query_id, hashed=False):
-        if not hashed:
-            query_id = str(hash(query_id))
+    async def unsubscribe(self, socket_id, query_id):
         if query_id not in self.subscriptions[socket_id]:
             raise Exception("query_id does not exist.")
 
