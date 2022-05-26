@@ -18,20 +18,17 @@ export default class GraffitiSocket {
     this.connect()
   }
 
-  async connect() {
-    while (true) {
-      try {
-        this.ws = new WebSocket(this.wsURL)
-        this.ws.onmessage = this.onSocketMessage.bind(this)
-        this.ws.onerror   = this.connect.bind(this)
-        this.ws.onclose   = this.connect.bind(this)
-        this.ws.onconnect = this.onConnect.bind(this)
-      } catch {
-        console.log("lost connection to graffiti server, attemping reconnect soon...")
-        // If it didn't work, sleep and try again
-        await Promise(resolve => setTimeout(resolve, 2000))
-      }
-    }
+  connect() {
+    this.ws = new WebSocket(this.wsURL)
+    this.ws.onmessage = this.onMessage.bind(this)
+    this.ws.onclose   = this.onClose.bind(this)
+    this.ws.onopen    = this.onOpen.bind(this)
+  }
+
+  async onClose() {
+    console.error("lost connection to graffiti server, attemping reconnect soon...")
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    this.connect()
   }
 
   async request(msg) {
@@ -146,7 +143,8 @@ export default class GraffitiSocket {
     })
   }
 
-  async onConnect() {
+  async onOpen() {
+    console.log("connected to the graffiti socket")
     // Resubscribe to hanging queries
     for (queryID in this.subscriptionData) {
       const sd = this.subscriptionData[queryID]

@@ -1,4 +1,4 @@
-export default class Auth {
+export default class GraffitiAuth {
 
   constructor(origin) {
     this.origin = new URL(origin)
