@@ -220,7 +220,6 @@ class GraffitiApp extends HTMLElement {
     })
 
     // Create a place for it to go
-    const shadow = this.attachShadow({mode: 'open'})
     const appEl = document.createElement('div')
     const graffitiLogin = document.createElement('graffiti-login')
     graffitiLogin.setAttribute('v-slot', 'graffiti')
@@ -229,7 +228,7 @@ class GraffitiApp extends HTMLElement {
 
     // Mount
     appEl.appendChild(graffitiLogin)
-    shadow.appendChild(appEl)
+    this.appendChild(appEl)
     app.mount(appEl)
   }
 }
