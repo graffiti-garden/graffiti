@@ -1,202 +1,189 @@
-import GraffitiTools from './vanilla.js'
+import GraffitiAuth   from './auth.js'
+import GraffitiSocket from './socket.js'
 
-export default function GraffitiComponents(vue, graffitiURL='https://graffiti.csail.mit.edu') {
+const falseID = Math.random().toString(36).substr(2)
 
-  const graffiti = new GraffitiTools(graffitiURL)
-  const falseID = Math.random().toString(36).substr(2)
+function GraffitiLogin(auth) { return {
+  data: () => ({
+    loggedIn: false,
+    myID: falseID
+  }),
 
-  const GraffitiLogin = {
-    data: () => ({
-      loggedIn: false,
-      myID: falseID
-    }),
+  created: async function() {
+    // Wait for login
+    this.loggedIn = await auth.loggedIn()
+    this.myID = await auth.myID()
+  },
 
-    async created() {
-      // Wait for login
-      // (note that this won't necessarily load
-      //  before creation, hence the false ID)
-      this.loggedIn = await graffiti.loggedIn()
-      this.myID = await graffiti.myID()
+  methods: {
+
+    logIn() {
+      auth.logIn()
     },
 
-    methods: {
-
-      logIn() {
-        graffiti.logIn()
-      },
-
-      logOut() {
-        graffiti.logOut()
-      },
-
+    logOut() {
+      auth.logOut()
     },
 
-    template: `
-    <div class="graffiti-log-in-bar">
-      <template v-if="loggedIn">
-        <button class="graffiti-log-in-button" @click="logOut">log out of graffiti</button>
-      </template>
-      <template v-else>
-        <button class="graffiti-log-in-button" @click="logIn">log in to graffiti</button>
-      </template>
-    </div>
+  },
 
-    <slot
-      :logOut        = "logOut"
-      :logIn         = "logIn"
-      :loggedIn      = "loggedIn"
-      :myID          = "myID"
-    ></slot>
-    `
-  }
+  template: `
+  <div class="graffiti-log-in-bar">
+    <template v-if="loggedIn">
+      <button class="graffiti-log-in-button" @click="logOut">log out of graffiti</button>
+    </template>
+    <template v-else>
+      <button class="graffiti-log-in-button" @click="logIn">log in to graffiti</button>
+    </template>
+  </div>
 
-  const GraffitiCollection = {
+  <slot
+    :loggedIn = "loggedIn"
+    :myID     = "myID"
+  ></slot>
+  `
+}}
 
-    props: {
+function GraffitiCollection(socket) { return {
+  
+  data: () => ({
+    objectMap: {},
+    queryID: null
+  }),
 
-      // The query applied to objects in the collection
-      query: {
-        type: Object,
-        default: () => ({})
-      },
+  props: {
 
-      // How many objects should be
-      // pre-loaded from the start
-      pageSize: {
-        type: Number,
-        default: 1,
-      },
+    // The query applied to objects in the collection
+    query: {
+      type: Object,
+      default: () => ({})
+    },
 
-      // The way that objects are sorted
-      sort: {
-        type: Function,
-        // by default newest -> oldest
-        // so that objects[0] is the newest
-        default: function(a, b) {
-          return b._timestamp - a._timestamp
-        },
-      },
-
-      // Will the objects be synchronized
-      // live or only updated in response
-      // to manual edits or fetches
-      live: {
-        type: Boolean,
-        default: false
+    // The way that objects are sorted
+    sort: {
+      type: Function,
+      // by default newest -> oldest
+      // so that objects[0] is the newest
+      default: function(a, b) {
+        return b.timestamp - a.timestamp
       },
     },
 
-    data: () => ({
-      canRewind: true,
-    }),
+    // Are timestamps automatically added to objects
+    timestamp: {
+      type: Boolean,
+      default: true
+    }
+  },
 
-    computed: {
-      // Objects sorted by the sort function
-      objects() {
-        return Object.values(this.objectMap).sort(this.sort)
-      },
+  computed: {
+    // Objects sorted by the sort function
+    objects() {
+      return Object.values(this.objectMap).sort(this.sort)
     },
+  },
 
-    setup(props) {
-      // Create an object full of results
-      const objectMap = vue.reactive({})
+  beforeUnmount() {
+    if (this.queryID) {
+      this.unsubscribe(this.queryID)
+    }
+  },
 
-      // Begin subscribing to an object
-      const querySubscriber = graffiti.QuerySubscriber(objectMap, props.live)
-      // Make sure it will disconnect appropriately
-      vue.onBeforeUnmount(querySubscriber.delete)
+  watch: {
+    query: {
+      handler: async function(newQuery, oldQuery) {
+        // Don't update if the query hasn't actually changed
+        // (it can get triggered twice because of immediate)
+        const newQueryJSON = JSON.stringify(newQuery)
+        const oldQueryJSON = JSON.stringify(oldQuery)
+        if (newQueryJSON == oldQueryJSON) return
 
-      return { objectMap, querySubscriber }
-    },
+        // If the query includes the random string, continue.
+        // The query will update after login
+        if (newQueryJSON.includes(falseID)) return
 
-    watch: {
-      query: {
-        handler: async function(newQuery, oldQuery) {
-          // Don't update if the query hasn't actually changed
-          // (it can get triggered twice because of immediate)
-          const newQueryJSON = JSON.stringify(newQuery)
-          const oldQueryJSON = JSON.stringify(oldQuery)
-          if (newQueryJSON == oldQueryJSON) return
-
-          // If the query includes the random string, continue.
-          // The query will update after login
-          if (newQueryJSON.includes(falseID)) return
-
-          // Update the query and rewind
-          await this.querySubscriber.update(newQuery)
-          await this.rewind()
-        },
-        deep: true,
-        immediate: true
-      },
-    },
-
-    methods: {
-      async rewind(pageSize=null) {
-        if (pageSize == null) pageSize = this.pageSize
-        this.canRewind = await this.querySubscriber.rewind(pageSize)
-        return this.canRewind
-      },
-
-      async play(pageSize=null) {
-        if (pageSize == null) pageSize = this.pageSize
-        return await this.querySubscriber.play(pageSize)
-      },
-
-      async update(object) {
-        // Send it to the server
-        const id = await graffiti.update(object)
-
-        // Then make sure it is returned in the query
-        const output = await graffiti.queryOne({ "$and": [
-          this.query,
-          { _id: id }
-        ]})
-
-        if (!output) {
-          await graffiti.delete(id)
-          throw {
-            type: 'Error',
-            content: 'Tried to update an object, but it would not be included in this collection\'s query.',
-            object: object,
-            query: this.query
-          }
-        } else {
-          this.objectMap[id] = output
+        // Unsubscribe to the existing query
+        if (this.queryID) {
+          const oldQueryID = this.queryID
+          this.queryID = null
+          await socket.unsubscribe(oldQueryID)
         }
-      },
 
-      async delete_(id) {
-        if (!(id in this.objectMap)) {
-          throw {
-            type: 'Error',
-            content: 'An ID was supposed to be deleted, but it is not in this collection',
-            id: id
-          }
+        // Clear the output
+        Object.keys(this.objectMap).forEach(k => delete this.objectMap[k])
+
+        // And subscribe to the new one
+        if (this.timestamp) {
+          newQuery = { "$and": [newQuery, { timestamp: { "$type": "number" } } ] }
         }
-        await graffiti.delete(id)
-        delete this.objectMap[id]
+        this.queryID = await socket.subscribe(newQuery, this.objectMap)
       },
+      deep: true,
+      immediate: true
+    },
+  },
+
+  methods: {
+    async update(object) {
+      // Automatically update the timestamp
+      if (this.timestamp) {
+        object.timestamp = Date.now()
+      }
+
+      // Send it to the server
+      const id = await socket.update(object)
+
+      // Listen if the ID actually gets added to the collection
+      const updatePromise = new Promise( (resolve, reject) => {
+        document.addEventListener(id, () => resolve() )
+        // But if it takes too long, timeout
+        setTimeout(() => reject(new Error('timeout')), 5000)
+      })
+
+      // Watch for changes to the object
+      const unwatch = this.$watch(`objectMap.${id}`, () => {
+        document.dispatchEvent(new Event(id))
+      })
+
+      try {
+        await updatePromise
+      } catch {
+        await socket.delete(id)
+        throw {
+          type: 'error',
+          content: 'the object you updated isn\'t included in this collection, so it has been deleted',
+          object
+        }
+      } finally {
+        // Stop watching
+        unwatch()
+      }
+
+      return id
     },
 
-    // Fill the inside with whatever
-    template: `
-    <slot
-      :object        = "objects[0]"
-      :objects       = "objects"
-      :update        = "update"
-      :delete        = "delete_"
-      :play          = "play"
-      :rewind        = "rewind"
-      :canRewind     = "canRewind"
-    ></slot>`
-  }
+    async delete_(id) {
+      if (!(id in this.objectMap)) {
+        throw {
+          type: 'error',
+          content: 'the object ID you\'re trying to delete is not in this collection',
+          id
+        }
+      }
+      await socket.delete(id)
+    },
+  },
 
-  return { 
-    'graffiti-login': GraffitiLogin, 
-    'graffiti-collection': GraffitiCollection 
-  }
-}
+  // Fill the inside with whatever
+  template: `
+  <slot
+    :object        = "objects[0]"
+    :objects       = "objects"
+    :objectMap     = "objectMap"
+    :update        = "update"
+    :delete        = "delete_"
+  ></slot>`
+}}
 
 class GraffitiApp extends HTMLElement {
   constructor() {
@@ -209,14 +196,26 @@ class GraffitiApp extends HTMLElement {
       data = JSON.parse(dataStr)
     }
 
-    let graffitiURL = this.getAttribute('graffitiURL')
+    let graffitiURL = this.getAttribute('graffiti-url')
     if (!graffitiURL) {
       graffitiURL = 'https://graffiti.csail.mit.edu'
     }
 
+    this.initialize(data, graffitiURL)
+  }
+
+  async initialize(data, graffitiURL) { 
+
+    // Authorize and establish a socket
+    const auth = new GraffitiAuth(graffitiURL)
+    const socket = new GraffitiSocket(graffitiURL, await auth.token())
+
     // Create the app
     const app = Vue.createApp({
-      components: GraffitiComponents(Vue, graffitiURL),
+      components: {
+        graffitiLogin: GraffitiLogin(auth),
+        graffitiCollection: GraffitiCollection(socket)
+      },
       data: () => (data)
     })
 

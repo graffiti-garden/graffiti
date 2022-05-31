@@ -15,6 +15,7 @@ export default class GraffitiSocket {
       this.wsURL.searchParams.set("token", token)
     }
 
+    this.open = false
     this.connect()
   }
 
@@ -26,6 +27,7 @@ export default class GraffitiSocket {
   }
 
   async onClose() {
+    this.open = false
     console.error("lost connection to graffiti server, attemping reconnect soon...")
     await new Promise(resolve => setTimeout(resolve, 2000))
     this.connect()
@@ -41,6 +43,13 @@ export default class GraffitiSocket {
         resolve(e.data)
       })
     })
+
+    // Wait for the socket to open
+    if (!this.open) {
+      await new Promise(resolve => {
+        document.addEventListener("graffitiOpen", () => resolve() )
+      })
+    }
 
     // Send the request
     msg.messageID = messageID
@@ -75,13 +84,19 @@ export default class GraffitiSocket {
         // For each data point, either add or remove it
         for (const r of data.results) {
           if (data.type == 'updates') {
+            if (Object.keys(sd.output).length > 10000) {
+              this.unsubscribe(data.queryID)
+              throw "query is too big! unsubscribed"
+            }
             sd.output[r._id] = r
           } else {
-            delete sd.output[r]
+            if (r in sd.output) {
+              delete sd.output[r]
+            }
           }
         }
 
-        // And update this queries notion of "now"
+        // And update this query's notion of "now"
         if (data.complete) {
           if (data.historical) {
             sd.historyComplete = true
@@ -110,18 +125,23 @@ export default class GraffitiSocket {
     })
   }
 
-  async subscribe(query, since, output, queryID=null, historyComplete=false) {
+  async subscribe(query, output, since=null, queryID=null, timestamp=true) {
     // Create a random query ID
     if (!queryID) {
       queryID = Math.random().toString(36).substr(2)
     }
 
+    if (timestamp) {
+      query = { "$and": [query, {"timestamp": { "$type": "number" } } ] }
+    }
+
     // Store the subscription in case of disconnections
     this.subscriptionData[queryID] = {
-      query, since, output, historyComplete
+      query, since, output,
+      historyComplete: false
     }
     try {
-      const data = await this.request({
+      await this.request({
         type: "subscribe",
         queryID, query, since
       })
@@ -130,6 +150,8 @@ export default class GraffitiSocket {
       delete this.subscriptionData[queryID]
       throw  e
     }
+
+    return queryID
   }
 
   async unsubscribe(queryID) {
@@ -145,10 +167,12 @@ export default class GraffitiSocket {
 
   async onOpen() {
     console.log("connected to the graffiti socket")
+    this.open = true
+    document.dispatchEvent(new Event("graffitiOpen"))
     // Resubscribe to hanging queries
     for (const queryID in this.subscriptionData) {
       const sd = this.subscriptionData[queryID]
-      await this.subscribe(sd.query, sd.since, sd.output, queryID, sd.historyComplete)
+      await this.subscribe(sd.query, sd.output, sd.since, queryID, false)
     }
   }
 }
