@@ -35,7 +35,7 @@ async def main():
             'query': {
                 'fieldA': common
             },
-            'since': 'always',
+            'since': None,
             'queryID': random_id()
         })
         result = await recv(ws)
@@ -51,7 +51,7 @@ async def main():
             'query': {
                 'fieldB': special
             },
-            'since': 'always',
+            'since': None,
             'queryID': random_id()
         })
         result = await recv(ws)
@@ -87,7 +87,7 @@ async def main():
             'query': {
                 'fieldA': common
             },
-            'since': 'always',
+            'since': None,
             'queryID': random_id()
         })
         result = await recv(ws)
@@ -103,7 +103,7 @@ async def main():
             'query': {
                 'fieldB': special
             },
-            'since': 'always',
+            'since': None,
             'queryID': random_id()
         })
         result = await recv(ws)
@@ -155,7 +155,7 @@ async def main():
             'query': {
                 'tags': { '$all': [a, b, c] }
             },
-            'since': 'always',
+            'since': None,
             'queryID': random_id()
         })
         result = await recv(ws)
@@ -171,7 +171,7 @@ async def main():
             'query': {
                 'tags': { '$elemMatch': { '$in': [a, b, c] } }
             },
-            'since': 'always',
+            'since': None,
             'queryID': random_id()
         })
         result = await recv(ws)
@@ -188,7 +188,7 @@ async def main():
                 'query': {
                     'tags': { '$all': subset }
                 },
-                'since': 'always',
+                'since': None,
                 'queryID': random_id()
             })
             result = await recv(ws)
@@ -203,7 +203,7 @@ async def main():
                 'query': {
                     'tags': { '$elemMatch': { '$in': subset } }
                 },
-                'since': 'always',
+                'since': None,
                 'queryID': random_id()
             })
             result = await recv(ws)

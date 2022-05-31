@@ -63,10 +63,11 @@ def socket_schema():
         "properties": {
             "type": { "const": "subscribe" },
             "query": { "$ref": "#/definitions/query" },
-            "since": {
-                "type": "string",
-                # Either now, always or a mongo object ID
-                "pattern": "^(now|always|[a-f\d]{24})$"
+            "since": { "oneOf": [{
+                    "type": "string",
+                    # A mongo object ID
+                    "pattern": "^([a-f\d]{24})$"
+                }, { "type": "null" }]
             },
             "queryID": { "type": "string" }
         },

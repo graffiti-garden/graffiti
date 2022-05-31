@@ -35,7 +35,7 @@ async def main():
             'query': {
                 'tags': custom_tag
             },
-            "since": "always",
+            "since": None,
             "queryID": query_id
         })
         result = await recv(ws)
@@ -79,7 +79,7 @@ async def main():
             'query': {
                 'tags': custom_tag
             },
-            "since": "always",
+            "since": None,
             "queryID": query_id
         })
         result = await recv(ws)

@@ -19,7 +19,7 @@ async def main():
             'query': {
                 'tags': custom_tag
             },
-            'since': 'now',
+            'since': None,
             'queryID': random_id()
         })
         result = await recv(ws)

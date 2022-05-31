@@ -62,12 +62,11 @@ class PubSub:
 
     async def subscribe(self, query, since, socket_id, query_id):
         # Process since
-        if since == "always":
-            since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
-        elif since == "now":
-            since = ObjectId()
-        else:
+        if since:
             since = ObjectId(since)
+        else:
+            # woo Y2K!
+            since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
 
         # Rewrite the query to account for contexts
         query = query_rewrite(query)

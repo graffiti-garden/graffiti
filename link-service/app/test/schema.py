@@ -37,14 +37,8 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "subscribe",
     "query": {},
-    "since": "now",
+    "since": None,
     "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {},
-    "since": "always",
-    "queryID": "asdf"
 }, {
     "messageID": random_id(),
     "type": "subscribe",
@@ -98,7 +92,7 @@ def valid_requests(my_id):
     "query": {
         "_to": my_id 
     },
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }, {
     # To myself nested
@@ -109,7 +103,7 @@ def valid_requests(my_id):
             "_to": my_id
         }
     },
-    "since": "always",
+    "since": None,
     "queryID": random_id()
 }, {
     # Weird fields
@@ -118,7 +112,7 @@ def valid_requests(my_id):
     "query": {
         "~a": "b",
     },
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }, {
     # Valid args
@@ -131,7 +125,7 @@ def valid_requests(my_id):
             "z": "b"
         }
     },
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }]
 
@@ -161,7 +155,7 @@ invalid_requests = [{
 }, {
     "messageID": random_id(),
     "type": "subscribe",
-    "since": "now"
+    "since": None
 }, {
     "messageID": random_id(),
     "type": "subscribe",
@@ -174,13 +168,13 @@ invalid_requests = [{
 }, {
     "messageID": random_id(),
     "type": "subscribe",
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }, {
     "messageID": random_id(),
     "type": "subscribe",
     "query": {},
-    "since": "now"
+    "since": None
 }, {
     "messageID": random_id(),
     "type": "unsubscribe"
@@ -273,7 +267,7 @@ invalid_requests = [{
     "messageID": random_id(),
     "type": "subscribe",
     "query": {},
-    "since": "notnow",
+    "since": "asdf",
     "queryID": random_id()
 }, {
     # Invalid operators
@@ -282,7 +276,7 @@ invalid_requests = [{
     "query": {
         "$asdf": "wassup"
     },
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }, {
     # Invalid operators nested
@@ -293,7 +287,7 @@ invalid_requests = [{
             "$asdf": "wassup"
         }
     },
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }, {
     # To someone else
@@ -302,7 +296,7 @@ invalid_requests = [{
     "query": {
         "_to": random_id()
     },
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }, {
     # To someone else nested
@@ -313,7 +307,7 @@ invalid_requests = [{
             "_to": random_id()
         }
     },
-    "since": "now",
+    "since": None,
     "queryID": random_id()
 }]
 

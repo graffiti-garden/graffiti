@@ -24,12 +24,10 @@ class Broker:
         # Initialize the batch event
         self.has_batch = asyncio.Event()
 
-        # Listen for updates
-        listener = asyncio.create_task(self.listen())
-        processor = asyncio.create_task(self.process_batches())
-
-        await processor
-        await listener
+        # Listen for updates and process them
+        await asyncio.gather(
+                self.listen(),
+                self.process_batches())
 
     async def listen(self):
         async with self.redis.pubsub() as p:
