@@ -90,9 +90,6 @@ class PubSub:
         now = str(ObjectId())
         asyncio.create_task(self.process_existing(query, since, query_path, now))
 
-        return query_id
-
-
     async def process_existing(self, query, since, query_path, now):
         # Rewrite
         query = {
@@ -177,7 +174,6 @@ class PubSub:
             output['results'] = results
 
             tasks.append(self.attempt_send(socket_id, output, counter))
-
 
         await asyncio.gather(*tasks)
 

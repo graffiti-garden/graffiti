@@ -32,7 +32,6 @@ def recursive_property(name):
     # Or something a constant
     { "type": "string" },
     { "type": "number" },
-    { "type": "integer" },
     { "type": "boolean" },
     { "type": "null" }
 ]}

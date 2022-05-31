@@ -53,12 +53,36 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": {
+        "foo": True
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        "foo": None
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        "foo": 123.4
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        "foo": 1234
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
         "_id": random_id(),
         "_to": [random_id(), random_id()],
         "foo": {
-            "blah": "asdf",
+            "blah": False,
             "bar": {
-                "asdf": ["asdf"]
+                "asdf": 1234.14
             }
         },
         "_contexts": [{
