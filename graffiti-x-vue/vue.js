@@ -1,46 +1,35 @@
 import GraffitiAuth   from './auth.js'
 import GraffitiSocket from './socket.js'
 
-const falseID = Math.random().toString(36).substr(2)
-
-function GraffitiLogin(auth) { return {
+function GraffitiLogIn(auth) { return {
   data: () => ({
     loggedIn: false,
-    myID: falseID
   }),
 
   created: async function() {
     // Wait for login
     this.loggedIn = await auth.loggedIn()
-    this.myID = await auth.myID()
   },
 
   methods: {
-
-    logIn() {
-      auth.logIn()
-    },
-
-    logOut() {
-      auth.logOut()
-    },
-
+    click() {
+      if (this.loggedIn) {
+        auth.logOut()
+      } else {
+        auth.logIn()
+      }
+    }
   },
 
   template: `
-  <div class="graffiti-log-in-bar">
+  <button class="graffiti-log-in-button" @click="click">
     <template v-if="loggedIn">
-      <button class="graffiti-log-in-button" @click="logOut">log out of graffiti</button>
+      log out of graffiti
     </template>
     <template v-else>
-      <button class="graffiti-log-in-button" @click="logIn">log in to graffiti</button>
+      log in to graffiti
     </template>
-  </div>
-
-  <slot
-    :loggedIn = "loggedIn"
-    :myID     = "myID"
-  ></slot>
+  </button>
   `
 }}
 
@@ -56,7 +45,7 @@ function GraffitiCollection(socket) { return {
     // The query applied to objects in the collection
     query: {
       type: Object,
-      default: () => ({})
+      default: () => (null)
     },
 
     // The way that objects are sorted
@@ -69,11 +58,6 @@ function GraffitiCollection(socket) { return {
       },
     },
 
-    // Are timestamps automatically added to objects
-    timestamp: {
-      type: Boolean,
-      default: true
-    }
   },
 
   computed: {
@@ -92,15 +76,14 @@ function GraffitiCollection(socket) { return {
   watch: {
     query: {
       handler: async function(newQuery, oldQuery) {
+        // Don't run on null queries
+        if (!newQuery) return
+
         // Don't update if the query hasn't actually changed
         // (it can get triggered twice because of immediate)
         const newQueryJSON = JSON.stringify(newQuery)
         const oldQueryJSON = JSON.stringify(oldQuery)
         if (newQueryJSON == oldQueryJSON) return
-
-        // If the query includes the random string, continue.
-        // The query will update after login
-        if (newQueryJSON.includes(falseID)) return
 
         // Unsubscribe to the existing query
         if (this.queryID) {
@@ -112,10 +95,7 @@ function GraffitiCollection(socket) { return {
         // Clear the output
         Object.keys(this.objectMap).forEach(k => delete this.objectMap[k])
 
-        // And subscribe to the new one
-        if (this.timestamp) {
-          newQuery = { "$and": [newQuery, { timestamp: { "$type": "number" } } ] }
-        }
+        // And subscribe to the new query
         this.queryID = await socket.subscribe(newQuery, this.objectMap)
       },
       deep: true,
@@ -125,11 +105,6 @@ function GraffitiCollection(socket) { return {
 
   methods: {
     async update(object) {
-      // Automatically update the timestamp
-      if (this.timestamp) {
-        object.timestamp = Date.now()
-      }
-
       // Send it to the server
       const id = await socket.update(object)
 
@@ -185,51 +160,18 @@ function GraffitiCollection(socket) { return {
   ></slot>`
 }}
 
-class GraffitiApp extends HTMLElement {
-  constructor() {
-    super();
-
-    // Get the data
-    const dataStr = this.getAttribute('data');
-    let data = {}
-    if (dataStr) {
-      data = JSON.parse(dataStr)
+export default function install(Vue, options) {
+  let graffitiURL = 'https://graffiti.csail.mit.edu'
+  if (options) {
+    if (options.graffitiURL) {
+      graffitiURL = options.graffitiURL
     }
-
-    let graffitiURL = this.getAttribute('graffiti-url')
-    if (!graffitiURL) {
-      graffitiURL = 'https://graffiti.csail.mit.edu'
-    }
-
-    this.initialize(data, graffitiURL)
   }
 
-  async initialize(data, graffitiURL) { 
+  // Authorize and establish a socket
+  const auth = new GraffitiAuth(graffitiURL)
+  const socket = new GraffitiSocket(graffitiURL, auth)
 
-    // Authorize and establish a socket
-    const auth = new GraffitiAuth(graffitiURL)
-    const socket = new GraffitiSocket(graffitiURL, await auth.token())
-
-    // Create the app
-    const app = Vue.createApp({
-      components: {
-        graffitiLogin: GraffitiLogin(auth),
-        graffitiCollection: GraffitiCollection(socket)
-      },
-      data: () => (data)
-    })
-
-    // Create a place for it to go
-    const appEl = document.createElement('div')
-    const graffitiLogin = document.createElement('graffiti-login')
-    graffitiLogin.setAttribute('v-slot', 'graffiti')
-    graffitiLogin.innerHTML = this.innerHTML
-    this.innerHTML = ""
-
-    // Mount
-    appEl.appendChild(graffitiLogin)
-    this.appendChild(appEl)
-    app.mount(appEl)
-  }
+  Vue.component('graffiti-log-in', GraffitiLogIn(auth))
+  Vue.component('graffiti-collection', GraffitiCollection(socket))
 }
-customElements.define('graffiti-app', GraffitiApp)
