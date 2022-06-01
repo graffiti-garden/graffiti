@@ -2,18 +2,9 @@ import GraffitiAuth   from './auth.js'
 import GraffitiSocket from './socket.js'
 
 function GraffitiLogIn(auth) { return {
-  data: () => ({
-    loggedIn: false,
-  }),
-
-  created: async function() {
-    // Wait for login
-    this.loggedIn = await auth.loggedIn()
-  },
-
   methods: {
     click() {
-      if (this.loggedIn) {
+      if (this.$graffiti.loggedIn) {
         auth.logOut()
       } else {
         auth.logIn()
@@ -23,7 +14,7 @@ function GraffitiLogIn(auth) { return {
 
   template: `
   <button class="graffiti-log-in-button" @click="click">
-    <template v-if="loggedIn">
+    <template v-if="$graffiti.loggedIn">
       log out of graffiti
     </template>
     <template v-else>
@@ -160,18 +151,17 @@ function GraffitiCollection(socket) { return {
   ></slot>`
 }}
 
-export default function install(Vue, options) {
-  let graffitiURL = 'https://graffiti.csail.mit.edu'
-  if (options) {
-    if (options.graffitiURL) {
-      graffitiURL = options.graffitiURL
-    }
-  }
-
+export default async function Graffiti(graffitiURL='https://graffiti.csail.mit.edu') {
   // Authorize and establish a socket
   const auth = new GraffitiAuth(graffitiURL)
-  const socket = new GraffitiSocket(graffitiURL, auth)
+  const socket = new GraffitiSocket(graffitiURL, await auth.token())
 
-  Vue.component('graffiti-log-in', GraffitiLogIn(auth))
-  Vue.component('graffiti-collection', GraffitiCollection(socket))
+  const myID = await auth.myID()
+  const loggedIn = await auth.loggedIn()
+
+  return function install(Vue, options) {
+    Vue.component('graffiti-log-in', GraffitiLogIn(auth))
+    Vue.component('graffiti-collection', GraffitiCollection(socket))
+    Vue.config.globalProperties.$graffiti = {myID, loggedIn}
+  }
 }

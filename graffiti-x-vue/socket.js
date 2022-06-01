@@ -1,6 +1,6 @@
 export default class GraffitiSocket {
 
-  constructor(origin, auth) {
+  constructor(origin, token) {
     this.open = false
     this.subscriptionData = {}
 
@@ -12,16 +12,12 @@ export default class GraffitiSocket {
     } else {
       this.wsURL.protocol = 'ws:'
     }
+    if (token) {
+      this.wsURL.searchParams.set("token", token)
+    }
 
-    // Wait for the token
-    auth.token().then((t) => {
-      // If it exists, add it to the search params
-      if (t) {
-        this.wsURL.searchParams.set("token", t)
-      }
-      // And commence connection
-      this.connect()
-    })
+    // And commence connection
+    this.connect()
   }
 
   connect() {

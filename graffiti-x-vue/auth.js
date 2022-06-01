@@ -47,6 +47,7 @@ export default class GraffitiAuth {
     }
 
     this.initialized = true
+    document.dispatchEvent(new Event("graffitiInitialized"))
   }
 
   async codeToToken(code, clientID, clientSecret) {
@@ -91,8 +92,10 @@ export default class GraffitiAuth {
   }
 
   async loggedIn() {
-    while (!this.initialized) {
-      await new Promise(resolve => setTimeout(resolve, 100))
+    if (!this.initialized) {
+      await new Promise(resolve => {
+        document.addEventListener("graffitiInitialized", () => resolve() )
+      })
     }
     return (this.tokenValue != null) && (this.myIDValue != null)
   }
