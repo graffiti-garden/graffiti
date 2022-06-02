@@ -59,16 +59,11 @@ class Broker:
         # Continually process batches
         # and send the results back.
         while True:
-            async for now, query_hash, insert_ids, delete_ids in self.process_batch():
-                # Unsubscribe might have happened in the background
-                if query_hash not in self.hash_to_paths:
-                    continue
-
+            now, results = await self.process_batch()
+            if results:
                 # Publish the changes
                 await self.redis.publish("results", json.dumps({
-                    'query_paths':  list(self.hash_to_paths[query_hash]),
-                    'insert_ids': insert_ids,
-                    'delete_ids': delete_ids,
+                    'results': results,
                     'now': now
                 }))
 
@@ -91,6 +86,8 @@ class Broker:
         # If there are queries
         # (if not the changes can just be discarded,
         #  so they don't get sent twice)
+        now = None
+        results = []
         if self.queries:
 
             # See if the changing objects match any open queries
@@ -111,24 +108,31 @@ class Broker:
             facets = await result.next()
             now = str(facets.pop('now')[0]['_id'])
 
-            # For each query and each change that matches
-            # that query assign it as either an insert or delete
+            # Add the changes for each query to a single list
             for query_hash, groups in facets.items():
-                if groups:
-                    insert_ids = []
-                    delete_ids = []
-                    for group in groups:
-                        mongo_id = str(group["mongo_id"])
-                        if mongo_id in deleting_ids:
-                            object_id = group["_id"][0]
-                            delete_ids.append(object_id)
-                        else:
-                            insert_ids.append(mongo_id)
+                if query_hash not in self.hash_to_paths: continue
+                if not groups: continue
 
-                    yield now, query_hash, insert_ids, delete_ids
+                # For each change that matches the query
+                # assign it as either an insert or delete
+                insert_ids = []
+                delete_ids = []
+                for group in groups:
+                    mongo_id = str(group["mongo_id"])
+                    if mongo_id in deleting_ids:
+                        object_id = group["_id"][0]
+                        delete_ids.append(object_id)
+                    else:
+                        insert_ids.append(mongo_id)
 
-        # Finally, delete all marked items
+                results.append((
+                    list(self.hash_to_paths[query_hash]),
+                    insert_ids,
+                    delete_ids))
+
+        # Finally, delete all marked items and return
         await self.db.delete_many({ "_id": { "$in": deleting_mongo_ids } })
+        return now, results
 
     def add_query(self, query, query_path):
         # Take the hash of the query

@@ -31,12 +31,14 @@ class PubSub:
                 if msg is not None:
                     msg = json.loads(msg['data'])
 
-                    # Process the messages
-                    await self.process_broker(
-                            msg['insert_ids'],
-                            msg['delete_ids'],
-                            msg['query_paths'],
-                            msg['now'])
+                    # Process the messages in parallel
+                    await asyncio.gather(*[
+                        self.process_broker(
+                            insert_ids,
+                            delete_ids,
+                            query_paths,
+                            msg["now"])
+                        for query_paths, insert_ids, delete_ids in msg["results"]])
 
                 else:
                     await asyncio.sleep(0.1)

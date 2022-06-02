@@ -19,10 +19,15 @@ Run test scripts with:
 
 Install docker via [these instructions](https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository) and docker compose v2 via [these instructions](https://docs.docker.com/compose/cli-command/#install-on-linux). Make sure docker compose is installed to root.
 
+Add the following subdomains as CNAME's in your DNS:
+
+    app.YOUR_DOMAIN
+    auth.YOUR_DOMAIN
+
 Install certbot according to [these instructions](https://certbot.eff.org/instructions?).
 Then generate an SSL certificate with:
 
-    sudo certbot certonly --standalone
+    sudo certbot certonly --standalone -d YOUR_DOMAIN,app.YOUR_DOMAIN,auth.YOUR_DOMAIN
 
 This will generate the following files:
 
