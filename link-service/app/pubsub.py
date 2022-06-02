@@ -114,11 +114,12 @@ class PubSub:
         # Send the delete results
         # (all at once because it's just a list of IDs)
         if delete_ids:
-            if not await self.publish_results(delete_ids, query_paths,
+            query_paths = await self.publish_results(delete_ids, query_paths,
                     type='deletes',
                     historical=False,
                     now=now,
-                    complete=(not insert_ids)):
+                    complete=(not insert_ids))
+            if not query_paths:
                 return
 
         # Send the insert results in batches
@@ -148,20 +149,26 @@ class PubSub:
             if len(results) == batch_size:
                 # Send the results back
                 # And reset the batch
-                if not await self.publish_results(results, query_paths, complete=False, **kwargs):
+                query_paths = await self.publish_results(results, query_paths, complete=False, **kwargs)
+                if not query_paths:
                     break
                 results = []
 
         else:
             # Publish any remainder
-            await self.publish_results(results, query_paths, complete=True, **kwargs)
+            query_paths = await self.publish_results(results, query_paths, complete=True, **kwargs)
+
+        return query_paths
 
     async def publish_results(self, results, query_paths, **kwargs):
 
         tasks = []
-        counter = { 'count': 0 }
 
-        for socket_id, query_id in query_paths:
+        # Keep track of the query paths that are still active
+        live_paths = []
+
+        for query_path in query_paths:
+            socket_id, query_id = query_path
 
             # If we have unsubscribed, no good
             if socket_id not in self.subscriptions:
@@ -175,19 +182,20 @@ class PubSub:
             output['queryID'] = query_id
             output['results'] = results
 
-            tasks.append(self.attempt_send(socket_id, output, counter))
+            tasks.append(self.attempt_send(socket_id, output, query_path, live_paths))
 
         await asyncio.gather(*tasks)
 
-        return counter['count'] > 0
+        return live_paths
 
-    async def attempt_send(self, socket_id, msg, counter):
+    async def attempt_send(self, socket_id, msg, query_path, live_paths):
         try:
             await self.sockets[socket_id].send_json(msg)
         except:
             pass
         else:
-            counter['count'] += 1
+            # Attempt succeeded so maintain the query path
+            live_paths.append(query_path)
 
     async def unsubscribe(self, socket_id, query_id):
         if query_id not in self.subscriptions[socket_id]:
