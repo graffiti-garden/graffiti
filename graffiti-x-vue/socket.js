@@ -126,14 +126,10 @@ export default class GraffitiSocket {
     })
   }
 
-  async subscribe(query, output, since=null, queryID=null, timestamp=true) {
+  async subscribe(query, output, since=null, queryID=null) {
     // Create a random query ID
     if (!queryID) {
       queryID = Math.random().toString(36).substr(2)
-    }
-
-    if (timestamp) {
-      query = { "$and": [query, {"timestamp": { "$type": "number" } } ] }
     }
 
     // Store the subscription in case of disconnections
