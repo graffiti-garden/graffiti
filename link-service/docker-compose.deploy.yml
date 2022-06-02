@@ -4,7 +4,7 @@ services:
 
   nginx:
     volumes:
-      - ./config/deploy.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/deploy.conf:/etc/nginx/nginx.conf:ro
       - /etc/letsencrypt/live/graffiti.csail.mit.edu/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
       - /etc/letsencrypt/live/graffiti.csail.mit.edu/privkey.pem:/etc/ssl/certs/privkey.pem:ro
     ports:
@@ -32,9 +32,9 @@ services:
   graffiti-auth:
     environment:
       DEBUG: 'false'
+    depends_on:
+      - mailserver
 
   graffiti-app:
     environment:
       DEBUG: 'false'
-    depends_on:
-      - mailserver
