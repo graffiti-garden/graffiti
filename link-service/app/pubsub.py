@@ -125,7 +125,7 @@ class PubSub:
         # Send the insert results in batches
         if insert_ids:
             query = {
-                "_id": { "$in": [ObjectId(insert_id) for insert_id in insert_ids] }
+                "_id": { "$in": [ObjectId(i) for i in insert_ids] }
             }
             await self.stream_query(query, query_paths,
                 type='updates',
@@ -162,35 +162,32 @@ class PubSub:
 
     async def publish_results(self, results, query_paths, **kwargs):
 
-        tasks = []
+        # Add the results to the message
+        msg = kwargs
+        msg['results'] = results
 
         # Keep track of the query paths that are still active
         live_paths = []
 
+        # Send the message to each socket 
+        tasks = []
         for query_path in query_paths:
-            socket_id, query_id = query_path
-
-            # If we have unsubscribed, no good
-            if socket_id not in self.subscriptions:
-                continue
-            if query_id not in self.subscriptions[socket_id]:
-                continue
-
-            # Add the parameters and results
-            # to the output and send.
-            output = kwargs
-            output['queryID'] = query_id
-            output['results'] = results
-
-            tasks.append(self.attempt_send(socket_id, output, query_path, live_paths))
-
+            tasks.append(self.attempt_send(msg, query_path, live_paths))
         await asyncio.gather(*tasks)
 
         return live_paths
 
-    async def attempt_send(self, socket_id, msg, query_path, live_paths):
+    async def attempt_send(self, msg, query_path, live_paths):
+        socket_id, query_id = query_path
+
+        # If we have unsubscribed, no good
+        if socket_id not in self.subscriptions:
+            return
+        if query_id not in self.subscriptions[socket_id]:
+            return
+
         try:
-            await self.sockets[socket_id].send_json(msg)
+            await self.sockets[socket_id].send_json(msg|{'queryID': query_id})
         except:
             pass
         else:

@@ -63,6 +63,7 @@ async def main():
     custom_tag = random_id()
     async def listen():
         async with websocket_connect(my_token) as ws:
+            query_id = random_id()
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'subscribe',
@@ -70,24 +71,28 @@ async def main():
                     'tags': custom_tag
                 },
                 'since': None,
-                'queryID': random_id()
+                'queryID': query_id
             })
             result = await recv(ws)
             assert result['type'] == 'success'
             result = await recv(ws)
             assert result['type'] == 'updates'
             assert len(result['results']) == 0
+            assert result['queryID'] == query_id
             result = await recv(ws)
             assert result['type'] == 'updates'
             assert len(result['results']) == 1
+            assert result['queryID'] == query_id
             result = await recv(ws)
             assert result['type'] == 'deletes'
             assert len(result['results']) == 1
+            assert result['queryID'] == query_id
             # For interleaved inserts and deletes
             messages = {}
             while len(messages) < big_size:
                 result = await recv(ws)
                 assert result['type'] == 'updates'
+                assert result['queryID'] == query_id
                 for r in result['results']:
                     messages[r['_id']] = r
             assert len(messages) == big_size
@@ -96,6 +101,7 @@ async def main():
             while adds < big_size or deletes < big_size:
                 result = await recv(ws)
                 assert result['type'] in ['updates', 'deletes']
+                assert result['queryID'] == query_id
                 for r in result['results']:
                     if result['type'] == 'updates':
                         messages[r['_id']] = r
