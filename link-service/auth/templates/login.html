@@ -65,8 +65,7 @@
       client_id: '{{client_id}}',
       redirect_uri: '{{redirect_uri}}',
       state: '{{state}}',
-      email: email,
-      origin: window.location.origin
+      email: email
     })
     window.location.replace(`email?${params.toString()}`)
   }

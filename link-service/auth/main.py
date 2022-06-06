@@ -21,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 debug = (getenv('DEBUG') == 'true')
 expiration_time = 60*float(getenv('AUTH_CODE_EXP_TIME')) # min -> sec
+domain = getenv('DOMAIN')
 secret = getenv('AUTH_SECRET')
 secret_namespace = uuid5(NAMESPACE_DNS, secret)
 
@@ -67,7 +68,6 @@ async def email(
         redirect_uri: str,
         state: str,
         email: str,
-        origin: str,
         request: Request):
 
     # Make email lowercase so one email
@@ -85,17 +85,21 @@ async def email(
     # Take the last part of the code (the signature)
     header, payload, signature = code.split('.')
 
-    login_link = f"{origin}/auth_socket_send?signature={signature}"
+    login_link = f"{domain}/auth_socket_send?signature={signature}"
 
     # Send the user the smaller part for verification
     if debug:
+        login_link = "http://" + login_link
+
         # In debug mode, print the login link
         print(f"login link: {login_link}")
     else:
+        login_link = "https://" + login_link
+
         # Otherwise, construct an email
         message = MIMEText(f"{login_link}")
         message["Subject"] = Header("login link")
-        message["From"] = f"graffiti <noreply@{origin.split('://')[1]}>"
+        message["From"] = f"graffiti <noreply@{domain}>"
         message["To"] = email
         message["Message-ID"] = make_msgid()
         message["Date"] = formatdate()
@@ -132,7 +136,8 @@ async def email(
         'redirect_uri': redirect_uri,
         'state': state,
         'code_body': header + '.' + payload,
-        'signature_hash': signature_hash
+        'signature_hash': signature_hash,
+        'domain': domain
     })
 
 @app.post("/token")

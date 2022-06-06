@@ -12,7 +12,7 @@ services:
       - 443:443
 
   mailserver:
-    image: mailserver/docker-mailserver:10.5.0
+    image: mailserver/docker-mailserver:11.0.0
     container_name: graffiti-mailserver
     hostname: ${DOMAIN}
     domainname: ${DOMAIN}
@@ -34,6 +34,7 @@ services:
   graffiti-auth:
     environment:
       DEBUG: 'false'
+      DOMAIN: ${DOMAIN}
     depends_on:
       - mailserver
 

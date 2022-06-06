@@ -15,7 +15,7 @@
 <script>
   // Listen for the signature over a websocket
 
-  const wsURL = new URL('auth_socket', window.location.origin)
+  const wsURL = new URL('auth_socket', {{domain}})
   if (wsURL.protocol == 'https:') {
     wsURL.protocol = 'wss:'
   } else {

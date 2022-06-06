@@ -9,6 +9,7 @@ services:
   graffiti-app:
     environment:
       DEBUG: 'true'
+      DOMAIN: 'localhost:5000'
 
   nginx:
     volumes:
