@@ -99,15 +99,12 @@ async def main():
             })
             result = await recv(ws)
             assert result['type'] == 'success'
+            await ws.close()
 
     # Perform a bunch of replacements with websockets in parallel
-    num_replacements = 1000
+    num_replacements = 100
     print(f"Replacing it a {num_replacements} times in parallel...")
-    tasks = []
-    for i in range(num_replacements):
-        tasks.append(asyncio.create_task(replace_object()))
-    for task in tasks:
-        await task
+    await asyncio.gather(*[replace_object() for i in range(num_replacements)])
     print("Success!")
 
     async with websocket_connect(my_token) as ws:

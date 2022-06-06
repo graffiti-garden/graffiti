@@ -1,9 +1,9 @@
 aiosmtplib==1.1.6 # Email
-pyjwt==2.3.0      # tokens
+pyjwt==2.4.0      # tokens
 
 jinja2==3.1.2            # For templating
 python-multipart==0.0.5  # For parsing multipart form data
 aiofiles==0.8.0          # For serving static files and templates
 
-fastapi==0.76.0           # Web framework
+fastapi==0.78.0           # Web framework
 uvicorn[standard]==0.17.6 # ASGI server

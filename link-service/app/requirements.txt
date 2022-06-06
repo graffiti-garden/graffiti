@@ -1,9 +1,9 @@
-motor==2.5.1      # Async MongoDB interface
+motor==3.0.0      # Async MongoDB interface
 aioredis==2.0.1   # Async Redis interface
 
-jsonschema==4.5.1 # Validate JSON
+jsonschema==4.6.0 # Validate JSON
 
-pyjwt==2.3.0      # Tokens
+pyjwt==2.4.0      # Tokens
 
-fastapi==0.76.0           # Web framework
+fastapi==0.78.0           # Web framework
 uvicorn[standard]==0.17.6 # ASGI server
