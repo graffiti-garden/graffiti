@@ -5,8 +5,8 @@ services:
   nginx:
     volumes:
       - ./config/nginx/deploy.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt/live/graffiti.csail.mit.edu/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
-      - /etc/letsencrypt/live/graffiti.csail.mit.edu/privkey.pem:/etc/ssl/certs/privkey.pem:ro
+      - /etc/letsencrypt/live/${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
     ports:
       - 80:80
       - 443:443
@@ -14,16 +14,18 @@ services:
   mailserver:
     image: mailserver/docker-mailserver:10.5.0
     container_name: graffiti-mailserver
-    hostname: graffiti.csail.mit.edu
-    domainname: graffiti.csail.mit.edu
+    hostname: ${DOMAIN}
+    domainname: ${DOMAIN}
     volumes:
       - ./config/mailserver:/tmp/docker-mailserver/
-      - /etc/letsencrypt/live/graffiti.csail.mit.edu/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
-      - /etc/letsencrypt/live/graffiti.csail.mit.edu/privkey.pem:/etc/ssl/certs/privkey.pem:ro
+      - /etc/letsencrypt/live/${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
       - /etc/localtime:/etc/localtime:ro
     expose:
       - 25
     env_file: config/mailserver.env
+    environment:
+      - POSTMASTER_ADDRESS=${POSTMASTER}
     cap_add:
       - NET_ADMIN
       - SYS_PTRACE
