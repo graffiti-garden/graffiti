@@ -24,8 +24,6 @@ services:
     expose:
       - 25
     env_file: config/mailserver.env
-    environment:
-      - POSTMASTER_ADDRESS=${POSTMASTER}
     cap_add:
       - NET_ADMIN
       - SYS_PTRACE
