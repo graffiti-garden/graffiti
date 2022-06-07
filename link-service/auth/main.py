@@ -85,7 +85,7 @@ async def email(
     # Take the last part of the code (the signature)
     header, payload, signature = code.split('.')
 
-    login_link = f"{domain}/auth_socket_send?signature={signature}"
+    login_link = f"auth.{domain}/auth_socket_send?signature={signature}"
 
     # Send the user the smaller part for verification
     if debug:

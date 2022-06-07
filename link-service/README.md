@@ -2,12 +2,12 @@
 
 ## Local Usage
 
-To launch this application locally, run:
+To launch the server locally, run:
 
     sudo docker compose up --build
 
 The application will be up at [http://localhost:5000](http://localhost:5000).
-If you are using the [Vue.js Graffiti plugin](https://github.com/csail-graffiti/vue), you might point your app to your local server as follows:
+If you are using the [Vue.js Graffiti plugin](https://github.com/csail-graffiti/vue), you might point to the local server as follows:
 
     Graffiti("http://localhost:5000").then(g=>createApp().use(g).mount("#app")
 
@@ -62,7 +62,7 @@ Clone this repository onto the server and edit the following variables in the `.
 
 ### SSL
 
-Add CNAME entries for the `app.DOMAIN` and `auth.DOMAIN` subdomains by adding these lines to your DNS (where DOMAIN is replaced with your server's domain):
+Add CNAME entries for the `app.DOMAIN` and `auth.DOMAIN` subdomains by adding these lines to your DNS (where `DOMAIN` is replaced with your server's domain):
 
     app.DOMAIN.  1800 IN CNAME DOMAIN
     auth.DOMAIN. 1800 IN CNAME DOMAIN
@@ -78,7 +78,7 @@ This will generate the following files:
 
 ### Mailserver
 
-To complete the mail server, first launch the server:
+First launch the server:
 
     sudo docker compose -f docker-compose.yml -f docker-compose.deploy.yml up --build
 
@@ -92,21 +92,21 @@ The generated file should already be split, but the sections are on new lines. R
 
     mail._domainkey.DOMAIN. 1800 IN TXT "v=DKIM1; h=sha256; k=rsa; p=" "MII...SiL" "6yL...UND" ...
 
-In addition, add these lines to your DNS to turn on the email security features DKIM and add SPF:
+In addition, add these lines to your DNS to turn on the email security features DKIM and SPF:
 
     _domainkey.DOMAIN. 1800 IN TXT "o=-"
     DOMAIN. 1800 IN TXT "v=spf1 a -all"
 
-Once the DNS propagates (again it might take an hour), you can test that the mail server is working by going to
+Once the DNS propagates (again, it might take an hour), you can test that the mail server is working by going to
 `https://auth.DOMAIN/client_id=&redirect_uri=`.
 Send an email to `test@allaboutspam.com` then go to [All About Spam](http://www.allaboutspam.com/email-server-test-report/index.php) and enter `noreply@DOMAIN` to see your test report.
 
-### Up and Down
+### Launching
 
-After configuring the server, which only needs to be done once, you can start it by running:
+Once everything is set up, you can start the server by running
 
     sudo docker compose -f docker-compose.yml -f docker-compose.deploy.yml up --build
 
-and shut it down by running:
+and shut it down by running
 
     sudo docker compose down --remove-orphans
