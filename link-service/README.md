@@ -66,10 +66,15 @@ On your server install:
 
 ### Configuration
 
-Clone this repository onto the server and edit the following variables in the `.env` file.
+Clone this repository onto the server and in the root directory create a file called `.env` with contents as follows:
 
-- `DOMAIN`: this should be the domain that points to your server, *e.g.* `graffiti.csail.mit.edu`. 
-- `SECRET`: this is used to authenticate users with the server. Make it unique and **keep it safe**!
+    # The domain name that points to the server
+    DOMAIN="graffiti.csail.mit.edu"
+
+    # A string used to encrypt authorization tokens
+    SECRET="something only i know"
+
+Make your secret unique and **keep it safe**!
 
 ### SSL
 
@@ -97,7 +102,7 @@ Once the docker application is running, create domain keys for the mail server:
 
     sudo docker exec graffiti-mailserver setup config dkim
 
-Copy the generated entry in `config/mailserver/opendkim/keys/DOMAIN/mail.txt` to your DNS.
+Copy the generated entry in `config/mailserver/opendkim/keys/example.com/mail.txt` to your DNS.
 To get things to work on the [CSAIL DNS](https://webdns.csail.mit.edu/), the entire `mail.txt` needs to be on a single line, but split up into segments of less than 256 characters.
 The generated file should already be split, but the sections are on new lines. Replace the new lines with spaces so it looks like this:
 
