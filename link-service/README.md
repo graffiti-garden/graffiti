@@ -66,7 +66,7 @@ On your server install:
 
 ### Configuration
 
-Clone this repository onto the server and in the root directory create a file called `.env` with contents as follows:
+Clone this repository onto the server and in the root directory of the repository create a file called `.env` with contents as follows:
 
     # The domain name that points to the server
     DOMAIN="graffiti.csail.mit.edu"
@@ -94,7 +94,7 @@ This will generate the following files:
 
 ### Mailserver
 
-First launch the server:
+Create a file at `config/mailserver/postfix-accounts.cf` containing just the string `noreply@DOMAIN`. Then launch the server:
 
     sudo docker compose -f docker-compose.yml -f docker-compose.deploy.yml up --build
 
@@ -102,7 +102,7 @@ Once the docker application is running, create domain keys for the mail server:
 
     sudo docker exec graffiti-mailserver setup config dkim
 
-Copy the generated entry in `config/mailserver/opendkim/keys/example.com/mail.txt` to your DNS.
+Copy the generated entry in `config/mailserver/opendkim/keys/DOMAIN/mail.txt` to your DNS.
 To get things to work on the [CSAIL DNS](https://webdns.csail.mit.edu/), the entire `mail.txt` needs to be on a single line, but split up into segments of less than 256 characters.
 The generated file should already be split, but the sections are on new lines. Replace the new lines with spaces so it looks like this:
 
