@@ -37,7 +37,7 @@ function GraffitiCollection(socket) { return {
 
   beforeUnmount() {
     if (this.queryID) {
-      this.unsubscribe(this.queryID)
+      socket.unsubscribe(this.queryID)
     }
   },
 
@@ -73,6 +73,8 @@ function GraffitiCollection(socket) { return {
 
   methods: {
     async update(object) {
+      // Immediately add the object to a temporary collection
+
       // Send it to the server
       const id = await socket.update(object)
 
@@ -113,7 +115,19 @@ function GraffitiCollection(socket) { return {
           id
         }
       }
-      await socket.delete(id)
+
+      // Immediately delete the object
+      // but store it in case there is an error
+      const obj = this.objectMap[id]
+      delete this.objectMap[id]
+
+      try {
+        await socket.delete(id)
+      } catch(e) {
+        // Delete failed, restore the object
+        this.objectMap[id] = obj
+        throw e
+      }
     },
   },
 
