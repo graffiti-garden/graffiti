@@ -83,16 +83,14 @@ export default class GraffitiSocket {
         const sd = this.subscriptionData[data.queryID]
 
         // For each data point, either add or remove it
-        for (const r of data.results) {
-          if (data.type == 'updates') {
-            if (Object.keys(sd.output).length > 10000) {
-              this.unsubscribe(data.queryID)
-              throw "query is too big! unsubscribed"
-            }
+        if (data.type == 'updates') {
+          for (const r of data.results) {
             sd.output[r._id] = r
-          } else {
-            if (r in sd.output) {
-              delete sd.output[r]
+          }
+        } else {
+          for (const id of data.results) {
+            if (id in sd.output) {
+              delete sd.output[id]
             }
           }
         }
@@ -165,7 +163,7 @@ export default class GraffitiSocket {
     // Resubscribe to hanging queries
     for (const queryID in this.subscriptionData) {
       const sd = this.subscriptionData[queryID]
-      await this.subscribe(sd.query, sd.output, sd.since, queryID, false)
+      await this.subscribe(sd.query, sd.output, sd.since, queryID)
     }
   }
 }
