@@ -73,10 +73,44 @@ function GraffitiCollection(socket) { return {
 
   methods: {
     async update(object) {
-      // Immediately add the object to a temporary collection
+
+      // Immediately add the object
+      const replacing = ("_id" in object) && (object._id in this.objectMap)
+      let originalObject = null
+      let tempID = null
+      if (replacing) {
+        // Store the original in case of failure
+        originalObject = this.objectMap[object._id]
+        this.objectMap[object._id] = object
+      } else {
+        // Create a temporary ID
+        tempID = Math.random().toString(36).substr(2)
+        // Store the object with the fake ID
+        this.objectMap[tempID] = { _id: tempID}
+        Object.assign(this.objectMap[tempID], object)
+      }
 
       // Send it to the server
-      const id = await socket.update(object)
+      let id = null
+      try {
+        id = await socket.update(object)
+      } catch(e) {
+        if (replacing) {
+          // Restore the original object
+          this.objectMap[object._id] = originalObject
+        } else {
+          // Delete the temp object
+          delete this.objectMap[tempID]
+        }
+        throw e
+      }
+
+      // Move the object to the correct ID
+      if (!replacing) {
+        this.objectMap[id] = this.objectMap[tempID]
+        this.objectMap[id]._id = id
+        delete this.objectMap[tempID]
+      }
 
       // Listen if the ID actually gets added to the collection
       const updatePromise = new Promise( (resolve, reject) => {
@@ -93,7 +127,8 @@ function GraffitiCollection(socket) { return {
       try {
         await updatePromise
       } catch {
-        await socket.delete(id)
+        delete this.objectMap[id]
+        socket.delete(id)
         throw {
           type: 'error',
           content: 'the object you updated isn\'t included in this collection, so it has been deleted',
