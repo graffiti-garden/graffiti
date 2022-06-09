@@ -132,20 +132,16 @@ export default class GraffitiSocket {
       queryID = Math.random().toString(36).substr(2)
     }
 
+    // Send the request
+    await this.request({
+      type: "subscribe",
+      queryID, query, since
+    })
+
     // Store the subscription in case of disconnections
     this.subscriptionData[queryID] = {
       query, since, output,
       historyComplete: false
-    }
-    try {
-      await this.request({
-        type: "subscribe",
-        queryID, query, since
-      })
-    } catch(e) {
-      // Clean up and re-throw
-      delete this.subscriptionData[queryID]
-      throw  e
     }
 
     return queryID
