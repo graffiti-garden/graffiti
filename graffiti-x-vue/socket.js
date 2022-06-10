@@ -109,11 +109,54 @@ export default class GraffitiSocket {
   }
 
   async update(object) {
+    const contextObjectTypes = ['_nearMisses', '_neighbors']
+
+    // Let users define one context at the root-level for shorthand
+    if (contextObjectTypes.filter(v=>Object.keys(object).includes(v))) {
+      if (!('_contexts' in object)) object._contexts = []
+
+      const context = {}
+      for (const type of contextObjectTypes) {
+        if (type in object) {
+          context[type] = object[type]
+          delete object[type]
+        }
+      }
+      object._contexts.push(context)
+    }
+
+    // Let users define near misses and neighbors functionally for shorthand
+    if ('_contexts' in object) {
+      for (const context of object._contexts) {
+        for (const type of contextObjectTypes) {
+          if (type in context) {
+
+            // Apply all functionally defined contexts
+            // to the top-level object
+            context[type] = context[type].map(p => {
+              if (typeof p != 'function') {
+                // If it's not a function, just return
+                return p
+              } else {
+                // Deep copy the object and remove _contexts
+                const copy = JSON.parse(JSON.stringify(object))
+                delete copy._contexts
+                // Transform the copied object and return
+                p(copy)
+                return copy
+              }
+            })
+
+          }
+        }
+      }
+    }
+
+    // Send the result to the server
     const data = await this.request({
       type: "update",
       object
     })
-
     return data.objectID
   }
 
