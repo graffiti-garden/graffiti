@@ -87,6 +87,53 @@ async def main():
         object_id = result['objectID']
         print("Added another object")
 
+    async with websocket_connect(my_token) as ws:
+        print("Replacing it a whole bunch of times in series")
+        for i in range(100):
+            await send(ws, {
+                'messageID': random_id(),
+                'type': 'update',
+                'object': {
+                    '_id': object_id,
+                    'something': 'random'
+                }
+            })
+            result = await recv(ws)
+            assert result['type'] == 'success'
+
+        # Try deleting the object
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'delete',
+            'objectID': object_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        print("Deleted object")
+
+        # Try deleting it *again*
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'delete',
+            'objectID': object_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        print("Could not re-delete object (as expected)")
+
+        # Try creating another object
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': {
+                'blahhh': 'blskjf'
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        object_id = result['objectID']
+        print("Added a new object")
+
     async def replace_object():
         async with websocket_connect(my_token) as ws:
             await send(ws, {
@@ -98,11 +145,10 @@ async def main():
                 }
             })
             result = await recv(ws)
-            assert result['type'] == 'success'
             await ws.close()
 
     # Perform a bunch of replacements with websockets in parallel
-    num_replacements = 100
+    num_replacements = 1000
     print(f"Replacing it a {num_replacements} times in parallel...")
     await asyncio.gather(*[replace_object() for i in range(num_replacements)])
     print("Success!")

@@ -33,9 +33,11 @@ services:
     environment:
       DEBUG: 'false'
       DOMAIN: ${DOMAIN}
+      AUTH_SECRET: ${SECRET}
     depends_on:
       - mailserver
 
   graffiti-app:
     environment:
       DEBUG: 'false'
+      AUTH_SECRET: ${SECRET}

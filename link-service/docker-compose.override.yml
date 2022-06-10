@@ -5,11 +5,13 @@ services:
   graffiti-auth:
     environment:
       DEBUG: 'true'
+      DOMAIN: 'localhost:5000'
+      AUTH_SECRET: 'secret'
 
   graffiti-app:
     environment:
       DEBUG: 'true'
-      DOMAIN: 'localhost:5000'
+      AUTH_SECRET: 'secret'
 
   nginx:
     volumes:

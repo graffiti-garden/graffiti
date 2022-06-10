@@ -34,6 +34,7 @@ class Broker:
 
             await p.subscribe(
                     "inserts",
+                    "replaces",
                     "deletes",
                     "subscribes",
                     "unsubscribes")
@@ -44,6 +45,8 @@ class Broker:
                     channel = msg['channel']
                     if channel == 'inserts':
                         self.insert_id(msg['data'])
+                    if channel == 'replaces':
+                        self.replace_id(*json.loads(msg['data']))
                     elif channel == 'deletes':
                         self.delete_id(msg['data'])
                     elif channel == 'subscribes':
@@ -178,6 +181,11 @@ class Broker:
 
     def insert_id(self, _id):
         self.insert_ids.add(_id)
+        self.has_batch.set()
+
+    def replace_id(self, delete_id, insert_id):
+        self.delete_ids.add(delete_id)
+        self.insert_ids.add(insert_id)
         self.has_batch.set()
 
     def delete_id(self, _id):

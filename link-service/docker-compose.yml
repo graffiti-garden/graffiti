@@ -8,7 +8,6 @@ services:
     volumes:
       - ./auth:/mount/auth
     environment:
-      AUTH_SECRET: ${SECRET}
       AUTH_CODE_EXP_TIME: 5 # minutes
 
   graffiti-app:
@@ -20,7 +19,6 @@ services:
       - mongo
       - redis
     environment:
-      AUTH_SECRET: ${SECRET}
       BATCH_SIZE: 100
 
   graffiti-broker:

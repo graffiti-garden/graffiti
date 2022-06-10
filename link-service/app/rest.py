@@ -22,35 +22,31 @@ class Rest:
         # Make a new document out of the object
         object_id, doc = object_to_doc(object, owner_id)
 
-        # Lock to make sure no one else is modifying the object
-        lock = self.redis.lock(object_id)
-        await lock.acquire()
+        if replacing:
+            # Delete the old document
+            delete_id = await self._delete(object_id, owner_id)
 
-        try:
-            if replacing:
-                # Delete the old document
-                await self._delete(object_id, owner_id)
+        # Then insert the new one into the database
+        result = await self.db.insert_one(doc)
 
-            # Then insert the new one into the database
-            result = await self.db.insert_one(doc)
-
-            # Mark that the new document has been inserted
+        # Send the change to the broker
+        if replacing:
+            await self.redis.publish("replaces", json.dumps(
+                (delete_id, str(result.inserted_id))
+            ))
+        else:
             await self.redis.publish("inserts", str(result.inserted_id))
-
-        finally:
-            await lock.release()
 
         return object_id
 
     async def delete(self, object_id, owner_id):
         self.validate_owner_id(owner_id)
 
-        lock = self.redis.lock(object_id)
-        await lock.acquire()
-        try:
-            await self._delete(object_id, owner_id)
-        finally:
-            await lock.release()
+        # Delete the object
+        delete_id = await self._delete(object_id, owner_id)
+
+        # And publish the change to the broker
+        await self.redis.publish("deletes", delete_id)
 
     async def _delete(self, object_id, owner_id):
         # Check that the object that already exists
@@ -71,8 +67,7 @@ the object you're trying to modify either \
 doesn't exist or you don't have permission \
 to modify it.""")
 
-        # And publish the change to the broker
-        await self.redis.publish("deletes", str(doc['_id']))
+        return str(doc['_id'])
 
     def validate_owner_id(self, owner_id):
         if not owner_id:
