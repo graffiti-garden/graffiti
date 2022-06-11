@@ -1,3 +1,5 @@
+import { randomString, sha256 } from './utils.js'
+
 export default class GraffitiAuth {
 
   constructor(origin) {
@@ -114,15 +116,11 @@ export default class GraffitiAuth {
     if (await this.loggedIn()) return
 
     // Generate a random client secret and state
-    const clientSecret = Math.random().toString(36).substr(2)
-    const state = Math.random().toString(36).substr(2)
+    const clientSecret = randomString()
+    const state = randomString()
 
     // The client ID is the secret's hex hash
-    const encoder = new TextEncoder()
-    const clientSecretData = encoder.encode(clientSecret)
-    const clientIDBuffer = await crypto.subtle.digest('SHA-256', clientSecretData)
-    const clientIDArray = Array.from(new Uint8Array(clientIDBuffer))
-    const clientID = clientIDArray.map(b => b.toString(16).padStart(2, '0')).join('')
+    const clientID = await sha256(clientSecret)
 
     // Store the client secret as a session variable
     window.sessionStorage.setItem('graffitiClientSecret', clientSecret)

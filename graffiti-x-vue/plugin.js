@@ -1,5 +1,6 @@
 import GraffitiAuth   from './auth.js'
 import GraffitiSocket from './socket.js'
+import objectRewrite  from './rewrite.js'
 
 function GraffitiCollection(socket) { return {
   
@@ -74,42 +75,32 @@ function GraffitiCollection(socket) { return {
   methods: {
     async update(object) {
 
-      // Immediately add the object
-      const replacing = ("_id" in object) && (object._id in this.objectMap)
+      // Perform object rewriting
+      const idProof = await objectRewrite(object, this.$graffiti.myID)
+      const id = object._id
+
+      // Store the original object if
+      // one exists, in case of failure
       let originalObject = null
-      let tempID = null
-      if (replacing) {
-        // Store the original in case of failure
-        originalObject = this.objectMap[object._id]
-        this.objectMap[object._id] = object
-      } else {
-        // Create a temporary ID
-        tempID = Math.random().toString(36).substr(2)
-        // Store the object with the fake ID
-        this.objectMap[tempID] = { _id: tempID}
-        Object.assign(this.objectMap[tempID], object)
+      if (id in this.objectMap) {
+        originalObject = this.objectMap[id]
       }
 
+      // Immediately replace the object
+      this.objectMap[id] = object
+      
       // Send it to the server
-      let id = null
       try {
-        id = await socket.update(object)
+        await socket.update(object, idProof)
       } catch(e) {
-        if (replacing) {
+        if (this.originalObject) {
           // Restore the original object
-          this.objectMap[object._id] = originalObject
+          this.objectMap[id] = originalObject
         } else {
           // Delete the temp object
-          delete this.objectMap[tempID]
+          delete this.objectMap[id]
         }
         throw e
-      }
-
-      // Move the object to the correct ID
-      if (!replacing) {
-        this.objectMap[id] = this.objectMap[tempID]
-        this.objectMap[id]._id = id
-        delete this.objectMap[tempID]
       }
 
       // Listen if the ID actually gets added to the collection
