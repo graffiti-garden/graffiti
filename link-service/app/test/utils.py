@@ -1,13 +1,22 @@
 import jwt
 import json
+import string
+import random
+from hashlib import sha256
 from os import getenv
 import websockets
 from uuid import uuid4
 
-def random_id():
-    return str(uuid4())
+def random_id(n=20):
+    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n))
 
-def id_and_token():
+def object_id_and_proof(owner_id, proof=None):
+    if not proof:
+        proof = random_id()
+    object_id = sha256((owner_id+proof).encode()).hexdigest()
+    return object_id, proof
+
+def owner_id_and_token():
     secret = getenv('AUTH_SECRET')
     id_ = str(uuid4())
     token = jwt.encode({

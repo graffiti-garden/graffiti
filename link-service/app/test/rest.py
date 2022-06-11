@@ -5,30 +5,51 @@ from utils import *
 
 async def main():
 
-    my_id, my_token = id_and_token()
+    my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
         # Try adding an object
+        object_id, proof = object_id_and_proof(my_id)
+        object_id2, proof2 = object_id_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'idProof': proof2,
             'object': {
+                '_id': object_id,
                 'type': 'justanormalobject',
                 'content': {
                     'foo': 'bar'
                 },
                 '_by': my_id,
-                '_to': [random_id(), random_id()]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        print("Could not add object without proper proof")
+
+        # Try adding an object
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'idProof': proof,
+            'object': {
+                '_id': object_id,
+                'type': 'justanormalobject',
+                'content': {
+                    'foo': 'bar'
+                },
+                '_by': my_id,
             }
         })
         result = await recv(ws)
         assert result['type'] == 'success'
-        object_id = result['objectID']
         print("Added object")
 
         # Try replacing the object
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'idProof': None,
             'object': {
                 '_id': object_id,
                 'something': {
@@ -38,7 +59,6 @@ async def main():
         })
         result = await recv(ws)
         assert result['type'] == 'success'
-        object_id = result['objectID']
         print("Replaced object")
 
         # Try deleting an object
@@ -64,6 +84,7 @@ async def main():
         # Try replacing again
         await send(ws, {
             'messageID': random_id(),
+            'idProof': None,
             'type': 'update',
             'object': {
                 '_id': object_id,
@@ -75,16 +96,18 @@ async def main():
         print("Could not re-replace object (as expected)")
 
         # Try creating another object
+        object_id, proof = object_id_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
+            'idProof': proof,
             'type': 'update',
             'object': {
+                '_id': object_id,
                 'blahhh': 'blskjf'
             }
         })
         result = await recv(ws)
         assert result['type'] == 'success'
-        object_id = result['objectID']
         print("Added another object")
 
     async with websocket_connect(my_token) as ws:
@@ -93,6 +116,7 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
+                'idProof': None,
                 'object': {
                     '_id': object_id,
                     'something': 'random'
@@ -122,16 +146,18 @@ async def main():
         print("Could not re-delete object (as expected)")
 
         # Try creating another object
+        object_id, proof = object_id_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'idProof': proof,
             'object': {
-                'blahhh': 'blskjf'
+                'blahhh': 'blskjf',
+                '_id': object_id
             }
         })
         result = await recv(ws)
         assert result['type'] == 'success'
-        object_id = result['objectID']
         print("Added a new object")
 
     async def replace_object():
@@ -139,16 +165,18 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
+                'idProof': proof,
                 'object': {
                     '_id': object_id,
                     'something': 'random'
                 }
             })
             result = await recv(ws)
+            assert result['type'] == 'success'
             await ws.close()
 
     # Perform a bunch of replacements with websockets in parallel
-    num_replacements = 1000
+    num_replacements = 200
     print(f"Replacing it a {num_replacements} times in parallel...")
     await asyncio.gather(*[replace_object() for i in range(num_replacements)])
     print("Success!")

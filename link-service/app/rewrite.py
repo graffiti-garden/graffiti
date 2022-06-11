@@ -1,7 +1,7 @@
 import time
 from uuid import uuid4
 
-def object_to_doc(object, owner_id):
+def object_to_doc(object, id_proof, owner_id):
     # Separate out the contexts
     if '_contexts' in object:
         contexts = object['_contexts']
@@ -9,20 +9,16 @@ def object_to_doc(object, owner_id):
     else:
         contexts = []
 
-    # If there is no id or timestamp, generate it
-    if '_id' not in object:
-        object['_id'] = str(uuid4())
-
     # Extract the ID and combine into one big doc
-    object_id = object['_id']
     doc = {
         "_owner_id": owner_id,
         "_object": [object],
         "_contexts": contexts,
-        "_tombstone": False
+        "_tombstone": False,
+        "_id_proof": id_proof
     }
 
-    return object_id, doc
+    return doc
 
 def doc_to_object(doc):
     object = doc['_object'][0]

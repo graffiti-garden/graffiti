@@ -13,6 +13,18 @@ UUID_SCHEMA = {
     "pattern": f"^{UUID_PATTERN}$"
 }
 
+# Hex representation of sha256
+SHA256_SCHEMA = {
+    "type": "string",
+    "pattern": "^[0-9a-f]{64}$"
+}
+
+# Random user input - any reasonably sized string
+RANDOM_SCHEMA = {
+    "type": "string",
+    "pattern": "^.{1,64}$"
+}
+
 OBJECT_OWNER_PATTERN = re.compile(f'"_by": "({UUID_PATTERN})"')
 QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({UUID_PATTERN})"')
 
@@ -21,40 +33,29 @@ def allowed_query_properties():
     allowed_properties['_to'] = UUID_SCHEMA
     return allowed_properties
 
-def recursive_property(name):
-    return { "oneOf": [
-    # Either a root object type
-    { "$ref": f"#/definitions/{name}" },
-    # A recursive array
-    { "type": "array",
-        "items": { "$ref": f"#/definitions/{name}Prop" }
-    },
-    # Or something a constant
-    { "type": "string" },
-    { "type": "number" },
-    { "type": "boolean" },
-    { "type": "null" }
-]}
-
 def socket_schema():
     return {
     "type": "object",
     "properties": {
-        "messageID": { "type": "string" },
+        "messageID": RANDOM_SCHEMA
     },
     "required": ["messageID", "type"],
     "anyOf": [{
         # UPDATE
         "properties": {
             "type": { "const": "update" },
-            "object": { "$ref": "#/definitions/object" }
+            "object": { "$ref": "#/definitions/object" },
+            "idProof": { "oneOf": [
+                { "type": "null" },
+                RANDOM_SCHEMA
+            ]}
         },
-        "required": ["object"],
+        "required": ["object", "idProof"],
     }, {
         # DELETE
         "properties": {
             "type": { "const": "delete" },
-            "objectID": UUID_SCHEMA
+            "objectID": SHA256_SCHEMA
         },
         "required": ["objectID"],
     }, {
@@ -68,14 +69,14 @@ def socket_schema():
                     "pattern": "^([a-f\d]{24})$"
                 }, { "type": "null" }]
             },
-            "queryID": { "type": "string" }
+            "queryID": RANDOM_SCHEMA
         },
         "required": ["query", "since", "queryID"],
     }, {
         # UNSUBSCRIBE
         "properties": {
             "type": { "const": "unsubscribe" },
-            "queryID": { "type": "string" }
+            "queryID": RANDOM_SCHEMA
         },
         "required": ["queryID"],
     }],
@@ -85,15 +86,16 @@ def socket_schema():
             "additionalProperties": False,
             "patternProperties": {
                 # Anything not starting with a "_"
-                "^(?!_).*$": { "$ref": "#/definitions/objectProp" }
+                "^(?!_).*$": True
             },
+            "required": ["_id"],
             "properties": {
                 "_by": UUID_SCHEMA,
                 "_to": {
                     "type": "array",
                     "items": UUID_SCHEMA
                 },
-                "_id": UUID_SCHEMA,
+                "_id": SHA256_SCHEMA,
                 "_contexts": {
                     "type": "array",
                     "items": {
@@ -122,8 +124,19 @@ def socket_schema():
             },
             "properties": allowed_query_properties()
         },
-        "objectProp": recursive_property("object"),
-        "queryProp": recursive_property("query")
+        "queryProp": { "oneOf": [
+            # Either a root object type
+            { "$ref": "#/definitions/query" },
+            # A recursive array
+            { "type": "array",
+                "items": { "$ref": "#/definitions/queryProp" }
+            },
+            # Or something a constant
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "null" }
+        ]}
     }
 }
 

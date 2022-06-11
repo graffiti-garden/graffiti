@@ -1,5 +1,6 @@
 import json
 import asyncio
+from hashlib import sha256
 from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
 
@@ -10,40 +11,62 @@ class Rest:
     def __init__(self, db, redis):
         self.db = db
         self.redis = redis
-        self.object_locks = {}
         self.deleted_ids = set()
 
-    async def update(self, object, owner_id):
+    async def update(self, object, id_proof, owner_id):
         self.validate_owner_id(owner_id)
 
-        # If there is no id, we are replacing
-        replacing = ('_id' in object)
+        # If there is a proof, check that it matches the object's ID
+        if id_proof:
+            _id = sha256((owner_id + id_proof).encode()).hexdigest()
+            if object['_id'] != _id:
+                raise Exception("the object's _id does not match the proof")
+
+        # Lock so that the delete and insert can be done together
+        lock = self.redis.lock(object['_id'])
+        await lock.acquire()
+
+        # Try deleting the old document if there is one
+        delete_id = None
+        try:
+            delete_id, id_proof = await self._delete(object['_id'], owner_id)
+
+        except Exception as e:
+
+            # If there is no old document and no ID proof
+            # there is no justification for the object's supplied _id
+            if not id_proof:
+                await lock.release()
+                raise e
 
         # Make a new document out of the object
-        object_id, doc = object_to_doc(object, owner_id)
-
-        if replacing:
-            # Delete the old document
-            delete_id = await self._delete(object_id, owner_id)
+        doc = object_to_doc(object, id_proof, owner_id)
 
         # Then insert the new one into the database
-        result = await self.db.insert_one(doc)
+        try:
+            result = await self.db.insert_one(doc)
+        finally:
+            await lock.release()
 
         # Send the change to the broker
-        if replacing:
+        if delete_id:
             await self.redis.publish("replaces", json.dumps(
                 (delete_id, str(result.inserted_id))
             ))
         else:
             await self.redis.publish("inserts", str(result.inserted_id))
 
-        return object_id
-
     async def delete(self, object_id, owner_id):
         self.validate_owner_id(owner_id)
 
+        lock = self.redis.lock(object_id)
+        await lock.acquire()
+
         # Delete the object
-        delete_id = await self._delete(object_id, owner_id)
+        try:
+            delete_id, _ = await self._delete(object_id, owner_id)
+        finally:
+            await lock.release()
 
         # And publish the change to the broker
         await self.redis.publish("deletes", delete_id)
@@ -67,7 +90,7 @@ the object you're trying to modify either \
 doesn't exist or you don't have permission \
 to modify it.""")
 
-        return str(doc['_id'])
+        return str(doc['_id']), doc['_id_proof']
 
     def validate_owner_id(self, owner_id):
         if not owner_id:

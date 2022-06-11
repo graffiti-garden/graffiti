@@ -87,8 +87,7 @@ async def reply(ws, msg, socket_id, owner_id):
         validate(msg, owner_id)
 
         if msg['type'] == 'update':
-            object_id = await app.rest.update(msg['object'], owner_id)
-            output['objectID'] = object_id
+            await app.rest.update(msg['object'], msg['idProof'], owner_id)
 
         elif msg['type'] == 'delete':
             await app.rest.delete(msg['objectID'], owner_id)

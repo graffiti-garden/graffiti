@@ -5,16 +5,19 @@ from utils import *
 
 async def main():
 
-    my_id, my_token = id_and_token()
+    my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
 
         print("creating an object with one near miss")
         common = random_id()
         special = random_id()
+        object_id, proof = object_id_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'idProof': proof,
             'object': {
+                '_id': object_id,
                 'fieldA': common,
                 'fieldB': special,
                 '_contexts': [{
@@ -63,10 +66,13 @@ async def main():
         print("creating an object with one neighbor")
         common = random_id()
         special = random_id()
+        object_id, proof = object_id_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'idProof': proof,
             'object': {
+                '_id': object_id,
                 'fieldA': common,
                 'fieldB': special,
                 '_contexts': [{
@@ -116,10 +122,13 @@ async def main():
         a = random_id()
         b = random_id()
         c = random_id()
+        object_id, proof = object_id_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'idProof': proof,
             'object': {
+                '_id': object_id,
                 'tags': [a, b, c],
                 '_contexts': [{
                     # If the query is for a, b, AND c

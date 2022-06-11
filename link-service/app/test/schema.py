@@ -5,7 +5,7 @@ from utils import *
 
 async def main():
 
-    my_id, my_token = id_and_token()
+    my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
         for request in valid_requests(my_id):
             await send(ws, request)
@@ -15,7 +15,7 @@ async def main():
             if response["type"] == "error":
                 assert response["reason"] != "validation"
         print("All valid requests passed, as expected")
-        for request in invalid_requests:
+        for request in invalid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
             while response["type"] in ["updates", "deletes"]:
@@ -25,16 +25,28 @@ async def main():
         print("All invalid requests failed, as expected")
 
 def valid_requests(my_id):
+    object_id, proof = object_id_and_proof(my_id)
+
     return [{
     "messageID": random_id(),
     "type": "update",
-    "object": {}
+    "object": {
+        "_id": object_id
+    },
+    "idProof": proof
 }, {
-    "messageID": random_id(),
+    "messageID": "alkjd$$\~934820fk",
+    "type": "update",
+    "object": {
+        "_id": object_id
+    },
+    "idProof": None
+}, {
+    "messageID": "a"*64,
     "type": "delete",
-    "objectID": random_id()
+    "objectID": object_id
 }, {
-    "messageID": random_id(),
+    "messageID": "iueiruwoeiurowiwf1293  -e 👍",
     "type": "subscribe",
     "query": {},
     "since": None,
@@ -52,33 +64,42 @@ def valid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "foo": True
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "foo": None
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "foo": 123.4
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "foo": 1234
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
-        "_id": random_id(),
-        "_to": [random_id(), random_id()],
+        "_id": object_id,
+        "_to": [str(uuid4()), str(uuid4())],
         "foo": {
             "blah": False,
             "bar": {
@@ -99,14 +120,18 @@ def valid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "_by": my_id
     }
 }, {
     # Weird fields
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "~a": "b",
     }
 }, {
@@ -153,19 +178,39 @@ def valid_requests(my_id):
     "queryID": random_id()
 }]
 
-invalid_requests = [{
+def invalid_requests(my_id):
+    object_id, proof = object_id_and_proof(my_id)
+
+    return [{
     # no message ID
     "type": "update",
-    "object": {}
+    "object": {
+        "_id": object_id
+    },
+    "idProof": proof
 }, {
     # Invalid message type
     "messageID": random_id(),
     "type": "dupdate",
-    "object": {}
+    "object": {
+        "_id": object_id
+    },
+    "idProof": proof
 }, {
     # Missing required field
     "messageID": random_id(),
-    "type": "update"
+    "type": "update",
+    "idProof": proof
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {}
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        "_id": object_id
+    }
 }, {
     "messageID": random_id(),
     "type": "delete"
@@ -207,73 +252,94 @@ invalid_requests = [{
     "messageID": random_id(),
     "type": "update",
     "object": {
+        "_id": object_id,
         "_notright": 12345
-    }
+    },
+    "idProof": proof
 }, {
     # _id should be an string
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
         "_id": 12345,
+    }
+}, {
+    # _id should be exactly length 64
+    "messageID": random_id(),
+    "type": "update",
+    "idProof": proof,
+    "object": {
+        "_id": "a15d"
+    }
+}, {
+    # _id should be hex
+    "messageID": random_id(),
+    "type": "update",
+    "idProof": proof,
+    "object": {
+        "_id": "z"*64
+    }
+}, {
+    # messageID too long
+    "messageID": "q"*65,
+    "type": "update",
+    "idProof": proof,
+    "object": {
+        "_id": object_id
     }
 }, {
     # _to should be an array
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
-        "_to": random_id()
+        "_id": object_id,
+        "_to": str(uuid4())
     }
 }, {
     # _to should by UUIDs
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "_to": ["12345"]
     }
 }, {
     # by can only be my id
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
-        "_by": random_id()
-    }
-}, {
-    # nested fields should also follow convention
-    "messageID": random_id(),
-    "type": "update",
-    "object": {
-        "foo": {
-            "_bar": "asdf"
-        }
-    }
-}, {
-    # nested fields should also follow convention
-    "messageID": random_id(),
-    "type": "update",
-    "object": {
-        "foo": {
-            "_id": "12345"
-        }
+        "_id": object_id,
+        "_by": str(uuid4())
     }
 }, {
     # _contexts is an array
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "_contexts": {}
     }
 }, {
     # _contexts only includes objects
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "_contexts": ["asdf"]
     }
 }, {
     # objects only have relevant fields
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "_contexts": [{
             "foo": "bar"
         }]
@@ -282,7 +348,9 @@ invalid_requests = [{
     # nearmisses is an array
     "messageID": random_id(),
     "type": "update",
+    "idProof": proof,
     "object": {
+        "_id": object_id,
         "_contexts": [{
             "_nearMisses": {}
         }]
@@ -318,7 +386,7 @@ invalid_requests = [{
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "_to": random_id()
+        "_to": str(uuid4())
     },
     "since": None,
     "queryID": random_id()
@@ -328,7 +396,7 @@ invalid_requests = [{
     "type": "subscribe",
     "query": {
         "foo": {
-            "_to": random_id()
+            "_to": str(uuid4())
         }
     },
     "since": None,
