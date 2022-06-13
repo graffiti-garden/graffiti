@@ -6,7 +6,8 @@ function GraffitiCollection(socket) { return {
   
   data: () => ({
     objectMap: {},
-    queryID: null
+    queryID: null,
+    eventTarget: new EventTarget()
   }),
 
   props: {
@@ -65,7 +66,10 @@ function GraffitiCollection(socket) { return {
         Object.keys(this.objectMap).forEach(k => delete this.objectMap[k])
 
         // And subscribe to the new query
-        this.queryID = await socket.subscribe(newQuery, this.objectMap)
+        this.queryID = await socket.subscribe(
+          newQuery,
+          this.updateCallback.bind(this),
+          this.deleteCallback.bind(this))
       },
       deep: true,
       immediate: true
@@ -105,14 +109,9 @@ function GraffitiCollection(socket) { return {
 
       // Listen if the ID actually gets added to the collection
       const updatePromise = new Promise( (resolve, reject) => {
-        document.addEventListener(id, () => resolve() )
+        this.eventTarget.addEventListener(id, () => resolve() )
         // But if it takes too long, timeout
         setTimeout(() => reject(new Error('timeout')), 5000)
-      })
-
-      // Watch for changes to the object
-      const unwatch = this.$watch(`objectMap.${id}`, () => {
-        document.dispatchEvent(new Event(id))
       })
 
       try {
@@ -125,9 +124,6 @@ function GraffitiCollection(socket) { return {
           content: 'the object you updated isn\'t included in this collection, so it has been deleted',
           object
         }
-      } finally {
-        // Stop watching
-        unwatch()
       }
 
       return id
@@ -155,6 +151,23 @@ function GraffitiCollection(socket) { return {
         throw e
       }
     },
+
+    async updateCallback(result) {
+      this.objectMap[result._id] = result
+
+      // Send an event to the watcher
+      this.eventTarget.dispatchEvent(new Event(result._id))
+
+      // Emit an event for parents
+    },
+
+    async deleteCallback(id) {
+      if (id in this.objectMap) {
+        delete this.objectMap[id]
+      }
+
+      // Emit an event for parents
+    }
   },
 
   // Fill the inside with whatever

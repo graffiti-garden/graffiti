@@ -5,6 +5,7 @@ export default class GraffitiSocket {
   constructor(origin, token) {
     this.open = false
     this.subscriptionData = {}
+    this.eventTarget = new EventTarget()
 
     // Rewrite the URL
     this.wsURL = new URL(origin)
@@ -42,7 +43,7 @@ export default class GraffitiSocket {
 
     // Create a listener for the reply
     const dataPromise = new Promise(resolve => {
-      document.addEventListener(messageID, (e) => {
+      this.eventTarget.addEventListener(messageID, (e) => {
         resolve(e.data)
       })
     })
@@ -50,7 +51,7 @@ export default class GraffitiSocket {
     // Wait for the socket to open
     if (!this.open) {
       await new Promise(resolve => {
-        document.addEventListener("graffitiOpen", () => resolve() )
+        this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
       })
     }
 
@@ -77,7 +78,7 @@ export default class GraffitiSocket {
       // Forward it back to the sender
       const messageEvent = new Event(data.messageID)
       messageEvent.data = data
-      document.dispatchEvent(messageEvent)
+      this.eventTarget.dispatchEvent(messageEvent)
 
     } else if (['updates', 'deletes'].includes(data.type)) {
       // Subscription data
@@ -87,13 +88,11 @@ export default class GraffitiSocket {
         // For each data point, either add or remove it
         if (data.type == 'updates') {
           for (const r of data.results) {
-            sd.output[r._id] = r
+            sd.updateCallback(r)
           }
         } else {
           for (const id of data.results) {
-            if (id in sd.output) {
-              delete sd.output[id]
-            }
+            sd.deleteCallback(id)
           }
         }
 
@@ -125,7 +124,13 @@ export default class GraffitiSocket {
     })
   }
 
-  async subscribe(query, output, since=null, queryID=null) {
+  async subscribe(
+    query,
+    updateCallback,
+    deleteCallback,
+    since=null,
+    queryID=null) {
+
     // Create a random query ID
     if (!queryID) queryID = randomString()
 
@@ -137,7 +142,7 @@ export default class GraffitiSocket {
 
     // Store the subscription in case of disconnections
     this.subscriptionData[queryID] = {
-      query, since, output,
+      query, since, updateCallback, deleteCallback,
       historyComplete: false
     }
 
@@ -158,11 +163,16 @@ export default class GraffitiSocket {
   async onOpen() {
     console.log("connected to the graffiti socket")
     this.open = true
-    document.dispatchEvent(new Event("graffitiOpen"))
+    this.eventTarget.dispatchEvent(new Event("graffitiOpen"))
     // Resubscribe to hanging queries
     for (const queryID in this.subscriptionData) {
       const sd = this.subscriptionData[queryID]
-      await this.subscribe(sd.query, sd.output, sd.since, queryID)
+      await this.subscribe(
+        sd.query,
+        sd.updateCallback,
+        sd.deleteCallback,
+        sd.since,
+        queryID)
     }
   }
 }
