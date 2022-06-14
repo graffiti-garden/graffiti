@@ -1,6 +1,6 @@
 import GraffitiAuth   from './auth.js'
 import GraffitiSocket from './socket.js'
-import objectRewrite  from './rewrite.js'
+import { queryRewrite, objectRewrite }  from './rewrite.js'
 
 function GraffitiCollection(socket) { return {
   
@@ -15,25 +15,39 @@ function GraffitiCollection(socket) { return {
     // The query applied to objects in the collection
     query: {
       type: Object,
-      default: () => (null)
+      default: () => null
     },
 
-    // The way that objects are sorted
-    sort: {
+    // Objects are sorted by their values
+    // according to this value function
+    valueFunction: {
       type: Function,
-      // by default newest -> oldest
-      // so that objects[0] is the newest
-      default: function(a, b) {
-        return b.timestamp - a.timestamp
-      },
+      // By default, sort by time
+      default: object => object.timestamp
+    },
+
+    // Allow anonymous objects to match the query
+    allowAnonymous: {
+      type: Boolean,
+      default: false
+    },
+
+    // Allow objects without timestamps to match the query
+    allowNoTimestamp: {
+      type: Boolean,
+      default: false
     },
 
   },
 
+  emits: ['modify'],
+
   computed: {
     // Objects sorted by the sort function
     objects() {
-      return Object.values(this.objectMap).sort(this.sort)
+      return Object.values(this.objectMap).sort((a, b) => (
+        this.valueFunction(b) - this.valueFunction(a)
+      ))
     },
   },
 
@@ -65,6 +79,16 @@ function GraffitiCollection(socket) { return {
         // Clear the output
         Object.keys(this.objectMap).forEach(k => delete this.objectMap[k])
 
+        // Emit a modification because of the clear
+        this.$emit('modify', this.objects)
+
+        // Rewrite to account for special conditions
+        newQuery = queryRewrite(
+          newQuery,
+          this.$graffiti.myID,
+          this.allowAnonymous,
+          this.allowNoTimestamp)
+
         // And subscribe to the new query
         this.queryID = await socket.subscribe(
           newQuery,
@@ -77,10 +101,10 @@ function GraffitiCollection(socket) { return {
   },
 
   methods: {
-    async update(object) {
+    async update(object, anonymous=false, timestamp=true) {
 
       // Perform object rewriting
-      const idProof = await objectRewrite(object, this.$graffiti.myID)
+      const idProof = await objectRewrite(object, this.$graffiti.myID, anonymous, timestamp)
       const id = object._id
 
       // Store the original object if
@@ -91,18 +115,22 @@ function GraffitiCollection(socket) { return {
       }
 
       // Immediately replace the object
-      this.objectMap[id] = object
+      this.updateCallback(object)
+
+      // Remove _ for the server
+      const serverObject = Object.assign({}, object)
+      delete serverObject._
       
       // Send it to the server
       try {
-        await socket.update(object, idProof)
+        await socket.update(serverObject, idProof)
       } catch(e) {
-        if (this.originalObject) {
+        if (originalObject) {
           // Restore the original object
-          this.objectMap[id] = originalObject
+          this.updateCallback(originalObject)
         } else {
           // Delete the temp object
-          delete this.objectMap[id]
+          this.deleteCallback(id)
         }
         throw e
       }
@@ -117,7 +145,7 @@ function GraffitiCollection(socket) { return {
       try {
         await updatePromise
       } catch {
-        delete this.objectMap[id]
+        this.deleteCallback(id)
         socket.delete(id)
         throw {
           type: 'error',
@@ -129,7 +157,25 @@ function GraffitiCollection(socket) { return {
       return id
     },
 
-    async delete_(id) {
+    async delete_(value) {
+      // Allow delete to be called on IDs or on objects (with an _id)
+      let id = null
+      if (typeof value == 'string') {
+        id = value
+      } else if (typeof value == 'object') {
+        if ('_id' in value) {
+          id = value._id
+        }
+      }
+
+      if (!id) {
+        throw {
+          type: 'error',
+          content: 'an object ID can\'t be parsed out of the value you\'re trying to delete.',
+          value
+        }
+      }
+
       if (!(id in this.objectMap)) {
         throw {
           type: 'error',
@@ -141,32 +187,45 @@ function GraffitiCollection(socket) { return {
       // Immediately delete the object
       // but store it in case there is an error
       const obj = this.objectMap[id]
-      delete this.objectMap[id]
+      this.deleteCallback(id)
 
       try {
         await socket.delete(id)
       } catch(e) {
         // Delete failed, restore the object
-        this.objectMap[id] = obj
+        this.updateCallback(obj)
         throw e
       }
     },
 
-    async updateCallback(result) {
-      this.objectMap[result._id] = result
+    async updateCallback(value) {
+      // Add or copy over _
+      if (value._id in this.objectMap) {
+        if ('_' in this.objectMap[value._id]) {
+          value._ = this.objectMap[value._id]._
+        }
+      }
+      if (!value._) value._ = {}
 
-      // Send an event to the watcher
-      this.eventTarget.dispatchEvent(new Event(result._id))
+      // Replace the object
+      this.objectMap[value._id] = value
 
-      // Emit an event for parents
+      // Send a local event if the update was ours
+      if (this.$graffiti.byMe(value)) {
+        this.eventTarget.dispatchEvent(new Event(value._id))
+      }
+
+      // Emit an event for parent components
+      this.$emit('modify', this.objects)
     },
 
     async deleteCallback(id) {
-      if (id in this.objectMap) {
-        delete this.objectMap[id]
-      }
+      if (!(id in this.objectMap)) return
 
-      // Emit an event for parents
+      delete this.objectMap[id]
+
+      // Emit an event for parent components
+      this.$emit('modify', this.objects)
     }
   },
 
@@ -194,7 +253,9 @@ export default async function Graffiti(graffitiURL='https://graffiti.csail.mit.e
     Vue.config.globalProperties.$graffiti = {
       myID, loggedIn,
       logIn: auth.logIn.bind(auth),
-      logOut: auth.logOut.bind(auth)
+      logOut: auth.logOut.bind(auth),
+      byMe: obj=>obj._by==myID,
+      getAuthors: objs=>[...new Set(objs.map(o=>o._by).filter(x=>x))]
     }
   }
 }

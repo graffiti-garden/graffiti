@@ -1,6 +1,36 @@
 import { randomString, sha256 } from './utils.js'
 
-export default async function rewriteObject(object, myID) {
+export function queryRewrite(query, allowAnonymous, allowNoTimestamp) {
+  if (allowAnonymous && allowNoTimestamp) return query
+
+  const out = { "$and": [ query ] }
+
+  if (allowAnonymous) {
+    out.$and.push({ _by: { $exists: true } })
+  }
+  if (allowNoTimestamp) {
+    out.$and.push({ timestamp: { $type: 'number' } })
+  }
+
+  return out
+}
+
+export async function objectRewrite(object, myID, anonymous, timestamp) {
+
+  // Add a by field and timestamp, if necessary
+  if (!anonymous) object._by = myID
+  if (timestamp) {
+    if (!('timestamp' in object)) {
+      object.timestamp = Date.now()
+    }
+  }
+
+  // Pre-generate the object's ID if it does not already exist
+  let idProof = null
+  if (!('_id' in object)) {
+    idProof = randomString()
+    object._id = await sha256(myID.concat(idProof))
+  }
 
   const contextObjectTypes = ['_nearMisses', '_neighbors']
 
@@ -43,13 +73,6 @@ export default async function rewriteObject(object, myID) {
         }
       }
     }
-  }
-
-  // Pre-generate the object's ID if it does not already exist
-  let idProof = null
-  if (!('_id' in object)) {
-    idProof = randomString()
-    object._id = await sha256(myID.concat(idProof))
   }
 
   return idProof
