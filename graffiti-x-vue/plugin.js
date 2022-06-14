@@ -1,6 +1,6 @@
-import GraffitiAuth   from './auth.js'
-import GraffitiSocket from './socket.js'
-import { queryRewrite, objectRewrite }  from './rewrite.js'
+import GraffitiAuth   from './src/auth.js'
+import GraffitiSocket from './src/socket.js'
+import { queryRewrite, objectRewrite }  from './src/rewrite.js'
 
 function GraffitiCollection(socket) { return {
   
@@ -270,4 +270,16 @@ export default async function Graffiti(graffitiURL='https://graffiti.csail.mit.e
       getAuthors: objs=>[...new Set(objs.map(o=>o._by).filter(x=>x))]
     }
   }
+}
+
+// A custom component to automount the plugin
+// (mostly useful for live coding)
+export function registerGraffitiApp(graffiti, app) {
+  customElements.define('graffiti-app',
+    class extends HTMLElement {
+      connectedCallback() {
+        app.use(graffiti).mount(this)
+      }
+    }
+  )
 }
