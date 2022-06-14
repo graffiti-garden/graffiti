@@ -274,11 +274,11 @@ export default async function Graffiti(graffitiURL='https://graffiti.csail.mit.e
 
 // A custom component to automount the plugin
 // (mostly useful for live coding)
-export function registerGraffitiApp(graffiti, app) {
+export function registerGraffitiApp(graffiti, createApp) {
   customElements.define('graffiti-app',
     class extends HTMLElement {
       connectedCallback() {
-        app.use(graffiti).mount(this)
+        createApp().use(graffiti).mount(this)
       }
     }
   )
