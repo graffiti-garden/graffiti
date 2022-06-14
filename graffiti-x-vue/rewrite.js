@@ -5,10 +5,10 @@ export function queryRewrite(query, allowAnonymous, allowNoTimestamp) {
 
   const out = { "$and": [ query ] }
 
-  if (allowAnonymous) {
+  if (!allowAnonymous) {
     out.$and.push({ _by: { $exists: true } })
   }
-  if (allowNoTimestamp) {
+  if (!allowNoTimestamp) {
     out.$and.push({ timestamp: { $type: 'number' } })
   }
 

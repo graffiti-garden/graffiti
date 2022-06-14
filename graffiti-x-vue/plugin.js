@@ -85,7 +85,6 @@ function GraffitiCollection(socket) { return {
         // Rewrite to account for special conditions
         newQuery = queryRewrite(
           newQuery,
-          this.$graffiti.myID,
           this.allowAnonymous,
           this.allowNoTimestamp)
 
@@ -102,6 +101,12 @@ function GraffitiCollection(socket) { return {
 
   methods: {
     async update(object, anonymous=false, timestamp=true) {
+      if (!this.$graffiti.loggedIn) {
+        throw {
+          type: 'error',
+          content: 'you can\'t update objects without logging in!'
+        }
+      }
 
       // Perform object rewriting
       const idProof = await objectRewrite(object, this.$graffiti.myID, anonymous, timestamp)
@@ -158,6 +163,13 @@ function GraffitiCollection(socket) { return {
     },
 
     async delete_(value) {
+      if (!this.$graffiti.loggedIn) {
+        throw {
+          type: 'error',
+          content: 'you can\'t delete objects without logging in!'
+        }
+      }
+
       // Allow delete to be called on IDs or on objects (with an _id)
       let id = null
       if (typeof value == 'string') {
