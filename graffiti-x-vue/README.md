@@ -163,24 +163,92 @@ Here's a more advanced example to puzzle through that takes advantage of the com
         _nearMisses: [
           o=> o.tags = ['learn']
         ]
-      }
+      }]
     }
 
 ## Identity
 
 When you are logged in, the global variable `$graffiti.myID` will be equal to a constant identifier linked to your account.
-You can mark objects you've created with your ID to prove you are that object's owner and you can create private objects that can only be queried by people with specific IDs.
+You can use this ID to prove ownership and enforce privacy.
 
 ### Ownership
 
-You can use your ID and *only* your ID in the value of the `_by` field in any objects you create.
-I.e. noone else can forge. For crypto folks you can think of this as signing a message (hopefully one day the graffiti system will be decentralized and end-to-end encrypted and this probably *will* be a cryptographic signature).
+You can set your ID and *only* your ID as the value of the `_by` field in any objects you create.
+In other words, this is a spcial field that no one else can forge.
 
-### Private Messages
+    {
+      content: 'something definitely by me',
+      _by: $graffiti.myID
+    }
+    
+For crypto folks, you can think of this as signing a message with your public key.
+Hopefully one day the Graffiti system will be decentralized and end-to-end encrypted and this will actually be a cryptographic signature.
 
-## Misc
+This plugin makes the assumption that more often than not you'll want to add your ID to the `_by` field, so it's added automatically (yay, less writing!)
+But if for some reason you want to create anonymous objects just pass an `anonymous` flag to the update function:
 
-Anonymous flag, timestamp flag, sorting example.
+    "posts.update({
+      content: 'who could this be by?'
+    }, anonymous=true)
+    
+We've also made the assumption that more often than not you'll only want to *query* for objects that include a valid `_by` field. So any query you make is automatically rewritten to require it.
+If you want to see anonymous messages as well, mark the `allowAnonymous` flag:
+    
+    <graffiti-collection :query="{
+      content: { $type: 'string' }
+    }" v-slot="allContent"
+    allowAnonymous="true">
+      ...
+    </graffiti-collection>
+
+### Private Objects
+
+In addition to the `_by` field, there is also a special `_to` field.
+If you include the `_to` field in an object, it must be an array of user IDs.
+But what really makes this field special is that you can only query for objects `_to` yourself:
+
+    <graffiti-collection :query="{
+      _to: $graffiti.myID
+    }" v-slot="myInbox">
+      ...
+    </graffiti-collection>
+
+On its own, this restriction doesn't make objects private, it just changes how they can be found.
+But by combining it with context rules, we can make completely private objects:
+
+    {
+      content: 'my secret message'
+      _to: ['e4355faa-d060-5e18-ad2d-822655eb872c'] // recipient's ID
+      _nearMisses: [ o=> o._to = 'anyone else' ]
+    }
+    
+Defining privacy in this way allows for freedom to make objects "semi-private". You could create an object that certain recipients may view as a "direct message" (by querying for objects directly `_to` themselves) but others will only see in the appropriate context. You can use this sort of interaction to alert users that you're tagging them in a reply while for everyone else the comment stays in the context of the thread:
+
+    {
+      inReplyTo: 'something cool',
+      content: 'wow, @Max would love this',
+      _to: ['e4355faa-d060-5e18-ad2d-822655eb872c'],
+      _contexts: [{
+        _nearMisses: [ o=> o.inReplyTo = 'something not cool' ]
+      }, {
+        _nearMisses: [ o=> o._to = 'anyone else' ]
+      }]
+    }
+
+## Sorting
+
+
+### Timestamps
+
+Like with anonimity, we assume in most cases users will want to timestamp their objects and only query for objects that are timestamped.
+That way they have some basis to sort those objects. Anonymous flag, timestamp flag, emits, sorting example.
+
+### Upward propogations
+
+`@modify`
+
+## Shorthand Functions
+
 `$graffiti.byMe(object)`
 `objects.filter($graffiti.byMe)`
 `$graffiti.getAuthors(objects).length`
