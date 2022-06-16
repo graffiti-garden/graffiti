@@ -36,6 +36,8 @@ To use this plugin, you can add the following script before the closing `</body>
 
 </body>
 ```
+
+Check out working examples at the [Graffiti website](https://csail-graffiti.github.io/website/) and [its source code](https://github.com/csail-graffiti/website)
     
 ## Modifying Content
 
@@ -336,13 +338,41 @@ Putting this all together, we can sort a list of posts by the number of likes ea
 
 ## Shorthand Functions
 
+Here are some global functions we've made to capture some common patterns:
+
 ### `byMe`
 
-The global variable `$graffiti.byMe`
-`$graffiti.byMe(object)`
-`objects.filter($graffiti.byMe)`
-`$graffiti.getAuthors(objects).length`
+This global variable is equivalent to the function `object=> object._by == $graffiti.myID`.
+You might use this to conditionally add edit or delete buttons to objects you've created, since you can only modify your own objects. For example:
 
-## Examples
+```html
+<template v-if="$graffiti.byMe(post)">
+  <button @click="posts.delete(post)">
+    delete my post
+  </button>
+</template>
+```
 
-For practical examples see the [Graffiti website](https://csail-graffiti.github.io/website/) and [its source code](https://github.com/csail-graffiti/website)
+You can also use [filter](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter) to get all of the objects in a collection that are yours. You might use this to add controls to delete your own objects from a collection:
+
+```html
+<button @click="likes.delete(
+  likes.objects.filter($graffiti.byMe)[0]
+)">
+  unlike
+</button>
+```
+
+### `getAuthors`
+
+This global variable takes in an array of objects and outputs a list of all the authors who created those objects without duplicates.
+If you want a system that enforces "one person one vote/like" you can use this function to remove duplicates from your count:
+
+```html
+<graffiti-collection v-slot="likes" :query="{
+  type: 'like',
+  at: post._id,
+}" @modify="objects=> 
+  post._.numLikes = $graffiti.getAuthors(objects).length">
+</graffiti-collection>
+```
