@@ -14,11 +14,7 @@
 
 <script>
   // Listen for the signature over a websocket
-  let protocol = 'wss:'
-  if (window.location.protocol != 'https:') {
-    protocol = 'ws:'
-  }
-  const wsURL = new URL('auth_socket', protocol + '//' + 'auth.{{domain}}')
+  const wsURL = new URL('auth_socket', 'ws{{url_divider}}auth.{{domain}}')
   wsURL.searchParams.set('signature_hash', '{{signature_hash}}')
 
   let redirecting = false

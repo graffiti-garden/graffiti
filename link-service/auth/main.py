@@ -6,8 +6,7 @@ import asyncio
 from hashlib import sha256
 from os import getenv
 from aiosmtplib import send as sendEmail
-from email.mime.text import MIMEText
-from email.header import Header
+from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 from uuid import uuid5, NAMESPACE_DNS
 from urllib.parse import urlencode
@@ -20,6 +19,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 debug = (getenv('DEBUG') == 'true')
+url_divider = ('' if debug else 's') + '://'
 expiration_time = 60*float(getenv('AUTH_CODE_EXP_TIME')) # min -> sec
 domain = getenv('DOMAIN')
 secret = getenv('AUTH_SECRET')
@@ -55,6 +55,8 @@ async def auth(
     # Ask the user to log in
     return templates.TemplateResponse("login.html", {
         'request': request,
+        'domain': domain,
+        'url_divider': url_divider,
         'client_id': client_id,
         'redirect_uri': redirect_uri,
         'state': state,
@@ -85,25 +87,30 @@ async def email(
     # Take the last part of the code (the signature)
     header, payload, signature = code.split('.')
 
-    login_link = f"auth.{domain}/auth_socket_send?signature={signature}"
+    # Construct a login link
+    login_link = f"http{url_divider}auth.{domain}/auth_socket_send?signature={signature}"
 
-    # Send the user the smaller part for verification
+    # And an email
+    html_email = templates.get_template('email.html').render({
+        'login_link': login_link,
+        'redirect_uri': redirect_uri,
+        'domain': domain,
+        'url_divider': url_divider
+    })
+    message = EmailMessage()
+    message.set_content(login_link)
+    message.add_alternative(html_email, subtype='html')
+    message["Subject"] = f"confirm log in at [ {redirect_uri} ]"
+    message["From"] = f"graffiti <noreply@{domain}>"
+    message["To"] = email
+    message["Message-ID"] = make_msgid()
+    message["Date"] = formatdate()
+
     if debug:
-        login_link = "http://" + login_link
+        print(message)
+        print(f"LINK> {login_link}")
 
-        # In debug mode, print the login link
-        print(f"login link: {login_link}")
     else:
-        login_link = "https://" + login_link
-
-        # Otherwise, construct an email
-        message = MIMEText(f"{login_link}")
-        message["Subject"] = Header("login link")
-        message["From"] = f"graffiti <noreply@{domain}>"
-        message["To"] = email
-        message["Message-ID"] = make_msgid()
-        message["Date"] = formatdate()
-
         # Send!
         try:
             await sendEmail(message, hostname="mailserver", port=25)
@@ -137,7 +144,8 @@ async def email(
         'state': state,
         'code_body': header + '.' + payload,
         'signature_hash': signature_hash,
-        'domain': domain
+        'domain': domain,
+        'url_divider': url_divider
     })
 
 @app.post("/token")
