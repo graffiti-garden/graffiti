@@ -100,7 +100,7 @@ async def email(
     message = EmailMessage()
     message.set_content(login_link)
     message.add_alternative(html_email, subtype='html')
-    message["Subject"] = f"confirm log in at [ {redirect_uri} ]"
+    message["Subject"] = f"confirm log in at {redirect_uri}"
     message["From"] = f"graffiti <noreply@{domain}>"
     message["To"] = email
     message["Message-ID"] = make_msgid()
