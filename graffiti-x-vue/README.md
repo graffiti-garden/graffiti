@@ -31,13 +31,14 @@ To use this plugin, you can add the following script before the closing `</body>
   <script type="module">
     import { createApp } from "https://unpkg.com/vue@3.2.36/dist/vue.esm-browser.prod.js"
     import Graffiti from "https://csail-graffiti.github.io/vue/plugin.js"
+
     Graffiti().then(g=>createApp().use(g).mount("#app"))
   </script>
 
 </body>
 ```
 
-Check out working examples at the [Graffiti website](https://csail-graffiti.github.io/website/) and [its source code](https://github.com/csail-graffiti/website)
+Check out working examples at the [Graffiti website](https://graffiti.csail.mit.edu) and [its source code](https://github.com/csail-graffiti/website)
     
 ## Modifying Content
 
@@ -375,4 +376,58 @@ If you want a system that enforces "one person one vote/like" you can use this f
 }" @modify="objects=> 
   post._.numLikes = $graffiti.getAuthors(objects).length">
 </graffiti-collection>
+```
+
+## Initialization
+
+As mentioned in the introduction you can use this library by including the following module at the end of your HTML document:
+
+```js
+import { createApp } from "https://unpkg.com/vue@3.2.36/dist/vue.esm-browser.prod.js"
+import Graffiti from "https://csail-graffiti.github.io/vue/plugin.js"
+
+Graffiti().then(g=>createApp().use(g).mount("#app"))
+```
+
+To unpack that last line, we are first initializing the Graffiti library by calling `Graffiti()`.
+This connects to the server and returns a promise that resolves to a [Vue plugin](https://vuejs.org/guide/reusability/plugins.html).
+By default the library will connect to the server at `https://graffiti.csail.mit.edu` but you can pass another server as an argument. For local testing you might use
+
+```js
+Graffiti('http://localhost:5000`)
+```
+
+Once the server connects and the promise resolves, the code within `then` initializes a Vue application, installs the plugin with `use` and mounts the app in the element `#app`.
+You can optionally define a lot of additional functionality when you initialize Vue.
+For example, to initialize a reactive state variable named `counter` you could do
+
+```js
+Graffiti().then(g=> createApp({
+  data(): {
+    return {
+      counter: 0
+    }
+  }
+}).use(g).mount("#app"))
+```
+
+See the [Vue documentation](https://vuejs.org/guide/introduction.html) for defining methods, reactive computation and more.
+
+### Automatic Mounting for Live Coding
+
+Sometimes it can be useful to automatically mount Graffiti/Vue to specific elements whenever they are added to the DOM - especially if you want to do any sort of live coding.
+This library defines a [custom web component](https://developer.mozilla.org/en-US/docs/Web/Web_Components/Using_custom_elements) specifically for that purpose.
+Once you call `registerGraffitiApp`, all existing or future elements with the custom tag `<graffiti-app>` will automatically become Graffiti/Vue applications.
+
+```html
+<graffiti-app>
+  ...
+</graffiti-app>
+
+<script type="module">
+  import { createApp } from "https://unpkg.com/vue@3.2.36/dist/vue.esm-browser.prod.js"
+  import { default as Graffiti, registerGraffitiApp } from "../vue/plugin.js"
+
+  Graffiti().then(g=>registerGraffitiApp(g, createApp))
+</script>
 ```
