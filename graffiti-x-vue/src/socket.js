@@ -1,6 +1,6 @@
 import { randomString } from './utils.js'
 
-export default class GraffitiSocket {
+export default class {
 
   constructor(origin, token) {
     this.open = false

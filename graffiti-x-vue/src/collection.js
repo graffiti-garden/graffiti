@@ -1,6 +1,6 @@
 import { queryRewrite, objectRewrite }  from './rewrite.js'
 
-export default function GraffitiCollection(socket) { return {
+export default function(socket) { return {
   
   data: () => ({
     objectMap: {},

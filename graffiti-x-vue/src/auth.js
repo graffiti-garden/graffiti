@@ -1,6 +1,6 @@
 import { randomString, sha256 } from './utils.js'
 
-export default class GraffitiAuth {
+export default class {
 
   constructor(origin) {
     this.origin = new URL(origin)
@@ -33,12 +33,12 @@ export default class GraffitiAuth {
         window.history.replaceState({}, '', url)
 
         // Get stored variables and remove them
-        const clientSecret = window.sessionStorage.getItem('graffitiClientSecret')
-        const clientID     = window.sessionStorage.getItem('graffitiClientID')
-        const storedState  = window.sessionStorage.getItem('graffitiAuthState')
-        window.sessionStorage.removeItem('graffitiClientSecret')
-        window.sessionStorage.removeItem('graffitiClientID')
-        window.sessionStorage.removeItem('graffitiAuthState')
+        const clientSecret = window.localStorage.getItem('graffitiClientSecret')
+        const clientID     = window.localStorage.getItem('graffitiClientID')
+        const storedState  = window.localStorage.getItem('graffitiAuthState')
+        window.localStorage.removeItem('graffitiClientSecret')
+        window.localStorage.removeItem('graffitiClientID')
+        window.localStorage.removeItem('graffitiAuthState')
 
         // Make sure state has been preserved
         if (state != storedState) {
@@ -123,10 +123,10 @@ export default class GraffitiAuth {
     // The client ID is the secret's hex hash
     const clientID = await sha256(clientSecret)
 
-    // Store the client secret as a session variable
-    window.sessionStorage.setItem('graffitiClientSecret', clientSecret)
-    window.sessionStorage.setItem('graffitiClientID', clientID)
-    window.sessionStorage.setItem('graffitiAuthState', state)
+    // Store the client secret as a local variable
+    window.localStorage.setItem('graffitiClientSecret', clientSecret)
+    window.localStorage.setItem('graffitiClientID', clientID)
+    window.localStorage.setItem('graffitiAuthState', state)
 
     // Redirect to the login window
     const authURL = new URL(this.origin)
