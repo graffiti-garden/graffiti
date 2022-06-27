@@ -47,6 +47,11 @@ export default function(socket) { return {
         this.valueFunction(b) - this.valueFunction(a)
       ))
     },
+
+    // Objects owned by me
+    myObjects() {
+      return this.objects.filter(this.$graffiti.byMe)
+    }
   },
 
   beforeUnmount() {
@@ -208,6 +213,12 @@ export default function(socket) { return {
       }
     },
 
+    async deleteMine() {
+      for (const object of this.myObjects) {
+        this.delete_(object)
+      }
+    },
+
     async updateCallback(value) {
       // Add or copy over _
       if (value._id in this.objectMap) {
@@ -244,8 +255,10 @@ export default function(socket) { return {
   <slot
     :object        = "objects[0]"
     :objects       = "objects"
+    :myObjects     = "myObjects"
     :objectMap     = "objectMap"
     :update        = "update"
     :delete        = "delete_"
+    :deleteMine    = "deleteMine"
   ></slot>`
 }}
