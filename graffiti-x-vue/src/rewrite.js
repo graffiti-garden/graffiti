@@ -35,7 +35,7 @@ export async function objectRewrite(object, myID, anonymous, timestamp) {
   const contextObjectTypes = ['_nearMisses', '_neighbors']
 
   // Context can be defined at the root level, for short
-  if (contextObjectTypes.filter(v=>Object.keys(object).includes(v))) {
+  if (contextObjectTypes.filter(v=>Object.keys(object).includes(v)).length) {
     if (!('_contexts' in object)) object._contexts = []
 
     const context = {}
