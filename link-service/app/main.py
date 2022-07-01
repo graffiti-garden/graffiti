@@ -48,7 +48,8 @@ async def startup():
     db = client.graffiti.objects
 
     # Create indexes if they don't already exist
-    await db.create_index('_owner_id')
+    await db.create_index('_object._by')
+    await db.create_index('_object._to')
     await db.create_index('_object._id')
     await db.create_index('_object._tombstone')
     await db.create_index('_object.$**')
@@ -87,7 +88,7 @@ async def reply(ws, msg, socket_id, owner_id):
         validate(msg, owner_id)
 
         if msg['type'] == 'update':
-            await app.rest.update(msg['object'], msg['idProof'], owner_id)
+            await app.rest.update(msg['object'], owner_id)
 
         elif msg['type'] == 'delete':
             await app.rest.delete(msg['objectID'], owner_id)

@@ -10,17 +10,18 @@ from uuid import uuid4
 def random_id(n=20):
     return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n))
 
-def object_base_and_proof(owner_id, proof=None):
+def object_base(owner_id, proof=None):
     if not proof:
         proof = random_id()
     object_id = sha256((owner_id+proof).encode()).hexdigest()
     object_base = {
+        '_idProof': proof,
         '_id': object_id,
         '_to': [owner_id],
         '_by': owner_id,
         '_contexts': []
     }
-    return object_base, proof
+    return object_base
 
 def owner_id_and_token():
     secret = getenv('AUTH_SECRET')

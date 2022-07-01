@@ -16,12 +16,11 @@ async def main():
     async with websocket_connect(my_token) as ws:
         print("adding 10 objects")
         for i in range(10):
-            object_base, proof = object_base_and_proof(my_id)
+            base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
-                'idProof': proof,
-                'object': object_base | {
+                'object': base | {
                     'content': random_id(),
                     'tags': [custom_tag],
                     'timestamp': time.time()
@@ -58,12 +57,11 @@ async def main():
 
         print(f"adding {2*batch_size} objects")
         for i in range(2*batch_size):
-            object_base, proof = object_base_and_proof(my_id)
+            base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
-                'idProof': proof,
-                'object': object_base | {
+                'object': base | {
                     'content': random_id(),
                     'tags': [custom_tag],
                     'timestamp': time.time()
@@ -123,12 +121,11 @@ async def main():
 
         print("adding just a couple more objects")
         for i in range(20):
-            object_base, proof = object_base_and_proof(my_id)
+            base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'idProof': proof,
                 'type': 'update',
-                'object': object_base | {
+                'object': base | {
                     'content': random_id(),
                     'tags': [custom_tag]
                 }

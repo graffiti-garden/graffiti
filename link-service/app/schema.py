@@ -25,7 +25,6 @@ RANDOM_SCHEMA = {
     "pattern": "^.{1,64}$"
 }
 
-OBJECT_OWNER_PATTERN = re.compile(f'"_by": "({UUID_PATTERN})"')
 QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({UUID_PATTERN})"')
 
 def allowed_query_properties():
@@ -33,34 +32,33 @@ def allowed_query_properties():
     allowed_properties['_to'] = UUID_SCHEMA
     return allowed_properties
 
+BASE_TYPES = ["messageID", "type"]
+
 def socket_schema():
     return {
     "type": "object",
-    "properties": {
-        "messageID": RANDOM_SCHEMA
-    },
-    "required": ["messageID", "type"],
-    "anyOf": [{
+    "oneOf": [{
         # UPDATE
         "properties": {
+            "messageID": RANDOM_SCHEMA,
             "type": { "const": "update" },
             "object": { "$ref": "#/definitions/object" },
-            "idProof": { "oneOf": [
-                { "type": "null" },
-                RANDOM_SCHEMA
-            ]}
         },
-        "required": ["object", "idProof"],
+        "required": BASE_TYPES + ["object"],
+        "additionalProperties": False
     }, {
         # DELETE
         "properties": {
+            "messageID": RANDOM_SCHEMA,
             "type": { "const": "delete" },
             "objectID": SHA256_SCHEMA
         },
-        "required": ["objectID"],
+        "required": BASE_TYPES + ["objectID"],
+        "additionalProperties": False
     }, {
         # SUBSCRIBE
         "properties": {
+            "messageID": RANDOM_SCHEMA,
             "type": { "const": "subscribe" },
             "query": { "$ref": "#/definitions/query" },
             "since": { "oneOf": [{
@@ -71,14 +69,17 @@ def socket_schema():
             },
             "queryID": RANDOM_SCHEMA
         },
-        "required": ["query", "since", "queryID"],
+        "required": BASE_TYPES + ["query", "since", "queryID"],
+        "additionalProperties": False
     }, {
         # UNSUBSCRIBE
         "properties": {
+            "messageID": RANDOM_SCHEMA,
             "type": { "const": "unsubscribe" },
             "queryID": RANDOM_SCHEMA
         },
-        "required": ["queryID"],
+        "required": BASE_TYPES + ["queryID"],
+        "additionalProperties": False
     }],
     "definitions": {
         "object": {
@@ -88,7 +89,7 @@ def socket_schema():
                 # Anything not starting with a "_"
                 "^(?!_).*$": True
             },
-            "required": ["_id", "_to", "_by", "_contexts"],
+            "required": ["_idProof", "_id", "_to", "_by", "_contexts"],
             "properties": {
                 "_by": UUID_SCHEMA,
                 "_to": {
@@ -96,6 +97,7 @@ def socket_schema():
                     "items": UUID_SCHEMA
                 },
                 "_id": SHA256_SCHEMA,
+                "_idProof": RANDOM_SCHEMA,
                 "_contexts": {
                     "type": "array",
                     "items": {

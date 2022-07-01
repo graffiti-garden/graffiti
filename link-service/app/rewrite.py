@@ -1,14 +1,15 @@
 import time
 from uuid import uuid4
 
-def object_to_doc(object, id_proof, owner_id):
-    # Separate out the contexts
+def object_to_doc(object):
+    # Separate out the contexts and id proof
     contexts = object['_contexts']
     del object['_contexts']
+    id_proof = object['_idProof']
+    del object['_idProof']
 
     # Extract the ID and combine into one big doc
     doc = {
-        "_owner_id": owner_id,
         "_object": [object],
         "_contexts": contexts,
         "_tombstone": False,
@@ -20,6 +21,7 @@ def object_to_doc(object, id_proof, owner_id):
 def doc_to_object(doc):
     object = doc['_object'][0]
     object['_contexts'] = doc['_contexts']
+    object['_idProof']  = doc['_id_proof']
     return object
 
 def query_rewrite(query):

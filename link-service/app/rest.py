@@ -13,14 +13,13 @@ class Rest:
         self.redis = redis
         self.deleted_ids = set()
 
-    async def update(self, object, id_proof, owner_id):
+    async def update(self, object, owner_id):
         self.validate_owner_id(owner_id)
 
-        # If there is a proof, check that it matches the object's ID
-        if id_proof:
-            _id = sha256((owner_id + id_proof).encode()).hexdigest()
-            if object['_id'] != _id:
-                raise Exception("the object's _id does not match the proof")
+        # Check that the proof matches the object's ID
+        _id = sha256((owner_id + object['_idProof']).encode()).hexdigest()
+        if object['_id'] != _id:
+            raise Exception("the object's _id does not match the proof")
 
         # Lock so that the delete and insert can be done together
         lock = self.redis.lock(object['_id'])
@@ -29,18 +28,14 @@ class Rest:
         # Try deleting the old document if there is one
         delete_id = None
         try:
-            delete_id, id_proof = await self._delete(object['_id'], owner_id)
+            delete_id = await self._delete(object['_id'], owner_id)
 
         except Exception as e:
-
-            # If there is no old document and no ID proof
-            # there is no justification for the object's supplied _id
-            if not id_proof:
-                await lock.release()
-                raise e
+            # Nothing to worry about, this is just a new object
+            pass
 
         # Make a new document out of the object
-        doc = object_to_doc(object, id_proof, owner_id)
+        doc = object_to_doc(object)
 
         # Then insert the new one into the database
         try:
@@ -64,7 +59,7 @@ class Rest:
 
         # Delete the object
         try:
-            delete_id, _ = await self._delete(object_id, owner_id)
+            delete_id = await self._delete(object_id, owner_id)
         finally:
             await lock.release()
 
@@ -78,7 +73,7 @@ class Rest:
         # If so, schedule it for deletion
         doc = await self.db.find_one_and_update({
             "_object._id": object_id,
-            "_owner_id": owner_id,
+            "_object._by": owner_id,
             "_tombstone": False
         }, {
             "$set": { "_tombstone": True }
@@ -90,7 +85,7 @@ the object you're trying to modify either \
 doesn't exist or you don't have permission \
 to modify it.""")
 
-        return str(doc['_id']), doc['_id_proof']
+        return str(doc['_id'])
 
     def validate_owner_id(self, owner_id):
         if not owner_id:

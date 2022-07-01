@@ -11,12 +11,11 @@ async def main():
         print("creating an object with one near miss")
         common = random_id()
         special = random_id()
-        base_object, proof = object_base_and_proof(my_id)
+        base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
-            'idProof': proof,
-            'object': base_object | {
+            'object': base | {
                 'fieldA': common,
                 'fieldB': special,
                 '_contexts': [{
@@ -65,12 +64,11 @@ async def main():
         print("creating an object with one neighbor")
         common = random_id()
         special = random_id()
-        base_object, proof = object_base_and_proof(my_id)
+        base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
-            'idProof': proof,
-            'object': base_object | {
+            'object': base | {
                 'fieldA': common,
                 'fieldB': special,
                 '_contexts': [{
@@ -120,12 +118,11 @@ async def main():
         a = random_id()
         b = random_id()
         c = random_id()
-        base_object, proof = object_base_and_proof(my_id)
+        base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
-            'idProof': proof,
-            'object': base_object | {
+            'object': base | {
                 'tags': [a, b, c],
                 '_contexts': [{
                     # If the query is for a, b, AND c

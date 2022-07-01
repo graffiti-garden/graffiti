@@ -25,17 +25,15 @@ async def main():
         print("All invalid requests failed, as expected")
 
 def valid_requests(my_id):
-    base_object, proof = object_base_and_proof(my_id)
+    base_object = object_base(my_id)
     return [{
     "messageID": random_id(),
     "type": "update",
     "object": base_object,
-    "idProof": proof
 }, {
     "messageID": "alkjd$$\~934820fk",
     "type": "update",
     "object": base_object,
-    "idProof": None
 }, {
     "messageID": "a"*64,
     "type": "delete",
@@ -59,35 +57,30 @@ def valid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "foo": True
     }
 }, {
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "foo": None
     }
 }, {
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "foo": 123.4
     }
 }, {
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "foo": 1234
     }
 }, {
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_to": [my_id, str(uuid4()), str(uuid4())],
         "foo": {
@@ -111,7 +104,6 @@ def valid_requests(my_id):
     # Weird fields
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "~a": "b",
     }
@@ -160,23 +152,39 @@ def valid_requests(my_id):
 }]
 
 def invalid_requests(my_id):
-    base_object, proof = object_base_and_proof(my_id)
-    return [{
+    base_object = object_base(my_id)
+    return [{}, # Empty
+{
     # no message ID
     "type": "update",
     "object": base_object,
-    "idProof": proof
 }, {
     # Invalid message type
     "messageID": random_id(),
     "type": "dupdate",
     "object": base_object,
-    "idProof": proof
+}, {
+    # Added extra field
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object,
+    "foo": "bar"
+}, {
+    "messageID": random_id(),
+    "type": "delete",
+    "objectID": base_object['_id'],
+    "bloo": {}
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {},
+    "since": None,
+    "queryID": random_id(),
+    "bug": 1
 }, {
     # Missing required field
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof
 }, {
     "messageID": random_id(),
     "type": "update",
@@ -184,7 +192,48 @@ def invalid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
-    "object": base_object
+    "object": {
+        '_idProof': base_object['_idProof'],
+        '_to': base_object['_to'],
+        '_by': base_object['_by'],
+        '_contexts': base_object['_contexts']
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        '_id': base_object['_id'],
+        '_to': base_object['_to'],
+        '_by': base_object['_by'],
+        '_contexts': base_object['_contexts']
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        '_id': base_object['_id'],
+        '_idProof': base_object['_idProof'],
+        '_by': base_object['_by'],
+        '_contexts': base_object['_contexts']
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        '_id': base_object['_id'],
+        '_idProof': base_object['_idProof'],
+        '_to': base_object['_to'],
+        '_contexts': base_object['_contexts']
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": {
+        '_id': base_object['_id'],
+        '_idProof': base_object['_idProof'],
+        '_to': base_object['_to'],
+        '_by': base_object['_by'],
+    }
 }, {
     "messageID": random_id(),
     "type": "delete"
@@ -228,12 +277,10 @@ def invalid_requests(my_id):
     "object": base_object | {
         "_notright": 12345
     },
-    "idProof": proof
 }, {
     # _id should be an string
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_id": 12345,
     }
@@ -241,7 +288,6 @@ def invalid_requests(my_id):
     # _id should be exactly length 64
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_id": "a15d"
     }
@@ -249,7 +295,6 @@ def invalid_requests(my_id):
     # _id should be hex
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_id": "z"*64
     }
@@ -257,13 +302,11 @@ def invalid_requests(my_id):
     # messageID too long
     "messageID": "q"*65,
     "type": "update",
-    "idProof": proof,
     "object": base_object
 }, {
     # _to should be an array
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_to": str(uuid4())
     }
@@ -271,7 +314,6 @@ def invalid_requests(my_id):
     # _to should by UUIDs
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_to": ["12345"]
     }
@@ -279,7 +321,6 @@ def invalid_requests(my_id):
     # _to should always include my ID
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_to": [str(uuid4())]
     }
@@ -287,7 +328,6 @@ def invalid_requests(my_id):
     # by can only be my id
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_by": str(uuid4())
     }
@@ -295,7 +335,6 @@ def invalid_requests(my_id):
     # _contexts is an array
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_contexts": {}
     }
@@ -303,7 +342,6 @@ def invalid_requests(my_id):
     # _contexts only includes objects
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_contexts": ["asdf"]
     }
@@ -311,7 +349,6 @@ def invalid_requests(my_id):
     # objects only have relevant fields
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_contexts": [{
             "foo": "bar"
@@ -321,11 +358,17 @@ def invalid_requests(my_id):
     # nearmisses is an array
     "messageID": random_id(),
     "type": "update",
-    "idProof": proof,
     "object": base_object | {
         "_contexts": [{
             "_nearMisses": {}
         }]
+    }
+}, {
+    # too long of a proof
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_idProof": "z"*65
     }
 }, {
     "messageID": random_id(),
