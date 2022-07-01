@@ -8,19 +8,17 @@ async def main():
     my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
         # Try adding an object
-        object_id, proof = object_id_and_proof(my_id)
-        object_id2, proof2 = object_id_and_proof(my_id)
+        object_base, proof = object_base_and_proof(my_id)
+        object_base2, proof2 = object_base_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
             'idProof': proof2,
-            'object': {
-                '_id': object_id,
+            'object': object_base | {
                 'type': 'justanormalobject',
                 'content': {
                     'foo': 'bar'
                 },
-                '_by': my_id,
             }
         })
         result = await recv(ws)
@@ -32,13 +30,11 @@ async def main():
             'messageID': random_id(),
             'type': 'update',
             'idProof': proof,
-            'object': {
-                '_id': object_id,
+            'object': object_base | {
                 'type': 'justanormalobject',
                 'content': {
                     'foo': 'bar'
                 },
-                '_by': my_id,
             }
         })
         result = await recv(ws)
@@ -50,8 +46,7 @@ async def main():
             'messageID': random_id(),
             'type': 'update',
             'idProof': None,
-            'object': {
-                '_id': object_id,
+            'object': object_base | {
                 'something': {
                     'totally': 'different'
                 }
@@ -65,7 +60,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -75,7 +70,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'error'
@@ -86,8 +81,7 @@ async def main():
             'messageID': random_id(),
             'idProof': None,
             'type': 'update',
-            'object': {
-                '_id': object_id,
+            'object': object_base | {
                 'foo': 'bar'
             }
         })
@@ -96,13 +90,12 @@ async def main():
         print("Could not re-replace object (as expected)")
 
         # Try creating another object
-        object_id, proof = object_id_and_proof(my_id)
+        object_base, proof = object_base_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'idProof': proof,
             'type': 'update',
-            'object': {
-                '_id': object_id,
+            'object': object_base | {
                 'blahhh': 'blskjf'
             }
         })
@@ -117,8 +110,7 @@ async def main():
                 'messageID': random_id(),
                 'type': 'update',
                 'idProof': None,
-                'object': {
-                    '_id': object_id,
+                'object': object_base | {
                     'something': 'random'
                 }
             })
@@ -129,7 +121,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -139,21 +131,20 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'error'
         print("Could not re-delete object (as expected)")
 
         # Try creating another object
-        object_id, proof = object_id_and_proof(my_id)
+        object_base, proof = object_base_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
             'idProof': proof,
-            'object': {
+            'object': object_base | {
                 'blahhh': 'blskjf',
-                '_id': object_id
             }
         })
         result = await recv(ws)
@@ -166,8 +157,7 @@ async def main():
                 'messageID': random_id(),
                 'type': 'update',
                 'idProof': proof,
-                'object': {
-                    '_id': object_id,
+                'object': object_base | {
                     'something': 'random'
                 }
             })
@@ -186,7 +176,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -196,7 +186,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'error'

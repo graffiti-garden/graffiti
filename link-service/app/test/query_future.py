@@ -30,13 +30,12 @@ async def main():
         assert len(result['results']) == 0
 
         print("adding an item")
-        object_id, proof = object_id_and_proof(my_id)
+        object_base, proof = object_base_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
             'idProof': proof,
-            'object': {
-                '_id': object_id,
+            'object': object_base | {
                 'content': random_id(),
                 'tags': [custom_tag]
             }
@@ -51,14 +50,14 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
         assert result['type'] == 'deletes'
         assert len(result['results']) == 1
-        assert result['results'][0] == object_id
+        assert result['results'][0] == object_base['_id']
 
 
     print("Making simultaneous listeners")
@@ -124,13 +123,12 @@ async def main():
 
     async with websocket_connect(my_token) as ws:
         print("adding an item")
-        object_id, proof = object_id_and_proof(my_id)
+        object_base, proof = object_base_and_proof(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
             'idProof': proof,
-            'object': {
-                '_id': object_id,
+            'object': object_base | {
                 'content': random_id(),
                 'tags': [custom_tag]
             }
@@ -144,7 +142,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'delete',
-            'objectID': object_id
+            'objectID': object_base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
@@ -154,32 +152,30 @@ async def main():
         print("adding a whole bunch of items")
         objectIDs = []
         for i in range(big_size):
-            object_id, proof = object_id_and_proof(my_id)
+            object_base, proof = object_base_and_proof(my_id)
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
                 'idProof': proof,
-                'object': {
-                    '_id': object_id,
+                'object': object_base | {
                     'content': random_id(),
                     'tags': [custom_tag]
                 }
             })
             result = await recv(ws)
             assert result['type'] == 'success'
-            objectIDs.append(object_id)
+            objectIDs.append(object_base['_id'])
 
         await asyncio.sleep(2)
 
         print("interleaving adds and deletes")
         for i in range(big_size):
-            object_id, proof = object_id_and_proof(my_id)
+            object_base, proof = object_base_and_proof(my_id)
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
                 'idProof': proof,
-                'object': {
-                    '_id': object_id,
+                'object': object_base | {
                     'content': random_id(),
                     'tags': [custom_tag]
                 }

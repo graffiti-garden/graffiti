@@ -88,7 +88,7 @@ def socket_schema():
                 # Anything not starting with a "_"
                 "^(?!_).*$": True
             },
-            "required": ["_id"],
+            "required": ["_id", "_to", "_by", "_contexts"],
             "properties": {
                 "_by": UUID_SCHEMA,
                 "_to": {
@@ -147,10 +147,10 @@ def validate(msg, owner_id):
     VALIDATOR.validate(msg)
 
     if msg['type'] == 'update':
-        matches = OBJECT_OWNER_PATTERN.findall(json.dumps(msg))
-        for match in matches:
-            if match != owner_id:
-                raise ValidationError("you can only create objects _by yourself")
+        if msg['object']['_by'] != owner_id:
+            raise ValidationError("you can only create objects _by yourself")
+        if owner_id not in msg['object']['_to']:
+            raise ValidationError("you must make all objects _to yourself")
     elif msg['type'] == 'subscribe':
         matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg))
         for match in matches:

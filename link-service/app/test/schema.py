@@ -25,26 +25,21 @@ async def main():
         print("All invalid requests failed, as expected")
 
 def valid_requests(my_id):
-    object_id, proof = object_id_and_proof(my_id)
-
+    base_object, proof = object_base_and_proof(my_id)
     return [{
     "messageID": random_id(),
     "type": "update",
-    "object": {
-        "_id": object_id
-    },
+    "object": base_object,
     "idProof": proof
 }, {
     "messageID": "alkjd$$\~934820fk",
     "type": "update",
-    "object": {
-        "_id": object_id
-    },
+    "object": base_object,
     "idProof": None
 }, {
     "messageID": "a"*64,
     "type": "delete",
-    "objectID": object_id
+    "objectID": base_object['_id']
 }, {
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
     "type": "subscribe",
@@ -65,41 +60,36 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "foo": True
     }
 }, {
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "foo": None
     }
 }, {
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "foo": 123.4
     }
 }, {
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "foo": 1234
     }
 }, {
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
-        "_to": [str(uuid4()), str(uuid4())],
+    "object": base_object | {
+        "_to": [my_id, str(uuid4()), str(uuid4())],
         "foo": {
             "blah": False,
             "bar": {
@@ -118,20 +108,11 @@ def valid_requests(my_id):
         }]
     }
 }, {
-    "messageID": random_id(),
-    "type": "update",
-    "idProof": proof,
-    "object": {
-        "_id": object_id,
-        "_by": my_id
-    }
-}, {
     # Weird fields
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "~a": "b",
     }
 }, {
@@ -179,22 +160,17 @@ def valid_requests(my_id):
 }]
 
 def invalid_requests(my_id):
-    object_id, proof = object_id_and_proof(my_id)
-
+    base_object, proof = object_base_and_proof(my_id)
     return [{
     # no message ID
     "type": "update",
-    "object": {
-        "_id": object_id
-    },
+    "object": base_object,
     "idProof": proof
 }, {
     # Invalid message type
     "messageID": random_id(),
     "type": "dupdate",
-    "object": {
-        "_id": object_id
-    },
+    "object": base_object,
     "idProof": proof
 }, {
     # Missing required field
@@ -208,9 +184,7 @@ def invalid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
-    "object": {
-        "_id": object_id
-    }
+    "object": base_object
 }, {
     "messageID": random_id(),
     "type": "delete"
@@ -251,8 +225,7 @@ def invalid_requests(my_id):
     # only special fields can start with _
     "messageID": random_id(),
     "type": "update",
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_notright": 12345
     },
     "idProof": proof
@@ -261,7 +234,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
+    "object": base_object | {
         "_id": 12345,
     }
 }, {
@@ -269,7 +242,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
+    "object": base_object | {
         "_id": "a15d"
     }
 }, {
@@ -277,7 +250,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
+    "object": base_object | {
         "_id": "z"*64
     }
 }, {
@@ -285,16 +258,13 @@ def invalid_requests(my_id):
     "messageID": "q"*65,
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id
-    }
+    "object": base_object
 }, {
     # _to should be an array
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_to": str(uuid4())
     }
 }, {
@@ -302,17 +272,23 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_to": ["12345"]
+    }
+}, {
+    # _to should always include my ID
+    "messageID": random_id(),
+    "type": "update",
+    "idProof": proof,
+    "object": base_object | {
+        "_to": [str(uuid4())]
     }
 }, {
     # by can only be my id
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_by": str(uuid4())
     }
 }, {
@@ -320,8 +296,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_contexts": {}
     }
 }, {
@@ -329,8 +304,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_contexts": ["asdf"]
     }
 }, {
@@ -338,8 +312,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_contexts": [{
             "foo": "bar"
         }]
@@ -349,8 +322,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "idProof": proof,
-    "object": {
-        "_id": object_id,
+    "object": base_object | {
         "_contexts": [{
             "_nearMisses": {}
         }]

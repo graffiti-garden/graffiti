@@ -3,11 +3,8 @@ from uuid import uuid4
 
 def object_to_doc(object, id_proof, owner_id):
     # Separate out the contexts
-    if '_contexts' in object:
-        contexts = object['_contexts']
-        del object['_contexts']
-    else:
-        contexts = []
+    contexts = object['_contexts']
+    del object['_contexts']
 
     # Extract the ID and combine into one big doc
     doc = {
