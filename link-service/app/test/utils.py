@@ -5,10 +5,12 @@ import random
 from hashlib import sha256
 from os import getenv
 import websockets
-from uuid import uuid4
 
 def random_id(n=20):
     return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n))
+
+def random_sha():
+    return sha256(random_id().encode()).hexdigest()
 
 def object_base(owner_id, proof=None):
     if not proof:
@@ -25,7 +27,7 @@ def object_base(owner_id, proof=None):
 
 def owner_id_and_token():
     secret = getenv('AUTH_SECRET')
-    id_ = str(uuid4())
+    id_ = random_sha()
     token = jwt.encode({
         "type": "token",
         "owner_id": id_

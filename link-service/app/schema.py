@@ -6,17 +6,11 @@ from jsonschema.exceptions import ValidationError
 # Mongo Operators
 ALLOWED_QUERY_OPERATORS = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
 
-UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-
-UUID_SCHEMA = {
-    "type": "string",
-    "pattern": f"^{UUID_PATTERN}$"
-}
-
 # Hex representation of sha256
+SHA256_PATTERN = "[0-9a-f]{64}"
 SHA256_SCHEMA = {
     "type": "string",
-    "pattern": "^[0-9a-f]{64}$"
+    "pattern": f"^{SHA256_PATTERN}$"
 }
 
 # Random user input - any reasonably sized string
@@ -25,11 +19,11 @@ RANDOM_SCHEMA = {
     "pattern": "^.{1,64}$"
 }
 
-QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({UUID_PATTERN})"')
+QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({SHA256_PATTERN})"')
 
 def allowed_query_properties():
     allowed_properties = { '$' + o: { "$ref": "#/definitions/queryProp" } for o in ALLOWED_QUERY_OPERATORS }
-    allowed_properties['_to'] = UUID_SCHEMA
+    allowed_properties['_to'] = SHA256_SCHEMA
     return allowed_properties
 
 BASE_TYPES = ["messageID", "type"]
@@ -91,10 +85,10 @@ def socket_schema():
             },
             "required": ["_idProof", "_id", "_to", "_by", "_contexts"],
             "properties": {
-                "_by": UUID_SCHEMA,
+                "_by": SHA256_SCHEMA,
                 "_to": {
                     "type": "array",
-                    "items": UUID_SCHEMA
+                    "items": SHA256_SCHEMA
                 },
                 "_id": SHA256_SCHEMA,
                 "_idProof": RANDOM_SCHEMA,

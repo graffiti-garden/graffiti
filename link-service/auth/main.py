@@ -23,7 +23,6 @@ url_divider = ('' if debug else 's') + '://'
 expiration_time = 60*float(getenv('AUTH_CODE_EXP_TIME')) # min -> sec
 domain = getenv('DOMAIN')
 secret = getenv('AUTH_SECRET')
-secret_namespace = uuid5(NAMESPACE_DNS, secret)
 
 app = FastAPI()
 
@@ -80,7 +79,7 @@ async def email(
     code = jwt.encode({
         "type": "code",
         "client_id": client_id,
-        "owner_id": str(uuid5(secret_namespace, email)),
+        "owner_id": sha256(email.encode()).hexdigest(),
         "time": time.time()
     }, secret, algorithm="HS256")
 

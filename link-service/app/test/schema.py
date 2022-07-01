@@ -82,7 +82,7 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_to": [my_id, str(uuid4()), str(uuid4())],
+        "_to": [my_id, random_sha(), random_sha()],
         "foo": {
             "blah": False,
             "bar": {
@@ -308,7 +308,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_to": str(uuid4())
+        "_to": random_sha()
     }
 }, {
     # _to should by UUIDs
@@ -322,14 +322,14 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_to": [str(uuid4())]
+        "_to": [random_sha()]
     }
 }, {
     # by can only be my id
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_by": str(uuid4())
+        "_by": random_sha()
     }
 }, {
     # _contexts is an array
@@ -401,7 +401,7 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "_to": str(uuid4())
+        "_to": random_sha()
     },
     "since": None,
     "queryID": random_id()
@@ -411,7 +411,7 @@ def invalid_requests(my_id):
     "type": "subscribe",
     "query": {
         "foo": {
-            "_to": str(uuid4())
+            "_to": random_sha()
         }
     },
     "since": None,
