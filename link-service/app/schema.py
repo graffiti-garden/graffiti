@@ -3,28 +3,49 @@ import json
 import jsonschema
 from jsonschema.exceptions import ValidationError
 
-# Mongo Operators
-ALLOWED_QUERY_OPERATORS = ['eq', 'gt', 'gte', 'in', 'lt', 'lte', 'ne', 'nin', 'and', 'not', 'nor', 'or', 'exists', 'type', 'all', 'elemMatch', 'size', '', 'slice']
-
 # Hex representation of sha256
-SHA256_PATTERN = "[0-9a-f]{64}"
-SHA256_SCHEMA = {
+SHA256_PATTERN = "[0-9a-f]{64}" # regex
+SHA256_SCHEMA = { # jsonschema
     "type": "string",
     "pattern": f"^{SHA256_PATTERN}$"
 }
 
 # Random user input - any reasonably sized string
-RANDOM_SCHEMA = {
+RANDOM_SCHEMA = { # jsonschema
     "type": "string",
     "pattern": "^.{1,64}$"
 }
 
-QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({SHA256_PATTERN})"')
+# Mongo Operators
+QUERY_PROPERTY_SCHEMA = { # jsonschema
+    "_to": SHA256_SCHEMA,
+    "$elemMatch": { "$ref": "#/definitions/query" },
+    "$type": {
+        "type": "string",
+        "enum": ["int", "long", "double", "decimal", "number", "string", "object", "array", "bool", "null"]
+    },
+    "$exists": { "type": "boolean" },
+    "$size":   { "type": "integer" }
+} | {
+    '$' + o: {
+        "type": "array",
+        "items": { "$ref": "#/definitions/query" }
+    } for o in ["and", "not", "nor", "or"]
+} | {
+    '$' + o: {
+        "$ref": "#/definitions/objectValues"
+    } for o in ["eq", "ne"]
+} | {
+    '$' + o: {
+        "type": "array",
+        "items": { "$ref": "#/definitions/objectValues" }
+    } for o in ["in", "nin", "all"]
+} | {
+    '$' + o: { "type": ["boolean", "number", "null"] }
+    for o in ["gt", "gte", "lt", "lte"]
+}
 
-def allowed_query_properties():
-    allowed_properties = { '$' + o: { "$ref": "#/definitions/queryProp" } for o in ALLOWED_QUERY_OPERATORS }
-    allowed_properties['_to'] = SHA256_SCHEMA
-    return allowed_properties
+QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({SHA256_PATTERN})"')
 
 BASE_TYPES = ["messageID", "type"]
 
@@ -80,8 +101,8 @@ def socket_schema():
             "type": "object",
             "additionalProperties": False,
             "patternProperties": {
-                # Anything not starting with a "_"
-                "^(?!_).*$": True
+                # Anything not starting with a "_" or a "$"
+                "^(?!_|\$).*$": { "$ref": "#/definitions/objectValues" }
             },
             "required": ["_idProof", "_id", "_to", "_by", "_contexts"],
             "properties": {
@@ -111,28 +132,33 @@ def socket_schema():
                 }
             }
         },
+        "objectValues": { "oneOf": [
+            { "type": "object",
+                "additionalProperties": False,
+                "patternProperties": {
+                    "^(?!_|\$).*$": { "$ref": "#/definitions/objectValues" }
+                }
+            },
+            { "type": "array",
+                "items": { "$ref": "#/definitions/objectValues" }
+            },
+            { "type": ["string", "number", "boolean", "null"] }
+        ]},
         "query": {
             "type": "object",
             "additionalProperties": False,
             "patternProperties": {
                 # Anything not starting with a "$"
-                "^(?!\$).*$": { "$ref": "#/definitions/queryProp" }
+                "^(?!\$).*$": { "oneOf": [
+                    { "$ref": "#/definitions/query" },
+                    { "type": "array",
+                        "items": { "$ref": "#/definitions/query" }
+                    },
+                    { "type": ["string", "number", "boolean", "null"] }
+                ] }
             },
-            "properties": allowed_query_properties()
+            "properties": QUERY_PROPERTY_SCHEMA
         },
-        "queryProp": { "oneOf": [
-            # Either a root object type
-            { "$ref": "#/definitions/query" },
-            # A recursive array
-            { "type": "array",
-                "items": { "$ref": "#/definitions/queryProp" }
-            },
-            # Or something a constant
-            { "type": "string" },
-            { "type": "number" },
-            { "type": "boolean" },
-            { "type": "null" }
-        ]}
     }
 }
 

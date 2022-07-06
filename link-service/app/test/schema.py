@@ -141,11 +141,29 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "x": { "$exists": "true" },
-        "$and": {
-            "y": "a",
-            "z": "b"
-        }
+        "x": { "$exists": True },
+        "$and": [
+            { "y": "a" },
+            { "z": "b" }
+        ]
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    # Valid args
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "x": { 
+            "y": {
+                "$gt": 100
+            }
+        },
+        "q": { "$size": 100 },
+        "asdf": { "$eq": "adsfhdkf" },
+        "qwer": { "$in": [1, 2, "3", None] },
+        "zxcv": { "$elemMatch": { "x": { "$ne": "asdf" } } },
+        "wert": { "$type": "double" }
     },
     "since": None,
     "queryID": random_id()
@@ -278,6 +296,13 @@ def invalid_requests(my_id):
         "_notright": 12345
     },
 }, {
+    # no fields can start with $
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "$something": 12345
+    },
+}, {
     # _id should be an string
     "messageID": random_id(),
     "type": "update",
@@ -397,6 +422,24 @@ def invalid_requests(my_id):
     "since": None,
     "queryID": random_id()
 }, {
+    # To is not sha
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "_to": "asdf"
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    # To is not sha
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "_to": { "x": "y" }
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
     # To someone else
     "messageID": random_id(),
     "type": "subscribe",
@@ -413,6 +456,55 @@ def invalid_requests(my_id):
         "foo": {
             "_to": random_sha()
         }
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    # Invalid queries
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "$and": "asdf"
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "x": { "$gt": "asdf" }
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "x": { "$type": "asdf" }
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "x": { "$exists": "true" }
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "x": { "$in": 1234 }
+    },
+    "since": None,
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "x": { "$size": "1234" }
     },
     "since": None,
     "queryID": random_id()
