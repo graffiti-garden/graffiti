@@ -82,6 +82,27 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
+        "_contexts": []
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{}]
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": [ [ [ 0 ] ] ],
+            "_neighbors":  [ [ [ 0 ] ] ]
+        }]
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
         "_to": [my_id, random_sha(), random_sha()],
         "foo": {
             "blah": False,
@@ -90,14 +111,11 @@ def valid_requests(my_id):
             }
         },
         "_contexts": [{
-            "_nearMisses": [{
-                "foo": {
-                    "bar": {
-                        "_to": "not right"
-                    }
-                },
-                "_by": "not me"
-            }]
+            "_nearMisses": [
+                [ [ "foo" ], [ "bar" ] ],
+                [ [ 0, "asdf" ], [ "asdf" ] ],
+                [ [ 1 ] ]
+            ]
         }]
     }
 }, {
@@ -350,6 +368,20 @@ def invalid_requests(my_id):
         "_to": [random_sha()]
     }
 }, {
+    # my id should always be first
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_to": [random_sha(), my_id]
+    }
+}, {
+    # no repeated IDs
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_to": [my_id] + [random_sha()]*2
+    }
+}, {
     # by can only be my id
     "messageID": random_id(),
     "type": "update",
@@ -376,7 +408,7 @@ def invalid_requests(my_id):
     "type": "update",
     "object": base_object | {
         "_contexts": [{
-            "foo": "bar"
+            "foo": [ [ [ 0 ] ] ]
         }]
     }
 }, {
@@ -387,6 +419,79 @@ def invalid_requests(my_id):
         "_contexts": [{
             "_nearMisses": {}
         }]
+    }
+}, {
+    # nearmisses must include at least one element
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": []
+        }]
+    }
+}, {
+    # nearmisses must include at least one element
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": [[]]
+        }]
+    }
+}, {
+    # nearmisses must include at least one element
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": [[[]]]
+        }]
+    }
+}, {
+    # nearmisses can only include strings and ints
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": [[[{}]]]
+        }]
+    }
+}, {
+    # nearmisses can only include strings and ints
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": [[[1.1]]]
+        }]
+    }
+}, {
+    # contexts must be unique
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": [[[0], [0]]]
+        }]
+    }
+}, {
+    # contexts must be unique
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [{
+            "_nearMisses": [ [[0]], [[0]] ]
+        }]
+    }
+}, {
+    # contexts must be unique
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_contexts": [
+            { "_nearMisses": [[[0]]] },
+            { "_nearMisses": [[[0]]] }
+        ]
     }
 }, {
     # too long of a proof

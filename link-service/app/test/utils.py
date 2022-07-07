@@ -21,7 +21,7 @@ def object_base(owner_id, proof=None):
         '_id': object_id,
         '_to': [owner_id],
         '_by': owner_id,
-        '_contexts': []
+        '_contexts': [{}]
     }
     return object_base
 

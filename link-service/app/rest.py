@@ -34,11 +34,10 @@ class Rest:
             # Nothing to worry about, this is just a new object
             pass
 
-        # Make a new document out of the object
-        doc = object_to_doc(object)
-
-        # Then insert the new one into the database
         try:
+            # Make a new document out of the object
+            doc = object_to_doc(object)
+            # Then insert the new one into the database
             result = await self.db.insert_one(doc)
         finally:
             await lock.release()

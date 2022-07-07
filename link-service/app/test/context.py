@@ -8,6 +8,151 @@ async def main():
     my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
 
+        print("creating objects with invalid context")
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'foo': [0, 1, 2],
+                '_contexts': [{
+                    '_nearMisses': [ 
+                        [ ['foo', 3] ]
+                    ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+
+        print("creating objects with valid context")
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'foo': [0, 1, 2],
+                '_contexts': [{
+                    '_nearMisses': [ 
+                        [ ['foo', 2] ]
+                    ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'foo': [0, 1, {
+                    'bar': {
+                        "asdf": ["hello", "world"]
+                    }
+                }],
+                '_contexts': [{
+                    '_nearMisses': [ 
+                        [ ['foo', 2, 'bar', 'asdf', 1] ]
+                    ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+
+        print("creating an object with no context")
+        common = random_id()
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'fieldA': common,
+                '_contexts': []
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'subscribe',
+            'query': {
+                'fieldA': common,
+                '_to': my_id
+            },
+            'since': None,
+            'queryID': random_id()
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'updates'
+        assert len(result['results']) == 1
+        print("able to find it by '_to'")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'subscribe',
+            'query': {
+                'fieldA': common,
+                '_id': base['_id']
+            },
+            'since': None,
+            'queryID': random_id()
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'updates'
+        assert len(result['results']) == 1
+        print("able to find it by '_id'")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'subscribe',
+            'query': {
+                'fieldA': common
+            },
+            'since': None,
+            'queryID': random_id()
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'updates'
+        assert len(result['results']) == 0
+        print("unable to search for it otherwise")
+
+        print("creating an object with open context")
+        common = random_id()
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'fieldA': common,
+                '_contexts': [{}] # here
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'subscribe',
+            'query': {
+                'fieldA': common
+            },
+            'since': None,
+            'queryID': random_id()
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'updates'
+        assert len(result['results']) == 1
+        print("able to find it")
+
         print("creating an object with one near miss")
         common = random_id()
         special = random_id()
@@ -19,10 +164,9 @@ async def main():
                 'fieldA': common,
                 'fieldB': special,
                 '_contexts': [{
-                    '_nearMisses': [{
-                        'fieldA': common,
-                        'fieldB': 'not' + special
-                    }]
+                    '_nearMisses': [ 
+                        [ ['fieldB'] ]
+                    ]
                 }]
             }
         })
@@ -72,10 +216,9 @@ async def main():
                 'fieldA': common,
                 'fieldB': special,
                 '_contexts': [{
-                    '_neighbors': [{
-                        'fieldA': common,
-                        'fieldB': 'not' + special
-                    }]
+                    '_neighbors': [
+                        [ ['fieldB'] ]
+                    ]
                 }]
             }
         })
@@ -126,25 +269,21 @@ async def main():
                 'tags': [a, b, c],
                 '_contexts': [{
                     # If the query is for a, b, AND c
-                    '_nearMisses': [{
-                        'tags': [random_id(), b, c],
-                    }, {
-                        'tags': [a, random_id(), c],
-                    }, {
-                        'tags': [a, b, random_id()],
-                    }]
+                    '_nearMisses': [
+                        [ ['tags', 0] ],
+                        [ ['tags', 1] ],
+                        [ ['tags', 2] ]
+                    ]
                 }, {
                     # If the query is for a, b, OR c
-                    '_neighbors': [{
-                        'tags': [a]
-                    }, {
-                        'tags': [b]
-                    }, {
-                        'tags': [c]
-                    }],
-                    '_nearMisses': [{
-                        'tags': [random_id()]
-                    }]
+                    '_neighbors': [
+                        [ ['tags', 1], ['tags', 2] ],
+                        [ ['tags', 0], ['tags', 2] ],
+                        [ ['tags', 0], ['tags', 1] ]
+                    ],
+                    '_nearMisses': [
+                        [ ['tags', 0], ['tags', 1], ['tags', 2] ]
+                    ]
                 }]
             }
         })

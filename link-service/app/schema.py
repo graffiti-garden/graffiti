@@ -49,6 +49,22 @@ QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({SHA256_PATTERN})"')
 
 BASE_TYPES = ["messageID", "type"]
 
+ARRAY_OF_ARRAY_OF_PATHS = {
+    "type": "array",
+    "uniqueItems": True,
+    "minItems": 1,
+    "items": { 
+        "type": "array",
+        "uniqueItems": True,
+        "minItems": 1,
+        "items": { 
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": ["string", "integer"] }
+        }
+    }
+}
+
 def socket_schema():
     return {
     "type": "object",
@@ -108,6 +124,8 @@ def socket_schema():
             "properties": {
                 "_by": SHA256_SCHEMA,
                 "_to": {
+                    "minItems": 1,
+                    "uniqueItems": True,
                     "type": "array",
                     "items": SHA256_SCHEMA
                 },
@@ -115,18 +133,13 @@ def socket_schema():
                 "_idProof": RANDOM_SCHEMA,
                 "_contexts": {
                     "type": "array",
+                    "uniqueItems": True,
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
-                            "_nearMisses": {
-                                "type": "array",
-                                "items": { "type": "object" }
-                            },
-                            "_neighbors": {
-                                "type": "array",
-                                "items": { "type": "object" }
-                            },
+                            "_nearMisses": ARRAY_OF_ARRAY_OF_PATHS,
+                            "_neighbors": ARRAY_OF_ARRAY_OF_PATHS
                         }
                     }
                 }
@@ -171,7 +184,7 @@ def validate(msg, owner_id):
     if msg['type'] == 'update':
         if msg['object']['_by'] != owner_id:
             raise ValidationError("you can only create objects _by yourself")
-        if owner_id not in msg['object']['_to']:
+        if owner_id != msg['object']['_to'][0]:
             raise ValidationError("you must make all objects _to yourself")
     elif msg['type'] == 'subscribe':
         matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg))
