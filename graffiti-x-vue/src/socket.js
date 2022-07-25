@@ -109,10 +109,10 @@ export default class {
     }
   }
 
-  async update(object, idProof) {
+  async update(object) {
     const data = await this.request({
       type: "update",
-      object, idProof
+      object
     })
     return data.objectID
   }

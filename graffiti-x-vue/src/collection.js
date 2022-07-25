@@ -24,12 +24,6 @@ export default function(socket) { return {
       default: object => object.timestamp
     },
 
-    // Allow anonymous objects to match the query
-    allowAnonymous: {
-      type: Boolean,
-      default: false
-    },
-
     // Allow objects without timestamps to match the query
     allowNoTimestamp: {
       type: Boolean,
@@ -88,7 +82,6 @@ export default function(socket) { return {
         // Rewrite to account for special conditions
         newQuery = queryRewrite(
           newQuery,
-          this.allowAnonymous,
           this.allowNoTimestamp)
 
         // And subscribe to the new query
@@ -103,7 +96,7 @@ export default function(socket) { return {
   },
 
   methods: {
-    async update(object, anonymous=false, timestamp=true) {
+    async update(object, timestamp=true) {
       if (!this.$graffiti.loggedIn) {
         throw {
           type: 'error',
@@ -112,7 +105,7 @@ export default function(socket) { return {
       }
 
       // Perform object rewriting
-      const idProof = await objectRewrite(object, this.$graffiti.myID, anonymous, timestamp)
+      await objectRewrite(object, this.$graffiti.myID, timestamp)
       const id = object._id
 
       // Store the original object if
@@ -128,10 +121,10 @@ export default function(socket) { return {
       // Remove _ for the server
       const serverObject = Object.assign({}, object)
       delete serverObject._
-      
+
       // Send it to the server
       try {
-        await socket.update(serverObject, idProof)
+        await socket.update(serverObject)
       } catch(e) {
         if (originalObject) {
           // Restore the original object
