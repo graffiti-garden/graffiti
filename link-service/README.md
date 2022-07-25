@@ -37,14 +37,15 @@ exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The AP
 - `subscribe`: returns all database entries matching a [MongoDB query](https://www.mongodb.com/docs/manual/tutorial/query-documents/) and then continues to stream new matches as they arrive.
 - `unsubscribe`: stops streaming results from a particular `subscribe` request.
 
-The JSON objects are schemaless aside from 4 regulated fields:
+The JSON objects are schemaless aside from 5 regulated fields:
 
-- `_id`: a random identifier unique to each object.
-- `_by`: a field that, if included, must be equal to the user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
-- `_to`: a field that, if included, must be equal to a list of user identifiers. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
-- `_contexts`: this field must be a list of objects each of which may contain a `_nearMisses` and a `_neighbors` field. These subfields must each be lists of objects. The `_contexts` field cannot be matched directly by a query. Instead, a query matches an object if for each of its contexts, each near miss object *does not* match the query and each neighbor object *does* match the query. This allows users to limit the set of queries that match their object, which can create virtual boundaries between different information spaces.
+- `_id`: this field is random identifier unique to each object. It is computed as the SHA-256 hash of the user's identifier (returned by the `auth` module) concatenated with a supplied `_id_proof` field. This makes it possible for the client to compute the `_id` in advance (e.g. for optimistic rendering) while enuring that the `_id` will not collide with any other user's items. If the client generates the `_id_proof` randomly it will not collide with any of the user's existing items. Alternatively a client can intentionally reuse an `_id`/`_id_proof` pair to replace an object.
+- `_id_proof`: this is a required field that can be any string up to 64 charachters long. This field cannot be queried.
+- `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
+- `_to`: this field must be equal to a list of unique user identifiers and the first element of this list must be the operating user's identifier. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
+- `_contexts`: [see here](https://github.com/csail-graffiti/vue#context)
 
-Objects can't include any other top-level fields that start with `_`.
+Objects can't include any other fields that start with `_` or `$`.
 
 For security and performance purposes, MongoDB query operators are limited to those listed [here](https://github.com/csail-graffiti/server/blob/main/app/schema.py).
 
@@ -66,10 +67,9 @@ Only run these scripts locally! They will fill your server up with a lot of junk
 
 It would be really nice if someone implemented...
 
-- An interface to import and export one's own data from the server, perhaps to a git repository.
 - Bridges that carry over data from existing social platforms into the Graffiti ecosystem.
 - Better scaling so the server could operate over multiple machines with multiple instances of each module. Perhaps this involves Kubernetes and AWS...
-- Decentralization?
+- Distribution? Decentralization?
 - Encryption?
 
 ## Deployment
