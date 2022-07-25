@@ -53,7 +53,8 @@ async def startup():
     await db.create_index('_object._id')
     await db.create_index('_object._tombstone')
     await db.create_index('_object.$**')
-    await db.create_index('_contexts.$**')
+    await db.create_index('_expandedContexts._queryFailsWithout.$**')
+    await db.create_index('_expandedContexts._queryPassesWithout.$**')
 
     # Initialize the pubsub/locking system
     redis = aioredis.from_url("redis://redis", decode_responses=True)

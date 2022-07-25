@@ -14,11 +14,9 @@ async def main():
             'messageID': random_id(),
             'type': 'update',
             'object': base | {
-                'foo': [0, 1, 2],
-                '_contexts': [{
-                    '_nearMisses': [ 
-                        [ ['foo', 3] ]
-                    ]
+                'foo': ['0', '1', '2'],
+                '_inContextIf': [{
+                    'queryFailsWithout': [ 'foo.3' ]
                 }]
             }
         })
@@ -30,11 +28,9 @@ async def main():
             'messageID': random_id(),
             'type': 'update',
             'object': base | {
-                'foo': [0, 1, 2],
-                '_contexts': [{
-                    '_nearMisses': [ 
-                        [ ['foo', 2] ]
-                    ]
+                'foo': ['0', '1', '2'],
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ 'foo.2' ]
                 }]
             }
         })
@@ -49,10 +45,8 @@ async def main():
                         "asdf": ["hello", "world"]
                     }
                 }],
-                '_contexts': [{
-                    '_nearMisses': [ 
-                        [ ['foo', 2, 'bar', 'asdf', 1] ]
-                    ]
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ 'foo.2.bar.asdf.1' ]
                 }]
             }
         })
@@ -67,7 +61,7 @@ async def main():
             'type': 'update',
             'object': base | {
                 'fieldA': common,
-                '_contexts': []
+                '_inContextIf': []
             }
         })
         result = await recv(ws)
@@ -131,7 +125,7 @@ async def main():
             'type': 'update',
             'object': base | {
                 'fieldA': common,
-                '_contexts': [{}] # here
+                '_inContextIf': [{}] # here
             }
         })
         result = await recv(ws)
@@ -163,10 +157,8 @@ async def main():
             'object': base | {
                 'fieldA': common,
                 'fieldB': special,
-                '_contexts': [{
-                    '_nearMisses': [ 
-                        [ ['fieldB'] ]
-                    ]
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ 'fieldB' ]
                 }]
             }
         })
@@ -215,10 +207,8 @@ async def main():
             'object': base | {
                 'fieldA': common,
                 'fieldB': special,
-                '_contexts': [{
-                    '_neighbors': [
-                        [ ['fieldB'] ]
-                    ]
+                '_inContextIf': [{
+                    '_queryPassesWithout': [ 'fieldB' ]
                 }]
             }
         })
@@ -267,23 +257,17 @@ async def main():
             'type': 'update',
             'object': base | {
                 'tags': [a, b, c],
-                '_contexts': [{
-                    # If the query is for a, b, AND c
-                    '_nearMisses': [
-                        [ ['tags', 0] ],
-                        [ ['tags', 1] ],
-                        [ ['tags', 2] ]
-                    ]
+                '_inContextIf': [{
+                    # If removing a, b OR c falsifies the query
+                    '_queryFailsWithout': [ 'tags.0', 'tags.1', 'tags.2' ]
                 }, {
-                    # If the query is for a, b, OR c
-                    '_neighbors': [
-                        [ ['tags', 1], ['tags', 2] ],
-                        [ ['tags', 0], ['tags', 2] ],
-                        [ ['tags', 0], ['tags', 1] ]
+                    '_queryPassesWithout': [
+                        [ 'tags.0', 'tags.1', ],
+                        [ 'tags.0', 'tags.2', ],
+                        [ 'tags.1', 'tags.2', ]
                     ],
-                    '_nearMisses': [
-                        [ ['tags', 0], ['tags', 1], ['tags', 2] ]
-                    ]
+                    # If removing a, b AND c falsifies the query
+                    '_queryFailsWithout': [ [ 'tags.0', 'tags.1', 'tags.2' ] ]
                 }]
             }
         })

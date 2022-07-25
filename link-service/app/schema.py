@@ -3,6 +3,8 @@ import json
 import jsonschema
 from jsonschema.exceptions import ValidationError
 
+ALLOWED_QUERY_OPERATORS = ["elemMatch", "type", "exists", "size", "and", "not", "nor", "or", "in", "nin", "all", "eq", "ne", "gt", "lt", "lte", "gte"]
+
 # Hex representation of sha256
 SHA256_PATTERN = "[0-9a-f]{64}" # regex
 SHA256_SCHEMA = { # jsonschema
@@ -16,56 +18,27 @@ RANDOM_SCHEMA = { # jsonschema
     "pattern": "^.{1,64}$"
 }
 
-# Mongo Operators
-QUERY_PROPERTY_SCHEMA = { # jsonschema
-    "_to": SHA256_SCHEMA,
-    "$elemMatch": { "$ref": "#/definitions/query" },
-    "$type": {
-        "type": "string",
-        "enum": ["int", "long", "double", "decimal", "number", "string", "object", "array", "bool", "null"]
-    },
-    "$exists": { "type": "boolean" },
-    "$size":   { "type": "integer" }
-} | {
-    '$' + o: {
-        "type": "array",
-        "items": { "$ref": "#/definitions/query" }
-    } for o in ["and", "not", "nor", "or"]
-} | {
-    '$' + o: {
-        "$ref": "#/definitions/objectValues"
-    } for o in ["eq", "ne"]
-} | {
-    '$' + o: {
-        "type": "array",
-        "items": { "$ref": "#/definitions/objectValues" }
-    } for o in ["in", "nin", "all"]
-} | {
-    '$' + o: { "type": ["boolean", "number", "null"] }
-    for o in ["gt", "gte", "lt", "lte"]
-}
-
-QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({SHA256_PATTERN})"')
-
-BASE_TYPES = ["messageID", "type"]
-
-ARRAY_OF_ARRAY_OF_PATHS = {
+ARRAY_OF_PATH_GROUPS = {
     "type": "array",
     "uniqueItems": True,
     "minItems": 1,
-    "items": { 
-        "type": "array",
-        "uniqueItems": True,
-        "minItems": 1,
-        "items": { 
+    "items": {
+        "oneOf": [ {
+                "type": "string"
+        }, {
             "type": "array",
-            "minItems": 1,
-            "items": { "type": ["string", "integer"] }
-        }
+            "uniqueItems": True,
+            "minItems": 2,
+            "items": { 
+                "type": "string"
+            }
+        } ]
     }
 }
 
 def socket_schema():
+    BASE_TYPES = ["messageID", "type"]
+
     return {
     "type": "object",
     "oneOf": [{
@@ -120,7 +93,7 @@ def socket_schema():
                 # Anything not starting with a "_" or a "$"
                 "^(?!_|\$).*$": { "$ref": "#/definitions/objectValues" }
             },
-            "required": ["_idProof", "_id", "_to", "_by", "_contexts"],
+            "required": ["_idProof", "_id", "_to", "_by", "_inContextIf"],
             "properties": {
                 "_by": SHA256_SCHEMA,
                 "_to": {
@@ -131,15 +104,15 @@ def socket_schema():
                 },
                 "_id": SHA256_SCHEMA,
                 "_idProof": RANDOM_SCHEMA,
-                "_contexts": {
+                "_inContextIf": {
                     "type": "array",
                     "uniqueItems": True,
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
-                            "_nearMisses": ARRAY_OF_ARRAY_OF_PATHS,
-                            "_neighbors": ARRAY_OF_ARRAY_OF_PATHS
+                            "_queryFailsWithout": ARRAY_OF_PATH_GROUPS,
+                            "_queryPassesWithout": ARRAY_OF_PATH_GROUPS
                         }
                     }
                 }
@@ -162,21 +135,26 @@ def socket_schema():
             "additionalProperties": False,
             "patternProperties": {
                 # Anything not starting with a "$"
-                "^(?!\$).*$": { "oneOf": [
-                    { "$ref": "#/definitions/query" },
-                    { "type": "array",
-                        "items": { "$ref": "#/definitions/query" }
-                    },
-                    { "type": ["string", "number", "boolean", "null"] }
-                ] }
+                "^(?!\$).*$": { "$ref": "#/definitions/queryValue" }
             },
-            "properties": QUERY_PROPERTY_SCHEMA
+            # To must be a SHA
+            "properties": { "_to": SHA256_SCHEMA } |
+            # And allowed query types recurse
+                { '$' + o: { "$ref": "#/definitions/queryValue" }
+                    for o in ALLOWED_QUERY_OPERATORS }
         },
-    }
-}
+        "queryValue": { "oneOf": [
+            { "$ref": "#/definitions/query" },
+            { "type": "array",
+                "items": { "$ref": "#/definitions/queryValue" }
+            },
+            { "type": ["string", "number", "boolean", "null"] }
+        ] }
+    }}
 
-# Initialize the schema validator
+# Initialize the scheme validator and owner checker
 VALIDATOR = jsonschema.Draft7Validator(socket_schema())
+QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({SHA256_PATTERN})"')
 
 def validate(msg, owner_id):
     VALIDATOR.validate(msg)
@@ -184,7 +162,7 @@ def validate(msg, owner_id):
     if msg['type'] == 'update':
         if msg['object']['_by'] != owner_id:
             raise ValidationError("you can only create objects _by yourself")
-        if owner_id != msg['object']['_to'][0]:
+        if owner_id not in msg['object']['_to']:
             raise ValidationError("you must make all objects _to yourself")
     elif msg['type'] == 'subscribe':
         matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg))

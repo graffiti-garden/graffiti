@@ -82,21 +82,15 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": []
+        "_inContextIf": []
     }
 }, {
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{}]
-    }
-}, {
-    "messageID": random_id(),
-    "type": "update",
-    "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": [ [ [ 0 ] ] ],
-            "_neighbors":  [ [ [ 0 ] ] ]
+        "_inContextIf": [{
+            "_queryFailsWithout": [ 'a' ],
+            "_queryPassesWithout":  [ 'b' ]
         }]
     }
 }, {
@@ -107,14 +101,13 @@ def valid_requests(my_id):
         "foo": {
             "blah": False,
             "bar": {
-                "asdf": 1234.14
+                "asdf": [ 1234.14 ]
             }
         },
-        "_contexts": [{
-            "_nearMisses": [
-                [ [ "foo" ], [ "bar" ] ],
-                [ [ 0, "asdf" ], [ "asdf" ] ],
-                [ [ 1 ] ]
+        "_inContextIf": [{
+            "_queryFailsWithout": [
+                "foo.blah",
+                "foo.bar.asdf.0"
             ]
         }]
     }
@@ -232,7 +225,7 @@ def invalid_requests(my_id):
         '_idProof': base_object['_idProof'],
         '_to': base_object['_to'],
         '_by': base_object['_by'],
-        '_contexts': base_object['_contexts']
+        '_inContextIf': base_object['_inContextIf']
     }
 }, {
     "messageID": random_id(),
@@ -241,7 +234,7 @@ def invalid_requests(my_id):
         '_id': base_object['_id'],
         '_to': base_object['_to'],
         '_by': base_object['_by'],
-        '_contexts': base_object['_contexts']
+        '_inContextIf': base_object['_inContextIf']
     }
 }, {
     "messageID": random_id(),
@@ -250,7 +243,7 @@ def invalid_requests(my_id):
         '_id': base_object['_id'],
         '_idProof': base_object['_idProof'],
         '_by': base_object['_by'],
-        '_contexts': base_object['_contexts']
+        '_inContextIf': base_object['_inContextIf']
     }
 }, {
     "messageID": random_id(),
@@ -259,7 +252,7 @@ def invalid_requests(my_id):
         '_id': base_object['_id'],
         '_idProof': base_object['_idProof'],
         '_to': base_object['_to'],
-        '_contexts': base_object['_contexts']
+        '_inContextIf': base_object['_inContextIf']
     }
 }, {
     "messageID": random_id(),
@@ -366,13 +359,6 @@ def invalid_requests(my_id):
     "type": "update",
     "object": base_object | {
         "_to": [random_sha()]
-    }
-}, {
-    # my id should always be first
-    "messageID": random_id(),
-    "type": "update",
-    "object": base_object | {
-        "_to": [random_sha(), my_id]
     }
 }, {
     # no repeated IDs
@@ -561,55 +547,6 @@ def invalid_requests(my_id):
         "foo": {
             "_to": random_sha()
         }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # Invalid queries
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "$and": "asdf"
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "x": { "$gt": "asdf" }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "x": { "$type": "asdf" }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "x": { "$exists": "true" }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "x": { "$in": 1234 }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "x": { "$size": "1234" }
     },
     "since": None,
     "queryID": random_id()

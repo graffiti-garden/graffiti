@@ -1,62 +1,95 @@
+import re
 import time
 import copy
 from uuid import uuid4
 
 def object_to_doc(object):
-    # Separate out the contexts and id proof
-    contexts = object['_contexts']
-    del object['_contexts']
+    # Separate out the id proof and contexts
     id_proof = object['_idProof']
     del object['_idProof']
+    contexts = object['_inContextIf']
+    del object['_inContextIf']
 
-    # Always Add _to and _id
-    default_contexts = [
-        { '_nearMisses': [ [ ['_to', 0] ] ] },
-        { '_nearMisses': [ [ ['_id'] ] ] }
-    ]
+    # Always add _id and _to for each recipient
+    default_contexts = \
+        [ { '_queryFailsWithout': [ '_id' ] } ] + \
+        [ { '_queryFailsWithout': [ f'_to.{i}' ] } 
+            for i, _ in enumerate(object['_to']) ]
 
-    # Rewrite the contexts
-    computed_contexts = []
+    # Expand the contexts by creating full copies
+    # of the original object except for a couple
+    # "twiddled" fields that will no longer match.
+    expanded_contexts = []
     for context in contexts + default_contexts:
-        computed_contexts.append({})
+        expanded_context = {}
+        expanded_contexts.append(expanded_context)
 
         for subtype in context:
-            computed_contexts[-1][subtype] = []
+            expanded_context[subtype] = []
 
-            for twiddled_object in context[subtype]:
-                # Clone the object
-                computed_contexts[-1][subtype].append(copy.deepcopy(object))
+            for path_or_paths in context[subtype]:
 
-                for twiddle_path in twiddled_object:
-                    twiddle(computed_contexts[-1][subtype][-1], twiddle_path)
+                clone = copy.deepcopy(object)
+                expanded_context[subtype].append(clone)
+
+                if isinstance(path_or_paths, str):
+                    path = path_or_paths
+                    twiddle(clone, path)
+                else:
+                    paths = path_or_paths
+                    for path in paths:
+                        twiddle(clone, path)
 
     # Extract the ID and combine into one big doc
     doc = {
         "_object": [object],
-        "_computed_contexts": computed_contexts,
-        "_contexts": contexts,
+        "_expandedContexts": expanded_contexts,
+        "_inContextIf": contexts,
         "_tombstone": False,
-        "_id_proof": id_proof
+        "_idProof": id_proof
     }
 
     return doc
 
-def twiddle(obj, twiddle_path):
-    # Walk along the path until there is
-    # only one element left.
-    position = 0
-    while position + 1 < len(twiddle_path):
-        # This might fail but the exception will be caught higher up
-        obj = obj[twiddle_path[position]]
-        position += 1
+odd_slashes_regex = r'(?<!\\)\\(?:\\\\)*'
+odd_slashes  = re.compile(f'({odd_slashes_regex})')
+ending_slashes = re.compile(r'\\+$')
+dot_notation = re.compile(r'((?:(?:' + odd_slashes_regex + r'\.)|[^\.])+)')
 
-    # Assign it something random
-    obj[twiddle_path[position]] = str(uuid4())
+def twiddle(obj, path):
+    # Convert the string path to an array
+    # based on period divisions, but allow
+    # for escaped periods. i.e.:
+    # 
+    # { 'foo': { 'bar': [ { 'this.works': 'hello' } ]
+    #
+    # 'foo.bar.0.this\.works' -> 'hello'
+    #
+    path = dot_notation.findall(path)
+    # Remove escapes before periods
+    path = [odd_slashes.sub(lambda x: x.group(0)[:-1:2], p) for p in path]
+    # Remove escapes at the end of subdivisions
+    path[:-1] = [ending_slashes.sub(lambda x: x.group(0)[:2], p) for p in path[:-1]]
+
+    for i, path_el in enumerate(path):
+        if isinstance(obj, list):
+            path_el = int(path_el)
+
+        if i + 1 < len(path):
+            # Walk along the path until there is
+            # only one element left.
+            # This might fail but the exception will be caught higher up
+            obj = obj[path_el]
+
+        else:
+            # At the end, assign the last character
+            # to nonsense that won't match
+            obj[path_el] = obj[path_el][:-1] + '\uFABC'
 
 def doc_to_object(doc):
     object = doc['_object'][0]
-    object['_contexts'] = doc['_contexts']
-    object['_idProof']  = doc['_id_proof']
+    object['_inContextIf'] = doc['_inContextIf']
+    object['_idProof']  = doc['_idProof']
     return object
 
 def query_rewrite(query):
@@ -64,13 +97,13 @@ def query_rewrite(query):
         # The object must match the query
         "_object": { "$elemMatch": query },
         # The object must match at least one of the contexts
-        "_computed_contexts": { "$elemMatch": {
-            # None of the near misses can match the query
-            "_nearMisses": {
+        "_expandedContexts": { "$elemMatch": {
+            # None of these "near misses" can match the query
+            "_queryFailsWithout": {
                 "$not": { "$elemMatch": query }
             },
-            # All of the neighbors must match the query
-            "_neighbors": {
+            # All of these "neighbors" must match the query
+            "_queryPassesWithout": {
                 "$not": {
                     # Which is the negation of:
                     # "some neighbor does not match the query"
