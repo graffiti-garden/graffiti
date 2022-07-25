@@ -52,11 +52,11 @@ def object_to_doc(object):
     return doc
 
 odd_slashes_regex = r'(?<!\\)\\(?:\\\\)*'
-odd_slashes  = re.compile(f'({odd_slashes_regex})')
+odd_slashes  = re.compile(f'({odd_slashes_regex})(?=\.)')
 ending_slashes = re.compile(r'\\+$')
 dot_notation = re.compile(r'((?:(?:' + odd_slashes_regex + r'\.)|[^\.])+)')
 
-def twiddle(obj, path):
+def twiddle(obj, path_str):
     # Convert the string path to an array
     # based on period divisions, but allow
     # for escaped periods. i.e.:
@@ -65,7 +65,7 @@ def twiddle(obj, path):
     #
     # 'foo.bar.0.this\.works' -> 'hello'
     #
-    path = dot_notation.findall(path)
+    path = dot_notation.findall(path_str)
     # Remove escapes before periods
     path = [odd_slashes.sub(lambda x: x.group(0)[:-1:2], p) for p in path]
     # Remove escapes at the end of subdivisions
@@ -73,7 +73,16 @@ def twiddle(obj, path):
 
     for i, path_el in enumerate(path):
         if isinstance(obj, list):
-            path_el = int(path_el)
+            try:
+                path_el = int(path_el)
+            except:
+                raise ValueError(f'element {i} of the context path "{path_str}", "{path_el}", is not an integer, but you are trying to index a list, {obj}')
+
+            if not 0 <= path_el < len(obj):
+                raise IndexError(f'element {i} of the context path "{path_str}", "{path_el}", is out of bounds of the array of length {len(obj)}, {obj}')
+        else:
+            if path_el not in obj:
+                raise KeyError(f'element {i} of the context path "{path_str}", "{path_el}", is not a key in the object, {obj}')
 
         if i + 1 < len(path):
             # Walk along the path until there is
@@ -82,6 +91,9 @@ def twiddle(obj, path):
             obj = obj[path_el]
 
         else:
+            if not isinstance(obj[path_el], str):
+                raise ValueError(f'the context path, "{path_str}", references a value that is not a string, {obj[path_el]}')
+
             # At the end, assign the last character
             # to nonsense that won't match
             obj[path_el] = obj[path_el][:-1] + '\uFABC'

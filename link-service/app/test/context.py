@@ -16,7 +16,43 @@ async def main():
             'object': base | {
                 'foo': ['0', '1', '2'],
                 '_inContextIf': [{
-                    'queryFailsWithout': [ 'foo.3' ]
+                    '_queryFailsWithout': [ 'foo.3' ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'foo.bar': '0',
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ 'foo.bar' ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                r'foo\.bar': '0',
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ r'foo\.bar' ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'foo': [0, 1, 2],
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ 'foo.2' ]
                 }]
             }
         })
@@ -31,6 +67,44 @@ async def main():
                 'foo': ['0', '1', '2'],
                 '_inContextIf': [{
                     '_queryFailsWithout': [ 'foo.2' ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                'foo.bar': ['0', '1', '2'],
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ r'foo\.bar.2' ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                r'foo\.bar': ['0', '1', '2'],
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ r'foo\\\.bar.2' ]
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'object': base | {
+                r"f\o\o\\.b\.ar": {
+                    r"a.\s\.\\\.go": 'asdf'
+                },
+                '_inContextIf': [{
+                    '_queryFailsWithout': [ r"f\o\o\\\\\.b\\\.ar.a\.\s\\\.\\\\\\\.go" ]
                 }]
             }
         })

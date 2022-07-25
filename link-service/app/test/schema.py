@@ -107,7 +107,12 @@ def valid_requests(my_id):
         "_inContextIf": [{
             "_queryFailsWithout": [
                 "foo.blah",
-                "foo.bar.asdf.0"
+                "foo.bar.asdf.0",
+                [ 'adsf', '1234' ]
+            ]
+        }, {
+            "_queryPassesWithout": [
+                [ 'asdf.ieu', 'diufi.192384' ]
             ]
         }]
     }
@@ -375,80 +380,71 @@ def invalid_requests(my_id):
         "_by": random_sha()
     }
 }, {
-    # _contexts is an array
+    # _inContextIf is an array
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": {}
+        "_inContextIf": {}
     }
 }, {
-    # _contexts only includes objects
+    # _inContextIf only includes objects
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": ["asdf"]
+        "_inContextIf": ["asdf"]
     }
 }, {
     # objects only have relevant fields
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "foo": [ [ [ 0 ] ] ]
+        "_inContextIf": [{
+            "foo": [ '0' ]
         }]
     }
 }, {
-    # nearmisses is an array
+    # queryFailsWithout is an array
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": {}
+        "_inContextIf": [{
+            "_queryFailsWithout": {}
         }]
     }
 }, {
-    # nearmisses must include at least one element
+    # queryFailsWithout must include at least one element
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": []
+        "_inContextIf": [{
+            "_queryFailsWithout": []
         }]
     }
 }, {
-    # nearmisses must include at least one element
+    # queryFailsWithout must include at least one element
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": [[]]
+        "_inContextIf": [{
+            "_queryFailsWithout": ['asdf', []]
         }]
     }
 }, {
-    # nearmisses must include at least one element
+    # queryFailsWithout must include at least one element
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": [[[]]]
+        "_inContextIf": [{
+            "_queryFailsWithout": ['asdf', ['asdfdf']]
         }]
     }
 }, {
-    # nearmisses can only include strings and ints
+    # nearmisses can only include strings
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": [[[{}]]]
-        }]
-    }
-}, {
-    # nearmisses can only include strings and ints
-    "messageID": random_id(),
-    "type": "update",
-    "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": [[[1.1]]]
+        "_inContextIf": [{
+            "_queryFailsWithout": [ 1 ]
         }]
     }
 }, {
@@ -456,8 +452,8 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": [[[0], [0]]]
+        "_inContextIf": [{
+            "_queryFailsWithout": [ 'asdf', 'asdf' ]
         }]
     }
 }, {
@@ -465,8 +461,8 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [{
-            "_nearMisses": [ [[0]], [[0]] ]
+        "_inContextIf": [{
+            "_queryFailsWithout": [ [ 'asdf', 'qwer' ], [ 'asdf', 'qwer' ] ]
         }]
     }
 }, {
@@ -474,9 +470,9 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_contexts": [
-            { "_nearMisses": [[[0]]] },
-            { "_nearMisses": [[[0]]] }
+        "_inContextIf": [
+            { "_queryFailsWithout": [ 'asdf' ] },
+            { "_queryFailsWithout": [ 'asdf' ] }
         ]
     }
 }, {
