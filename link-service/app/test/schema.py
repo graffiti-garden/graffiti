@@ -227,7 +227,6 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": {
-        '_idProof': base_object['_idProof'],
         '_to': base_object['_to'],
         '_by': base_object['_by'],
         '_inContextIf': base_object['_inContextIf']
@@ -237,7 +236,6 @@ def invalid_requests(my_id):
     "type": "update",
     "object": {
         '_id': base_object['_id'],
-        '_to': base_object['_to'],
         '_by': base_object['_by'],
         '_inContextIf': base_object['_inContextIf']
     }
@@ -246,16 +244,6 @@ def invalid_requests(my_id):
     "type": "update",
     "object": {
         '_id': base_object['_id'],
-        '_idProof': base_object['_idProof'],
-        '_by': base_object['_by'],
-        '_inContextIf': base_object['_inContextIf']
-    }
-}, {
-    "messageID": random_id(),
-    "type": "update",
-    "object": {
-        '_id': base_object['_id'],
-        '_idProof': base_object['_idProof'],
         '_to': base_object['_to'],
         '_inContextIf': base_object['_inContextIf']
     }
@@ -264,7 +252,6 @@ def invalid_requests(my_id):
     "type": "update",
     "object": {
         '_id': base_object['_id'],
-        '_idProof': base_object['_idProof'],
         '_to': base_object['_to'],
         '_by': base_object['_by'],
     }
@@ -326,18 +313,11 @@ def invalid_requests(my_id):
         "_id": 12345,
     }
 }, {
-    # _id should be exactly length 64
+    # _id should be < length 64
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_id": "a15d"
-    }
-}, {
-    # _id should be hex
-    "messageID": random_id(),
-    "type": "update",
-    "object": base_object | {
-        "_id": "z"*64
+        "_id": "z"*65
     }
 }, {
     # messageID too long
@@ -474,13 +454,6 @@ def invalid_requests(my_id):
             { "_queryFailsWithout": [ 'asdf' ] },
             { "_queryFailsWithout": [ 'asdf' ] }
         ]
-    }
-}, {
-    # too long of a proof
-    "messageID": random_id(),
-    "type": "update",
-    "object": base_object | {
-        "_idProof": "z"*65
     }
 }, {
     "messageID": random_id(),

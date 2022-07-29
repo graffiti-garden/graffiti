@@ -123,8 +123,9 @@ class Broker:
                 for group in groups:
                     mongo_id = str(group["mongo_id"])
                     if mongo_id in deleting_ids:
-                        object_id = group["_id"][0]
-                        delete_ids.append(object_id)
+                        object_id  = group["_id"]['_externalID']
+                        owner_id = group["_id"]['_by'][0]
+                        delete_ids.append((object_id, owner_id))
                     else:
                         insert_ids.append(mongo_id)
 
@@ -154,7 +155,10 @@ class Broker:
                     # has been modified multiple times,
                     # only the most recent one is used.
                     { "$group": {
-                        "_id" : "$_object._id",
+                        "_id" : {
+                            "_externalID": "$_externalID",
+                            "_by": "$_object._by"
+                        },
                         "mongo_id" : { "$last": "$_id" }
                     }}
                 ]

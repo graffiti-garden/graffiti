@@ -55,7 +55,7 @@ def socket_schema():
         "properties": {
             "messageID": RANDOM_SCHEMA,
             "type": { "const": "delete" },
-            "objectID": SHA256_SCHEMA
+            "objectID": RANDOM_SCHEMA
         },
         "required": BASE_TYPES + ["objectID"],
         "additionalProperties": False
@@ -93,7 +93,7 @@ def socket_schema():
                 # Anything not starting with a "_" or a "$"
                 "^(?!_|\$).*$": { "$ref": "#/definitions/objectValues" }
             },
-            "required": ["_idProof", "_id", "_to", "_by", "_inContextIf"],
+            "required": ["_id", "_to", "_by", "_inContextIf"],
             "properties": {
                 "_by": SHA256_SCHEMA,
                 "_to": {
@@ -102,8 +102,7 @@ def socket_schema():
                     "type": "array",
                     "items": SHA256_SCHEMA
                 },
-                "_id": SHA256_SCHEMA,
-                "_idProof": RANDOM_SCHEMA,
+                "_id": RANDOM_SCHEMA,
                 "_inContextIf": {
                     "type": "array",
                     "uniqueItems": True,

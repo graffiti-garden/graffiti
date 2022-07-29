@@ -48,13 +48,13 @@ async def startup():
     db = client.graffiti.objects
 
     # Create indexes if they don't already exist
-    await db.create_index('_object._by')
-    await db.create_index('_object._to')
-    await db.create_index('_object._id')
-    await db.create_index('_object._tombstone')
-    await db.create_index('_object.$**')
     await db.create_index('_expandedContexts._queryFailsWithout.$**')
     await db.create_index('_expandedContexts._queryPassesWithout.$**')
+    await db.create_index('_externalID')
+    await db.create_index('_tombstone')
+    await db.create_index('_object._by')
+    await db.create_index('_object._to')
+    await db.create_index('_object.$**')
 
     # Initialize the pubsub/locking system
     redis = aioredis.from_url("redis://redis", decode_responses=True)

@@ -5,14 +5,13 @@ from uuid import uuid4
 
 def object_to_doc(object):
     # Separate out the id proof and contexts
-    id_proof = object['_idProof']
-    del object['_idProof']
+    external_id = object['_id']
+    del object['_id']
     contexts = object['_inContextIf']
     del object['_inContextIf']
 
     # Always add _id and _to for each recipient
     default_contexts = \
-        [ { '_queryFailsWithout': [ '_id' ] } ] + \
         [ { '_queryFailsWithout': [ f'_to.{i}' ] } 
             for i, _ in enumerate(object['_to']) ]
 
@@ -46,7 +45,7 @@ def object_to_doc(object):
         "_expandedContexts": expanded_contexts,
         "_inContextIf": contexts,
         "_tombstone": False,
-        "_idProof": id_proof
+        "_externalID": external_id
     }
 
     return doc
@@ -101,7 +100,7 @@ def twiddle(obj, path_str):
 def doc_to_object(doc):
     object = doc['_object'][0]
     object['_inContextIf'] = doc['_inContextIf']
-    object['_idProof']  = doc['_idProof']
+    object['_id'] = doc['_externalID']
     return object
 
 def query_rewrite(query):

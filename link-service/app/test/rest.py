@@ -9,23 +9,6 @@ async def main():
     async with websocket_connect(my_token) as ws:
         # Try adding an object
         base  = object_base(my_id)
-        base2 = object_base(my_id)
-        await send(ws, {
-            'messageID': random_id(),
-            'type': 'update',
-            'object': base | {
-                '_idProof': base2['_idProof'],
-                'type': 'justanormalobject',
-                'content': {
-                    'foo': 'bar'
-                },
-            }
-        })
-        result = await recv(ws)
-        assert result['type'] == 'error'
-        print("Could not add object without proper proof")
-
-        # Try adding an object
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',

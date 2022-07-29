@@ -16,13 +16,8 @@ class Rest:
     async def update(self, object, owner_id):
         self.validate_owner_id(owner_id)
 
-        # Check that the proof matches the object's ID
-        _id = sha256((owner_id + object['_idProof']).encode()).hexdigest()
-        if object['_id'] != _id:
-            raise Exception("the object's _id does not match the proof")
-
         # Lock so that the delete and insert can be done together
-        lock = self.redis.lock(object['_id'])
+        lock = self.redis.lock(object['_id'] + owner_id)
         await lock.acquire()
 
         # Try deleting the old document if there is one
@@ -53,7 +48,7 @@ class Rest:
     async def delete(self, object_id, owner_id):
         self.validate_owner_id(owner_id)
 
-        lock = self.redis.lock(object_id)
+        lock = self.redis.lock(object_id + owner_id)
         await lock.acquire()
 
         # Delete the object
@@ -71,7 +66,7 @@ class Rest:
         # and that it is not scheduled for deletion
         # If so, schedule it for deletion
         doc = await self.db.find_one_and_update({
-            "_object._id": object_id,
+            "_externalID": object_id,
             "_object._by": owner_id,
             "_tombstone": False
         }, {

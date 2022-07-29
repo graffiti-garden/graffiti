@@ -162,23 +162,6 @@ async def main():
             'messageID': random_id(),
             'type': 'subscribe',
             'query': {
-                'fieldA': common,
-                '_id': base['_id']
-            },
-            'since': None,
-            'queryID': random_id()
-        })
-        result = await recv(ws)
-        assert result['type'] == 'success'
-        result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert len(result['results']) == 1
-        print("able to find it by '_id'")
-
-        await send(ws, {
-            'messageID': random_id(),
-            'type': 'subscribe',
-            'query': {
                 'fieldA': common
             },
             'since': None,

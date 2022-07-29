@@ -13,12 +13,8 @@ def random_sha():
     return sha256(random_id().encode()).hexdigest()
 
 def object_base(owner_id, proof=None):
-    if not proof:
-        proof = random_id()
-    object_id = sha256((owner_id+proof).encode()).hexdigest()
     object_base = {
-        '_idProof': proof,
-        '_id': object_id,
+        '_id': random_id(),
         '_to': [owner_id],
         '_by': owner_id,
         '_inContextIf': [{}]
