@@ -118,3 +118,11 @@ def query_rewrite(query):
             }
         }}
     }
+
+def audit_rewrite(query, owner_id):
+    return {
+        # The object must still match the query
+        "_object": { "$elemMatch": query },
+        # No context, just anything by myself
+        "_object._by": owner_id
+    }

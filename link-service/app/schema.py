@@ -71,7 +71,8 @@ def socket_schema():
                     "pattern": "^([a-f\d]{24})$"
                 }, { "type": "null" }]
             },
-            "queryID": RANDOM_SCHEMA
+            "queryID": RANDOM_SCHEMA,
+            "audit": { "type": "boolean" }
         },
         "required": BASE_TYPES + ["query", "since", "queryID"],
         "additionalProperties": False

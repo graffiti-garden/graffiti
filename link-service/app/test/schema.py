@@ -195,6 +195,25 @@ def valid_requests(my_id):
     },
     "since": None,
     "queryID": random_id()
+}, {
+    # With audit
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "foo": "bar" 
+    },
+    "audit": True,
+    "since": None,
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "foo": "bar" 
+    },
+    "audit": False,
+    "since": None,
+    "queryID": random_id()
 }]
 
 def invalid_requests(my_id):
@@ -512,6 +531,25 @@ def invalid_requests(my_id):
         }
     },
     "since": None,
+    "queryID": random_id()
+}, {
+    # Audit is not boolean
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "foo": "bar"
+    },
+    "since": None,
+    "audit": "true",
+    "queryID": random_id()
+}, {
+    "messageID": random_id(),
+    "type": "subscribe",
+    "query": {
+        "foo": "bar"
+    },
+    "since": None,
+    "audit": 0,
     "queryID": random_id()
 }]
 
