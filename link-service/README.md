@@ -39,7 +39,7 @@ exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The AP
 
 The JSON objects are schemaless aside from 5 regulated fields:
 
-- `_id`: is a random identifier that must be added to each object. This field is not searchable, it's only purpose it to refer to objects so they can be added and replaced. This field is user-assigned for optimistic rendering. A user can't store more than one object with the same `_id`; trying to update an object with the same `_id` as an existing object will replace that object. Different users can have objects with the same `_id`, so there is no worry of someone else replacing your object.
+- `_id`: is a random identifier that must be added to each object. This field is not searchable, it's only purpose it to uniquely refer to objects so they can be added and replaced. This field is user-assigned for optimistic rendering. A user can't store more than one object with the same `_id`; trying to create an object with the same `_id` as an existing object will simply replace the existing object. Different users *can* store objects with the same `_id`, so there is no worry of someone else replacing your object.
 - `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
 - `_to`: this field must be equal to a list of unique user identifiers. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
 - `inContextIf`: [see here](https://github.com/csail-graffiti/vue#context)
