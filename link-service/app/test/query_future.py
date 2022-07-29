@@ -56,8 +56,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'deletes'
         assert len(result['results']) == 1
-        assert result['results'][0][0] == base['_id']
-        assert result['results'][0][1] == my_id
+        assert result['results'][0] == base['_id'] + my_id
 
 
     print("Making simultaneous listeners")
@@ -95,7 +94,7 @@ async def main():
                 assert result['type'] == 'updates'
                 assert result['queryID'] == query_id
                 for r in result['results']:
-                    messages[r['_id']] = r
+                    messages[r['_id'] + r['_by']] = r
             assert len(messages) == big_size
             adds = 0
             deletes = 0
@@ -105,10 +104,10 @@ async def main():
                 assert result['queryID'] == query_id
                 for r in result['results']:
                     if result['type'] == 'updates':
-                        messages[r['_id']] = r
+                        messages[r['_id'] + r['_by']] = r
                         adds += 1
                     else:
-                        del messages[r[0]]
+                        del messages[r]
                         deletes += 1
             assert adds == big_size
             assert deletes == big_size
