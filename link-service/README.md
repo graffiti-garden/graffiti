@@ -1,11 +1,11 @@
 # Graffiti Server
 
-This is a web server that can be used as the communication and storage backend for many different types of social applications including applications like Facebook, Twitter, Reddit, Slack, Yik Yak and Figma.
+This is a web server that can be used as the communication and storage backend for many different types of social applications including applications like Facebook, Reddit and Google Docs.
 Moreover, these applications can all function on top of the same server instance at the same time and to the degree that they have overlapping functionality, they will naturally interoperate.
 We hope that this serves both as a powerful prototyping tool and as a proof of concept that an ecosystem of social applications can exist that isn't subject to [collective vendor lock-in](https://en.wikipedia.org/wiki/Vendor_lock-in#Collective_vendor_lock-in).
 
 A reference client library built as a plugin to the Vue.js web framework is available [here](https://github.com/csail-graffiti/vue).
-Example applications built with that library are available [here](https://csail-graffiti.github.io/website/).
+Example applications built with that library are available [here](https://graffiti.csail.mit.edu).
 
 ## Local Usage
 
@@ -39,11 +39,10 @@ exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The AP
 
 The JSON objects are schemaless aside from 5 regulated fields:
 
-- `_id`: this field is random identifier unique to each object. It is computed as the SHA-256 hash of the user's identifier (returned by the `auth` module) concatenated with a supplied `_id_proof` field. This makes it possible for the client to compute the `_id` in advance (e.g. for optimistic rendering) while enuring that the `_id` will not collide with any other user's items. If the client generates the `_id_proof` randomly it will not collide with any of the user's existing items. Alternatively a client can intentionally reuse an `_id`/`_id_proof` pair to replace an object.
-- `_id_proof`: this is a required field that can be any string up to 64 charachters long. This field cannot be queried.
+- `_id`: is a random identifier that must be added to each object. This field is not searchable, it's only purpose it to refer to objects so they can be added and replaced. This field is user-assigned for optimistic rendering. A user can't store more than one object with the same `_id`; trying to update an object with the same `_id` as an existing object will replace that object. Different users can have objects with the same `_id`, so there is no worry of someone else replacing your object.
 - `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
-- `_to`: this field must be equal to a list of unique user identifiers and the first element of this list must be the operating user's identifier. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
-- `_contexts`: [see here](https://github.com/csail-graffiti/vue#context)
+- `_to`: this field must be equal to a list of unique user identifiers. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
+- `inContextIf`: [see here](https://github.com/csail-graffiti/vue#context)
 
 Objects can't include any other fields that start with `_` or `$`.
 
