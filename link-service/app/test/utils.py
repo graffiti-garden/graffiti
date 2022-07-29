@@ -15,7 +15,6 @@ def random_sha():
 def object_base(owner_id, proof=None):
     object_base = {
         '_id': random_id(),
-        '_to': [owner_id],
         '_by': owner_id,
         '_inContextIf': [{}]
     }

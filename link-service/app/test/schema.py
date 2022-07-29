@@ -82,6 +82,18 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
+        "_to": [random_sha()]
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
+        "_to": [random_sha(), my_id]
+    }
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "object": base_object | {
         "_inContextIf": []
     }
 }, {
@@ -97,7 +109,7 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": base_object | {
-        "_to": [my_id, random_sha(), random_sha()],
+        "_to": [random_sha(), my_id, random_sha()],
         "foo": {
             "blah": False,
             "bar": {
@@ -227,7 +239,6 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "update",
     "object": {
-        '_to': base_object['_to'],
         '_by': base_object['_by'],
         '_inContextIf': base_object['_inContextIf']
     }
@@ -237,23 +248,13 @@ def invalid_requests(my_id):
     "object": {
         '_id': base_object['_id'],
         '_by': base_object['_by'],
-        '_inContextIf': base_object['_inContextIf']
     }
 }, {
     "messageID": random_id(),
     "type": "update",
     "object": {
         '_id': base_object['_id'],
-        '_to': base_object['_to'],
         '_inContextIf': base_object['_inContextIf']
-    }
-}, {
-    "messageID": random_id(),
-    "type": "update",
-    "object": {
-        '_id': base_object['_id'],
-        '_to': base_object['_to'],
-        '_by': base_object['_by'],
     }
 }, {
     "messageID": random_id(),
@@ -337,13 +338,6 @@ def invalid_requests(my_id):
     "type": "update",
     "object": base_object | {
         "_to": ["12345"]
-    }
-}, {
-    # _to should always include my ID
-    "messageID": random_id(),
-    "type": "update",
-    "object": base_object | {
-        "_to": [random_sha()]
     }
 }, {
     # no repeated IDs

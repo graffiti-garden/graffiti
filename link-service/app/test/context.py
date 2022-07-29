@@ -145,23 +145,6 @@ async def main():
             'messageID': random_id(),
             'type': 'subscribe',
             'query': {
-                'fieldA': common,
-                '_to': my_id
-            },
-            'since': None,
-            'queryID': random_id()
-        })
-        result = await recv(ws)
-        assert result['type'] == 'success'
-        result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert len(result['results']) == 1
-        print("able to find it by '_to'")
-
-        await send(ws, {
-            'messageID': random_id(),
-            'type': 'subscribe',
-            'query': {
                 'fieldA': common
             },
             'since': None,
@@ -172,7 +155,7 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'updates'
         assert len(result['results']) == 0
-        print("unable to search for it otherwise")
+        print("unable to search for it")
 
         print("creating an object with open context")
         common = random_id()

@@ -10,16 +10,11 @@ def object_to_doc(object):
     contexts = object['_inContextIf']
     del object['_inContextIf']
 
-    # Always add _id and _to for each recipient
-    default_contexts = \
-        [ { '_queryFailsWithout': [ f'_to.{i}' ] } 
-            for i, _ in enumerate(object['_to']) ]
-
     # Expand the contexts by creating full copies
     # of the original object except for a couple
     # "twiddled" fields that will no longer match.
     expanded_contexts = []
-    for context in contexts + default_contexts:
+    for context in contexts:
         expanded_context = {}
         expanded_contexts.append(expanded_context)
 

@@ -93,11 +93,10 @@ def socket_schema():
                 # Anything not starting with a "_" or a "$"
                 "^(?!_|\$).*$": { "$ref": "#/definitions/objectValues" }
             },
-            "required": ["_id", "_to", "_by", "_inContextIf"],
+            "required": ["_id", "_by", "_inContextIf"],
             "properties": {
                 "_by": SHA256_SCHEMA,
                 "_to": {
-                    "minItems": 1,
                     "uniqueItems": True,
                     "type": "array",
                     "items": SHA256_SCHEMA
@@ -161,8 +160,6 @@ def validate(msg, owner_id):
     if msg['type'] == 'update':
         if msg['object']['_by'] != owner_id:
             raise ValidationError("you can only create objects _by yourself")
-        if owner_id not in msg['object']['_to']:
-            raise ValidationError("you must make all objects _to yourself")
     elif msg['type'] == 'subscribe':
         matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg))
         for match in matches:
