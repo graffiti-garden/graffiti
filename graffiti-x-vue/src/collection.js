@@ -1,5 +1,3 @@
-import { queryRewrite, objectRewrite }  from './rewrite.js'
-
 export default function(socket) { return {
   
   data: () => ({
@@ -16,19 +14,31 @@ export default function(socket) { return {
       default: () => null
     },
 
-    // Objects are sorted by their values
-    // according to this value function
-    valueFunction: {
+    // Objects with the same value are
+    // considered equal
+    // Takes in a function that gives
+    // a value to an object to see if those objects are
+    // equal
+    //group: {
+      //type: Function,
+      //default: (obj) => False
+    //}
+
+    // Merge a function that takes an
+    // Each group
+    // For example, last writer wins or a more complicated
+    //
+    //merge: {
+    //}
+
+    // Objects are sorted by this compare function
+    sort: {
       type: Function,
-      // By default, sort by time
-      default: object => object.timestamp
+      // By default, everything is equal
+      // so sorting is arbitrary
+      default: (a, b) => 0
     },
 
-    // Allow objects without timestamps to match the query
-    allowNoTimestamp: {
-      type: Boolean,
-      default: false
-    },
 
   },
 
@@ -37,14 +47,12 @@ export default function(socket) { return {
   computed: {
     // Objects sorted by the sort function
     objects() {
-      return Object.values(this.objectMap).sort((a, b) => (
-        this.valueFunction(b) - this.valueFunction(a)
-      ))
+      return Object.values(this.objectMap).sort(this.sort)
     },
 
     // Objects owned by me
     myObjects() {
-      return this.objects.filter(this.$graffiti.byMe)
+      return this.objects.filter(o=> o._by==socket.myID)
     }
   },
 
@@ -79,11 +87,6 @@ export default function(socket) { return {
         // Emit a modification because of the clear
         this.$emit('modify', this.objects)
 
-        // Rewrite to account for special conditions
-        newQuery = queryRewrite(
-          newQuery,
-          this.allowNoTimestamp)
-
         // And subscribe to the new query
         this.queryID = await socket.subscribe(
           newQuery,
@@ -96,29 +99,21 @@ export default function(socket) { return {
   },
 
   methods: {
-    async update(object, timestamp=true) {
-      if (!this.$graffiti.loggedIn) {
+    async update(object) {
+      if (!socket.loggedIn) {
         throw {
           type: 'error',
           content: 'you can\'t update objects without logging in!'
         }
       }
 
-      // Perform object rewriting
-      await objectRewrite(object, this.$graffiti.myID, timestamp)
-      const id = object._id
-
-      // Store the original object if
-      // one exists, in case of failure
-      let originalObject = null
-      if (id in this.objectMap) {
-        originalObject = this.objectMap[id]
-      }
+      // Give the object an _id, etc.
+      socket.completeObject(object)
 
       // Immediately replace the object
-      this.updateCallback(object)
+      const originalObject = this.updateCallback(object)
 
-      // Remove _ for the server
+      // Remove _ and for the server
       const serverObject = Object.assign({}, object)
       delete serverObject._
 
@@ -131,14 +126,14 @@ export default function(socket) { return {
           this.updateCallback(originalObject)
         } else {
           // Delete the temp object
-          this.deleteCallback(id)
+          this.deleteCallback(object)
         }
         throw e
       }
 
       // Listen if the ID actually gets added to the collection
       const updatePromise = new Promise( (resolve, reject) => {
-        this.eventTarget.addEventListener(id, () => resolve() )
+        this.eventTarget.addEventListener(socket.objectUUID(object), () => resolve() )
         // But if it takes too long, timeout
         setTimeout(() => reject(new Error('timeout')), 5000)
       })
@@ -146,8 +141,8 @@ export default function(socket) { return {
       try {
         await updatePromise
       } catch {
-        this.deleteCallback(id)
-        socket.delete(id)
+        this.deleteCallback(object)
+        socket.delete(object._id)
         throw {
           type: 'error',
           content: 'the object you updated isn\'t included in this collection, so it has been deleted',
@@ -155,36 +150,19 @@ export default function(socket) { return {
         }
       }
 
-      return id
+      return object
     },
 
-    async delete_(value) {
-      if (!this.$graffiti.loggedIn) {
+    async delete_(object) {
+      if (!socket.loggedIn) {
         throw {
           type: 'error',
           content: 'you can\'t delete objects without logging in!'
         }
       }
 
-      // Allow delete to be called on IDs or on objects (with an _id)
-      let id = null
-      if (typeof value == 'string') {
-        id = value
-      } else if (typeof value == 'object') {
-        if ('_id' in value) {
-          id = value._id
-        }
-      }
-
-      if (!id) {
-        throw {
-          type: 'error',
-          content: 'an object ID can\'t be parsed out of the value you\'re trying to delete.',
-          value
-        }
-      }
-
-      if (!(id in this.objectMap)) {
+      const uuid = socket.objectUUID(object)
+      if (!(uuid in this.objectMap)) {
         throw {
           type: 'error',
           content: 'the object ID you\'re trying to delete is not in this collection',
@@ -194,14 +172,14 @@ export default function(socket) { return {
 
       // Immediately delete the object
       // but store it in case there is an error
-      const obj = this.objectMap[id]
-      this.deleteCallback(id)
+      const originalObject = this.objectMap[uuid]
+      this.deleteCallback(object)
 
       try {
-        await socket.delete(id)
+        await socket.delete(object._id)
       } catch(e) {
         // Delete failed, restore the object
-        this.updateCallback(obj)
+        this.updateCallback(originalObject)
         throw e
       }
     },
@@ -212,31 +190,45 @@ export default function(socket) { return {
       }
     },
 
-    async updateCallback(value) {
-      // Add or copy over _
-      if (value._id in this.objectMap) {
-        if ('_' in this.objectMap[value._id]) {
-          value._ = this.objectMap[value._id]._
+    async updateCallback(object) {
+      const uuid = socket.objectUUID(object)
+
+      // Store the original object if
+      // one exists, in case of failure
+      let originalObject = null
+      if (uuid in this.objectMap) {
+        originalObject = this.objectMap[uuid]
+
+        // Copy over the "workspace" for the
+        // object (which also won't go to the server)
+        if ('_' in originalObject) {
+          object._ = originalObject._
         }
       }
-      if (!value._) value._ = {}
+
+      // Generate the workspace if it doesn't exist
+      if (!object._) object._ = {}
 
       // Replace the object
-      this.objectMap[value._id] = value
+      this.objectMap[uuid] = object
 
       // Send a local event if the update was ours
-      if (this.$graffiti.byMe(value)) {
-        this.eventTarget.dispatchEvent(new Event(value._id))
+      if (object._by == socket.myID) {
+        this.eventTarget.dispatchEvent(new Event(uuid))
       }
 
       // Emit an event for parent components
       this.$emit('modify', this.objects)
+
+      // Return the original in case of failure
+      return originalObject
     },
 
-    async deleteCallback(id) {
-      if (!(id in this.objectMap)) return
+    async deleteCallback(object) {
+      const uuid = socket.objectUUID(object)
+      if (!(uuid in this.objectMap)) return
 
-      delete this.objectMap[id]
+      delete this.objectMap[uuid]
 
       // Emit an event for parent components
       this.$emit('modify', this.objects)
