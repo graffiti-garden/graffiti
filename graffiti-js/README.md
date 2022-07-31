@@ -1,7 +1,7 @@
-# The Basic Graffiti Javascript Library
+# Graffiti for Vanilla Javascript
 
 This is the base Javascript library that interfaces with the [Graffiti server](https://github.com/csail-graffiti/server).
-We recommend not using the vanilla library itself but instead using framework plugins built on top of this library like the [Graffiti plugin for Vue.JS](https://github.com/csail-graffiti/graffiti-js-vue).
+We recommend not using this vanilla library itself but instead using framework plugins that are built on top of it like the [Graffiti plugin for Vue.JS](https://github.com/csail-graffiti/graffiti-js-vue).
 
 Example usage: 
 
@@ -42,6 +42,9 @@ const myCoolPost = {
   type: 'post',
   content: 'hello world'
 }
+// ("completing" an object annotates
+//  it with your user ID and a random
+//  object ID, required by the server)
 gs.complete(myCoolPost)
 await gs.update(myCoolPost)
 
