@@ -125,7 +125,10 @@ class Broker:
                     if mongo_id in deleting_ids:
                         object_id  = group["_id"]['_externalID']
                         owner_id = group["_id"]['_by'][0]
-                        delete_ids.append(object_id + owner_id)
+                        delete_ids.append({
+                            "_id": object_id,
+                            "_by": owner_id
+                        })
                     else:
                         insert_ids.append(mongo_id)
 

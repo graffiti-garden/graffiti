@@ -56,7 +56,8 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'deletes'
         assert len(result['results']) == 1
-        assert result['results'][0] == base['_id'] + my_id
+        assert result['results'][0]['_id'] == base['_id']
+        assert result['results'][0]['_by'] == base['_by']
 
 
     print("Making simultaneous listeners")
@@ -107,7 +108,7 @@ async def main():
                         messages[r['_id'] + r['_by']] = r
                         adds += 1
                     else:
-                        del messages[r]
+                        del messages[r['_id'] + r['_by']]
                         deletes += 1
             assert adds == big_size
             assert deletes == big_size

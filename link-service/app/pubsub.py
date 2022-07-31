@@ -70,8 +70,8 @@ class PubSub:
             # woo Y2K!
             since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
 
-        # Rewrite the query to account for contexts
-        # Except with audits
+        # Rewrite the query to account for contexts,
+        # except with audits which only care about _by
         if audit:
             query = audit_rewrite(query, owner_id)
         else:
@@ -81,8 +81,7 @@ class PubSub:
         # by performing a test query
         await self.db.find_one(query)
 
-        # Generate a random subscription ID for this query
-        # And add it to the list of subscriptions
+        # And add the query id to the list of subscriptions
         self.subscriptions[socket_id].add(query_id)
         query_path = (socket_id, query_id)
 
@@ -98,14 +97,12 @@ class PubSub:
 
     async def process_existing(self, query, since, query_path, now):
         # Rewrite
-        query = {
-            "$and": [query, {
-                # So we don't get deleted objects
-                "_tombstone": False,
-                # And so you can choose to only see
-                # things that have changed recently
-                "_id": { "$gt": since }
-            }]
+        query = query | {
+            # So we don't get deleted objects
+            "_tombstone": False,
+            # And so you can choose to only see
+            # things that have changed recently
+            "_id": { "$gt": since }
         }
 
         await self.stream_query(query, [query_path],
@@ -116,13 +113,14 @@ class PubSub:
 
     async def process_broker(self, insert_ids, delete_ids, query_paths, now):
         # Send the delete results
-        # (all at once because it's just a list of IDs)
+        # (all at once because it's just a list of object/owner IDs)
         if delete_ids:
             query_paths = await self.publish_results(delete_ids, query_paths,
                     type='deletes',
                     historical=False,
                     now=now,
                     complete=(not insert_ids))
+            # If there are no more live sockets on the receiving end, stop now
             if not query_paths:
                 return
 
@@ -154,9 +152,10 @@ class PubSub:
                 # Send the results back
                 # And reset the batch
                 query_paths = await self.publish_results(results, query_paths, complete=False, **kwargs)
+                results = []
+                # If there are no more live sockets, stop
                 if not query_paths:
                     break
-                results = []
 
         else:
             # Publish any remainder

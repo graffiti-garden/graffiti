@@ -5,7 +5,7 @@ services:
   graffiti-auth:
     environment:
       DEBUG: 'true'
-      DOMAIN: 'localhost:5000'
+      DOMAIN: 'localhost:5001'
       AUTH_SECRET: 'secret'
 
   graffiti-app:
@@ -17,4 +17,4 @@ services:
     volumes:
       - ./config/nginx/debug.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - 5000:5000
+      - 5001:5001

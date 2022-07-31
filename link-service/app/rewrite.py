@@ -34,7 +34,7 @@ def object_to_doc(object):
                     for path in paths:
                         twiddle(clone, path)
 
-    # Extract the ID and combine into one big doc
+    # Combine into one big doc
     doc = {
         "_object": [object],
         "_expandedContexts": expanded_contexts,
