@@ -3,7 +3,7 @@
 This is the base Javascript library that interfaces with the [Graffiti server](https://github.com/csail-graffiti/server).
 We recommend not using the vanilla library itself but instead using framework plugins built on top of this library like the [Graffiti plugin for Vue.JS](https://github.com/csail-graffiti/graffiti-js-vue).
 
-With this library:
+Example usage: 
 
 ```javascript
 import GraffitiSocket from "https://csail-graffiti.github.io/graffiti-js-vanilla/socket.js"
@@ -18,9 +18,9 @@ const queryID = await gs.subscribe({
     content: { $type: 'string' }
   }
   // With an arbitrary update callback
-  (obj) => console.log(`An object has been created: {obj}`)
+  (obj) => console.log(`An object has been created: {obj}`),
   // and delete callback
-  (obj) => console.log(`An object with id {obj._id} by user {obj._by} has been deleted`.
+  (obj) => console.log(`An object with id {obj._id} by user {obj._by} has been deleted`.)
 )
 
 // And then unsubscribe to those queries
@@ -30,10 +30,10 @@ await gs.unsubscribe(queryID)
 gs.logIn()
 gs.logOut()
 if (gs.loggedIn) {
-  ...
+  // ...
 }
 
-// When you are logged in you reference your user ID
+// When you are logged in you can reference your user ID
 console.log(gs.myID)
 
 // And when you are logged in you can
