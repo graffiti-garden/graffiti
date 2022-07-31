@@ -13,10 +13,10 @@ To launch the server locally, run:
 
     sudo docker compose up --build
 
-The application will be up at [http://localhost:5000](http://localhost:5000).
+The application will be up at [http://localhost:5000](http://localhost:5001).
 If you are using the [Vue.js Graffiti plugin](https://github.com/csail-graffiti/vue), you might point to the local server as follows:
 
-    Graffiti("http://localhost:5000").then(g=>createApp().use(g).mount("#app")
+    Graffiti("http://localhost:5001").then(g=>createApp().use(g).mount("#app")
     
 When you are running the server locally, login links will be printed to your terminal rather than sent to your email.
 
