@@ -1,0 +1,217 @@
+import Auth from './auth.js'
+import { randomString } from './utils.js'
+
+export default class {
+
+  constructor(origin="https://graffiti.csail.mit.edu") {
+    this.origin = origin
+    this.open = false
+    this.subscriptionData = {}
+    this.eventTarget = new EventTarget()
+  }
+
+  // CALL THIS BEFORE DOING ANYTHING ELSE
+  async initialize() {
+    // Perform authorization
+    this.authParams = await Auth.connect(this.origin)
+
+    // Rewrite the URL
+    this.wsURL = new URL(origin)
+    this.wsURL.host = "app." + this.wsURL.host
+    if (this.wsURL.protocol == 'https:') {
+      this.wsURL.protocol = 'wss:'
+    } else {
+      this.wsURL.protocol = 'ws:'
+    }
+    if (this.authParams.token) {
+      this.wsURL.searchParams.set("token", this.authParams.token)
+    }
+
+    // And commence connection
+    this.connect()
+  }
+
+  connect() {
+    this.ws = new WebSocket(this.wsURL)
+    this.ws.onmessage = this.onMessage.bind(this)
+    this.ws.onclose   = this.onClose.bind(this)
+    this.ws.onopen    = this.onOpen.bind(this)
+  }
+
+  // authorization functions
+  logIn() { Auth.logIn(this.origin) }
+  logOut() { Auth.logOut() }
+  get myID() { return this.authParams.myID }
+  get loggedIn() { return this.authParams.loggedIn }
+
+  async onClose() {
+    this.open = false
+    console.error("lost connection to graffiti server, attemping reconnect soon...")
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    this.connect()
+  }
+
+  async request(msg) {
+    // Create a random message ID
+    const messageID = randomString()
+
+    // Create a listener for the reply
+    const dataPromise = new Promise(resolve => {
+      this.eventTarget.addEventListener(messageID, (e) => {
+        resolve(e.data)
+      })
+    })
+
+    // Wait for the socket to open
+    if (!this.open) {
+      await new Promise(resolve => {
+        this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
+      })
+    }
+
+    // Send the request
+    msg.messageID = messageID
+    this.ws.send(JSON.stringify(msg))
+
+    // Await the reply
+    const data = await dataPromise
+    delete data.messageID
+
+    if (data.type == 'error' ) {
+      throw data
+    } else {
+      return data
+    }
+  }
+
+  onMessage(event) {
+    const data = JSON.parse(event.data)
+
+    if ('messageID' in data) {
+      // It's a reply
+      // Forward it back to the sender
+      const messageEvent = new Event(data.messageID)
+      messageEvent.data = data
+      this.eventTarget.dispatchEvent(messageEvent)
+
+    } else if (['updates', 'deletes'].includes(data.type)) {
+      // Subscription data
+      if (data.queryID in this.subscriptionData) {
+        const sd = this.subscriptionData[data.queryID]
+
+        // For each data point, either add or remove it
+        for (const r of data.results) {
+          if (data.type == 'updates') {
+            sd.updateCallback(r)
+          } else {
+            sd.deleteCallback(r)
+          }
+        }
+
+        // And update this query's notion of "now"
+        if (data.complete) {
+          if (data.historical) {
+            sd.historyComplete = true
+          }
+          if (sd.historyComplete) {
+            sd.since = data.now
+          }
+        }
+      }
+    }
+  }
+
+  async update(object) {
+    const data = await this.request({
+      type: "update",
+      object
+    })
+    return data.objectID
+  }
+
+  async delete(objectID) {
+    await this.request({
+      type: "delete",
+      objectID
+    })
+  }
+
+  async subscribe(
+    query,
+    updateCallback,
+    deleteCallback,
+    since=null,
+    queryID=null) {
+
+    // Create a random query ID
+    if (!queryID) queryID = randomString()
+
+    // Send the request
+    await this.request({
+      type: "subscribe",
+      queryID, query, since
+    })
+
+    // Store the subscription in case of disconnections
+    this.subscriptionData[queryID] = {
+      query, since, updateCallback, deleteCallback,
+      historyComplete: false
+    }
+
+    return queryID
+  }
+
+  async unsubscribe(queryID) {
+    // Remove allocated space
+    delete this.subscriptionData[queryID]
+
+    // And unsubscribe
+    const data = await this.request({
+      type: "unsubscribe",
+      queryID
+    })
+  }
+
+  async onOpen() {
+    console.log("connected to the graffiti socket")
+    this.open = true
+    this.eventTarget.dispatchEvent(new Event("graffitiOpen"))
+    // Resubscribe to hanging queries
+    for (const queryID in this.subscriptionData) {
+      const sd = this.subscriptionData[queryID]
+      await this.subscribe(
+        sd.query,
+        sd.updateCallback,
+        sd.deleteCallback,
+        sd.since,
+        queryID)
+    }
+  }
+
+  // Adds required fields to an object.
+  // You should probably call this before 'update'
+  completeObject(object) {
+    // Add by/to fields
+    object._by = this.myID
+    if ('_to' in object && !Array.isArray(object._to)) {
+      throw new Error("_to must be an array")
+    }
+
+    // Pre-generate the object's ID if it does not already exist
+    if (!object._id) object._id = randomString()
+  }
+
+  // Utility function to get a universally unique string
+  // that represents a particular object
+  objectUUID(object) {
+    if (!object._id || !object._by) {
+      throw {
+        type: 'error',
+        content: 'the object you are trying to identify does not have an ID or owner',
+        object
+      }
+    }
+    return object._id + object._by
+  }
+
+}

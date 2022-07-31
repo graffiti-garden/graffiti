@@ -1,0 +1,54 @@
+# The Basic Graffiti Javascript Library
+
+This is the base Javascript library that interfaces with the [Graffiti server](https://github.com/csail-graffiti/server).
+We recommend not using the vanilla library itself but instead using framework plugins built on top of this library like the [Graffiti plugin for Vue.JS](https://github.com/csail-graffiti/graffiti-js-vue).
+
+With this library:
+
+```javascript
+import GraffitiSocket from "https://csail-graffiti.github.io/graffiti-js-vanilla/socket.js"
+
+// You can initialize a connection to the graffiti server
+const gs = GraffitiSocket()
+await gs.initialize()
+
+// You can subscribe to queries
+const queryID = await gs.subscribe({
+    type: 'post',
+    content: { $type: 'string' }
+  }
+  // With an arbitrary update callback
+  (obj) => console.log(`An object has been created: {obj}`)
+  // and delete callback
+  (obj) => console.log(`An object with id {obj._id} by user {obj._by} has been deleted`.
+)
+
+// And then unsubscribe to those queries
+await gs.unsubscribe(queryID)
+
+// You can log in and out and check your logged-in status
+gs.logIn()
+gs.logOut()
+if (gs.loggedIn) {
+  ...
+}
+
+// When you are logged in you reference your user ID
+console.log(gs.myID)
+
+// And when you are logged in you can
+// create objects,
+const myCoolPost = {
+  type: 'post',
+  content: 'hello world'
+}
+gs.complete(myCoolPost)
+await gs.update(myCoolPost)
+
+// replace objects,
+myCoolPost.content += '!!!'
+await gs.update(myCoolPost)
+
+// and delete objects.
+await gs.delete(myCoolPost)
+```
