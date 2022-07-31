@@ -2,7 +2,7 @@ import { randomString, sha256 } from './utils.js'
 
 export default {
 
-  async logIn(origin) {
+  async logIn(graffitiURL) {
     // Generate a random client secret and state
     const clientSecret = randomString()
     const state = randomString()
@@ -16,16 +16,14 @@ export default {
     window.localStorage.setItem('graffitiAuthState', state)
 
     // Redirect to the login window
-    const authURL = new URL(origin)
-    authURL.searchParams.set('client_id', clientID)
-    authURL.searchParams.set('redirect_uri', window.location.href)
-    authURL.searchParams.set('state', state)
-    window.location.href = authURL
+    const loginURL = this.authURL(graffitiURL)
+    loginURL.searchParams.set('client_id', clientID)
+    loginURL.searchParams.set('redirect_uri', window.location.href)
+    loginURL.searchParams.set('state', state)
+    window.location.href = loginURL
   },
 
-  async connect(origin) {
-    origin = new URL(origin)
-    origin.host = "auth." + origin.host
+  async connect(graffitiURL) {
 
     // Check to see if we are already logged in
     let token = window.localStorage.getItem('graffitiToken')
@@ -64,7 +62,8 @@ export default {
         form.append('code', code)
 
         // Ask to exchange the code for a token
-        const tokenURL = new URL('token', origin)
+        const tokenURL = this.authURL(graffitiURL)
+        tokenURL.pathname = '/token'
         const response = await fetch(tokenURL, {
             method: 'post',
             body: form
@@ -98,7 +97,7 @@ export default {
       }
     }
 
-    const loggedIn = (token != null) && (myID != null),
+    const loggedIn = (token != null) && (myID != null)
 
     return { loggedIn, myID, token }
 
@@ -108,6 +107,12 @@ export default {
     window.localStorage.removeItem('graffitiToken')
     window.localStorage.removeItem('graffitiID')
     window.location.reload()
+  },
+
+  authURL(graffitiURL) {
+    const url = new URL(graffitiURL)
+    url.host = "auth." + url.host
+    return url
   },
 
 }
