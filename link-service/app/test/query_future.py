@@ -34,6 +34,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'content': random_id(),
                 'tags': [custom_tag]
@@ -127,6 +128,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'content': random_id(),
                 'tags': [custom_tag]
@@ -155,6 +157,7 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
+                'query': {},
                 'object': base | {
                     'content': random_id(),
                     'tags': [custom_tag]
@@ -172,6 +175,7 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
+                'query': {},
                 'object': base | {
                     'content': random_id(),
                     'tags': [custom_tag]

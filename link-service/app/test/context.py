@@ -10,9 +10,13 @@ async def main():
 
         print("creating objects with invalid context")
         base = object_base(my_id)
+        # list item out of bounds
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'foo': ['0', '1', '2'],
+            },
             'object': base | {
                 'foo': ['0', '1', '2'],
                 '_inContextIf': [{
@@ -22,33 +26,44 @@ async def main():
         })
         result = await recv(ws)
         assert result['type'] == 'error'
+        # Lists must be indexed by integer
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'foo': ['one', 'two', 'three'],
+            },
             'object': base | {
-                'foo.bar': '0',
                 '_inContextIf': [{
-                    '_queryFailsWithout': [ 'foo.bar' ]
+                    '_queryFailsWithout': [ 'foo.one' ]
                 }]
             }
         })
         result = await recv(ws)
         assert result['type'] == 'error'
+        # missing key
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'foo': { 'bar': 'asdf' }
+            },
             'object': base | {
-                r'foo\.bar': '0',
+                'foo': { 'bar': 'asdf' },
                 '_inContextIf': [{
-                    '_queryFailsWithout': [ r'foo\.bar' ]
+                    '_queryFailsWithout': [ 'foo.notbar' ]
                 }]
             }
         })
         result = await recv(ws)
         assert result['type'] == 'error'
+        # context objects must be strings
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'foo': [0, 1, 2],
+            },
             'object': base | {
                 'foo': [0, 1, 2],
                 '_inContextIf': [{
@@ -63,6 +78,9 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'foo': ['0', '1', '2'],
+            },
             'object': base | {
                 'foo': ['0', '1', '2'],
                 '_inContextIf': [{
@@ -75,44 +93,13 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
-            'object': base | {
-                'foo.bar': ['0', '1', '2'],
-                '_inContextIf': [{
-                    '_queryFailsWithout': [ r'foo\.bar.2' ]
+            'query': {
+                'foo': [0, 1, {
+                    'bar': {
+                        "asdf": ["hello", "world"]
+                    }
                 }]
-            }
-        })
-        result = await recv(ws)
-        assert result['type'] == 'success'
-        await send(ws, {
-            'messageID': random_id(),
-            'type': 'update',
-            'object': base | {
-                r'foo\.bar': ['0', '1', '2'],
-                '_inContextIf': [{
-                    '_queryFailsWithout': [ r'foo\\\.bar.2' ]
-                }]
-            }
-        })
-        result = await recv(ws)
-        assert result['type'] == 'success'
-        await send(ws, {
-            'messageID': random_id(),
-            'type': 'update',
-            'object': base | {
-                r"f\o\o\\.b\.ar": {
-                    r"a.\s\.\\\.go": 'asdf'
-                },
-                '_inContextIf': [{
-                    '_queryFailsWithout': [ r"f\o\o\\\\\.b\\\.ar.a\.\s\\\.\\\\\\\.go" ]
-                }]
-            }
-        })
-        result = await recv(ws)
-        assert result['type'] == 'success'
-        await send(ws, {
-            'messageID': random_id(),
-            'type': 'update',
+            },
             'object': base | {
                 'foo': [0, 1, {
                     'bar': {
@@ -127,15 +114,23 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'success'
 
-        print("creating an object with no context")
+        print("creating an object with limited context")
         common = random_id()
+        common2 = random_id()
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'fieldA': common,
+                'fieldB': common2,
+            },
             'object': base | {
                 'fieldA': common,
-                '_inContextIf': []
+                'fieldB': common2,
+                '_inContextIf': [{
+                    '_queryFailsWithout': ['fieldA', 'fieldB']
+                }]
             }
         })
         result = await recv(ws)
@@ -163,6 +158,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'fieldA': common,
                 '_inContextIf': [{}] # here
@@ -194,6 +190,9 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'fieldB': special,
+            },
             'object': base | {
                 'fieldA': common,
                 'fieldB': special,
@@ -244,6 +243,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'fieldA': common,
                 'fieldB': special,
@@ -295,6 +295,9 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {
+                'tags': [a, b, c],
+            },
             'object': base | {
                 'tags': [a, b, c],
                 '_inContextIf': [{

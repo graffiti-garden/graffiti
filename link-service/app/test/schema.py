@@ -29,10 +29,12 @@ def valid_requests(my_id):
     return [{
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object,
 }, {
     "messageID": "alkjd$$\~934820fk",
     "type": "update",
+    "query": {},
     "object": base_object,
 }, {
     "messageID": "a"*64,
@@ -57,48 +59,49 @@ def valid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "foo": True
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "foo": None
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "foo": 123.4
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "foo": 1234
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_to": [random_sha()]
     }
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_to": [random_sha(), my_id]
     }
 }, {
     "messageID": random_id(),
     "type": "update",
-    "object": base_object | {
-        "_inContextIf": []
-    }
-}, {
-    "messageID": random_id(),
-    "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": [ 'a' ],
@@ -108,6 +111,7 @@ def valid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_to": [random_sha(), my_id, random_sha()],
         "foo": {
@@ -132,6 +136,7 @@ def valid_requests(my_id):
     # Weird fields
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "~a": "b",
     }
@@ -214,6 +219,23 @@ def valid_requests(my_id):
     "audit": False,
     "since": None,
     "queryID": random_id()
+}, {
+    # Weird query with update
+    "messageID": random_id(),
+    "type": "update",
+    "query": {
+        "x": { 
+            "y": {
+                "$gt": 100
+            }
+        },
+        "q": { "$size": 100 },
+        "asdf": { "$eq": "adsfhdkf" },
+        "qwer": { "$in": [1, 2, "3", None] },
+        "zxcv": { "$elemMatch": { "x": { "$ne": "asdf" } } },
+        "wert": { "$type": "double" }
+    },
+    "object": base_object
 }]
 
 def invalid_requests(my_id):
@@ -222,16 +244,19 @@ def invalid_requests(my_id):
 {
     # no message ID
     "type": "update",
+    "query": {},
     "object": base_object,
 }, {
     # Invalid message type
     "messageID": random_id(),
     "type": "dupdate",
+    "query": {},
     "object": base_object,
 }, {
     # Added extra field
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object,
     "foo": "bar"
 }, {
@@ -250,13 +275,21 @@ def invalid_requests(my_id):
     # Missing required field
     "messageID": random_id(),
     "type": "update",
+    "object": base_object
+}, {
+    # Missing required field
+    "messageID": random_id(),
+    "type": "update",
+    "query": {}
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": {}
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": {
         '_by': base_object['_by'],
         '_inContextIf': base_object['_inContextIf']
@@ -264,6 +297,7 @@ def invalid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": {
         '_id': base_object['_id'],
         '_by': base_object['_by'],
@@ -271,6 +305,7 @@ def invalid_requests(my_id):
 }, {
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": {
         '_id': base_object['_id'],
         '_inContextIf': base_object['_inContextIf']
@@ -315,6 +350,7 @@ def invalid_requests(my_id):
     # only special fields can start with _
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_notright": 12345
     },
@@ -322,13 +358,30 @@ def invalid_requests(my_id):
     # no fields can start with $
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "$something": 12345
+    },
+}, {
+    # or include a period
+    "messageID": random_id(),
+    "type": "update",
+    "query": {},
+    "object": base_object | {
+        "foo.bar": 12345
+    },
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "query": {},
+    "object": base_object | {
+        ".adfkjr": 12345
     },
 }, {
     # _id should be an string
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_id": 12345,
     }
@@ -336,6 +389,7 @@ def invalid_requests(my_id):
     # _id should be < length 64
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_id": "z"*65
     }
@@ -343,11 +397,13 @@ def invalid_requests(my_id):
     # messageID too long
     "messageID": "q"*65,
     "type": "update",
+    "query": {},
     "object": base_object
 }, {
     # _to should be an array
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_to": random_sha()
     }
@@ -355,6 +411,7 @@ def invalid_requests(my_id):
     # _to should by UUIDs
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_to": ["12345"]
     }
@@ -362,6 +419,7 @@ def invalid_requests(my_id):
     # no repeated IDs
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_to": [my_id] + [random_sha()]*2
     }
@@ -369,6 +427,7 @@ def invalid_requests(my_id):
     # by can only be my id
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_by": random_sha()
     }
@@ -376,13 +435,23 @@ def invalid_requests(my_id):
     # _inContextIf is an array
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": {}
+    }
+}, {
+    # _inContextIf cannot be empty
+    "messageID": random_id(),
+    "type": "update",
+    "query": {},
+    "object": base_object | {
+        "_inContextIf": []
     }
 }, {
     # _inContextIf only includes objects
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": ["asdf"]
     }
@@ -390,6 +459,7 @@ def invalid_requests(my_id):
     # objects only have relevant fields
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "foo": [ '0' ]
@@ -399,6 +469,7 @@ def invalid_requests(my_id):
     # queryFailsWithout is an array
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": {}
@@ -408,6 +479,7 @@ def invalid_requests(my_id):
     # queryFailsWithout must include at least one element
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": []
@@ -417,6 +489,7 @@ def invalid_requests(my_id):
     # queryFailsWithout must include at least one element
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": ['asdf', []]
@@ -426,6 +499,7 @@ def invalid_requests(my_id):
     # queryFailsWithout must include at least one element
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": ['asdf', ['asdfdf']]
@@ -435,6 +509,7 @@ def invalid_requests(my_id):
     # nearmisses can only include strings
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": [ 1 ]
@@ -444,6 +519,7 @@ def invalid_requests(my_id):
     # contexts must be unique
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": [ 'asdf', 'asdf' ]
@@ -453,6 +529,7 @@ def invalid_requests(my_id):
     # contexts must be unique
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [{
             "_queryFailsWithout": [ [ 'asdf', 'qwer' ], [ 'asdf', 'qwer' ] ]
@@ -462,6 +539,7 @@ def invalid_requests(my_id):
     # contexts must be unique
     "messageID": random_id(),
     "type": "update",
+    "query": {},
     "object": base_object | {
         "_inContextIf": [
             { "_queryFailsWithout": [ 'asdf' ] },
@@ -551,6 +629,21 @@ def invalid_requests(my_id):
     "since": None,
     "audit": 0,
     "queryID": random_id()
+}, {
+    # query requirements also affect update
+    "messageID": random_id(),
+    "type": "update",
+    "query": {
+        "$asdf": "wassup"
+    },
+    "object": base_object
+}, {
+    "messageID": random_id(),
+    "type": "update",
+    "query": {
+        "_to": random_sha()
+    },
+    "object": base_object
 }]
 
 if __name__ == "__main__":

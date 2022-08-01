@@ -18,19 +18,27 @@ RANDOM_SCHEMA = { # jsonschema
     "pattern": "^.{1,64}$"
 }
 
+# Anything not starting with a "_" or a "$"
+CONTEXT_PROPERTY_PATTERN = "^(?!_|\$).*$"
+
+# Anything not starting with a "_" or a "$" or containing periods
+OBJECT_PROPERTY_PATTERN = "^(?!_|\$)[^\.]*$"
+
 ARRAY_OF_PATH_GROUPS = {
     "type": "array",
     "uniqueItems": True,
     "minItems": 1,
     "items": {
         "oneOf": [ {
-                "type": "string"
+                "type": "string",
+                "pattern": CONTEXT_PROPERTY_PATTERN
         }, {
             "type": "array",
             "uniqueItems": True,
             "minItems": 2,
             "items": { 
-                "type": "string"
+                "type": "string",
+                "pattern": CONTEXT_PROPERTY_PATTERN
             }
         } ]
     }
@@ -47,8 +55,9 @@ def socket_schema():
             "messageID": RANDOM_SCHEMA,
             "type": { "const": "update" },
             "object": { "$ref": "#/definitions/object" },
+            "query": { "$ref": "#/definitions/query" },
         },
-        "required": BASE_TYPES + ["object"],
+        "required": BASE_TYPES + ["object", "query"],
         "additionalProperties": False
     }, {
         # DELETE
@@ -91,8 +100,7 @@ def socket_schema():
             "type": "object",
             "additionalProperties": False,
             "patternProperties": {
-                # Anything not starting with a "_" or a "$"
-                "^(?!_|\$).*$": { "$ref": "#/definitions/objectValues" }
+                OBJECT_PROPERTY_PATTERN: { "$ref": "#/definitions/objectValues" }
             },
             "required": ["_id", "_by", "_inContextIf"],
             "properties": {
@@ -106,6 +114,7 @@ def socket_schema():
                 "_inContextIf": {
                     "type": "array",
                     "uniqueItems": True,
+                    "minItems": 1,
                     "items": {
                         "type": "object",
                         "additionalProperties": False,
@@ -121,7 +130,7 @@ def socket_schema():
             { "type": "object",
                 "additionalProperties": False,
                 "patternProperties": {
-                    "^(?!_|\$).*$": { "$ref": "#/definitions/objectValues" }
+                    OBJECT_PROPERTY_PATTERN: { "$ref": "#/definitions/objectValues" }
                 }
             },
             { "type": "array",
@@ -161,8 +170,8 @@ def validate(msg, owner_id):
     if msg['type'] == 'update':
         if msg['object']['_by'] != owner_id:
             raise ValidationError("you can only create objects _by yourself")
-    elif msg['type'] == 'subscribe':
-        matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg))
+    if msg['type'] in ['subscribe', 'update']:
+        matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg['query']))
         for match in matches:
             if match != owner_id:
                 raise ValidationError("you can only query for objects _to yourself")

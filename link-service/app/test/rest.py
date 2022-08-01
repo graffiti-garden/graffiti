@@ -12,6 +12,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'type': 'justanormalobject',
                 'content': {
@@ -27,6 +28,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'something': {
                     'totally': 'different'
@@ -61,6 +63,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'foo': 'bar'
             }
@@ -84,6 +87,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'blahhh': 'blskjf'
             }
@@ -98,6 +102,7 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
+                'query': {},
                 'object': base | {
                     'something': 'random'
                 }
@@ -130,6 +135,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'type': 'update',
+            'query': {},
             'object': base | {
                 'blahhh': 'blskjf',
             }
@@ -143,6 +149,7 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'type': 'update',
+                'query': {},
                 'object': base | {
                     'something': 'random'
                 }
@@ -177,6 +184,171 @@ async def main():
         result = await recv(ws)
         assert result['type'] == 'error'
         print("Could not re-delete object (as expected)")
+
+        base  = object_base(my_id)
+        tag = random_id()
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'query': {},
+            'object': base | {
+                'tag': tag
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        print("Added another object")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'query': {},
+            'object': base | {
+                '_inContextIf': [{
+                    '_queryFailsWithout': ['thiskeydoesnotexist']
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        print("Could not be replaced with an invalid context")
+
+        query_id = random_id()
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'subscribe',
+            'query': {
+                'tag': tag
+            },
+            "since": None,
+            "queryID": query_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'updates'
+        assert result['complete']
+        assert len(result['results']) == 1
+        print("The original still exists")
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'unsubscribe',
+            'queryID': query_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        
+        base  = object_base(my_id)
+        tag = random_id()
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'query': {
+                'foo': tag,
+                'bar': True
+            },
+            'object': base | {
+                'foo': tag,
+                'bar': False
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        print("Could not add object that does not match the query")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'query': {
+                'foo': tag,
+                'bar': True
+            },
+            'object': base | {
+                'foo': tag,
+                'bar': True,
+                '_inContextIf': [{
+                    '_queryFailsWithout': ['foo']
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        print("Could add it when it matches the query")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'query': {
+                'foo': tag,
+                'bar': True
+            },
+            'object': base | {
+                'foo': tag,
+                'bar': 1234
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        print("Could not replace it with an object that does not match")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'query': {
+                'foo': { '$type': 'notreal' },
+                'bar': True
+            },
+            'object': base | {
+                'foo': tag,
+                'bar': True
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        print("Could not replace it when the query is invalid")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'update',
+            'query': {
+                'bar': True
+            },
+            'object': base | {
+                'foo': tag,
+                'bar': True,
+                '_inContextIf': [{
+                    '_queryFailsWithout': ['foo']
+                }]
+            }
+        })
+        result = await recv(ws)
+        assert result['type'] == 'error'
+        print("Could not replace it when it's out of context")
+
+        query_id = random_id()
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'subscribe',
+            'query': {
+                'foo': tag
+            },
+            "since": None,
+            "queryID": query_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
+        result = await recv(ws)
+        assert result['type'] == 'updates'
+        assert result['complete']
+        assert len(result['results']) == 1
+        print("The original still exists")
+        await send(ws, {
+            'messageID': random_id(),
+            'type': 'unsubscribe',
+            'queryID': query_id
+        })
+        result = await recv(ws)
+        assert result['type'] == 'success'
 
 if __name__ == "__main__":
     asyncio.run(main())

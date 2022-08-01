@@ -45,25 +45,18 @@ def object_to_doc(object):
 
     return doc
 
-odd_slashes_regex = r'(?<!\\)\\(?:\\\\)*'
-odd_slashes  = re.compile(f'({odd_slashes_regex})(?=\.)')
-ending_slashes = re.compile(r'\\+$')
-dot_notation = re.compile(r'((?:(?:' + odd_slashes_regex + r'\.)|[^\.])+)')
+dot_notation = re.compile(r'[^\.]+')
 
 def twiddle(obj, path_str):
     # Convert the string path to an array
-    # based on period divisions, but allow
-    # for escaped periods. i.e.:
+    # based on period divisions
+    # (periods aren't allowed in field names)
     # 
-    # { 'foo': { 'bar': [ { 'this.works': 'hello' } ]
+    # { 'foo': { 'bar': [ { 'asdf': 'hello' } ]
     #
-    # 'foo.bar.0.this\.works' -> 'hello'
+    # 'foo.bar.0.asdf' -> 'hello'
     #
     path = dot_notation.findall(path_str)
-    # Remove escapes before periods
-    path = [odd_slashes.sub(lambda x: x.group(0)[:-1:2], p) for p in path]
-    # Remove escapes at the end of subdivisions
-    path[:-1] = [ending_slashes.sub(lambda x: x.group(0)[:2], p) for p in path[:-1]]
 
     for i, path_el in enumerate(path):
         if isinstance(obj, list):
