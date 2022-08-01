@@ -18,8 +18,8 @@ RANDOM_SCHEMA = { # jsonschema
     "pattern": "^.{1,64}$"
 }
 
-# Anything not starting with a "_" or a "$"
-CONTEXT_PROPERTY_PATTERN = "^(?!_|\$).*$"
+# Anything not starting with a "$"
+QUERY_VALUE_PROPERTY_PATTERN = "^(?!\$).*$"
 
 # Anything not starting with a "_" or a "$" or containing periods
 OBJECT_PROPERTY_PATTERN = "^(?!_|\$)[^\.]*$"
@@ -31,14 +31,14 @@ ARRAY_OF_PATH_GROUPS = {
     "items": {
         "oneOf": [ {
                 "type": "string",
-                "pattern": CONTEXT_PROPERTY_PATTERN
+                "pattern": QUERY_VALUE_PROPERTY_PATTERN
         }, {
             "type": "array",
             "uniqueItems": True,
             "minItems": 2,
             "items": { 
                 "type": "string",
-                "pattern": CONTEXT_PROPERTY_PATTERN
+                "pattern": QUERY_VALUE_PROPERTY_PATTERN
             }
         } ]
     }
@@ -143,7 +143,7 @@ def socket_schema():
             "additionalProperties": False,
             "patternProperties": {
                 # Anything not starting with a "$"
-                "^(?!\$).*$": { "$ref": "#/definitions/queryValue" }
+                QUERY_VALUE_PROPERTY_PATTERN: { "$ref": "#/definitions/queryValue" }
             },
             # To must be a SHA
             "properties": { "_to": SHA256_SCHEMA } |
