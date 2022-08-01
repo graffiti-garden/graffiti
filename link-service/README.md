@@ -4,8 +4,7 @@ This is a web server that can be used as the communication and storage backend f
 Moreover, these applications can all function on top of the same server instance at the same time and to the degree that they have overlapping functionality, they will naturally interoperate.
 We hope that this serves both as a powerful prototyping tool and as a proof of concept that an ecosystem of social applications can exist that isn't subject to [collective vendor lock-in](https://en.wikipedia.org/wiki/Vendor_lock-in#Collective_vendor_lock-in).
 
-A reference client library built as a plugin to the Vue.js web framework is available [here](https://github.com/csail-graffiti/vue).
-Example applications built with that library are available [here](https://graffiti.csail.mit.edu).
+A reference client library built as an extension of the Vue.js web framework along with example applications are available [here](https://github.com/csail-graffiti/graffiti-js-vue).
 
 ## Local Usage
 
@@ -13,7 +12,7 @@ To launch the server locally, run:
 
     sudo docker compose up --build
 
-The application will be up at [http://localhost:5000](http://localhost:5001).
+The application will be up at [http://localhost:5001](http://localhost:5001).
 If you are using the [Vue.js Graffiti plugin](https://github.com/csail-graffiti/vue), you might point to the local server as follows:
 
     Graffiti("http://localhost:5001").then(g=>createApp().use(g).mount("#app")
@@ -33,7 +32,7 @@ implements the [OAuth2](https://www.oauth.com/) standard to authorize users with
 exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The API consists of 4 basic functions:
 
 - `update`: lets users insert JSON objects into the database or replace objects they have inserted.
-- `delete`: lets users remove objects they have put in the database.
+- `remove`: lets users remove objects they have put in the database.
 - `subscribe`: returns all database entries matching a [MongoDB query](https://www.mongodb.com/docs/manual/tutorial/query-documents/) and then continues to stream new matches as they arrive.
 - `unsubscribe`: stops streaming results from a particular `subscribe` request.
 
@@ -42,7 +41,7 @@ The JSON objects are schemaless aside from 5 regulated fields:
 - `_id`: is a random identifier that must be added to each object. This field is not searchable, it's only purpose it to uniquely refer to objects so they can be added and replaced. This field is user-assigned for optimistic rendering. A user can't store more than one object with the same `_id`; trying to create an object with the same `_id` as an existing object will simply replace the existing object. Different users *can* store objects with the same `_id`, so there is no worry of someone else replacing your object.
 - `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
 - `_to`: this field must be equal to a list of unique user identifiers. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
-- `inContextIf`: [see here](https://github.com/csail-graffiti/vue#context)
+- `_inContextIf`: [see here](https://github.com/csail-graffiti/graffiti-js-vue]
 
 Objects can't include any other fields that start with `_` or `$`.
 
