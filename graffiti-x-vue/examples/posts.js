@@ -1,15 +1,19 @@
-export default function(useGraffiti) { return {
+export default function({ myID, useQuery }) { return {
 
-  setup: ()=> useGraffiti({
-    type: 'post',
-    content: { $type: 'string' },
-    timestamp: { $type: 'number' },
-    _by: 'f0e4c2f76c58916ec258f246851bea091d14d4247a2fc3e18694461b1816e13b'
-  }),
+  setup () {
+    return { myID, ...useQuery({
+      type: 'post',
+      content: { $type: 'string' },
+      timestamp: { $type: 'number' },
+      _by: myID
+    }) }
+  },
 
-  data: ()=> ({
-    inputText: ''
-  }),
+  data () {
+    return {
+      inputText: ''
+    }
+  },
 
   methods: {
     makePost() {
@@ -34,6 +38,9 @@ export default function(useGraffiti) { return {
   },
 
   template: `
+    <p>
+      My user ID is: {{myID}}
+    </p>
     <form @submit.prevent="makePost">
       <input v-model="inputText">
     </form>
