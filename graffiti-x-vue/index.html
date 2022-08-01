@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Graffiti for Vue 3</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://unpkg.com/vue@3.2.37/dist/vue.global.prod.js"></script>
+</head>
+<body>
+
+  <div id="app">
+    <h1>
+      Graffiti for Vue 3
+    </h1>
+
+    <p>
+      For example, you can add button to log in and out: <log-in/>.
+    </p>
+
+    <h2>
+      A Timestamped Collection
+    </h2>
+
+    <posts/>
+  </div>
+
+  <script type="module">
+    import Graffiti from './src/graffiti.js'
+    import Posts from './examples/posts.js'
+    import LogIn from './examples/login.js'
+
+    Graffiti(Vue, 'http://localhost:5001').then(g=> {
+      Vue.createApp()
+        .component('log-in', LogIn(g))
+        .component('posts', Posts(g))
+        .mount('#app')
+    })
+  </script>
+</body>
+</html>

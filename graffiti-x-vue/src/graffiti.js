@@ -1,3 +1,5 @@
+import Socket from './graffiti-js-vanilla/src/socket.js'
+
 export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu') {
 
   const socket = new Socket(graffitiURL)
@@ -8,13 +10,11 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
 
     // Initialize the collection output
     const objectMap = Vue.reactive({})
-    // and an event stream
-    const eventTarget = new EventTarget()
 
     // This functions is called when an object
     // is added or removed from the collection
     // either by the query subscription or locally
-    async function updateCallback(object) {
+    function updateCallback(object) {
       const uuid = socket.objectUUID(object)
 
       // Store the original object if
@@ -27,18 +27,13 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       // Replace the object
       objectMap[uuid] = object
 
-      // Send a local event if the update was ours
-      if (object._by == socket.myID) {
-        eventTarget.dispatchEvent(new Event(uuid))
-      }
-
       // Return the original in case of failure
       return originalObject
     }
 
     // Likewise, this is called whenever an
-    // object is deleted either by the query or locally
-    function deleteCallback(object) {
+    // object is removed either by the query or locally
+    function removeCallback(object) {
       const uuid = socket.objectUUID(object)
       if (!(uuid in objectMap)) return
       delete objectMap[uuid]
@@ -76,7 +71,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       queryID = await socket.subscribe(
         newQuery,
         updateCallback,
-        deleteCallback)
+        removeCallback)
     }
 
     // Subscribe to the query using the handler
@@ -112,39 +107,20 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
           updateCallback(originalObject)
         } else {
           // Delete the temp object
-          deleteCallback(object)
+          removeCallback(object)
         }
         throw e
-      }
-
-      // Listen if the ID actually gets added to the collection
-      const updatePromise = new Promise( (resolve, reject) => {
-        eventTarget.addEventListener(socket.objectUUID(object), () => resolve() )
-        // But if it takes too long, timeout
-        setTimeout(() => reject(new Error('timeout')), 5000)
-      })
-
-      try {
-        await updatePromise
-      } catch {
-        deleteCallback(object)
-        socket.delete(object._id)
-        throw {
-          type: 'error',
-          content: 'the object you updated isn\'t included in this collection, so it has been deleted',
-          object
-        }
       }
 
       return object
     }
 
     // And this one is the exposed deletion function
-    async function delete_(object) {
+    async function remove(object) {
       if (!socket.loggedIn) {
         throw {
           type: 'error',
-          content: 'you can\'t delete objects without logging in!'
+          content: 'you can\'t remove objects without logging in!'
         }
       }
 
@@ -152,39 +128,41 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       if (!(uuid in objectMap)) {
         throw {
           type: 'error',
-          content: 'the object ID you\'re trying to delete is not in this collection',
+          content: 'the object ID you\'re trying to remove is not in this collection',
           id
         }
       }
 
-      // Immediately delete the object
+      // Immediately remove the object
       // but store it in case there is an error
       const originalObject = objectMap[uuid]
-      deleteCallback(object)
+      removeCallback(object)
 
       try {
-        await socket.delete(object._id)
+        await socket.remove(object._id)
       } catch(e) {
         // Delete failed, restore the object
         updateCallback(originalObject)
         throw e
       }
+
+      return originalObject
     }
 
     // Finally, we only want an array not an object
-    const objects = Vue.computed(() => Object.values(object.map))
+    const objects = Vue.computed(() => Object.values(objectMap))
 
-    // Return the map,
+    // Return the reactive object array,
     // the exposed modification functions,
     // and authorization functions
     return {
       objects,
       update,
-      delete_,
+      remove,
       myID: socket.myID,
       loggedIn: socket.loggedIn,
-      logOut: socket.logOut,
-      logIn: socket.logIn
+      logOut: socket.logOut.bind(socket),
+      logIn: socket.logIn.bind(socket)
     }
   }
 }
