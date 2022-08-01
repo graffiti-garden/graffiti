@@ -46,16 +46,16 @@ async def main():
         assert result['type'] == 'updates'
         assert len(result['results']) == 1
 
-        print("deleting an item")
+        print("removing an item")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
         result = await recv(ws)
-        assert result['type'] == 'deletes'
+        assert result['type'] == 'removes'
         assert len(result['results']) == 1
         assert result['results'][0]['_id'] == base['_id']
         assert result['results'][0]['_by'] == base['_by']
@@ -86,10 +86,10 @@ async def main():
             assert len(result['results']) == 1
             assert result['queryID'] == query_id
             result = await recv(ws)
-            assert result['type'] == 'deletes'
+            assert result['type'] == 'removes'
             assert len(result['results']) == 1
             assert result['queryID'] == query_id
-            # For interleaved inserts and deletes
+            # For interleaved inserts and removes
             messages = {}
             while len(messages) < big_size:
                 result = await recv(ws)
@@ -99,10 +99,10 @@ async def main():
                     messages[r['_id'] + r['_by']] = r
             assert len(messages) == big_size
             adds = 0
-            deletes = 0
-            while adds < big_size or deletes < big_size:
+            removes = 0
+            while adds < big_size or removes < big_size:
                 result = await recv(ws)
-                assert result['type'] in ['updates', 'deletes']
+                assert result['type'] in ['updates', 'removes']
                 assert result['queryID'] == query_id
                 for r in result['results']:
                     if result['type'] == 'updates':
@@ -110,9 +110,9 @@ async def main():
                         adds += 1
                     else:
                         del messages[r['_id'] + r['_by']]
-                        deletes += 1
+                        removes += 1
             assert adds == big_size
-            assert deletes == big_size
+            assert removes == big_size
             assert len(messages) == big_size
 
     tasks = []
@@ -139,10 +139,10 @@ async def main():
 
         await asyncio.sleep(1)
 
-        print("deleting an item")
+        print("removing an item")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -169,7 +169,7 @@ async def main():
 
         await asyncio.sleep(2)
 
-        print("interleaving adds and deletes")
+        print("interleaving adds and removes")
         for i in range(big_size):
             base = object_base(my_id)
             await send(ws, {
@@ -185,7 +185,7 @@ async def main():
             assert result['type'] == 'success'
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'delete',
+                'type': 'remove',
                 'objectID': objectIDs[i]
             })
             result = await recv(ws)

@@ -10,7 +10,7 @@ async def main():
         for request in valid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
-            while response["type"] in ["updates", "deletes"]:
+            while response["type"] in ["updates", "removes"]:
                 response = await recv(ws)
             if response["type"] == "error":
                 assert response["reason"] != "validation"
@@ -18,7 +18,7 @@ async def main():
         for request in invalid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
-            while response["type"] in ["updates", "deletes"]:
+            while response["type"] in ["updates", "removes"]:
                 response = await recv(ws)
             assert response["type"] == "error"
             assert response["reason"] == "validation"
@@ -38,7 +38,7 @@ def valid_requests(my_id):
     "object": base_object,
 }, {
     "messageID": "a"*64,
-    "type": "delete",
+    "type": "remove",
     "objectID": base_object['_id']
 }, {
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
@@ -261,7 +261,7 @@ def invalid_requests(my_id):
     "foo": "bar"
 }, {
     "messageID": random_id(),
-    "type": "delete",
+    "type": "remove",
     "objectID": base_object['_id'],
     "bloo": {}
 }, {
@@ -312,7 +312,7 @@ def invalid_requests(my_id):
     }
 }, {
     "messageID": random_id(),
-    "type": "delete"
+    "type": "remove"
 }, {
     "messageID": random_id(),
     "type": "subscribe"

@@ -39,25 +39,25 @@ async def main():
         assert result['type'] == 'success'
         print("Replaced object")
 
-        # Try deleting an object
+        # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
         print("Deleted object")
 
-        # Try deleting it *again*
+        # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'error'
-        print("Could not re-delete object (as expected)")
+        print("Could not re-remove object (as expected)")
 
         # Try replacing again
         await send(ws, {
@@ -72,10 +72,10 @@ async def main():
         assert result['type'] == 'success'
         print("Could replace object")
 
-        # Try deleting an object
+        # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -110,25 +110,25 @@ async def main():
             result = await recv(ws)
             assert result['type'] == 'success'
 
-        # Try deleting the object
+        # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
         print("Deleted object")
 
-        # Try deleting it *again*
+        # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'error'
-        print("Could not re-delete object (as expected)")
+        print("Could not re-remove object (as expected)")
 
         # Try creating another object
         base = object_base(my_id)
@@ -165,25 +165,25 @@ async def main():
     print("Success!")
 
     async with websocket_connect(my_token) as ws:
-        # Try deleting the object
+        # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'success'
         print("Deleted object")
 
-        # Try deleting it *again*
+        # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'type': 'delete',
+            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
         assert result['type'] == 'error'
-        print("Could not re-delete object (as expected)")
+        print("Could not re-remove object (as expected)")
 
         base  = object_base(my_id)
         tag = random_id()

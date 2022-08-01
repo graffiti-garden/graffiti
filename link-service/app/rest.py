@@ -11,7 +11,6 @@ class Rest:
     def __init__(self, db, redis):
         self.db = db
         self.redis = redis
-        self.deleted_ids = set()
 
     async def update(self, object, query, owner_id):
         self.validate_owner_id(owner_id)
@@ -23,7 +22,7 @@ class Rest:
         # Try deleting the old document if there is one
         delete_id = None
         try:
-            delete_id = await self._delete(object['_id'], owner_id)
+            delete_id = await self.delete(object['_id'], owner_id)
         except Exception as e:
             # Nothing to worry about, this is just a new object
             pass
@@ -72,7 +71,7 @@ class Rest:
         else:
             await self.redis.publish("inserts", str(result.inserted_id))
 
-    async def delete(self, object_id, owner_id):
+    async def remove(self, object_id, owner_id):
         self.validate_owner_id(owner_id)
 
         lock = self.redis.lock(object_id + owner_id)
@@ -80,14 +79,14 @@ class Rest:
 
         # Delete the object
         try:
-            delete_id = await self._delete(object_id, owner_id)
+            delete_id = await self.delete(object_id, owner_id)
         finally:
             await lock.release()
 
         # And publish the change to the broker
         await self.redis.publish("deletes", str(delete_id))
 
-    async def _delete(self, object_id, owner_id):
+    async def delete(self, object_id, owner_id):
         # Check that the object that already exists
         # that it is owned by the owner_id,
         # and that it is not scheduled for deletion

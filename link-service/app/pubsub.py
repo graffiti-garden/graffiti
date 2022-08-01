@@ -116,7 +116,7 @@ class PubSub:
         # (all at once because it's just a list of object/owner IDs)
         if delete_ids:
             query_paths = await self.publish_results(delete_ids, query_paths,
-                    type='deletes',
+                    type='removes',
                     historical=False,
                     now=now,
                     complete=(not insert_ids))

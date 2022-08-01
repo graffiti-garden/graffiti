@@ -63,7 +63,7 @@ def socket_schema():
         # DELETE
         "properties": {
             "messageID": RANDOM_SCHEMA,
-            "type": { "const": "delete" },
+            "type": { "const": "remove" },
             "objectID": RANDOM_SCHEMA
         },
         "required": BASE_TYPES + ["objectID"],
