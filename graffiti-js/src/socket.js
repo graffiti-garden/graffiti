@@ -121,10 +121,10 @@ export default class {
     }
   }
 
-  async update(object) {
+  async update(object, query) {
     const data = await this.request({
       type: "update",
-      object
+      object, query
     })
     return data.objectID
   }

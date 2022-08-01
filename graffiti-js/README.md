@@ -46,12 +46,28 @@ const myCoolPost = {
 //  it with your user ID and a random
 //  object ID, required by the server)
 gs.complete(myCoolPost)
-await gs.update(myCoolPost)
+await gs.update(myCoolPost, {})
 
 // replace objects,
 myCoolPost.content += '!!!'
-await gs.update(myCoolPost)
+await gs.update(myCoolPost, {})
 
 // and remove objects.
 await gs.remove(myCoolPost)
+
+// The second argument in the update
+// function is a query. If the object you
+// try to add does not match the query
+// it will be rejected. This prevents
+// you from accidentally creating data
+// that gets "lost".
+const query = { type: 'post' }
+const myPost = { type: 'post' }
+const myNotPost = { type: 'notpost' }
+gs.complete(myNotPost)
+// This works
+await gs.update(myPost, query)
+// But this won't work!
+await gs.update(myNotPost, query)
+
 ```
