@@ -29,7 +29,7 @@
     import Posts from './examples/posts.js'
     import LogIn from './examples/login.js'
 
-    Graffiti(Vue, 'http://localhost:5001').then(g=> {
+    Graffiti(Vue).then(g=> {
       Vue.createApp()
         .component('log-in', LogIn(g))
         .component('posts', Posts(g))
