@@ -100,7 +100,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
 
       // Send it to the server
       try {
-        await socket.update(object)
+        await socket.update(object, query)
       } catch(e) {
         if (originalObject) {
           // Restore the original object
