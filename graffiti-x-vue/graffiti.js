@@ -1,15 +1,13 @@
-import Socket from './graffiti-js-vanilla/src/socket.js'
+import Graffiti from './graffiti-js-vanilla/graffiti.js'
 
 export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu') {
 
-  const socket = new Socket(graffitiURL)
-  await socket.initialize()
+  const graffiti = new Graffiti(graffitiURL)
+  await graffiti.initialize()
 
   return {
-    myID: socket.myID,
-    loggedIn: socket.loggedIn,
-    logOut: socket.logOut.bind(socket),
-    logIn: socket.logIn.bind(socket),
+    myID: graffiti.myID,
+    toggleLogIn: graffiti.toggleLogIn.bind(graffiti),
     // A Vue composable
     useQuery(query) {
 
@@ -20,7 +18,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       // is added or removed from the collection
       // either by the query subscription or locally
       function updateCallback(object) {
-        const uuid = socket.objectUUID(object)
+        const uuid = graffiti.objectUUID(object)
 
         // Store the original object if
         // one exists, in case of failure
@@ -39,7 +37,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       // Likewise, this is called whenever an
       // object is removed either by the query or locally
       function removeCallback(object) {
-        const uuid = socket.objectUUID(object)
+        const uuid = graffiti.objectUUID(object)
         if (!(uuid in objectMap)) return
         delete objectMap[uuid]
       }
@@ -49,7 +47,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
 
       // Unsubscribe to the query when done
       Vue.onBeforeUnmount(() => { if (queryID) {
-        socket.unsubscribe(queryID)
+        graffiti.unsubscribe(queryID)
       }})
 
       async function queryHandler(newQuery, oldQuery) {
@@ -66,14 +64,14 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         if (queryID) {
           const oldQueryID = queryID
           queryID = null
-          await socket.unsubscribe(oldQueryID)
+          await graffiti.unsubscribe(oldQueryID)
         }
 
         // Clear the output
         Object.keys(objectMap).forEach(k => delete objectMap[k])
 
         // And subscribe to the new query
-        queryID = await socket.subscribe(
+        queryID = await graffiti.subscribe(
           newQuery,
           updateCallback,
           removeCallback)
@@ -90,7 +88,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       // This exposed function lets users
       // modify graffiti objects
       async function update(object) {
-        if (!socket.loggedIn) {
+        if (!graffiti.myID) {
           throw {
             type: 'error',
             content: 'you can\'t update objects without logging in!'
@@ -98,14 +96,14 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         }
 
         // Give the object an _id, etc.
-        socket.completeObject(object)
+        graffiti.completeObject(object)
 
         // Immediately replace the object
         const originalObject = updateCallback(object)
 
         // Send it to the server
         try {
-          await socket.update(object, query)
+          await graffiti.update(object, query)
         } catch(e) {
           if (originalObject) {
             // Restore the original object
@@ -122,14 +120,14 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
 
       // And this one is the exposed deletion function
       async function remove(object) {
-        if (!socket.loggedIn) {
+        if (!graffiti.myID) {
           throw {
             type: 'error',
             content: 'you can\'t remove objects without logging in!'
           }
         }
 
-        const uuid = socket.objectUUID(object)
+        const uuid = graffiti.objectUUID(object)
         if (!(uuid in objectMap)) {
           throw {
             type: 'error',
@@ -144,7 +142,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         removeCallback(object)
 
         try {
-          await socket.remove(object._id)
+          await graffiti.remove(object._id)
         } catch(e) {
           // Delete failed, restore the object
           updateCallback(originalObject)
