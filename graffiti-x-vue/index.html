@@ -5,41 +5,55 @@
   <title>Graffiti for Vue 3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <base target="_blank">
+  <link href="https://unpkg.com/prismjs@1.28.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
   <link href="./docs/style.css" rel="stylesheet" />
-  <link href="https://unpkg.com/prismjs@1.28.0/themes/prism-twilight.min.css" rel="stylesheet" />
 </head>
 <body>
 
-  <div id="app">
-    <header>
-      <ul>
-        <li>
-          Graffiti for Vue 3
-        </li>
-        <li>
-          <a href="https://github.com/csail-graffiti/graffiti-js-vue">Github</a>
-        </li>
-    </header>
+  <header>
+    <ul>
+      <li>
+        Graffiti for Vue 3
+      </li>
+      <li>
+        <a href="https://github.com/csail-graffiti/graffiti-js-vue">Github</a>
+      </li>
+  </header>
+
+  <main id="app">
+
+    <h1>
+      Graffiti for Vue 3
+    </h1>
 
     <p>
-      This library exposes capabilities of the <a href="https://github.com/csail-graffiti/server">Graffiti server</a>.
-      Specifically it 
+      This is the frontend interface to the
+      <a href="https://github.com/csail-graffiti/server">Graffiti server</a>
+      that let's you add custom, reactive social features to any static website.
+      Specifically, the library exposes three properties:
       <ul>
         <li>
           <code class="language-js">toggleLogIn</code>:
-          A function that let's you log in and out of the Graffiti server.
+          A function that let's you log in and out of the Graffiti server via email.
         </li>
         <li>
           <code class="language-js">myID</code>: 
-          A unique user identifier when you're logged in.
+          A unique string associated with your account.
         </li>
         <li>
           <code class="language-js">useCollection</code>:
-          A <a href="https://vuejs.org/guide/reusability/composables.html">Vue Composable</a> that let's you retrieve and modify collections of social data from the Graffiti server --- this is where the magic happens!
+          A <a href="https://vuejs.org/guide/reusability/composables.html">Vue Composable</a> that let's you retrieve and modify collections of social data from the Graffiti server — this is where the magic happens!
         </li>
       </ul>
 
+      This guide assumes you are pretty familiar with
+      <a href="https://vuejs.org/guide/introduction.html">Vue</a>,
+      so we're going to dive straight into building components.
+      These components can be hooked into this library by including the following code at the end of an HTML document within 
+      <code class="language-html">&lt;script type="module"&gt;&lt;script&gt;</code> tags:
+
       <display-code path="./docs/examples/initialize.js"></display-code>
+
     </p>
 
     <h2>
@@ -47,12 +61,17 @@
     </h2>
 
     <p>
-      First let's make a button for logging in and out.
-      Since the user ID "myID" will only be defined when you're logged in we can use that to determine whether our button should say log in or log out.
+      First let's make a component for logging in and out.
+      Since
+      <code class="language-js">myID</code>
+      will only be defined when you're logged in, we can use it to determine whether our log-in button should say "Log In" or "Log Out". We'll also display
+      <code class="language-js">myID</code>
+      once you're logged in.
+      You'll see that the ID pretty ugly, so it's best to avoid exposing it to users in your interfaces.
 
       <display-code path="./docs/examples/login.js"></display-code>
 
-      Let's try in out!
+      Try it out:
 
       <div class="component">
         <log-in/>
@@ -66,11 +85,15 @@
     <p>
       We can create collections of objects with the useCollection composable.
       The composable takes a query as an input and exposes three things:
-      objects: a list of objects in the queries
-      update: a function to add or replace an object matching the query
-      remove: a function to remove an object matching the query.
+      objects: a reactive array of all objects in the server that match the query.
+      update: a function to add or replace an object matching the query to the server.
+      remove: a function to remove an object matching the query from the server
+    </p>
 
+    <p>
       Let's see how we can use these three things to create a collection of "boops".
+      In the example below, the input query to our collection is for "boops" written "_by" you (we'll explain more about _by in the next section.
+      We're using update to create boops, objects to interate through our boops and remove to add a button that deletes our boops:
 
       <display-code path="./docs/examples/boop.js"></display-code>
 
@@ -108,10 +131,10 @@
     </h2>
 
     <h2>
-      More Examples!
+      Moderation
     </h2>
 
-  </div>
+  </main>
 
   <script src="https://unpkg.com/prismjs@1.28.0/components/prism-core.min.js"></script>
   <script src="https://unpkg.com/prismjs@1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
