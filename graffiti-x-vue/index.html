@@ -4,35 +4,129 @@
   <meta charset="utf-8">
   <title>Graffiti for Vue 3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://unpkg.com/vue@3.2.37/dist/vue.global.prod.js"></script>
+  <base target="_blank">
+  <link href="./docs/style.css" rel="stylesheet" />
+  <link href="https://unpkg.com/prismjs@1.28.0/themes/prism-twilight.min.css" rel="stylesheet" />
 </head>
 <body>
 
   <div id="app">
-    <h1>
-      Graffiti for Vue 3
-    </h1>
+    <header>
+      <ul>
+        <li>
+          Graffiti for Vue 3
+        </li>
+        <li>
+          <a href="https://github.com/csail-graffiti/graffiti-js-vue">Github</a>
+        </li>
+    </header>
 
     <p>
-      For example, you can add button to log in and out: <log-in/>.
+      This library exposes capabilities of the <a href="https://github.com/csail-graffiti/server">Graffiti server</a>.
+      Specifically it 
+      <ul>
+        <li>
+          <code class="language-js">toggleLogIn</code>:
+          A function that let's you log in and out of the Graffiti server.
+        </li>
+        <li>
+          <code class="language-js">myID</code>: 
+          A unique user identifier when you're logged in.
+        </li>
+        <li>
+          <code class="language-js">useCollection</code>:
+          A <a href="https://vuejs.org/guide/reusability/composables.html">Vue Composable</a> that let's you retrieve and modify collections of social data from the Graffiti server --- this is where the magic happens!
+        </li>
+      </ul>
+
+      <display-code path="./docs/examples/initialize.js"></display-code>
     </p>
 
     <h2>
-      A Timestamped Collection
+      Logging In
     </h2>
 
-    <posts/>
+    <p>
+      First let's make a button for logging in and out.
+      Since the user ID "myID" will only be defined when you're logged in we can use that to determine whether our button should say log in or log out.
+
+      <display-code path="./docs/examples/login.js"></display-code>
+
+      Let's try in out!
+
+      <div class="component">
+        <log-in/>
+      </div>
+    </p>
+
+    <h2>
+      Collections
+    </h2>
+
+    <p>
+      We can create collections of objects with the useCollection composable.
+      The composable takes a query as an input and exposes three things:
+      objects: a list of objects in the queries
+      update: a function to add or replace an object matching the query
+      remove: a function to remove an object matching the query.
+
+      Let's see how we can use these three things to create a collection of "boops".
+
+      <display-code path="./docs/examples/boop.js"></display-code>
+
+      Let's try it (don't forget you need to be logged in for this to work! Your login status persists across all components sharing the same Graffiti connection.
+
+      <div class="component">
+        <boop/>
+      </div>
+
+      These "boops" are stored on the Graffiti server so they will persist if you refresh the page or log out and back in. They also immediately synchronize between different clients. Try opening two tabs side-by-side and see what happens when you "boop".
+    </p>
+
+    <h2>
+      Context and Privacy
+    </h2>
+
+    In the last example we reffered to the `_by` field. There are 3 special fields in our objects that determine ownership and privacy.
+
+    <h2>
+      Replacements
+    </h2>
+
+    <h2>
+      Recursive queries (sorting by likes)
+    </h2>
+
+    <h2>
+      Ordered Lists
+    </h2>
+
+    Logoot CRDT
+
+    <h2>
+      Audits
+    </h2>
+
+    <h2>
+      More Examples!
+    </h2>
+
   </div>
 
+  <script src="https://unpkg.com/prismjs@1.28.0/components/prism-core.min.js"></script>
+  <script src="https://unpkg.com/prismjs@1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <script src="https://unpkg.com/vue@3.2.37/dist/vue.global.prod.js"></script>
   <script type="module">
     import Graffiti from './graffiti.js'
-    import Posts from './components/posts.js'
-    import LogIn from './components/login.js'
+    import DisplayCode from './docs/displaycode.js'
+    import LogIn from './docs/examples/login.js'
+    import Boop from './docs/examples/boop.js'
 
     Graffiti(Vue).then(g=> {
       Vue.createApp()
+        .component('display-code', DisplayCode)
         .component('log-in', LogIn(g))
-        .component('posts', Posts(g))
+        .component('boop', Boop(g))
         .mount('#app')
     })
   </script>
