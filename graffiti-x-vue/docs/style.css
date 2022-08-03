@@ -1,7 +1,7 @@
 :root {
   --back: rgb(26, 26, 26);
   --front: rgba(255, 255, 255, 0.87);
-  --frontbold: #cc99cd;
+  --frontbold: #ca7acc;
   --border: grey;
 }
 
@@ -13,6 +13,7 @@ body {
   line-height: 1.7;
   background: var(--back);
   color: var(--front);
+  word-break: break-word;
 }
 
 header {
@@ -48,10 +49,14 @@ a:hover {
 
 pre {
   line-height: 1.2em !important;
+  padding: 1em !important;
 }
 
 code {
   font-family: Menlo, Monaco, Consolas, "Courier New", monospace !important;
+}
+
+pre code {
   font-size: 80% !important;
   line-height: 0em !important;
 }
@@ -68,5 +73,22 @@ pre, .component {
 }
 
 button {
-  font-size: 200%;
+  font-size: 150%;
+  font-weight: 500;
+  border-radius: 0.5em;
+  padding: 0.2em;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+  border: 0;
+  background: var(--back);
+  color: var(--front);
+}
+
+button:hover {
+  background: var(--frontbold);
+  cursor: pointer;
+}
+
+.component p {
+  margin-bottom: 0;
 }

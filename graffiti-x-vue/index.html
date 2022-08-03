@@ -13,10 +13,14 @@
   <header>
     <ul>
       <li>
-        Graffiti for Vue 3
+        <a target="_self" href="https://csail-graffiti.github.io/graffiti-js-vue/">
+          Graffiti for Vue 3
+        </a>
       </li>
       <li>
-        <a href="https://github.com/csail-graffiti/graffiti-js-vue">Github</a>
+        <a href="https://github.com/csail-graffiti/graffiti-js-vue">
+          Github
+        </a>
       </li>
   </header>
 
@@ -27,9 +31,13 @@
     </h1>
 
     <p>
-      This is the frontend interface to the
-      <a href="https://github.com/csail-graffiti/server">Graffiti server</a>
-      that let's you add custom, reactive social features to any static website.
+      This library let's you easily add custom, reactive social features to any static website
+      via an extension to the
+      <a href="https://vuejs.org/guide/introduction.html">
+        Vue.js
+      </a>
+      Javascript framework that interfaces with the
+      <a href="https://github.com/csail-graffiti/server">Graffiti server</a>.
       Specifically, the library exposes three properties:
       <ul>
         <li>
@@ -38,7 +46,7 @@
         </li>
         <li>
           <code class="language-js">myID</code>: 
-          A unique string associated with your account.
+          A unique string associated with your Graffiti account.
         </li>
         <li>
           <code class="language-js">useCollection</code>:
@@ -48,8 +56,8 @@
 
       This guide assumes you are pretty familiar with
       <a href="https://vuejs.org/guide/introduction.html">Vue</a>,
-      so we're going to dive straight into building components.
-      These components can be hooked into this library by including the following code at the end of an HTML document within 
+      so we're going to dive straight into building social components.
+      These components can be hooked into the library by including the following code at the end of an HTML document within 
       <code class="language-html">&lt;script type="module"&gt;&lt;script&gt;</code> tags:
 
       <display-code path="./docs/examples/initialize.js"></display-code>
@@ -83,6 +91,7 @@
     </h2>
 
     <p>
+      
       We can create collections of objects with the useCollection composable.
       The composable takes a query as an input and exposes three things:
       objects: a reactive array of all objects in the server that match the query.
@@ -137,7 +146,9 @@
   </main>
 
   <script src="https://unpkg.com/prismjs@1.28.0/components/prism-core.min.js"></script>
-  <script src="https://unpkg.com/prismjs@1.28.0/plugins/autoloader/prism-autoloader.min.js"></script>
+  <script src="https://unpkg.com/prismjs@1.28.0/components/prism-markup.min.js"></script>
+  <script src="https://unpkg.com/prismjs@1.28.0/components/prism-clike.min.js"></script>
+  <script src="https://unpkg.com/prismjs@1.28.0/components/prism-javascript.min.js"></script>
   <script src="https://unpkg.com/vue@3.2.37/dist/vue.global.prod.js"></script>
   <script type="module">
     import Graffiti from './graffiti.js'

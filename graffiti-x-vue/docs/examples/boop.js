@@ -12,12 +12,11 @@ export default function({ myID, useQuery }) { return {
     })">
       Boop
     </button>
-    <ol>
-      <li v-for="boop in objects">
-        Booped
-        <button @click="remove(boop)">
-          ❌
-        </button>
-      </li>
-    </ol>`
+    <p v-if="objects.length">
+      <span v-for="boop in objects">
+        <a href="" @click.prevent="remove(boop)">
+          boop
+        <a/>
+      </span>
+    </p>`
 }}
