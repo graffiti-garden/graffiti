@@ -10,7 +10,8 @@ export default function({myID, useCollection}) { return {
       Boop
     </button>
 
-    <p v-if="objects.length">
+    <p>
+      boops:
       <span v-for="boop in objects">
         <a href="" @click.prevent="remove(boop)">
           boop
