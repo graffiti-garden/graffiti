@@ -31,7 +31,7 @@
     </h1>
 
     <p>
-      This library let's you easily add custom, reactive social features to any static website
+      This library lets you add custom social components to any static website
       via an extension to the
       <a href="https://vuejs.org/guide/introduction.html">
         Vue.js
@@ -50,15 +50,17 @@
         </li>
         <li>
           <code class="language-js">useCollection</code>:
-          A <a href="https://vuejs.org/guide/reusability/composables.html">Vue Composable</a> that let's you retrieve and modify collections of social data from the Graffiti server — this is where the magic happens!
+          A <a href="https://vuejs.org/guide/reusability/composables.html">Vue Composable</a> that let's you retrieve and modify dynamic collections of social data from the Graffiti server — this is where the magic happens!
         </li>
       </ul>
+    </p>
 
+    <p>
       This guide assumes you are pretty familiar with
       <a href="https://vuejs.org/guide/introduction.html">Vue</a>,
       so we're going to dive straight into building social components.
       These components can be hooked into the library by including the following code at the end of an HTML document within 
-      <code class="language-html">&lt;script type="module"&gt;&lt;script&gt;</code> tags:
+      <code class="language-html">&lt;script type="module"&gt;&lt;/script&gt;</code> tags:
 
       <display-code path="./docs/examples/initialize.js"></display-code>
 
@@ -72,19 +74,21 @@
       First let's make a component for logging in and out.
       Since
       <code class="language-js">myID</code>
-      will only be defined when you're logged in, we can use it to determine whether our log-in button should say "Log In" or "Log Out". We'll also display
+      is only defined when you're logged in, we can use it to determine whether our log-in button should say "Log In" or "Log Out". We'll also display
       <code class="language-js">myID</code>
-      once you're logged in.
-      You'll see that the ID pretty ugly, so it's best to avoid exposing it to users in your interfaces.
+      once you're logged in, just so you can see what it looks like.
+      The ID is pretty ugly, so it's best to avoid exposing it to users.
+    </p>
 
-      <display-code path="./docs/examples/login.js"></display-code>
+    <display-code path="./docs/examples/login.js"></display-code>
 
+    <p>
       Try it out:
+    </p>
 
       <div class="component">
         <log-in/>
       </div>
-    </p>
 
     <h2>
       Collections
@@ -119,6 +123,11 @@
       Context and Privacy
     </h2>
 
+    Knowing one's audience.
+    Strict boundaries: this can only be seen by person X.
+    Soft boundaries: this can only be seen by people specifically looking for...
+    _to, _inContextIf
+    
     In the last example we reffered to the `_by` field. There are 3 special fields in our objects that determine ownership and privacy.
 
     <h2>
