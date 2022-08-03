@@ -71,7 +71,7 @@
     </h2>
 
     <p>
-      First let's make a component for logging in and out.
+      First, let's make a component for logging in and out.
       Since
       <code class="language-js">myID</code>
       is only defined when you're logged in, we can use it to determine whether our log-in button should say "Log In" or "Log Out". We'll also display
@@ -95,28 +95,45 @@
     </h2>
 
     <p>
-      
-      We can create collections of objects with the useCollection composable.
-      The composable takes a query as an input and exposes three things:
-      objects: a reactive array of all objects in the server that match the query.
-      update: a function to add or replace an object matching the query to the server.
-      remove: a function to remove an object matching the query from the server
+      Collections of social data in Graffiti are formed by arbitrary <em>queries</em> rather than the directories of a file structure or the tables of a SQL database.
+      We can interface with these collections in Vue with the <code class="language-js">useCollection</code> <a href="https://vuejs.org/guide/reusability/composables.html">composable</a>.
+      The composable takes a <a href="https://www.mongodb.com/docs/manual/tutorial/query-documents/">MongoDB query</a> as input and returns three properties:
+      <ul>
+        <li>
+          <code class="language-js">objects</code>:
+          a reactive array of all the objects in the server that match the input query.
+        </li>
+        <li>
+          <code class="language-js">update</code>:
+          a function to add or replace an object matching the query to the server.
+        </li>
+        <li>
+          <code class="language-js">remove</code>:
+          a function to remove an object matching the query from the server
+        </li>
+      </ul>
     </p>
 
     <p>
-      Let's see how we can use these three things to create a collection of "boops".
-      In the example below, the input query to our collection is for "boops" written "_by" you (we'll explain more about _by in the next section.
-      We're using update to create boops, objects to interate through our boops and remove to add a button that deletes our boops:
+      Other than a couple regulated fields that start with <code class="language-js">_</code> described in the next section, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">type</code> with value <code class="language-js">"boop"</code>.
+      In the example below, we form a collection of boops "by us" (<code class="language-js">_by</code> is one of those special fields we'll get to)
+      and add functionality to add and remove our boops from the collection:
 
       <display-code path="./docs/examples/boop.js"></display-code>
+    </p>
 
-      Let's try it (don't forget you need to be logged in for this to work! Your login status persists across all components sharing the same Graffiti connection.
+    <p>
+      Try it out below!
+      To add or remove data to Graffiti you'll need to be logged in, so make sure you're logged in with the button we made in the previous section.
 
       <div class="component">
         <boop/>
       </div>
+    </p>
 
-      These "boops" are stored on the Graffiti server so they will persist if you refresh the page or log out and back in. They also immediately synchronize between different clients. Try opening two tabs side-by-side and see what happens when you "boop".
+    <p>
+      Our boops are stored in the Graffiti server so they will persist even if you refresh the page or log out and back in.
+      They also immediately synchronize between different clients — try opening this guide in two side-by-side windows and see what happens when you "boop".
     </p>
 
     <h2>
