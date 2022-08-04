@@ -19,7 +19,7 @@ export const BoopDisplay = {
     <p>
       {{ title }}:
       <span v-for="boop in boops">
-        <a href="" @click.prevent="remove(boop)">
+        <a @click="remove(boop)">
           boop
         </a>
       </span>

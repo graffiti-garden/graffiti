@@ -3,7 +3,7 @@ export default {
 
   data: ()=> ({code: ''}),
 
-  async mounted() {
+  async created() {
     const request = new Request(this.path)
     const response = await fetch(request)
     this.code = await response.text()

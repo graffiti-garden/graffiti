@@ -88,7 +88,7 @@
     </p>
 
       <div class="component">
-        <log-in/>
+        <log-in></log-in/>
       </div>
 
     <h2 id="collections">
@@ -117,7 +117,7 @@
     </p>
 
     <p>
-      Other than a couple regulated fields that start with <code class="language-js">_</code> described in the next section, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">type</code> with value <code class="language-js">"boop"</code>.
+      Other than a couple regulated fields that start with <code class="language-js">_</code> described in the next sections, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">type</code> with value <code class="language-js">"boop"</code>.
       In the example below, we form a collection of <a href="https://c.tenor.com/JjZtInaG4pEAAAAd/boop-cat-boop.gif">boops</a> and define a button that creates new boops with <code class="language-js">update</code>.
       We've also created a "boop display" component to view and delete our boops using <code class="language-js">remove</code> (we separated this component out to reuse in future examples).
       <display-code path="./docs/examples/boop.js"></display-code>
@@ -143,27 +143,42 @@
     </h2>
 
     <p>
-      Boundaries are critical to maintaining healthy social relationships, and so one of Graffiti's core features is a powerful system for creating <em>hard</em> and <em>soft</em> boundaries around certain pieces of content.
-      Hard boundaries are like those in traditional access control; only individuals you specify can access a piece of content.
-      Soft boundaries are for content that is public but only intended for a specific audience.
-      Consider a physical analogy. Say you sing at a karaoke bar at the weekend. Your singing is public because anyone can walk into the bar and see you sing. Still, it's unlikely that your colleagues will encounter you singing unless they are also karaoke enthusiasts.
+      <a href="https://en.wikipedia.org/wiki/Context_collapse">Contextual boundaries</a> are critical to maintaining healthy social relationships, and so one of Graffiti's core features is a powerful system for creating hard and soft contextual boundaries around data objects.
+      We use "hard contextual boundaries" to describe boundaries that operate like those in a traditional <a href="https://en.wikipedia.org/wiki/Access-control_list">access control list</a>; these are boundaries where only certain whitelisted individuals are granted access to some content.
+      "Soft contextual boundaries" on the other hand are for content that is public but only intended for a specific audience or audiences.
     </p>
 
     <p>
-      In Graffiti, hard boundaries are actually a special case of soft boundaries so we will start with soft.
-      We consider a soft boundary to be something of the form "I don't want people to see this unless they are specifically looking for <i>X</i>".
-      We take a person "specifically looking for <i>X</i>" to mean that their query would fail on an object that does not include <i>X</i>.
+      To understand these soft boundaries consider a physical analogy.
+      Say you sing at a karaoke bar at the weekend.
+      Your singing is technically public because anyone can walk into the bar and see you sing.
+      At the same time, anyone who sees you sing has had to chosen to walk into a karaoke bar and is presumably someone who likes karaoke and who respects the bar as a safe space for self expression.
+      Also, by singing in a karaoke bar you know that your audience is implicitly consenting to being sung at,
+      as opposed to a random street corner or your an office where it might be extremely disturbing.
     </p>
 
     <p>
-      In the example below we are querying for boops that have the tag <code class="language-js">"demo"</code>.
+      In Graffiti, hard contextual boundaries are actually a special case of soft contextual boundaries so we will start with soft.
+      We specify a soft contextual boundary to be something of the form "I don't want people to see <i>X</i> unless they are specifically looking for <i>Y</i>", for example "I don't want people to see <i>me sing</i> unless they are specifically looking for <i>karaoke</i>".
+    </p>
+
+    <p>
+      We formally say that a query is "specifically looking for <i>Y</i> in <i>X</i>" if that query would <em>fail</em> on <i>X</i> if <i>Y</i> were changed.
+      The request "show me someone singing" could be answered with either someone singing in a karaoke bar or someone singing on a street corner.
+      Whereas, the request "show me someone singing in a karaoke bar" could not be answered with someone singing on a street corner - the query fails if "karaoke bar" is changed to "street corner" and so this request is sufficiently specific.
+    </p>
+
+    <p>
+      In the example below we are going to make boops that have the tag <code class="language-js">"demo"</code>.
+      Remember,
       <code class="language-js">tags</code>, like
       <code class="language-js">type</code> and all other properties not beginning with
       <code class="language-js">_</code>, is just an arbitrary property name.
-      Then, we are using two special properties
+      Some of the boops we make will not specify any contextual boundaries.
+      Other boops will using two special properties
       <code class="language-js">_inContextIf</code> and
       <code class="language-js">_queryFailsWithout</code>
-      to make one of our buttons only boop for people specifically looking for objects with the tag <code class="language-js">"demo"</code>.
+      to add a boundary that only shows these boops to people specifcally looking for objects with the tag <code class="language-js">"demo"</code>.
 
       <display-code path="./docs/examples/context.js"></display-code>
     </p>
@@ -187,8 +202,8 @@
     </p>
 
     <p>
-      With these elements you can construct arbitrary boolean "context formulas".
-      Perhaps it's easier to understand by playing with an example.
+      With these elements you can construct arbitrary boolean "context formulas" —
+      perhaps it's easier to understand by playing with an example.
       Below we have an object that is in context if someone queries for
       objects that are (boops AND tagged with "demo") OR (boops OR tagged with demo).
 
@@ -212,36 +227,49 @@
     </h2>
 
     <p>
-      In our examples we've made queries for the _by property.
-      This special property is automatically included in all objects and must be equal to _myID.
-      Therefore, noone can forge this "signature" on your objects.
-      So far, it's allowed us to filter for only object we have created but you might also use it to compile information about a user. For example as your interface is parsing a list of comments, it could look up each commenters name to display.
-      However the context system in the previous section means that just because an object is _by you, doesn't mean it can be found by simply querying for {_by: _myID}.
+      In our examples, our queries have included the condition <code class="language-js">{_by: myID}</code>.
+      <code class="language-js">_by</code> is a special property that is automatically included in all objects and must be equal to the object's creator's ID; it is an unforgable "signature" on objects.
+      So far, we've been using <code class="language-js">_by</code> to filter out objects that other people reading this demo have created, but you can also use it to cross reference information about a user. For example, as your interface is parsing a list of comments, it could use <code class="language-js">_by</code> to look up and append the commenter's name to each comment.
+      However, thanks to Graffiti's system of contextual boundaries, this does not mean that you can simply find everything that a user has ever posted with a single <code class="language-js">{_by: myID}</code> query.
     </p>
 
     <p>
-      There is one more special field that will allow us to create Hard boundaries: _to.
-      If you include it in your object, _to must be an Array of user IDs.
-      The catch is that people can only query for things _to their own user ID.
-      On it's own this does not that does not make the object private, but we can combine it with context to make it so.
+      The "hard contextual boundaries" we described in the previous section can be created with the other special identity field, <code class="language-js">_to</code>.
+      The field <code class="language-js">_to</code> can optionally be included in any object and must be an array of user IDs.
+      However, the primary constraint on <code class="language-js">_to</code> is on the querier's end: people can only query for objects <code class="language-js">_to</code> themselves.
     </p>
 
     <p>
-      For example, here is an object that can only be seen by
+      On it's own this does not create privacy, it just means that the recipients included in the <code class="language-js">_to</code> array of an object can query for that object in more ways than other people.
+      However, by using <code class="language-js">_inContextIf</code> we can block all of the queries that <em>don't specify</em> <code class="language-js">_to</code>, thereby allowing only the desired recipients to access the object.
+      <!--Since this is primarily coming from _to, we can include.-->
+      <!--Because context is flexible you can have an object that can be privately accessed. You might use this if you want to post a reply in a specific community but also directly "notify" whoever it is you are replying to.-->
+    </p>
 
-      Because context is flexible you can have an object that can be privately accessed. You might use this if you want to post a reply in a specific community but also directly "notify" whoever it is you are replying to.
+    <p>
+      Let's see how this works in practice. First we're going to create a "Boop Outbox" which, for a given recipient ID, provides a button that sends private boops to that recipient.
 
       <display-code path="./docs/examples/outbox.js"></display-code>
     </p>
+
     <p>
-    <display-code path="./docs/examples/inbox.js"></display-code>
+      Let's also create an inbox that can read private boops from a particular sender.
+      <display-code path="./docs/examples/inbox.js"></display-code>
+    </p>
+
+    <p>
+      Finally, we need a way of finding people to send our boops to!
+      In the code below we create component that let's use introduce yourself with a new sort of "introduction" object.
+      We create a form that posts an introduction and we also display all the introductions that have been made in the past day.
+      Clicking on a particular introduction will instantiate a boop inbox and outbox directed to the introduction's creator!
+      <display-code path="./docs/examples/introduction.js"></display-code>
+    </p>
+
+    <p>
+      Try it out! Maybe convince a friend to do this with you or open a private tab and log in with a different email.
 
       <div class="component">
-        <log-in></log-in>
-        <hr>
-        <outbox></outbox>
-        <br>
-        <inbox></inbox>
+        <introduction></introduction>
       </div>
     </p>
 
@@ -264,14 +292,36 @@
     </h2>
 
     <p>
-      Logoot CRDT
+      In all of the examples so far our the collections we've formed have not have much structure.
+      Many were unsorted and some sorted by timestamps.
+      However things get trickier when you want a collection of objects that has a particular sort of order.
 
-      ordered list example
+      TO do this we're going to essentially number.
+
+      But real numbers can't be divided forever, so we're going to use a Logoot CRDT.
+      There are some explanations here and here.
     </p>
 
     <h2>
       Audits
     </h2>
+
+    <p>
+      The biggest drawback that Graffiti's contexual boundaries have compared to something like a hierarchy of directories is potentially losing data.
+      In a filestructure you can start at the root and crawl down the tree and eventually you'll touch every file.
+      But in Graffiti there are some objects you won't find unless you make exactly the right query.
+    </p>
+
+    <p>
+      This is why the update and remove functions are attached to a particular collection rather than global properties.
+      This means that you can't accidentally create data that you can't "see".
+    </p>
+
+    <p>
+      Still there are times when it's really necessary to do a complete audit.
+      That's why a collection has an "audit" flag. This flag makes the query ignore all contextual boundaries but it will only query for objects _by yourself.
+      You can use it to make something kind of like Facebook's "Activity Log" which tracks actions that have happened all over the site in one stream.
+    </p>
   </main>
 
   <script src="https://unpkg.com/prismjs@1.28.0/components/prism-core.min.js"></script>
@@ -288,6 +338,7 @@
     import Context2 from './docs/examples/context2.js'
     import Inbox from './docs/examples/inbox.js'
     import Outbox from './docs/examples/outbox.js'
+    import Introduction from './docs/examples/introduction.js'
 
     Graffiti(Vue).then(g=> {
       Vue.createApp()
@@ -297,8 +348,9 @@
         .component('booper', Booper(g))
         .component('context', Context(g))
         .component('context2', Context2(g))
-        .component('inbox', Inbox(g))
-        .component('outbox', Outbox(g))
+        .component('BoopInbox', Inbox(g))
+        .component('BoopOutbox', Outbox(g))
+        .component('introduction', Introduction(g))
         .mount('#app')
     })
   </script>

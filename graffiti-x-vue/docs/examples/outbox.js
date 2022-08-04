@@ -1,14 +1,12 @@
 export default function({myID, useCollection}) { return {
 
+  props: ['recipientID'],
+
   setup: ()=> ({myID, ...useCollection({
     type: 'boop',
     _to: myID,
     _by: myID
   })}),
-
-  data: ()=> ({
-    recipientID: ''
-  }),
 
   methods: {
     sendBoop() {
@@ -23,9 +21,7 @@ export default function({myID, useCollection}) { return {
   },
 
   template: `
-    Recipient ID: <input v-model="recipientID" />
-
-    <button @click="sendBoop()">
+    <button @click="sendBoop">
       Send Boop!
     </button>
 

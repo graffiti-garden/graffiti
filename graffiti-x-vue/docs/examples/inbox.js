@@ -1,9 +1,11 @@
 export default function({myID, useCollection}) { return {
 
-  setup: ()=> useCollection({
+  props: ['senderID'],
+
+  setup: (props)=> useCollection({
     type: 'boop',
     _to: myID,
-    _by: { $ne: myID }
+    _by: props.senderID
   }),
 
   template: `
