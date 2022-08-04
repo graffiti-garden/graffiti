@@ -29,12 +29,5 @@ export default function({myID, useCollection}) { return {
     <button @click="makeDemoBoop">Demo Boop</button>
     <button @click="makeDemoOnlyBoop">Demo Boop for Demoers Only</button>
 
-    <p>
-      demo boops:
-      <span v-for="boop in objects">
-        <a href="" @click.prevent="remove(boop)">
-          boop
-        </a>
-      </span>
-    </p>`
+    <BoopDisplay title="demo boops" :boops="objects" :remove="remove" />`
 }}

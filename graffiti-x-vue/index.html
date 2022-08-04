@@ -66,7 +66,8 @@
 
     </p>
 
-    <h2>
+    <h2 id="loggingin">
+      <a class="h-anchor" href="#loggingin" target="_self">#</a>
       Logging In
     </h2>
 
@@ -90,7 +91,8 @@
         <log-in/>
       </div>
 
-    <h2>
+    <h2 id="collections">
+      <a class="h-anchor" href="#collections" target="_self">#</a>
       Collections
     </h2>
 
@@ -116,9 +118,8 @@
 
     <p>
       Other than a couple regulated fields that start with <code class="language-js">_</code> described in the next section, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">type</code> with value <code class="language-js">"boop"</code>.
-      In the example below, we form a collection of boops "by us" (<code class="language-js">_by</code> is one of those special fields we'll get to)
-      and add functionality to add and remove our boops from the collection:
-
+      In the example below, we form a collection of <a href="https://c.tenor.com/JjZtInaG4pEAAAAd/boop-cat-boop.gif">boops</a> and define a button that creates new boops with <code class="language-js">update</code>.
+      We've also created a "boop display" component to view and delete our boops using <code class="language-js">remove</code> (we separated this component out to reuse in future examples).
       <display-code path="./docs/examples/boop.js"></display-code>
     </p>
 
@@ -127,7 +128,7 @@
       To add or remove data to Graffiti you'll need to be logged in, so make sure you're logged in with the button we made in the previous section.
 
       <div class="component">
-        <boop></boop>
+        <booper></booper>
       </div>
     </p>
 
@@ -136,7 +137,8 @@
       They also immediately synchronize between different clients — try opening this guide in two side-by-side windows and see what happens when you "boop".
     </p>
 
-    <h2>
+    <h2 id="context">
+      <a class="h-anchor" href="#context" target="_self">#</a>
       Context
     </h2>
 
@@ -144,20 +146,20 @@
       Boundaries are critical to maintaining healthy social relationships, and so one of Graffiti's core features is a powerful system for creating <em>hard</em> and <em>soft</em> boundaries around certain pieces of content.
       Hard boundaries are like those in traditional access control; only individuals you specify can access a piece of content.
       Soft boundaries are for content that is public but only intended for a specific audience.
-      Consider a physical analogy. Say you sing at a karaoke bar at the weekend. Your singing is public because anyone can walk into the bar and see you sing. Still, it's unlikely that your colleagues will encounter you in that context unless they are also karaoke enthusiasts.
+      Consider a physical analogy. Say you sing at a karaoke bar at the weekend. Your singing is public because anyone can walk into the bar and see you sing. Still, it's unlikely that your colleagues will encounter you singing unless they are also karaoke enthusiasts.
     </p>
 
     <p>
       In Graffiti, hard boundaries are actually a special case of soft boundaries so we will start with soft.
       We consider a soft boundary to be something of the form "I don't want people to see this unless they are specifically looking for <i>X</i>".
-      We take a person "specifically looking for <i>X</i>" mean that their query would fail on an object that does not include <i>X</i>.
+      We take a person "specifically looking for <i>X</i>" to mean that their query would fail on an object that does not include <i>X</i>.
     </p>
 
     <p>
       In the example below we are querying for boops that have the tag <code class="language-js">"demo"</code>.
       <code class="language-js">tags</code>, like
       <code class="language-js">type</code> and all other properties not beginning with
-      <code class="language-js">_</code>, is just an arbitrary name.
+      <code class="language-js">_</code>, is just an arbitrary property name.
       Then, we are using two special properties
       <code class="language-js">_inContextIf</code> and
       <code class="language-js">_queryFailsWithout</code>
@@ -172,7 +174,7 @@
       <div class="component">
         <context></context>
         <br>
-        <boop></boop>
+        <booper></booper>
       </div>
     </p>
 
@@ -186,7 +188,7 @@
 
     <p>
       With these elements you can construct arbitrary boolean "context formulas".
-      It's probably easier to understand through an example.
+      Perhaps it's easier to understand by playing with an example.
       Below we have an object that is in context if someone queries for
       objects that are (boops AND tagged with "demo") OR (boops OR tagged with demo).
 
@@ -200,11 +202,12 @@
         <br>
         <context></context>
         <br>
-        <boop></boop>
+        <booper></booper>
       </div>
     </p>
 
-    <h2>
+    <h2 id="identity">
+      <a class="h-anchor" href="#identity" target="_self">#</a>
       Identity
     </h2>
 
@@ -223,26 +226,37 @@
       On it's own this does not that does not make the object private, but we can combine it with context to make it so.
     </p>
 
+    <p>
       For example, here is an object that can only be seen by
-
-      {
-        type: 'boop',
-        _to: [this._myID, yourID]
-        _inContextIf: [{
-          _queryFailsWithout: [_to.0, _to.1]
-        }]
-      }
 
       Because context is flexible you can have an object that can be privately accessed. You might use this if you want to post a reply in a specific community but also directly "notify" whoever it is you are replying to.
 
-    <h2>
-      Recursion
+      <display-code path="./docs/examples/outbox.js"></display-code>
+    </p>
+    <p>
+    <display-code path="./docs/examples/inbox.js"></display-code>
+
+      <div class="component">
+        <log-in></log-in>
+        <hr>
+        <outbox></outbox>
+        <br>
+        <inbox></inbox>
+      </div>
+    </p>
+
+    <h2 id="moderation">
+      <a class="h-anchor" href="#moderation" target="_self">#</a>
+      Moderation
     </h2>
 
     <p>
-      At this point we've described all of the basic functionality, in the next couple of sections we're going to show how these can be combined into complex social tools
+      At this point we've described all of the basic functionality, in the next couple of sections we're going to show how these can be combined into complex social tools.
+      One thing we encountered in the last example was that we couldn't delete boops in our "outbox".
+      Unlike email the data is not being, we're just reading it from a shared database.
+      You can only delete things you have created.
 
-      Moderation example.
+      So we're going to see now how you can "annotate" objects.
     </p>
 
     <h2>
@@ -269,17 +283,22 @@
     import Graffiti from './graffiti.js'
     import DisplayCode from './docs/displaycode.js'
     import LogIn from './docs/examples/login.js'
-    import Boop from './docs/examples/boop.js'
+    import {Booper, BoopDisplay} from './docs/examples/boop.js'
     import Context from './docs/examples/context.js'
     import Context2 from './docs/examples/context2.js'
+    import Inbox from './docs/examples/inbox.js'
+    import Outbox from './docs/examples/outbox.js'
 
     Graffiti(Vue).then(g=> {
       Vue.createApp()
         .component('display-code', DisplayCode)
         .component('log-in', LogIn(g))
-        .component('boop', Boop(g))
+        .component('BoopDisplay', BoopDisplay)
+        .component('booper', Booper(g))
         .component('context', Context(g))
         .component('context2', Context2(g))
+        .component('inbox', Inbox(g))
+        .component('outbox', Outbox(g))
         .mount('#app')
     })
   </script>

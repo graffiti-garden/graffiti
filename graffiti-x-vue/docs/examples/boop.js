@@ -1,5 +1,4 @@
-export default function({myID, useCollection}) { return {
-
+export function Booper({myID, useCollection}) { return {
   setup: ()=> useCollection({
     type: 'boop',
     _by: myID
@@ -10,12 +9,19 @@ export default function({myID, useCollection}) { return {
       Boop
     </button>
 
+    <BoopDisplay title="boops" :boops="objects" :remove="remove" />`
+}}
+
+export const BoopDisplay = {
+  props: ['title', 'boops', 'remove'],
+
+  template: `
     <p>
-      boops:
-      <span v-for="boop in objects">
+      {{ title }}:
+      <span v-for="boop in boops">
         <a href="" @click.prevent="remove(boop)">
           boop
         </a>
       </span>
     </p>`
-}}
+}
