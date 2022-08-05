@@ -1,14 +1,12 @@
-import { randomString, sha256 } from './utils.js'
-
 export default {
 
   async logIn(graffitiURL) {
     // Generate a random client secret and state
-    const clientSecret = randomString()
-    const state = randomString()
+    const clientSecret = this.randomString()
+    const state = this.randomString()
 
     // The client ID is the secret's hex hash
-    const clientID = await sha256(clientSecret)
+    const clientID = await this.sha256(clientSecret)
 
     // Store the client secret as a local variable
     window.localStorage.setItem('graffitiClientSecret', clientSecret)
@@ -115,5 +113,17 @@ export default {
     url.host = "auth." + url.host
     return url
   },
+
+  randomString() {
+    return Math.random().toString(36).substr(2)
+  },
+
+  async sha256(input) {
+    const encoder = new TextEncoder()
+    const inputBytes = encoder.encode(input)
+    const outputBuffer = await crypto.subtle.digest('SHA-256', inputBytes)
+    const outputArray = Array.from(new Uint8Array(outputBuffer))
+    return outputArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  }
 
 }
