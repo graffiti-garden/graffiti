@@ -1,4 +1,4 @@
-import Graffiti from './graffiti-js-vanilla/graffiti.js'
+import Graffiti from './graffiti-x-js/graffiti.js'
 
 export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu') {
 
