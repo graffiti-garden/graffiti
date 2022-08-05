@@ -52,7 +52,7 @@ export default class {
 
   async request(msg) {
     // Create a random message ID
-    const messageID = Auth.randomString()
+    const messageID = crypto.randomUUID()
 
     // Create a listener for the reply
     const dataPromise = new Promise(resolve => {
@@ -149,7 +149,7 @@ export default class {
     queryID=null) {
 
     // Create a random query ID
-    if (!queryID) queryID = Auth.randomString()
+    if (!queryID) queryID = crypto.randomUUID()
 
     // Send the request
     await this.request({
@@ -209,7 +209,7 @@ export default class {
     }
 
     // Pre-generate the object's ID if it does not already exist
-    if (!object._id) object._id = Auth.randomString()
+    if (!object._id) object._id = crypto.randomUUID()
   }
 
   // Utility function to get a universally unique string

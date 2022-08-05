@@ -2,8 +2,8 @@ export default {
 
   async logIn(graffitiURL) {
     // Generate a random client secret and state
-    const clientSecret = this.randomString()
-    const state = this.randomString()
+    const clientSecret = crypto.randomUUID()
+    const state = crypto.randomUUID()
 
     // The client ID is the secret's hex hash
     const clientID = await this.sha256(clientSecret)
@@ -112,10 +112,6 @@ export default {
     const url = new URL(graffitiURL)
     url.host = "auth." + url.host
     return url
-  },
-
-  randomString() {
-    return Math.random().toString(36).substr(2)
   },
 
   async sha256(input) {
