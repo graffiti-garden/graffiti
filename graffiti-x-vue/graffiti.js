@@ -9,7 +9,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
     myID: graffiti.myID,
     toggleLogIn: graffiti.toggleLogIn.bind(graffiti),
     // A Vue composable
-    useCollection(query) {
+    useCollection(query, flags={}) {
 
       // Initialize the collection output
       const objectMap = Vue.reactive({})
@@ -74,7 +74,8 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         queryID = await graffiti.subscribe(
           newQuery,
           updateCallback,
-          removeCallback)
+          removeCallback,
+          flags)
       }
 
       // Subscribe to the query using the handler

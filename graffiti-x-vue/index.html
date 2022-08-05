@@ -13,13 +13,13 @@
   <header>
     <ul>
       <li>
-        <a target="_self" href="https://csail-graffiti.github.io/graffiti-js-vue/">
-          Graffiti for Vue 3
+        <a href="https://graffiti.csail.mit.edu">
+          Graffiti Project
         </a>
       </li>
       <li>
         <a href="https://github.com/csail-graffiti/graffiti-js-vue">
-          Github
+          Graffiti x Vue Github
         </a>
       </li>
   </header>
@@ -27,14 +27,16 @@
   <main id="app">
 
     <h1>
-      Graffiti for Vue 3
+      <a target="_self" href="https://csail-graffiti.github.io/graffiti-js-vue/">
+        Graffiti x Vue
+      </a>
     </h1>
 
     <p>
-      This library lets you add custom social components to any static website
+      <code class="language-markup">graffiti-x-vue</code> is a library that lets you add custom social components to any static website
       via an extension to the
       <a href="https://vuejs.org/guide/introduction.html">
-        Vue.js
+        Vue.js 3
       </a>
       Javascript framework that interfaces with the
       <a href="https://github.com/csail-graffiti/server">Graffiti server</a>.
@@ -152,7 +154,7 @@
       To understand these soft boundaries consider a physical analogy.
       Say you sing at a karaoke bar at the weekend.
       Your singing is technically public because anyone can walk into the bar and see you sing.
-      At the same time, anyone who sees you sing has had to chosen to walk into a karaoke bar and is presumably someone who likes karaoke and who respects the bar as a safe space for self expression.
+      However, anyone who sees you sing has had to chosen to walk into a karaoke bar and is presumably someone who likes karaoke and who respects the bar as a safe space for self expression.
       Also, by singing in a karaoke bar you know that your audience is implicitly consenting to being sung at,
       as opposed to a random street corner or your an office where it might be extremely disturbing.
     </p>
@@ -174,8 +176,8 @@
       <code class="language-js">tags</code>, like
       <code class="language-js">type</code> and all other properties not beginning with
       <code class="language-js">_</code>, is just an arbitrary property name.
-      Some of the boops we make will not specify any contextual boundaries.
-      Other boops will using two special properties
+      One of the ways we will make these boops will not specify any contextual boundaries.
+      The other way will use two special properties
       <code class="language-js">_inContextIf</code> and
       <code class="language-js">_queryFailsWithout</code>
       to add a boundary that only shows these boops to people specifcally looking for objects with the tag <code class="language-js">"demo"</code>.
@@ -288,6 +290,41 @@
     </p>
 
     <h2>
+      Audits
+    </h2>
+
+    <p>
+      The biggest drawback that Graffiti's contexual boundaries has when compared to something like a hierarchy of directories is the potential for data to get <a href="https://en.wikipedia.org/wiki/Lost_in_hyperspace">lost in hyperspace</a>.
+      In a filestructure you can start at the root directory and crawl through the tree and eventually you'll touch every file.
+      But in Graffiti there are some objects you won't find unless you make <em>exactly</em> the right query.
+    </p>
+
+    <p>
+      This is why the <code class="language-js">update</code> and <code class="language-js">remove</code> functions are coupled to a particular collection query rather than provided as global properties.
+      It makes it hard to accidentally create data you that wouldn't be able to find or destroy data that you didn't mean to.
+      See what happens when we try to create boops when we're querying for "notboops" (open the developer console to see the error):
+
+      <display-code path="./docs/examples/noboop.js"></display-code>
+
+      <div class="component">
+        <no-boop></no-boop>
+      </div>
+    </p>
+
+    <p>
+      This works as a good protection mechanism but it's not foolproof.
+      That's why the <code class="language-js">useCollection</code> composable has an <code class="language-js">audit</code> flag.
+      This flag makes the query ignore <em>all</em> contextual boundaries but it will only query for objects <code class="language-js">_by</code> yourself.
+      You can use it to make something kind of like Facebook's "<a href="https://www.wikihow.com/Use-the-Facebook-Activity-Log-Page">Activity Log</a>" which compiles actions that have happened anywhere on the site into one stream.
+
+      <display-code path="./docs/examples/audit.js"></display-code>
+
+      <div class="component">
+        <audit></audit>
+      </div>
+    </p>
+
+    <h2>
       Ordered Lists
     </h2>
 
@@ -300,27 +337,6 @@
 
       But real numbers can't be divided forever, so we're going to use a Logoot CRDT.
       There are some explanations here and here.
-    </p>
-
-    <h2>
-      Audits
-    </h2>
-
-    <p>
-      The biggest drawback that Graffiti's contexual boundaries have compared to something like a hierarchy of directories is potentially losing data.
-      In a filestructure you can start at the root and crawl down the tree and eventually you'll touch every file.
-      But in Graffiti there are some objects you won't find unless you make exactly the right query.
-    </p>
-
-    <p>
-      This is why the update and remove functions are attached to a particular collection rather than global properties.
-      This means that you can't accidentally create data that you can't "see".
-    </p>
-
-    <p>
-      Still there are times when it's really necessary to do a complete audit.
-      That's why a collection has an "audit" flag. This flag makes the query ignore all contextual boundaries but it will only query for objects _by yourself.
-      You can use it to make something kind of like Facebook's "Activity Log" which tracks actions that have happened all over the site in one stream.
     </p>
   </main>
 
@@ -339,6 +355,8 @@
     import Inbox from './docs/examples/inbox.js'
     import Outbox from './docs/examples/outbox.js'
     import Introduction from './docs/examples/introduction.js'
+    import NoBoop from './docs/examples/noboop.js'
+    import Audit from './docs/examples/audit.js'
 
     Graffiti(Vue).then(g=> {
       Vue.createApp()
@@ -351,6 +369,8 @@
         .component('BoopInbox', Inbox(g))
         .component('BoopOutbox', Outbox(g))
         .component('introduction', Introduction(g))
+        .component('no-boop', NoBoop(g))
+        .component('audit', Audit(g))
         .mount('#app')
     })
   </script>
