@@ -1,19 +1,19 @@
 # Graffiti for Vanilla Javascript
 
 This is the base Javascript library that interfaces with the [Graffiti server](https://github.com/csail-graffiti/server).
-We recommend not using this vanilla library itself but instead using framework plugins that are built on top of it like the [Graffiti plugin for Vue.JS](https://github.com/csail-graffiti/graffiti-js-vue).
+We recommend not using this vanilla library itself but instead using framework plugins that are built on top of it like the [Graffiti plugin for Vue.JS](https://github.com/csail-graffiti/graffiti-x-vue).
 
 Example usage: 
 
 ```javascript
-import GraffitiSocket from "https://csail-graffiti.github.io/graffiti-js-vanilla/socket.js"
+import Graffiti from "https://csail-graffiti.github.io/graffiti-x-js/graffiti.js"
 
 // You can initialize a connection to the graffiti server
-const gs = GraffitiSocket()
-await gs.initialize()
+const graffiti = Graffiti()
+await graffiti.initialize()
 
 // You can subscribe to queries
-const queryID = await gs.subscribe({
+const queryID = await graffiti.subscribe({
     type: 'post',
     content: { $type: 'string' }
   }
@@ -24,17 +24,17 @@ const queryID = await gs.subscribe({
 )
 
 // And then unsubscribe to those queries
-await gs.unsubscribe(queryID)
+await graffiti.unsubscribe(queryID)
 
 // You can log in and out and check your logged-in status
-gs.logIn()
-gs.logOut()
-if (gs.loggedIn) {
+graffiti.logIn()
+graffiti.logOut()
+if (graffiti.loggedIn) {
   // ...
 }
 
 // When you are logged in you can reference your user ID
-console.log(gs.myID)
+console.log(graffiti.myID)
 
 // And when you are logged in you can
 // create objects,
@@ -45,15 +45,15 @@ const myCoolPost = {
 // ("completing" an object annotates
 //  it with your user ID and a random
 //  object ID, required by the server)
-gs.complete(myCoolPost)
-await gs.update(myCoolPost, {})
+graffiti.complete(myCoolPost)
+await graffiti.update(myCoolPost, {})
 
 // replace objects,
 myCoolPost.content += '!!!'
-await gs.update(myCoolPost, {})
+await graffiti.update(myCoolPost, {})
 
 // and remove objects.
-await gs.remove(myCoolPost)
+await graffiti.remove(myCoolPost)
 
 // The second argument in the update
 // function is a query. If the object you
@@ -64,10 +64,9 @@ await gs.remove(myCoolPost)
 const query = { type: 'post' }
 const myPost = { type: 'post' }
 const myNotPost = { type: 'notpost' }
-gs.complete(myNotPost)
+graffiti.complete(myNotPost)
 // This works
-await gs.update(myPost, query)
+await graffiti.update(myPost, query)
 // But this won't work!
-await gs.update(myNotPost, query)
-
+await graffiti.update(myNotPost, query)
 ```
