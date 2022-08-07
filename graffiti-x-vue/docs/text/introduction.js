@@ -35,7 +35,9 @@ export default function(graffiti) { return {
     <DisplayCode path="./docs/demos/initialize.js" />
   </p>
 
-  <router-link to="/logging-in">
-    Logging In
-  </router-link>`
+  <footer>
+    <router-link to="/logging-in">
+      Logging In
+    </router-link>
+  </footer>`
 }}

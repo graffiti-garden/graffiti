@@ -55,7 +55,9 @@ export default function(graffiti) { return {
       </div>
     </p>
 
-    <router-link to="/moderation">
-      Moderation
-    </router-link>`
+    <footer>
+      <router-link to="/moderation">
+        Moderation
+      </router-link>
+    </footer>`
 }}

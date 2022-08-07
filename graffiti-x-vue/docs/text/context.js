@@ -93,7 +93,9 @@ export default function(graffiti) { return {
       </div>
     </p>
 
-    <router-link to="/identity">
-      Identity
-    </router-link>`
+    <footer>
+      <router-link to="/identity">
+        Identity
+      </router-link>
+    </footer>`
 }}

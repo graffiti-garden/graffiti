@@ -28,7 +28,9 @@ export default function(graffiti) { return {
       </div>
     </p>
 
-    <router-link to="/collections">
-      Collections
-    </router-link>`
+    <footer>
+      <router-link to="/collections">
+        Collections
+      </router-link>
+    </footer>`
 }}

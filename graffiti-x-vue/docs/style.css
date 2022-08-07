@@ -1,5 +1,6 @@
 :root {
   --back: rgb(26, 26, 26);
+  --halfback: #2d2d2d;
   --front: rgba(255, 255, 255, 0.87);
   --frontbold: #ca7acc;
   --border: grey;
@@ -64,7 +65,7 @@ pre code {
 
 pre, .component {
   border-radius: 0.5em;
-  background: #2d2d2d;
+  background: var(--halfback);
 }
 
 .component {
@@ -73,7 +74,7 @@ pre, .component {
   padding: 1em;
 }
 
-button {
+button, footer a {
   font-size: 150%;
   font-weight: 500;
   border-radius: 0.5em;
@@ -87,9 +88,10 @@ button {
   margin-right: 0.2em;
 }
 
-button:hover {
+:is(button, footer a):hover {
   background: var(--frontbold);
   cursor: pointer;
+  text-decoration: none;
 }
 
 a:hover {
@@ -158,4 +160,24 @@ nav h2 {
 
 .router-link-active {
   color: var(--frontbold);
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 1em;
+  display: flex;
+  justify-content: flex-end;
+}
+
+footer a {
+  background: var(--halfback);
+  text-align: right;
+}
+
+footer a::before {
+  content: "Up Next:";
+}
+
+footer a::after {
+  content: "➤"
 }

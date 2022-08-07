@@ -53,7 +53,9 @@ export default function(graffiti) { return {
       They also immediately synchronize between different clients — try opening this guide in two side-by-side windows and see what happens when you "boop".
     </p>
 
-    <router-link to="/context">
-      Context
-    </router-link>`
+    <footer>
+      <router-link to="/context">
+        Context
+      </router-link>
+    </footer>`
 }}

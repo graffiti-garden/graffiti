@@ -11,7 +11,9 @@ export default function(graffiti) { return {
       So we're going to see now how you can "annotate" objects.
     </p>
 
-    <router-link to="/audit">
-      Audits
-    </router-link>`
+    <footer>
+      <router-link to="/audit">
+        Audits
+      </router-link>
+    </footer>`
 }}

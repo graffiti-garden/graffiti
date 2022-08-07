@@ -41,7 +41,9 @@ export default function(graffiti) { return {
       </div>
     </p>
   
-    <router-link to="/ordered">
-      Ordered Lists
-    </router-link>`
+    <footer>
+      <router-link to="/ordered">
+        Ordered Lists
+      </router-link>
+    </footer>`
 }}
