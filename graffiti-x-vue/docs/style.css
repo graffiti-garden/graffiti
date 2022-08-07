@@ -23,6 +23,7 @@ header {
 main {
   max-width: 50em;
   margin: auto;
+  padding: 1em;
 }
 
 header ul {
@@ -111,4 +112,50 @@ a.h-anchor {
   margin-top: .3em;
   opacity: 0;
   text-decoration: underline;
+}
+
+#app {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+nav {
+  flex-grow: 0;
+  flex-shrink: 0;
+  flex-basis: 8em;
+  border-right: 1px solid var(--border);
+  padding: 1em;
+}
+
+code {
+  white-space: pre-wrap !important;
+}
+
+nav a {
+  color: var(--front);
+  font-weight: normal;
+}
+
+nav a:hover {
+  color: var(--frontbold);
+  text-decoration: none;
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 0;
+}
+
+nav h2 {
+  font-size: 100%;
+  text-align: center;
+  margin: 1em;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.router-link-active {
+  color: var(--frontbold);
 }
