@@ -1,6 +1,7 @@
 :root {
   --back: rgb(26, 26, 26);
   --halfback: #2d2d2d;
+  --frontfaded: rgba(255, 255, 255, 0.7);
   --front: rgba(255, 255, 255, 0.87);
   --frontbold: #ca7acc;
   --border: grey;
@@ -72,6 +73,7 @@ pre, .component {
   text-align: center;
   font-size: 120%;
   padding: 1em;
+  margin: 1em;
 }
 
 button, footer a {
@@ -84,8 +86,7 @@ button, footer a {
   border: 0;
   background: var(--back);
   color: var(--front);
-  margin-left: 0.2em;
-  margin-right: 0.2em;
+  margin: 0.2em;
 }
 
 :is(button, footer a):hover {
@@ -99,7 +100,11 @@ a:hover {
 }
 
 .component p {
-  margin-bottom: 0;
+  /*margin-bottom: 0;*/
+}
+
+.component a {
+  user-select: none;
 }
 
 :is(h1,h2,h3,h4,h5,h6):hover .h-anchor {
@@ -135,7 +140,7 @@ code {
 }
 
 nav a {
-  color: var(--front);
+  color: var(--frontfaded);
   font-weight: normal;
 }
 

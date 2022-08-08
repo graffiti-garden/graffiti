@@ -41,7 +41,7 @@ export default function(graffiti) { return {
 
     <p>
       Try it out below!
-      To add or remove data to Graffiti you'll need to be logged in, so make sure you're logged in with the button we made in the <router-link to="/logging-in">previous section</router-link>.
+      To add or remove data to Graffiti you'll need to be logged in, so make sure you're logged in with the button we made in the <router-link to="/logging-in">§Logging In</router-link>.
 
       <div class="component">
         <Booper/>

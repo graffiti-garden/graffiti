@@ -9,14 +9,15 @@ export default function(graffiti) { return {
     <h1>Identity</h1>
 
     <p>
-      In our examples, our queries have included the condition <code class="language-js">{_by: myID}</code>.
+      In <router-link to="/collections">§Collections</router-link> and <router-link to="/context">§Context</router-link>, our demo queries have included the condition <code class="language-js">{_by: myID}</code>.
       <code class="language-js">_by</code> is a special property that is automatically included in all objects and must be equal to the object's creator's ID; it is an unforgable "signature" on objects.
-      In our sections on <router-link to="/collections">Collections</router-link> and <router-link to="/context">Context</router-link>, we've been using <code class="language-js">_by</code> to filter out objects that other people reading this demo have created, but you can also use it to cross reference information about a user. For example, as your interface is parsing a list of comments, it could use <code class="language-js">_by</code> to look up and append the commenter's name to each comment.
+      So far we have used
+      <code class="language-js">_by</code> to filter out objects that other people reading this demo have created, but you can also use it to cross reference information about a user. For example, as your interface is parsing a list of comments, it could use <code class="language-js">_by</code> to look up and append the commenter's name to each comment.
       However, thanks to Graffiti's system of contextual boundaries, this does not mean that you can simply find everything that a user has ever posted with a single <code class="language-js">{_by: myID}</code> query.
     </p>
 
     <p>
-      There is one other special identity property, <code class="language-js">_to</code>, which we can use to create the "hard contextual boundaries" described in the <router-link to="/context">previous section on context</router-link>.
+      There is one other special identity property, <code class="language-js">_to</code>, which we can use to create the "hard contextual boundaries" described in <router-link to="/context">§Context</router-link>.
       The property <code class="language-js">_to</code> can optionally be included in any object and must be an array of user IDs.
       However, the primary constraint on <code class="language-js">_to</code> is on the querier's end: people can only query for objects <code class="language-js">_to</code> themselves.
     </p>

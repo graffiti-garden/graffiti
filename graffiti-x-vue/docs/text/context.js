@@ -21,47 +21,46 @@ export default function(graffiti) { return {
     </p>
 
     <p>
-      To understand these soft boundaries consider a physical analogy.
+      To understand these soft boundaries, consider a physical analogy.
       Say you sing at a karaoke bar at the weekend.
       Your singing is technically public because anyone can walk into the bar and see you sing.
       However, anyone who sees you sing has had to chosen to walk into a karaoke bar and is presumably someone who likes karaoke and who respects the bar as a safe space for self expression.
-      Also, by singing in a karaoke bar you know that your audience is implicitly consenting to being sung at,
+      Also, by singing in a karaoke bar you know that your audience is implicitly <em>consenting</em> to being sung at,
       as opposed to a random street corner or your an office where it might be extremely disturbing.
     </p>
 
     <p>
-      In Graffiti, hard contextual boundaries are actually a special case of soft contextual boundaries so we will start with soft.
+      In Graffiti, hard contextual boundaries are actually a special case of soft contextual boundaries, so we will start with soft.
       We specify a soft contextual boundary to be something of the form "I don't want people to see <i>X</i> unless they are specifically looking for <i>Y</i>", for example "I don't want people to see <i>me sing</i> unless they are specifically looking for <i>karaoke</i>".
     </p>
 
     <p>
       We formally say that a query is "specifically looking for <i>Y</i> in <i>X</i>" if that query would <em>fail</em> on <i>X</i> if <i>Y</i> were changed.
-      The request "show me someone singing" could be answered with either someone singing in a karaoke bar or someone singing on a street corner.
-      Whereas, the request "show me someone singing in a karaoke bar" could not be answered with someone singing on a street corner - the query fails if "karaoke bar" is changed to "street corner" and so this request is sufficiently specific.
+      For example, the request "show me someone singing" could be answered with either someone singing in a karaoke bar or someone singing on a street corner — the query does not fail if "karaoke bar" is changed to "street corner" and so the request is not sufficiently specific.
+      Whereas, the request "show me someone singing in a karaoke bar" could not be answered with someone singing on a street corner — the query fails if "karaoke bar" is changed to "street corner" and so this request is sufficiently specific.
     </p>
 
     <p>
-      In the example below we are going to make boops that have the tag <code class="language-js">"demo"</code>.
+      In the example below we are going make two buttons that create boops with the tag <code class="language-js">"demo"</code>.
       Remember,
       <code class="language-js">tags</code>, like
       <code class="language-js">type</code> and all other properties not beginning with
       <code class="language-js">_</code>, is just an arbitrary property name.
-      One of the ways we will make these boops will not specify any contextual boundaries.
-      The other way will use two special properties
+      Boops created with one button will not not specify any contextual boundaries.
+      Boops created with the other button will use two special properties,
       <code class="language-js">_inContextIf</code> and
-      <code class="language-js">_queryFailsWithout</code>
-      to add a boundary that only shows these boops to people specifcally looking for objects with the tag <code class="language-js">"demo"</code>.
+      <code class="language-js">_queryFailsWithout</code>,
+      to add a boundary that only shows these boops to people <em>specifcally</em> looking for objects with the tag <code class="language-js">"demo"</code>.
 
       <display-code path="./docs/demos/context.js"></display-code>
     </p>
 
     <p>
-      Here is an instantiation of the component, plus the component we built in the previous section.
+      Here is an instantiation of the component, plus the component we built in the <router-link to="/collections">§Collections</router-link>.
       Check out what happens when you press each of the buttons.
       <div class="component">
-        <context></context>
-        <br>
-        <booper></booper>
+        <Context/>
+        <Booper/>
       </div>
     </p>
 
@@ -85,11 +84,9 @@ export default function(graffiti) { return {
     <p>
       Check out how the context in this example differs from the previous two:
       <div class="component">
-        <context2></context2>
-        <br>
-        <context></context>
-        <br>
-        <booper></booper>
+        <Context2/>
+        <Context/>
+        <Booper/>
       </div>
     </p>
 

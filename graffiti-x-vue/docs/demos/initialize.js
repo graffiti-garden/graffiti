@@ -1,4 +1,4 @@
-import Graffiti from 'https://csail-graffiti.github.io/graffiti-js-vue/graffiti.js'
+import Graffiti from 'https://graffiti.csail.mit.edu/graffiti-x-vue/graffiti.js'
 
 function MyComponent({toggleLogIn, myID, useCollection}) {
   return {
