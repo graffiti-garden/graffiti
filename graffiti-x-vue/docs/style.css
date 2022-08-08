@@ -74,6 +74,8 @@ pre, .component {
   font-size: 120%;
   padding: 1em;
   margin: 1em;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 button, footer a {

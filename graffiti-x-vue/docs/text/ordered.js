@@ -1,4 +1,10 @@
+import TODO from '../demos/todo.js'
+
 export default function(graffiti) { return {
+  components: {
+    TODO: TODO(graffiti)
+  },
+
   template: `
     <h1>Ordered Lists</h1>
 
@@ -11,5 +17,14 @@ export default function(graffiti) { return {
 
       But real numbers can't be divided forever, so we're going to use a Logoot CRDT.
       There are some explanations here and here.
+
+    <div class="component">
+      <TODO/>
+    </div>
+
+    </p>
+
+    <p>
+      <DisplayCode path="./docs/demos/todo.js" />
     </p>`
 }}
