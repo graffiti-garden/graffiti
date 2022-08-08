@@ -20,16 +20,32 @@ export default function({myID, useCollection}) { return {
     }
   },
 
-  data: ()=> ({
-    input: '',
-    dragging: null
-  }),
-
   methods: {
+    // These functions move a TODO at a particular
+    // index up or down. They replace that TODO's
+    // order with something in-between either the
+    // two TODOs preceding or following with virtual
+    // TODOs at very beginning and very end represented
+    // with Logoot.before and Logoot.after.
+    moveUp(index) {
+      if (index == 0) return
+      this.todos[index].order = Logoot.between(
+        (index > 1)? this.todos[index-2].order : Logoot.before,
+        this.todos[index-1].order)
+      this.update(this.todos[index-1])
+    },
+    moveDown(index) {
+      if (index == this.todos.length - 1) return
+      this.todos[index].order = Logoot.between(
+        this.todos[index+1].order,
+        (index < this.todos.length-2)? this.todos[index+2].order : Logoot.after)
+      this.update(this.todos[index+1])
+    },
+
+    // A function to create a new TODO
     addTODO() {
       // If there is no input text, don't do anything
       if (!this.input) return
-
       // Add the TODO
       this.update({
         todo: this.input,
@@ -40,28 +56,12 @@ export default function({myID, useCollection}) { return {
           Logoot.before,
           this.todos.length? this.todos[0].order : Logoot.after)
       })
-
       // Clear the input
       this.input = ''
     },
-
-    // Store the todo that was clicked
-    // when a drag begins
-    dragstart(todo) {
-      this.dragging = todo
-    },
-
-    drop(todoIndex) {
-      // Set position of the stored TODO
-      // to be between the element it is dropped on
-      // and either the preceding element if it exists
-      // or the start of the list, Logoot.before
-      this.dragging.order = Logoot.between(
-        todoIndex? this.todos[todoIndex-1].order : Logoot.before,
-        this.todos[todoIndex].order)
-      this.update(this.dragging)
-    }
   },
+
+  data: ()=> ({input: ''}),
 
   template: `
     <form @submit.prevent="addTODO">
@@ -70,13 +70,10 @@ export default function({myID, useCollection}) { return {
     </form>
     
     <ol>
-      <li v-for="(todo, todoIndex) in todos"
-       draggable="true"
-       @dragstart="dragstart(todo)"
-       @drop="drop(todoIndex)"
-       @dragover.prevent
-       @dragenter.prevent>
+      <li v-for="(todo, todoIndex) in todos">
         {{todo.todo}}
+        <button @click="moveUp(todoIndex)">👆</button>
+        <button @click="moveDown(todoIndex)">👇</button>
         <button @click="remove(todo)">❌</button>
       </li>
     </ol>`
