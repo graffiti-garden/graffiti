@@ -1,13 +1,14 @@
 export default function({myID, useCollection}) { return {
 
-  setup: ()=> useCollection({
-    type: { $type: 'string' }
-  }, { audit: true }),
+  setup: ()=> useCollection({}, { audit: true }),
 
   template: `
-    <ol>
-      <li v-for="object in objects">
-        {{ object.type }}
+    <ul>
+      <li v-for="object in objects.slice(0,5)">
+        {{ JSON.stringify(object).slice(0,40) }}...
+        <button @click="remove(object)">
+          ❌
+        </button>
       </li>
-    </ol>`
+    </ul>`
 }}

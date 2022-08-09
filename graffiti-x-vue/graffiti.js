@@ -51,9 +51,6 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       }})
 
       async function queryHandler(newQuery, oldQuery) {
-        // Don't run on null queries
-        if (!newQuery) return
-
         // Don't update if the query hasn't actually changed
         // (it can get triggered twice because of immediate)
         const newQueryJSON = JSON.stringify(newQuery)
@@ -83,7 +80,7 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         Vue.watch(query, queryHandler, { deep: true, immediate: true })
       } else {
         // Avoid watch overhead and just run once
-        queryHandler(query, {})
+        queryHandler(query)
       }
 
       // This exposed function lets users
