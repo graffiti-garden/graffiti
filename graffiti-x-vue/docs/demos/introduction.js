@@ -36,6 +36,12 @@ export default function({myID, useCollection}) { return {
     }
   },
 
+  computed: {
+    introductions() {
+      return this.objects.sort((a, b)=> b.timestamp-a.timestamp)
+    }
+  },
+
   template: `
     <form @submit.prevent="introduceMyself">
       <input v-model="name" />
@@ -43,7 +49,7 @@ export default function({myID, useCollection}) { return {
     </form>
 
     <ul>
-      <li v-for="introduction in objects">
+      <li v-for="introduction in introductions">
         hi, my name is {{introduction.name}}!
 
         <button v-if="introduction._by==myID" @click="remove(introduction)">

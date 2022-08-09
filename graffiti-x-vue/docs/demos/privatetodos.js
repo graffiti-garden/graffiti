@@ -34,7 +34,7 @@ export default function({myID, useCollection}) { return {
   template: `
     <form @submit.prevent="addTODO">
       <input v-model="input"/>
-      <input type="submit" value="add todo"/>
+      <input type="submit" value="add to-do"/>
     </form>
 
     <ul>

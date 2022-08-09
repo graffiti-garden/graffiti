@@ -58,7 +58,7 @@ export default function(graffiti) { return {
     </h2>
 
     <p>
-      <code class="language-js">update</code> can also be used to replace objects that have been created, just change an existing object and call <code class="language-js">update</code> on it again.
+      <code class="language-js">update</code> can also be used to replace objects that have been created: just change an existing object and call <code class="language-js">update</code> on it again.
       Here, we have a component that queries for "boops" and "bops" and displays each in a seperate list.
       When you click on an object of one type it will be replaced with an object of the other type.
 
@@ -69,7 +69,9 @@ export default function(graffiti) { return {
       Try it out here. If you don't see anything, make sure to first create some boops up above — changing something in one component will immediately be reflected in the other!
 
       <div class="component">
-        <BoopBop/>
+        <div class="columns">
+          <BoopBop/>
+        </div>
       </div>
     </p>
 

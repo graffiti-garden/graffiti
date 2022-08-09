@@ -9,5 +9,7 @@ export default function({myID, useCollection}) { return {
       This Won't Work
     </button>
 
-    <BoopDisplay title="not boops" :boops="objects" :remove="remove" />`
+    <p v-if="objects.length">
+      boop
+    </p>`
 }}
