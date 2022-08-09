@@ -9,5 +9,10 @@ export default function({myID, useCollection}) { return {
       Boop
     </button>
 
-    <BoopDisplay title="boops" :boops="objects" :remove="remove" />`,
+    <p>
+      <span  v-for="boop in objects">
+        boop
+        <button @click="remove(boop)">❌</button>
+      </span>
+    </p>`
 }}

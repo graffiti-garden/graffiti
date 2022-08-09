@@ -1,8 +1,10 @@
 import Introduction from '../demos/introduction.js'
+import PrivateTODO from '../demos/privatetodos.js'
 
 export default function(graffiti) { return {
   components: {
-    Introduction: Introduction(graffiti)
+    Introduction: Introduction(graffiti),
+    PrivateTODO: PrivateTODO(graffiti)
   },
 
   template: `
@@ -24,36 +26,42 @@ export default function(graffiti) { return {
 
     <p>
       On it's own this does not create privacy, it just means that the recipients included in the <code class="language-js">_to</code> array of an object can query for that object in more ways than other people.
-      However, by using <code class="language-js">_inContextIf</code> we can block all of the queries that <em>don't specify</em> <code class="language-js">_to</code>, thereby allowing only the desired recipients to access the object.
-      <!--Since this is primarily coming from _to, we can include.-->
-      <!--Because context is flexible you can have an object that can be privately accessed. You might use this if you want to post a reply in a specific community but also directly "notify" whoever it is you are replying to.-->
+      However, by using <code class="language-js">_inContextIf</code> we can block all of the queries that <em>don't specify</em> <code class="language-js">_to</code>, thereby allowing only the desired recipients to access the object. This is how we can create private messages.
     </p>
 
     <p>
-      Let's see how this works in practice. First we're going to create a "Boop Outbox" which, for a given recipient ID, provides a button that sends private boops to that recipient.
-
-      <display-code path="./docs/demos/outbox.js"></display-code>
+      In the example below we're just going to send private messages to ourself. Creating a private message to someone else is no different, but it would require three accounts (sender, receiver, snooper) rather than just two (sender, snooper) to demonstrate that it is working. We will use our private messages to represent a to-do list, which we'll sort in reverse chronological order.
+      Try it out first before we explain how it works:
+      <div class="component">
+        <PrivateTODO/>
+      </div>
     </p>
 
     <p>
-      Let's also create an inbox that can read private boops from a particular sender.
-      <display-code path="./docs/demos/inbox.js"></display-code>
+      To make our private to-do list, first, we create a query for to-dos with timestamps. Then, we have a function that reads from a textbox and creates a to-do that can only be retrieved if the querier specifies <code class="language-js">{_to: myID}</code>. Then, we create a <a href="https://vuejs.org/guide/essentials/computed.html">computed property</a> that sorts our to-dos in reverse  chronological order. 
+      Finally, we put our form and list of to-dos together.
+
+      <DisplayCode path="./docs/demos/privatetodos.js"/>
     </p>
 
     <p>
-      Finally, we need a way of finding people to send our boops to!
-      In the code below we create component that let's use introduce yourself with a new sort of "introduction" object.
-      We create a form that posts an introduction and we also display all the introductions that have been made in the past day.
-      Clicking on a particular introduction will instantiate a boop inbox and outbox directed to the introduction's creator!
-      <display-code path="./docs/demos/introduction.js"></display-code>
+      Let's make sure that noone else can snoop for our to-dos.
+      We're going to create a "snooping" component that takes an ID as input and displays that to-dos it has found by that account.
+
+      <display-code path="./docs/demos/snooper.js"></display-code>
     </p>
 
     <p>
-      Try it out! Maybe convince a friend to do this with you or open a private tab and log in with a different email.
+      To make our Snooper work we're going to wrap it in a component that let's you introduce yourself! We'll describe that below but the result is here. Try introducing yourself then <router-link to="/logging-in">log in</router-link> with a different account and try to snoop on your first account.
+      You shouldn't be able to find anything. In fact, if you check the browser console you'll see an error complaining about trying to query for objects _to someone else.
 
       <div class="component">
         <Introduction/>
       </div>
+    </p>
+
+    <p>
+      <display-code path="./docs/demos/introduction.js"></display-code>
     </p>
 
     <footer>
