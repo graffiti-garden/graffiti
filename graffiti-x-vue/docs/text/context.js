@@ -59,44 +59,32 @@ export default function(graffiti) { return {
     </h2>
 
     <p>
-      Complex expression can be built within the <code class="language-js">_inContextIf</code> property to shape the contextual boundaries.
+      Complex expression can be built within the <code class="language-js">_inContextIf</code> property to shape the contextual boundaries:
 
       <ul>
         <li>
-          <code class="language-js">_inContextIf</code> may hold an array of possible conditions and an object will be in context if any one of the conditions is true.
+          <code class="language-js">_inContextIf</code> may hold an array of possible conditions and an object will be in context if any one of the conditions evaluates to true.
         </li>
         <li>
-          <code class="language-js">_queryFailsWithout</code> may hold an array of multiple properties and an object will be in context changing any one of those properties would cause the observing query to fail.
+          <code class="language-js">_queryFailsWithout</code> may describe multiple mutations and an object will only be in context if, for each mutation, applying that mutation causes the observing query to fail.
         </li>
         <li>
-          Entries of the <code class="language-js">_queryFailsWithout</code> array may be arrays of properties, anand an object will be in context if
+          In addition to <code class="language-js">_queryFailsWithout</code> you can also use it's negation, <code class="language-js">_queryPassesWithout</code>
         </li>
         <li>
-          And finally, in addition to <code class="language-js">_queryFailsWithout</code> you can also use it's negation,
+          Mutations can distort a single property, as in the example above, or they may distort an array of properties.
         </li>
       </ul>
     </p>
 
     <p>
-      With these elements you can construct arbitrary boolean "context formulas" —
-      perhaps it's easier to understand by playing with an example.
-      Below we have an object that is in context if someone queries for
-      objects that are (boops AND tagged with "demo") OR (boops OR tagged with demo).
+      In pseudocode this looks like:
 
-      <display-code path="./docs/demos/context2.js"></display-code>
+      <DisplayCode path="./docs/demos/pseudocode.py" />
+
+      Note that actually implimenting context like this would be extremely innefficient. You can see how the server actually does it <a href="https://github.com/csail-graffiti/server/blob/main/app/rewrite.py">here</a>.
     </p>
 
-    <p>
-      Check out how the context in this example differs from the previous two:
-      <div class="component">
-        <Context2/>
-        <Context/>
-        <Booper/>
-      </div>
-
-      This is not fool proof.
-      Sometimes people explicitly enter certain contexts because they know it is a place that can cause trouble.
-    </p>
 
     <footer>
       <router-link to="/access">

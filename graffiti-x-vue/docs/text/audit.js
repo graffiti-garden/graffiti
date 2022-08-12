@@ -11,7 +11,7 @@ export default function(graffiti) { return {
     <h1>Audits</h1>
 
     <p>
-      The drawback of using a system as flexible as Graffiti's contextual boundaries as compared to something like a hierarchy of directories is the potential for data to get <a href="https://en.wikipedia.org/wiki/Lost_in_hyperspace">lost in hyperspace</a>.
+      The drawback of using a system as flexible as Graffiti's <router-link to="/context">contextual boundaries</router-link> as compared to something like a hierarchy of directories is the potential for data to get <a href="https://en.wikipedia.org/wiki/Lost_in_hyperspace">lost in hyperspace</a>.
       In a filestructure you can start at the root directory and crawl through the tree and eventually you'll touch every file.
       But in Graffiti there are some objects you won't find unless you make <em>exactly</em> the right query.
     </p>
