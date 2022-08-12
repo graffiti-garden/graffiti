@@ -1,13 +1,13 @@
-import Booper from '../demos/boop.js'
-import Context from '../demos/context.js'
-import Context2 from '../demos/context2.js'
+import Nickname from '../demos/nickname.js'
+import Name from '../demos/name.js'
 
 export default function(graffiti) { return {
   components: {
-    Booper: Booper(graffiti),
-    Context: Context(graffiti),
-    Context2: Context2(graffiti)
+    Nickname: Nickname(graffiti),
+    Name: Name(graffiti)
   },
+
+  setup: ()=> graffiti,
 
   template: `
     <h1 id="context">
@@ -15,61 +15,66 @@ export default function(graffiti) { return {
     </h1>
 
     <p>
-      <a href="https://en.wikipedia.org/wiki/Context_collapse">Contextual boundaries</a> are critical to maintaining healthy social relationships, and so one of Graffiti's core features is a powerful system for creating hard and soft contextual boundaries around data objects.
-      We use "hard contextual boundaries" to describe boundaries that operate like those in a traditional <a href="https://en.wikipedia.org/wiki/Access-control_list">access control list</a>; these are boundaries where only certain whitelisted individuals are granted access to some content.
-      "Soft contextual boundaries" on the other hand are for content that is public but only intended for a specific audience or audiences.
+      <a href="https://en.wikipedia.org/wiki/Context_collapse">Contextual boundaries</a> are critical to maintaining healthy social relationships, and so one of Graffiti's core features is a system for creating contextual boundaries around data objects.
+      Some of these boundaries may function like traditional <a href="https://en.wikipedia.org/wiki/Access-control_list">access control lists</a>, which we'll get to in the <router-link to="/access">next section</router-link>.
+      However, one of the most powerful things about Graffiti is its ability create softer contextual boundaries around data that is technically public but only intended for a specific audience.
     </p>
 
     <p>
-      To understand these soft boundaries, consider a physical analogy.
-      Say you sing at a karaoke bar at the weekend.
-      Your singing is technically public because anyone can walk into the bar and see you sing.
-      However, anyone who sees you sing has had to chosen to walk into a karaoke bar and is presumably someone who likes karaoke and who respects the bar as a safe space for self expression.
-      Also, by singing in a karaoke bar you know that your audience is implicitly <em>consenting</em> to being sung at,
-      as opposed to a random street corner or your an office where it might be extremely disturbing.
+      Perhaps you're in a punk band and perform in a public venue on the weekend.
+      Although the venue is public, the only people that will experience the performance are people who presumably <em>chose</em> to enter that venue.
+      So long as the venue has sufficient indicators, either by explicitly advertising "Punk Show Tonight!" or by catering to a punk aesthetic, any observer is implicitly <em>consenting</em> to hearing loud and agressive music as opposed to,
+      say, people in an office space who might consider it extremely disturbing.
     </p>
 
     <p>
-      In Graffiti, hard contextual boundaries are actually a special case of soft contextual boundaries, so we will start with soft.
-      We specify a soft contextual boundary to be something of the form "I don't want people to see <i>X</i> unless they are specifically looking for <i>Y</i>", for example "I don't want people to see <i>me sing</i> unless they are specifically looking for <i>karaoke</i>".
+      Essentially, observers reveal some information about what they are <em>comfortable</em> and <em>interested</em> in observering via where they decide to look.
+      In Graffiti, you can condition whether data objects should appear based on such information.
+      This saves the observer from being overwhelmed by content they weren't expecting and saves the producer from the embarassment of "oversharing" or being misunderstood.
     </p>
 
     <p>
-      We formally say that a query is "specifically looking for <i>Y</i> in <i>X</i>" if that query would <em>fail</em> on <i>X</i> if <i>Y</i> were changed.
-      For example, the request "show me someone singing" could be answered with either someone singing in a karaoke bar or someone singing on a street corner — the query does not fail if "karaoke bar" is changed to "street corner" and so the request is not sufficiently specific.
-      Whereas, the request "show me someone singing in a karaoke bar" could not be answered with someone singing on a street corner — the query fails if "karaoke bar" is changed to "street corner" and so this request is sufficiently specific.
+      In the example below, we will create a component that allows you to create a nickname.
+      Even though the nickname will match the schema of the name component we created in the <router-link to="/identity">§Identity</router-link>,
+      the interface provides an option to include the special <code class="language-js">_inContextIf</code> property with a <code class="language-js">_queryFailsWithout</code> condition. When this condition is applied, the nickname will only be shown to observers that are <em>specifically</em> looking for names related to the tag <code class="language-js">"graffiti-demo"</code>.
+      Or equivalently, observers must make queries that would fail to return the nickname if the tag <code class="language-js">"graffiti-demo"</code> were changed to something random.
+
+      <display-code path="./docs/demos/nickname.js"></display-code>
     </p>
 
     <p>
-      In the example below we are going make two buttons that create boops with the tag <code class="language-js">"demo"</code>.
-      Remember,
-      <code class="language-js">tags</code>, like
-      <code class="language-js">type</code> and all other properties not beginning with
-      <code class="language-js">_</code>, is just an arbitrary property name.
-      Boops created with one button will not not specify any contextual boundaries.
-      Boops created with the other button will use two special properties,
-      <code class="language-js">_inContextIf</code> and
-      <code class="language-js">_queryFailsWithout</code>,
-      to add a boundary that only shows these boops to people <em>specifcally</em> looking for objects with the tag <code class="language-js">"demo"</code>.
+      Here is the component, plus the name component we made in <router-link to="/identity">§Identity</router-link>.
+      Observe that when you apply the contextual boundary to the nickname, the name component will not "see" it because it is not making a specific enough query.
 
-      <display-code path="./docs/demos/context.js"></display-code>
-    </p>
-
-    <p>
-      Here is an instantiation of the component, plus the component we built in the <router-link to="/collections">§Collections</router-link>.
-      Check out what happens when you press each of the buttons.
       <div class="component">
-        <Context/>
-        <Booper/>
+        <Nickname/>
+        <p>
+          My name is: <Name :ID="myID"/>
+        </p>
       </div>
     </p>
 
+    <h2>
+      Advanced Context
+    </h2>
+
     <p>
-      The array <code class="language-js">_inContextIf</code> can include multiple conditions and an object will be "in context" if any one of the conditions holds.
-      The array <code class="language-js">_queryFailsWithout</code> can include multiple properties and an object will be in context if the query fails without any one of them.
-      It can also include groups of properties and an object will be in context if removing all of the properties in the group simultaneously causes the query to fail.
-      And finally, in addition to <code class="language-js">_queryFailsWithout</code> you can also use it's negation,
-      <code class="language-js">_queryPassesWithout</code>.
+      Complex expression can be built within the <code class="language-js">_inContextIf</code> property to shape the contextual boundaries.
+
+      <ul>
+        <li>
+          <code class="language-js">_inContextIf</code> may hold an array of possible conditions and an object will be in context if any one of the conditions is true.
+        </li>
+        <li>
+          <code class="language-js">_queryFailsWithout</code> may hold an array of multiple properties and an object will be in context changing any one of those properties would cause the observing query to fail.
+        </li>
+        <li>
+          Entries of the <code class="language-js">_queryFailsWithout</code> array may be arrays of properties, anand an object will be in context if
+        </li>
+        <li>
+          And finally, in addition to <code class="language-js">_queryFailsWithout</code> you can also use it's negation,
+        </li>
+      </ul>
     </p>
 
     <p>
@@ -88,11 +93,14 @@ export default function(graffiti) { return {
         <Context/>
         <Booper/>
       </div>
+
+      This is not fool proof.
+      Sometimes people explicitly enter certain contexts because they know it is a place that can cause trouble.
     </p>
 
     <footer>
-      <router-link to="/identity">
-        Identity
+      <router-link to="/access">
+        Access Control
       </router-link>
     </footer>`
 }}

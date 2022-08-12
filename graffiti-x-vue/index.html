@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Graffiti for Vue 3</title>
+  <title>Graffiti x Vue</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <base target="_blank">
   <link href="https://unpkg.com/prismjs@1.28.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
@@ -48,13 +48,18 @@
           </router-link>
         </li>
         <li>
+          <router-link to="/identity">
+            Identity
+          </router-link>
+        </li>
+        <li>
           <router-link to="/context">
             Context
           </router-link>
         </li>
         <li>
-          <router-link to="/identity">
-            Identity
+          <router-link to="/access">
+            Access Control
           </router-link>
         </li>
         <li>
@@ -128,6 +133,7 @@
           lazyDoc('collections'),
           lazyDoc('context'),
           lazyDoc('identity'),
+          lazyDoc('access'),
           lazyDoc('moderation'),
           lazyDoc('audit'),
           lazyDoc('ordered')

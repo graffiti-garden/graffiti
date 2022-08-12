@@ -1,11 +1,11 @@
 export default function({myID, useCollection}) { return {
   setup: ()=> useCollection({
-    type: 'boop',
+    action: 'boop',
     _by: myID
   }),
 
   template: `
-    <button @click="update({type: 'boop'})">
+    <button @click="update({action: 'boop'})">
       Boop
     </button>
 

@@ -33,7 +33,7 @@ export default function(graffiti) { return {
     </p>
 
     <p>
-      Other than a couple regulated fields that start with <code class="language-js">_</code> described in the next sections, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">type</code> with value <code class="language-js">"boop"</code>.
+      Other than a couple regulated fields that start with <code class="language-js">_</code> described in the next sections, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">action</code> with value <code class="language-js">"boop"</code>.
       In the example below, we form a collection of <a href="https://c.tenor.com/JjZtInaG4pEAAAAd/boop-cat-boop.gif">boops</a> and define a button that creates new boops with <code class="language-js">update</code> and for each boop create a button that removes that boop with <code class="language-js">remove</code>.
 
       <display-code path="./docs/demos/boop.js"></display-code>
@@ -76,8 +76,8 @@ export default function(graffiti) { return {
     </p>
 
     <footer>
-      <router-link to="/context">
-        Context
+      <router-link to="/identity">
+        Identity
       </router-link>
     </footer>`
 }}

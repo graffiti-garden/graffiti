@@ -1,87 +1,84 @@
-import Introduction from '../demos/introduction.js'
-import PrivateTODO from '../demos/privatetodos.js'
+import Name from '../demos/name.js'
+import Comments from '../demos/comments.js'
 
 export default function(graffiti) { return {
+
+  setup: ()=> graffiti,
+
   components: {
-    Introduction: Introduction(graffiti),
-    PrivateTODO: PrivateTODO(graffiti)
+    Name: Name(graffiti),
+    Comments: Comments(graffiti),
   },
 
   template: `
     <h1>Identity</h1>
 
     <p>
-      In <router-link to="/collections">§Collections</router-link> and <router-link to="/context">§Context</router-link>, our demo queries have included the condition <code class="language-js">{_by: myID}</code>.
+      In <router-link to="/collections">§Collections</router-link>, our demo queries have included the condition <code class="language-js">{_by: myID}</code>.
       <code class="language-js">_by</code> is a special property that is automatically included in all objects and must be equal to the object's creator's ID; it is an unforgable "signature" on objects.
       So far we have used
-      <code class="language-js">_by</code> to filter out objects that other people reading this demo have created, but you can also use it to cross reference information about a user. For example, as your interface is parsing a list of comments, it could use <code class="language-js">_by</code> to look up and append the commenter's name to each comment.
-      However, thanks to Graffiti's system of contextual boundaries, this does not mean that you can simply find everything that a user has ever posted with a single <code class="language-js">{_by: myID}</code> query.
+      <code class="language-js">_by</code> to filter out objects that other people reading this demo have created, but you can also use it to cross reference information about a user.
     </p>
 
     <p>
-      There is one other special identity property, <code class="language-js">_to</code>, which we can use to create the "hard contextual boundaries" described in <router-link to="/context">§Context</router-link>.
-      The property <code class="language-js">_to</code> can optionally be included in any object and must be an array of user IDs.
-      However, the primary constraint on <code class="language-js">_to</code> is on the querier's end: people can only query for objects <code class="language-js">_to</code> themselves.
-    </p>
+      In the example that follows, we create a comments section and, for each comment, display the name associated with the commenter's ID.
+      First, we'll create a component for displaying and editing names:
 
-    <p>
-      On it's own this does not create privacy, it just means that the recipients included in the <code class="language-js">_to</code> array of an object can query for that object in more ways than other people.
-      However, by using <code class="language-js">_inContextIf</code> we can block all of the queries that <em>don't specify</em> <code class="language-js">_to</code>, thereby allowing <em>only</em> the desired recipients to access the object. This is how we can create private messages.
-    </p>
-
-    <p>
-      In the example below you're going to send private messages to yourself. Creating a private message to someone else is no different, but it would require three accounts (sender, receiver, snooper) rather than just two (sender, snooper) to demonstrate that it is working. We will use our private messages to represent a private to-do list.
-      Try it out first before we explain how it works:
       <div class="component">
-        <PrivateTODO/>
+        My name is: <Name :editable="true" :ID="myID"/>
       </div>
     </p>
 
     <p>
-      Our code to make this to-do list should look pretty similar to code in <router-link to="/content">§Context</router-link>, only this time we're specifying context around the <code class="language-js">_to</code> field.
-      We are also sorting our to-do list in reverse chronological order using a <a href="https://vuejs.org/guide/essentials/computed.html">computed property</a>.
+      Our "Name" component queries for a collection of objects that have a property <code class="language-js">name</code> and are <code class="language-js">_by</code> a particular user's ID.
+      If someone has multiple names, we display the most recent name by sorting the collection in reverse chronological order using a 
+      <a href="https://vuejs.org/guide/essentials/computed.html">computed property</a>.
+      We've added an <code class="language-js">editable</code> parameter to the component so that the "✏️" edit icon won't appear unless we explicitly want it to.
 
-      <DisplayCode path="./docs/demos/privatetodos.js"/>
-    </p>
-
-    <h2>
-      Verifying Privacy
-    </h2>
-
-    <p>
-      You could take our word that the example above makes a private to-do list,
-      but let's test it just to make sure.
-      We're going to create a "Snooper" component that takes an ID as input and displays the to-dos it has found by that account.
-      If our to-dos our really private, we should only be able to snoop for to-dos created by our own account.
-
-      <display-code path="./docs/demos/snooper.js"></display-code>
+      <DisplayCode path="./docs/demos/name.js"/>
     </p>
 
     <p>
-      To make our Snooper work, we're going to need to give it another user's ID.
-      To do that, we'll make a component that let's you introduce yourself and for each introduction we'll add a "snoop" button.
-      The introduction component doesn't include any new concepts so we'll show you the result first and then put its code below for completeness.
+      Now that we can display names, we're going to create a comments section for this page.
+      Our comments section will include a query for objects that have a property <code class="language-js">comment</code> and are explicitly <code class="language-js">about</code> this page's URL.
+      We use our name component to cross-reference and display a name with each comment.
+      If the comment is our own, we'll add a button that deletes it.
+
+      <DisplayCode path="./docs/demos/comments.js"/>
     </p>
 
     <p>
-      Use this component to introduce yourself, then <router-link to="/logging-in">log in</router-link> with a different account and try to snoop on your first account.
-      If we did things right, you shouldn't be able to find anything. In fact, if you check the browser console you'll see an error complaining about trying to query for objects <code class="language-js">_to</code> someone else.
+      Try writing a comment below. Then, perhaps <router-link to="/logging-in">log out and log back in</router-link> with another account and write a comment under a different name.
 
       <div class="component">
-        <Introduction/>
+        <Comments/>
       </div>
-    </p>
 
-    <p>
-      The introducer queries for introductions made in the past day. If you've already made an introduction, the <code class="language-js">introduceMyself</code> function replaces your old introduction, otherwise it creates a new one.
-      The introductions are sorted by time and include a button that opens up a Snooper.
-     
-      <display-code path="./docs/demos/introduction.js"></display-code>
+      This comments section is about as simple as it could be, but there are plenty of ways to extend it.
+      Copying patterns from dominant platforms you could...
+      <ul>
+        <li>
+          Display the timestamp and other metadata like tags, locations, photos, etc.
+        </li>
+        <li>
+          Display other information about the commenter, like a profile picture.
+        </li>
+        <li>
+          Add comments sections to each comment to create threading.
+        </li>
+        <li>
+          Add other interactive components like a "like" button.
+        </li>
+      </ul>
+      Of course, with Graffiti you aren't limited to to these preexisting patterns.
+      What if really large comment streams could be <a href="https://dl.acm.org/doi/abs/10.1145/2998181.2998235">recursively summarized</a>?
+      What sort of patterns could allow for more <a href="https://a9.io/glue-comic">nonlinear conversations</a>?
+      What if the comments had some sort of spatial structure (like physical graffiti on a wall)?
     </p>
 
     <footer>
-      <router-link to="/moderation">
-        Moderation
+      <router-link to="/context">
+        Context
       </router-link>
     </footer>`
 }}

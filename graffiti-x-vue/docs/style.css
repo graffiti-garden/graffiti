@@ -76,11 +76,14 @@ pre, .component {
   margin: 1em;
   margin-left: 0;
   margin-right: 0;
-  min-height: 10em;
+}
+
+.component p {
+  min-height: 4em;
 }
 
 .component ul {
-  min-width: 5em;
+  /*min-width: 5em;*/
 }
 
 input, button, footer a {
@@ -192,5 +195,7 @@ footer a::after {
 
 .columns {
   display: flex;
-  justify-content: space-evenly;
+  justify-content: space-between;
+  margin: auto;
+  max-width: 20em;
 }
