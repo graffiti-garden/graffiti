@@ -93,7 +93,6 @@
   <script src="https://unpkg.com/vue-router@4.0.14/dist/vue-router.global.prod.js"></script>
   <script type="module">
     import Graffiti from './graffiti.js'
-    import BoopDisplay from './docs/demos/boop-display.js'
 
     const DisplayCode = {
       props: ['path'],
@@ -145,7 +144,6 @@
 
       Vue.createApp()
         .component('DisplayCode', DisplayCode)
-        .component('BoopDisplay', BoopDisplay)
         .use(Router)
         .mount('#app')
     })
