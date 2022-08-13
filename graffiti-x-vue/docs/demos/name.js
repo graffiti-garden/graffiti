@@ -2,11 +2,11 @@ export default function({useCollection}) { return {
 
   props: ['ID', 'editable'],
 
-  setup: (props)=> useCollection({
+  setup: (props)=> useCollection(()=> ({
     name: { $type: "string" },
     timestamp: { $type: "number" },
     _by: props.ID
-  }),
+  })),
 
   computed: {
     names() {

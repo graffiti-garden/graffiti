@@ -14,7 +14,7 @@ export default function(graffiti) { return {
     <h1>Access Control</h1>
 
     <p>
-      The boundaries we described in <router-link to="/context">§Context</router-link> can prevent people from stumbling upon data they weren't supposed to see and wouldn't want to see.
+      The boundaries we described in <router-link to="/context">§Context</router-link> can prevent people from stumbling upon data they weren't supposed to see or wouldn't want to see.
       However, they don't prevent malicious behavior, like stalking or spying.
       To create secure boundaries around objects, we can use the property <code class="language-js">_to</code>.
       This property can optionally be included in any object and must be an array of user IDs.
@@ -24,11 +24,11 @@ export default function(graffiti) { return {
     <p>
       On it's own this does not create privacy, it just means that the recipients included in the <code class="language-js">_to</code> array of an object can query for that object in more ways than other people.
       However, by using <code class="language-js">_inContextIf</code> we can block all of the queries that <em>don't specify</em> <code class="language-js">_to</code>, thereby allowing <em>only</em> the desired recipients to access the object.
-      Using <code class="language-js">_inContextIf</code> to enforce these privacy constraints means we can have contexts within private spaces and we can create objects that exist both in a specific public context and in a private context.
+      Using <code class="language-js">_inContextIf</code> to enforce these privacy constraints gives us the flexibility to create contexts within private spaces and to create objects that exist both in a specific public context and in a private context — imagine a comment that appears in a particular thread but also appears in the "inbox" of the person being replied to.
     </p>
 
     <p>
-      In the example below you're going to send private messages to yourself. Creating a private message to someone else is no different, but it would require three accounts (sender, receiver, snooper) rather than just two (sender, snooper) to demonstrate that it is working. We will use our private messages to represent a private to-do list.
+      In the example below, you're going to send private messages to yourself. Creating a private message to someone else is no different, but it would require three accounts (sender, receiver, snooper) rather than just two (sender, snooper) to demonstrate that it is working. We will use our private messages to represent a private to-do list.
       Try it out first before we explain how it works:
       <div class="component">
         <PrivateTODO/>

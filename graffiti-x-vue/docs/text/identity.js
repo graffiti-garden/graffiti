@@ -31,6 +31,7 @@ export default function(graffiti) { return {
 
     <p>
       Our "Name" component queries for a collection of objects that have a property <code class="language-js">name</code> and are <code class="language-js">_by</code> a particular user's ID.
+      We're passing the query into the component as a <a href="https://vuejs.org/api/composition-api-setup.html#accessing-props">getter</a> so that it will react to changes in the <code class="language-js">ID</code> parameter.
       If someone has multiple names, we display the most recent name by sorting the collection in reverse chronological order using a 
       <a href="https://vuejs.org/guide/essentials/computed.html">computed property</a>.
       We've added an <code class="language-js">editable</code> parameter to the component so that the "✏️" edit icon won't appear unless we explicitly want it to.

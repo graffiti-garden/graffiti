@@ -22,10 +22,8 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
 
         // Store the original object if
         // one exists, in case of failure
-        let originalObject = null
-        if (uuid in objectMap) {
-          originalObject = objectMap[uuid]
-        }
+        const originalObject = (uuid in objectMap)?
+          objectMap[uuid] : null
 
         // Replace the object
         objectMap[uuid] = object
@@ -51,12 +49,6 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       }})
 
       async function queryHandler(newQuery, oldQuery) {
-        // Don't update if the query hasn't actually changed
-        // (it can get triggered twice because of immediate)
-        const newQueryJSON = JSON.stringify(newQuery)
-        const oldQueryJSON = JSON.stringify(oldQuery)
-        if (newQueryJSON == oldQueryJSON) return
-
         // Unsubscribe to the existing query
         if (queryID) {
           const oldQueryID = queryID
@@ -76,10 +68,9 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       }
 
       // Subscribe to the query using the handler
-      if (Vue.isReactive(query)) {
+      if (Vue.isRef(query) || Vue.isReactive(query) || typeof query == 'function') {
         Vue.watch(query, queryHandler, { deep: true, immediate: true })
       } else {
-        // Avoid watch overhead and just run once
         queryHandler(query)
       }
 
@@ -101,7 +92,10 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
 
         // Send it to the server
         try {
-          await graffiti.update(object, query)
+          const queryObj = 
+            (typeof query == 'function')? query() :
+            Vue.isRef(query)? query.value : query
+          await graffiti.update(object, queryObj)
         } catch(e) {
           if (originalObject) {
             // Restore the original object

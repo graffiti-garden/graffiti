@@ -37,7 +37,7 @@ export default function({myID, useCollection}) { return {
 
     <ul>
       <li v-for="comment in comments">
-        <Name :ID="comment._by" />:
+        <Name :ID="comment._by" :key="comment._by" />:
         {{ comment.comment }}
         <button v-if="comment._by==myID" @click="remove(comment)">
           ❌
