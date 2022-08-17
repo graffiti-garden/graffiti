@@ -144,16 +144,62 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         return originalObject
       }
 
-      // Finally, we only want an array not an object
-      const objects = Vue.computed(() => Object.values(objectMap))
 
-      // Return the reactive object array and
-      // the exposed modification functions
-      return {
-        objects,
-        update,
-        remove
+      // Extend the array class to expose update
+      // and remove functions, plus provide some
+      // useful helper methods
+      class Collection extends Array {
+
+        get mine() {
+          return this.filter(o=> o._by==graffiti.myID)
+        }
+
+        get authors() {
+          return [...new Set(this.map(o=> o._by))]
+        }
+
+        async removeMine() {
+          this.mine.forEach(async o=> await this.remove(o))
+        }
+
+        #getProperty(obj, propertyPath) {
+          // Split it up by periods
+          propertyPath = propertyPath.match(/([^\.]+)/g)
+          // Traverse down the path tree
+          for (const property of propertyPath) {
+            obj = obj[property]
+          }
+          return obj
+        }
+
+        sortBy(propertyPath) {
+
+          const sortOrder = propertyPath[0] == '-'? -1 : 1
+          if (sortOrder < 0) propertyPath = propertyPath.substring(1)
+
+          return this.sort((a, b)=> {
+            const propertyA = this.#getProperty(a, propertyPath)
+            const propertyB = this.#getProperty(b, propertyPath)
+            return sortOrder * (
+              propertyA < propertyB? -1 : 
+              propertyA > propertyB?  1 : 0 )
+          })
+        }
+
+        groupBy(propertyPath) {
+          return this.objects.reduce((chain, obj)=> {
+            const property = this.#getProperty(obj, propertyPath)
+            return { ...chain,
+              [property]: [ ...(chain[property] || []), obj]
+            }
+          }, {})
+        }
       }
+      Collection.prototype.update = update
+      Collection.prototype.remove = remove
+
+      // And return a collection
+      return Vue.computed(() => new Collection(...Object.values(objectMap)))
     }
   }
 }

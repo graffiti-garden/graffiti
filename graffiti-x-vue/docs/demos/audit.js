@@ -1,12 +1,15 @@
 export default function({myID, useCollection}) { return {
 
-  setup: ()=> useCollection({}, { audit: true }),
+  setup: ()=> ({
+    everything:
+      useCollection({}, { audit: true})
+  }),
 
   template: `
     <ul>
-      <li v-for="object in objects.slice(0,5)">
+      <li v-for="object in everything.slice(0,5)">
         {{ JSON.stringify(object).slice(0,40) }}...
-        <button @click="remove(object)">
+        <button @click="everything.remove(object)">
           ❌
         </button>
       </li>

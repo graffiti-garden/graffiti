@@ -1,24 +1,25 @@
 export default function({myID, useCollection}) { return {
 
-  setup: ()=> useCollection({
-    action: { $in: ['boop', 'bop'] },
-    _by: myID
+  setup: ()=> ({
+    boopbops: useCollection({
+      action: { $in: ['boop', 'bop'] },
+      _by: myID
+    })
   }),
 
   methods: {
-    toggleType(object) {
-      object.action = (object.action=='boop')? 'bop' : 'boop'
-      this.update(object)
+    toggleType(boopbop) {
+      boopbop.action = boopbop.action=='boop'? 'bop' : 'boop'
+      this.boopbops.update(boopbop)
     }
   },
 
   template: `
     <ul v-for="action in ['boop', 'bop']">
-      <li v-for="object in objects.filter(o=>o.action==action)">
-        <button @click="toggleType(object)">
-          {{ object.action }}
+      <li v-for="boopbop in boopbops.filter(o=>o.action==action)">
+        <button @click="toggleType(boopbop)">
+          {{ boopbop.action }}
         </button>
       </li>
     </ul>`
 }}
-

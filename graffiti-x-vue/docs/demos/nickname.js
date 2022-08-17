@@ -1,10 +1,12 @@
 export default function({myID, useCollection}) { return {
 
-  setup: ()=> useCollection({
-    name: { $type: "string" },
-    timestamp: { $type: "number" },
-    tags: 'graffiti-demo',
-    _by: myID
+  setup: ()=> ({
+    nicknames: useCollection({
+      name: { $type: "string" },
+      timestamp: { $type: "number" },
+      tags: 'graffiti-demo',
+      _by: myID
+    })
   }),
 
   data: ()=> ({
@@ -15,7 +17,8 @@ export default function({myID, useCollection}) { return {
   methods: {
     saveNickname() {
       // Remove all previous nicknames
-      while(this.objects.length) { this.remove(this.objects[0]) }
+      // with a helper function
+      this.nicknames.removeMine()
 
       const nicknameObj = {
         name: this.nickname,
@@ -29,7 +32,7 @@ export default function({myID, useCollection}) { return {
         }]
       }
 
-      this.update(nicknameObj)
+      this.nicknames.update(nicknameObj)
     }
   },
 
@@ -41,8 +44,8 @@ export default function({myID, useCollection}) { return {
       <input type="submit" value="replace nickname"/>
     </form>
 
-    <p v-if="objects.length">
-      my nickname is: {{ objects[0].name }}
+    <p v-if="nicknames.length">
+      my nickname is: {{ nicknames.sortBy('-timestamp')[0].name }}
     </p>
     <p v-else>
       i don't have a nickname 😭

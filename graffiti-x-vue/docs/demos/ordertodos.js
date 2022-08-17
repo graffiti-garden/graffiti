@@ -2,36 +2,36 @@ import Logoot from '../../graffiti-x-js/logoot.js'
 
 export default {
 
-  props: ['update', 'remove', 'objects'],
+  props: ['todos'],
 
   computed: {
-    sorted() {
-      return this.objects.sort((a, b)=> Logoot.compare(a.order, b.order))
+    todosSorted() {
+      return this.todos.sort((a, b)=> Logoot.compare(a.order, b.order))
     }
   },
 
   methods: {
-    move(object, index, offset) {
+    move(todo, index, offset) {
       let newIndex = index + offset
-      if (newIndex < 0 || newIndex > this.sorted.length-1) return
+      if (newIndex < 0 || newIndex > this.todosSorted.length-1) return
 
       if (offset > 0) newIndex++
 
-      object.order = Logoot.between(
-        (newIndex == 0)? Logoot.before : this.sorted[newIndex-1].order,
-        (newIndex == this.sorted.length)? Logoot.after : this.sorted[newIndex].order)
+      todo.order = Logoot.between(
+        (newIndex == 0)? Logoot.before : this.todosSorted[newIndex-1].order,
+        (newIndex == this.todosSorted.length)? Logoot.after : this.todosSorted[newIndex].order)
 
-      this.update(object)
+      this.todos.update(todo)
     },
   },
 
   template: `
     <ol>
-      <li v-for="(object, index) in sorted">
-        {{object.todo}}
-        <button @click="move(object, index, -1)">👆</button>
-        <button @click="move(object, index, +1)">👇</button>
-        <button @click="remove(object)">❌</button>
+      <li v-for="(todo, index) in todosSorted">
+        {{todo.todo}}
+        <button @click="move(todo, index, -1)">👆</button>
+        <button @click="move(todo, index, +1)">👇</button>
+        <button @click="todos.remove(todo)">❌</button>
       </li>
     </ol>`
 }

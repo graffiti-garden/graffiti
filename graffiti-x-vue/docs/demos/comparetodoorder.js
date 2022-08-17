@@ -5,23 +5,25 @@ export default function({myID, useCollection}) { return {
 
   components: { OrderTODOs },
 
-  setup: ()=> useCollection({
-    todo: { $type: 'string' },
-    ...Logoot.query('order'),
-    _by: myID
+  setup: ()=> ({
+    todos: useCollection({
+      todo: { $type: 'string' },
+      ...Logoot.query('order'),
+      _by: myID
+    })
   }),
 
   methods: {
     addTODO() {
       if (!this.input) return
 
-      this.update({
+      this.todos.update({
         todo: this.input,
         order: Logoot.between(
           Logoot.before,
           // Place it at the beginning of the list
-          this.objects.length?
-            this.objects.reduce((a, b)=> 
+          this.todos.length?
+            this.todos.reduce((a, b)=> 
               Logoot.compare(a.order, b.order)>0? b : a).order
             : Logoot.after)
       })
@@ -32,7 +34,7 @@ export default function({myID, useCollection}) { return {
 
   computed: {
     oddTODOs() {
-      return this.objects.filter(o=> o.todo.length%2==0)
+      return this.todos.filter(o=> o.todo.length%2==0)
     }
   },
 
@@ -43,8 +45,8 @@ export default function({myID, useCollection}) { return {
     </form>
 
     <div class="columns">
-      <OrderTODOs :objects="objects" :update="update" :remove="remove"/>
-      <OrderTODOs :objects="oddTODOs" :update="update" :remove="remove"/>
+      <OrderTODOs :todos="todos"/>
+      <OrderTODOs :todos="oddTODOs"/>
     </div>`
 
 }}

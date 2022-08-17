@@ -4,23 +4,19 @@ export default function({myID, useCollection}) { return {
 
   components: { Name: Name({useCollection}) },
 
-  setup: ()=> ({myID, ...useCollection({
-    comment: { $type: 'string' },
-    about: window.location.href,
-    timestamp: { $type: 'number' }
-  })}),
+  setup: ()=> ({
+    comments: useCollection({
+      comment: { $type: 'string' },
+      about: window.location.href,
+      timestamp: { $type: 'number' }
+    })
+  }),
 
   data: ()=> ({ myComment: '' }),
 
-  computed: {
-    comments() {
-      return this.objects.sort((a, b)=> b.timestamp-a.timestamp)
-    }
-  },
-
   methods: {
     post() {
-      this.update({
+      this.comments.update({
         comment: this.myComment,
         about: window.location.href,
         timestamp: Date.now()
@@ -36,10 +32,10 @@ export default function({myID, useCollection}) { return {
     </form>
 
     <ul>
-      <li v-for="comment in comments">
+      <li v-for="comment in comments.sortBy('-timestamp')">
         <Name :ID="comment._by" :key="comment._by" />:
         {{ comment.comment }}
-        <button v-if="comment._by==myID" @click="remove(comment)">
+        <button v-if="comment._by=='${myID}'" @click="comments.remove(comment)">
           ❌
         </button>
       </li>

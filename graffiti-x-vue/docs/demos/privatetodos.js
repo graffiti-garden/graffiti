@@ -1,18 +1,22 @@
 export default function({myID, useCollection}) { return {
 
-  setup: ()=> useCollection({
-    todo: { $type: 'string' },
-    timestamp: { $type: 'number' },
-    _to: myID,
-    _by: myID
+  setup: ()=> ({
+    todos: useCollection({
+      todo: { $type: 'string' },
+      timestamp: { $type: 'number' },
+      _to: myID,
+      _by: myID
+    })
   }),
+
+  data: ()=> ({ input: '' }),
 
   methods: {
 
     addTODO() {
       if (!this.input) return
 
-      this.update({
+      this.todos.update({
         todo: this.input,
         timestamp: Date.now(),
         _to: [myID],
@@ -25,12 +29,6 @@ export default function({myID, useCollection}) { return {
     },
   },
 
-  computed: {
-    todos() {
-      return this.objects.sort((a, b)=> b.timestamp-a.timestamp)
-    }
-  },
-
   template: `
     <form @submit.prevent="addTODO">
       <input v-model="input"/>
@@ -38,9 +36,9 @@ export default function({myID, useCollection}) { return {
     </form>
 
     <ul>
-      <li v-for="todo in todos">
+      <li v-for="todo in todos.sortBy('-timestamp')">
         {{todo.todo}}
-        <button @click="remove(todo)">❌</button>
+        <button @click="todos.remove(todo)">❌</button>
       </li>
     </ul>`
 }}

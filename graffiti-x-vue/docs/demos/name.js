@@ -2,18 +2,19 @@ export default function({useCollection}) { return {
 
   props: ['ID', 'editable'],
 
-  setup: (props)=> useCollection(()=> ({
-    name: { $type: "string" },
-    timestamp: { $type: "number" },
-    _by: props.ID
-  })),
+  setup: (props)=> ({
+    names: useCollection(()=> ({
+      name: { $type: "string" },
+      timestamp: { $type: "number" },
+      _by: props.ID
+    }))
+  }),
 
   computed: {
-    names() {
-      return this.objects.sort((a, b)=> b.timestamp-a.timestamp)
-    },
     currentName() {
-      return this.names.length? this.names[0] : { name: '' }
+      return this.names.length?
+        this.names.sortBy('-timestamp')[0] :
+        { name: '' }
     }
   },
 
@@ -22,7 +23,7 @@ export default function({useCollection}) { return {
   methods: {
     saveName() {
       this.currentName.timestamp = Date.now()
-      this.update(this.currentName)
+      this.names.update(this.currentName)
       this.editing = false
     }
   },
