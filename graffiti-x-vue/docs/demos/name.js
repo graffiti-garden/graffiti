@@ -30,13 +30,7 @@ export default function({useCollection}) { return {
 
   template: `
     <template v-if="!editing">
-      <template v-if="currentName.name">
-        {{ currentName.name }}
-      </template>
-      <template v-else>
-        anonymous
-      </template>
-
+      {{ names.length? currentName.name : 'anonymous' }}
       <button v-if="editable" @click="editing=true">
         ✏️
       </button>

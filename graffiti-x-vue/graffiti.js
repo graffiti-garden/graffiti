@@ -187,11 +187,14 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         }
 
         groupBy(propertyPath) {
-          return this.objects.reduce((chain, obj)=> {
+          return this.reduce((chain, obj)=> {
             const property = this.#getProperty(obj, propertyPath)
-            return { ...chain,
-              [property]: [ ...(chain[property] || []), obj]
+            if (property in chain) {
+              chain[property].push(obj)
+            } else {
+              chain[property] = new Collection(obj)
             }
+            return chain
           }, {})
         }
       }
