@@ -69,12 +69,12 @@ export default function(graffiti) { return {
     </p>
 
     <h2>
-      Helper Functions
+      Helper Methods
     </h2>
 
     <p>
-      Each collection comes with some helper functions to succinctly perform common tasks.
-      You'll see these helper functions in use in the next sections, but we'll put them here for reference:
+      Each collection comes with some helper methods to succinctly perform common tasks.
+      You'll see these helper methods in use in the next sections, but we'll put them here for reference:
     </p>
 
     <ul>

@@ -14,7 +14,7 @@ export default function(graffiti) { return {
     <h1>Identity</h1>
 
     <p>
-      In <router-link to="/collections">§Collections</router-link>, our demo queries have included the condition <code class="language-js">{_by: myID}</code>.
+      In <router-link to="/collections">§Collections</router-link>, our demo queries included the condition <code class="language-js">{_by: myID}</code>.
       <code class="language-js">_by</code> is a special property that is automatically included in all objects and must be equal to the object's creator's ID; it is an unforgable "signature" on objects.
       So far we have used
       <code class="language-js">_by</code> to filter out objects that other people reading this demo have created, but you can also use it to cross reference information about a user.
@@ -30,11 +30,15 @@ export default function(graffiti) { return {
     </p>
 
     <p>
-      Our "Name" component queries for a collection of objects that have a property <code class="language-js">name</code> and are <code class="language-js">_by</code> a particular user's ID.
-      We're passing the query into the component as a <a href="https://vuejs.org/api/composition-api-setup.html#accessing-props">getter</a> so that it will react to changes in the <code class="language-js">ID</code> parameter.
-      If someone has multiple names, we display the most recent name by sorting the collection in reverse chronological order using a 
-      <a href="https://vuejs.org/guide/essentials/computed.html">computed property</a>.
+      Our "Name" component queries for a collection of <code class="language-js">names</code> that have a property <code class="language-js">name</code> and are <code class="language-js">_by</code> a particular user's ID.
+      If someone has multiple names, we display the most recent name by sorting the collection in reverse chronological order using the <code class="language-js">sortBy</code> <router-link to="/collections">helper method</router-link>. 
       We've added an <code class="language-js">editable</code> parameter to the component so that the "✏️" edit icon won't appear unless we explicitly want it to.
+    </p>
+
+    <p>
+      One subtle but important detail is that we are passing the query into the component as a function rather than a constant object. 
+      This makes our query react to changes in the <code class="language-js">ID</code> parameter.
+      You can read more about reactivity to <code class="language-js">props</code> in <code class="language-js">setup</code> <a href="https://vuejs.org/api/composition-api-setup.html#accessing-props">here</a>.
 
       <DisplayCode path="./docs/demos/name.js"/>
     </p>

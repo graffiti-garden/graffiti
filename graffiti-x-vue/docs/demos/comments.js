@@ -16,6 +16,7 @@ export default function({myID, useCollection}) { return {
 
   methods: {
     post() {
+      if (!this.myComment) return
       this.comments.update({
         comment: this.myComment,
         about: window.location.href,
