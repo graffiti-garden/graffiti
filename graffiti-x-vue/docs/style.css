@@ -40,6 +40,14 @@ header ul li {
   padding: 0.5em;
 }
 
+main li {
+  padding: 0.3em;
+}
+
+strong * {
+  color: var(--frontbold) !important;
+}
+
 a {
   color: var(--frontbold);
   font-weight: 700;

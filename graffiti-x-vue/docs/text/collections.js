@@ -15,26 +15,19 @@ export default function(graffiti) { return {
     <p>
       Collections of social data in Graffiti are formed by arbitrary <em>queries</em> as compared to directory listings in a file system or the channels/rooms of a chat client.
       We can interface with these collections in Vue with the <code class="language-js">useCollection</code> <a href="https://vuejs.org/guide/reusability/composables.html">composable</a>.
-      The composable takes a <a href="https://www.mongodb.com/docs/manual/tutorial/query-documents/">MongoDB query</a> as input and returns three properties:
-      <ul>
-        <li>
-          <code class="language-js">objects</code>:
-          a reactive array of all the objects in the server that match the input query.
-        </li>
-        <li>
-          <code class="language-js">update</code>:
-          a function to add or replace an object matching the query to the server.
-        </li>
-        <li>
-          <code class="language-js">remove</code>:
-          a function to remove an object matching the query from the server
-        </li>
-      </ul>
+      The composable takes a <a href="https://www.mongodb.com/docs/manual/tutorial/query-documents/">MongoDB query</a> as input and returns a reactive "collection" of all the elements that match the query.
     </p>
 
     <p>
-      Other than a couple regulated fields that start with <code class="language-js">_</code> described in the next sections, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">action</code> with value <code class="language-js">"boop"</code>.
-      In the example below, we form a collection of <a href="https://c.tenor.com/JjZtInaG4pEAAAAd/boop-cat-boop.gif">boops</a> and define a button that creates new boops with <code class="language-js">update</code> and for each boop create a button that removes that boop with <code class="language-js">remove</code>.
+      The collection acts like an <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array">Array</a>
+      and inherits all immutable methods: <code class="language-js">length</code>, <code class="language-js">sort</code>, <code class="language-js">filter</code>, etc.
+      However, whenever <em>anyone</em> changes data on the Graffiti server matching the input query, the collection will reactively change too.
+      To modify the collection, you can use the methods <code class="language-js">update</code> and <code class="language-js">remove</code>, which modify the collection both locally and on the Graffiti server.
+    </p>
+
+    <p>
+      Other than a couple regulated fields that start with <code class="language-js">_</code> (underscore) described in the next sections, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">action</code> with value <code class="language-js">"boop"</code>.
+      In the example below, we form a collection of <a href="https://c.tenor.com/JjZtInaG4pEAAAAd/boop-cat-boop.gif">boops</a>, define a button that creates new boops with <code class="language-js">update</code>, and for each boop create a button that removes that boop with <code class="language-js">remove</code>.
 
       <display-code path="./docs/demos/boop.js"></display-code>
     </p>
@@ -74,6 +67,37 @@ export default function(graffiti) { return {
         </div>
       </div>
     </p>
+
+    <h2>
+      Helper Functions
+    </h2>
+
+    <p>
+      Each collection comes with some helper functions to succinctly perform common tasks.
+      You'll see these helper functions in use in the next sections, but we'll put them here for reference:
+    </p>
+
+    <ul>
+    <li>
+      <strong><code class="language-js">mine</code></strong>: a shallow copy of the collection containing only objects you created. Equivalent to <code class="language-js">filter(o=>o._by==myID)</code>.
+    </li>
+
+    <li>
+      <strong><code class="language-js">authors</code></strong>: an array containing the unique user IDs that contributed to the collection. <code class="language-js">authors.length</code> can be used for one-person-one-vote counts, such as counting "upvotes" or "likes. Equivalent to <code class="language-js">[...new Set(collection.map(o=> o._by))]</code>.
+    </li>
+
+    <li>
+      <strong><code class="language-js">sortBy('some.property')</code></strong>: sorts the collection in ascending order by the property specified in dot notation. To sort in descending order, append <code class="language-js">'-'</code> to the start of the string.
+    </li>
+
+    <li>
+      <strong><code class="language-js">groupBy('some.property')</code></strong>: groups the collection into subcollections that have equal property values. Returns an object that maps property values onto collections of objects with equal property values like the experimental <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/group">group()</a> method.
+    </li>
+
+    <li>
+      <strong><code class="language-js">removeMine()</code></strong>: removes all objects in the collection that you have created. <em>Be careful with this function!</em>
+    </li>
+    </ul>
 
     <footer>
       <router-link to="/identity">

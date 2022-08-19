@@ -8,7 +8,15 @@ export default function(graffiti) { return {
     <code class="language-markup">graffiti-x-vue</code> is a library that lets you add custom social components to any static website
     via an extension to the <a href="https://vuejs.org/guide/introduction.html">Vue.js 3</a> Javascript framework that interfaces with the
     <a href="https://github.com/csail-graffiti/server">Graffiti server</a>.
-    Specifically, the library exposes three properties:
+  </p>
+
+  <p>
+    On a high level, Graffiti is kind of like a shared database.
+    However, unlike a normal database it has some special properties that makes it possible for people with different <router-link to="/context">organization</router-link> and <router-link to="/moderation">moderation</router-link> preferences to use it at the same time.
+  </p>
+
+  <p>
+    Practically, the library exposes three properties:
     <ul>
       <li>
         <code class="language-js">toggleLogIn</code>:
