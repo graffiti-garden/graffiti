@@ -6,7 +6,7 @@ from os import getenv
 from bson.objectid import ObjectId
 from contextlib import asynccontextmanager
 
-from .rewrite import query_rewrite, audit_rewrite, doc_to_object
+from .rewrite import query_rewrite, doc_to_object
 
 batch_size = int(getenv('BATCH_SIZE'))
 
@@ -62,7 +62,7 @@ class PubSub:
             del self.subscriptions[socket_id]
             del self.sockets[socket_id]
 
-    async def subscribe(self, query, since, audit, socket_id, query_id, owner_id):
+    async def subscribe(self, query, since, socket_id, query_id, owner_id):
         # Process since
         if since:
             since = ObjectId(since)
@@ -72,10 +72,7 @@ class PubSub:
 
         # Rewrite the query to account for contexts,
         # except with audits which only care about _by
-        if audit:
-            query = audit_rewrite(query, owner_id)
-        else:
-            query = query_rewrite(query)
+        query = query_rewrite(query, owner_id)
 
         # Make sure the query has valid syntax
         # by performing a test query

@@ -81,7 +81,6 @@ def socket_schema():
                 }, { "type": "null" }]
             },
             "queryID": RANDOM_SCHEMA,
-            "audit": { "type": "boolean" }
         },
         "required": BASE_TYPES + ["query", "since", "queryID"],
         "additionalProperties": False
@@ -146,7 +145,10 @@ def socket_schema():
                 QUERY_VALUE_PROPERTY_PATTERN: { "$ref": "#/definitions/queryValue" }
             },
             # To must be a SHA
-            "properties": { "_to": SHA256_SCHEMA } |
+            "properties": {
+                "_to": SHA256_SCHEMA,
+                "_audit": { "type": "boolean" }
+            } |
             # And allowed query types recurse
                 { '$' + o: { "$ref": "#/definitions/queryValue" }
                     for o in ALLOWED_QUERY_OPERATORS }

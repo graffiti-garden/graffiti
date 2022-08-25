@@ -81,7 +81,8 @@ async def main():
             'messageID': random_id(),
             'type': 'subscribe',
             'query': {
-                'tags': custom_tag
+                'tags': custom_tag,
+                '_audit': False
             },
             "since": None,
             "queryID": query_id

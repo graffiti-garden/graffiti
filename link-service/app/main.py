@@ -93,9 +93,7 @@ async def reply(ws, msg, socket_id, owner_id):
             await app.rest.remove(msg['objectID'], owner_id)
 
         elif msg['type'] == 'subscribe':
-            audit = False
-            if 'audit' in msg: audit = msg['audit']
-            await app.pubsub.subscribe(msg['query'], msg['since'], audit, socket_id, msg['queryID'], owner_id)
+            await app.pubsub.subscribe(msg['query'], msg['since'], socket_id, msg['queryID'], owner_id)
 
         elif msg['type'] == 'unsubscribe':
             await app.pubsub.unsubscribe(socket_id, msg['queryID'])

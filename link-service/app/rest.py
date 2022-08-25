@@ -37,7 +37,7 @@ class Rest:
 
             # Once inserted, try querying for it
             # with the supplied query
-            query = query_rewrite(query)
+            query = query_rewrite(query, owner_id)
             query["_id"] = result.inserted_id
             refetched_doc = await self.db.find_one(query)
             if not refetched_doc:

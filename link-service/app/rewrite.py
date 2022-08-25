@@ -91,7 +91,16 @@ def doc_to_object(doc):
     object['_id'] = doc['_externalID']
     return object
 
-def query_rewrite(query):
+def query_rewrite(query, owner_id):
+    if "_audit" in query:
+        if query.pop("_audit"):
+            return {
+                # The object must still match the query
+                "_object": { "$elemMatch": query },
+                # No context, just anything by myself
+                "_object._by": owner_id
+            }
+
     return {
         # The object must match the query
         "_object": { "$elemMatch": query },
@@ -110,12 +119,4 @@ def query_rewrite(query):
                 }
             }
         }}
-    }
-
-def audit_rewrite(query, owner_id):
-    return {
-        # The object must still match the query
-        "_object": { "$elemMatch": query },
-        # No context, just anything by myself
-        "_object._by": owner_id
     }

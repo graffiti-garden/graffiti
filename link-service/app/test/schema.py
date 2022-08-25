@@ -205,18 +205,18 @@ def valid_requests(my_id):
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "foo": "bar" 
+        "foo": "bar" ,
+        "_audit": True
     },
-    "audit": True,
     "since": None,
     "queryID": random_id()
 }, {
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "foo": "bar" 
+        "foo": "bar",
+        "_audit": False
     },
-    "audit": False,
     "since": None,
     "queryID": random_id()
 }, {
@@ -615,19 +615,19 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "foo": "bar"
+        "foo": "bar",
+        "_audit": "true"
     },
     "since": None,
-    "audit": "true",
     "queryID": random_id()
 }, {
     "messageID": random_id(),
     "type": "subscribe",
     "query": {
-        "foo": "bar"
+        "foo": "bar",
+        "_audit": 0
     },
     "since": None,
-    "audit": 0,
     "queryID": random_id()
 }, {
     # query requirements also affect update

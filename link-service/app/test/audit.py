@@ -38,7 +38,8 @@ async def main():
             'messageID': random_id(),
             'type': 'subscribe',
             'query': {
-                'foo': custom_tag
+                'foo': custom_tag,
+                "_audit": False
             },
             "since": None,
             "queryID": query_id
@@ -55,10 +56,10 @@ async def main():
             'messageID': random_id(),
             'type': 'subscribe',
             'query': {
-                'foo': custom_tag
+                'foo': custom_tag,
+                "_audit": True
             },
             "since": None,
-            "audit": True,
             "queryID": query_id
         })
         result = await recv(ws)
@@ -99,9 +100,9 @@ async def main():
                 'type': 'subscribe',
                 'query': {
                     'foo': custom_tag,
+                    "_audit": True
                 },
                 "since": None,
-                "audit": True,
                 "queryID": query_id
             })
             result = await recv(other_ws)
@@ -134,9 +135,9 @@ async def main():
             'type': 'subscribe',
             'query': {
                 'foo': custom_tag,
+                "_audit": True
             },
             "since": None,
-            "audit": True,
             "queryID": query_id
         })
         result = await recv(ws)
