@@ -2,7 +2,7 @@ export default function({myID, useCollection}) { return {
 
   setup: ()=> ({
     everything:
-      useCollection({}, { audit: true})
+      useCollection({_audit: true})
   }),
 
   template: `
