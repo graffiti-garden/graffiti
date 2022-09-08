@@ -25,6 +25,14 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         const originalObject = (uuid in objectMap)?
           objectMap[uuid] : null
 
+        // Add properties to the object
+        // so it can be updated and removed
+        // without the collection
+        if (!object._update) {
+          Object.defineProperty(object, '_update', { value: ()=>update(object) })
+          Object.defineProperty(object, '_remove', { value: ()=>remove(object) })
+        }
+
         // Replace the object
         objectMap[uuid] = object
 
@@ -159,7 +167,8 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         }
 
         async removeMine() {
-          this.mine.forEach(async o=> await this.remove(o))
+          await Promise.all(
+            this.mine.map(async o=> await this.remove(o)))
         }
 
         #getProperty(obj, propertyPath) {
