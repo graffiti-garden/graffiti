@@ -14,6 +14,10 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
       // Initialize the collection output
       const objectMap = Vue.reactive({})
 
+      // Initialize content addresses for collection members
+      const objectMapContentAddresses = Vue.reactive({})
+      const encoder = new TextEncoder()
+
       // This functions is called when an object
       // is added or removed from the collection
       // either by the query subscription or locally
@@ -31,10 +35,22 @@ export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu')
         if (!object._update) {
           Object.defineProperty(object, '_update', { value: ()=>update(object) })
           Object.defineProperty(object, '_remove', { value: ()=>remove(object) })
+          Object.defineProperty(object, '_contentAddress', { get: ()=>Vue.computed(()=> {
+            return (uuid in objectMapContentAddresses)?
+              objectMapContentAddresses[uuid] : null
+          })})
         }
 
         // Replace the object
         objectMap[uuid] = object
+
+        // Compute it's content address
+        const inputBytes = encoder.encode(JSON.stringify(object))
+        crypto.subtle.digest('SHA-256', inputBytes).then(outputBuffer=>{
+          const outputArray = Array.from(new Uint8Array(outputBuffer))
+          objectMapContentAddresses[uuid] =
+            outputArray.map(b => b.toString(16).padStart(2, '0')).join('')
+        })
 
         // Return the original in case of failure
         return originalObject
