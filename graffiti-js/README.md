@@ -1,12 +1,12 @@
 # Graffiti for Vanilla Javascript
 
-This is the base Javascript library that interfaces with the [Graffiti server](https://github.com/csail-graffiti/server).
-We recommend not using this vanilla library itself but instead using framework plugins that are built on top of it like the [Graffiti plugin for Vue.JS](https://github.com/csail-graffiti/graffiti-x-vue).
+This is the base Javascript library that interfaces with the [Graffiti server](https://github.com/digital-graffiti/server).
+We recommend not using this vanilla library itself but instead using framework plugins that are built on top of it like the [Graffiti plugin for Vue.JS](https://github.com/digital-graffiti/graffiti-x-vue).
 
 Example usage: 
 
 ```javascript
-import Graffiti from "https://csail-graffiti.github.io/graffiti-x-js/graffiti.js"
+import Graffiti from "https://digital-graffiti.github.io/graffiti-x-js/graffiti.js"
 
 // You can initialize a connection to the graffiti server
 const graffiti = Graffiti()
