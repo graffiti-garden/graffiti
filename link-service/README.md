@@ -4,7 +4,7 @@ This is a web server that can be used as the communication and storage backend f
 Moreover, these applications can all function on top of the same server instance at the same time and to the degree that they have overlapping functionality, they will naturally interoperate.
 We hope that this serves both as a powerful prototyping tool and as a proof of concept that an ecosystem of social applications can exist that isn't subject to [collective vendor lock-in](https://en.wikipedia.org/wiki/Vendor_lock-in#Collective_vendor_lock-in).
 
-A reference client library built as an extension of the Vue.js web framework along with example applications are available [here](https://github.com/csail-graffiti/graffiti-js-vue).
+A reference client library built as an extension of the Vue.js web framework along with example applications are available [here](https://github.com/digital-graffiti/graffiti-js-vue).
 
 ## Local Usage
 
@@ -13,7 +13,7 @@ To launch the server locally, run:
     sudo docker compose up --build
 
 The application will be up at [http://localhost:5001](http://localhost:5001).
-If you are using the [Vue.js Graffiti plugin](https://github.com/csail-graffiti/vue), you might point to the local server as follows:
+If you are using the [Vue.js Graffiti plugin](https://github.com/digital-graffiti/vue), you might point to the local server as follows:
 
     Graffiti("http://localhost:5001").then(g=>createApp().use(g).mount("#app")
     
@@ -41,11 +41,11 @@ The JSON objects are schemaless aside from 5 regulated fields:
 - `_id`: is a random identifier that must be added to each object. This field is not searchable, it's only purpose it to uniquely refer to objects so they can be added and replaced. This field is user-assigned for optimistic rendering. A user can't store more than one object with the same `_id`; trying to create an object with the same `_id` as an existing object will simply replace the existing object. Different users *can* store objects with the same `_id`, so there is no worry of someone else replacing your object.
 - `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
 - `_to`: this field must be equal to a list of unique user identifiers. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
-- `_inContextIf`: [see here](https://github.com/csail-graffiti/graffiti-js-vue]
+- `_inContextIf`: see [the interactive tutorial](https://digital-graffiti.github.io/graffiti-x-vue/#/context).
 
 Objects can't include any other fields that start with `_` or `$`.
 
-For security and performance purposes, MongoDB query operators are limited to those listed [here](https://github.com/csail-graffiti/server/blob/main/app/schema.py).
+For security and performance purposes, MongoDB query operators are limited to those listed [here](https://github.com/digital-graffiti/server/blob/main/app/schema.py).
 
 ### `broker`
 
@@ -84,7 +84,7 @@ On your server install:
 Clone this repository onto the server and in the root directory of the repository create a file called `.env` with contents as follows:
 
     # The domain name that points to the server
-    DOMAIN="graffiti.csail.mit.edu"
+    DOMAIN="graffiti.example.com"
 
     # A string used to encrypt authorization tokens
     SECRET="something only i know"
@@ -118,7 +118,7 @@ Once the docker application is running, create domain keys for the mail server:
     sudo docker exec graffiti-mailserver setup config dkim
 
 Copy the generated entry in `config/mailserver/opendkim/keys/DOMAIN/mail.txt` to your DNS.
-To get things to work on the [CSAIL DNS](https://webdns.csail.mit.edu/), the entire `mail.txt` needs to be on a single line, but split up into segments of less than 256 characters.
+To get things to work on some DNS systems, the entire `mail.txt` needs to be on a single line, but split up into segments of less than 256 characters.
 The generated file should already be split, but the sections are on new lines. Replace the new lines with spaces so it looks like this:
 
     mail._domainkey.DOMAIN. 1800 IN TXT "v=DKIM1; h=sha256; k=rsa; p=" "MII...SiL" "6yL...UND" ...
