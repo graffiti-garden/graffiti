@@ -33,7 +33,7 @@ export default function(graffiti) { return {
 
     <p>
       This coupling is a good protection mechanism but it is not foolproof.
-      That's why the <code class="language-js">useCollection</code> composable has an <code class="language-js">audit</code> flag.
+      That's why you can include an <code class="language-js">_audit</code> flag in queries you pass to the <code class="language-js">useCollection</code> composable.
       This flag makes the query ignore <em>all</em> contextual boundaries but it will only query for objects <code class="language-js">_by</code> yourself.
     </p>
 

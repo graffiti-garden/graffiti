@@ -82,7 +82,7 @@ export default function(graffiti) { return {
 
       <DisplayCode path="./docs/demos/pseudocode.py" />
 
-      Note that actually implimenting context like this would be extremely innefficient. You can see how the server actually does it <a href="https://github.com/csail-graffiti/server/blob/main/app/rewrite.py">here</a>.
+      Note that actually implimenting context like this would be extremely innefficient. You can see how the server actually does it <a href="https://github.com/digital-graffiti/server/blob/main/app/rewrite.py">here</a>.
     </p>
 
 

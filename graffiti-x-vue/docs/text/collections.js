@@ -20,13 +20,13 @@ export default function(graffiti) { return {
 
     <p>
       The collection acts like an <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array">Array</a>
-      and inherits all immutable methods: <code class="language-js">length</code>, <code class="language-js">sort</code>, <code class="language-js">filter</code>, etc.
+      and inherits all immutable methods: <code class="language-js">length</code>, <code class="language-js">filter</code>, etc.
       However, whenever <em>anyone</em> changes data on the Graffiti server matching the input query, the collection will reactively change too.
-      To modify the collection, you can use the methods <code class="language-js">update</code> and <code class="language-js">remove</code>, which modify the collection both locally and on the Graffiti server.
+      To modify the collection yourself, you can use the methods <code class="language-js">update</code> and <code class="language-js">remove</code>, which modify the collection both locally and on the Graffiti server.
     </p>
 
     <p>
-      Other than a couple regulated fields that start with <code class="language-js">_</code> (underscore) described in the next sections, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">action</code> with value <code class="language-js">"boop"</code>.
+      Other than a couple regulated fields that start with <code class="language-js">_</code> (underscore), described in the next sections, data you put into Graffiti is schemaless. So let's invent a new sort of data object that has a property <code class="language-js">action</code> with value <code class="language-js">"boop"</code>.
       In the example below, we form a collection of <a href="https://c.tenor.com/JjZtInaG4pEAAAAd/boop-cat-boop.gif">boops</a>, define a button that creates new boops with <code class="language-js">update</code>, and for each boop create a button that removes that boop with <code class="language-js">remove</code>.
 
       <display-code path="./docs/demos/boop.js"></display-code>

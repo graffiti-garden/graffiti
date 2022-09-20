@@ -7,7 +7,7 @@ export default function(graffiti) { return {
   <p>
     <code class="language-markup">graffiti-x-vue</code> is a library that lets you add custom social components to any static website
     via an extension to the <a href="https://vuejs.org/guide/introduction.html">Vue.js 3</a> Javascript framework that interfaces with the
-    <a href="https://github.com/csail-graffiti/server">Graffiti server</a>.
+    <a href="https://github.com/digital-graffiti/server">Graffiti server</a>.
   </p>
 
   <p>
