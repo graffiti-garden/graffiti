@@ -21,7 +21,7 @@ export default {
     return [this.maxInt+1]
   },
 
-  between(a, b) {
+  between(a, b, scale=100) {
     // Strip zeros and find common length
     const aLength = this.lengthWithoutZeros(a)
     const bLength = this.lengthWithoutZeros(b)
@@ -103,9 +103,14 @@ export default {
       }
     }
 
-    // Finally, sample between the upper and
-    // lower bounds
-    out.push(Math.floor(Math.random() * (upperBound + 1 - lowerBound)) + lowerBound)
+    // Create a random number in [0,1] but bias it to be small,
+    // so that numbers tend to increase by a small amount.
+    let random = Math.random()
+    random = -Math.log(1-random)/scale
+    random = Math.min(random, 1)
+    
+    // Finally, sample between the upper and lower bounds
+    out.push(Math.floor(random * (upperBound + 1 - lowerBound)) + lowerBound)
     return out
   },
 
