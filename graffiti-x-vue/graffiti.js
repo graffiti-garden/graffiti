@@ -1,6 +1,6 @@
 import Graffiti from './graffiti-x-js/graffiti.js'
 
-export default async function(Vue, graffitiURL='https://graffiti.csail.mit.edu') {
+export default async function(Vue, graffitiURL='https://graffiti.garden') {
 
   const graffiti = new Graffiti(graffitiURL)
   await graffiti.initialize()
