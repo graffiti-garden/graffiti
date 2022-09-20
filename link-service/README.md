@@ -129,7 +129,7 @@ In addition, add these lines to your DNS to turn on the email security features 
     DOMAIN. 1800 IN TXT "v=spf1 a -all"
 
 Once the DNS propagates (again, it might take an hour), you can test that the mail server is working by going to
-`https://auth.DOMAIN/client_id=&redirect_uri=`.
+`https://auth.DOMAIN/?client_id=&redirect_uri=`.
 Send an email to `test@allaboutspam.com` then go to [All About Spam](http://www.allaboutspam.com/email-server-test-report/index.php) and enter `noreply@DOMAIN` to see your test report.
 
 ### Launching
