@@ -24,9 +24,13 @@ export default function({myID, useCollection}) { return {
   },
 
   template: `
-    <p v-if="!follows.length">
-      You're not following anyone!
-      Browse the <router-link to="/directory">directory</router-link> for people to follow.
-    </p>
+    <template v-if="!follows.length">
+      <h1>
+        You're not following anyone!
+      </h1>
+      <p>
+      Browse the <router-link to="/directory">namebook</router-link> for people to follow.
+      </p>
+    </template>
     <Posts v-else :queryMod="postQueryMod" prompt="what's on your mind?"/>`
 }}

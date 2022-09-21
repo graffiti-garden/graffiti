@@ -40,9 +40,9 @@ export default function({myID, useCollection}) { return {
     <h1>
       <Name :ID="ID" editable="true"/>
     </h1>
-    <h2 v-if="ID!='${myID}'">
+    <p v-if="ID!='${myID}'">
       <Follow :ID="ID" />
-    </h2>
+    </p>
 
     <Posts :queryMod="queryMod" :postMod="postMod" :prompt="prompt"/>`
 }}
