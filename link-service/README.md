@@ -95,17 +95,12 @@ Make your secret unique and **keep it safe**!
 
 Add CNAME entries for the `app.DOMAIN` and `auth.DOMAIN` subdomains by adding these lines to your DNS (where `DOMAIN` is replaced with your server's domain):
 
-    app.DOMAIN.  1800 IN CNAME DOMAIN
-    auth.DOMAIN. 1800 IN CNAME DOMAIN
-
+    app.DOMAIN.  1800 IN A DOMAIN_IP
+    auth.DOMAIN. 1800 IN CNAME app.DOMAIN
+    
 Once these changes propagate (it might take up to an hour), generate SSL certificates with:
 
     sudo certbot certonly --standalone -d DOMAIN,app.DOMAIN,auth.DOMAIN
-
-This will generate the following files:
-
-    /etc/letsencrypt/live/DOMAIN/fullchain.pem
-    /etc/letsencrypt/live/DOMAIN/privkey.pem
 
 ### Mailserver
 
@@ -126,9 +121,9 @@ The generated file should already be split, but the sections are on new lines. R
 In addition, add these lines to your DNS to turn on the email security features DKIM and SPF:
 
     _domainkey.DOMAIN. 1800 IN TXT "o=-"
-    DOMAIN. 1800 IN TXT "v=spf1 a -all"
+    DOMAIN. 1800 IN TXT "v=spf1 a:app.DOMAIN -all"
 
-Once the DNS propagates (again, it might take an hour), you can test that the mail server is working by going to
+Once the DNS propagates (again, it might take an hour), restart the server and test that the mailer is working by going to
 `https://auth.DOMAIN/?client_id=&redirect_uri=`.
 Send an email to `test@allaboutspam.com` then go to [All About Spam](http://www.allaboutspam.com/email-server-test-report/index.php) and enter `noreply@DOMAIN` to see your test report.
 
