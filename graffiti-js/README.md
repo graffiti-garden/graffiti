@@ -26,12 +26,8 @@ const queryID = await graffiti.subscribe({
 // And then unsubscribe to those queries
 await graffiti.unsubscribe(queryID)
 
-// You can log in and out and check your logged-in status
-graffiti.logIn()
-graffiti.logOut()
-if (graffiti.loggedIn) {
-  // ...
-}
+// You can toggle logging in and out
+graffiti.toggleLogIn()
 
 // When you are logged in you can reference your user ID
 console.log(graffiti.myID)
