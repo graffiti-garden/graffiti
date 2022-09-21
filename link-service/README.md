@@ -1,5 +1,6 @@
 # Graffiti Server
 
+
 This is a web server that can be used as the communication and storage backend for many different types of social applications including applications like Facebook, Reddit and Google Docs.
 Moreover, these applications can all function on top of the same server instance at the same time and to the degree that they have overlapping functionality, they will naturally interoperate.
 We hope that this serves both as a powerful prototyping tool and as a proof of concept that an ecosystem of social applications can exist that isn't subject to [collective vendor lock-in](https://en.wikipedia.org/wiki/Vendor_lock-in#Collective_vendor_lock-in).
