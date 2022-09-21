@@ -124,6 +124,10 @@ textarea + input[type="submit"] {
   display: block;
 }
 
+main p {
+  text-align: center;
+}
+
 main > *, main li {
   margin-bottom: var(--between-posts);
 }
@@ -153,7 +157,7 @@ main li h2 {
   font-size: 80%;
 }
 
-p {
+main li p {
   word-break: break-word;
   white-space: pre-wrap;
   font-size: 130%;
@@ -250,7 +254,7 @@ input[type="text"] {
 }
 
 p a {
-  color: cornflowerblue
+  color: var(--blue);
 }
 
 .directory {
