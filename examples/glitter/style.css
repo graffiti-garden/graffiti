@@ -1,11 +1,56 @@
 :root {
   --blue: #4267B2;
+  --light-blue: #e6eaf2;
   --dark-blue: #193b80;
   --grey: #898F9C;
+  --between-posts: 2rem;
 }
 
 * {
   font-family: Helvetica, sans-serif;
+  font-size: large;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+header {
+  background: var(--blue);
+  color: white;
+  display: flex;
+  margin: 0;
+  justify-content: space-evenly;
+  align-items: stretch;
+  position: relative;
+  z-index: 1;
+}
+
+header a {
+  display: block;
+}
+
+input[type="submit"], header a {
+  background: var(--blue);
+  color: white;
+  font-size: inherit;
+  padding: 0.5em;
+}
+
+:is(input[type="submit"], header a):hover {
+  cursor: pointer;
+  background: var(--dark-blue);
+}
+
+header .router-link-active {
+  background: var(--dark-blue);
+}
+
+menu, ol, ul {
+  display: contents;
+}
+
+li {
+  list-style-type: none;
 }
 
 a {
@@ -14,45 +59,74 @@ a {
   text-decoration: none;
 }
 
-a:hover {
-  text-decoration: underline;
+main {
+  background: var(--light-blue);
+  border: 1px solid var(--grey);
+  border-top: 0;
+  border-bottom: 0;
+  padding: var(--between-posts);
+  max-width: 35em;
+  min-height: 100vh;
+  margin-left: auto;
+  margin-right: auto;
+  box-shadow: 0em 0em 50vw var(--grey);
 }
 
-.header .router-link-active {
-  text-decoration: underline;
+textarea {
+  width: 100%;
+  font-size: inherit;
+  padding: 1em;
+  resize: none;
+  box-sizing: border-box;
+  margin-bottom: 0;
+  border: none;
+  vertical-align: top;
 }
 
-li {
+textarea:focus {
+  outline: none;
+}
+
+textarea + input[type="submit"] {
+  width: 100%;
+  border: 0;
   display: block;
 }
 
-ul {
-  list-style-type: none;
-  padding: 0;
+main > *, main li {
+  margin-bottom: var(--between-posts);
 }
 
-header {
-  background: var(--blue);
-  color: white;
-  text-align: center;
-  border-radius: 1em;
+main li li {
+  margin-bottom: 0;
+  margin-top: 1em;
 }
 
-header li {
+main form, main li {
+  position: relative;
+  background: white;
+  border: 1px solid var(--grey);
+}
+
+main li {
   padding: 1em;
-  display: inline-block;
 }
 
-u {
-  font-family: klavika-web, sans-serif;
-  text-decoration: none;
+main li h1 {
+  color: var(--blue);
+}
+
+main li h2 {
+  color: var(--grey);
+  font-weight: normal;
+  font-size: 80%;
+}
+
+p {
+  word-break: break-word;
+  white-space: pre-wrap;
   font-size: 130%;
-}
-
-main {
-  max-width: 30em;
-  margin-left: auto;
-  margin-right: auto;
+  padding: 1em;
 }
 
 input[type="checkbox"] {
@@ -75,10 +149,8 @@ label, button {
   padding-bottom: 0.2em;
   font-size: inherit;
   user-select: none;
-  box-shadow: 0.05em 0.05em 0.2em var(--grey);
+  border: 1px solid var(--grey);
   background: none;
-  border: none;
-  border-radius: 1em;
   color: var(--grey);
 }
 
@@ -88,40 +160,28 @@ label, button {
   color: white;
 }
 
-.post {
-  box-shadow: 0.1em 0.1em 0.4em var(--grey);
-  padding-left: 1em;
-  padding-right: 1em;
-  padding-top: 0.5em;
-  padding-bottom: 0.5em;
-  margin-top: 2em;
-  position: relative;
-}
-
-.post-modifiers {
+.modifiers {
   position: absolute;
   right: 0;
   top: 0;
   padding: inherit;
-  font-size: 120%;
+  font-size: inherit;
   text-align: right;
 }
 
-.post-modifiers > * {
+.modifiers > * {
   display: block;
   float: right;
   clear: right;
 }
 
-.post-modifiers ul {
-  background: white;
-  box-shadow: 0.05em 0.05em 0.2em var(--grey);
+.modifiers li {
+  display: contents;
 }
 
-.post-modifiers button {
+.modifiers button {
   width: 100%;
-  border-radius: 0;
-  box-shadow: none;
+  background: white;
 }
 
 .post-annotators {
@@ -134,68 +194,16 @@ label, button {
   align-items: center;
 }
 
-h1 {
+main > h1 {
   text-align: center;
-  margin: 1.5em;
+  font-size: 150%;
 }
 
-h2 {
-  font-size: 200%;
-  text-align: center;
-  margin: 1em;
-}
-
-h3 {
-  color: var(--blue);
-  margin: 0.1em;
-  font-size: 110%;
-}
-
-h4 {
-  color: var(--grey);
-  margin: 0.1em;
-  font-weight: normal;
-  font-size: 90%;
-}
-
-textarea {
-  width: 100%;
-  font-size: inherit;
-  padding: 0.5em;
-  resize: none;
-  box-sizing: border-box;
-  margin-bottom: 0;
-  border: 1px solid var(--grey);
-  vertical-align: top;
-}
-
-textarea:focus {
-  outline: none;
-  border: 1px solid var(--blue);
-}
-
-input[type="submit"] {
-  background: var(--blue);
-  color: white;
-}
-
-input[type="submit"]:hover {
-  cursor: pointer;
-  background: var(--dark-blue);
-}
-
-textarea + input[type="submit"] {
-  font-size: inherit;
-  padding: 0.5em;
-  width: 100%;
-  border-radius: 0 0 0.5em 0.5em;
-  border: 0;
-  display: block;
-}
-
-.superscript {
-  vertical-align: top;
-  font-size: 50%;
+main > h1 button {
+  padding: 0;
+  color: black;
+  border: none;
+  font-weight: bold;
 }
 
 input[type="text"] {
@@ -210,17 +218,10 @@ input[type="text"] {
   width: 80%;
 }
 
-p {
-  word-break: break-word;
-  white-space: pre-wrap;
-  font-size: 130%;
-}
-
 p a {
   color: cornflowerblue
 }
 
 .directory {
-  text-align: center;
   font-size: 120%;
 }

@@ -14,6 +14,8 @@ export default function({myID, useCollection}) { return {
   computed: {
     postQueryMod() {
       const followIDs = this.follows.map(f=>f.follow.by)
+      followIDs.push(myID)
+      console.log(followIDs)
       return { $or: [
         { _by: { $in: followIDs } },
         {  at: { $in: followIDs } }

@@ -1,6 +1,6 @@
 export default function({myID, useCollection}) { return {
 
-  props: ['ID'],
+  props: ['ID', 'editable'],
 
   setup: (props)=> ({
     names: useCollection(()=>({
@@ -21,6 +21,12 @@ export default function({myID, useCollection}) { return {
             _queryFailsWithout: [ '_by' ]
           }]
         }
+    },
+
+    currentNameDisplay() {
+      return this.names.length?
+        this.currentName.name :
+        'Anonymous'
     }
   },
 
@@ -35,19 +41,19 @@ export default function({myID, useCollection}) { return {
   },
 
   template: `
-    <form v-if="editing" @submit.prevent="setName">
-      <input v-model="currentName.name"
-        v-click-away="()=> setName()"
-        @focus="$event.target.select()" v-focus />
-    </form>
-
-    <router-link v-else :to="'/profile/' + ID">
-      {{ names.length? currentName.name : 'Anonymous' }}
-    </router-link>
-
-    <button
-      v-if="ID=='${myID}' && !editing"
-      @click="editing=true">
-      ✏️
-    </button>`
+    <template v-if="editable && ID=='${myID}'">
+      <form v-if="editing" @submit.prevent="setName">
+        <input v-model="currentName.name"
+          v-click-away="()=> setName()"
+          @focus="$event.target.select()" v-focus />
+      </form>
+      <button v-else @click="editing=true">
+        {{ currentNameDisplay }}
+      </button>
+    </template>
+    <template v-else>
+      <router-link v-else :to="'/profile/' + ID">
+        {{ currentNameDisplay }}
+      </router-link>
+    </template>`
 }}
