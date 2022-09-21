@@ -1,21 +1,24 @@
 export default {
 
-  maxInt: 9007199254740992,
+  query(property) {
+    return {
+      [property]: {
+        $type: 'array',
+        $type: ['int', 'long'],
+      },
+      $nor: [
+        { [property]: { $gt: this.maxInt } },
+        { [property]: { $lt: 0 } },
+      ]
+    }
+  },
 
-  begin() {
+  get before() {
     return []
   },
 
-  end() {
-    return [this.maxInt]
-  },
-
-  lengthWithoutZeros(a) {
-    let length = a.length
-    while (length > 0 && a[length - 1] == 0) {
-      length--
-    }
-    return length
+  get after() {
+    return [this.maxInt+1]
   },
 
   between(a, b) {
@@ -131,4 +134,15 @@ export default {
       return 0
     }
   },
+
+
+  lengthWithoutZeros(a) {
+    let length = a.length
+    while (length > 0 && a[length - 1] == 0) {
+      length--
+    }
+    return length
+  },
+
+  maxInt: 9007199254740991,
 }
