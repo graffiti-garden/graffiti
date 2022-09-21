@@ -1,0 +1,60 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+main, dialog {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  top: 0;
+  left: 0;
+}
+
+header {
+  position: fixed;
+  z-index: 1;
+}
+
+dialog {
+  display: flex;
+  z-index: 9999999999999999;
+  background: rgba(0,0,0,0.5);
+  justify-content: center;
+  align-items: center;
+}
+
+form {
+  width: 30em;
+  font-size: 120%;
+  background: white;
+  border: 1px solid black;
+}
+
+input, textarea {
+  width: 100%;
+  font: inherit;
+  border: none;
+}
+
+input[type=submit] {
+  border-top: 1px solid black;
+}
+
+input:hover {
+  cursor: pointer;
+}
+
+li {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  border: 1px solid black;
+  background: white;
+  list-style: none;
+  padding: 0.5em;
+}
