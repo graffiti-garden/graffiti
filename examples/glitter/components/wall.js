@@ -21,6 +21,8 @@ export default function({myID, useCollection}) { return {
   data: ()=> ({
     postContent: '',
     creatorOpen: false,
+    publicContext: false,
+    editPost: null
   }),
 
   methods: {
@@ -34,7 +36,7 @@ export default function({myID, useCollection}) { return {
     },
 
     makePost() {
-      this.posts.update({
+      const post = {
         post: this.postContent,
         id: crypto.randomUUID(),
         timestamp: Date.now(),
@@ -42,7 +44,13 @@ export default function({myID, useCollection}) { return {
           x: Math.random(),
           y: Math.random()
         }
-      })
+      }
+      if (!this.publicContext) {
+        post._inContextIf = [{
+          _queryFailsWithout: ['position.x', 'position.y']
+        }]
+      }
+      this.posts.update(post)
       this.postContent = ''
       this.creatorOpen = false
     },
@@ -68,15 +76,28 @@ export default function({myID, useCollection}) { return {
         make new post
       </button>
     </header>
-    <dialog v-if="creatorOpen">
-      <form @submit.prevent="makePost">
+    <dialog v-if="creatorOpen||editPost">
+      <form v-if="creatorOpen" @submit.prevent="makePost" v-click-away="()=>creatorOpen=false">
         <textarea v-model="postContent"/>
+        <label>
+          <input type="checkbox" v-model="publicContext">
+          share this post with more generic posters (like namebook)?
+        </label>
         <input type="submit" value="send it">
+      </form>
+      <form v-if="editPost" v-click-away="()=>editPost=null">
+        <button @click="editPost._remove();editPost=null">
+          ❌ delete post ❌
+        </button>
+        <label>
+          <input type="checkbox" v-model="publicContext">
+          share this post with more generic posters (like namebook)?
+        </label>
       </form>
     </dialog>
     <main @drop="endDrag($event)" @dragover.prevent @dragenter.prevent>
       <ul>
-        <li v-for="post in posts" :style="style(post)" :draggable="post._by=='${myID}'" @dragstart="startDrag($event, post)">
+        <li v-for="post in posts" :style="style(post)" :draggable="post._by=='${myID}'" @dragstart="startDrag($event, post)" @dblclick="editPost=post">
           {{post.post}}
         </li>
       </ul>
