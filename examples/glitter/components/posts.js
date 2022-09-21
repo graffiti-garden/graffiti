@@ -8,7 +8,7 @@ export default function({myID, useCollection}) { return {
     Post: Post(...arguments)
   },
 
-  props: ['queryMod', 'postMod', 'prompt', 'follows'],
+  props: ['queryMod', 'postMod', 'prompt', 'follows', 'inReplyToContentAddress'],
 
   setup: (props)=> ({
     posts: useCollection(()=>Object.assign({
@@ -40,9 +40,10 @@ export default function({myID, useCollection}) { return {
       <input type="submit" value="post">
     </form>
 
+
     <ul>
       <li v-for="post in posts.sortBy('-timestamp')" :key="post.id">
-        <Post :post="post" :follows="follows" />
+        <Post :post="post" :follows="follows" :inReplyToContentAddress="inReplyToContentAddress"/>
       </li>
     </ul>`
 }}

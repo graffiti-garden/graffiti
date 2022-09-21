@@ -37,6 +37,11 @@ export default function({myID, toggleLogIn}) { return {
             </router-link>
           </li>
           <li>
+            <a href="./minimal.html">
+              minimal
+            </a>
+          </li>
+          <li>
             <a href="" @click.prevent="toggleLogIn">
               log out
             </a>
