@@ -22,13 +22,11 @@ export default function({myID, toggleLogIn}) { return {
     <template v-else>
 
       <header>
-        <ul>
+        <menu>
           <li>
-            <u>
-              <router-link to="/">
-                namebook
-              </router-link>
-            </u>
+            <router-link to="/">
+              feed
+            </router-link>
           </li>
           <li>
             <router-link to="/profile/${myID}">
@@ -37,7 +35,7 @@ export default function({myID, toggleLogIn}) { return {
           </li>
           <li>
             <router-link to="/directory">
-              user directory
+              name book
             </router-link>
           </li>
           <li>
@@ -45,7 +43,7 @@ export default function({myID, toggleLogIn}) { return {
               log out
             </a>
           </li>
-        </ul>
+        </menu>
       </header>
 
       <main>

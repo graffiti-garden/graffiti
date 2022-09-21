@@ -40,8 +40,8 @@ export default function({myID, useCollection}) { return {
       this.postContent = ''
     },
 
-    formattedDate() {
-      return new Date(this.post.timestamp)
+    formattedTimestamp(post) {
+      return new Date(post.timestamp)
         .toLocaleDateString(undefined, {
           month: 'long',
           day: 'numeric',
@@ -89,22 +89,21 @@ export default function({myID, useCollection}) { return {
     </form>
 
     <ul>
-      <li class="post"
-        v-for="post in posts.sortBy('-timestamp')"
+      <li v-for="post in posts.sortBy('-timestamp')"
         :key="post.id">
 
-        <h3>
+        <h1>
           <Name :ID="post._by" />
           <template v-if="'at' in post">
             <template v-for="id in post.at" :key="id">
               @<Name :ID="id" />
             </template>
           </template>
-        </h3>
+        </h1>
 
-        <h4>
-          {{ formattedTimestamp }}
-        </h4>
+        <h2>
+          {{ formattedTimestamp(post) }}
+        </h2>
 
         <p>
           <form v-if="editID==post.id" @submit.prevent="posts.update(post); editID=''">
@@ -115,25 +114,28 @@ export default function({myID, useCollection}) { return {
           <span v-else v-html="sanitizedContent(post)"></span>
         </p>
 
-        <div class="post-modifiers" v-if="post._by=='${myID}'">
+        <div class="modifiers" v-if="post._by=='${myID}'">
           <input type="checkbox"
             :id="'menu' + post.id"
             :checked="editMenuID==post.id"
             @click.prevent="editMenuID=editMenuID==post.id?'':post.id">
           <label :for="'menu' + post.id">⚙️</label>
 
-          <ul v-if="editMenuID==post.id" v-click-away="()=> editMenuID=''">
+          <menu v-if="editMenuID==post.id" v-click-away="()=> editMenuID=''">
             <li v-if="editID!=post.id">
               <button @click="editID=post.id;editMenuID=''">
                 edit
               </button>
+            </li>
+            <li v-else>
+              <Block :ID="id">
             </li>
             <li>
               <button @click="posts.remove(post)">
                 delete
               </button>
             </li>
-          </ul>
+          </menu>
         </div>
 
         <div class="post-annotators">

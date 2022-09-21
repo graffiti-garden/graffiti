@@ -38,9 +38,9 @@ export default function({myID, useCollection}) { return {
 
   template: `
     <h1>
-      <Name :ID="ID" />
+      <Name :ID="ID" editable="true"/>
     </h1>
-    <h2>
+    <h2 v-if="ID!='${myID}'">
       <Follow :ID="ID" />
     </h2>
 

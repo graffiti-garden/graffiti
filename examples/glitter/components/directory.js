@@ -29,9 +29,7 @@ export default function({myID, useCollection}) { return {
 
   template: `
     <h1>
-      <u>
-        namebook directory
-      </u>
+      namebook directory
     </h1>
 
     <h2>
