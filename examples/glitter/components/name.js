@@ -52,7 +52,7 @@ export default function({myID, useCollection}) { return {
       </button>
     </template>
     <template v-else>
-      <router-link v-else :to="'/profile/' + ID">
+      <router-link :to="'/profile/' + ID">
         {{ currentNameDisplay }}
       </router-link>
     </template>`
