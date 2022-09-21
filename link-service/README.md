@@ -4,7 +4,7 @@ This is a web server that can be used as the communication and storage backend f
 Moreover, these applications can all function on top of the same server instance at the same time and to the degree that they have overlapping functionality, they will naturally interoperate.
 We hope that this serves both as a powerful prototyping tool and as a proof of concept that an ecosystem of social applications can exist that isn't subject to [collective vendor lock-in](https://en.wikipedia.org/wiki/Vendor_lock-in#Collective_vendor_lock-in).
 
-A reference client library built as an extension of the Vue.js web framework along with example applications are available [here](https://github.com/digital-graffiti/graffiti-js-vue).
+A reference client library built as an extension of the Vue.js web framework along with example applications are available [here](https://github.com/graffiti-garden/graffiti-x-vue).
 
 ## Local Usage
 
@@ -13,7 +13,7 @@ To launch the server locally, run:
     sudo docker compose up --build
 
 The application will be up at [http://localhost:5001](http://localhost:5001).
-If you are using the [Vue.js Graffiti plugin](https://github.com/digital-graffiti/vue), you might point to the local server as follows:
+If you are using the [Vue.js Graffiti plugin](https://github.com/graffiti-garden/graffiti-x-vue), you might point to the local server as follows:
 
     Graffiti("http://localhost:5001").then(g=>createApp().use(g).mount("#app")
     
@@ -41,11 +41,11 @@ The JSON objects are schemaless aside from 5 regulated fields:
 - `_id`: is a random identifier that must be added to each object. This field is not searchable, it's only purpose it to uniquely refer to objects so they can be added and replaced. This field is user-assigned for optimistic rendering. A user can't store more than one object with the same `_id`; trying to create an object with the same `_id` as an existing object will simply replace the existing object. Different users *can* store objects with the same `_id`, so there is no worry of someone else replacing your object.
 - `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
 - `_to`: this field must be equal to a list of unique user identifiers. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
-- `_inContextIf`: see [the interactive tutorial](https://digital-graffiti.github.io/graffiti-x-vue/#/context).
+- `_inContextIf`: see [the interactive tutorial](https://graffiti.garden/graffiti-x-vue/#/context).
 
 Objects can't include any other fields that start with `_` or `$`.
 
-For security and performance purposes, MongoDB query operators are limited to those listed [here](https://github.com/digital-graffiti/server/blob/main/app/schema.py).
+For security and performance purposes, MongoDB query operators are limited to those listed [here](https://github.com/graffiti-garden/server/blob/main/app/schema.py).
 
 ### `broker`
 
@@ -95,12 +95,17 @@ Make your secret unique and **keep it safe**!
 
 Add CNAME entries for the `app.DOMAIN` and `auth.DOMAIN` subdomains by adding these lines to your DNS (where `DOMAIN` is replaced with your server's domain):
 
-    app.DOMAIN.  1800 IN A DOMAIN_IP
-    auth.DOMAIN. 1800 IN CNAME app.DOMAIN
-    
+    app.DOMAIN.  1800 IN CNAME DOMAIN
+    auth.DOMAIN. 1800 IN CNAME DOMAIN
+
 Once these changes propagate (it might take up to an hour), generate SSL certificates with:
 
     sudo certbot certonly --standalone -d DOMAIN,app.DOMAIN,auth.DOMAIN
+
+This will generate the following files:
+
+    /etc/letsencrypt/live/DOMAIN/fullchain.pem
+    /etc/letsencrypt/live/DOMAIN/privkey.pem
 
 ### Mailserver
 
@@ -121,9 +126,9 @@ The generated file should already be split, but the sections are on new lines. R
 In addition, add these lines to your DNS to turn on the email security features DKIM and SPF:
 
     _domainkey.DOMAIN. 1800 IN TXT "o=-"
-    DOMAIN. 1800 IN TXT "v=spf1 a:app.DOMAIN -all"
+    DOMAIN. 1800 IN TXT "v=spf1 a -all"
 
-Once the DNS propagates (again, it might take an hour), restart the server and test that the mailer is working by going to
+Once the DNS propagates (again, it might take an hour), you can test that the mail server is working by going to
 `https://auth.DOMAIN/?client_id=&redirect_uri=`.
 Send an email to `test@allaboutspam.com` then go to [All About Spam](http://www.allaboutspam.com/email-server-test-report/index.php) and enter `noreply@DOMAIN` to see your test report.
 

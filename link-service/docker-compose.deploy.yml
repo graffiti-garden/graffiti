@@ -10,6 +10,8 @@ services:
     ports:
       - 80:80
       - 443:443
+    environment:
+      DOMAIN: ${DOMAIN}
 
   mailserver:
     image: mailserver/docker-mailserver:11.0.0
