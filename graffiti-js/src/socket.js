@@ -94,7 +94,7 @@ export default class {
       messageEvent.data = data
       this.eventTarget.dispatchEvent(messageEvent)
 
-    } else if (['updates', 'deletes'].includes(data.type)) {
+    } else if (['updates', 'removes'].includes(data.type)) {
       // Subscription data
       if (data.queryID in this.subscriptionData) {
         const sd = this.subscriptionData[data.queryID]
@@ -131,7 +131,7 @@ export default class {
 
   async remove(objectID) {
     await this.request({
-      type: "delete",
+      type: "remove",
       objectID
     })
   }
