@@ -1,0 +1,226 @@
+:root {
+  --blue: #4267B2;
+  --dark-blue: #193b80;
+  --grey: #898F9C;
+}
+
+* {
+  font-family: Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.header .router-link-active {
+  text-decoration: underline;
+}
+
+li {
+  display: block;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+header {
+  background: var(--blue);
+  color: white;
+  text-align: center;
+  border-radius: 1em;
+}
+
+header li {
+  padding: 1em;
+  display: inline-block;
+}
+
+u {
+  font-family: klavika-web, sans-serif;
+  text-decoration: none;
+  font-size: 130%;
+}
+
+main {
+  max-width: 30em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+input[type="checkbox"] {
+  display: none;
+}
+
+input[type="checkbox"]:checked + label {
+  background: var(--blue);
+  color: white;
+}
+
+input[type="checkbox"]:checked + label:hover {
+  background: var(--dark-blue);
+}
+
+label, button {
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+  padding-top: 0.2em;
+  padding-bottom: 0.2em;
+  font-size: inherit;
+  user-select: none;
+  box-shadow: 0.05em 0.05em 0.2em var(--grey);
+  background: none;
+  border: none;
+  border-radius: 1em;
+  color: var(--grey);
+}
+
+:is(label, button):not([disabled]):hover {
+  cursor: pointer;
+  background: var(--grey);
+  color: white;
+}
+
+.post {
+  box-shadow: 0.1em 0.1em 0.4em var(--grey);
+  padding-left: 1em;
+  padding-right: 1em;
+  padding-top: 0.5em;
+  padding-bottom: 0.5em;
+  margin-top: 2em;
+  position: relative;
+}
+
+.post-modifiers {
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: inherit;
+  font-size: 120%;
+  text-align: right;
+}
+
+.post-modifiers > * {
+  display: block;
+  float: right;
+  clear: right;
+}
+
+.post-modifiers ul {
+  background: white;
+  box-shadow: 0.05em 0.05em 0.2em var(--grey);
+}
+
+.post-modifiers button {
+  width: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.post-annotators {
+  border-top: 1px solid grey;
+  padding-top: inherit;
+  display: flex;
+  font-size: 120%;
+  justify-content: space-between;
+  color: var(--grey);
+  align-items: center;
+}
+
+h1 {
+  text-align: center;
+  margin: 1.5em;
+}
+
+h2 {
+  font-size: 200%;
+  text-align: center;
+  margin: 1em;
+}
+
+h3 {
+  color: var(--blue);
+  margin: 0.1em;
+  font-size: 110%;
+}
+
+h4 {
+  color: var(--grey);
+  margin: 0.1em;
+  font-weight: normal;
+  font-size: 90%;
+}
+
+textarea {
+  width: 100%;
+  font-size: inherit;
+  padding: 0.5em;
+  resize: none;
+  box-sizing: border-box;
+  margin-bottom: 0;
+  border: 1px solid var(--grey);
+  vertical-align: top;
+}
+
+textarea:focus {
+  outline: none;
+  border: 1px solid var(--blue);
+}
+
+input[type="submit"] {
+  background: var(--blue);
+  color: white;
+}
+
+input[type="submit"]:hover {
+  cursor: pointer;
+  background: var(--dark-blue);
+}
+
+textarea + input[type="submit"] {
+  font-size: inherit;
+  padding: 0.5em;
+  width: 100%;
+  border-radius: 0 0 0.5em 0.5em;
+  border: 0;
+  display: block;
+}
+
+.superscript {
+  vertical-align: top;
+  font-size: 50%;
+}
+
+input[type="text"] {
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: inherit;
+  color: inherit;
+  border: none;
+  padding: 0;
+  border: 0;
+  outline-color: var(--blue);
+  width: 80%;
+}
+
+p {
+  word-break: break-word;
+  white-space: pre-wrap;
+  font-size: 130%;
+}
+
+p a {
+  color: cornflowerblue
+}
+
+.directory {
+  text-align: center;
+  font-size: 120%;
+}

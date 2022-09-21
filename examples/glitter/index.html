@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Graffiti Namebook</title>
+  <link rel="stylesheet" href="https://use.typekit.net/ovj6wxu.css">
+  <link rel="stylesheet" href="./style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+  <div id="app">
+    <navigation></navigation>
+  </div>
+
+  <script src="https://unpkg.com/vue@3.2.37/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/vue-router@4.0.16/dist/vue-router.global.prod.js"></script>
+  <script type="module">
+    import Graffiti from 'https://graffiti.csail.mit.edu/graffiti-x-vue/graffiti.js'
+    import VueClickAway from "https://cdn.jsdelivr.net/npm/vue3-click-away@1.2.4/dist/module.js"
+    import Navigation from './components/navigation.js'
+
+    const focus = {
+      mounted: el => el.focus()
+    }
+
+    Graffiti(Vue).then(graffiti=> {
+
+      const Router = VueRouter.createRouter({
+        history: VueRouter.createWebHashHistory(),
+        routes: [{
+          path: '/',
+          component: async ()=>
+            (await import('./components/directory.js')).default(graffiti)
+        }, {
+          path: '/profile/:ID',
+          props: true,
+          component: async ()=>
+            (await import('./components/profile.js')).default(graffiti)
+        }]
+      })
+
+      Vue.createApp()
+        .use(Router)
+        .use(VueClickAway)
+        .directive('focus', focus)
+        .component('Navigation', Navigation(graffiti))
+        .mount('#app')
+    })
+  </script>
+</body>
+</html>
