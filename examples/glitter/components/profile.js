@@ -20,6 +20,15 @@ export default function({myID, useCollection}) { return {
       ]}
     },
 
+    postMod() {
+      return this.ID==myID? {} : {
+        at: [this.ID],
+        _inContextIf: [{
+          _queryFailsWithout: ['at.0']
+        }]
+      }
+    },
+
     prompt() {
       return this.ID==myID?
         "what's on your mind?" :
@@ -35,5 +44,5 @@ export default function({myID, useCollection}) { return {
       <Follow :ID="ID" />
     </h2>
 
-    <Posts :query="queryMod" :prompt="prompt"/>`
+    <Posts :queryMod="queryMod" :postMod="postMod" :prompt="prompt"/>`
 }}
