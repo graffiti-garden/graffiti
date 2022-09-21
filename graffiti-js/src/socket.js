@@ -3,8 +3,8 @@ import { randomString } from './utils.js'
 
 export default class {
 
-  constructor(origin="https://graffiti.csail.mit.edu") {
-    this.origin = origin
+  constructor(graffitiURL="https://graffiti.csail.mit.edu") {
+    this.graffitiURL = graffitiURL
     this.open = false
     this.subscriptionData = {}
     this.eventTarget = new EventTarget()
@@ -13,10 +13,10 @@ export default class {
   // CALL THIS BEFORE DOING ANYTHING ELSE
   async initialize() {
     // Perform authorization
-    this.authParams = await Auth.connect(this.origin)
+    this.authParams = await Auth.connect(this.graffitiURL)
 
     // Rewrite the URL
-    this.wsURL = new URL(origin)
+    this.wsURL = new URL(this.graffitiURL)
     this.wsURL.host = "app." + this.wsURL.host
     if (this.wsURL.protocol == 'https:') {
       this.wsURL.protocol = 'wss:'
@@ -39,7 +39,7 @@ export default class {
   }
 
   // authorization functions
-  logIn() { Auth.logIn(this.origin) }
+  logIn() { Auth.logIn(this.graffitiURL) }
   logOut() { Auth.logOut() }
   get myID() { return this.authParams.myID }
   get loggedIn() { return this.authParams.loggedIn }
