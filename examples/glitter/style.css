@@ -265,10 +265,20 @@ input[type="text"] {
   width: 80%;
 }
 
-p a {
+:is(p,footer) a {
   color: var(--blue);
 }
 
 .directory {
   font-size: 120%;
+}
+
+footer {
+  position: sticky;
+  width: 100%;
+  background: var(--light-blue);
+  bottom: 0;
+  text-align: center;
+  padding: 0.5rem;
+  border-top: 1px solid var(--grey);
 }
