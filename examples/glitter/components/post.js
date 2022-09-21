@@ -24,6 +24,10 @@ export default function({myID, useCollection}) { return {
     showLikeCount: {
       type: Boolean,
       default: true
+    },
+    inReplyToContentAddress: {
+      type: String,
+      default: ''
     }
   },
 
@@ -73,14 +77,17 @@ export default function({myID, useCollection}) { return {
     },
 
     commentsQueryMod() {
-      return { inReplyTo: this.post.id }
+      return { 'inReplyTo.id': this.post.id }
     },
 
     commentsPostMod() {
       return {
-        inReplyTo: this.post.id,
+        inReplyTo: {
+          id: this.post.id,
+          contentAddress: this.post._contentAddress
+        },
         _inContextIf: [{
-          _queryFailsWithout: [ 'inReplyTo' ]
+          _queryFailsWithout: [ 'inReplyTo.id' ]
         }]
       }
     }
@@ -129,8 +136,7 @@ export default function({myID, useCollection}) { return {
       </menu>
     </div>
 
-    <p v-if="blocks.length" class="warning">
-      this post is blocked by
+    <p v-if="blocks.length" class="warning">this post is blocked by
       <ul>
         <li v-if="blocks.authors.includes('${myID}')">you</li>
         <li v-for="author in blocks.authors.filter(x=>x!='${myID}')">
@@ -144,6 +150,8 @@ export default function({myID, useCollection}) { return {
       <label :for="'spoiler' + post.id">show it anyways?</label>
     </p>
     <template v-if="spoilerOpen || !blocks.length">
+      <p class="warning" v-if="inReplyToContentAddress && post.inReplyTo && post.inReplyTo.contentAddress && inReplyToContentAddress!=post.inReplyTo.contentAddress">this comment refers to a post that has been edited
+      </p>
       <p>
         <form v-if="editing" @submit.prevent="post._update(); editing=false">
           <textarea v-model="post.post" @focus="$event.target.select()" v-focus>
@@ -175,6 +183,7 @@ export default function({myID, useCollection}) { return {
         :queryMod="commentsQueryMod"
         :postMod="commentsPostMod"
         :follows="follows"
+        :inReplyToContentAddress="post._contentAddress"
         prompt="write a comment..."/>
     </template>`
 }}
