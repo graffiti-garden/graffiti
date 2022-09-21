@@ -35,7 +35,7 @@ export default function({myID, toggleLogIn}) { return {
           </li>
           <li>
             <router-link to="/directory">
-              name book
+              namebook
             </router-link>
           </li>
           <li>
