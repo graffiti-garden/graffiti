@@ -12,11 +12,14 @@ export default function({myID, useCollection}) { return {
   }),
 
   computed: {
+    followAuthors() {
+      return this.follows.map(f=>f.follow.by)
+    },
+
     postQueryMod() {
-      const followIDs = this.follows.map(f=>f.follow.by)
       return { $or: [
-        { _by: { $in: followIDs } },
-        {  at: { $in: followIDs } }
+        { _by: { $in: this.followAuthors } },
+        {  at: { $in: this.followAuthors } }
       ]}
     }
   },
@@ -30,5 +33,5 @@ export default function({myID, useCollection}) { return {
       Browse the <router-link to="/directory">namebook</router-link> for people to follow.
       </p>
     </template>
-    <Posts v-else :queryMod="postQueryMod" prompt="what's on your mind?" :follows="follows"/>`
+    <Posts v-else :queryMod="postQueryMod" prompt="what's on your mind?" :follows="followAuthors"/>`
 }}

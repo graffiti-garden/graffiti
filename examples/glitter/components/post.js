@@ -30,38 +30,11 @@ export default function({myID, useCollection}) { return {
   }),
 
   data: ()=> ({
+    spoilerOpen: false,
     commentsOpen: false,
     editMenuOpen: false,
     editing: false,
   }),
-
-  methods: {
-    toggleLike() {
-      if (this.likes.mine.length) {
-        this.likes.removeMine()
-      } else {
-        this.likes.update({
-          like: { id: this.post.id },
-          _inContextIf: [{
-            _queryFailsWithout: ['like.id']
-          }]
-        })
-      }
-    },
-
-    toggleBlock() {
-      if (this.blocks.mine.length) {
-        this.blocks.removeMine()
-      } else {
-        this.blocks.update({
-          block: { id: this.post.id },
-          _inContextIf: [{
-            _queryFailsWithout: ['like.id']
-          }]
-        })
-      }
-    }
-  },
 
   computed: {
     formattedTimestamp() {
@@ -120,26 +93,17 @@ export default function({myID, useCollection}) { return {
       {{ formattedTimestamp }}
     </h2>
 
-    <p>
-      <form v-if="editing" @submit.prevent="post._update(); editing=false">
-        <textarea v-model="post.post" @focus="$event.target.select()" v-focus>
-        </textarea>
-        <input type="submit" value="save">
-      </form>
-      <span v-else v-html="sanitizedContent"></span>
-    </p>
-
     <div class="modifiers" v-click-away="()=> editMenuOpen=false">
       <input type="checkbox"
         :id="'menu' + post.id"
         :checked="editMenuOpen"
-        @click.prevent="editMenuOpen=!editMenuOpen">
+        @click="editMenuOpen=!editMenuOpen">
       <label :for="'menu' + post.id">⚙️</label>
 
-      <menu v-if="editMenuOpen">
+      <menu v-if="editMenuOpen" @click="editMenuOpen=false">
         <template v-if="post._by=='${myID}'">
           <li v-if="!editing">
-            <button @click="editing=true;editMenuOpen=false">
+            <button @click="editing=true">
               edit
             </button>
           </li>
@@ -157,24 +121,50 @@ export default function({myID, useCollection}) { return {
       </menu>
     </div>
 
-    <div class="post-annotators">
-      <Annotation name="like" :ID="post.id" :collection="likes" checked="👍 liked" unchecked="👍 like"/>
-
-      <label disabled>
-        Likes: {{ likes.authors.length }}
-      </label>
-
+    <p v-if="blocks.length" class="warning">
+      this post is blocked by
+      <ul>
+        <li v-if="blocks.authors.includes('${myID}')">you</li>
+        <li v-for="author in blocks.authors.filter(x=>x!='${myID}')">
+          <Name :ID="author" />
+        </li>
+      </ul>.
       <input type="checkbox"
-        :id="'comments' + post.id"
-        :checked="commentsOpen"
-        @click="commentsOpen=!commentsOpen">
-      <label :for="'comments' + post.id">
-        comments
-      </label>
-    </div>
+        :id="'spoiler' + post.id"
+        :checked="spoilerOpen"
+        @click="spoilerOpen=!spoilerOpen">
+      <label :for="'spoiler' + post.id">show it anyways?</label>
+    </p>
+    <template v-if="spoilerOpen || !blocks.length">
+      <p>
+        <form v-if="editing" @submit.prevent="post._update(); editing=false">
+          <textarea v-model="post.post" @focus="$event.target.select()" v-focus>
+          </textarea>
+          <input type="submit" value="save">
+        </form>
+        <span v-else v-html="sanitizedContent"></span>
+      </p>
 
-    <Posts v-if="commentsOpen"
-      :queryMod="commentsQueryMod"
-      :postMod="commentsPostMod"
-      prompt="write a comment..."/>`
+      <div class="post-annotators">
+        <Annotation name="like" :ID="post.id" :collection="likes" checked="👍 liked" unchecked="👍 like"/>
+
+        <label disabled>
+          likes: {{ likes.authors.length }}
+        </label>
+
+        <input type="checkbox"
+          :id="'comments' + post.id"
+          :checked="commentsOpen"
+          @click="commentsOpen=!commentsOpen">
+        <label :for="'comments' + post.id">
+          comments
+        </label>
+      </div>
+
+      <Posts v-if="commentsOpen"
+        :queryMod="commentsQueryMod"
+        :postMod="commentsPostMod"
+        :follows="follows"
+        prompt="write a comment..."/>
+    </template>`
 }}

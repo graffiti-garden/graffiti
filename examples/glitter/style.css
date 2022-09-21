@@ -4,6 +4,7 @@
   --dark-blue: #193b80;
   --grey: #898F9C;
   --between-posts: 2rem;
+  --red: #E11B1B;
 }
 
 * {
@@ -281,4 +282,26 @@ footer {
   text-align: center;
   padding: 0.5rem;
   border-top: 1px solid var(--grey);
+}
+
+.warning {
+  color: var(--red);
+  font: inherit;
+}
+
+.warning :is(ul, li) {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.warning li ~ li::before{
+  content: " and ";
+}
+
+.warning label {
+  display: block;
+  text-align: center;
+  margin-top: calc(0.5*var(--between-posts));
 }
