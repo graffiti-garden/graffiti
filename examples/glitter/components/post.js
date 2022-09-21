@@ -16,6 +16,14 @@ export default function({myID, useCollection}) { return {
     follows: {
       type: Array,
       default: []
+    },
+    showComments: {
+      type: Boolean,
+      default: true
+    },
+    showLikeCount: {
+      type: Boolean,
+      default: true
     }
   },
 
@@ -148,17 +156,19 @@ export default function({myID, useCollection}) { return {
       <div class="post-annotators">
         <Annotation name="like" :ID="post.id" :collection="likes" checked="👍 liked" unchecked="👍 like"/>
 
-        <label disabled>
+        <label v-if="showLikeCount" disabled>
           likes: {{ likes.authors.length }}
         </label>
 
-        <input type="checkbox"
-          :id="'comments' + post.id"
-          :checked="commentsOpen"
-          @click="commentsOpen=!commentsOpen">
-        <label :for="'comments' + post.id">
-          comments
-        </label>
+        <template v-if="showComments">
+          <input type="checkbox"
+            :id="'comments' + post.id"
+            :checked="commentsOpen"
+            @click="commentsOpen=!commentsOpen">
+          <label :for="'comments' + post.id">
+            comments
+          </label>
+        </template>
       </div>
 
       <Posts v-if="commentsOpen"
