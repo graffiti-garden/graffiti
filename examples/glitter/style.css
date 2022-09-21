@@ -110,12 +110,13 @@ textarea {
   resize: none;
   box-sizing: border-box;
   margin-bottom: 0;
-  border: none;
+  border: 1px solid var(--grey);
   vertical-align: top;
 }
 
 textarea:focus {
   outline: none;
+  border: 1px solid var(--blue);
 }
 
 textarea + input[type="submit"] {
@@ -124,7 +125,7 @@ textarea + input[type="submit"] {
   display: block;
 }
 
-main p {
+main > p {
   text-align: center;
 }
 
@@ -141,7 +142,7 @@ main li :is(li, form) {
   margin-top: calc(0.5*var(--between-posts));
 }
 
-main form, main li {
+main li {
   position: relative;
   background: white;
   border: 1px solid var(--grey);
@@ -162,6 +163,17 @@ main li p {
   white-space: pre-wrap;
   font-size: 130%;
   padding: 1rem;
+}
+
+form {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+input {
+  text-align: center;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 input[type="checkbox"] {
