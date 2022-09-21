@@ -27,7 +27,7 @@ export default function({myID, useCollection}) { return {
   template: `
     <input type="checkbox"
       :id="'follow'+ID"
-      :checked="follows.length">
+      :checked="!follows.length">
     <label for="'follow'+ID" @click.prevent="follow">
       follow<template v-if="follows.length">ed</template>
     </label>`

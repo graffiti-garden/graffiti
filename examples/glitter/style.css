@@ -97,19 +97,19 @@ main > *, main li {
   margin-bottom: var(--between-posts);
 }
 
-main li li {
+main li {
+  padding: calc(0.5*var(--between-posts));
+}
+
+main li :is(li, form) {
   margin-bottom: 0;
-  margin-top: 1em;
+  margin-top: calc(0.5*var(--between-posts));
 }
 
 main form, main li {
   position: relative;
   background: white;
   border: 1px solid var(--grey);
-}
-
-main li {
-  padding: 1em;
 }
 
 main li h1 {
@@ -126,7 +126,7 @@ p {
   word-break: break-word;
   white-space: pre-wrap;
   font-size: 130%;
-  padding: 1em;
+  padding: 1rem;
 }
 
 input[type="checkbox"] {

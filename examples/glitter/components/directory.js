@@ -1,8 +1,12 @@
 import Name from './name.js'
+import Follow from './follow.js'
 
 export default function({myID, useCollection}) { return {
 
-  components: { Name: Name(...arguments) },
+  components: {
+    Name: Name(...arguments),
+    Follow: Follow(...arguments)
+  },
 
   setup: ()=> ({
     joins: useCollection({
@@ -28,30 +32,40 @@ export default function({myID, useCollection}) { return {
   },
 
   template: `
+    <ul class="directory">
+      <li>
+        <h1>
+          <Name ID="${myID}" />
+        </h1>
+        <div class="modifiers">
+          <input type="checkbox"
+            :checked="!joins.mine.length"
+            id="directorycheck"
+            @change="toggleJoin">
+          <label for="directorycheck">
+            <template v-if="!joins.mine.length">
+              add me to the directory!
+            </template>
+            <template v-else>
+              remove me
+            </template>
+          </label>
+        </div>
+      </li>
+    </ul>
+
     <h1>
-      namebook directory
+      namebook entries:
     </h1>
 
-    <h2>
-      <input type="checkbox"
-        :checked="joins.mine.length"
-        id="directorycheck"
-        @change="toggleJoin">
-      <label for="directorycheck">
-        <template v-if="!joins.mine.length">
-          add me!
-        </template>
-        <template v-else>
-          remove me
-        </template>
-      </label>
-    </h2>
-
-    <ul class="directory">
+    <ul>
       <li v-for="authorID in joins.authors" :key="authorID">
-        <h3>
+        <h1>
           <Name :ID="authorID" />
-        </h3>
+        </h1>
+        <div class="modifiers">
+          <Follow :ID="authorID" />
+        </div>
       </li>
     </ul>`
 }}
