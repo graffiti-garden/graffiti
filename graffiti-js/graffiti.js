@@ -1,5 +1,4 @@
 import Auth from './auth.js'
-import { randomString } from './utils.js'
 
 export default class {
 
@@ -53,7 +52,7 @@ export default class {
 
   async request(msg) {
     // Create a random message ID
-    const messageID = randomString()
+    const messageID = Auth.randomString()
 
     // Create a listener for the reply
     const dataPromise = new Promise(resolve => {
@@ -150,7 +149,7 @@ export default class {
     queryID=null) {
 
     // Create a random query ID
-    if (!queryID) queryID = randomString()
+    if (!queryID) queryID = Auth.randomString()
 
     // Send the request
     await this.request({
@@ -210,7 +209,7 @@ export default class {
     }
 
     // Pre-generate the object's ID if it does not already exist
-    if (!object._id) object._id = randomString()
+    if (!object._id) object._id = Auth.randomString()
   }
 
   // Utility function to get a universally unique string
