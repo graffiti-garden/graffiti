@@ -12,7 +12,18 @@ export default function({myID, useCollection}) { return {
 
   props: ['ID'],
 
+  setup: ()=> ({
+    follows: useCollection({
+      "follow.by": { $type: 'string' },
+      _by: myID
+    })
+  }),
+
   computed: {
+    followAuthors() {
+      return this.follows.map(f=>f.follow.by)
+    },
+
     queryMod() {
       return { $or: [
         { _by: this.ID },
@@ -44,5 +55,5 @@ export default function({myID, useCollection}) { return {
       <Follow :ID="ID" />
     </p>
 
-    <Posts :queryMod="queryMod" :postMod="postMod" :prompt="prompt"/>`
+    <Posts :queryMod="queryMod" :postMod="postMod" :prompt="prompt" :follows="followAuthors"/>`
 }}
