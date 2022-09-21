@@ -104,7 +104,7 @@ export default class {
           if (data.type == 'updates') {
             sd.updateCallback(r)
           } else {
-            sd.deleteCallback(r)
+            sd.removeCallback(r)
           }
         }
 
@@ -129,7 +129,7 @@ export default class {
     return data.objectID
   }
 
-  async delete(objectID) {
+  async remove(objectID) {
     await this.request({
       type: "delete",
       objectID
@@ -139,7 +139,7 @@ export default class {
   async subscribe(
     query,
     updateCallback,
-    deleteCallback,
+    removeCallback,
     since=null,
     queryID=null) {
 
@@ -154,7 +154,7 @@ export default class {
 
     // Store the subscription in case of disconnections
     this.subscriptionData[queryID] = {
-      query, since, updateCallback, deleteCallback,
+      query, since, updateCallback, removeCallback,
       historyComplete: false
     }
 
@@ -182,7 +182,7 @@ export default class {
       await this.subscribe(
         sd.query,
         sd.updateCallback,
-        sd.deleteCallback,
+        sd.removeCallback,
         sd.since,
         queryID)
     }

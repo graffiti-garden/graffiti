@@ -19,8 +19,8 @@ const queryID = await gs.subscribe({
   }
   // With an arbitrary update callback
   (obj) => console.log(`An object has been created: {obj}`),
-  // and delete callback
-  (obj) => console.log(`An object with id {obj._id} by user {obj._by} has been deleted`.)
+  // and remove callback
+  (obj) => console.log(`An object with id {obj._id} by user {obj._by} has been removed.`)
 )
 
 // And then unsubscribe to those queries
@@ -52,6 +52,6 @@ await gs.update(myCoolPost)
 myCoolPost.content += '!!!'
 await gs.update(myCoolPost)
 
-// and delete objects.
-await gs.delete(myCoolPost)
+// and remove objects.
+await gs.remove(myCoolPost)
 ```
