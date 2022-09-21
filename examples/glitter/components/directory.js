@@ -30,7 +30,7 @@ export default function({myID, useCollection}) { return {
   template: `
     <h1>
       <u>
-        namebook
+        namebook directory
       </u>
     </h1>
 

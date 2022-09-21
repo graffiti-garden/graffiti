@@ -50,5 +50,4 @@ export default function({myID, useCollection}) { return {
       @click="editing=true">
       ✏️
     </button>`
-
 }}

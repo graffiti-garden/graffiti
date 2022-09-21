@@ -31,6 +31,10 @@
         routes: [{
           path: '/',
           component: async ()=>
+            (await import('./components/feed.js')).default(graffiti)
+        }, {
+          path: '/directory',
+          component: async ()=>
             (await import('./components/directory.js')).default(graffiti)
         }, {
           path: '/profile/:ID',
