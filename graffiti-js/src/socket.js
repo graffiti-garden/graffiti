@@ -77,7 +77,7 @@ export default class {
     const data = await dataPromise
     delete data.messageID
 
-    if (data.type == 'error' ) {
+    if (data.type == 'error') {
       throw data
     } else {
       return data
@@ -118,6 +118,11 @@ export default class {
           }
         }
       }
+    } else if (data.type == 'error') {
+      if (data.reason == 'authorization') {
+        this.logOut()
+      }
+      throw data
     }
   }
 
