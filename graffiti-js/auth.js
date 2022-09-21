@@ -30,6 +30,9 @@ export default {
     let myID  = window.localStorage.getItem('graffitiID')
 
     if (!token || !myID) {
+      // Remove them both in case one exists
+      // and the other does not
+      token = myID = null
 
       // Check to see if we are redirecting back
       const url = new URL(window.location)
@@ -87,7 +90,7 @@ export default {
         myID = data.owner_id
 
         // And make sure that the token is valid
-        if (!token) {
+        if (!token || !myID) {
           throw new Error(`The authorization token could not be parsed from the response.\n\n${data}`)
         }
 
@@ -97,9 +100,7 @@ export default {
       }
     }
 
-    const loggedIn = (token != null) && (myID != null)
-
-    return { loggedIn, myID, token }
+    return { myID, token }
 
   },
 

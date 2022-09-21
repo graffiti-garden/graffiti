@@ -39,10 +39,10 @@ export default class {
   }
 
   // authorization functions
-  logIn() { Auth.logIn(this.graffitiURL) }
-  logOut() { Auth.logOut() }
   get myID() { return this.authParams.myID }
-  get loggedIn() { return this.authParams.loggedIn }
+  toggleLogIn() {
+    this.myID? Auth.logOut() : Auth.logIn(this.graffitiURL)
+  }
 
   async onClose() {
     this.open = false
