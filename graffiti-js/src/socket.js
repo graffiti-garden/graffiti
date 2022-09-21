@@ -1,9 +1,10 @@
 import Auth from './auth.js'
+import { randomString } from './utils.js'
 
 export default class {
 
-  constructor(graffitiURL="https://graffiti.csail.mit.edu") {
-    this.graffitiURL = graffitiURL
+  constructor(origin="https://graffiti.csail.mit.edu") {
+    this.origin = origin
     this.open = false
     this.subscriptionData = {}
     this.eventTarget = new EventTarget()
@@ -12,10 +13,10 @@ export default class {
   // CALL THIS BEFORE DOING ANYTHING ELSE
   async initialize() {
     // Perform authorization
-    this.authParams = await Auth.connect(this.graffitiURL)
+    this.authParams = await Auth.connect(this.origin)
 
     // Rewrite the URL
-    this.wsURL = new URL(this.graffitiURL)
+    this.wsURL = new URL(origin)
     this.wsURL.host = "app." + this.wsURL.host
     if (this.wsURL.protocol == 'https:') {
       this.wsURL.protocol = 'wss:'
@@ -38,10 +39,10 @@ export default class {
   }
 
   // authorization functions
+  logIn() { Auth.logIn(this.origin) }
+  logOut() { Auth.logOut() }
   get myID() { return this.authParams.myID }
-  toggleLogIn() {
-    this.myID? Auth.logOut() : Auth.logIn(this.graffitiURL)
-  }
+  get loggedIn() { return this.authParams.loggedIn }
 
   async onClose() {
     this.open = false
@@ -52,7 +53,7 @@ export default class {
 
   async request(msg) {
     // Create a random message ID
-    const messageID = crypto.randomUUID()
+    const messageID = randomString()
 
     // Create a listener for the reply
     const dataPromise = new Promise(resolve => {
@@ -76,7 +77,7 @@ export default class {
     const data = await dataPromise
     delete data.messageID
 
-    if (data.type == 'error') {
+    if (data.type == 'error' ) {
       throw data
     } else {
       return data
@@ -93,7 +94,7 @@ export default class {
       messageEvent.data = data
       this.eventTarget.dispatchEvent(messageEvent)
 
-    } else if (['updates', 'removes'].includes(data.type)) {
+    } else if (['updates', 'deletes'].includes(data.type)) {
       // Subscription data
       if (data.queryID in this.subscriptionData) {
         const sd = this.subscriptionData[data.queryID]
@@ -103,7 +104,7 @@ export default class {
           if (data.type == 'updates') {
             sd.updateCallback(r)
           } else {
-            sd.removeCallback(r)
+            sd.deleteCallback(r)
           }
         }
 
@@ -117,25 +118,20 @@ export default class {
           }
         }
       }
-    } else if (data.type == 'error') {
-      if (data.reason == 'authorization') {
-        this.logOut()
-      }
-      throw data
     }
   }
 
-  async update(object, query) {
+  async update(object) {
     const data = await this.request({
       type: "update",
-      object, query
+      object
     })
     return data.objectID
   }
 
-  async remove(objectID) {
+  async delete(objectID) {
     await this.request({
-      type: "remove",
+      type: "delete",
       objectID
     })
   }
@@ -143,23 +139,22 @@ export default class {
   async subscribe(
     query,
     updateCallback,
-    removeCallback,
-    flags={},
+    deleteCallback,
     since=null,
     queryID=null) {
 
     // Create a random query ID
-    if (!queryID) queryID = crypto.randomUUID()
+    if (!queryID) queryID = randomString()
 
     // Send the request
     await this.request({
       type: "subscribe",
-      queryID, query, since, ...flags
+      queryID, query, since
     })
 
     // Store the subscription in case of disconnections
     this.subscriptionData[queryID] = {
-      query, since, flags, updateCallback, removeCallback,
+      query, since, updateCallback, deleteCallback,
       historyComplete: false
     }
 
@@ -187,8 +182,7 @@ export default class {
       await this.subscribe(
         sd.query,
         sd.updateCallback,
-        sd.removeCallback,
-        sd.flags,
+        sd.deleteCallback,
         sd.since,
         queryID)
     }
@@ -203,13 +197,8 @@ export default class {
       throw new Error("_to must be an array")
     }
 
-    // Add an open context if none is declared
-    if (!object._inContextIf) {
-      object._inContextIf = [{}]
-    }
-
     // Pre-generate the object's ID if it does not already exist
-    if (!object._id) object._id = crypto.randomUUID()
+    if (!object._id) object._id = randomString()
   }
 
   // Utility function to get a universally unique string

@@ -1,12 +1,14 @@
+import { randomString, sha256 } from './utils.js'
+
 export default {
 
-  async logIn(graffitiURL) {
+  async logIn(origin) {
     // Generate a random client secret and state
-    const clientSecret = crypto.randomUUID()
-    const state = crypto.randomUUID()
+    const clientSecret = randomString()
+    const state = randomString()
 
     // The client ID is the secret's hex hash
-    const clientID = await this.sha256(clientSecret)
+    const clientID = await sha256(clientSecret)
 
     // Store the client secret as a local variable
     window.localStorage.setItem('graffitiClientSecret', clientSecret)
@@ -14,23 +16,22 @@ export default {
     window.localStorage.setItem('graffitiAuthState', state)
 
     // Redirect to the login window
-    const loginURL = this.authURL(graffitiURL)
-    loginURL.searchParams.set('client_id', clientID)
-    loginURL.searchParams.set('redirect_uri', window.location.href)
-    loginURL.searchParams.set('state', state)
-    window.location.href = loginURL
+    const authURL = new URL(origin)
+    authURL.searchParams.set('client_id', clientID)
+    authURL.searchParams.set('redirect_uri', window.location.href)
+    authURL.searchParams.set('state', state)
+    window.location.href = authURL
   },
 
-  async connect(graffitiURL) {
+  async connect(origin) {
+    origin = new URL(origin)
+    origin.host = "auth." + origin.host
 
     // Check to see if we are already logged in
     let token = window.localStorage.getItem('graffitiToken')
     let myID  = window.localStorage.getItem('graffitiID')
 
     if (!token || !myID) {
-      // Remove them both in case one exists
-      // and the other does not
-      token = myID = null
 
       // Check to see if we are redirecting back
       const url = new URL(window.location)
@@ -63,8 +64,7 @@ export default {
         form.append('code', code)
 
         // Ask to exchange the code for a token
-        const tokenURL = this.authURL(graffitiURL)
-        tokenURL.pathname = '/token'
+        const tokenURL = new URL('token', origin)
         const response = await fetch(tokenURL, {
             method: 'post',
             body: form
@@ -88,7 +88,7 @@ export default {
         myID = data.owner_id
 
         // And make sure that the token is valid
-        if (!token || !myID) {
+        if (!token) {
           throw new Error(`The authorization token could not be parsed from the response.\n\n${data}`)
         }
 
@@ -98,7 +98,9 @@ export default {
       }
     }
 
-    return { myID, token }
+    const loggedIn = (token != null) && (myID != null),
+
+    return { loggedIn, myID, token }
 
   },
 
@@ -107,19 +109,5 @@ export default {
     window.localStorage.removeItem('graffitiID')
     window.location.reload()
   },
-
-  authURL(graffitiURL) {
-    const url = new URL(graffitiURL)
-    url.host = "auth." + url.host
-    return url
-  },
-
-  async sha256(input) {
-    const encoder = new TextEncoder()
-    const inputBytes = encoder.encode(input)
-    const outputBuffer = await crypto.subtle.digest('SHA-256', inputBytes)
-    const outputArray = Array.from(new Uint8Array(outputBuffer))
-    return outputArray.map(b => b.toString(16).padStart(2, '0')).join('')
-  }
 
 }
