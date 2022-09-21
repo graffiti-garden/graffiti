@@ -46,6 +46,9 @@ export default function({myID, toggleLogIn}) { return {
 
       <main>
         <router-view></router-view>
+        <footer>
+          made with <a href="..">graffiti</a>
+        </footer>
       </main>
     </template>`
 }}
