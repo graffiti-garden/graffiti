@@ -5,18 +5,16 @@ export default function({myID, toggleLogIn}) { return {
   template: `
     <template v-if="${!myID}">
 
-      <main>
+      <dialog>
         <h1>
-          <u>
+          <router-link to="/">
             namebook
-          </u>
+          </router-link>
         </h1>
-        <h2>
-          <button @click="toggleLogIn">
-            log in with graffiti
-          </button>
-        </h2>
-      </main>
+        <button @click="toggleLogIn">
+          log in with graffiti
+        </button>
+      </dialog>
 
     </template>
     <template v-else>
