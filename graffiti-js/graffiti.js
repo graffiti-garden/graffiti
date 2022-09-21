@@ -145,6 +145,7 @@ export default class {
     query,
     updateCallback,
     removeCallback,
+    flags={},
     since=null,
     queryID=null) {
 
@@ -154,12 +155,12 @@ export default class {
     // Send the request
     await this.request({
       type: "subscribe",
-      queryID, query, since
+      queryID, query, since, ...flags
     })
 
     // Store the subscription in case of disconnections
     this.subscriptionData[queryID] = {
-      query, since, updateCallback, removeCallback,
+      query, since, flags, updateCallback, removeCallback,
       historyComplete: false
     }
 
@@ -188,6 +189,7 @@ export default class {
         sd.query,
         sd.updateCallback,
         sd.removeCallback,
+        sd.flags,
         sd.since,
         queryID)
     }
