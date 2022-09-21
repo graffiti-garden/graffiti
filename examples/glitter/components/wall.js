@@ -5,6 +5,7 @@ export default function({myID, useCollection}) { return {
       post: { $type: 'string' },
       id: { $type: 'string' },
       timestamp: { $type: 'number' },
+      'position.type': 'canvas',
       'position.x': {
         $type: 'number',
         $gte: 0,
@@ -41,13 +42,14 @@ export default function({myID, useCollection}) { return {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         position: {
+          type: 'canvas',
           x: Math.random(),
           y: Math.random()
         }
       }
       if (!this.publicContext) {
         post._inContextIf = [{
-          _queryFailsWithout: ['position.x', 'position.y']
+          _queryFailsWithout: ['position.type']
         }]
       }
       this.posts.update(post)
@@ -89,10 +91,6 @@ export default function({myID, useCollection}) { return {
         <button @click="editPost._remove();editPost=null">
           ❌ delete post ❌
         </button>
-        <label>
-          <input type="checkbox" v-model="publicContext">
-          share this post with more generic posters (like namebook)?
-        </label>
       </form>
     </dialog>
     <main @drop="endDrag($event)" @dragover.prevent @dragenter.prevent>
