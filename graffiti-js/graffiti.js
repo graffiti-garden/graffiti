@@ -2,7 +2,7 @@ import Auth from './auth.js'
 
 export default class {
 
-  constructor(graffitiURL="https://graffiti.garden") {
+  constructor(graffitiURL="https://graffiti.csail.mit.edu") {
     this.graffitiURL = graffitiURL
     this.open = false
     this.subscriptionData = {}
@@ -119,7 +119,7 @@ export default class {
       }
     } else if (data.type == 'error') {
       if (data.reason == 'authorization') {
-        this.logOut()
+        Auth.logOut()
       }
       throw data
     }
