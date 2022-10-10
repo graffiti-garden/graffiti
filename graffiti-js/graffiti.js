@@ -2,7 +2,7 @@ import Auth from './auth.js'
 
 export default class {
 
-  constructor(graffitiURL="https://graffiti.csail.mit.edu") {
+  constructor(graffitiURL="https://graffiti.garden") {
     this.graffitiURL = graffitiURL
     this.open = false
     this.subscriptionData = {}
