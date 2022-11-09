@@ -112,7 +112,7 @@ async def email(
     else:
         # Send!
         try:
-            await sendEmail(message, hostname="mailserver", port=25)
+            await sendEmail(message, hostname="mailserver", port=25, start_tls=False)
         except:
             # Redirect back home with an error
             home = "/?" + urlencode({
