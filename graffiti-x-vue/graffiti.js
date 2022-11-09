@@ -24,25 +24,27 @@ export default async function(Vue, graffitiURL='https://graffiti.garden') {
       function updateCallback(object) {
         const uuid = graffiti.objectUUID(object)
 
-        // Store the original object if
-        // one exists, in case of failure
-        const originalObject = (uuid in objectMap)?
-          objectMap[uuid] : null
+        let originalObject = null
+        if (uuid in objectMap) {
+          // Copy the original object if
+          // one exists, in case of failure
+          originalObject = Object.assign({},objectMap[uuid])
 
-        // Add properties to the object
-        // so it can be updated and removed
-        // without the collection
-        if (!object._update) {
+          // Replace the object
+          recursiveCopy(objectMap[uuid], object)
+
+        } else {
+          // Add properties to the object
+          // so it can be updated and removed
+          // without the collection
           Object.defineProperty(object, '_update', { value: ()=>update(object) })
           Object.defineProperty(object, '_remove', { value: ()=>remove(object) })
           Object.defineProperty(object, '_contentAddress', { get: ()=>Vue.computed(()=> {
             return (uuid in objectMapContentAddresses)?
               objectMapContentAddresses[uuid] : null
           })})
+          objectMap[uuid] = object
         }
-
-        // Replace the object
-        objectMap[uuid] = object
 
         // Compute it's content address
         const inputBytes = encoder.encode(JSON.stringify(object))
@@ -231,3 +233,20 @@ export default async function(Vue, graffitiURL='https://graffiti.garden') {
     }
   }
 }
+
+function recursiveCopy(target, source) {
+  for (const field in target) {
+    if (!(field in source)) {
+      delete target[field]
+    }
+  }
+
+  for (const field in source) {
+    if (field in target && typeof target[field] == 'object' && typeof source[field] == 'object') {
+        recursiveCopy(target[field], source[field])
+    } else {
+      target[field] = source[field]
+    }
+  }
+}
+
