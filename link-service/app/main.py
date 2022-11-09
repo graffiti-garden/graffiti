@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from jsonschema.exceptions import ValidationError
-import aioredis
+from redis import asyncio as aioredis
 
 from .rest import Rest
 from .pubsub import PubSub

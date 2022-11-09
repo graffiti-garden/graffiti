@@ -14,7 +14,7 @@ services:
       DOMAIN: ${DOMAIN}
 
   mailserver:
-    image: mailserver/docker-mailserver:11.0.0
+    image: mailserver/docker-mailserver:11.2.0
     container_name: graffiti-mailserver
     hostname: ${DOMAIN}
     domainname: ${DOMAIN}

@@ -1,6 +1,6 @@
 import json
 import asyncio
-import aioredis
+from redis import asyncio as aioredis
 from bson.objectid import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 

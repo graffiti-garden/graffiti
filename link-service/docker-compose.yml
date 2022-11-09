@@ -31,18 +31,18 @@ services:
       - redis
 
   nginx:
-    image: nginx:1.21.6
+    image: nginx:1.23.2
     container_name: graffiti-nginx
     volumes:
       - ./config/nginx/base.conf:/etc/nginx/templates/base.conf.template:ro
 
   mongo:
-    image: mongo:5.0.9
+    image: mongo:6.0.2-focal
     container_name: graffiti-mongo
     restart: always
     volumes:
       - ./db:/data/db
 
   redis:
-    image: redis:7.0.0
+    image: redis:7.0.5-bullseye
     container_name: graffiti-redis

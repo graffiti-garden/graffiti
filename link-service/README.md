@@ -16,9 +16,10 @@ To launch the server locally, run:
 The application will be up at [http://localhost:5001](http://localhost:5001).
 If you are using the [Vue.js Graffiti plugin](https://github.com/graffiti-garden/graffiti-x-vue), you might point to the local server as follows:
 
-    Graffiti("http://localhost:5001").then(g=>createApp().use(g).mount("#app")
+    Graffiti("http://localhost:5001").then(g=>createApp().use(g).mount("#app"))
     
 When you are running the server locally, login links will be printed to your terminal rather than sent to your email.
+You can quickly test the login functionality by going to [http://auth.localhost:5001?client_id=&redirect_uri=https://example.com](https://auth.localhost:5001?client_id=&redirect_uri=https://example.com)
 
 ## Design Overview
 
