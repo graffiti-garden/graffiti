@@ -18,3 +18,5 @@ services:
       - ./config/nginx/debug.conf:/etc/nginx/nginx.conf:ro
     ports:
       - 5001:5001
+    environment:
+      DOMAIN: 'localhost'

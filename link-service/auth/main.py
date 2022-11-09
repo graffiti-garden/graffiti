@@ -217,20 +217,32 @@ async def auth_socket(ws: WebSocket, signature_hash: str):
 
 
 @app.get("/auth_socket_send", response_class=HTMLResponse)
-async def auth_socket_send(signature: str):
+async def auth_socket_send(signature: str, request: Request):
     # Take the hash of the signature, to make sure it's real
     signature_hash = sha256(signature.encode()).hexdigest()
 
     if signature_hash not in magic_events:
-        raise HTTPException(status_code=400, detail="link expired.")
+        return templates.TemplateResponse("close.html", {
+            'request': request,
+            'error': "link expired"
+        })
+
+    event, signature, t = magic_events[signature_hash]
+    if t + expiration_time < time.time():
+        del magic_events[signature_hash]
+        return templates.TemplateResponse("close.html", {
+            'request': request,
+            'error': "link expired"
+        })
 
     # Set the event
-    event, signature, _ = magic_events[signature_hash]
     event.set()
 
-    # Cleanup and close
-    del magic_events[signature_hash]
-    return "<script>window.close()</script>"
+    # Close
+    return templates.TemplateResponse("close.html", {
+        'request': request,
+        'error': False
+    })
 
 if __name__ == "__main__":
     args = {}
