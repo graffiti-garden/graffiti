@@ -17,7 +17,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': custom_tag,
                 'bar': custom_tag2
@@ -36,7 +35,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'foo': custom_tag,
                 "_audit": False
@@ -54,7 +52,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'foo': custom_tag,
                 "_audit": True
@@ -78,7 +75,6 @@ async def main():
             base = object_base(other_id)
             await send(other_ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {
                     'foo': custom_tag,
                     'bar': custom_tag2
@@ -97,7 +93,6 @@ async def main():
 
             await send(other_ws, {
                 'messageID': random_id(),
-                'type': 'subscribe',
                 'query': {
                     'foo': custom_tag,
                     "_audit": True
@@ -115,7 +110,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'foo': custom_tag,
             },
@@ -132,7 +126,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'foo': custom_tag,
                 "_audit": True

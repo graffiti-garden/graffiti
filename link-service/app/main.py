@@ -86,17 +86,17 @@ async def reply(ws, msg, socket_id, owner_id):
         # Make sure the message is formatted properly
         validate(msg, owner_id)
 
-        if msg['type'] == 'update':
+        if msg.keys() >= { 'object', 'query' }:
             await app.rest.update(msg['object'], msg['query'], owner_id)
 
-        elif msg['type'] == 'remove':
-            await app.rest.remove(msg['objectID'], owner_id)
-
-        elif msg['type'] == 'subscribe':
+        elif msg.keys() >= { 'query', 'since', 'queryID' }:
             await app.pubsub.subscribe(msg['query'], msg['since'], socket_id, msg['queryID'], owner_id)
 
-        elif msg['type'] == 'unsubscribe':
+        elif 'queryID' in msg:
             await app.pubsub.unsubscribe(socket_id, msg['queryID'])
+
+        elif 'objectID' in msg:
+            await app.rest.remove(msg['objectID'], owner_id)
 
     except ValidationError as e:
         output['type'] = 'error'

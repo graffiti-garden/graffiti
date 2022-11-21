@@ -4,11 +4,19 @@ import copy
 from uuid import uuid4
 
 def object_to_doc(object):
-    # Separate out the id proof and contexts
-    external_id = object['_id']
+    # Form an output and separate out the ID proof
+    output = {
+        "_tombstone": False,
+        "_externalID": object['_id']
+    }
     del object['_id']
-    contexts = object['_inContextIf']
-    del object['_inContextIf']
+
+    if '_inContextIf' in object:
+        # Separate out the contexts
+        output["_inContextIf"] = contexts = object['_inContextIf']
+        del object['_inContextIf']
+    else:
+        contexts = [{}]
 
     # Expand the contexts by creating full copies
     # of the original object except for a couple
@@ -34,16 +42,9 @@ def object_to_doc(object):
                     for path in paths:
                         twiddle(clone, path)
 
-    # Combine into one big doc
-    doc = {
-        "_object": [object],
-        "_expandedContexts": expanded_contexts,
-        "_inContextIf": contexts,
-        "_tombstone": False,
-        "_externalID": external_id
-    }
-
-    return doc
+    output["_object"] = [object]
+    output["_expandedContexts"] = expanded_contexts
+    return output
 
 dot_notation = re.compile(r'[^\.]+')
 
@@ -87,8 +88,9 @@ def twiddle(obj, path_str):
 
 def doc_to_object(doc):
     object = doc['_object'][0]
-    object['_inContextIf'] = doc['_inContextIf']
     object['_id'] = doc['_externalID']
+    if '_inContextIf' in doc:
+        object['_inContextIf'] = doc['_inContextIf']
     return object
 
 def query_rewrite(query, owner_id):
@@ -104,7 +106,7 @@ def query_rewrite(query, owner_id):
     return {
         # The object must match the query
         "_object": { "$elemMatch": query },
-        # The object must match at least one of the contexts
+        # And the object matches at least one of the contexts
         "_expandedContexts": { "$elemMatch": {
             # None of these "near misses" can match the query
             "_queryFailsWithout": {
@@ -118,5 +120,19 @@ def query_rewrite(query, owner_id):
                     "$elemMatch": { "$nor": [ query ] }
                 }
             }
-        }}
+        }},
+        "$or": [
+            {
+                # The object is public
+                "_object._to": { "$exists": False },
+            }, {
+                # The object is private
+                "_object._to": { "$exists": True },
+                # The owner is the recipient or sender
+                "$or": [
+                    { "_object._to": owner_id },
+                    { "_object._by": owner_id }
+                ]
+            }
+        ]
     }

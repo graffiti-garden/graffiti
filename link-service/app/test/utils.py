@@ -16,7 +16,6 @@ def object_base(owner_id, proof=None):
     object_base = {
         '_id': random_id(),
         '_by': owner_id,
-        '_inContextIf': [{}]
     }
     return object_base
 

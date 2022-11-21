@@ -27,80 +27,78 @@ async def main():
 def valid_requests(my_id):
     base_object = object_base(my_id)
     return [{
+    # update
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object,
 }, {
     "messageID": "alkjd$$\~934820fk",
-    "type": "update",
     "query": {},
     "object": base_object,
 }, {
+    # remove
     "messageID": "a"*64,
-    "type": "remove",
     "objectID": base_object['_id']
 }, {
+    # subscribe
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
-    "type": "subscribe",
     "query": {},
     "since": None,
     "queryID": random_id()
 }, {
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {},
     "since": "666f6f2d6261722d71757578",
     "queryID": random_id()
 }, {
+    # unsubscribe
     "messageID": random_id(),
-    "type": "unsubscribe",
     "queryID": random_id()
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "foo": True
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "foo": None
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "foo": 123.4
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "foo": 1234
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_to": [random_sha()]
     }
 }, {
+    # _to myself ie "private note"
     "messageID": random_id(),
-    "type": "update",
+    "query": {},
+    "object": base_object | {
+        "_to": []
+    }
+}, {
+    "messageID": random_id(),
     "query": {},
     "object": base_object | {
         "_to": [random_sha(), my_id]
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -110,7 +108,6 @@ def valid_requests(my_id):
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_to": [random_sha(), my_id, random_sha()],
@@ -135,7 +132,6 @@ def valid_requests(my_id):
 }, {
     # Weird fields
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "~a": "b",
@@ -143,7 +139,6 @@ def valid_requests(my_id):
 }, {
     # To myself
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "_to": my_id 
     },
@@ -152,7 +147,6 @@ def valid_requests(my_id):
 }, {
     # To myself nested
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "foo": {
             "_to": my_id
@@ -163,7 +157,6 @@ def valid_requests(my_id):
 }, {
     # Weird fields
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "~a": "b",
     },
@@ -172,7 +165,6 @@ def valid_requests(my_id):
 }, {
     # Valid args
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "x": { "$exists": True },
         "$and": [
@@ -185,7 +177,6 @@ def valid_requests(my_id):
 }, {
     # Valid args
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "x": { 
             "y": {
@@ -203,7 +194,6 @@ def valid_requests(my_id):
 }, {
     # With audit
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "foo": "bar" ,
         "_audit": True
@@ -212,7 +202,6 @@ def valid_requests(my_id):
     "queryID": random_id()
 }, {
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "foo": "bar",
         "_audit": False
@@ -222,7 +211,6 @@ def valid_requests(my_id):
 }, {
     # Weird query with update
     "messageID": random_id(),
-    "type": "update",
     "query": {
         "x": { 
             "y": {
@@ -243,30 +231,20 @@ def invalid_requests(my_id):
     return [{}, # Empty
 {
     # no message ID
-    "type": "update",
-    "query": {},
-    "object": base_object,
-}, {
-    # Invalid message type
-    "messageID": random_id(),
-    "type": "dupdate",
     "query": {},
     "object": base_object,
 }, {
     # Added extra field
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object,
     "foo": "bar"
 }, {
     "messageID": random_id(),
-    "type": "remove",
     "objectID": base_object['_id'],
     "bloo": {}
 }, {
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {},
     "since": None,
     "queryID": random_id(),
@@ -274,82 +252,42 @@ def invalid_requests(my_id):
 }, {
     # Missing required field
     "messageID": random_id(),
-    "type": "update",
     "object": base_object
 }, {
     # Missing required field
     "messageID": random_id(),
-    "type": "update",
     "query": {}
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": {}
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": {
         '_by': base_object['_by'],
-        '_inContextIf': base_object['_inContextIf']
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": {
         '_id': base_object['_id'],
-        '_by': base_object['_by'],
     }
 }, {
     "messageID": random_id(),
-    "type": "update",
-    "query": {},
-    "object": {
-        '_id': base_object['_id'],
-        '_inContextIf': base_object['_inContextIf']
-    }
 }, {
     "messageID": random_id(),
-    "type": "remove"
-}, {
-    "messageID": random_id(),
-    "type": "subscribe"
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
     "query": {}
 }, {
     "messageID": random_id(),
-    "type": "subscribe",
     "since": None
 }, {
     "messageID": random_id(),
-    "type": "subscribe",
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {},
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
-    "since": None,
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "type": "subscribe",
     "query": {},
     "since": None
-}, {
-    "messageID": random_id(),
-    "type": "unsubscribe"
 }, {
     # only special fields can start with _
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_notright": 12345
@@ -357,7 +295,6 @@ def invalid_requests(my_id):
 }, {
     # no fields can start with $
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "$something": 12345
@@ -365,14 +302,12 @@ def invalid_requests(my_id):
 }, {
     # or include a period
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "foo.bar": 12345
     },
 }, {
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         ".adfkjr": 12345
@@ -380,7 +315,6 @@ def invalid_requests(my_id):
 }, {
     # _id should be an string
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_id": 12345,
@@ -388,7 +322,6 @@ def invalid_requests(my_id):
 }, {
     # _id should be < length 64
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_id": "z"*65
@@ -396,13 +329,11 @@ def invalid_requests(my_id):
 }, {
     # messageID too long
     "messageID": "q"*65,
-    "type": "update",
     "query": {},
     "object": base_object
 }, {
     # _to should be an array
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_to": random_sha()
@@ -410,7 +341,6 @@ def invalid_requests(my_id):
 }, {
     # _to should by UUIDs
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_to": ["12345"]
@@ -418,7 +348,6 @@ def invalid_requests(my_id):
 }, {
     # no repeated IDs
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_to": [my_id] + [random_sha()]*2
@@ -426,7 +355,6 @@ def invalid_requests(my_id):
 }, {
     # by can only be my id
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_by": random_sha()
@@ -434,7 +362,6 @@ def invalid_requests(my_id):
 }, {
     # _inContextIf is an array
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": {}
@@ -442,15 +369,19 @@ def invalid_requests(my_id):
 }, {
     # _inContextIf cannot be empty
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": []
     }
 }, {
+    "messageID": random_id(),
+    "query": {},
+    "object": base_object | {
+        "_inContextIf": [{}]
+    }
+}, {
     # _inContextIf only includes objects
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": ["asdf"]
@@ -458,7 +389,6 @@ def invalid_requests(my_id):
 }, {
     # objects only have relevant fields
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -468,7 +398,6 @@ def invalid_requests(my_id):
 }, {
     # queryFailsWithout is an array
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -478,7 +407,6 @@ def invalid_requests(my_id):
 }, {
     # queryFailsWithout must include at least one element
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -488,7 +416,6 @@ def invalid_requests(my_id):
 }, {
     # queryFailsWithout must include at least one element
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -498,7 +425,6 @@ def invalid_requests(my_id):
 }, {
     # queryFailsWithout must include at least one element
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -508,7 +434,6 @@ def invalid_requests(my_id):
 }, {
     # nearmisses can only include strings
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -518,7 +443,6 @@ def invalid_requests(my_id):
 }, {
     # contexts must be unique
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -528,7 +452,6 @@ def invalid_requests(my_id):
 }, {
     # contexts must be unique
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [{
@@ -538,7 +461,6 @@ def invalid_requests(my_id):
 }, {
     # contexts must be unique
     "messageID": random_id(),
-    "type": "update",
     "query": {},
     "object": base_object | {
         "_inContextIf": [
@@ -548,14 +470,12 @@ def invalid_requests(my_id):
     }
 }, {
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {},
     "since": "asdf",
     "queryID": random_id()
 }, {
     # Invalid operators
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "$asdf": "wassup"
     },
@@ -564,7 +484,6 @@ def invalid_requests(my_id):
 }, {
     # Invalid operators nested
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "foo": {
             "$asdf": "wassup"
@@ -573,47 +492,8 @@ def invalid_requests(my_id):
     "since": None,
     "queryID": random_id()
 }, {
-    # To is not sha
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "_to": "asdf"
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # To is not sha
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "_to": { "x": "y" }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # To someone else
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "_to": random_sha()
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # To someone else nested
-    "messageID": random_id(),
-    "type": "subscribe",
-    "query": {
-        "foo": {
-            "_to": random_sha()
-        }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
     # Audit is not boolean
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "foo": "bar",
         "_audit": "true"
@@ -622,7 +502,6 @@ def invalid_requests(my_id):
     "queryID": random_id()
 }, {
     "messageID": random_id(),
-    "type": "subscribe",
     "query": {
         "foo": "bar",
         "_audit": 0
@@ -632,16 +511,8 @@ def invalid_requests(my_id):
 }, {
     # query requirements also affect update
     "messageID": random_id(),
-    "type": "update",
     "query": {
         "$asdf": "wassup"
-    },
-    "object": base_object
-}, {
-    "messageID": random_id(),
-    "type": "update",
-    "query": {
-        "_to": random_sha()
     },
     "object": base_object
 }]

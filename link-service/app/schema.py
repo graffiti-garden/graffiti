@@ -1,5 +1,3 @@
-import re
-import json
 import jsonschema
 from jsonschema.exceptions import ValidationError
 
@@ -18,11 +16,11 @@ RANDOM_SCHEMA = { # jsonschema
     "pattern": "^.{1,64}$"
 }
 
-# Anything not starting with a "$"
-QUERY_VALUE_PROPERTY_PATTERN = "^(?!\$).*$"
-
 # Anything not starting with a "_" or a "$" or containing periods
 OBJECT_PROPERTY_PATTERN = "^(?!_|\$)[^\.]*$"
+
+# Anything not starting with a "$"
+QUERY_VALUE_PROPERTY_PATTERN = "^(?!\$).*$"
 
 ARRAY_OF_PATH_GROUPS = {
     "type": "array",
@@ -44,56 +42,32 @@ ARRAY_OF_PATH_GROUPS = {
     }
 }
 
-def socket_schema():
-    BASE_TYPES = ["messageID", "type"]
-
-    return {
+SOCKET_SCHEMA = {
     "type": "object",
-    "oneOf": [{
+    "properties": {
+        "messageID": RANDOM_SCHEMA,
+        "object": { "$ref": "#/definitions/object" },
+        "query": { "$ref": "#/definitions/query" },
+        "objectID": RANDOM_SCHEMA,
+        "since": { "oneOf": [{
+                "type": "string",
+                # A mongo object ID
+                "pattern": "^([a-f\d]{24})$"
+            }, { "type": "null" }]
+        },
+        "queryID": RANDOM_SCHEMA,
+    },
+    "additionalProperties": False,
+    "anyOf": [
         # UPDATE
-        "properties": {
-            "messageID": RANDOM_SCHEMA,
-            "type": { "const": "update" },
-            "object": { "$ref": "#/definitions/object" },
-            "query": { "$ref": "#/definitions/query" },
-        },
-        "required": BASE_TYPES + ["object", "query"],
-        "additionalProperties": False
-    }, {
-        # DELETE
-        "properties": {
-            "messageID": RANDOM_SCHEMA,
-            "type": { "const": "remove" },
-            "objectID": RANDOM_SCHEMA
-        },
-        "required": BASE_TYPES + ["objectID"],
-        "additionalProperties": False
-    }, {
+        { "required": ["messageID", "object", "query"] },
         # SUBSCRIBE
-        "properties": {
-            "messageID": RANDOM_SCHEMA,
-            "type": { "const": "subscribe" },
-            "query": { "$ref": "#/definitions/query" },
-            "since": { "oneOf": [{
-                    "type": "string",
-                    # A mongo object ID
-                    "pattern": "^([a-f\d]{24})$"
-                }, { "type": "null" }]
-            },
-            "queryID": RANDOM_SCHEMA,
-        },
-        "required": BASE_TYPES + ["query", "since", "queryID"],
-        "additionalProperties": False
-    }, {
+        { "required": ["messageID", "query", "since", "queryID"] },
         # UNSUBSCRIBE
-        "properties": {
-            "messageID": RANDOM_SCHEMA,
-            "type": { "const": "unsubscribe" },
-            "queryID": RANDOM_SCHEMA
-        },
-        "required": BASE_TYPES + ["queryID"],
-        "additionalProperties": False
-    }],
+        { "required": ["messageID", "queryID"] },
+        # DELETE
+        { "required": ["messageID", "objectID"] },
+    ],
     "definitions": {
         "object": {
             "type": "object",
@@ -101,15 +75,15 @@ def socket_schema():
             "patternProperties": {
                 OBJECT_PROPERTY_PATTERN: { "$ref": "#/definitions/objectValues" }
             },
-            "required": ["_id", "_by", "_inContextIf"],
+            "required": ["_id", "_by"],
             "properties": {
                 "_by": SHA256_SCHEMA,
+                "_id": RANDOM_SCHEMA,
                 "_to": {
                     "uniqueItems": True,
                     "type": "array",
                     "items": SHA256_SCHEMA
                 },
-                "_id": RANDOM_SCHEMA,
                 "_inContextIf": {
                     "type": "array",
                     "uniqueItems": True,
@@ -120,7 +94,11 @@ def socket_schema():
                         "properties": {
                             "_queryFailsWithout": ARRAY_OF_PATH_GROUPS,
                             "_queryPassesWithout": ARRAY_OF_PATH_GROUPS
-                        }
+                        },
+                        "anyOf": [
+                            { "required": ["_queryFailsWithout"] },
+                            { "required": ["_queryPassesWithout"] },
+                        ]
                     }
                 }
             }
@@ -146,7 +124,6 @@ def socket_schema():
             },
             # To must be a SHA
             "properties": {
-                "_to": SHA256_SCHEMA,
                 "_audit": { "type": "boolean" }
             } |
             # And allowed query types recurse
@@ -163,17 +140,11 @@ def socket_schema():
     }}
 
 # Initialize the scheme validator and owner checker
-VALIDATOR = jsonschema.Draft7Validator(socket_schema())
-QUERY_OWNER_PATTERN  = re.compile(f'"_to": "({SHA256_PATTERN})"')
+VALIDATOR = jsonschema.Draft7Validator(SOCKET_SCHEMA)
 
 def validate(msg, owner_id):
     VALIDATOR.validate(msg)
 
-    if msg['type'] == 'update':
+    if 'object' in msg:
         if msg['object']['_by'] != owner_id:
             raise ValidationError("you can only create objects _by yourself")
-    if msg['type'] in ['subscribe', 'update']:
-        matches = QUERY_OWNER_PATTERN.findall(json.dumps(msg['query']))
-        for match in matches:
-            if match != owner_id:
-                raise ValidationError("you can only query for objects _to yourself")

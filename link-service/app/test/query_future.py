@@ -16,7 +16,6 @@ async def main():
         print("starting to listen")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'tags': custom_tag
             },
@@ -33,7 +32,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'content': random_id(),
@@ -49,7 +47,6 @@ async def main():
         print("removing an item")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -68,7 +65,6 @@ async def main():
             query_id = random_id()
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'subscribe',
                 'query': {
                     'tags': custom_tag,
                     '_audit': False
@@ -128,7 +124,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'content': random_id(),
@@ -143,7 +138,6 @@ async def main():
         print("removing an item")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -157,7 +151,6 @@ async def main():
             base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {},
                 'object': base | {
                     'content': random_id(),
@@ -175,7 +168,6 @@ async def main():
             base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {},
                 'object': base | {
                     'content': random_id(),
@@ -186,7 +178,6 @@ async def main():
             assert result['type'] == 'success'
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'remove',
                 'objectID': objectIDs[i]
             })
             result = await recv(ws)

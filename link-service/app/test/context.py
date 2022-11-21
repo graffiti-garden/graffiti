@@ -13,7 +13,6 @@ async def main():
         # list item out of bounds
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': ['0', '1', '2'],
             },
@@ -29,7 +28,6 @@ async def main():
         # Lists must be indexed by integer
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': ['one', 'two', 'three'],
             },
@@ -44,7 +42,6 @@ async def main():
         # missing key
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': { 'bar': 'asdf' }
             },
@@ -60,7 +57,6 @@ async def main():
         # context objects must be strings
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': [0, 1, 2],
             },
@@ -77,7 +73,6 @@ async def main():
         print("creating objects with valid context")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': ['0', '1', '2'],
             },
@@ -92,7 +87,6 @@ async def main():
         assert result['type'] == 'success'
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': [0, 1, {
                     'bar': {
@@ -120,7 +114,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'fieldA': common,
                 'fieldB': common2,
@@ -138,7 +131,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'fieldA': common
             },
@@ -157,11 +149,9 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'fieldA': common,
-                '_inContextIf': [{}] # here
             }
         })
         result = await recv(ws)
@@ -169,7 +159,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'fieldA': common
             },
@@ -189,7 +178,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'fieldB': special,
             },
@@ -207,7 +195,6 @@ async def main():
         print("querying without context")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'fieldA': common
             },
@@ -223,7 +210,6 @@ async def main():
         print("querying with context")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'fieldB': special
             },
@@ -242,7 +228,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'fieldA': common,
@@ -258,7 +243,6 @@ async def main():
         print("querying without context")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'fieldA': common
             },
@@ -274,7 +258,6 @@ async def main():
         print("querying with context")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'fieldB': special
             },
@@ -294,7 +277,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'tags': [a, b, c],
             },
@@ -320,7 +302,6 @@ async def main():
         print("querying for intersection")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'tags': { '$all': [a, b, c] }
             },
@@ -336,7 +317,6 @@ async def main():
         print("querying for union")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'tags': { '$elemMatch': { '$in': [a, b, c] } }
             },
@@ -353,7 +333,6 @@ async def main():
         for subset in [ [a, b], [a, c], [a, b] ]:
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'subscribe',
                 'query': {
                     'tags': { '$all': subset }
                 },
@@ -368,7 +347,6 @@ async def main():
 
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'subscribe',
                 'query': {
                     'tags': { '$elemMatch': { '$in': subset } }
                 },

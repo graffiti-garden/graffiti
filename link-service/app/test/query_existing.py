@@ -19,7 +19,6 @@ async def main():
             base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {},
                 'object': base | {
                     'content': random_id(),
@@ -33,7 +32,6 @@ async def main():
         print("querying for them")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'tags': custom_tag
             },
@@ -50,7 +48,6 @@ async def main():
         print("unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'unsubscribe',
             'queryID': query_id
         })
         result = await recv(ws)
@@ -61,7 +58,6 @@ async def main():
             base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {},
                 'object': base | {
                     'content': random_id(),
@@ -79,7 +75,6 @@ async def main():
         print("querying for them")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'tags': custom_tag,
                 '_audit': False
@@ -116,7 +111,6 @@ async def main():
         print("unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'unsubscribe',
             'queryID': query_id
         })
         result = await recv(ws)
@@ -127,7 +121,6 @@ async def main():
             base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {},
                 'object': base | {
                     'content': random_id(),
@@ -140,7 +133,6 @@ async def main():
         print("querying only for recently added ones")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'since': now,
             'query': {
                 'tags': custom_tag

@@ -11,7 +11,6 @@ async def main():
         base  = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'type': 'justanormalobject',
@@ -27,7 +26,6 @@ async def main():
         # Try replacing the object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'something': {
@@ -42,7 +40,6 @@ async def main():
         # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -52,7 +49,6 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -62,7 +58,6 @@ async def main():
         # Try replacing again
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'foo': 'bar'
@@ -75,7 +70,6 @@ async def main():
         # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -86,7 +80,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'blahhh': 'blskjf'
@@ -101,7 +94,6 @@ async def main():
         for i in range(100):
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {},
                 'object': base | {
                     'something': 'random'
@@ -113,7 +105,6 @@ async def main():
         # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -123,7 +114,6 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -134,7 +124,6 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'blahhh': 'blskjf',
@@ -148,7 +137,6 @@ async def main():
         async with websocket_connect(my_token) as ws:
             await send(ws, {
                 'messageID': random_id(),
-                'type': 'update',
                 'query': {},
                 'object': base | {
                     'something': 'random'
@@ -168,7 +156,6 @@ async def main():
         # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -178,7 +165,6 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'type': 'remove',
             'objectID': base['_id']
         })
         result = await recv(ws)
@@ -189,7 +175,6 @@ async def main():
         tag = random_id()
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 'tag': tag
@@ -201,7 +186,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {},
             'object': base | {
                 '_inContextIf': [{
@@ -216,7 +200,6 @@ async def main():
         query_id = random_id()
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'tag': tag,
                 '_audit': False
@@ -233,7 +216,6 @@ async def main():
         print("The original still exists")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'unsubscribe',
             'queryID': query_id
         })
         result = await recv(ws)
@@ -243,7 +225,6 @@ async def main():
         tag = random_id()
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': tag,
                 'bar': True
@@ -259,7 +240,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': tag,
                 'bar': True
@@ -278,7 +258,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': tag,
                 'bar': True
@@ -294,7 +273,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'foo': { '$type': 'notreal' },
                 'bar': True
@@ -310,7 +288,6 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'type': 'update',
             'query': {
                 'bar': True
             },
@@ -329,7 +306,6 @@ async def main():
         query_id = random_id()
         await send(ws, {
             'messageID': random_id(),
-            'type': 'subscribe',
             'query': {
                 'foo': tag
             },
@@ -345,7 +321,6 @@ async def main():
         print("The original still exists")
         await send(ws, {
             'messageID': random_id(),
-            'type': 'unsubscribe',
             'queryID': query_id
         })
         result = await recv(ws)
