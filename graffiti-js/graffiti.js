@@ -126,18 +126,12 @@ export default class {
   }
 
   async update(object, query) {
-    const data = await this.request({
-      type: "update",
-      object, query
-    })
+    const data = await this.request({ object, query })
     return data.objectID
   }
 
   async remove(objectID) {
-    await this.request({
-      type: "remove",
-      objectID
-    })
+    await this.request({ objectID })
   }
 
   async subscribe(
@@ -152,10 +146,7 @@ export default class {
     if (!queryID) queryID = crypto.randomUUID()
 
     // Send the request
-    await this.request({
-      type: "subscribe",
-      queryID, query, since, ...flags
-    })
+    await this.request({ queryID, query, since, ...flags })
 
     // Store the subscription in case of disconnections
     this.subscriptionData[queryID] = {
@@ -171,10 +162,7 @@ export default class {
     delete this.subscriptionData[queryID]
 
     // And unsubscribe
-    const data = await this.request({
-      type: "unsubscribe",
-      queryID
-    })
+    const data = await this.request({ queryID })
   }
 
   async onOpen() {

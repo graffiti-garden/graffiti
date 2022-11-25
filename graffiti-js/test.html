@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h1> Graffiti x JS </h1>
+
+  <p id="ID"></p>
+
+  <h2 id="status">Unsubscribed</h2>
+
+  <button onclick="Subscribe()">
+    Subscribe
+  </button>
+
+  <button onclick="Unsubscribe()">
+    Unsubscribe
+  </button>
+
+  <button onclick="Update()">
+    Update
+  </button>
+
+  <button onclick="Remove()">
+    Remove
+  </button>
+
+  <button onclick="LogOut()">
+    Log Out
+  </button>
+
+<script type="module">
+  import Graffiti from "./graffiti.js"
+
+  // Connect to a local Graffiti instance
+  // (see the server README for how to run locally)
+  const graffiti = new Graffiti("http://localhost:5001")
+  await graffiti.initialize()
+
+  // Log in automatically if not already
+  // and supply a log out button
+  if (!graffiti.myID) graffiti.toggleLogIn()
+  window.LogOut = ()=> graffiti.toggleLogIn()
+  document.getElementById('ID').innerHTML = `Your Graffiti ID is: ${graffiti.myID}`
+
+  // Create a display counter
+  let count = 0
+  function displayCount() {
+    document.getElementById('status').innerHTML = `Subscribed: ${count} Objects`
+  }
+
+  // From here to below we're going to
+  // define functions that can be activated
+  // with button presses, corresponding to
+  // each of the four Graffiti primitives.
+
+  // Create an object containing a special string
+  const special = crypto.randomUUID()
+  const usedIDs = []
+  window.Update = async function() {
+    usedIDs.unshift(crypto.randomUUID())
+    await graffiti.update({
+      _id: usedIDs[0],
+      _by: graffiti.myID,
+      special
+    }, {})
+  }
+
+  // Remove an existing object
+  window.Remove = async function() {
+    if ( usedIDs.length ) {
+      await graffiti.remove( usedIDs.pop() )
+    }
+  }
+
+  // Subscribe to objects containing the special string
+  let queryID = null
+  window.Subscribe = async function() {
+    if (queryID) return
+    count = 0
+    queryID = await graffiti.subscribe(
+      { special },
+      (obj)=> { count++; displayCount() },
+      (obj)=> { count--; displayCount() }
+    )
+    displayCount()
+  }
+
+  // Unsubscribe to the existing query
+  window.Unsubscribe = async function() {
+    if (queryID) {
+      await graffiti.unsubscribe(queryID)
+      queryID = null
+      document.getElementById('status').innerHTML = "Unsubscribed"
+    }
+  }
+</script>
+</body>
+</html>
