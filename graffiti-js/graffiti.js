@@ -191,11 +191,6 @@ export default class {
       throw new Error("_to must be an array")
     }
 
-    // Add an open context if none is declared
-    if (!object._inContextIf) {
-      object._inContextIf = [{}]
-    }
-
     // Pre-generate the object's ID if it does not already exist
     if (!object._id) object._id = crypto.randomUUID()
   }
