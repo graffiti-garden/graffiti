@@ -180,6 +180,10 @@ export default async function(Vue, graffitiURL='https://graffiti.garden') {
           return this.filter(o=> o._by==graffiti.myID)
         }
 
+        get notMine() {
+          return this.filter(o=> o._by!=graffiti.myID)
+        }
+
         get authors() {
           return [...new Set(this.map(o=> o._by))]
         }
