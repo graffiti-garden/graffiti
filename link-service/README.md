@@ -102,7 +102,7 @@ Add CNAME entries for the `app.DOMAIN` and `auth.DOMAIN` subdomains by adding th
     
 Once these changes propagate (it might take up to an hour), generate SSL certificates with:
 
-    sudo certbot certonly --standalone -d DOMAIN,app.DOMAIN,auth.DOMAIN
+    sudo certbot certonly --standalone -d app.DOMAIN,auth.DOMAIN
 
 ### Mailserver
 
