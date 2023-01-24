@@ -10,18 +10,17 @@ async def main():
         for request in valid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
-            while response["type"] in ["updates", "removes"]:
-                response = await recv(ws)
-            if response["type"] == "error":
-                assert response["reason"] != "validation"
+            # while response["type"] in ["updates", "removes"]:
+                # response = await recv(ws)
+            if 'error' in response:
+                assert response['error'] != "validation"
         print("All valid requests passed, as expected")
         for request in invalid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
-            while response["type"] in ["updates", "removes"]:
-                response = await recv(ws)
-            assert response["type"] == "error"
-            assert response["reason"] == "validation"
+            # while response["type"] in ["updates", "removes"]:
+                # response = await recv(ws)
+            assert response['error'] == "validation"
         print("All invalid requests failed, as expected")
 
 def valid_requests(my_id):
@@ -29,86 +28,75 @@ def valid_requests(my_id):
     return [{
     # update
     "messageID": random_id(),
-    "query": {},
     "object": base_object,
 }, {
     "messageID": "alkjd$$\~934820fk",
-    "query": {},
     "object": base_object,
 }, {
     # remove
     "messageID": "a"*64,
-    "objectID": base_object['_id']
+    "objectKey": base_object['_key']
 }, {
     # subscribe
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
-    "query": {},
-    "since": None,
-    "queryID": random_id()
+    "tagsSince": [["hello", "666f6f2d6261722d71757578"]],
 }, {
     "messageID": random_id(),
-    "query": {},
-    "since": "666f6f2d6261722d71757578",
-    "queryID": random_id()
+    "tagsSince": [["goodbye", None], ["hello", "666f6f2d6261722d71757578"]],
 }, {
     # unsubscribe
     "messageID": random_id(),
-    "queryID": random_id()
+    "tags": ["hello"]
 }, {
+    # List tags
     "messageID": random_id(),
-    "query": {},
+}, {
+    # Get
+    "messageID": random_id(),
+    "objectKey": random_id(),
+    "userID": random_sha()
+}, {
+    # Different sorts of objects
+    "messageID": random_id(),
     "object": base_object | {
         "foo": True
     }
 }, {
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "foo": None
     }
 }, {
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "foo": 123.4
     }
 }, {
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "foo": 1234
     }
 }, {
+    # With _to
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "_to": [random_sha()]
     }
 }, {
-    # _to myself ie "private note"
+    # _to noone ie "private note"
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "_to": []
     }
 }, {
+    # To multiple people
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "_to": [random_sha(), my_id]
     }
 }, {
+    # Something more complicated
     "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": [ 'a' ],
-            "_queryPassesWithout":  [ 'b' ]
-        }]
-    }
-}, {
-    "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "_to": [random_sha(), my_id, random_sha()],
         "foo": {
@@ -117,113 +105,20 @@ def valid_requests(my_id):
                 "asdf": [ 1234.14 ]
             }
         },
-        "_inContextIf": [{
-            "_queryFailsWithout": [
-                "foo.blah",
-                "foo.bar.asdf.0",
-                [ 'adsf', '1234' ]
-            ]
-        }, {
-            "_queryPassesWithout": [
-                [ 'asdf.ieu', 'diufi.192384' ]
-            ]
-        }]
     }
 }, {
     # Weird fields
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "~a": "b",
     }
 }, {
-    # To myself
     "messageID": random_id(),
-    "query": {
-        "_to": my_id 
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # To myself nested
-    "messageID": random_id(),
-    "query": {
-        "foo": {
-            "_to": my_id
-        }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # Weird fields
-    "messageID": random_id(),
-    "query": {
-        "~a": "b",
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # Valid args
-    "messageID": random_id(),
-    "query": {
-        "x": { "$exists": True },
-        "$and": [
-            { "y": "a" },
-            { "z": "b" }
-        ]
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # Valid args
-    "messageID": random_id(),
-    "query": {
-        "x": { 
-            "y": {
-                "$gt": 100
-            }
+    "object": base_object | {
+        "asdf": {
+            "_kdfj.😘": "🍍"
         },
-        "q": { "$size": 100 },
-        "asdf": { "$eq": "adsfhdkf" },
-        "qwer": { "$in": [1, 2, "3", None] },
-        "zxcv": { "$elemMatch": { "x": { "$ne": "asdf" } } },
-        "wert": { "$type": "double" }
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # With audit
-    "messageID": random_id(),
-    "query": {
-        "foo": "bar" ,
-        "_audit": True
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    "messageID": random_id(),
-    "query": {
-        "foo": "bar",
-        "_audit": False
-    },
-    "since": None,
-    "queryID": random_id()
-}, {
-    # Weird query with update
-    "messageID": random_id(),
-    "query": {
-        "x": { 
-            "y": {
-                "$gt": 100
-            }
-        },
-        "q": { "$size": 100 },
-        "asdf": { "$eq": "adsfhdkf" },
-        "qwer": { "$in": [1, 2, "3", None] },
-        "zxcv": { "$elemMatch": { "x": { "$ne": "asdf" } } },
-        "wert": { "$type": "double" }
-    },
-    "object": base_object
+    }
 }]
 
 def invalid_requests(my_id):
@@ -231,60 +126,20 @@ def invalid_requests(my_id):
     return [{}, # Empty
 {
     # no message ID
-    "query": {},
     "object": base_object,
 }, {
     # Added extra field
     "messageID": random_id(),
-    "query": {},
     "object": base_object,
     "foo": "bar"
 }, {
     "messageID": random_id(),
-    "objectID": base_object['_id'],
+    "objectKey": random_id(),
     "bloo": {}
 }, {
     "messageID": random_id(),
-    "query": {},
-    "since": None,
-    "queryID": random_id(),
+    "tags": ["asdf"],
     "bug": 1
-}, {
-    # Missing required field
-    "messageID": random_id(),
-    "object": base_object
-}, {
-    # Missing required field
-    "messageID": random_id(),
-    "query": {}
-}, {
-    "messageID": random_id(),
-    "query": {},
-    "object": {}
-}, {
-    "messageID": random_id(),
-    "query": {},
-    "object": {
-        '_by': base_object['_by'],
-    }
-}, {
-    "messageID": random_id(),
-    "query": {},
-    "object": {
-        '_id': base_object['_id'],
-    }
-}, {
-    "messageID": random_id(),
-}, {
-    "messageID": random_id(),
-    "query": {}
-}, {
-    "messageID": random_id(),
-    "since": None
-}, {
-    "messageID": random_id(),
-    "query": {},
-    "since": None
 }, {
     # only special fields can start with _
     "messageID": random_id(),
@@ -293,228 +148,107 @@ def invalid_requests(my_id):
         "_notright": 12345
     },
 }, {
-    # no fields can start with $
+    # _key should be an string
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
-        "$something": 12345
-    },
-}, {
-    # or include a period
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "foo.bar": 12345
-    },
-}, {
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        ".adfkjr": 12345
-    },
-}, {
-    # _id should be an string
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_id": 12345,
+        "_key": 12345,
     }
 }, {
-    # _id should be < length 64
+    # _key should be < length 64
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
-        "_id": "z"*65
+        "_key": "z"*65
     }
 }, {
     # messageID too long
     "messageID": "q"*65,
-    "query": {},
     "object": base_object
 }, {
     # _to should be an array
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "_to": random_sha()
     }
 }, {
     # _to should by UUIDs
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "_to": ["12345"]
     }
 }, {
     # no repeated IDs
     "messageID": random_id(),
-    "query": {},
     "object": base_object | {
         "_to": [my_id] + [random_sha()]*2
     }
 }, {
-    # by can only be my id
+    # Object is not an object
     "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_by": random_sha()
-    }
+    "object": "1234"
 }, {
-    # _inContextIf is an array
     "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": {}
-    }
+    "object": ["1234"]
 }, {
-    # _inContextIf cannot be empty
+    # Object is missing a field
     "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": []
+    "object": {
+        '_by': my_id,
+        '_tags': ['something']
     }
 }, {
     "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{}]
-    }
-}, {
-    # _inContextIf only includes objects
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": ["asdf"]
-    }
-}, {
-    # objects only have relevant fields
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "foo": [ '0' ]
-        }]
-    }
-}, {
-    # queryFailsWithout is an array
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": {}
-        }]
-    }
-}, {
-    # queryFailsWithout must include at least one element
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": []
-        }]
-    }
-}, {
-    # queryFailsWithout must include at least one element
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": ['asdf', []]
-        }]
-    }
-}, {
-    # queryFailsWithout must include at least one element
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": ['asdf', ['asdfdf']]
-        }]
-    }
-}, {
-    # nearmisses can only include strings
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": [ 1 ]
-        }]
-    }
-}, {
-    # contexts must be unique
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": [ 'asdf', 'asdf' ]
-        }]
-    }
-}, {
-    # contexts must be unique
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [{
-            "_queryFailsWithout": [ [ 'asdf', 'qwer' ], [ 'asdf', 'qwer' ] ]
-        }]
-    }
-}, {
-    # contexts must be unique
-    "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
-        "_inContextIf": [
-            { "_queryFailsWithout": [ 'asdf' ] },
-            { "_queryFailsWithout": [ 'asdf' ] }
-        ]
+    "object": {
+        '_key': random_id(),
+        '_tags': ['something']
     }
 }, {
     "messageID": random_id(),
-    "query": {},
-    "since": "asdf",
-    "queryID": random_id()
+    "object": {
+        '_key': random_id(),
+        '_by': my_id,
+    }
 }, {
-    # Invalid operators
+    # Tags is not a list
     "messageID": random_id(),
-    "query": {
-        "$asdf": "wassup"
-    },
-    "since": None,
-    "queryID": random_id()
+    "object": {
+        '_key': random_id(),
+        '_tags': 'something'
+    }
 }, {
-    # Invalid operators nested
+    # Tags is not a list of strings
     "messageID": random_id(),
-    "query": {
-        "foo": {
-            "$asdf": "wassup"
-        }
-    },
-    "since": None,
-    "queryID": random_id()
+    "object": {
+        '_key': random_id(),
+        '_tags': [1]
+    }
 }, {
-    # Audit is not boolean
+    # Tags since is not a list
     "messageID": random_id(),
-    "query": {
-        "foo": "bar",
-        "_audit": "true"
-    },
-    "since": None,
-    "queryID": random_id()
+    "tagsSince": "1234"
 }, {
+    # Tags since is empty
     "messageID": random_id(),
-    "query": {
-        "foo": "bar",
-        "_audit": 0
-    },
-    "since": None,
-    "queryID": random_id()
+    "tagsSince": []
 }, {
-    # query requirements also affect update
+    # Tags since is not a list of lists
     "messageID": random_id(),
-    "query": {
-        "$asdf": "wassup"
-    },
-    "object": base_object
+    "tagsSince": ["hello", "666f6f2d6261722d71757578"],
+}, {
+    # Tags since entries have too few items
+    "messageID": random_id(),
+    "tagsSince": [["hello"]]
+}, {
+    # Tags since entries have too many items
+    "messageID": random_id(),
+    "tagsSince": [["hello", "666f6f2d6261722d71757578", "asdf"]],
+}, {
+    # First entry is not a string
+    "messageID": random_id(),
+    "tagsSince": [[1234, "666f6f2d6261722d71757578"]],
+}, {
+    # Tags since entries are not a mongo ID
+    "messageID": random_id(),
+    "tagsSince": [["hello", "why"]],
 }]
 
 if __name__ == "__main__":

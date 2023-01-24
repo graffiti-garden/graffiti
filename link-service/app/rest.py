@@ -1,112 +1,107 @@
-import json
-import asyncio
-from hashlib import sha256
-from motor.motor_asyncio import AsyncIOMotorClient
-from contextlib import asynccontextmanager
+async def update(app, object, owner_id):
+    # Make sure the owner is logged in
+    if not owner_id:
+        raise Exception("you can't modify objects without logging in.")
 
-from .rewrite import query_rewrite, object_to_doc
+    # Make sure the object is by the user
+    if object['_by'] != owner_id:
+        raise Exception("you can only create objects _by yourself.")
 
-class Rest:
+    # Insert the new object
+    old_object = await app.db.find_one_and_replace({
+        "_key": object['_key'],
+        "_by": owner_id
+    }, object, upsert=True)
 
-    def __init__(self, db, redis):
-        self.db = db
-        self.redis = redis
+    # Extract deleted and updated tags
+    updated_tags = object["_tags"]
 
-    async def update(self, object, query, owner_id):
-        self.validate_owner_id(owner_id)
+    if old_object:
+        deleted_tags = [tag for tag in old_object["_tags"] if tag not in object["_tags"]]
 
-        # Lock so that the delete and insert can be done together
-        lock = self.redis.lock(object['_id'] + owner_id)
-        await lock.acquire()
+        # TODO
+        # Send tags and new object to the broker
 
-        # Try deleting the old document if there is one
-        delete_id = None
-        try:
-            delete_id = await self.delete(object['_id'], owner_id)
-        except Exception as e:
-            # Nothing to worry about, this is just a new object
-            pass
+        return "replaced"
 
-        result = None
-        try:
-            # Make a new document out of the object
-            doc = object_to_doc(object)
+    else:
+        # TODO
+        # Send tags and new object to the broker
 
-            # Then insert the new one into the database
-            result = await self.db.insert_one(doc)
+        return "inserted"
 
-            # Once inserted, try querying for it
-            # with the supplied query
-            query = query_rewrite(query, owner_id)
-            query["_id"] = result.inserted_id
-            refetched_doc = await self.db.find_one(query)
-            if not refetched_doc:
-                raise Exception("the updated object does not match the supplied query")
 
-        except Exception as e:
+async def remove(app, object_key, owner_id):
+    # Make sure the owner is logged in
+    if not owner_id:
+        raise Exception("you can't modify objects without logging in.")
 
-            # Delete the object if it was inserted
-            if result:
-                await self.db.delete_one({ "_id": result.inserted_id })
+    # Set the old tags as deleting
+    old_object = await app.db.find_one_and_delete({
+        "_key": object_key,
+        "_by": owner_id,
+    })
 
-            # Un-delete the original object if it exists
-            if delete_id:
-                result = await self.db.find_one_and_update({
-                    "_id": delete_id
-                }, {
-                    "$set": { "_tombstone": False }
-                })
-
-            # Propagate the exception up
-            raise e
-
-        finally:
-            await lock.release()
-
-        # Send the change to the broker
-        if delete_id:
-            await self.redis.publish("replaces", json.dumps(
-                (str(delete_id), str(result.inserted_id))
-            ))
-        else:
-            await self.redis.publish("inserts", str(result.inserted_id))
-
-    async def remove(self, object_id, owner_id):
-        self.validate_owner_id(owner_id)
-
-        lock = self.redis.lock(object_id + owner_id)
-        await lock.acquire()
-
-        # Delete the object
-        try:
-            delete_id = await self.delete(object_id, owner_id)
-        finally:
-            await lock.release()
-
-        # And publish the change to the broker
-        await self.redis.publish("deletes", str(delete_id))
-
-    async def delete(self, object_id, owner_id):
-        # Check that the object that already exists
-        # that it is owned by the owner_id,
-        # and that it is not scheduled for deletion
-        # If so, schedule it for deletion
-        doc = await self.db.find_one_and_update({
-            "_externalID": object_id,
-            "_object._by": owner_id,
-            "_tombstone": False
-        }, {
-            "$set": { "_tombstone": True }
-        })
-
-        if not doc:
-            raise Exception("""\
+    if not old_object:
+        raise Exception("""\
 the object you're trying to modify either \
 doesn't exist or you don't have permission \
 to modify it.""")
 
-        return doc['_id']
+    deleted_tags = old_object["_tags"]
 
-    def validate_owner_id(self, owner_id):
-        if not owner_id:
-            raise Exception("you can't modify objects without logging in.")
+    # TODO
+    # Send ID, tags to the broker
+
+    return "removed"
+
+async def get(app, user_id, object_key, owner_id):
+    # Look to see if there is an object matching the description
+    object = await app.db.find_one({
+        "_by": user_id,
+        "_key": object_key,
+        "$or": [
+            {
+                # The object is public
+                "_to": { "$exists": False },
+            }, {
+                # The object is private
+                "_to": { "$exists": True },
+                # The owner is the recipient or sender
+                "$or": [
+                    { "_to": owner_id },
+                    { "_by": owner_id }
+                ]
+            }
+        ]
+    })
+
+    if not object:
+        raise Exception("""\
+the object you're trying to get either \
+doesn't exist or you don't have permission \
+to get it.""")
+
+    del object["_id"]
+    return object
+
+async def tags(app, owner_id):
+    async for doc in app.db.aggregate([
+        { "$match": {
+            "_by": owner_id,
+        }},
+        { "$project": {
+            "_id": 0,
+            "_tags": 1,
+        }},
+        { "$unwind": {
+            "path": "$_tags"
+        }},
+        { "$group": {
+            "_id": None,
+            "_tags": { "$addToSet": "$_tags" }
+        }}]):
+
+        return doc["_tags"]
+    else:
+        return []

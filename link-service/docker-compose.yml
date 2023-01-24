@@ -17,32 +17,18 @@ services:
       - ./app:/mount/app
     depends_on:
       - mongo
-      - redis
     environment:
       BATCH_SIZE: 100
 
-  graffiti-broker:
-    container_name: graffiti-broker
-    build: broker
-    volumes:
-      - ./broker:/mount/broker
-    depends_on:
-      - mongo
-      - redis
-
   nginx:
-    image: nginx:1.23.2
+    image: nginx:1.23.3
     container_name: graffiti-nginx
     volumes:
       - ./config/nginx/base.conf:/etc/nginx/templates/base.conf.template:ro
 
   mongo:
-    image: mongo:6.0.2-focal
+    image: mongo:6.0.3-focal
     container_name: graffiti-mongo
     restart: always
     volumes:
       - ./db:/data/db
-
-  redis:
-    image: redis:7.0.5-bullseye
-    container_name: graffiti-redis

@@ -14,8 +14,9 @@ def random_sha():
 
 def object_base(owner_id, proof=None):
     object_base = {
-        '_id': random_id(),
+        '_key': random_id(),
         '_by': owner_id,
+        '_tags': ['something']
     }
     return object_base
 

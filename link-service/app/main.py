@@ -6,11 +6,9 @@ from os import getenv
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from jsonschema.exceptions import ValidationError
-from redis import asyncio as aioredis
 
-from .rest import Rest
-from .pubsub import PubSub
+from . import rest
+# from .pubsub import PubSub
 from .schema import validate
 
 app = FastAPI()
@@ -30,23 +28,17 @@ secret = getenv('AUTH_SECRET')
 async def startup():
     # Initialize the database
     client = AsyncIOMotorClient('mongo')
-    db = client.graffiti.objects
+    app.db = client.graffiti.objects
 
     # Create indexes if they don't already exist
-    await db.create_index('_expandedContexts._queryFailsWithout.$**')
-    await db.create_index('_expandedContexts._queryPassesWithout.$**')
-    await db.create_index('_externalID')
-    await db.create_index('_tombstone')
-    await db.create_index('_object._by')
-    await db.create_index('_object._to')
-    await db.create_index('_object.$**')
-
-    # Initialize the pubsub/locking system
-    redis = aioredis.from_url("redis://redis", decode_responses=True)
+    await app.db.create_index('_id')
+    await app.db.create_index('_by')
+    await app.db.create_index('_key')
+    await app.db.create_index('_tags')
+    await app.db.create_index('_to')
 
     # Initialize database interfaces
-    app.rest   = Rest  (db, redis)
-    app.pubsub = PubSub(db, redis)
+    # TODO: PubSub
 
 @app.websocket("/")
 async def query_socket(ws: WebSocket, token: str|None=None):
@@ -60,21 +52,21 @@ async def query_socket(ws: WebSocket, token: str|None=None):
             owner_id = token["owner_id"]
         except:
             await ws.send_json({
-                'type': 'error',
-                'reason': 'authorization',
+                'error': 'authorization',
                 'detail': 'invalid token'
             })
 
     # Register with the pub/sub manager
-    async with app.pubsub.register(ws) as socket_id:
+    # async with app.pubsub.register(ws) as socket_id:
+    socket_id = None
 
-        # Send messages back and forth
-        while True:
-            try:
-                msg = await ws.receive_json()
-                await reply(ws, msg, socket_id, owner_id)
-            except:
-                break
+    # Send messages back and forth
+    while True:
+        try:
+            msg = await ws.receive_json()
+            await reply(ws, msg, socket_id, owner_id)
+        except:
+            break
 
 async def reply(ws, msg, socket_id, owner_id):
     # Initialize the output
@@ -82,36 +74,43 @@ async def reply(ws, msg, socket_id, owner_id):
     if 'messageID' in msg:
         output['messageID'] = msg['messageID']
 
+    # Make sure the message is formatted properly
     try:
-        # Make sure the message is formatted properly
-        validate(msg, owner_id)
-
-        if msg.keys() >= { 'object', 'query' }:
-            await app.rest.update(msg['object'], msg['query'], owner_id)
-
-        elif msg.keys() >= { 'query', 'since', 'queryID' }:
-            await app.pubsub.subscribe(msg['query'], msg['since'], socket_id, msg['queryID'], owner_id)
-
-        elif 'queryID' in msg:
-            await app.pubsub.unsubscribe(socket_id, msg['queryID'])
-
-        elif 'objectID' in msg:
-            await app.rest.remove(msg['objectID'], owner_id)
-
-    except ValidationError as e:
-        output['type'] = 'error'
-        output['reason'] = 'validation'
+        validate(msg)
+    except Exception as e:
+        output['error'] = 'validation'
         output['detail'] = str(e).split('\n')[0]
         await ws.send_json(output)
+        return
+
+    # Pass it to the proper function
+    try:
+
+        if 'object' in msg:
+            result = await rest.update(app, msg['object'], owner_id)
+
+        elif msg.keys() >= { 'userID', 'objectKey' }:
+            result = await rest.get(app, msg['userID'], msg['objectKey'], owner_id)
+
+        elif 'objectKey' in msg:
+            result = await rest.remove(app, msg['objectKey'], owner_id)
+
+        # elif 'tags_since' in msg:
+            # result = await app.pubsub.subscribe(msg['tags_since'], socket_id, owner_id)
+
+        # elif 'tags' in msg:
+            # result = await app.pubsub.unsubscribe(msg['tags'], socket_id, owner_id)
+
+        else:
+            result = await rest.tags(app, owner_id)
+
+        output["result"] = result
 
     except Exception as e:
-        output['type'] = 'error'
-        output['reason'] = 'unknown'
+        output['error'] = 'unknown'
         output['detail'] = str(e)
-        await ws.send_json(output)
 
-    else:
-        output['type'] = 'success'
+    finally:
         await ws.send_json(output)
 
 if __name__ == "__main__":
