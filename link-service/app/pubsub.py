@@ -1,205 +1,154 @@
-import json
 import asyncio
-from uuid import uuid4
 import datetime
-from os import getenv
 from bson.objectid import ObjectId
 from contextlib import asynccontextmanager
-
-from .rewrite import query_rewrite, doc_to_object
-
-batch_size = int(getenv('BATCH_SIZE'))
+from .schema import query_access
 
 class PubSub:
 
-    def __init__(self, db, redis):
+    def __init__(self, db):
         self.db = db
-        self.redis = redis
 
-        self.sockets = {} # socket_id -> socket
-        self.subscriptions = {} # socket_id -> set of query_ids
+        self.tags = set()
+        self.socket_to_tags = {} # socket_id -> set(tag)
+        self.tag_to_sockets = {} # tag -> set(socket_id)
 
-        # Listen for updates
-        listener = asyncio.create_task(self.listen())
-
-    async def listen(self):
-        async with self.redis.pubsub() as p:
-
-            await p.subscribe("results")
-            while True:
-                msg = await p.get_message(ignore_subscribe_messages=True)
-                if msg is not None:
-                    msg = json.loads(msg['data'])
-
-                    # Process the messages in parallel
-                    await asyncio.gather(*[
-                        self.process_broker(
-                            insert_ids,
-                            delete_ids,
-                            query_paths,
-                            msg["now"])
-                        for query_paths, insert_ids, delete_ids in msg["results"]])
-
-                else:
-                    await asyncio.sleep(0.1)
+        asyncio.create_task(self.watch())
 
     @asynccontextmanager
-    async def register(self, ws):
+    async def register(self, socket):
         # Allocate space for this socket's subscriptions
-        socket_id = str(uuid4())
-        self.sockets[socket_id] = ws
-        self.subscriptions[socket_id] = set()
+        self.socket_to_tags[socket] = set()
 
         try:
-            yield socket_id
+            yield
 
         finally:
-            # Unsubscribe the socket from any hanging queries.
-            while self.subscriptions[socket_id]:
-                query_id = next(iter(self.subscriptions[socket_id]))
-                await self.unsubscribe(socket_id, query_id)
-            # And delete all references to it.
-            del self.subscriptions[socket_id]
-            del self.sockets[socket_id]
+            # Remove all references to the socket
+            for tag in self.socket_to_tags[socket]:
+                self.tag_to_sockets[tag].remove(socket)
+                if not self.tag_to_sockets[tag]:
+                    del self.tag_to_sockets[tag]
+                    self.tags.remove(tag)
+                    self.tags_updated = True
+            del self.socket_to_tags[socket]
 
-    async def subscribe(self, query, since, socket_id, query_id, owner_id):
-        # Process since
-        if since:
-            since = ObjectId(since)
-        else:
-            # woo Y2K!
-            since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
+    async def subscribe(self, tags_since, socket, owner_id):
+        for tag, since in tags_since:
+            if tag in self.socket_to_tags[socket]:
+                raise Exception
 
-        # Rewrite the query to account for contexts,
-        # except with audits which only care about _by
-        query = query_rewrite(query, owner_id)
-
-        # Make sure the query has valid syntax
-        # by performing a test query
-        await self.db.find_one(query)
-
-        # And add the query id to the list of subscriptions
-        self.subscriptions[socket_id].add(query_id)
-        query_path = (socket_id, query_id)
-
-        # Forward this subscription to the query broker
-        await self.redis.publish("subscribes", json.dumps({
-            'query': query,
-            'query_path': query_path
-        }))
+        for tag, since in tags_since:
+            self.socket_to_tags[socket].add(tag)
+            if tag not in self.tag_to_sockets:
+                self.tag_to_sockets[tag] = set()
+                self.tags.add(tag)
+                self.tags_updated = True
+            self.tag_to_sockets[tag].add(socket)
 
         # In the background, begin processing existing results
-        now = str(ObjectId())
-        asyncio.create_task(self.process_existing(query, since, query_path, now))
+        asyncio.create_task(self.process_existing(tags_since, socket, owner_id))
 
-    async def process_existing(self, query, since, query_path, now):
-        # Rewrite
-        query = query | {
-            # So we don't get deleted objects
-            "_tombstone": False,
-            # And so you can choose to only see
-            # things that have changed recently
-            "_id": { "$gt": since }
+        return 'subscribed'
+
+    async def unsubscribe(self, tags, socket, owner_id):
+        for tag in tags:
+            if tag not in self.socket_to_tags[socket]:
+                raise Exception
+
+        for tag in tags:
+            self.socket_to_tags[socket].remove(tag)
+            self.tag_to_sockets[tag].remove(socket)
+            if not self.tag_to_sockets[tag]:
+                self.tags.remove(tag)
+                self.tags_updated = True
+                del self.tag_to_sockets[tag]
+
+        return 'unsubscribed'
+
+    # Initialize database interfaces
+    async def watch(self):
+
+        resume_token = None
+
+        while True:
+
+            self.tags_updated = False
+        
+            async with self.db.watch(
+                    [ { '$match' : {'fullDocument._tags': { "$elemMatch": { "$in": list(self.tags) }}}}],
+                    full_document='whenAvailable',
+                    full_document_before_change='whenAvailable') as stream:
+
+                async for change in stream:
+
+                    now = change['_id']
+                    done_sockets = set()
+                    tasks = []
+
+                    # Create a set of tasks for sending
+                    # messages to relevant sockets
+                    if 'fullDocument' in change:
+                        doc = change['fullDocument']
+                        del doc['_id']
+                        msg = { "update": doc }
+                        self.collect_tasks(doc, tasks, msg, done_sockets, now, owner_id)
+                    if 'fullDocumentBeforeChange' in change:
+                        doc = change['fullDocumentBeforeChange']
+                        msg = { "remove": doc["_key"] }
+                        self.collect_tasks(doc, tasks, msg, done_sockets, now, owner_id)
+
+                    # Do the tasks
+                    await asyncio.gather(*tasks)
+                    
+                    # Check for new subscriptions
+                    if self.tags_updated:
+                        resume_token = stream.resume_token
+                        break
+
+    def collect_tasks(self, doc, tasks, msg, done_sockets, now, owner_id):
+
+        for tag in doc["_tags"]:
+            if not self.tag_to_sockets[tag]: continue
+            for socket in self.tag_to_sockets[tag] - done_sockets:
+                done_sockets.add(socket)
+                if '_to' not in doc or owner_id == doc['_by'] or owner_id in doc['_to']:
+                    tasks.append(socket.send_json( msg | { "now": now }))
+
+    async def process_existing(self, tags_since, socket, owner_id):
+        
+        # Formulate a query for each tag and time pair
+        tags_since_queries = []
+        for (tag, since) in tags_since:
+            if since:
+                since = ObjectId(since)
+            else:
+                # woo Y2K!
+                since = ObjectId.from_datetime(datetime.datetime(2000,1,1))
+
+            tags_since_queries.append({
+                "_tags": tag,
+                "_id": { "$gt": since }
+            })
+
+        query = {
+            # Only get objects prior to subscription
+            "$and": [query_access(owner_id), {
+                "$or": tags_since_queries
+            }]
         }
 
-        await self.stream_query(query, [query_path],
-            type='updates',
-            historical=True,
-            now=now
-        )
+        now = None
+        async for object in self.db.find(query, sort=[('_id', -1)]):
+            if not now:
+                now = object["_id"]
 
-    async def process_broker(self, insert_ids, delete_ids, query_paths, now):
-        # Send the delete results
-        # (all at once because it's just a list of object/owner IDs)
-        if delete_ids:
-            query_paths = await self.publish_results(delete_ids, query_paths,
-                    type='removes',
-                    historical=False,
-                    now=now,
-                    complete=(not insert_ids))
-            # If there are no more live sockets on the receiving end, stop now
-            if not query_paths:
-                return
+            try:
+                del object["_id"]
+                await socket.send_json({
+                    "update": object,
+                    "now": str(now)})
+            except Exception as e:
+                break
 
-        # Send the insert results in batches
-        if insert_ids:
-            query = {
-                "_id": { "$in": [ObjectId(i) for i in insert_ids] }
-            }
-            await self.stream_query(query, query_paths,
-                type='updates',
-                historical=False,
-                now=now
-            )
-
-    async def stream_query(self, query, query_paths, **kwargs):
-        # For each element of the query
-        results = []
-        cursor = self.db.find(
-                query,
-                # Return the latest elements first
-                sort=[('_id', -1)])
-
-        async for doc in cursor:
-            # Add the doc to the batch
-            results.append(doc_to_object(doc))
-            
-            # Once the batch is full
-            if len(results) == batch_size:
-                # Send the results back
-                # And reset the batch
-                query_paths = await self.publish_results(results, query_paths, complete=False, **kwargs)
-                results = []
-                # If there are no more live sockets, stop
-                if not query_paths:
-                    break
-
-        else:
-            # Publish any remainder
-            query_paths = await self.publish_results(results, query_paths, complete=True, **kwargs)
-
-        return query_paths
-
-    async def publish_results(self, results, query_paths, **kwargs):
-
-        # Add the results to the message
-        msg = kwargs
-        msg['results'] = results
-
-        # Keep track of the query paths that are still active
-        live_paths = []
-
-        # Send the message to each socket 
-        tasks = []
-        for query_path in query_paths:
-            tasks.append(self.attempt_send(msg, query_path, live_paths))
-        await asyncio.gather(*tasks)
-
-        return live_paths
-
-    async def attempt_send(self, msg, query_path, live_paths):
-        socket_id, query_id = query_path
-
-        # If we have unsubscribed, no good
-        if socket_id not in self.subscriptions:
-            return
-        if query_id not in self.subscriptions[socket_id]:
-            return
-
-        try:
-            await self.sockets[socket_id].send_json(msg|{'queryID': query_id})
-        except:
-            pass
-        else:
-            # Attempt succeeded so maintain the query path
-            live_paths.append(query_path)
-
-    async def unsubscribe(self, socket_id, query_id):
-        if query_id not in self.subscriptions[socket_id]:
-            raise Exception("query_id does not exist.")
-
-        # Remove the subscription from the socket
-        self.subscriptions[socket_id].remove(query_id)
-
-        # And push the result to the query broker
-        await self.redis.publish("unsubscribes", json.dumps((socket_id, query_id)))
+        await socket.send_json({ "tagsSince": tags_since })

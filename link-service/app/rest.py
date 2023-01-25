@@ -1,4 +1,6 @@
-async def update(app, object, owner_id):
+from .schema import query_access
+
+async def update(db, object, owner_id):
     # Make sure the owner is logged in
     if not owner_id:
         raise Exception("you can't modify objects without logging in.")
@@ -8,7 +10,7 @@ async def update(app, object, owner_id):
         raise Exception("you can only create objects _by yourself.")
 
     # Insert the new object
-    old_object = await app.db.find_one_and_replace({
+    old_object = await db.find_one_and_replace({
         "_key": object['_key'],
         "_by": owner_id
     }, object, upsert=True)
@@ -19,25 +21,18 @@ async def update(app, object, owner_id):
     if old_object:
         deleted_tags = [tag for tag in old_object["_tags"] if tag not in object["_tags"]]
 
-        # TODO
-        # Send tags and new object to the broker
-
         return "replaced"
 
     else:
-        # TODO
-        # Send tags and new object to the broker
-
         return "inserted"
 
-
-async def remove(app, object_key, owner_id):
+async def remove(db, object_key, owner_id):
     # Make sure the owner is logged in
     if not owner_id:
         raise Exception("you can't modify objects without logging in.")
 
     # Set the old tags as deleting
-    old_object = await app.db.find_one_and_delete({
+    old_object = await db.find_one_and_delete({
         "_key": object_key,
         "_by": owner_id,
     })
@@ -50,31 +45,14 @@ to modify it.""")
 
     deleted_tags = old_object["_tags"]
 
-    # TODO
-    # Send ID, tags to the broker
-
     return "removed"
 
-async def get(app, user_id, object_key, owner_id):
+async def get(db, user_id, object_key, owner_id):
     # Look to see if there is an object matching the description
-    object = await app.db.find_one({
+    object = await db.find_one({
         "_by": user_id,
         "_key": object_key,
-        "$or": [
-            {
-                # The object is public
-                "_to": { "$exists": False },
-            }, {
-                # The object is private
-                "_to": { "$exists": True },
-                # The owner is the recipient or sender
-                "$or": [
-                    { "_to": owner_id },
-                    { "_by": owner_id }
-                ]
-            }
-        ]
-    })
+    } | query_access(owner_id))
 
     if not object:
         raise Exception("""\
@@ -85,8 +63,8 @@ to get it.""")
     del object["_id"]
     return object
 
-async def tags(app, owner_id):
-    async for doc in app.db.aggregate([
+async def tags(db, owner_id):
+    async for doc in db.aggregate([
         { "$match": {
             "_by": owner_id,
         }},

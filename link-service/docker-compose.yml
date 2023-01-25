@@ -17,8 +17,6 @@ services:
       - ./app:/mount/app
     depends_on:
       - mongo
-    environment:
-      BATCH_SIZE: 100
 
   nginx:
     image: nginx:1.23.3
@@ -30,5 +28,9 @@ services:
     image: mongo:6.0.3-focal
     container_name: graffiti-mongo
     restart: always
+    command: "--bind_ip_all --replSet rs0"
     volumes:
+      - ./config/mongo:/docker-entrypoint-initdb.d/
       - ./db:/data/db
+    extra_hosts:
+      - "mongo:127.0.0.1"

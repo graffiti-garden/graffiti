@@ -88,3 +88,19 @@ schema = {
 
 validator = jsonschema.Draft7Validator(schema)
 validate = lambda msg: validator.validate(msg)
+
+def query_access(owner_id):
+    return { "$or": [
+        {
+            # The object is public
+            "_to": { "$exists": False },
+        }, {
+            # The object is private
+            "_to": { "$exists": True },
+            # The owner is the recipient or sender
+            "$or": [
+                { "_to": owner_id },
+                { "_by": owner_id }
+            ]
+        }
+    ]}

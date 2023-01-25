@@ -19,7 +19,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Added object")
 
         # Try replacing the object
@@ -32,7 +32,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'replaced'
+        assert result['reply'] == 'replaced'
         print("Replaced object")
 
         # Try removing an object
@@ -41,7 +41,7 @@ async def main():
             'objectKey': base['_key']
         })
         result = await recv(ws)
-        assert result['result'] == 'removed'
+        assert result['reply'] == 'removed'
         print("Removed object")
 
         # Try removing it *again*
@@ -61,7 +61,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Could replace object")
 
         # Try removing an object
@@ -70,7 +70,7 @@ async def main():
             'objectKey': base['_key']
         })
         result = await recv(ws)
-        assert result['result'] == 'removed'
+        assert result['reply'] == 'removed'
         print("Removed the replacement")
 
         # Try creating another object
@@ -82,7 +82,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Added another object")
 
     async with websocket_connect(my_token) as ws:
@@ -95,7 +95,7 @@ async def main():
                 }
             })
             result = await recv(ws)
-            assert result['result'] == 'replaced'
+            assert result['reply'] == 'replaced'
         print("...Done")
 
         # Try removing the object
@@ -104,7 +104,7 @@ async def main():
             'objectKey': base['_key']
         })
         result = await recv(ws)
-        assert result['result'] == 'removed'
+        assert result['reply'] == 'removed'
         print("Deleted object")
 
         # Try removing it *again*
@@ -125,7 +125,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Added a new object")
 
     async def replace_object():
@@ -137,7 +137,7 @@ async def main():
                 }
             })
             result = await recv(ws)
-            assert result['result'] == 'replaced'
+            assert result['reply'] == 'replaced'
             await ws.close()
 
     # Perform a bunch of replacements with websockets in parallel
@@ -153,7 +153,7 @@ async def main():
             'objectKey': base['_key']
         })
         result = await recv(ws)
-        assert result['result'] == 'removed'
+        assert result['reply'] == 'removed'
         print("Removed object")
 
         # Try removing it *again*
@@ -174,7 +174,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Added another object")
 
     # Create a new user
@@ -185,7 +185,7 @@ async def main():
         # List the tags associated with the user
         await send(ws, { 'messageID': random_id() })
         result = await recv(ws)
-        assert len(result["result"]) == 0
+        assert len(result["reply"]) == 0
         print("User has no tags")
 
         # Add 10 objects with the same tag
@@ -199,14 +199,14 @@ async def main():
                 }
             })
             result = await recv(ws)
-            assert result['result'] == 'inserted'
+            assert result['reply'] == 'inserted'
         print("...Done")
 
         # List the tags associated with the user
         await send(ws, { 'messageID': random_id() })
         result = await recv(ws)
-        assert len(result["result"]) == 1
-        assert 'hello' in result["result"]
+        assert len(result["reply"]) == 1
+        assert 'hello' in result["reply"]
         print("User has one tag")
 
         print("Adding an object the same, plus another tag")
@@ -218,14 +218,14 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
 
         # List the tags associated with the user
         await send(ws, { 'messageID': random_id() })
         result = await recv(ws)
-        assert len(result["result"]) == 2
-        assert 'hello' in result["result"]
-        assert 'goodbye' in result["result"]
+        assert len(result["reply"]) == 2
+        assert 'hello' in result["reply"]
+        assert 'goodbye' in result["reply"]
         print("The user has the two tags")
         
         print("Removing the additional object")
@@ -234,13 +234,13 @@ async def main():
             'objectKey': base["_key"]
         })
         result = await recv(ws)
-        assert result['result'] == 'removed'
+        assert result['reply'] == 'removed'
 
         # Still one tag
         await send(ws, { 'messageID': random_id() })
         result = await recv(ws)
-        assert len(result["result"]) == 1
-        assert 'hello' in result["result"]
+        assert len(result["reply"]) == 1
+        assert 'hello' in result["reply"]
         print("The user has only one tag")
 
 
@@ -262,7 +262,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Inserted the object")
 
         await send(ws, {
@@ -271,7 +271,7 @@ async def main():
             'objectKey': base["_key"]
         })
         result = await recv(ws)
-        assert result["result"]["content"] == 12345
+        assert result["reply"]["content"] == 12345
         print("Getting content is correct")
 
         await send(ws, {
@@ -281,7 +281,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'replaced'
+        assert result['reply'] == 'replaced'
         print("Inserted the object")
 
         await send(ws, {
@@ -290,7 +290,7 @@ async def main():
             'objectKey': base["_key"]
         })
         result = await recv(ws)
-        assert result["result"]["content"] == 67890
+        assert result["reply"]["content"] == 67890
         print("Getting replaced content is correct")
 
         base_private  = object_base(my_id)
@@ -302,7 +302,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Inserted a private object")
 
         await send(ws, {
@@ -311,7 +311,7 @@ async def main():
             'objectKey': base_private["_key"]
         })
         result = await recv(ws)
-        assert result["result"]["something"] == 'asdf'
+        assert result["reply"]["something"] == 'asdf'
         print("Getting private content is correct")
 
     other_id, other_token = owner_id_and_token()
@@ -324,7 +324,7 @@ async def main():
             'objectKey': base["_key"]
         })
         result = await recv(ws)
-        assert result["result"]["content"] == 67890
+        assert result["reply"]["content"] == 67890
         print("Other user can see public content")
 
         await send(ws, {
@@ -345,7 +345,7 @@ async def main():
             }
         })
         result = await recv(ws)
-        assert result['result'] == 'inserted'
+        assert result['reply'] == 'inserted'
         print("Other user inserted a private message to first user")
 
         await send(ws, {
@@ -354,7 +354,7 @@ async def main():
             'objectKey': base_other["_key"]
         })
         result = await recv(ws)
-        assert result["result"]["secret"] == "message"
+        assert result["reply"]["secret"] == "message"
         print("Other user can see sent private message")
 
     async with websocket_connect(my_token) as ws:
@@ -366,7 +366,7 @@ async def main():
             'objectKey': base_other["_key"]
         })
         result = await recv(ws)
-        assert result["result"]["secret"] == "message"
+        assert result["reply"]["secret"] == "message"
         print("Original user can see sent private message")
 
     another_other_id, another_other_token = owner_id_and_token()

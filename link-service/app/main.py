@@ -8,8 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from . import rest
-# from .pubsub import PubSub
 from .schema import validate
+from .pubsub import PubSub
 
 app = FastAPI()
 
@@ -28,6 +28,9 @@ secret = getenv('AUTH_SECRET')
 async def startup():
     # Initialize the database
     client = AsyncIOMotorClient('mongo')
+    if 'objects' not in await client.graffiti.list_collection_names():
+        await client.graffiti.create_collection('objects', changeStreamPreAndPostImages={'enabled': True})
+
     app.db = client.graffiti.objects
 
     # Create indexes if they don't already exist
@@ -37,12 +40,13 @@ async def startup():
     await app.db.create_index('_tags')
     await app.db.create_index('_to')
 
-    # Initialize database interfaces
-    # TODO: PubSub
+    # Keep track of the total set of tags that people are subscribed to
+    # When that set changes, update the pipeline
+    app.pubsub = PubSub(app.db)
 
 @app.websocket("/")
-async def query_socket(ws: WebSocket, token: str|None=None):
-    await ws.accept()
+async def query_socket(socket: WebSocket, token: str|None=None):
+    await socket.accept()
     # Perform authorization
     owner_id = None
     if token:
@@ -51,24 +55,23 @@ async def query_socket(ws: WebSocket, token: str|None=None):
             assert token["type"] == "token"
             owner_id = token["owner_id"]
         except:
-            await ws.send_json({
+            await socket.send_json({
                 'error': 'authorization',
                 'detail': 'invalid token'
             })
 
     # Register with the pub/sub manager
-    # async with app.pubsub.register(ws) as socket_id:
-    socket_id = None
+    async with app.pubsub.register(socket):
 
-    # Send messages back and forth
-    while True:
-        try:
-            msg = await ws.receive_json()
-            await reply(ws, msg, socket_id, owner_id)
-        except:
-            break
+        # Send messages back and forth
+        while True:
+            try:
+                msg = await socket.receive_json()
+                await reply(socket, msg, owner_id)
+            except:
+                break
 
-async def reply(ws, msg, socket_id, owner_id):
+async def reply(socket, msg, owner_id):
     # Initialize the output
     output = {}
     if 'messageID' in msg:
@@ -80,38 +83,37 @@ async def reply(ws, msg, socket_id, owner_id):
     except Exception as e:
         output['error'] = 'validation'
         output['detail'] = str(e).split('\n')[0]
-        await ws.send_json(output)
-        return
+        return await socket.send_json(output)
 
     # Pass it to the proper function
     try:
 
         if 'object' in msg:
-            result = await rest.update(app, msg['object'], owner_id)
+            reply = await rest.update(app.db, msg['object'], owner_id)
 
         elif msg.keys() >= { 'userID', 'objectKey' }:
-            result = await rest.get(app, msg['userID'], msg['objectKey'], owner_id)
+            reply = await rest.get(app.db, msg['userID'], msg['objectKey'], owner_id)
 
         elif 'objectKey' in msg:
-            result = await rest.remove(app, msg['objectKey'], owner_id)
+            reply = await rest.remove(app.db, msg['objectKey'], owner_id)
 
-        # elif 'tags_since' in msg:
-            # result = await app.pubsub.subscribe(msg['tags_since'], socket_id, owner_id)
+        elif 'tagsSince' in msg:
+            reply = await app.pubsub.subscribe(msg['tagsSince'], socket, owner_id)
 
-        # elif 'tags' in msg:
-            # result = await app.pubsub.unsubscribe(msg['tags'], socket_id, owner_id)
+        elif 'tags' in msg:
+            reply = await app.pubsub.unsubscribe(msg['tags'], socket, owner_id)
 
         else:
-            result = await rest.tags(app, owner_id)
+            reply = await rest.tags(app.db, owner_id)
 
-        output["result"] = result
+        output["reply"] = reply
 
     except Exception as e:
         output['error'] = 'unknown'
         output['detail'] = str(e)
 
     finally:
-        await ws.send_json(output)
+        await socket.send_json(output)
 
 if __name__ == "__main__":
     args = {}

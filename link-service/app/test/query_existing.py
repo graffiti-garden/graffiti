@@ -2,15 +2,12 @@
 
 import asyncio
 from utils import *
-from os import getenv
 import time
-
-batch_size = int(getenv('BATCH_SIZE'))
 
 async def main():
 
     custom_tag = random_id()
-    query_id = random_id()
+    custom_tag2 = random_id()
 
     my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
@@ -19,132 +16,159 @@ async def main():
             base = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'query': {},
                 'object': base | {
+                    '_tags': [custom_tag],
                     'content': random_id(),
-                    'tags': [custom_tag],
-                    'timestamp': time.time()
                 }
             })
             result = await recv(ws)
-            assert result['type'] == 'success'
+            assert result['reply'] == 'inserted'
+        print("...added")
 
         print("querying for them")
         await send(ws, {
             'messageID': random_id(),
-            'query': {
-                'tags': custom_tag
-            },
-            "since": None,
-            "queryID": query_id
+            'tagsSince': [
+                [custom_tag, None]
+            ]
         })
         result = await recv(ws)
-        assert result['type'] == 'success'
+        assert result['reply'] == 'subscribed'
+        for i in range(10):
+            result = await recv(ws)
+            assert 'update' in result
+            assert result['update']['_tags'] == [custom_tag]
+            now = result['now']
         result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert result['complete']
-        assert len(result['results']) == 10
+        assert 'tagsSince' in result
+        print("...received")
+
+        # Try subscribing again
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [
+                [custom_tag, None]
+            ]
+        })
+        result = await recv(ws)
+        assert 'error' in result
+        print("Could not subscribe again")
 
         print("unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'queryID': query_id
+            'tags': [custom_tag]
         })
         result = await recv(ws)
-        assert result['type'] == 'success'
+        assert result['reply'] == 'unsubscribed'
 
-        print(f"adding {2*batch_size} objects")
-        for i in range(2*batch_size):
-            base = object_base(my_id)
-            await send(ws, {
-                'messageID': random_id(),
-                'query': {},
-                'object': base | {
-                    'content': random_id(),
-                    'tags': [custom_tag],
-                    'timestamp': time.time()
-                }
-            })
-            result = await recv(ws)
-            assert result['type'] == 'success'
-
-        print("waiting for these to be fully processed")
-        print("so they don't accidentally get sent as live updates")
-        await asyncio.sleep(1)
-
-        print("querying for them")
+        # Try unsubscribing again
         await send(ws, {
             'messageID': random_id(),
-            'query': {
-                'tags': custom_tag,
-                '_audit': False
-            },
-            "since": None,
-            "queryID": query_id
+            'tags': [custom_tag]
         })
         result = await recv(ws)
-        assert result['type'] == 'success'
-        result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert result['historical']
-        # Store now
-        now = result['now']
-        assert not result['complete']
-        assert len(result['results']) == batch_size
-        timestamp0 = result['results'][0]['timestamp']
-        result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert result['historical']
-        assert not result['complete']
-        assert len(result['results']) == batch_size
-        timestamp1 = result['results'][0]['timestamp']
-        result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert result['historical']
-        assert result['complete']
-        assert len(result['results']) == 10
-        timestamp2 = result['results'][0]['timestamp']
-        # newest objects are returned first
-        assert timestamp0 > timestamp1
-        assert timestamp1 > timestamp2
+        assert 'error' in result
+        print("Could not unsubscribe again")
 
+        # Add some more objects with one and more than one tag
+        print("Inserting objects with multiple tags")
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                '_tags': [custom_tag],
+                'something': 'one'
+            }
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'inserted'
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                '_tags': [custom_tag2, custom_tag],
+                'something': 'two'
+            }
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'inserted'
+
+        # Subscribe again and only query for recently added objects of 1st tag
+        print("Subscribe to events since last query")
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [
+                [custom_tag, now]
+            ]
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'subscribed'
+
+        # Objects arrive in reverse chronological order
+        result = await recv(ws)
+        assert result['update']['something'] == 'two'
+        now2 = result['now']
+        result = await recv(ws)
+        assert result['update']['something'] == 'one'
+        result = await recv(ws)
+        assert 'tagsSince' in result
+        print("...received")
+
+        # Unsubscribe
         print("unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'queryID': query_id
+            'tags': [custom_tag]
         })
         result = await recv(ws)
-        assert result['type'] == 'success'
+        assert result['reply'] == 'unsubscribed'
 
-        print("adding just a couple more objects")
-        for i in range(20):
-            base = object_base(my_id)
-            await send(ws, {
-                'messageID': random_id(),
-                'query': {},
-                'object': base | {
-                    'content': random_id(),
-                    'tags': [custom_tag]
-                }
-            })
-            result = await recv(ws)
-            assert result['type'] == 'success'
-
-        print("querying only for recently added ones")
+        # Add more objects with both tags
+        print("Inserting more objects with multiple tags")
+        base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'since': now,
-            'query': {
-                'tags': custom_tag
-            },
-            'queryID': query_id
+            'object': base | {
+                '_tags': [custom_tag2],
+                'something': 'three'
+            }
         })
         result = await recv(ws)
-        assert result['type'] == 'success'
+        assert result['reply'] == 'inserted'
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                '_tags': [custom_tag],
+                'something': 'four'
+            }
+        })
         result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert result['complete']
-        assert len(result['results']) == 20
+        assert result['reply'] == 'inserted'
+
+        print("Subscribe to both tags with different sinces")
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [
+                [custom_tag2, now],
+                [custom_tag, now2]
+            ]
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'subscribed'
+        result = await recv(ws)
+        assert result['update']['something'] == 'four'
+        result = await recv(ws)
+        assert result['update']['something'] == 'three'
+        result = await recv(ws)
+        assert result['update']['something'] == 'two'
+        result = await recv(ws)
+        assert 'tagsSince' in result
+        print("Received both new results but only one older result as expected")
+
+        # TODO
+        # Try private messaging
 
 if __name__ == "__main__":
     asyncio.run(main())
