@@ -10,16 +10,16 @@ async def main():
         for request in valid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
-            # while response["type"] in ["updates", "removes"]:
-                # response = await recv(ws)
+            while ('error' not in response) and ('messageID' not in response):
+                response = await recv(ws)
             if 'error' in response:
                 assert response['error'] != "validation"
         print("All valid requests passed, as expected")
         for request in invalid_requests(my_id):
             await send(ws, request)
             response = await recv(ws)
-            # while response["type"] in ["updates", "removes"]:
-                # response = await recv(ws)
+            while ('error' not in response) and ('messageID' not in response):
+                response = await recv(ws)
             assert response['error'] == "validation"
         print("All invalid requests failed, as expected")
 

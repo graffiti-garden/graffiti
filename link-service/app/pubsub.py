@@ -36,7 +36,7 @@ class PubSub:
     async def subscribe(self, tags_since, socket, owner_id):
         for tag, since in tags_since:
             if tag in self.socket_to_tags[socket]:
-                raise Exception
+                raise Exception(f"you are already subscribed to the tag {tag}")
 
         for tag, since in tags_since:
             self.socket_to_tags[socket].add(tag)
@@ -54,7 +54,7 @@ class PubSub:
     async def unsubscribe(self, tags, socket, owner_id):
         for tag in tags:
             if tag not in self.socket_to_tags[socket]:
-                raise Exception
+                raise Exception(f"you are not subscribed to the tag {tag}")
 
         for tag in tags:
             self.socket_to_tags[socket].remove(tag)

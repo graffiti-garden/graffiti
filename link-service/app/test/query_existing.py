@@ -8,8 +8,12 @@ async def main():
 
     custom_tag = random_id()
     custom_tag2 = random_id()
+    custom_tag3 =  random_id()
 
     my_id, my_token = owner_id_and_token()
+    other_id, other_token = owner_id_and_token()
+    another_id, another_token = owner_id_and_token()
+
     async with websocket_connect(my_token) as ws:
         print("adding 10 objects")
         for i in range(10):
@@ -167,8 +171,57 @@ async def main():
         assert 'tagsSince' in result
         print("Received both new results but only one older result as expected")
 
-        # TODO
-        # Try private messaging
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'content': 'qwerty',
+                '_tags': [custom_tag3],
+                '_to': [other_id]
+            }
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'inserted'
+        print("Created a private object")
+
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [[custom_tag3, None]]
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'subscribed'
+        result = await recv(ws)
+        assert result['update']['content'] == 'qwerty'
+        result = await recv(ws)
+        assert 'tagsSince' in result
+        print("Creator can see it")
+
+    async with websocket_connect(other_token) as ws:
+
+        # Recipient can see it
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [[custom_tag3, None]]
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'subscribed'
+        result = await recv(ws)
+        assert result['update']['content'] == 'qwerty'
+        result = await recv(ws)
+        assert 'tagsSince' in result
+        print("Recipient can see it")
+
+    async with websocket_connect(another_token) as ws:
+
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [[custom_tag3, None]]
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'subscribed'
+        result = await recv(ws)
+        assert 'tagsSince' in result
+        print("Snoop cannot see it")
 
 if __name__ == "__main__":
     asyncio.run(main())
