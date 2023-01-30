@@ -48,12 +48,12 @@ async def startup():
 async def query_socket(socket: WebSocket, token: str|None=None):
     await socket.accept()
     # Perform authorization
-    owner_id = None
+    socket.owner_id = None
     if token:
         try:
             token = jwt.decode(token, secret, algorithms=["HS256"])
             assert token["type"] == "token"
-            owner_id = token["owner_id"]
+            socket.owner_id = token["owner_id"]
         except:
             await socket.send_json({
                 'error': 'authorization',
@@ -67,11 +67,11 @@ async def query_socket(socket: WebSocket, token: str|None=None):
         while True:
             try:
                 msg = await socket.receive_json()
-                await reply(socket, msg, owner_id)
+                await reply(socket, msg)
             except:
                 break
 
-async def reply(socket, msg, owner_id):
+async def reply(socket, msg):
     # Initialize the output
     output = {}
     if 'messageID' in msg:
@@ -89,22 +89,22 @@ async def reply(socket, msg, owner_id):
     try:
 
         if 'object' in msg:
-            reply = await rest.update(app.db, msg['object'], owner_id)
+            reply = await rest.update(app.db, msg['object'], socket.owner_id)
 
         elif msg.keys() >= { 'userID', 'objectKey' }:
-            reply = await rest.get(app.db, msg['userID'], msg['objectKey'], owner_id)
+            reply = await rest.get(app.db, msg['userID'], msg['objectKey'], socket.owner_id)
 
         elif 'objectKey' in msg:
-            reply = await rest.remove(app.db, msg['objectKey'], owner_id)
+            reply = await rest.remove(app.db, msg['objectKey'], socket.owner_id)
 
         elif 'tagsSince' in msg:
-            reply = await app.pubsub.subscribe(msg['tagsSince'], socket, owner_id)
+            reply = await app.pubsub.subscribe(msg['tagsSince'], socket)
 
         elif 'tags' in msg:
-            reply = await app.pubsub.unsubscribe(msg['tags'], socket, owner_id)
+            reply = await app.pubsub.unsubscribe(msg['tags'], socket)
 
         else:
-            reply = await rest.tags(app.db, owner_id)
+            reply = await rest.tags(app.db, socket.owner_id)
 
         output["reply"] = reply
 

@@ -2,10 +2,6 @@
 
 import asyncio
 from utils import *
-from os import getenv
-
-batch_size = int(getenv('BATCH_SIZE'))
-big_size = 3*batch_size
 
 async def main():
 
@@ -13,36 +9,68 @@ async def main():
 
     my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
-        print("starting to listen")
+
+        # Subscribe to the tag
+        print("Subscribing to tag")
         await send(ws, {
             'messageID': random_id(),
-            'query': {
-                'tags': custom_tag
-            },
-            'since': None,
-            'queryID': random_id()
+            'tagsSince': [[custom_tag, None]]
         })
         result = await recv(ws)
-        assert result['type'] == 'success'
+        assert result['reply'] == 'subscribed'
         result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert len(result['results']) == 0
+        assert 'tagsSince' in result
 
-        print("adding an item")
+        print("adding an item with the tag")
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'query': {},
             'object': base | {
-                'content': random_id(),
-                'tags': [custom_tag]
+                'something': 'else',
+                '_tags': [custom_tag]
             }
         })
         result = await recv(ws)
-        assert result['type'] == 'success'
+        assert result['reply'] == 'inserted'
         result = await recv(ws)
-        assert result['type'] == 'updates'
-        assert len(result['results']) == 1
+        assert result['update']['something'] == 'else'
+        print("Received as update")
+
+        print("Adding an item with a different tag")
+        base2 = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base2 | {
+                'another': 'thing',
+                '_tags': [random_id()]
+            }
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'inserted'
+        timedout = False
+        try:
+            async with asyncio.timeout(0.1):
+                await recv(ws)
+        except TimeoutError:
+            timedout = True
+        print("The item is not received")
+
+        print("Replacing the first item's tag")
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'another': 'thing',
+                '_tags': [random_id()]
+            }
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'replaced'
+        result = await recv(ws)
+        assert 'remove' in result
+        print("It is removed from the perspective of the subscriber")
+        return
+
+
 
         print("removing an item")
         await send(ws, {

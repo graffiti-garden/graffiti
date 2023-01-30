@@ -4,6 +4,12 @@ import asyncio
 from utils import *
 import time
 
+async def recv_historical(ws):
+    result = { 'update': {}, 'historical': False }
+    while 'update' in result and not result['historical']:
+        result = await recv(ws)
+    return result
+
 async def main():
 
     custom_tag = random_id()
@@ -25,7 +31,7 @@ async def main():
                     'content': random_id(),
                 }
             })
-            result = await recv(ws)
+            result = await recv_historical(ws)
             assert result['reply'] == 'inserted'
         print("...added")
 
@@ -36,14 +42,14 @@ async def main():
                 [custom_tag, None]
             ]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
         for i in range(10):
-            result = await recv(ws)
+            result = await recv_historical(ws)
             assert 'update' in result
             assert result['update']['_tags'] == [custom_tag]
             now = result['now']
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'tagsSince' in result
         print("...received")
 
@@ -54,7 +60,7 @@ async def main():
                 [custom_tag, None]
             ]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'error' in result
         print("Could not subscribe again")
 
@@ -63,7 +69,7 @@ async def main():
             'messageID': random_id(),
             'tags': [custom_tag]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'unsubscribed'
 
         # Try unsubscribing again
@@ -71,7 +77,7 @@ async def main():
             'messageID': random_id(),
             'tags': [custom_tag]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'error' in result
         print("Could not unsubscribe again")
 
@@ -85,7 +91,7 @@ async def main():
                 'something': 'one'
             }
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'inserted'
         base = object_base(my_id)
         await send(ws, {
@@ -95,7 +101,7 @@ async def main():
                 'something': 'two'
             }
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'inserted'
 
         # Subscribe again and only query for recently added objects of 1st tag
@@ -106,16 +112,16 @@ async def main():
                 [custom_tag, now]
             ]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
 
         # Objects arrive in reverse chronological order
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['update']['something'] == 'two'
         now2 = result['now']
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['update']['something'] == 'one'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'tagsSince' in result
         print("...received")
 
@@ -125,7 +131,7 @@ async def main():
             'messageID': random_id(),
             'tags': [custom_tag]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'unsubscribed'
 
         # Add more objects with both tags
@@ -138,7 +144,7 @@ async def main():
                 'something': 'three'
             }
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'inserted'
         base = object_base(my_id)
         await send(ws, {
@@ -148,7 +154,7 @@ async def main():
                 'something': 'four'
             }
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'inserted'
 
         print("Subscribe to both tags with different sinces")
@@ -159,15 +165,15 @@ async def main():
                 [custom_tag, now2]
             ]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['update']['something'] == 'four'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['update']['something'] == 'three'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['update']['something'] == 'two'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'tagsSince' in result
         print("Received both new results but only one older result as expected")
 
@@ -180,7 +186,7 @@ async def main():
                 '_to': [other_id]
             }
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'inserted'
         print("Created a private object")
 
@@ -188,11 +194,11 @@ async def main():
             'messageID': random_id(),
             'tagsSince': [[custom_tag3, None]]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['update']['content'] == 'qwerty'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'tagsSince' in result
         print("Creator can see it")
 
@@ -203,11 +209,11 @@ async def main():
             'messageID': random_id(),
             'tagsSince': [[custom_tag3, None]]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['update']['content'] == 'qwerty'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'tagsSince' in result
         print("Recipient can see it")
 
@@ -217,9 +223,9 @@ async def main():
             'messageID': random_id(),
             'tagsSince': [[custom_tag3, None]]
         })
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
-        result = await recv(ws)
+        result = await recv_historical(ws)
         assert 'tagsSince' in result
         print("Snoop cannot see it")
 
