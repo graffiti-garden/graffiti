@@ -10,7 +10,6 @@ class PubSub:
 
         self.tag_to_sockets = {} # tag -> set(socket)
 
-        self.now = datetime.fromtimestamp(0)
         self.resume_token = None
         self.restart_watcher()
 
@@ -86,9 +85,10 @@ class PubSub:
                 # messages to relevant sockets
                 if 'fullDocument' in change:
                     obj = change['fullDocument']
-                    self.update_now(obj)
+                    now = obj['_updated']
+                    del obj['_updated']
                     del obj['_id']
-                    msg = { "update": obj }
+                    msg = { "update": obj, "now": fmt_date(now) }
                     self.collect_tasks(obj, tasks, msg, done_sockets)
                 if 'fullDocumentBeforeChange' in change:
                     obj = change['fullDocumentBeforeChange']
@@ -119,7 +119,6 @@ class PubSub:
                     socket.owner_id in obj['_to']:
 
                     tasks.append(socket.send_json( msg | {
-                        "now": self.now_str(),
                         "historical": False
                     }))
 
@@ -150,8 +149,10 @@ class PubSub:
             }]
         }
 
+        now = datetime.fromtimestamp(0)
         async for obj in self.db.find(query):
-            self.update_now(obj)
+            now = max(now, obj["_updated"])
+            del obj["_updated"]
             del obj["_id"]
 
             try:
@@ -162,12 +163,7 @@ class PubSub:
                 break
 
         else:
-            await socket.send_json({ "historyComplete": tags_since, "now": self.now_str() })
+            await socket.send_json({ "historyComplete": tags_since, "now": fmt_date(now) })
 
-    def update_now(self, obj):
-        time = obj["_updated"]
-        del obj["_updated"]
-        if time > self.now: self.now = time
-
-    def now_str(self):
-        return self.now.replace(tzinfo=timezone.utc).isoformat()
+def fmt_date(date):
+    return date.replace(tzinfo=timezone.utc).isoformat()
