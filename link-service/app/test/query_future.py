@@ -6,6 +6,25 @@ from utils import *
 async def main():
 
     custom_tag = random_id()
+    custom_tag2 = random_id()
+    custom_tag3 = random_id()
+    private_tag1 = random_id()
+    private_tag2 = random_id()
+
+    async def recv_future(ws):
+        result = {'reply'}
+        while 'reply' in result:
+            result = await recv(ws)
+        return result
+
+    async def another_message(ws):
+        try:
+            async with asyncio.timeout(0.1):
+                await recv_future(ws)
+        except TimeoutError:
+            return False
+        else:
+            return True
 
     my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
@@ -16,9 +35,7 @@ async def main():
             'messageID': random_id(),
             'tagsSince': [[custom_tag, None]]
         })
-        result = await recv(ws)
-        assert result['reply'] == 'subscribed'
-        result = await recv(ws)
+        result = await recv_future(ws)
         assert 'tagsSince' in result
 
         print("adding an item with the tag")
@@ -30,9 +47,7 @@ async def main():
                 '_tags': [custom_tag]
             }
         })
-        result = await recv(ws)
-        assert result['reply'] == 'inserted'
-        result = await recv(ws)
+        result = await recv_future(ws)
         assert result['update']['something'] == 'else'
         print("Received as update")
 
@@ -45,14 +60,8 @@ async def main():
                 '_tags': [random_id()]
             }
         })
-        result = await recv(ws)
-        assert result['reply'] == 'inserted'
         timedout = False
-        try:
-            async with asyncio.timeout(0.1):
-                await recv(ws)
-        except TimeoutError:
-            timedout = True
+        assert not await another_message(ws)
         print("The item is not received")
 
         print("Replacing the first item's tag")
@@ -63,156 +72,210 @@ async def main():
                 '_tags': [random_id()]
             }
         })
-        result = await recv(ws)
-        assert result['reply'] == 'replaced'
-        result = await recv(ws)
+        result = await recv_future(ws)
         assert 'remove' in result
         print("It is removed from the perspective of the subscriber")
-        return
 
-
-
-        print("removing an item")
+        # Put the item back
+        print("Putting the original tag and some other tags back in")
         await send(ws, {
             'messageID': random_id(),
-            'objectID': base['_id']
+            'object': base | {
+                'replacey': 'place',
+                '_tags': [random_id(), custom_tag, random_id()]
+            }
         })
-        result = await recv(ws)
-        assert result['type'] == 'success'
-        result = await recv(ws)
-        assert result['type'] == 'removes'
-        assert len(result['results']) == 1
-        assert result['results'][0]['_id'] == base['_id']
-        assert result['results'][0]['_by'] == base['_by']
+        result = await recv_future(ws)
+        assert result['update']['replacey'] == 'place'
+        print("It is updated from the perspective of the subscriber")
 
+        # Delete it
+        print("Removing the item...")
+        await send(ws, {
+            'messageID': random_id(),
+            'objectKey': base['_key']
+        })
+        result = await recv_future(ws)
+        assert 'remove' in result
+        print("It is removed from the perspective of the subscriber")
 
-    print("Making simultaneous listeners")
-    custom_tag = random_id()
-    async def listen():
-        async with websocket_connect(my_token) as ws:
-            query_id = random_id()
-            await send(ws, {
-                'messageID': random_id(),
-                'query': {
-                    'tags': custom_tag,
-                    '_audit': False
-                },
-                'since': None,
-                'queryID': query_id
-            })
-            result = await recv(ws)
-            assert result['type'] == 'success'
-            result = await recv(ws)
-            assert result['type'] == 'updates'
-            assert len(result['results']) == 0
-            assert result['queryID'] == query_id
-            result = await recv(ws)
-            assert result['type'] == 'updates'
-            assert len(result['results']) == 1
-            assert result['queryID'] == query_id
-            result = await recv(ws)
-            assert result['type'] == 'removes'
-            assert len(result['results']) == 1
-            assert result['queryID'] == query_id
-            # For interleaved inserts and removes
-            messages = {}
-            while len(messages) < big_size:
-                result = await recv(ws)
-                assert result['type'] == 'updates'
-                assert result['queryID'] == query_id
-                for r in result['results']:
-                    messages[r['_id'] + r['_by']] = r
-            assert len(messages) == big_size
-            adds = 0
-            removes = 0
-            while adds < big_size or removes < big_size:
-                result = await recv(ws)
-                assert result['type'] in ['updates', 'removes']
-                assert result['queryID'] == query_id
-                for r in result['results']:
-                    if result['type'] == 'updates':
-                        messages[r['_id'] + r['_by']] = r
-                        adds += 1
-                    else:
-                        del messages[r['_id'] + r['_by']]
-                        removes += 1
-            assert adds == big_size
-            assert removes == big_size
-            assert len(messages) == big_size
+        # Unsubscribe
+        print("Unsubscribing")
+        await send(ws, {
+            'messageID': random_id(),
+            'tags': [custom_tag]
+        })
 
-    tasks = []
-    for i in range(100):
-        tasks.append(asyncio.create_task(listen()))
+        # Re add the item
+        print("Putting the item back")
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'im': 'back',
+                '_tags': [random_id(), custom_tag, random_id()]
+            }
+        })
+        timedout = False
+        assert not await another_message(ws)
+        print("The item is not received")
 
-    print("Waiting for them to come online")
-    await asyncio.sleep(1)
+        print("Subscribing to multiple tags")
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [[custom_tag2, None], [custom_tag3, None]]
+        })
+        result = await recv_future(ws)
+        assert 'tagsSince' in result
 
-    async with websocket_connect(my_token) as ws:
-        print("adding an item")
+        print("adding an item with the first tag")
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'query': {},
             'object': base | {
-                'content': random_id(),
-                'tags': [custom_tag]
+                'two': 'twoey',
+                '_tags': [custom_tag2]
             }
         })
-        result = await recv(ws)
-        assert result['type'] == 'success'
+        result = await recv_future(ws)
+        assert result['update']['two'] == 'twoey'
+        print("Received as update")
 
-        await asyncio.sleep(1)
-
-        print("removing an item")
+        print("adding an item with the second tag")
+        base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'objectID': base['_id']
+            'object': base | {
+                'three': 'threey',
+                '_tags': [custom_tag3]
+            }
         })
-        result = await recv(ws)
-        assert result['type'] == 'success'
+        result = await recv_future(ws)
+        assert result['update']['three'] == 'threey'
+        print("Received as update")
 
+        print("adding an item with both tags")
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'both': 'asdf',
+                '_tags': [random_id(), custom_tag2, custom_tag3]
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['both'] == 'asdf'
+        print("Received as update")
+        assert not await another_message(ws)
+        print("A second update is not received")
+
+        print("Removing one tag from the item with both")
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'only': 'one',
+                '_tags': [custom_tag3]
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['only'] == 'one'
+        print("It is seen as an update")
+        assert not await another_message(ws)
+        print("A second update is not received")
+
+        print("Replacing it entirely")
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'nothing': True,
+                '_tags': [random_id()]
+            }
+        })
+        result = await recv_future(ws)
+        assert 'remove' in result
+        print("It is seen as a removal")
+        assert not await another_message(ws)
+        print("A second update is not received")
+
+        # View private messages from others
+        async def listen(id, token):
+            async with websocket_connect(token) as ws:
+                await send(ws, {
+                    'messageID': random_id(),
+                    'tagsSince': [[private_tag1, None], [private_tag2, None]]
+                })
+                result = await recv_future(ws)
+                assert 'tagsSince' in result
+
+                # See private message
+                result = await recv_future(ws)
+                assert result['update']['to'] == 'me'
+
+                # See it being deleted
+                result = await recv_future(ws)
+                assert 'remove' in result
+
+                # See public object
+                result = await recv_future(ws)
+                assert result['update']['public'] == 'object'
+
+        print("Create a private message to two recipients")
+        tasks = []
+        users = []
+        for i in range(100):
+            id, token = owner_id_and_token()
+            tasks.append(asyncio.create_task(listen(id, token)))
+            users.append(id)
+
+        print("Waiting for them to come online")
         await asyncio.sleep(1)
 
-        print("adding a whole bunch of items")
-        objectIDs = []
-        for i in range(big_size):
-            base = object_base(my_id)
-            await send(ws, {
-                'messageID': random_id(),
-                'query': {},
-                'object': base | {
-                    'content': random_id(),
-                    'tags': [custom_tag]
-                }
-            })
-            result = await recv(ws)
-            assert result['type'] == 'success'
-            objectIDs.append(base['_id'])
+        print("Creating a private message to the users")
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [[private_tag1, None], [private_tag2, None]]
+        })
+        result = await recv_future(ws)
+        assert 'tagsSince' in result
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'to': 'me',
+                '_tags': [private_tag2],
+                '_to': users
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['to'] == 'me'
+        print("The sender sees it")
 
-        await asyncio.sleep(2)
+        print("Removing recipients to create a personal object")
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'private': 'message',
+                '_tags': [private_tag2],
+                '_to': []
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['private'] == 'message'
+        print("The sender still sees it")
 
-        print("interleaving adds and removes")
-        for i in range(big_size):
-            base = object_base(my_id)
-            await send(ws, {
-                'messageID': random_id(),
-                'query': {},
-                'object': base | {
-                    'content': random_id(),
-                    'tags': [custom_tag]
-                }
-            })
-            result = await recv(ws)
-            assert result['type'] == 'success'
-            await send(ws, {
-                'messageID': random_id(),
-                'objectID': objectIDs[i]
-            })
-            result = await recv(ws)
-            assert result['type'] == 'success'
+        print("Making it public")
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'public': 'object',
+                '_tags': [private_tag1],
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['public'] == 'object'
+        print("The sender still sees it")
 
-    for task in tasks:
-        await task
+        for task in tasks:
+            await task
+        print("All tasks are good")
 
 if __name__ == "__main__":
     asyncio.run(main())

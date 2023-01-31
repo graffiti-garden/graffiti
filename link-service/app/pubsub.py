@@ -44,7 +44,7 @@ class PubSub:
                 self.tag_to_sockets[tag] = { socket }
                 self.restart_watcher()
             else:
-                self.tag_to_sockets.add(socket)
+                self.tag_to_sockets[tag].add(socket)
 
         # In the background, begin processing existing results
         asyncio.create_task(self.process_existing(tags_since, socket))
@@ -101,14 +101,14 @@ class PubSub:
                 self.resume_token = stream.resume_token
 
     def collect_tasks(self, doc, tasks, msg, done_sockets, now):
+        denied_sockets = set()
 
         for tag in doc["_tags"]:
             if tag not in self.tag_to_sockets: continue
 
             # Ignore sockets that have already
             # been considered for sending
-            for socket in self.tag_to_sockets[tag] - done_sockets:
-                done_sockets.add(socket)
+            for socket in self.tag_to_sockets[tag] - done_sockets - denied_sockets:
 
                 # Manually check for access permissions
                 if '_to' not in doc or \
@@ -119,6 +119,11 @@ class PubSub:
                         "now": now,
                         "historical": False
                     }))
+
+                    done_sockets.add(socket)
+
+                else:
+                    denied_sockets.add(socket)
 
     async def process_existing(self, tags_since, socket):
         
