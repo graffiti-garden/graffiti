@@ -21,40 +21,6 @@ If you are using the [Vue.js Graffiti plugin](https://github.com/graffiti-garden
 When you are running the server locally, login links will be printed to your terminal rather than sent to your email.
 You can quickly test the login functionality by going to [http://auth.localhost:5001?client_id=&redirect_uri=https://example.com](https://auth.localhost:5001?client_id=&redirect_uri=https://example.com)
 
-## Design Overview
-
-The codebase consists of three modules: `auth`, `app`, and `broker`. Each module has its own folder and exists as a separate docker container. A docker compose file hooks the three modules together along with [MongoDB](https://www.mongodb.com/), [Redis](https://redis.io/), [nginx](https://nginx.org/en/) and [docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/edge/) to form a complete application.
-
-### `auth`
-
-implements the [OAuth2](https://www.oauth.com/) standard to authorize users with the server. Users log in by clicking a link sent to their email so no passwords are stored on the server. `auth` is served at `auth.DOMAIN` where `DOMAIN` is the domain of your server.
-
-### `app`
-
-exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The API consists of 4 basic functions:
-
-- `update`: lets users insert JSON objects into the database or replace objects they have inserted.
-- `remove`: lets users remove objects they have put in the database.
-- `subscribe`: returns all database entries matching a [MongoDB query](https://www.mongodb.com/docs/manual/tutorial/query-documents/) and then continues to stream new matches as they arrive.
-- `unsubscribe`: stops streaming results from a particular `subscribe` request.
-
-The JSON objects are schemaless aside from 5 regulated fields:
-
-- `_id`: is a random identifier that must be added to each object. This field is not searchable, it's only purpose it to uniquely refer to objects so they can be added and replaced. This field is user-assigned for optimistic rendering. A user can't store more than one object with the same `_id`; trying to create an object with the same `_id` as an existing object will simply replace the existing object. Different users *can* store objects with the same `_id`, so there is no worry of someone else replacing your object.
-- `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
-- `_to`: this field must be equal to a list of unique user identifiers. If this field is included in a query it must be equal to the querier's identifier — users can only query for objects `_to` themselves.
-- `_inContextIf`: see [the interactive tutorial](https://graffiti.garden/graffiti-x-vue/#/context).
-
-Objects can't include any other fields that start with `_` or `$`.
-
-For security and performance purposes, MongoDB query operators are limited to those listed [here](https://github.com/graffiti-garden/server/blob/main/app/schema.py).
-
-### `broker`
-
-is the critical path of the server. Whenever any object is added or removed from the database that object's ID is sent to the broker. The broker matches changed objects with all queries that are currently being subscribed to and then publishes those changes back to `app` to send as results of the `subscribe` function. Optimizing this module will probably yield the most performance gains.
-
-## Contribution
-
 ### Testing
 
 There are a series of test scripts in the `app/test` folder which you can run as follows
@@ -63,14 +29,33 @@ There are a series of test scripts in the `app/test` folder which you can run as
     
 Only run these scripts locally! They will fill your server up with a lot of junk.
 
-### Wishlist
+## Design Overview
 
-It would be really nice if someone implemented...
+The codebase consists of two modules, `auth` and `app`. Each module has its own folder and exists as a separate docker container. A docker compose file hooks the three modules together along with [MongoDB](https://www.mongodb.com/), [nginx](https://nginx.org/en/) and [docker-mailserver](https://docker-mailserver.github.io/docker-mailserver/edge/) to form a complete application. The current implementation only spawns a single instance of `auth` and `app`, however neither keeps track of any global state so theoretically many instances could be spawned to scale the system.
 
-- Bridges that carry over data from existing social platforms into the Graffiti ecosystem.
-- Better scaling so the server could operate over multiple machines with multiple instances of each module. Perhaps this involves Kubernetes and AWS...
-- Distribution? Decentralization?
-- Encryption?
+### `auth`
+
+implements the [OAuth2](https://www.oauth.com/) standard to authorize users with the server. Users log in by clicking a link sent to their email so no passwords are stored on the server. `auth` is served at `auth.DOMAIN` where `DOMAIN` is the domain of your server.
+
+### `app`
+
+exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The API consists of 6 basic functions:
+
+- `update`: inserts a tagged JSON object into the database or replaces an object the requester already inserted.
+- `remove`: removes an object the requester already inserted.
+- `subscribe`: fetches all the objects containing a set of tags and streams future changes to objects with those tags.
+- `unsubscribe`: stops streaming results from certain subscribed tags.
+- `get`: fetches a particular object.
+- `list`: lists all tags the requester has tagged objects with.
+
+The JSON objects are schemaless aside from 4 regulated fields:
+
+- `_key`: is a random identifier that must be added to each object. A user can't store more than one object with the same `_key`; trying to create an object with the same `_key` as an existing object will simply replace the existing object. Different users *can* store objects with the same `_key`, so there is no worry of someone else replacing your object.
+- `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
+- `_tags`: this must be a list of strings with at least one entry. Objects can only be seen by subscribing to one of its tags.
+- `_to`: this field is optional, but if included it must be equal to a list of unique user identifiers. The object will only be seen by it's creator and the listed users. If the `_to` field is not included, anyone can see the object. If it is an empty list, only the creator can see the object.
+
+Objects can't include any other top-level fields that start with `_`.
 
 ## Deployment
 
@@ -138,3 +123,10 @@ Once everything is set up, you can start the server by running
 and shut it down by running
 
     sudo docker compose down --remove-orphans
+
+## TODO
+
+- Bridges that carry data over from existing social platforms (likely matrix)
+- End-to-end encryption for private messages
+- Distribution
+- Decentralization
