@@ -3,34 +3,25 @@ from jsonschema import Draft7Validator
 schema = {
     "type": "object",
     "properties": {
-        "messageID": { "$ref": "#/definitions/random_string" },
-        "object": { "$ref": "#/definitions/object" },
-        "objectKey": { "$ref": "#/definitions/random_string" },
-        "userID": { "$ref": "#/definitions/userID" },
-        "tags": { "$ref": "#/definitions/tags" },
-        "tagsSince": { "$ref": "#/definitions/tagsSince" },
+        "messageID": { "$ref": "#/definitions/objectKey" },
+        "update": { "$ref": "#/definitions/object" },
+        "remove": { "$ref": "#/definitions/objectKey" },
+        "subscribe": { "$ref": "#/definitions/tagsSince" },
+        "unsubscribe": { "$ref": "#/definitions/tags" },
+        "get": { "$ref": "#/definitions/userIDAndObjectKey" },
+        "ls": { "type": "null" }
     },
     "additionalProperties": False,
-    "anyOf": [
-        # UPDATE
-        { "required": ["messageID", "object"] },
-        # DELETE
-        { "required": ["messageID", "objectKey"] },
-        # SUBSCRIBE
-        { "required": ["messageID", "tagsSince"] },
-        # UNSUBSCRIBE
-        { "required": ["messageID", "tags"] },
-        # GET SPECIFIC OBJECT
-        { "required": ["messageID", "userID", "objectKey"] },
-        # LIST PERSONALLY USED TAGS
-        { "required": ["messageID"] }
+    "oneOf": [
+        { "required": ["messageID", x] } for x in \
+        ["update", "remove", "subscribe", "unsubscribe", "get", "ls"]
     ],
     "definitions": {
         "object": {
             "type": "object",
             "properties": {
                 "_by": { "$ref": "#/definitions/userID" },
-                "_key": { "$ref": "#/definitions/random_string" },
+                "_key": { "$ref": "#/definitions/objectKey" },
                 "_tags": { "$ref": "#/definitions/tags" },
                 "_to": {
                     "uniqueItems": True,
@@ -45,11 +36,21 @@ schema = {
             "required": ["_key", "_by", "_tags"],
             "additionalProperties": False
         },
+        "userID": {
+            # A SHA256 String
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+        },
+        "objectKey": {
+            # Unstructured user input - any reasonably sized string
+            "type": "string",
+            "pattern": "^.{1,64}$"
+        },
         "tags": {
             "type": "array",
             "uniqueItems": True,
             "minItems": 1,
-            "items": { "$ref": "#/definitions/random_string" },
+            "items": { "type": "string" }
         },
         "tagsSince": {
             # A list of (tag, date) tuples
@@ -59,34 +60,34 @@ schema = {
             "items": {
                 "type": "array",
                 "items": [
-                    { "$ref": "#/definitions/random_string" },
+                    { "type": "string" },
                     { "$ref": "#/definitions/ISODate" }
                 ],
                 "minItems": 2,
                 "maxItems": 2,
             }
         },
-        "random_string": {
-            # Unstructured user input - any reasonably sized string
-            "type": "string",
-            "pattern": "^.{1,64}$"
-        },
-        "userID": {
-            # A SHA256 String
-            "type": "string",
-            "pattern": "^[0-9a-f]{64}$"
-        },
         "ISODate": {
             "oneOf": [{
                 "type": "string",
                 "format": "date-time"
             }, { "type": "null" }
-        ]}
+        ]},
+        "userIDAndObjectKey": {
+            "type": "object",
+            "properties": {
+                "_by": { "$ref": "#/definitions/userID" },
+                "_key": { "$ref": "#/definitions/objectKey" },
+            },
+            "additionalProperties": False,
+            "required": ["_key", "_by"]
+        }
     }
 }
 
 validator = Draft7Validator(schema, format_checker=Draft7Validator.FORMAT_CHECKER)
 validate = lambda msg: validator.validate(msg)
+
 def query_access(owner_id):
     return { "$or": [
         {

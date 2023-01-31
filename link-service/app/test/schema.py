@@ -29,76 +29,88 @@ def valid_requests(my_id):
     return [{
     # update
     "messageID": random_id(),
-    "object": base_object,
+    "update": base_object,
 }, {
     "messageID": "alkjd$$\~934820fk",
-    "object": base_object,
+    "update": base_object,
 }, {
     # remove
     "messageID": "a"*64,
-    "objectKey": base_object['_key']
+    "remove": base_object['_key']
 }, {
     # subscribe
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
-    "tagsSince": [["hello", "2018-11-13T20:20:39+00:00"]]
+    "subscribe": [["hello", "2018-11-13T20:20:39+00:00"]]
 }, {
     "messageID": random_id(),
-    "tagsSince": [["goodbye", None], ["hello", datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc).isoformat(timespec='microseconds')]]
+    "subscribe": [["goodbye", None], ["hello", datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc).isoformat(timespec='microseconds')]]
 }, {
     # unsubscribe
     "messageID": random_id(),
-    "tags": ["hello"]
+    "unsubscribe": ["hello"]
+}, {
+    "messageID": random_id(),
+    "unsubscribe": ["hello", "eriu", "alksdf"]
 }, {
     # List tags
     "messageID": random_id(),
+    "ls": None
 }, {
     # Get
     "messageID": random_id(),
-    "objectKey": random_id(),
-    "userID": random_sha()
+    "get": {
+        "_by": random_sha(),
+        "_key": random_id()
+    }
 }, {
     # Different sorts of objects
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "foo": True
     }
 }, {
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "foo": None
     }
 }, {
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "foo": 123.4
     }
 }, {
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "foo": 1234
+    }
+}, {
+    # Various tags
+    "messageID": random_id(),
+    "update": base_object | {
+        "_tags": ["aksjfdkd", "1"*1000, "😠"]
     }
 }, {
     # With _to
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_to": [random_sha()]
     }
 }, {
     # _to noone ie "private note"
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_to": []
     }
 }, {
     # To multiple people
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_to": [random_sha(), my_id]
     }
 }, {
     # Something more complicated
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_to": [random_sha(), my_id, random_sha()],
         "foo": {
             "blah": False,
@@ -110,12 +122,12 @@ def valid_requests(my_id):
 }, {
     # Weird fields
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "~a": "b",
     }
 }, {
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "asdf": {
             "_kdfj.😘": "🍍"
         },
@@ -127,129 +139,158 @@ def invalid_requests(my_id):
     return [{}, # Empty
 {
     # no message ID
-    "object": base_object,
+    "update": base_object,
 }, {
     # Added extra field
     "messageID": random_id(),
-    "object": base_object,
+    "update": base_object,
     "foo": "bar"
 }, {
+    # Multiple commands at once
     "messageID": random_id(),
-    "objectKey": random_id(),
-    "bloo": {}
-}, {
-    "messageID": random_id(),
-    "tags": ["asdf"],
-    "bug": 1
+    "update": base_object,
+    "ls": None
 }, {
     # only special fields can start with _
     "messageID": random_id(),
-    "query": {},
-    "object": base_object | {
+    "update": base_object | {
         "_notright": 12345
     },
 }, {
     # _key should be an string
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_key": 12345,
     }
 }, {
     # _key should be < length 64
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_key": "z"*65
     }
 }, {
     # messageID too long
     "messageID": "q"*65,
-    "object": base_object
+    "update": base_object
 }, {
     # _to should be an array
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_to": random_sha()
     }
 }, {
     # _to should by UUIDs
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_to": ["12345"]
     }
 }, {
     # no repeated IDs
     "messageID": random_id(),
-    "object": base_object | {
+    "update": base_object | {
         "_to": [my_id] + [random_sha()]*2
     }
 }, {
     # Object is not an object
     "messageID": random_id(),
-    "object": "1234"
+    "update": "1234"
 }, {
     "messageID": random_id(),
-    "object": ["1234"]
+    "update": ["1234"]
 }, {
     # Object is missing a field
     "messageID": random_id(),
-    "object": {
+    "update": {
         '_by': my_id,
         '_tags': ['something']
     }
 }, {
     "messageID": random_id(),
-    "object": {
+    "update": {
         '_key': random_id(),
         '_tags': ['something']
     }
 }, {
     "messageID": random_id(),
-    "object": {
+    "update": {
         '_key': random_id(),
         '_by': my_id,
     }
 }, {
     # Tags is not a list
     "messageID": random_id(),
-    "object": {
+    "update": {
         '_key': random_id(),
         '_tags': 'something'
     }
 }, {
     # Tags is not a list of strings
     "messageID": random_id(),
-    "object": {
+    "update": {
         '_key': random_id(),
         '_tags': [1]
     }
 }, {
     # Tags since is not a list
     "messageID": random_id(),
-    "tagsSince": "1234"
+    "subscribe": "1234"
 }, {
     # Tags since is empty
     "messageID": random_id(),
-    "tagsSince": []
+    "subscribe": []
 }, {
     # Tags since is not a list of lists
     "messageID": random_id(),
-    "tagsSince": ["hello", None]
+    "subscribe": ["hello", None]
 }, {
     # Tags since entries have too few items
     "messageID": random_id(),
-    "tagsSince": [["hello"]]
+    "subscribe": [["hello"]]
 }, {
     # Tags since entries have too many items
     "messageID": random_id(),
-    "tagsSince": [["hello", None, "asdf"]],
+    "subscribe": [["hello", None, "asdf"]],
 }, {
     # First entry is not a string
     "messageID": random_id(),
-    "tagsSince": [[1234, None]]
+    "subscribe": [[1234, None]]
 }, {
     # Tags since date isn't right
     "messageID": random_id(),
-    "tagsSince": [["hello", "1234"]]
+    "subscribe": [["hello", "1234"]]
+}, {
+    # Get missing a field
+    "messageID": random_id(),
+    "get": {
+        "_by": random_sha(),
+    }
+}, {
+    "messageID": random_id(),
+    "get": {
+        "_key": random_id()
+    }
+}, {
+    # Get includes an extra field
+    "messageID": random_id(),
+    "get": {
+        "hi": "asdf",
+        "_by": random_sha(),
+        "_key": random_id()
+    }
+}, {
+    # Unsubscribe is not a list of strings
+    "messageID": random_id(),
+    "unsubscribe": "asdf"
+}, {
+    "messageID": random_id(),
+    "unsubscribe": []
+}, {
+    "messageID": random_id(),
+    "unsubscribe": [1]
+}, {
+    # LS is anything but none
+    "messageID": random_id(),
+    "ls": 1
 }]
 
 if __name__ == "__main__":

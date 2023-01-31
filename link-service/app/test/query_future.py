@@ -33,7 +33,7 @@ async def main():
         print("Subscribing to tag")
         await send(ws, {
             'messageID': random_id(),
-            'tagsSince': [[custom_tag, None]]
+            'subscribe': [[custom_tag, None]]
         })
         result = await recv_future(ws)
         assert 'historyComplete' in result
@@ -42,7 +42,7 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'something': 'else',
                 '_tags': [custom_tag]
             }
@@ -56,7 +56,7 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'how': 'r u?',
                 '_tags': [custom_tag]
             }
@@ -69,13 +69,13 @@ async def main():
         print("Unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'tags': [custom_tag]
+            'unsubscribe': [custom_tag]
         })
 
         print("Resubscribing 'after' first item was added")
         await send(ws, {
             'messageID': random_id(),
-            'tagsSince': [[custom_tag, now]]
+            'subscribe': [[custom_tag, now]]
         })
         result = await recv_future(ws)
         assert result['update']['how'] == 'r u?'
@@ -86,7 +86,7 @@ async def main():
         base2 = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base2 | {
+            'update': base2 | {
                 'another': 'thing',
                 '_tags': [random_id()]
             }
@@ -98,7 +98,7 @@ async def main():
         print("Replacing the first item's tag")
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'another': 'thing',
                 '_tags': [random_id()]
             }
@@ -111,7 +111,7 @@ async def main():
         print("Putting the original tag and some other tags back in")
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'replacey': 'place',
                 '_tags': [random_id(), custom_tag, random_id()]
             }
@@ -124,7 +124,7 @@ async def main():
         print("Removing the item...")
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv_future(ws)
         assert 'remove' in result
@@ -134,14 +134,14 @@ async def main():
         print("Unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'tags': [custom_tag]
+            'unsubscribe': [custom_tag]
         })
 
         # Re add the item
         print("Putting the item back")
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'im': 'back',
                 '_tags': [random_id(), custom_tag, random_id()]
             }
@@ -153,7 +153,7 @@ async def main():
         print("Subscribing to multiple tags")
         await send(ws, {
             'messageID': random_id(),
-            'tagsSince': [[custom_tag2, None], [custom_tag3, None]]
+            'subscribe': [[custom_tag2, None], [custom_tag3, None]]
         })
         result = await recv_future(ws)
         assert 'historyComplete' in result
@@ -162,7 +162,7 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'two': 'twoey',
                 '_tags': [custom_tag2]
             }
@@ -175,7 +175,7 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'three': 'threey',
                 '_tags': [custom_tag3]
             }
@@ -188,7 +188,7 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'both': 'asdf',
                 '_tags': [random_id(), custom_tag2, custom_tag3]
             }
@@ -202,7 +202,7 @@ async def main():
         print("Removing one tag from the item with both")
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'only': 'one',
                 '_tags': [custom_tag3]
             }
@@ -216,7 +216,7 @@ async def main():
         print("Replacing it entirely")
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'nothing': True,
                 '_tags': [random_id()]
             }
@@ -232,7 +232,7 @@ async def main():
             async with websocket_connect(token) as ws:
                 await send(ws, {
                     'messageID': random_id(),
-                    'tagsSince': [[private_tag1, None], [private_tag2, None]]
+                    'subscribe': [[private_tag1, None], [private_tag2, None]]
                 })
                 result = await recv_future(ws)
                 assert 'historyComplete' in result
@@ -263,13 +263,13 @@ async def main():
         print("Creating a private message to the users")
         await send(ws, {
             'messageID': random_id(),
-            'tagsSince': [[private_tag1, None], [private_tag2, None]]
+            'subscribe': [[private_tag1, None], [private_tag2, None]]
         })
         result = await recv_future(ws)
         assert 'historyComplete' in result
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'to': 'me',
                 '_tags': [private_tag2],
                 '_to': users
@@ -282,7 +282,7 @@ async def main():
         print("Removing recipients to create a personal object")
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'private': 'message',
                 '_tags': [private_tag2],
                 '_to': []
@@ -295,7 +295,7 @@ async def main():
         print("Making it public")
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'public': 'object',
                 '_tags': [private_tag1],
             }

@@ -11,7 +11,7 @@ async def main():
         base  = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'type': 'justanormalobject',
                 'content': {
                     'foo': 'bar'
@@ -25,7 +25,7 @@ async def main():
         # Try replacing the object
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'something': {
                     'totally': 'different'
                 }
@@ -38,7 +38,7 @@ async def main():
         # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -47,7 +47,7 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv(ws)
         assert 'error' in result
@@ -56,7 +56,7 @@ async def main():
         # Try replacing again
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'foo': 'bar'
             }
         })
@@ -67,7 +67,7 @@ async def main():
         # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -77,7 +77,7 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'blahhh': 'blskjf'
             }
         })
@@ -90,7 +90,7 @@ async def main():
         for i in range(200):
             await send(ws, {
                 'messageID': random_id(),
-                'object': base | {
+                'update': base | {
                     'something': 'random'
                 }
             })
@@ -101,7 +101,7 @@ async def main():
         # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -110,7 +110,7 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv(ws)
         assert 'error' in result
@@ -120,7 +120,7 @@ async def main():
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'blahhh': 'blskjf',
             }
         })
@@ -132,7 +132,7 @@ async def main():
         async with websocket_connect(my_token) as ws:
             await send(ws, {
                 'messageID': random_id(),
-                'object': base | {
+                'update': base | {
                     'something': 'random'
                 }
             })
@@ -150,7 +150,7 @@ async def main():
         # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -159,7 +159,7 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base['_key']
+            'remove': base['_key']
         })
         result = await recv(ws)
         assert 'error' in result
@@ -169,7 +169,7 @@ async def main():
         tag = random_id()
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'tag': tag
             }
         })
@@ -183,7 +183,7 @@ async def main():
         print("Created new user")
 
         # List the tags associated with the user
-        await send(ws, { 'messageID': random_id() })
+        await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 0
         print("User has no tags")
@@ -194,7 +194,7 @@ async def main():
             base  = object_base(my_id)
             await send(ws, {
                 'messageID': random_id(),
-                'object': base | {
+                'update': base | {
                     '_tags': ['hello']
                 }
             })
@@ -203,7 +203,7 @@ async def main():
         print("...Done")
 
         # List the tags associated with the user
-        await send(ws, { 'messageID': random_id() })
+        await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 1
         assert 'hello' in result["reply"]
@@ -213,7 +213,7 @@ async def main():
         base  = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 '_tags': ['hello', 'goodbye']
             }
         })
@@ -221,7 +221,7 @@ async def main():
         assert result['reply'] == 'inserted'
 
         # List the tags associated with the user
-        await send(ws, { 'messageID': random_id() })
+        await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 2
         assert 'hello' in result["reply"]
@@ -231,13 +231,13 @@ async def main():
         print("Removing the additional object")
         await send(ws, {
             'messageID': random_id(),
-            'objectKey': base["_key"]
+            'remove': base["_key"]
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
 
         # Still one tag
-        await send(ws, { 'messageID': random_id() })
+        await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 1
         assert 'hello' in result["reply"]
@@ -248,8 +248,10 @@ async def main():
         base  = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'userID': my_id,
-            'objectKey': base["_key"]
+            'get': {
+                '_by': my_id,
+                '_key': base["_key"]
+            }
         })
         result = await recv(ws)
         assert 'error' in result
@@ -257,7 +259,7 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'content': 12345
             }
         })
@@ -267,8 +269,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': my_id,
-            'objectKey': base["_key"]
+            'get': {
+                '_by': my_id,
+                '_key': base["_key"]
+            }
         })
         result = await recv(ws)
         assert result["reply"]["content"] == 12345
@@ -276,7 +280,7 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'object': base | {
+            'update': base | {
                 'content': 67890
             }
         })
@@ -286,8 +290,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': my_id,
-            'objectKey': base["_key"]
+            'get': {
+                '_by': my_id,
+                '_key': base["_key"]
+            }
         })
         result = await recv(ws)
         assert result["reply"]["content"] == 67890
@@ -296,7 +302,7 @@ async def main():
         base_private  = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base_private | {
+            'update': base_private | {
                 'something': 'asdf',
                 '_to': []
             }
@@ -307,8 +313,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': my_id,
-            'objectKey': base_private["_key"]
+            'get': {
+                '_by': my_id,
+                '_key': base_private["_key"]
+            }
         })
         result = await recv(ws)
         assert result["reply"]["something"] == 'asdf'
@@ -320,8 +328,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': my_id,
-            'objectKey': base["_key"]
+            'get': {
+                '_by': my_id,
+                '_key': base["_key"]
+            }
         })
         result = await recv(ws)
         assert result["reply"]["content"] == 67890
@@ -329,8 +339,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': my_id,
-            'objectKey': base_private["_key"]
+            'get': {
+                '_by': my_id,
+                '_key': base_private["_key"]
+            }
         })
         result = await recv(ws)
         assert 'error' in result
@@ -339,7 +351,7 @@ async def main():
         base_other  = object_base(other_id)
         await send(ws, {
             'messageID': random_id(),
-            'object': base_other | {
+            'update': base_other | {
                 'secret': 'message',
                 '_to': [my_id]
             }
@@ -350,8 +362,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': other_id,
-            'objectKey': base_other["_key"]
+            'get': {
+                '_by': other_id,
+                '_key': base_other["_key"]
+            }
         })
         result = await recv(ws)
         assert result["reply"]["secret"] == "message"
@@ -362,8 +376,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': other_id,
-            'objectKey': base_other["_key"]
+            'get': {
+                '_by': other_id,
+                '_key': base_other["_key"]
+            }
         })
         result = await recv(ws)
         assert result["reply"]["secret"] == "message"
@@ -375,8 +391,10 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'userID': other_id,
-            'objectKey': base_other["_key"]
+            'get': {
+                '_by': other_id,
+                '_key': base_other["_key"]
+            }
         })
         result = await recv(ws)
         assert 'error' in result

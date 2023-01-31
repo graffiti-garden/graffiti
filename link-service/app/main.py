@@ -88,22 +88,22 @@ async def reply(socket, msg):
     # Pass it to the proper function
     try:
 
-        if 'object' in msg:
-            reply = await rest.update(app.db, msg['object'], socket.owner_id)
+        if 'update' in msg:
+            reply = await rest.update(app.db, msg['update'], socket.owner_id)
 
-        elif msg.keys() >= { 'userID', 'objectKey' }:
-            reply = await rest.get(app.db, msg['userID'], msg['objectKey'], socket.owner_id)
+        elif 'remove' in msg:
+            reply = await rest.remove(app.db, msg['remove'], socket.owner_id)
 
-        elif 'objectKey' in msg:
-            reply = await rest.remove(app.db, msg['objectKey'], socket.owner_id)
+        elif 'subscribe' in msg:
+            reply = await app.pubsub.subscribe(msg['subscribe'], socket)
 
-        elif 'tagsSince' in msg:
-            reply = await app.pubsub.subscribe(msg['tagsSince'], socket)
+        elif 'unsubscribe' in msg:
+            reply = await app.pubsub.unsubscribe(msg['unsubscribe'], socket)
 
-        elif 'tags' in msg:
-            reply = await app.pubsub.unsubscribe(msg['tags'], socket)
+        elif 'get' in msg:
+            reply = await rest.get(app.db, msg['get']['_by'], msg['get']['_key'], socket.owner_id)
 
-        else:
+        elif 'ls' in msg:
             reply = await rest.tags(app.db, socket.owner_id)
 
         output["reply"] = reply
