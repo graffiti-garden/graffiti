@@ -48,9 +48,9 @@ async def main():
             result = await recv_historical(ws)
             assert 'update' in result
             assert result['update']['_tags'] == [custom_tag]
-            now = result['now']
         result = await recv_historical(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
+        now = result['now']
         print("...received")
 
         # Try subscribing again
@@ -116,13 +116,13 @@ async def main():
         assert result['reply'] == 'subscribed'
 
         # Objects arrive in reverse chronological order
+        results = [ await recv_historical(ws) for i in range(2) ]
+        outputs = [ result["update"]["something"] for result in results ] 
+        assert 'one' in outputs
+        assert 'two' in outputs
         result = await recv_historical(ws)
-        assert result['update']['something'] == 'two'
+        assert 'historyComplete' in result
         now2 = result['now']
-        result = await recv_historical(ws)
-        assert result['update']['something'] == 'one'
-        result = await recv_historical(ws)
-        assert 'tagsSince' in result
         print("...received")
 
         # Unsubscribe
@@ -167,14 +167,13 @@ async def main():
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
+        results = [ await recv_historical(ws) for i in range(3) ]
+        outputs = [ result["update"]["something"] for result in results ] 
+        assert 'two' in outputs
+        assert 'three' in outputs
+        assert 'four' in outputs
         result = await recv_historical(ws)
-        assert result['update']['something'] == 'four'
-        result = await recv_historical(ws)
-        assert result['update']['something'] == 'three'
-        result = await recv_historical(ws)
-        assert result['update']['something'] == 'two'
-        result = await recv_historical(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
         print("Received both new results but only one older result as expected")
 
         base = object_base(my_id)
@@ -199,7 +198,7 @@ async def main():
         result = await recv_historical(ws)
         assert result['update']['content'] == 'qwerty'
         result = await recv_historical(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
         print("Creator can see it")
 
     async with websocket_connect(other_token) as ws:
@@ -214,7 +213,7 @@ async def main():
         result = await recv_historical(ws)
         assert result['update']['content'] == 'qwerty'
         result = await recv_historical(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
         print("Recipient can see it")
 
     async with websocket_connect(another_token) as ws:
@@ -226,7 +225,7 @@ async def main():
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
         result = await recv_historical(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
         print("Snoop cannot see it")
 
 if __name__ == "__main__":

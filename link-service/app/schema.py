@@ -1,4 +1,4 @@
-import jsonschema
+from jsonschema import Draft7Validator
 
 schema = {
     "type": "object",
@@ -52,7 +52,7 @@ schema = {
             "items": { "$ref": "#/definitions/random_string" },
         },
         "tagsSince": {
-            # A list of (tag, mongID) tuples
+            # A list of (tag, date) tuples
             "type": "array",
             "uniqueItems": True,
             "minItems": 1,
@@ -60,7 +60,7 @@ schema = {
                 "type": "array",
                 "items": [
                     { "$ref": "#/definitions/random_string" },
-                    { "$ref": "#/definitions/mongoID" }
+                    { "$ref": "#/definitions/ISODate" }
                 ],
                 "minItems": 2,
                 "maxItems": 2,
@@ -76,19 +76,17 @@ schema = {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
         },
-        "mongoID": {
-            # See https://www.mongodb.com/docs/manual/reference/method/ObjectId/
+        "ISODate": {
             "oneOf": [{
                 "type": "string",
-                "pattern": "^([a-f\d]{24})$"
+                "format": "date-time"
             }, { "type": "null" }
         ]}
     }
 }
 
-validator = jsonschema.Draft7Validator(schema)
+validator = Draft7Validator(schema, format_checker=Draft7Validator.FORMAT_CHECKER)
 validate = lambda msg: validator.validate(msg)
-
 def query_access(owner_id):
     return { "$or": [
         {

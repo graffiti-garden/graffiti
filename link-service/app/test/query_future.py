@@ -36,7 +36,7 @@ async def main():
             'tagsSince': [[custom_tag, None]]
         })
         result = await recv_future(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
 
         print("adding an item with the tag")
         base = object_base(my_id)
@@ -49,7 +49,38 @@ async def main():
         })
         result = await recv_future(ws)
         assert result['update']['something'] == 'else'
+        now = result['now']
         print("Received as update")
+
+        print("Adding another item")
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'object': base | {
+                'how': 'r u?',
+                '_tags': [custom_tag]
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['how'] == 'r u?'
+        print("Received as update")
+
+        # Unsubscribe
+        print("Unsubscribing")
+        await send(ws, {
+            'messageID': random_id(),
+            'tags': [custom_tag]
+        })
+
+        print("Resubscribing 'after' first item was added")
+        await send(ws, {
+            'messageID': random_id(),
+            'tagsSince': [[custom_tag, now]]
+        })
+        result = await recv_future(ws)
+        assert result['update']['how'] == 'r u?'
+        result = await recv_future(ws)
+        assert 'historyComplete' in result
 
         print("Adding an item with a different tag")
         base2 = object_base(my_id)
@@ -125,7 +156,7 @@ async def main():
             'tagsSince': [[custom_tag2, None], [custom_tag3, None]]
         })
         result = await recv_future(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
 
         print("adding an item with the first tag")
         base = object_base(my_id)
@@ -204,7 +235,7 @@ async def main():
                     'tagsSince': [[private_tag1, None], [private_tag2, None]]
                 })
                 result = await recv_future(ws)
-                assert 'tagsSince' in result
+                assert 'historyComplete' in result
 
                 # See private message
                 result = await recv_future(ws)
@@ -235,7 +266,7 @@ async def main():
             'tagsSince': [[private_tag1, None], [private_tag2, None]]
         })
         result = await recv_future(ws)
-        assert 'tagsSince' in result
+        assert 'historyComplete' in result
         await send(ws, {
             'messageID': random_id(),
             'object': base | {

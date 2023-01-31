@@ -34,7 +34,7 @@ async def startup():
     app.db = client.graffiti.objects
 
     # Create indexes if they don't already exist
-    await app.db.create_index('_id')
+    await app.db.create_index('_updated')
     await app.db.create_index('_by')
     await app.db.create_index('_key')
     await app.db.create_index('_tags')

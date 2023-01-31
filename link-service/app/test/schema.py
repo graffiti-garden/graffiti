@@ -2,6 +2,7 @@
 
 import asyncio
 from utils import *
+import datetime
 
 async def main():
 
@@ -39,10 +40,10 @@ def valid_requests(my_id):
 }, {
     # subscribe
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
-    "tagsSince": [["hello", "666f6f2d6261722d71757578"]],
+    "tagsSince": [["hello", "2018-11-13T20:20:39+00:00"]]
 }, {
     "messageID": random_id(),
-    "tagsSince": [["goodbye", None], ["hello", "666f6f2d6261722d71757578"]],
+    "tagsSince": [["goodbye", None], ["hello", datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc).isoformat(timespec='microseconds')]]
 }, {
     # unsubscribe
     "messageID": random_id(),
@@ -232,7 +233,7 @@ def invalid_requests(my_id):
 }, {
     # Tags since is not a list of lists
     "messageID": random_id(),
-    "tagsSince": ["hello", "666f6f2d6261722d71757578"],
+    "tagsSince": ["hello", None]
 }, {
     # Tags since entries have too few items
     "messageID": random_id(),
@@ -240,15 +241,15 @@ def invalid_requests(my_id):
 }, {
     # Tags since entries have too many items
     "messageID": random_id(),
-    "tagsSince": [["hello", "666f6f2d6261722d71757578", "asdf"]],
+    "tagsSince": [["hello", None, "asdf"]],
 }, {
     # First entry is not a string
     "messageID": random_id(),
-    "tagsSince": [[1234, "666f6f2d6261722d71757578"]],
+    "tagsSince": [[1234, None]]
 }, {
-    # Tags since entries are not a mongo ID
+    # Tags since date isn't right
     "messageID": random_id(),
-    "tagsSince": [["hello", "why"]],
+    "tagsSince": [["hello", "1234"]]
 }]
 
 if __name__ == "__main__":
