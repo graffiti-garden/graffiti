@@ -45,8 +45,6 @@
 
   // Make a display
   async function displayObjects() {
-    await new Promise(r => setTimeout(r, 1000));
-
     let display = 'not subscribed'
     try {
       const objects = graffiti.objectsByTags(myTag)
@@ -59,25 +57,25 @@
   // Create an object containing a special string
   window.Subscribe = async function() {
     await graffiti.subscribe(myTag)
+    await new Promise(r => setTimeout(r, 1000));
     displayObjects()
   }
 
   window.Unsubscribe = async function() {
     await graffiti.unsubscribe(myTag)
+    await new Promise(r => setTimeout(r, 1000));
     displayObjects()
   }
 
   // Create an object containing a special string
   window.Update = async function() {
-    console.log(await graffiti.update(
-      graffiti.completeObject({_tags: [myTag]})))
+    await graffiti.update({_tags: [myTag]})
     displayObjects()
   }
 
   // Remove an existing object
   window.Remove = async function() {
-    const objects = graffiti.objectsByTags(myTag)
-    console.log(await graffiti.remove(objects[0]._key))
+    await graffiti.objectsByTags(myTag)[0]._remove()
     displayObjects()
   }
 
