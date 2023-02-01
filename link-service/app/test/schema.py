@@ -40,10 +40,10 @@ def valid_requests(my_id):
 }, {
     # subscribe
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
-    "subscribe": [["hello", "2018-11-13T20:20:39+00:00"]]
+    "subscribe": ["hello"]
 }, {
     "messageID": random_id(),
-    "subscribe": [["goodbye", None], ["hello", datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc).isoformat(timespec='microseconds')]]
+    "subscribe": ["goodbye", "hello"]
 }, {
     # unsubscribe
     "messageID": random_id(),
@@ -231,33 +231,17 @@ def invalid_requests(my_id):
         '_tags': [1]
     }
 }, {
-    # Tags since is not a list
+    # Tags is not a list
     "messageID": random_id(),
     "subscribe": "1234"
 }, {
-    # Tags since is empty
+    # Tags is empty
     "messageID": random_id(),
     "subscribe": []
 }, {
-    # Tags since is not a list of lists
+    # entries are not strings
     "messageID": random_id(),
-    "subscribe": ["hello", None]
-}, {
-    # Tags since entries have too few items
-    "messageID": random_id(),
-    "subscribe": [["hello"]]
-}, {
-    # Tags since entries have too many items
-    "messageID": random_id(),
-    "subscribe": [["hello", None, "asdf"]],
-}, {
-    # First entry is not a string
-    "messageID": random_id(),
-    "subscribe": [[1234, None]]
-}, {
-    # Tags since date isn't right
-    "messageID": random_id(),
-    "subscribe": [["hello", "1234"]]
+    "subscribe": [1234]
 }, {
     # Get missing a field
     "messageID": random_id(),

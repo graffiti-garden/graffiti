@@ -6,7 +6,7 @@ schema = {
         "messageID": { "$ref": "#/definitions/objectKey" },
         "update": { "$ref": "#/definitions/object" },
         "remove": { "$ref": "#/definitions/objectKey" },
-        "subscribe": { "$ref": "#/definitions/tagsSince" },
+        "subscribe": { "$ref": "#/definitions/tags" },
         "unsubscribe": { "$ref": "#/definitions/tags" },
         "get": { "$ref": "#/definitions/userIDAndObjectKey" },
         "ls": { "type": "null" }
@@ -52,27 +52,6 @@ schema = {
             "minItems": 1,
             "items": { "type": "string" }
         },
-        "tagsSince": {
-            # A list of (tag, date) tuples
-            "type": "array",
-            "uniqueItems": True,
-            "minItems": 1,
-            "items": {
-                "type": "array",
-                "items": [
-                    { "type": "string" },
-                    { "$ref": "#/definitions/ISODate" }
-                ],
-                "minItems": 2,
-                "maxItems": 2,
-            }
-        },
-        "ISODate": {
-            "oneOf": [{
-                "type": "string",
-                "format": "date-time"
-            }, { "type": "null" }
-        ]},
         "userIDAndObjectKey": {
             "type": "object",
             "properties": {
@@ -85,7 +64,7 @@ schema = {
     }
 }
 
-validator = Draft7Validator(schema, format_checker=Draft7Validator.FORMAT_CHECKER)
+validator = Draft7Validator(schema)
 validate = lambda msg: validator.validate(msg)
 
 def query_access(owner_id):

@@ -10,13 +10,10 @@ async def update(db, object, owner_id):
         raise Exception("you can only create objects _by yourself.")
 
     # Insert the new object
-    old_object = await db.find_one_and_update({
+    old_object = await db.find_one_and_replace({
         "_key": object['_key'],
-        "_by": owner_id
-    }, [
-        { "$replaceRoot": { "newRoot": object } },
-        { "$set": { "_updated": "$$NOW" } },
-    ], upsert=True)
+        "_by": object['_by']
+    }, object, upsert=True)
 
     if old_object:
         return "replaced"
@@ -56,7 +53,6 @@ doesn't exist or you don't have permission \
 to get it.""")
 
     del object["_id"]
-    del object["_updated"]
     return object
 
 async def tags(db, owner_id):

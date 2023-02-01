@@ -14,6 +14,7 @@ async def main():
 
     custom_tag = random_id()
     custom_tag2 = random_id()
+    custom_tag4 = random_id()
     custom_tag3 =  random_id()
 
     my_id, my_token = owner_id_and_token()
@@ -38,9 +39,7 @@ async def main():
         print("querying for them")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [
-                [custom_tag, None]
-            ]
+            'subscribe': [custom_tag]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
@@ -48,17 +47,12 @@ async def main():
             result = await recv_historical(ws)
             assert 'update' in result
             assert result['update']['_tags'] == [custom_tag]
-        result = await recv_historical(ws)
-        assert 'historyComplete' in result
-        now = result['now']
         print("...received")
 
         # Try subscribing again
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [
-                [custom_tag, None]
-            ]
+            'subscribe': [custom_tag]
         })
         result = await recv_historical(ws)
         assert 'error' in result
@@ -81,13 +75,12 @@ async def main():
         assert 'error' in result
         print("Could not unsubscribe again")
 
-        # Add some more objects with one and more than one tag
-        print("Inserting objects with multiple tags")
+        # Adding items with multiple tags and combinations
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                '_tags': [custom_tag],
+                '_tags': [custom_tag2],
                 'something': 'one'
             }
         })
@@ -97,84 +90,40 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                '_tags': [custom_tag2, custom_tag],
+                '_tags': [custom_tag4],
                 'something': 'two'
             }
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'inserted'
-
-        # Subscribe again and only query for recently added objects of 1st tag
-        print("Subscribe to events since last query")
-        await send(ws, {
-            'messageID': random_id(),
-            'subscribe': [
-                [custom_tag, now]
-            ]
-        })
-        result = await recv_historical(ws)
-        assert result['reply'] == 'subscribed'
-
-        # Objects arrive in reverse chronological order
-        results = [ await recv_historical(ws) for i in range(2) ]
-        outputs = [ result["update"]["something"] for result in results ] 
-        assert 'one' in outputs
-        assert 'two' in outputs
-        result = await recv_historical(ws)
-        assert 'historyComplete' in result
-        now2 = result['now']
-        print("...received")
-
-        # Unsubscribe
-        print("unsubscribing")
-        await send(ws, {
-            'messageID': random_id(),
-            'unsubscribe': [custom_tag]
-        })
-        result = await recv_historical(ws)
-        assert result['reply'] == 'unsubscribed'
-
-        # Add more objects with both tags
-        print("Inserting more objects with multiple tags")
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                '_tags': [custom_tag2],
+                '_tags': [custom_tag4, custom_tag2],
                 'something': 'three'
             }
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'inserted'
-        base = object_base(my_id)
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                '_tags': [custom_tag],
-                'something': 'four'
-            }
-        })
-        result = await recv_historical(ws)
-        assert result['reply'] == 'inserted'
+        print("...added")
 
-        print("Subscribe to both tags with different sinces")
+        # Try subscribing again
+        print("Subscribing to the tags")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [
-                [custom_tag2, now],
-                [custom_tag, now2]
-            ]
+            'subscribe': [custom_tag2, custom_tag4]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
         results = [ await recv_historical(ws) for i in range(3) ]
-        outputs = [ result["update"]["something"] for result in results ] 
+        outputs = [ result["update"]["something"] for result in results ]
+        assert 'one' in outputs
         assert 'two' in outputs
         assert 'three' in outputs
-        assert 'four' in outputs
-        result = await recv_historical(ws)
-        assert 'historyComplete' in result
-        print("Received both new results but only one older result as expected")
+        print("All results received")
+        assert not await another_message(ws, recv=recv_historical)
+        print("no more results received")
 
         base = object_base(my_id)
         await send(ws, {
@@ -191,14 +140,12 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [[custom_tag3, None]]
+            'subscribe': [custom_tag3]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
         result = await recv_historical(ws)
         assert result['update']['content'] == 'qwerty'
-        result = await recv_historical(ws)
-        assert 'historyComplete' in result
         print("Creator can see it")
 
     async with websocket_connect(other_token) as ws:
@@ -206,26 +153,22 @@ async def main():
         # Recipient can see it
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [[custom_tag3, None]]
+            'subscribe': [custom_tag3]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
         result = await recv_historical(ws)
         assert result['update']['content'] == 'qwerty'
-        result = await recv_historical(ws)
-        assert 'historyComplete' in result
         print("Recipient can see it")
 
     async with websocket_connect(another_token) as ws:
 
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [[custom_tag3, None]]
+            'subscribe': [custom_tag3]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
-        result = await recv_historical(ws)
-        assert 'historyComplete' in result
         print("Snoop cannot see it")
 
 if __name__ == "__main__":

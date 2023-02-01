@@ -2,6 +2,7 @@ import jwt
 import json
 import string
 import random
+import asyncio
 from hashlib import sha256
 from os import getenv
 import websockets
@@ -40,3 +41,14 @@ async def send(ws, j):
 
 async def recv(ws):
     return json.loads(await ws.recv())
+
+
+async def another_message(ws, recv=recv):
+    try:
+        async with asyncio.timeout(0.1):
+            result = await recv(ws)
+            print(result)
+    except TimeoutError:
+        return False
+    else:
+        return True

@@ -13,18 +13,9 @@ async def main():
 
     async def recv_future(ws):
         result = {'reply'}
-        while 'reply' in result:
+        while 'reply' in result or ('historical' in result and result['historical']):
             result = await recv(ws)
         return result
-
-    async def another_message(ws):
-        try:
-            async with asyncio.timeout(0.1):
-                await recv_future(ws)
-        except TimeoutError:
-            return False
-        else:
-            return True
 
     my_id, my_token = owner_id_and_token()
     async with websocket_connect(my_token) as ws:
@@ -33,12 +24,12 @@ async def main():
         print("Subscribing to tag")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [[custom_tag, None]]
+            'subscribe': [custom_tag]
         })
-        result = await recv_future(ws)
-        assert 'historyComplete' in result
+        result = await recv(ws)
+        assert result['reply'] == 'subscribed'
 
-        print("adding an item with the tag")
+        print(f"adding an item with the tag {custom_tag}")
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
@@ -49,7 +40,6 @@ async def main():
         })
         result = await recv_future(ws)
         assert result['update']['something'] == 'else'
-        now = result['now']
         print("Received as update")
 
         print("Adding another item")
@@ -65,23 +55,6 @@ async def main():
         assert result['update']['how'] == 'r u?'
         print("Received as update")
 
-        # Unsubscribe
-        print("Unsubscribing")
-        await send(ws, {
-            'messageID': random_id(),
-            'unsubscribe': [custom_tag]
-        })
-
-        print("Resubscribing 'after' first item was added")
-        await send(ws, {
-            'messageID': random_id(),
-            'subscribe': [[custom_tag, now]]
-        })
-        result = await recv_future(ws)
-        assert result['update']['how'] == 'r u?'
-        result = await recv_future(ws)
-        assert 'historyComplete' in result
-
         print("Adding an item with a different tag")
         base2 = object_base(my_id)
         await send(ws, {
@@ -92,7 +65,7 @@ async def main():
             }
         })
         timedout = False
-        assert not await another_message(ws)
+        assert not await another_message(ws, recv=recv_future)
         print("The item is not received")
 
         print("Replacing the first item's tag")
@@ -147,16 +120,14 @@ async def main():
             }
         })
         timedout = False
-        assert not await another_message(ws)
+        assert not await another_message(ws, recv=recv_future)
         print("The item is not received")
 
         print("Subscribing to multiple tags")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [[custom_tag2, None], [custom_tag3, None]]
+            'subscribe': [custom_tag2, custom_tag3]
         })
-        result = await recv_future(ws)
-        assert 'historyComplete' in result
 
         print("adding an item with the first tag")
         base = object_base(my_id)
@@ -186,17 +157,18 @@ async def main():
 
         print("adding an item with both tags")
         base = object_base(my_id)
+        random = random_id()
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'both': 'asdf',
-                '_tags': [random_id(), custom_tag2, custom_tag3]
+                '_tags': [random, custom_tag2, custom_tag3]
             }
         })
         result = await recv_future(ws)
         assert result['update']['both'] == 'asdf'
         print("Received as update")
-        assert not await another_message(ws)
+        assert not await another_message(ws, recv=recv_future)
         print("A second update is not received")
 
         print("Removing one tag from the item with both")
@@ -209,9 +181,15 @@ async def main():
         })
         result = await recv_future(ws)
         assert result['update']['only'] == 'one'
+        assert result['update']['_tags'] == [custom_tag3]
         print("It is seen as an update")
-        assert not await another_message(ws)
-        print("A second update is not received")
+        result = await recv_future(ws)
+        assert result['remove']['_key'] == base['_key']
+        tags = result['remove']['_tags']
+        assert len(tags) == 2
+        assert random in tags
+        assert custom_tag2 in tags
+        print("It is also seen as a removal")
 
         print("Replacing it entirely")
         await send(ws, {
@@ -224,7 +202,7 @@ async def main():
         result = await recv_future(ws)
         assert 'remove' in result
         print("It is seen as a removal")
-        assert not await another_message(ws)
+        assert not await another_message(ws, recv=recv_future)
         print("A second update is not received")
 
         # View private messages from others
@@ -232,10 +210,8 @@ async def main():
             async with websocket_connect(token) as ws:
                 await send(ws, {
                     'messageID': random_id(),
-                    'subscribe': [[private_tag1, None], [private_tag2, None]]
+                    'subscribe': [private_tag1, private_tag2]
                 })
-                result = await recv_future(ws)
-                assert 'historyComplete' in result
 
                 # See private message
                 result = await recv_future(ws)
@@ -263,10 +239,8 @@ async def main():
         print("Creating a private message to the users")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [[private_tag1, None], [private_tag2, None]]
+            'subscribe': [private_tag1, private_tag2]
         })
-        result = await recv_future(ws)
-        assert 'historyComplete' in result
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
