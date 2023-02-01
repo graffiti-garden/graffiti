@@ -2,11 +2,16 @@ import Auth from './auth.js'
 
 export default class {
 
-  constructor(graffitiURL="https://graffiti.garden") {
+  // There needs to be a new object map for each tag
+  constructor(
+    graffitiURL="https://graffiti.garden",
+    objectMapConstructor=()=>({})) {
+
     this.graffitiURL = graffitiURL
+    this.objectMapConstructor = objectMapConstructor
     this.open = false
-    this.subscriptionData = {}
     this.eventTarget = new EventTarget()
+    this.tagMap = {}
   }
 
   // CALL THIS BEFORE DOING ANYTHING ELSE
@@ -26,8 +31,13 @@ export default class {
       this.wsURL.searchParams.set("token", this.authParams.token)
     }
 
-    // And commence connection
+    // Commence connection
     this.connect()
+
+    // Wait until open
+    await new Promise(resolve => {
+      this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
+    })
   }
 
   connect() {
@@ -51,6 +61,10 @@ export default class {
   }
 
   async request(msg) {
+    if (!this.open) {
+      throw { 'error': 'Not connected!' }
+    }
+
     // Create a random message ID
     const messageID = crypto.randomUUID()
 
@@ -60,13 +74,6 @@ export default class {
         resolve(e.data)
       })
     })
-
-    // Wait for the socket to open
-    if (!this.open) {
-      await new Promise(resolve => {
-        this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
-      })
-    }
 
     // Send the request
     msg.messageID = messageID
@@ -79,7 +86,7 @@ export default class {
     if (data.type == 'error') {
       throw data
     } else {
-      return data
+      return data['reply']
     }
   }
 
@@ -93,30 +100,23 @@ export default class {
       messageEvent.data = data
       this.eventTarget.dispatchEvent(messageEvent)
 
-    } else if (['updates', 'removes'].includes(data.type)) {
-      // Subscription data
-      if (data.queryID in this.subscriptionData) {
-        const sd = this.subscriptionData[data.queryID]
+    } else if ('update' in data || 'remove' in data) {
 
-        // For each data point, either add or remove it
-        for (const r of data.results) {
-          if (data.type == 'updates') {
-            sd.updateCallback(r)
+      const object = 'update' in data? data['update'] : data['remove']
+      const uuid = this.objectUUID(object)
+
+      for (const tag of object._tags) {
+        if (tag in this.tagMap) {
+          const om = this.tagMap[tag].objectMap
+
+          if ('remove' in data) {
+            delete om[uuid]
           } else {
-            sd.removeCallback(r)
-          }
-        }
-
-        // And update this query's notion of "now"
-        if (data.complete) {
-          if (data.historical) {
-            sd.historyComplete = true
-          }
-          if (sd.historyComplete) {
-            sd.since = data.now
+            om[uuid] = object
           }
         }
       }
+
     } else if (data.type == 'error') {
       if (data.reason == 'authorization') {
         Auth.logOut()
@@ -125,61 +125,98 @@ export default class {
     }
   }
 
-  async update(object, query) {
-    const data = await this.request({ object, query })
-    return data.objectID
+  async update(object) {
+    // TODO
+    // Add the logic in vue to here
+    return await this.request({ update: object })
   }
 
-  async remove(objectID) {
-    await this.request({ objectID })
+  async remove(objectKey) {
+    // TODO
+    // same
+    return await this.request({ remove: objectKey })
   }
 
-  async subscribe(
-    query,
-    updateCallback,
-    removeCallback,
-    flags={},
-    since=null,
-    queryID=null) {
+  async lsTags() {
+    return await this.request({ ls: null })
+  }
 
-    // Create a random query ID
-    if (!queryID) queryID = crypto.randomUUID()
+  async objectByKey(userID, objectKey) {
+    return await this.request({ get: {
+      _by: userID,
+      _key: objectKey
+    }})
+  }
 
-    // Send the request
-    await this.request({ queryID, query, since, ...flags })
-
-    // Store the subscription in case of disconnections
-    this.subscriptionData[queryID] = {
-      query, since, flags, updateCallback, removeCallback,
-      historyComplete: false
+  objectsByTags(...tags) {
+    for (const tag of tags) {
+      if (!(tag in this.tagMap)) {
+        throw `You are not subscribed to '${tag}'`
+      }
     }
 
-    return queryID
+    // Merge by UUID to combine all the maps
+    const combinedMaps = Object.assign({},
+      ...tags.map(tag=> this.tagMap[tag].objectMap))
+
+    // Return just the array
+    return Object.values(combinedMaps)
   }
 
-  async unsubscribe(queryID) {
-    // Remove allocated space
-    delete this.subscriptionData[queryID]
+  async subscribe(...tags) {
+    // Look at what is already subscribed to
+    const subscribingTags = []
+    for (const tag of tags) {
+      if (tag in this.tagMap) {
+        // Increase the count
+        this.tagMap[tag].count++
+      } else {
+        // Create a new slot
+        this.tagMap[tag] = {
+          objectMap: this.objectMapConstructor(),
+          count: 1
+        }
+        subscribingTags.push(tag)
+      }
+    }
 
-    // And unsubscribe
-    const data = await this.request({ queryID })
+    // Begin subscribing in the background
+    if (subscribingTags.length)
+      await this.request({ subscribe: subscribingTags })
+  }
+
+  async unsubscribe(...tags) {
+    // Decrease the count of each tag,
+    // removing and marking if necessary
+    const unsubscribingTags = []
+    for (const tag of tags) {
+      this.tagMap[tag].count--
+
+      if (!this.tagMap[tag].count) {
+        unsubscribingTags.push(tag)
+        delete this.tagMap[tag]
+      }
+    }
+
+    // Unsubscribe from all remaining tags
+    if (unsubscribingTags.length)
+      await this.request({ unsubscribe: unsubscribingTags })
   }
 
   async onOpen() {
     console.log("connected to the graffiti socket")
     this.open = true
     this.eventTarget.dispatchEvent(new Event("graffitiOpen"))
-    // Resubscribe to hanging queries
-    for (const queryID in this.subscriptionData) {
-      const sd = this.subscriptionData[queryID]
-      await this.subscribe(
-        sd.query,
-        sd.updateCallback,
-        sd.removeCallback,
-        sd.flags,
-        sd.since,
-        queryID)
+
+    // Clear data
+    for (let tag in this.tagMap) {
+      const objectMap = this.tagMap[tag].objectMap
+      for (let uuid in objectMap) delete objectMap[uuid]
     }
+
+    // Resubscribe
+    const tags = Object.keys(this.tagMap)
+    if (tags.length) await this.request({ subscribe: tags })
   }
 
   // Adds required fields to an object.
@@ -192,20 +229,21 @@ export default class {
     }
 
     // Pre-generate the object's ID if it does not already exist
-    if (!object._id) object._id = crypto.randomUUID()
+    if (!object._key) object._key = crypto.randomUUID()
+
+    return object
   }
 
   // Utility function to get a universally unique string
   // that represents a particular object
   objectUUID(object) {
-    if (!object._id || !object._by) {
+    if (!object._by || !object._key) {
       throw {
         type: 'error',
-        content: 'the object you are trying to identify does not have an ID or owner',
+        content: 'the object you are trying to identify does not have an owner or key',
         object
       }
     }
-    return object._id + object._by
+    return object._by + object._key
   }
-
 }
