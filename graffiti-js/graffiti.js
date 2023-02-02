@@ -230,6 +230,7 @@ export default class {
   }
 
   objectsByTags(...tags) {
+    tags = tags.filter(tag=> tag!=null)
     for (const tag of tags) {
       if (!(tag in this.tagMap)) {
         throw `You are not subscribed to '${tag}'`
@@ -245,6 +246,7 @@ export default class {
   }
 
   async subscribe(...tags) {
+    tags = tags.filter(tag=> tag!=null)
     // Look at what is already subscribed to
     const subscribingTags = []
     for (const tag of tags) {
@@ -267,6 +269,7 @@ export default class {
   }
 
   async unsubscribe(...tags) {
+    tags = tags.filter(tag=> tag!=null)
     // Decrease the count of each tag,
     // removing and marking if necessary
     const unsubscribingTags = []
