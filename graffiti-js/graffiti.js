@@ -12,10 +12,11 @@ export default class {
     this.open = false
     this.eventTarget = new EventTarget()
     this.tagMap = {}
+
+    this.#initialize()
   }
 
-  // CALL THIS BEFORE DOING ANYTHING ELSE
-  async initialize() {
+  async #initialize() {
     // Perform authorization
     this.authParams = await Auth.connect(this.graffitiURL)
 
@@ -33,8 +34,9 @@ export default class {
 
     // Commence connection
     this.#connect()
+  }
 
-    // Wait until open
+  async waitTilOpen() {
     await new Promise(resolve => {
       this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
     })
