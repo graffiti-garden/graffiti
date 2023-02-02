@@ -1,5 +1,5 @@
 import Auth from './src/auth.js'
-//import Collection from './src/collection.js'
+import GraffitiArray from './src/array.js'
 
 export default class {
 
@@ -240,8 +240,8 @@ export default class {
     const combinedMaps = Object.assign({},
       ...tags.map(tag=> this.tagMap[tag].objectMap))
 
-    // Return just the array
-    return Object.values(combinedMaps)
+    // Return an array wrapped with graffiti functions
+    return new GraffitiArray(this, ...Object.values(combinedMaps))
   }
 
   async subscribe(...tags) {
