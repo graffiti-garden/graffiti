@@ -123,7 +123,8 @@ export default class {
     const uuid = this.#objectUUID(object)
 
     let originalObject = null
-    for (const tag in this.tagMap) {
+    for (const tag of object._tags) {
+      if (!(tag in this.tagMap)) continue
       const objectMap = this.tagMap[tag].objectMap
 
       if (uuid in objectMap) {
@@ -153,7 +154,8 @@ export default class {
     const uuid = this.#objectUUID(object)
 
     let originalObject = null
-    for (const tag in this.tagMap) {
+    for (const tag of object._tags) {
+      if (!(tag in this.tagMap)) continue
       const objectMap = this.tagMap[tag].objectMap
 
       if (!(uuid in objectMap)) return
