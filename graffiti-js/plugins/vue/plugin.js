@@ -16,11 +16,19 @@ export default {
       app.config.globalProperties.$graffitiID.value = graffiti.myID
     })
 
-    // Add logging in and out
-    app.config.globalProperties.$graffitiToggleLogIn =
-      graffiti.toggleLogIn.bind(graffiti)
+    // Add static functions
+    const methodMapping = {
+      'ToggleLogIn': 'toggleLogIn',
+      'Update': 'update',
+      'Tags': 'myTags',
+      'ObjectByKey': 'objectByKey'
+    }
+    for (const key in methodMapping) {
+      app.config.globalProperties['$graffiti'+key] =
+        graffiti[methodMapping[key]].bind(graffiti)
+    }
 
-    // A composable for subscribing and
+    // A component for subscribing and
     // unsubscribing to tags that returns
     // a reactive array of the results
     app.component('GraffitiObjects', {
