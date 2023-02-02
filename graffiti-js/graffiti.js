@@ -1,4 +1,5 @@
-import Auth from './auth.js'
+import Auth from './src/auth.js'
+//import Collection from './src/collection.js'
 
 export default class {
 
@@ -36,10 +37,12 @@ export default class {
     this.#connect()
   }
 
-  async waitTilOpen() {
-    await new Promise(resolve => {
-      this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
-    })
+  async opened() {
+    if (!this.open) {
+      await new Promise(resolve => {
+        this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
+      })
+    }
   }
 
   #connect() {

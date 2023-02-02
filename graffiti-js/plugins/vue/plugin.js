@@ -12,7 +12,7 @@ export default {
 
     // These ID need to change after opening
     app.config.globalProperties.$graffitiID = ref(null)
-    graffiti.waitTilOpen().then(()=> {
+    graffiti.opened().then(()=> {
       app.config.globalProperties.$graffitiID.value = graffiti.myID
     })
 

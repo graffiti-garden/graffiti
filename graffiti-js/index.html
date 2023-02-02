@@ -33,7 +33,7 @@
   // Connect to a local Graffiti instance
   // (see the server README for how to n locally)
   window.graffiti = new Graffiti("http://localhost:5001")
-  await graffiti.waitTilOpen()
+  await graffiti.opened()
 
   // Log in automatically if not already
   // and supply a log out button
