@@ -44,10 +44,7 @@
   </h1>
 
   <p>
-    My name is: 
-    <graffiti-objects :tags="[$graffitiID.value]" v-slot="{objects}">
-      <name :of="$graffitiID.value" :objects="objects"></name>
-    </graffiti-objects>
+    My name is: <name :of="$graffitiID.value"></name>
   </p>
 
   <set-my-name :tags="[$graffitiID.value]"></set-my-name>
@@ -58,9 +55,7 @@
     Chatting
   </h1>
 
-  <graffiti-objects :tags="['demo']" v-slot="{objects}">
-    <chat :tags="['demo']" :objects="objects"></chat>
-  </graffiti-objects>
+  <chat :tags="['demo']"></chat>
 
   <!-- Add a like button -->
 
@@ -70,9 +65,8 @@
 
   <!-- different contexts -->
 
-
   <!-- Private messages -->
-
+  
 <!-------------------------------------------------------------->
 </body>
 </html>

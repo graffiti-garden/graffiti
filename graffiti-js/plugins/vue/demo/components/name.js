@@ -1,10 +1,10 @@
 export const Name = {
 
-  props: ["of", "objects"],
+  props: ["of"],
 
-  computed: {
-    name() {
-      const nameObjects = this.objects
+  methods: {
+    name(objects) {
+      const nameObjects = objects
                  .filter(o=> 
                    'name' in o &&
                    'of' in o &&
@@ -20,7 +20,10 @@ export const Name = {
     }
   },
 
-  template: '{{name}}'
+  template: `
+    <graffiti-objects :tags="[of]" v-slot="{objects}">
+      {{ name(objects) }}
+    </graffiti-objects>`
 }
 
 export const SetMyName = {
