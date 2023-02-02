@@ -39,7 +39,7 @@ export default {
 
           {{ object.message }}
 
-          <template v-if="object._by==$graffitiID.value">
+          <template v-if="object._by==$graffitiMyID">
             <button @click="object.message+='!!';object._update()">
               ‼️
             </button>

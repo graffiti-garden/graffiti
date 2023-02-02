@@ -39,7 +39,7 @@ export const SetMyName = {
       this.$graffitiUpdate({
         name: this.name,
         timestamp: Date.now(),
-        of: this.$graffitiID.value,
+        of: this.$graffitiMyID,
         _tags: this.tags
       })
       this.name = ''

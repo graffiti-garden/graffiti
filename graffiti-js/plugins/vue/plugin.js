@@ -7,25 +7,22 @@ export default {
     const graffitiURL = options && 'url' in options?
       options.url : 'https://graffiti.garden'
 
-    // Initialize graffiti
+    // Initialize graffiti with reactive entries
     const graffiti = new Graffiti(graffitiURL, ()=>reactive({}))
 
     // These ID need to change after opening
-    app.config.globalProperties.$graffitiID = ref(null)
+    const myID = ref(null)
     graffiti.opened().then(()=> {
-      app.config.globalProperties.$graffitiID.value = graffiti.myID
+      myID.value = graffiti.myID
+    })
+    Object.defineProperty(app.config.globalProperties, "$graffitiMyID", {
+      get: ()=> myID.value
     })
 
     // Add static functions
-    const methodMapping = {
-      'ToggleLogIn': 'toggleLogIn',
-      'Update': 'update',
-      'Tags': 'myTags',
-      'ObjectByKey': 'objectByKey'
-    }
-    for (const key in methodMapping) {
-      app.config.globalProperties['$graffiti'+key] =
-        graffiti[methodMapping[key]].bind(graffiti)
+    for (const key of ['toggleLogIn', 'update', 'myTags', 'objectByKey']) {
+      const vueKey = '$graffiti' + key.charAt(0).toUpperCase() + key.slice(1)
+      app.config.globalProperties[vueKey] = graffiti[key].bind(graffiti)
     }
 
     // A component for subscribing and
