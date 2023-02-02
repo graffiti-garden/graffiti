@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Graffiti Vue</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/skeleton/2.0.4/skeleton.min.css">
+  <script async src="https://ga.jspm.io/npm:es-module-shims@1.6.2/dist/es-module-shims.js"></script>
+  <script type="importmap">{ "imports": {
+    "vue": "https://cdnjs.cloudflare.com/ajax/libs/vue/3.2.45/vue.esm-browser.min.js",
+    "graffiti-vue": "../plugin.js"
+  }}</script>
+  <script type="module">
+    //"graffiti-vue": "https://graffiti.garden/graffiti-js/plugins/vue/plugin.js"
+    import { createApp } from 'vue'
+    import { Name, SetMyName } from './components/name.js'
+    import Chat from './components/chat.js'
+    import GraffitiVue from 'graffiti-vue'
+    createApp()
+      .use(GraffitiVue)
+      .component('Name', Name)
+      .component('SetMyName', SetMyName)
+      .component('Chat', Chat)
+      .mount('#app')
+  </script>
+</head>
+<body id="app">
+<!-------------------------------------------------------------->
+
+
+  <h1>
+    Logging In
+  </h1>
+
+  <p>
+    <button @click="$graffitiToggleLogIn">
+      {{ !$graffitiID.value? 'Log In' : 'Log Out' }}
+    </button>
+  </p>
+
+  <br>
+
+  <h1>
+    Profile
+  </h1>
+
+  <p>
+    My name is: 
+    <graffiti-objects :tags="[$graffitiID.value]" v-slot="{objects}">
+      <name :of="$graffitiID.value" :objects="objects"></name>
+    </graffiti-objects>
+  </p>
+
+  <set-my-name :tags="[$graffitiID.value]"></set-my-name>
+
+  <br>
+
+  <h1>
+    Chatting
+  </h1>
+
+  <graffiti-objects :tags="['demo']" v-slot="{objects}">
+    <chat :tags="['demo']" :objects="objects"></chat>
+  </graffiti-objects>
+
+  <!-- Add a like button -->
+
+
+  <!-- Filter by likes -->
+
+
+  <!-- different contexts -->
+
+
+  <!-- Private messages -->
+
+<!-------------------------------------------------------------->
+</body>
+</html>
