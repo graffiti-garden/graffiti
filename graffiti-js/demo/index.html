@@ -17,6 +17,7 @@
     import { Name, SetMyName } from './components/name.js'
     import Chat from './components/chat.js'
     import Moderation from './components/moderation.js'
+    import PrivateMessaging from './components/private-messaging.js'
     import GraffitiVue from 'graffiti-vue'
     createApp()
       .use(GraffitiVue)
@@ -24,6 +25,7 @@
       .component('SetMyName', SetMyName)
       .component('Chat', Chat)
       .component('Moderation', Moderation)
+      .component('PrivateMessaging', PrivateMessaging)
       .mount('#app')
   </script>
 </head>
@@ -65,9 +67,8 @@
 
   <moderation></moderation>
 
-  <h2>Private Messages</h2>
+  <h2>Private Messaging</h2>
 
-  <h2>Tagging</h2>
-  
+  <private-messaging></private-messaging>
 </body>
 </html>

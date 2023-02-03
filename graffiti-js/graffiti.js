@@ -140,7 +140,7 @@ export default class {
         // Replace the object by copying
         // so references to it don't break
         this.#recursiveCopy(objectMap[uuid], object)
-      } else {
+      } else if (!('_id' in object)) {
 
         // Add properties to the object
         // so it can be updated and removed
@@ -148,6 +148,7 @@ export default class {
         Object.defineProperty(object, '_id', { value: this.#objectUUID(object) })
         Object.defineProperty(object, '_update', { value: ()=>this.update(object) })
         Object.defineProperty(object, '_remove', { value: ()=>this.remove(object) })
+
         objectMap[uuid] = object
       }
     }

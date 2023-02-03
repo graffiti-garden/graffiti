@@ -22,6 +22,8 @@ export default {
 
     <graffiti-objects :tags="[channel]" v-slot="{objects}">
 
+      <h3>Example 1</h3>
+
       <p>
         Only show me objects with more than <input v-model.number="likeThreshold"/> likes.
       </p>
@@ -34,6 +36,8 @@ export default {
           </li>
         </graffiti-objects>
       </ul>
+
+      <h3>Example 2</h3>
 
       <p>
         Only show me objects that
