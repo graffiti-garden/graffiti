@@ -10,13 +10,25 @@ export default {
     // Initialize graffiti with reactive entries
     const graffiti = new Graffiti(graffitiURL, ()=>reactive({}))
 
-    // These ID need to change after opening
-    const myID = ref(null)
-    graffiti.opened().then(()=> {
-      myID.value = graffiti.myID
+    // Create a reactive variable that tracks
+    // connection changes
+    const connectionState = ref(false)
+    ;(function waitForState(state) {
+      graffiti.connectionState(state).then(()=> {
+        connectionState.value = state
+        waitForState(!state)
+    })})(true)
+    Object.defineProperty(app.config.globalProperties, "$graffitiConnected", {
+      get: ()=> connectionState.value
     })
+
+    // the connection state becomes true
+    let myID = null
     Object.defineProperty(app.config.globalProperties, "$graffitiMyID", {
-      get: ()=> myID.value
+      get: ()=> {
+        if (connectionState.value) myID = graffiti.myID
+        return myID
+      }
     })
 
     // Add static functions

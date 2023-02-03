@@ -36,11 +36,14 @@ export default class {
     // Commence connection
     this.#connect()
   }
-
-  async opened() {
-    if (!this.open) {
+  
+  // Wait for the connection to be
+  // open (state=true) or closed (state=false)
+  async connectionState(state) {
+    if (this.open != state) {
       await new Promise(resolve => {
-        this.eventTarget.addEventListener("graffitiOpen", () => resolve() )
+        this.eventTarget.addEventListener(
+          state? "open": "closed", ()=> resolve())
       })
     }
   }
@@ -59,15 +62,16 @@ export default class {
   }
 
   async #onClose() {
-    this.open = false
     console.error("lost connection to graffiti server, attemping reconnect soon...")
+    this.open = false
+    this.eventTarget.dispatchEvent(new Event("closed"))
     await new Promise(resolve => setTimeout(resolve, 2000))
     this.#connect()
   }
 
   async #request(msg) {
     if (!this.open) {
-      throw { 'error': 'Not connected!' }
+      throw "Can't make request! Not connected to graffiti server"
     }
 
     // Create a random message ID
@@ -75,7 +79,7 @@ export default class {
 
     // Create a listener for the reply
     const dataPromise = new Promise(resolve => {
-      this.eventTarget.addEventListener(messageID, (e) => {
+      this.eventTarget.addEventListener('$'+messageID, (e) => {
         resolve(e.data)
       })
     })
@@ -101,7 +105,7 @@ export default class {
     if ('messageID' in data) {
       // It's a reply
       // Forward it back to the sender
-      const messageEvent = new Event(data.messageID)
+      const messageEvent = new Event('$'+data.messageID)
       messageEvent.data = data
       this.eventTarget.dispatchEvent(messageEvent)
 
@@ -263,9 +267,13 @@ export default class {
       }
     }
 
-    // Begin subscribing in the background
+    // Try subscribing in the background
+    // but don't raise an error since
+    // the subscriptions will happen once connected
     if (subscribingTags.length)
-      await this.#request({ subscribe: subscribingTags })
+      try {
+        await this.#request({ subscribe: subscribingTags })
+      } catch {}
   }
 
   async unsubscribe(...tags) {
@@ -284,13 +292,15 @@ export default class {
 
     // Unsubscribe from all remaining tags
     if (unsubscribingTags.length)
-      await this.#request({ unsubscribe: unsubscribingTags })
+      try {
+        await this.#request({ unsubscribe: unsubscribingTags })
+      } catch {}
   }
 
   async #onOpen() {
     console.log("connected to the graffiti socket")
     this.open = true
-    this.eventTarget.dispatchEvent(new Event("graffitiOpen"))
+    this.eventTarget.dispatchEvent(new Event("open"))
 
     // Clear data
     for (let tag in this.tagMap) {
