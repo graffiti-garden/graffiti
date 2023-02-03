@@ -35,7 +35,7 @@ export default {
     <graffiti-objects :tags="tags" v-slot="{objects}">
       <ul v-for="object in messageObjects(objects)">
         <li>
-          <name :of="object._by"></name>
+          <em><Name :of="object._by"/></em>:
 
           {{ object.message }}
 
