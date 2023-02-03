@@ -1,13 +1,13 @@
 import { Name } from './name.js'
+import LikeButton from './like-button.js'
 
 export default {
 
-  components: { Name },
-
-  props: ['tags'],
+  components: { Name, LikeButton },
 
   data: ()=> ({
-    message: ''
+    message: '',
+    channel: 'demo'
   }),
 
   methods: {
@@ -25,19 +25,22 @@ export default {
       this.$graffitiUpdate({
         message: this.message,
         timestamp: Date.now(),
-        _tags: this.tags
+        _tags: [this.channel]
       })
       this.message = ''
     }
   },
 
   template: `
-    <graffiti-objects :tags="tags" v-slot="{objects}">
+    Chat Channel: <input v-model="channel"/>
+
+    <graffiti-objects :tags="[channel]" v-slot="{objects}">
       <ul v-for="object in messageObjects(objects)">
         <li>
           <em><Name :of="object._by"/></em>:
-
           {{ object.message }}
+
+          <LikeButton :messageID="object._id" />
 
           <template v-if="object._by==$graffitiMyID">
             <button @click="object.message+='!!';object._update()">

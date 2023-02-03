@@ -13,6 +13,7 @@ export default class {
     this.open = false
     this.eventTarget = new EventTarget()
     this.tagMap = {}
+    this.GraffitiArray = GraffitiArray(this)
 
     this.#initialize()
   }
@@ -144,6 +145,7 @@ export default class {
         // Add properties to the object
         // so it can be updated and removed
         // without the collection
+        Object.defineProperty(object, '_id', { value: this.#objectUUID(object) })
         Object.defineProperty(object, '_update', { value: ()=>this.update(object) })
         Object.defineProperty(object, '_remove', { value: ()=>this.remove(object) })
         objectMap[uuid] = object
@@ -246,7 +248,7 @@ export default class {
       ...tags.map(tag=> this.tagMap[tag].objectMap))
 
     // Return an array wrapped with graffiti functions
-    return new GraffitiArray(this, ...Object.values(combinedMaps))
+    return new this.GraffitiArray(...Object.values(combinedMaps))
   }
 
   async subscribe(...tags) {
