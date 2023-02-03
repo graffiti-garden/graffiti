@@ -3,11 +3,11 @@ export default {
   props: ['messageID'],
 
   methods: {
-    likeObjects(objects) {
+    likeObjects(objects, messageID=this.messageID) {
       return objects.filter(o=>
                       'like' in o &&
                       'timestamp' in o &&
-                      o.like == this.messageID &&
+                      o.like == messageID &&
                       typeof o.timestamp == 'number')
 
     },

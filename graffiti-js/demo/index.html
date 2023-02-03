@@ -16,12 +16,14 @@
     import { createApp } from 'vue'
     import { Name, SetMyName } from './components/name.js'
     import Chat from './components/chat.js'
+    import Moderation from './components/moderation.js'
     import GraffitiVue from 'graffiti-vue'
     createApp()
       .use(GraffitiVue)
       .component('Name', Name)
       .component('SetMyName', SetMyName)
       .component('Chat', Chat)
+      .component('Moderation', Moderation)
       .mount('#app')
   </script>
 </head>
@@ -60,6 +62,8 @@
   <chat></chat>
 
   <h2>Moderation</h2>
+
+  <moderation></moderation>
 
   <h2>Private Messages</h2>
 

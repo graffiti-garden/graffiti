@@ -32,7 +32,9 @@ export default {
   },
 
   template: `
-    Chat Channel: <input v-model="channel"/>
+    <p>
+      Chat Channel: <input v-model="channel"/>
+    </p>
 
     <graffiti-objects :tags="[channel]" v-slot="{objects}">
       <ul v-for="object in messageObjects(objects)">
