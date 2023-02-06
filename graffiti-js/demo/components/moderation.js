@@ -51,7 +51,7 @@ export default {
 
       <ul v-for="object in messageObjects(objects)">
         <graffiti-objects :tags="[object._id]" v-slot="{objects: responses}">
-          <li v-if="likeObjects(responses, object._id).filter(o=> o._by=admin).length">
+          <li v-if="likeObjects(responses, object._id).filter(o=> o._by==admin).length">
             <em><Name :of="object._by"/></em>:
             {{ object.message }}
           </li>
