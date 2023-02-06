@@ -6,13 +6,13 @@ export default class {
   // There needs to be a new object map for each tag
   constructor(
     graffitiURL="https://graffiti.garden",
-    objectMapConstructor=()=>({})) {
+    objectConstructor=()=>({})) {
 
     this.graffitiURL = graffitiURL
-    this.objectMapConstructor = objectMapConstructor
     this.open = false
     this.eventTarget = new EventTarget()
-    this.tagMap = {}
+    this.tagMap = objectConstructor() // tag->{count, Set(uuid)}
+    this.objectMap = objectConstructor() // uuid->object
     this.GraffitiArray = GraffitiArray(this)
 
     this.#initialize()
@@ -127,30 +127,29 @@ export default class {
   #updateCallback(object) {
     const uuid = this.#objectUUID(object)
 
-    let originalObject = null
+    // Add the UUID to the tag map
     for (const tag of object._tags) {
       if (!(tag in this.tagMap)) continue
-      const objectMap = this.tagMap[tag].objectMap
+      this.tagMap[tag].uuids.add(uuid)
+    }
 
-      if (uuid in objectMap) {
-        // Copy the original object if
-        // one exists, in case of failure
-        originalObject = Object.assign({},objectMap[uuid])
+    // Add the object to the object map
+    let originalObject = null
+    if (uuid in this.objectMap) {
+      originalObject = Object.assign({},this.objectMap[uuid])
 
-        // Replace the object by copying
-        // so references to it don't break
-        this.#recursiveCopy(objectMap[uuid], object)
-      } else if (!('_id' in object)) {
+      // Replace the object by copying
+      // so references to it don't break
+      this.#recursiveCopy(this.objectMap[uuid], object)
+    } else {
+      // Add properties to the object
+      // so it can be updated and removed
+      // without the collection
+      Object.defineProperty(object, '_id', { value: this.#objectUUID(object) })
+      Object.defineProperty(object, '_update', { value: ()=>this.update(object) })
+      Object.defineProperty(object, '_remove', { value: ()=>this.remove(object) })
 
-        // Add properties to the object
-        // so it can be updated and removed
-        // without the collection
-        Object.defineProperty(object, '_id', { value: this.#objectUUID(object) })
-        Object.defineProperty(object, '_update', { value: ()=>this.update(object) })
-        Object.defineProperty(object, '_remove', { value: ()=>this.remove(object) })
-
-        objectMap[uuid] = object
-      }
+      this.objectMap[uuid] = object
     }
 
     // Return the original in case of failure
@@ -160,14 +159,15 @@ export default class {
   #removeCallback(object) {
     const uuid = this.#objectUUID(object)
 
-    let originalObject = null
+    // Remove the UUID from the tag map
     for (const tag of object._tags) {
       if (!(tag in this.tagMap)) continue
-      const objectMap = this.tagMap[tag].objectMap
+      this.tagMap[tag].uuids.delete(uuid)
+    }
 
-      if (!(uuid in objectMap)) return
-      originalObject = Object.assign({},objectMap[uuid])
-      delete objectMap[uuid]
+    // And the object map
+    if (uuid in this.objectMap) {
+      delete this.objectMap[uuid]
     }
   }
 
@@ -225,6 +225,7 @@ export default class {
     }
   }
 
+
   async myTags() {
     return await this.#request({ ls: null })
   }
@@ -236,7 +237,7 @@ export default class {
     }})
   }
 
-  objectsByTags(...tags) {
+  objects(...tags) {
     tags = tags.filter(tag=> tag!=null)
     for (const tag of tags) {
       if (!(tag in this.tagMap)) {
@@ -244,12 +245,13 @@ export default class {
       }
     }
 
-    // Merge by UUID to combine all the maps
-    const combinedMaps = Object.assign({},
-      ...tags.map(tag=> this.tagMap[tag].objectMap))
+    // Merge by UUIDs from all tags and
+    // convert to relevant objects
+    const uuids = new Set(tags.map(tag=>[...this.tagMap[tag].uuids]).flat())
+    const objects = [...uuids].map(uuid=>this.objectMap[uuid])
 
     // Return an array wrapped with graffiti functions
-    return new this.GraffitiArray(...Object.values(combinedMaps))
+    return new this.GraffitiArray(...objects)
   }
 
   async subscribe(...tags) {
@@ -263,7 +265,7 @@ export default class {
       } else {
         // Create a new slot
         this.tagMap[tag] = {
-          objectMap: this.objectMapConstructor(),
+          uuids: new Set(),
           count: 1
         }
         subscribingTags.push(tag)
@@ -346,3 +348,12 @@ export default class {
   }
 }
 
+// If any in object
+//if (['_by', '_key', '_id'] in object) {
+  //throw "No predefining keys"
+//}
+
+// Add tags
+//if ('_tags' in object && !Array.isArray(object._to)) {
+  //throw new Error("_tags must be an array")
+//}

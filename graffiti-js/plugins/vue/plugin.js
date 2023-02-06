@@ -65,7 +65,7 @@ export default {
 
       computed: {
         objects() {
-          return graffiti.objectsByTags(...this.tags)
+          return graffiti.objects(...this.tags)
         }
       },
 
