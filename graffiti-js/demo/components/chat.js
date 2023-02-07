@@ -45,11 +45,11 @@ export default {
           <LikeButton :messageID="object._id" />
 
           <template v-if="object._by==$graffitiMyID">
-            <button @click="object.message+='!!';object._update()">
+            <button @click="object.message+='!!'">
               ‼️
             </button>
 
-            <button @click="object._remove()">
+            <button @click="delete object._key">
               ❌
             </button>
           </template>

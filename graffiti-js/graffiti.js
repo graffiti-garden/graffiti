@@ -128,29 +128,34 @@ export default class {
     const uuid = this.#objectUUID(object)
 
     // Add the UUID to the tag map
+    let subscribed = false
     for (const tag of object._tags) {
       if (!(tag in this.tagMap)) continue
       this.tagMap[tag].uuids.add(uuid)
+      subscribed = true
     }
 
-    // Add the object to the object map
-    let originalObject = null
-    if (uuid in this.objectMap) {
-      originalObject = Object.assign({},this.objectMap[uuid])
+    if (!subscribed) return
 
-      // Replace the object by copying
-      // so references to it don't break
-      this.#recursiveCopy(this.objectMap[uuid], object)
-    } else {
-      // Add properties to the object
-      // so it can be updated and removed
-      // without the collection
-      Object.defineProperty(object, '_id', { value: this.#objectUUID(object) })
-      Object.defineProperty(object, '_update', { value: ()=>this.update(object) })
-      Object.defineProperty(object, '_remove', { value: ()=>this.remove(object) })
+    // Store the original object in case
+    // there is an error with the update
+    const originalObject = uuid in this.objectMap?
+      Object.assign({},this.objectMap[uuid]) : null
 
-      this.objectMap[uuid] = object
+    // Assign the object UUID
+    Object.defineProperty(object, '_id', { value: uuid })
+
+    // Add proxy functions so object modifications
+    // sync with the server
+    const handler = {
+      get: (target, prop, receiver)=>
+        this.#getObjectProperty(handler, target, prop, receiver),
+      set: (target, prop, val, receiver)=>
+        this.#setObjectProperty(object, target, prop, val, receiver),
+      deleteProperty: (target, prop)=>
+        this.#deleteObjectProperty(object, target, prop)
     }
+    this.objectMap[uuid] = new Proxy(object, handler)
 
     // Return the original in case of failure
     return originalObject
@@ -172,17 +177,7 @@ export default class {
   }
 
   async update(object) {
-    if (!this.myID) {
-      throw 'you can\'t update objects without logging in!'
-    }
-
-    // Add by/to fields
     object._by = this.myID
-    if ('_to' in object && !Array.isArray(object._to)) {
-      throw new Error("_to must be an array")
-    }
-
-    // Pre-generate the object's ID if it does not already exist
     if (!object._key) object._key = crypto.randomUUID()
 
     // Immediately replace the object
@@ -203,28 +198,53 @@ export default class {
     }
   }
 
-  async remove(object) {
-    if (!this.myID) {
-      throw 'you can\'t remove objects without logging in!'
-    }
-
-    if (this.myID != object._by) {
-      throw 'you can\'t remove an object that isn\'t yours!'
-    }
-
-    // Immediately remove the object
-    // but store it in case there is an error
-    const originalObject = this.#removeCallback(object)
-
-    try {
-      return await this.#request({ remove: object._key })
-    } catch(e) {
-      // Delete failed, restore the object
-      if (originalObject) this.#updateCallback(originalObject)
-      throw e
+  #getObjectProperty(handler, target, prop, receiver) {
+    if (typeof target[prop] === 'object' && target[prop] !== null) {
+      return new Proxy(Reflect.get(target, prop, receiver), handler)
+    } else {
+      return Reflect.get(target, prop, receiver)
     }
   }
 
+  #setObjectProperty(object, target, prop, val, receiver) {
+    // Store the original, perform the update,
+    // sync with server and restore original if error
+    const originalObject = Object.assign({}, object)
+    if (Reflect.set(target, prop, val, receiver)) {
+      this.#request({ update: object }).catch(e=> {
+        this.#updateCallback(originalObject)
+        throw e
+      })
+      return true
+    } else { return false }
+  }
+
+  #deleteObjectProperty(object, target, prop) {
+    const originalObject = Object.assign({}, object)
+    if (object==target && ['_key', '_by', '_tags'].includes(prop)) {
+      // This is a deletion of the whole object
+      const uuid = this.#objectUUID(object)
+      for (const tag of object._tags) {
+        if (!(tag in this.tagMap)) continue
+        this.tagMap[tag].uuids.delete(uuid)
+      }
+      if (!(uuid in this.objectMap)) return false
+      delete this.objectMap[uuid]
+      this.#request({ remove: object._key }).catch(e=> {
+        this.#updateCallback(originalObject)
+        throw e
+      })
+      return true
+    } else {
+      if (Reflect.deleteProperty(target, prop)) {
+        this.#request({ update: object }).catch(e=> {
+          this.#updateCallback(originalObject)
+          throw e
+        })
+        return true
+      } else { return false }
+    }
+  }
 
   async myTags() {
     return await this.#request({ ls: null })
@@ -248,7 +268,7 @@ export default class {
     // Merge by UUIDs from all tags and
     // convert to relevant objects
     const uuids = new Set(tags.map(tag=>[...this.tagMap[tag].uuids]).flat())
-    const objects = [...uuids].map(uuid=>this.objectMap[uuid])
+    const objects = [...uuids].map(uuid=> this.objectMap[uuid])
 
     // Return an array wrapped with graffiti functions
     return new this.GraffitiArray(...objects)
@@ -309,9 +329,9 @@ export default class {
 
     // Clear data
     for (let tag in this.tagMap) {
-      const objectMap = this.tagMap[tag].objectMap
-      for (let uuid in objectMap) delete objectMap[uuid]
+      this.tagMap[tag].uuids = new Set()
     }
+    for (let uuid in this.objectMap) delete this.objectMap[uuid]
 
     // Resubscribe
     const tags = Object.keys(this.tagMap)
@@ -330,30 +350,4 @@ export default class {
     }
     return object._by + object._key
   }
-
-  #recursiveCopy(target, source) {
-    for (const field in target) {
-      if (!(field in source)) {
-        delete target[field]
-      }
-    }
-
-    for (const field in source) {
-      if (field in target && typeof target[field] == 'object' && typeof source[field] == 'object') {
-        this.#recursiveCopy(target[field], source[field])
-      } else {
-        target[field] = source[field]
-      }
-    }
-  }
 }
-
-// If any in object
-//if (['_by', '_key', '_id'] in object) {
-  //throw "No predefining keys"
-//}
-
-// Add tags
-//if ('_tags' in object && !Array.isArray(object._to)) {
-  //throw new Error("_tags must be an array")
-//}

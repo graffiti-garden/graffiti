@@ -17,9 +17,8 @@ export default function(graffiti) {
       return [...new Set(this.map(o=> o._by))]
     }
 
-    async removeMine() {
-      await Promise.all(
-        this.mine.map(async o=> await o._remove()))
+    removeMine() {
+      this.mine.map(o=> delete o._key)
     }
 
     #getProperty(obj, propertyPath) {
