@@ -93,10 +93,10 @@ export default class {
     const data = await dataPromise
     delete data.messageID
 
-    if (data.type == 'error') {
+    if ('error' in data) {
       throw data
     } else {
-      return data['reply']
+      return data.reply
     }
   }
 
@@ -137,41 +137,36 @@ export default class {
 
     if (!subscribed) return
 
-    // Store the original object in case
-    // there is an error with the update
-    const originalObject = uuid in this.objectMap?
-      Object.assign({},this.objectMap[uuid]) : null
+    // Define object specific properties
+    if (!('_id' in object)) {
+      // Assign the object UUID
+      Object.defineProperty(object, '_id', { value: uuid })
 
-    // Assign the object UUID
-    Object.defineProperty(object, '_id', { value: uuid })
-
-    // Add proxy functions so object modifications
-    // sync with the server
-    const handler = {
-      get: (target, prop, receiver)=>
-        this.#getObjectProperty(handler, target, prop, receiver),
-      set: (target, prop, val, receiver)=>
-        this.#setObjectProperty(object, target, prop, val, receiver),
-      deleteProperty: (target, prop)=>
-        this.#deleteObjectProperty(object, target, prop)
+      // Add proxy functions so object modifications
+      // sync with the server
+      object = new Proxy(object, this.#objectHandler(object, true))
     }
-    this.objectMap[uuid] = new Proxy(object, handler)
 
-    // Return the original in case of failure
-    return originalObject
+    this.objectMap[uuid] = object
   }
 
   #removeCallback(object) {
     const uuid = this.#objectUUID(object)
 
-    // Remove the UUID from the tag map
-    for (const tag of object._tags) {
-      if (!(tag in this.tagMap)) continue
-      this.tagMap[tag].uuids.delete(uuid)
+    // Remove the UUID from all relevant tag maps
+    let supported = false
+    for (const tag in this.tagMap) {
+      if (this.tagMap[tag].uuids.has(uuid)) {
+        if (object._tags.includes(tag)) {
+          this.tagMap[tag].uuids.delete(uuid)
+        } else {
+          supported = true
+        }
+      }
     }
 
-    // And the object map
-    if (uuid in this.objectMap) {
+    // If all tags have been removed, delete entirely
+    if (!supported && uuid in this.objectMap) {
       delete this.objectMap[uuid]
     }
   }
@@ -181,37 +176,46 @@ export default class {
     if (!object._key) object._key = crypto.randomUUID()
 
     // Immediately replace the object
-    const originalObject = this.#updateCallback(object)
+    this.#updateCallback(object)
 
     // Send it to the server
     try {
       await this.#request({ update: object })
     } catch(e) {
-      if (originalObject) {
-        // Restore the original object
-        this.#updateCallback(originalObject)
-      } else {
-        // Delete the temp object
-        this.#removeCallback(object)
-      }
+      // Delete the temp object
+      this.#removeCallback(object)
       throw e
     }
   }
 
-  #getObjectProperty(handler, target, prop, receiver) {
+  #objectHandler(object, root) {
+    return {
+      get: (target, prop, receiver)=>
+        this.#getObjectProperty(object, target, prop, receiver),
+      set: (target, prop, val, receiver)=>
+        this.#setObjectProperty(object, root, target, prop, val, receiver),
+      deleteProperty: (target, prop)=>
+        this.#deleteObjectProperty(object, root, target, prop)
+    }
+  }
+
+  #getObjectProperty(object, target, prop, receiver) {
     if (typeof target[prop] === 'object' && target[prop] !== null) {
-      return new Proxy(Reflect.get(target, prop, receiver), handler)
+      return new Proxy(Reflect.get(target, prop, receiver), this.#objectHandler(object, false))
     } else {
       return Reflect.get(target, prop, receiver)
     }
   }
 
-  #setObjectProperty(object, target, prop, val, receiver) {
+  #setObjectProperty(object, root, target, prop, val, receiver) {
     // Store the original, perform the update,
     // sync with server and restore original if error
     const originalObject = Object.assign({}, object)
     if (Reflect.set(target, prop, val, receiver)) {
+      this.#removeCallback(originalObject)
+      this.#updateCallback(object)
       this.#request({ update: object }).catch(e=> {
+        this.#removeCallback(object)
         this.#updateCallback(originalObject)
         throw e
       })
@@ -219,17 +223,11 @@ export default class {
     } else { return false }
   }
 
-  #deleteObjectProperty(object, target, prop) {
+  #deleteObjectProperty(object, root, target, prop) {
     const originalObject = Object.assign({}, object)
-    if (object==target && ['_key', '_by', '_tags'].includes(prop)) {
+    if (root && ['_key', '_by', '_tags'].includes(prop)) {
       // This is a deletion of the whole object
-      const uuid = this.#objectUUID(object)
-      for (const tag of object._tags) {
-        if (!(tag in this.tagMap)) continue
-        this.tagMap[tag].uuids.delete(uuid)
-      }
-      if (!(uuid in this.objectMap)) return false
-      delete this.objectMap[uuid]
+      this.#removeCallback(object)
       this.#request({ remove: object._key }).catch(e=> {
         this.#updateCallback(originalObject)
         throw e
