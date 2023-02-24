@@ -53,7 +53,7 @@ async def query_socket(socket: WebSocket, token: str|None=None):
         try:
             token = jwt.decode(token, secret, algorithms=["HS256"])
             assert token["type"] == "token"
-            socket.actor = "graffitiactor://" + token["owner_id"]
+            socket.actor = token["actor"]
         except:
             await socket.send_json({
                 'error': 'authorization',

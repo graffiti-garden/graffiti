@@ -79,7 +79,7 @@ async def email(
     code = jwt.encode({
         "type": "code",
         "client_id": client_id,
-        "owner_id": sha256(email.encode()).hexdigest(),
+        "actor": "graffitiactor://" + sha256(email.encode()).hexdigest(),
         "time": time.time()
     }, secret, algorithm="HS256")
 
@@ -176,10 +176,10 @@ def token(
     # If authorized, create a token
     token = jwt.encode({
         "type": "token",
-        "owner_id": code["owner_id"]
+        "actor": code["actor"]
         }, secret, algorithm="HS256")
 
-    return {"access_token": token, "owner_id": code["owner_id"], "token_type": "bearer"}
+    return {"access_token": token, "actor": code["actor"], "token_type": "bearer"}
 
 @app.websocket("/auth_socket")
 async def auth_socket(ws: WebSocket, signature_hash: str):
