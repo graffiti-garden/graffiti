@@ -34,10 +34,11 @@ async def startup():
     app.db = client.graffiti.objects
 
     # Create indexes if they don't already exist
-    await app.db.create_index('_by')
-    await app.db.create_index('_key')
-    await app.db.create_index('_tags')
-    await app.db.create_index('_to')
+    await app.db.create_index('id', unique=True)
+    await app.db.create_index('actor')
+    await app.db.create_index('tag')
+    await app.db.create_index('bto')
+    await app.db.create_index('bcc')
 
     # Keep track of the total set of tags that people are subscribed to
     # When that set changes, update the pipeline
@@ -47,12 +48,12 @@ async def startup():
 async def query_socket(socket: WebSocket, token: str|None=None):
     await socket.accept()
     # Perform authorization
-    socket.owner_id = None
+    socket.actor = None
     if token:
         try:
             token = jwt.decode(token, secret, algorithms=["HS256"])
             assert token["type"] == "token"
-            socket.owner_id = token["owner_id"]
+            socket.actor = "graffitiactor://" + token["owner_id"]
         except:
             await socket.send_json({
                 'error': 'authorization',
@@ -88,10 +89,10 @@ async def reply(socket, msg):
     try:
 
         if 'update' in msg:
-            reply = await rest.update(app.db, msg['update'], socket.owner_id)
+            reply = await rest.update(app.db, msg['update'], socket.actor)
 
         elif 'remove' in msg:
-            reply = await rest.remove(app.db, msg['remove'], socket.owner_id)
+            reply = await rest.remove(app.db, msg['remove'], socket.actor)
 
         elif 'subscribe' in msg:
             reply = await app.pubsub.subscribe(msg['subscribe'], socket)
@@ -100,10 +101,10 @@ async def reply(socket, msg):
             reply = await app.pubsub.unsubscribe(msg['unsubscribe'], socket)
 
         elif 'get' in msg:
-            reply = await rest.get(app.db, msg['get']['_by'], msg['get']['_key'], socket.owner_id)
+            reply = await rest.get(app.db, msg['get'], socket.actor)
 
         elif 'ls' in msg:
-            reply = await rest.tags(app.db, socket.owner_id)
+            reply = await rest.tags(app.db, socket.actor)
 
         output["reply"] = reply
 

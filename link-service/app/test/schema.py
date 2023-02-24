@@ -6,9 +6,9 @@ import datetime
 
 async def main():
 
-    my_id, my_token = owner_id_and_token()
+    my_actor, my_token = actor_id_and_token()
     async with websocket_connect(my_token) as ws:
-        for request in valid_requests(my_id):
+        for request in valid_requests(my_actor):
             await send(ws, request)
             response = await recv(ws)
             while ('error' not in response) and ('messageID' not in response):
@@ -16,7 +16,7 @@ async def main():
             if 'error' in response:
                 assert response['error'] != "validation"
         print("All valid requests passed, as expected")
-        for request in invalid_requests(my_id):
+        for request in invalid_requests(my_actor):
             await send(ws, request)
             response = await recv(ws)
             while ('error' not in response) and ('messageID' not in response):
@@ -24,8 +24,8 @@ async def main():
             assert response['error'] == "validation"
         print("All invalid requests failed, as expected")
 
-def valid_requests(my_id):
-    base_object = object_base(my_id)
+def valid_requests(my_actor):
+    base_object = object_base(my_actor)
     return [{
     # update
     "messageID": random_id(),
@@ -36,7 +36,7 @@ def valid_requests(my_id):
 }, {
     # remove
     "messageID": "a"*64,
-    "remove": base_object['_key']
+    "remove": base_object['id']
 }, {
     # subscribe
     "messageID": "iueiruwoeiurowiwf1293  -e 👍",
@@ -58,10 +58,7 @@ def valid_requests(my_id):
 }, {
     # Get
     "messageID": random_id(),
-    "get": {
-        "_by": random_sha(),
-        "_key": random_id()
-    }
+    "get": f"graffitiobject://{random_sha()}:{random_id()}"
 }, {
     # Different sorts of objects
     "messageID": random_id(),
@@ -87,31 +84,47 @@ def valid_requests(my_id):
     # Various tags
     "messageID": random_id(),
     "update": base_object | {
-        "_tags": ["aksjfdkd", "1"*1000, "😠"]
+        "tag": ["aksjfdkd", "1"*1000, "😠"]
     }
 }, {
-    # With _to
+    # With bto/bcc
     "messageID": random_id(),
     "update": base_object | {
-        "_to": [random_sha()]
+        "bto": [random_actor()]
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "bcc": [random_actor()]
     }
 }, {
     # _to noone ie "private note"
     "messageID": random_id(),
     "update": base_object | {
-        "_to": []
+        "bto": []
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "bcc": []
     }
 }, {
     # To multiple people
     "messageID": random_id(),
     "update": base_object | {
-        "_to": [random_sha(), my_id]
+        "bto": [random_actor(), base_object["actor"]]
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "bcc": [base_object["actor"], random_actor(), random_actor()]
     }
 }, {
     # Something more complicated
     "messageID": random_id(),
     "update": base_object | {
-        "_to": [random_sha(), my_id, random_sha()],
+        "bto": [random_actor(), base_object["actor"], random_actor()],
+        "bcc": [random_actor()],
         "foo": {
             "blah": False,
             "bar": {
@@ -134,8 +147,8 @@ def valid_requests(my_id):
     }
 }]
 
-def invalid_requests(my_id):
-    base_object = object_base(my_id)
+def invalid_requests(my_actor):
+    base_object = object_base(my_actor)
     return [{}, # Empty
 {
     # no message ID
@@ -151,44 +164,77 @@ def invalid_requests(my_id):
     "update": base_object,
     "ls": None
 }, {
-    # only special fields can start with _
+    # id should be an string
     "messageID": random_id(),
     "update": base_object | {
-        "_notright": 12345
-    },
-}, {
-    # _key should be an string
-    "messageID": random_id(),
-    "update": base_object | {
-        "_key": 12345,
+        "id": 12345,
     }
 }, {
-    # _key should be < length 64
+    # id improperly formatted
+    # Wrong scheme
     "messageID": random_id(),
     "update": base_object | {
-        "_key": "z"*65
+        "id": 'G' + base_object['id'][1:]
+    }
+}, {
+    # URL appended
+    "messageID": random_id(),
+    "update": base_object | {
+        "id": "asdf" + base_object['id']
+    }
+}, {
+    # Key is too long
+    "messageID": random_id(),
+    "update": base_object | {
+        "id": base_object['id'] + "z"*65
     }
 }, {
     # messageID too long
     "messageID": "q"*65,
     "update": base_object
 }, {
-    # _to should be an array
+    # bto/bcc should be an array
     "messageID": random_id(),
     "update": base_object | {
-        "_to": random_sha()
+        "bto": random_actor()
     }
 }, {
-    # _to should by UUIDs
     "messageID": random_id(),
     "update": base_object | {
-        "_to": ["12345"]
+        "bcc": random_actor()
+    }
+}, {
+    # bto/bcc should by UUIDs
+    "messageID": random_id(),
+    "update": base_object | {
+        "bto": ["12345"]
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "bcc": ["12345"]
     }
 }, {
     # no repeated IDs
     "messageID": random_id(),
     "update": base_object | {
-        "_to": [my_id] + [random_sha()]*2
+        "bto": [random_actor()]*2
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "bcc": [random_actor()]+[base_object["actor"]]*2
+    }
+}, {
+    # Improperly formatted actor
+    "messageID": random_id(),
+    "update": base_object | {
+        "bto": ["G"+random_actor()[1:]]
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "bto": [random_actor() + "1"]
     }
 }, {
     # Object is not an object
@@ -201,34 +247,32 @@ def invalid_requests(my_id):
     # Object is missing a field
     "messageID": random_id(),
     "update": {
-        '_by': my_id,
-        '_tags': ['something']
+        'actor': my_actor,
+        'tag': ['something']
     }
 }, {
     "messageID": random_id(),
     "update": {
-        '_key': random_id(),
-        '_tags': ['something']
+        'id': base_object['id'],
+        'tag': ['something']
     }
 }, {
     "messageID": random_id(),
     "update": {
-        '_key': random_id(),
-        '_by': my_id,
+        'id': base_object['id'],
+        'actor': my_actor,
     }
 }, {
     # Tags is not a list
     "messageID": random_id(),
-    "update": {
-        '_key': random_id(),
-        '_tags': 'something'
+    "update": base_object | {
+        'tag': 'something'
     }
 }, {
     # Tags is not a list of strings
     "messageID": random_id(),
-    "update": {
-        '_key': random_id(),
-        '_tags': [1]
+    "update": base_object | {
+        'tag': [1]
     }
 }, {
     # Tags is not a list
@@ -243,24 +287,13 @@ def invalid_requests(my_id):
     "messageID": random_id(),
     "subscribe": [1234]
 }, {
-    # Get missing a field
+    # Get is not a string
     "messageID": random_id(),
-    "get": {
-        "_by": random_sha(),
-    }
+    "get": 12345
 }, {
+    # Get is ill-formed
     "messageID": random_id(),
-    "get": {
-        "_key": random_id()
-    }
-}, {
-    # Get includes an extra field
-    "messageID": random_id(),
-    "get": {
-        "hi": "asdf",
-        "_by": random_sha(),
-        "_key": random_id()
-    }
+    "get": "G" + base_object['id'][1:]
 }, {
     # Unsubscribe is not a list of strings
     "messageID": random_id(),

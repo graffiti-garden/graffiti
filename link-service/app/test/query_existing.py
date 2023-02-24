@@ -17,9 +17,9 @@ async def main():
     custom_tag4 = random_id()
     custom_tag3 =  random_id()
 
-    my_id, my_token = owner_id_and_token()
-    other_id, other_token = owner_id_and_token()
-    another_id, another_token = owner_id_and_token()
+    my_id, my_token = actor_id_and_token()
+    other_id, other_token = actor_id_and_token()
+    another_id, another_token = actor_id_and_token()
 
     async with websocket_connect(my_token) as ws:
         print("adding 10 objects")
@@ -28,7 +28,7 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'update': base | {
-                    '_tags': [custom_tag],
+                    'tag': [custom_tag],
                     'content': random_id(),
                 }
             })
@@ -46,7 +46,7 @@ async def main():
         for i in range(10):
             result = await recv_historical(ws)
             assert 'update' in result
-            assert result['update']['_tags'] == [custom_tag]
+            assert result['update']['tag'] == [custom_tag]
         print("...received")
 
         # Try subscribing again
@@ -80,7 +80,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                '_tags': [custom_tag2],
+                'tag': [custom_tag2],
                 'something': 'one'
             }
         })
@@ -90,7 +90,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                '_tags': [custom_tag4],
+                'tag': [custom_tag4],
                 'something': 'two'
             }
         })
@@ -100,7 +100,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                '_tags': [custom_tag4, custom_tag2],
+                'tag': [custom_tag4, custom_tag2],
                 'something': 'three'
             }
         })
@@ -130,8 +130,8 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'content': 'qwerty',
-                '_tags': [custom_tag3],
-                '_to': [other_id]
+                'tag': [custom_tag3],
+                'bto': [object_base(other_id)["actor"]]
             }
         })
         result = await recv_historical(ws)
@@ -169,6 +169,7 @@ async def main():
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
+        assert not await another_message(ws, recv=recv_historical)
         print("Snoop cannot see it")
 
 if __name__ == "__main__":

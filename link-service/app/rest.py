@@ -1,18 +1,22 @@
-from .schema import query_access
+from .schema import query_access, parse_object_URL
 
-async def update(db, object, owner_id):
-    # Make sure the owner is logged in
-    if not owner_id:
+
+async def update(db, object, actor):
+    # Make sure the actor is logged in
+    if not actor:
         raise Exception("you can't modify objects without logging in.")
 
     # Make sure the object is by the user
-    if object['_by'] != owner_id:
-        raise Exception("you can only create objects _by yourself.")
+    if object['actor'] != actor:
+        raise Exception("you can only create objects by yourself.")
+
+    # Make sure the object ID is consistent
+    if parse_object_URL(object["id"])[0] != actor:
+        raise Exception("object ID is inconsistent with actor.")
 
     # Insert the new object
     old_object = await db.find_one_and_replace({
-        "_key": object['_key'],
-        "_by": object['_by']
+        "id": object["id"],
     }, object, upsert=True)
 
     if old_object:
@@ -20,15 +24,18 @@ async def update(db, object, owner_id):
     else:
         return "inserted"
 
-async def remove(db, object_key, owner_id):
-    # Make sure the owner is logged in
-    if not owner_id:
+async def remove(db, object_id, actor):
+    # Make sure the actor is logged in
+    if not actor:
         raise Exception("you can't modify objects without logging in.")
+
+    # Make sure the object ID is consistent
+    if parse_object_URL(object_id)[0] != actor:
+        raise Exception("object ID is inconsistent with actor.")
 
     # Set the old tags as deleting
     old_object = await db.find_one_and_delete({
-        "_key": object_key,
-        "_by": owner_id,
+        "id": object_id,
     })
 
     if not old_object:
@@ -39,12 +46,11 @@ to modify it.""")
 
     return "removed"
 
-async def get(db, user_id, object_key, owner_id):
+async def get(db, object_id, actor):
     # Look to see if there is an object matching the description
     object = await db.find_one({
-        "_by": user_id,
-        "_key": object_key,
-    } | query_access(owner_id))
+        "id": object_id,
+    } | query_access(actor))
 
     if not object:
         raise Exception("""\
@@ -55,23 +61,23 @@ to get it.""")
     del object["_id"]
     return object
 
-async def tags(db, owner_id):
+async def tags(db, actor):
     async for doc in db.aggregate([
         { "$match": {
-            "_by": owner_id,
+            "actor": actor,
         }},
         { "$project": {
             "_id": 0,
-            "_tags": 1,
+            "tag": 1,
         }},
         { "$unwind": {
-            "path": "$_tags"
+            "path": "$tag"
         }},
         { "$group": {
             "_id": None,
-            "_tags": { "$addToSet": "$_tags" }
+            "tag": { "$addToSet": "$tag" }
         }}]):
 
-        return doc["_tags"]
+        return doc["tag"]
     else:
         return []

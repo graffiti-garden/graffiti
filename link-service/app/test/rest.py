@@ -5,10 +5,10 @@ from utils import *
 
 async def main():
 
-    my_id, my_token = owner_id_and_token()
+    my_actor_id, my_token = actor_id_and_token()
     async with websocket_connect(my_token) as ws:
         # Try adding an object
-        base  = object_base(my_id)
+        base  = object_base(my_actor_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
@@ -38,7 +38,7 @@ async def main():
         # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -47,7 +47,7 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv(ws)
         assert 'error' in result
@@ -67,14 +67,14 @@ async def main():
         # Try removing an object
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
         print("Removed the replacement")
 
         # Try creating another object
-        base = object_base(my_id)
+        base = object_base(my_actor_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
@@ -101,7 +101,7 @@ async def main():
         # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -110,14 +110,14 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv(ws)
         assert 'error' in result
         print("Could not re-remove object (as expected)")
 
         # Try creating another object
-        base = object_base(my_id)
+        base = object_base(my_actor_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
@@ -150,7 +150,7 @@ async def main():
         # Try removing the object
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -159,26 +159,27 @@ async def main():
         # Try removing it *again*
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv(ws)
         assert 'error' in result
         print("Could not re-remove object (as expected)")
 
-        base  = object_base(my_id)
+        base  = object_base(my_actor_id)
         tag = random_id()
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                'tag': tag
+                'tag': [tag]
             }
         })
         result = await recv(ws)
+        print(result)
         assert result['reply'] == 'inserted'
         print("Added another object")
 
     # Create a new user
-    my_id, my_token = owner_id_and_token()
+    my_actor_id, my_token = actor_id_and_token()
     async with websocket_connect(my_token) as ws:
         print("Created new user")
 
@@ -191,11 +192,11 @@ async def main():
         # Add 10 objects with the same tag
         print("Adding 10 objects with the same tag")
         for i in range(10):
-            base  = object_base(my_id)
+            base  = object_base(my_actor_id)
             await send(ws, {
                 'messageID': random_id(),
                 'update': base | {
-                    '_tags': ['hello']
+                    'tag': ['hello']
                 }
             })
             result = await recv(ws)
@@ -210,11 +211,11 @@ async def main():
         print("User has one tag")
 
         print("Adding an object the same, plus another tag")
-        base  = object_base(my_id)
+        base  = object_base(my_actor_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                '_tags': ['hello', 'goodbye']
+                'tag': ['hello', 'goodbye']
             }
         })
         result = await recv(ws)
@@ -231,7 +232,7 @@ async def main():
         print("Removing the additional object")
         await send(ws, {
             'messageID': random_id(),
-            'remove': base["_key"]
+            'remove': base["id"]
         })
         result = await recv(ws)
         assert result['reply'] == 'removed'
@@ -245,13 +246,10 @@ async def main():
 
 
         # Getting objects
-        base  = object_base(my_id)
+        base  = object_base(my_actor_id)
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': my_id,
-                '_key': base["_key"]
-            }
+            'get': base['id']
         })
         result = await recv(ws)
         assert 'error' in result
@@ -269,10 +267,7 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': my_id,
-                '_key': base["_key"]
-            }
+            'get': base['id']
         })
         result = await recv(ws)
         assert result["reply"]["content"] == 12345
@@ -290,21 +285,18 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': my_id,
-                '_key': base["_key"]
-            }
+            'get': base['id']
         })
         result = await recv(ws)
         assert result["reply"]["content"] == 67890
         print("Getting replaced content is correct")
 
-        base_private  = object_base(my_id)
+        base_private  = object_base(my_actor_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base_private | {
                 'something': 'asdf',
-                '_to': []
+                'bto': []
             }
         })
         result = await recv(ws)
@@ -313,25 +305,19 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': my_id,
-                '_key': base_private["_key"]
-            }
+            'get': base_private['id']
         })
         result = await recv(ws)
         assert result["reply"]["something"] == 'asdf'
         print("Getting private content is correct")
 
-    other_id, other_token = owner_id_and_token()
+    other_id, other_token = actor_id_and_token()
     async with websocket_connect(other_token) as ws:
         print("Logged in as other user")
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': my_id,
-                '_key': base["_key"]
-            }
+            'get': base['id']
         })
         result = await recv(ws)
         assert result["reply"]["content"] == 67890
@@ -339,10 +325,7 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': my_id,
-                '_key': base_private["_key"]
-            }
+            'get': base_private['id']
         })
         result = await recv(ws)
         assert 'error' in result
@@ -353,7 +336,7 @@ async def main():
             'messageID': random_id(),
             'update': base_other | {
                 'secret': 'message',
-                '_to': [my_id]
+                'bcc': [base['actor']]
             }
         })
         result = await recv(ws)
@@ -362,10 +345,7 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': other_id,
-                '_key': base_other["_key"]
-            }
+            'get': base_other['id']
         })
         result = await recv(ws)
         assert result["reply"]["secret"] == "message"
@@ -376,25 +356,19 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': other_id,
-                '_key': base_other["_key"]
-            }
+            'get': base_other['id']
         })
         result = await recv(ws)
         assert result["reply"]["secret"] == "message"
         print("Original user can see sent private message")
 
-    another_other_id, another_other_token = owner_id_and_token()
+    another_other_id, another_other_token = actor_id_and_token()
     async with websocket_connect(another_other_token) as ws:
         print("Logged in as another other user")
 
         await send(ws, {
             'messageID': random_id(),
-            'get': {
-                '_by': other_id,
-                '_key': base_other["_key"]
-            }
+            'get': base_other['id']
         })
         result = await recv(ws)
         assert 'error' in result

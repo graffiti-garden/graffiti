@@ -13,15 +13,18 @@ def random_id(n=20):
 def random_sha():
     return sha256(random_id().encode()).hexdigest()
 
-def object_base(owner_id, proof=None):
+def random_actor():
+    return f"graffitiactor://{random_sha()}"
+
+def object_base(actor_id):
     object_base = {
-        '_key': random_id(),
-        '_by': owner_id,
-        '_tags': ['something']
+        'actor': f"graffitiactor://{actor_id}",
+        'id': f"graffitiobject://{actor_id}:{random_id()}",
+        'tag': ['something']
     }
     return object_base
 
-def owner_id_and_token():
+def actor_id_and_token():
     secret = getenv('AUTH_SECRET')
     id_ = random_sha()
     token = jwt.encode({

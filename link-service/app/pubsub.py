@@ -70,8 +70,8 @@ class PubSub:
         tags_query = { "$elemMatch": { "$in": list(self.tag_to_sockets.keys()) }}
         async with self.db.watch(
                 [ { '$match' : { '$or': [
-                    { 'fullDocument._tags': tags_query },
-                    { 'fullDocumentBeforeChange._tags': tags_query }
+                    { 'fullDocument.tag': tags_query },
+                    { 'fullDocumentBeforeChange.tag': tags_query }
                 ]}}],
                 full_document='whenAvailable',
                 full_document_before_change='whenAvailable',
@@ -85,7 +85,7 @@ class PubSub:
                 tags_new = denied_sockets = []
                 if 'fullDocument' in change:
                     obj = change['fullDocument']
-                    tags_new = obj["_tags"]
+                    tags_new = obj["tag"]
                     del obj['_id']
                     denied_sockets = self.collect_tasks(obj, tasks, "update")
 
@@ -93,9 +93,9 @@ class PubSub:
 
                     obj = change['fullDocumentBeforeChange']
                     obj = {
-                        "_key": obj["_key"],
-                        "_by": obj["_by"],
-                        "_tags": obj["_tags"]
+                        "id": obj["id"],
+                        "actor": obj["actor"],
+                        "tag": obj["tag"]
                     }
 
                     # If users have permission to see the old
@@ -104,7 +104,7 @@ class PubSub:
                         self.task_with_permission(socket, obj, tasks, "remove")
 
                     # Now only consider old tags and don't consider denied sockets
-                    obj["_tags"] = list(set(obj["_tags"]) - set(tags_new))
+                    obj["tag"] = list(set(obj["tag"]) - set(tags_new))
                     self.collect_tasks(obj, tasks, "remove", done_sockets=denied_sockets)
 
                 # Send the changes
@@ -115,7 +115,7 @@ class PubSub:
         if not done_sockets: done_sockets = set()
         denied_sockets = set()
 
-        for tag in obj["_tags"]:
+        for tag in obj["tag"]:
             if tag not in self.tag_to_sockets: continue
 
             # Ignore sockets that have already
@@ -128,9 +128,10 @@ class PubSub:
         return denied_sockets
 
     def task_with_permission(self, socket, obj, tasks, msg):
-        has_permission = '_to' not in obj or \
-            socket.owner_id == obj['_by'] or \
-            socket.owner_id in obj['_to']
+        has_permission = socket.actor == obj['actor'] or \
+            (('bto' not in obj) and ('bcc' not in obj)) or \
+            ('bto' in obj and socket.actor in obj['bto']) or \
+            ('bcc' in obj and socket.actor in obj['bcc'])
 
         if has_permission:
             tasks.append(socket.send_json({msg: obj, "historical": False}))
@@ -138,8 +139,8 @@ class PubSub:
 
     async def process_existing(self, tags, socket):
         
-        query = query_access(socket.owner_id) | \
-            { "_tags": { "$elemMatch": { "$in": tags } } }
+        query = query_access(socket.actor) | \
+            { "tag": { "$elemMatch": { "$in": tags } } }
 
         async for obj in self.db.find(query):
             del obj["_id"]

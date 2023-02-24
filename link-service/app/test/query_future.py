@@ -17,7 +17,7 @@ async def main():
             result = await recv(ws)
         return result
 
-    my_id, my_token = owner_id_and_token()
+    my_id, my_token = actor_id_and_token()
     async with websocket_connect(my_token) as ws:
 
         # Subscribe to the tag
@@ -35,7 +35,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'something': 'else',
-                '_tags': [custom_tag]
+                'tag': [custom_tag]
             }
         })
         result = await recv_future(ws)
@@ -48,7 +48,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'how': 'r u?',
-                '_tags': [custom_tag]
+                'tag': [custom_tag]
             }
         })
         result = await recv_future(ws)
@@ -61,7 +61,7 @@ async def main():
             'messageID': random_id(),
             'update': base2 | {
                 'another': 'thing',
-                '_tags': [random_id()]
+                'tag': [random_id()]
             }
         })
         timedout = False
@@ -73,7 +73,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'another': 'thing',
-                '_tags': [random_id()]
+                'tag': [random_id()]
             }
         })
         result = await recv_future(ws)
@@ -86,7 +86,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'replacey': 'place',
-                '_tags': [random_id(), custom_tag, random_id()]
+                'tag': [random_id(), custom_tag, random_id()]
             }
         })
         result = await recv_future(ws)
@@ -97,7 +97,7 @@ async def main():
         print("Removing the item...")
         await send(ws, {
             'messageID': random_id(),
-            'remove': base['_key']
+            'remove': base['id']
         })
         result = await recv_future(ws)
         assert 'remove' in result
@@ -116,7 +116,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'im': 'back',
-                '_tags': [random_id(), custom_tag, random_id()]
+                'tag': [random_id(), custom_tag, random_id()]
             }
         })
         timedout = False
@@ -135,7 +135,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'two': 'twoey',
-                '_tags': [custom_tag2]
+                'tag': [custom_tag2]
             }
         })
         result = await recv_future(ws)
@@ -148,7 +148,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'three': 'threey',
-                '_tags': [custom_tag3]
+                'tag': [custom_tag3]
             }
         })
         result = await recv_future(ws)
@@ -162,7 +162,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'both': 'asdf',
-                '_tags': [random, custom_tag2, custom_tag3]
+                'tag': [random, custom_tag2, custom_tag3]
             }
         })
         result = await recv_future(ws)
@@ -176,16 +176,16 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'only': 'one',
-                '_tags': [custom_tag3]
+                'tag': [custom_tag3]
             }
         })
         result = await recv_future(ws)
         assert result['update']['only'] == 'one'
-        assert result['update']['_tags'] == [custom_tag3]
+        assert result['update']['tag'] == [custom_tag3]
         print("It is seen as an update")
         result = await recv_future(ws)
-        assert result['remove']['_key'] == base['_key']
-        tags = result['remove']['_tags']
+        assert result['remove']['id'] == base['id']
+        tags = result['remove']['tag']
         assert len(tags) == 2
         assert random in tags
         assert custom_tag2 in tags
@@ -196,7 +196,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'nothing': True,
-                '_tags': [random_id()]
+                'tag': [random_id()]
             }
         })
         result = await recv_future(ws)
@@ -229,9 +229,9 @@ async def main():
         tasks = []
         users = []
         for i in range(100):
-            id, token = owner_id_and_token()
+            id, token = actor_id_and_token()
             tasks.append(asyncio.create_task(listen(id, token)))
-            users.append(id)
+            users.append(object_base(id)["actor"])
 
         print("Waiting for them to come online")
         await asyncio.sleep(1)
@@ -245,8 +245,8 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'to': 'me',
-                '_tags': [private_tag2],
-                '_to': users
+                'tag': [private_tag2],
+                'bcc': users
             }
         })
         result = await recv_future(ws)
@@ -258,8 +258,8 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'private': 'message',
-                '_tags': [private_tag2],
-                '_to': []
+                'tag': [private_tag2],
+                'bto': []
             }
         })
         result = await recv_future(ws)
@@ -271,7 +271,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'public': 'object',
-                '_tags': [private_tag1],
+                'tag': [private_tag1],
             }
         })
         result = await recv_future(ws)

@@ -5,7 +5,7 @@ This is a web server that can be used as the communication and storage backend f
 Moreover, these applications can all function on top of the same server instance at the same time and to the degree that they have overlapping functionality, they will naturally interoperate.
 We hope that this serves both as a powerful prototyping tool and as a proof of concept that an ecosystem of social applications can exist that isn't subject to [collective vendor lock-in](https://en.wikipedia.org/wiki/Vendor_lock-in#Collective_vendor_lock-in).
 
-A reference client library built as an extension of the Vue.js web framework along with example applications are available [here](https://github.com/graffiti-garden/graffiti-x-vue).
+To interact with the server, you can use the [reference client library](https://github.com/graffiti-garden/graffiti-js) which provides in-browser interactivity via both vanilla Javascript and the Vue.js web framework.
 
 ## Local Usage
 
@@ -14,9 +14,6 @@ To launch the server locally, run:
     sudo docker compose up --build
 
 The application will be up at [http://localhost:5001](http://localhost:5001).
-If you are using the [Vue.js Graffiti plugin](https://github.com/graffiti-garden/graffiti-x-vue), you might point to the local server as follows:
-
-    Graffiti("http://localhost:5001").then(g=>createApp().use(g).mount("#app"))
     
 When you are running the server locally, login links will be printed to your terminal rather than sent to your email.
 You can quickly test the login functionality by going to [http://auth.localhost:5001?client_id=&redirect_uri=https://example.com](https://auth.localhost:5001?client_id=&redirect_uri=https://example.com)
@@ -48,14 +45,12 @@ exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The AP
 - `get`: fetches a particular object.
 - `list`: lists all tags the requester has tagged objects with.
 
-The JSON objects are schemaless aside from 4 regulated fields:
+The JSON objects are schemaless aside from 5 regulated fields, inherited from the [WC3 Activity Vocabulary](https://www.w3.org/TR/activitystreams-vocabulary/):
 
-- `_key`: is a random identifier that must be added to each object. A user can't store more than one object with the same `_key`; trying to create an object with the same `_key` as an existing object will simply replace the existing object. Different users *can* store objects with the same `_key`, so there is no worry of someone else replacing your object.
-- `_by`: this field must be equal to the operating user's identifier returned by the `auth` module — users can only create objects `_by` themselves.
-- `_tags`: this must be a list of strings with at least one entry. Objects can only be seen by subscribing to one of its tags.
-- `_to`: this field is optional, but if included it must be equal to a list of unique user identifiers. The object will only be seen by it's creator and the listed users. If the `_to` field is not included, anyone can see the object. If it is an empty list, only the creator can see the object.
-
-Objects can't include any other top-level fields that start with `_`.
+- [`actor`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-actor): this field *must* be a URL containing the user's unique identifier returned by the `auth` module of the form `graffitiactor://ACTOR_ID`.
+- [`id`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-id): this field *must* be URL that that contains both the actor's ID and a unique key of the form `graffitiobject://ACTOR_ID:UNIQUE_KEY`. A user can't store more than one object with the same key; trying to create an object with the same key as an existing object will simply replace the existing object. Different users *can* store objects with the same key, so there is no worry of someone else replacing your object.
+- [`tag`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-tag): this *must* be a list of strings with at least one entry. Objects can only be seen by subscribing to one of its tags.
+- [`bto`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-bto), [`bcc`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-bcc): these fields are optional, but if included they *must* be equal to a list of unique actor URLs. The object will only be seen by it's creator and the listed users. If both fields are not included, anyone can see the object. If either or both of the fields exist and both are empty, only the creator can see the object. Both fields function exactly the same, their difference is simply semantic with `bto` referring to the primary private audience and `bcc` referring to the secondary public audience.
 
 ## Deployment
 
