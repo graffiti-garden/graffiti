@@ -2,35 +2,25 @@ export default {
 
   props: ['messageID'],
 
-  methods: {
-    likeObjects(objects, messageID=this.messageID) {
-      return objects.filter(o=>
-                      'like' in o &&
-                      'timestamp' in o &&
-                      o.like == messageID &&
-                      typeof o.timestamp == 'number')
-
-    },
-
-    toggleLike(objects) {
-      const myLikes = this.likeObjects(objects).mine
-      if (myLikes.length) {
-        myLikes.removeMine()
-      } else {
-        this.$graffitiUpdate({
-          like: this.messageID,
-          timestamp: Date.now(),
-          _tags: [this.messageID]
-        })
-      }
-    }
-  },
-
   template: `
-    <graffiti-objects :tags="[messageID]" v-slot="{objects}">
-      <button @click="toggleLike(objects)" :class="likeObjects(objects).mine.length?'button-primary':''">
-        👍 {{ likeObjects(objects).length }}
-      </button>
-    </graffiti-objects>`
-}
+    <GraffitiObjects v-slot="{objects}"
+      :tags="[messageID]"
+      :properties="{type: {enum: ['Like']}, object: {enum: [messageID]}}"
+      :required="['object']">
 
+      <button v-if="objects.mine.length" class="button-primary"
+        @click="objects.removeMine()">
+        👍
+      </button>
+      <button v-else
+        @click="$graffitiUpdate({
+          type: 'Like',
+          object: messageID,
+          tag: [this.messageID]
+        })">
+        👍
+      </button>
+
+      {{ objects.actors.length }}
+    </GraffitiObjects>`
+}

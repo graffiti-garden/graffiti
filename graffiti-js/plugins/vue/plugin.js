@@ -4,11 +4,11 @@ import Graffiti from '../../graffiti.js'
 export default {
   install(app, options) {
 
-    const graffitiURL = options && 'url' in options?
-      options.url : 'https://graffiti.garden'
-
     // Initialize graffiti with reactive entries
-    const graffiti = new Graffiti(graffitiURL, ()=>reactive({}))
+    const graffiti = new Graffiti({
+      objectConstructor: ()=>reactive({}),
+      ...options
+    })
 
     // Create a reactive variable that
     // tracks connection state
@@ -24,16 +24,17 @@ export default {
 
     // Latch on to the graffiti ID
     // when the connection state first becomes true
-    let myID = null
-    Object.defineProperty(app.config.globalProperties, "$graffitiMyID", {
+    let myActor = null
+    Object.defineProperty(app.config.globalProperties, "$graffitiMyActor", {
       get: ()=> {
-        if (connectionState.value) myID = graffiti.myID
-        return myID
+        if (connectionState.value) myActor = graffiti.myActor
+        return myActor
       }
     })
 
     // Add static functions
-    for (const key of ['toggleLogIn', 'update', 'myTags', 'objectByKey']) {
+    for (const key of [
+      'toggleLogIn', 'update', 'myTags', 'objectByID']) {
       const vueKey = '$graffiti' + key.charAt(0).toUpperCase() + key.slice(1)
       app.config.globalProperties[vueKey] = graffiti[key].bind(graffiti)
     }
@@ -43,15 +44,38 @@ export default {
     // a reactive array of the results
     app.component('GraffitiObjects', {
 
-      props: ['tags'],
+      props: {
+        tags: {
+          type: Array,
+          required: true
+        },
+        mine: {
+          type: Boolean,
+          default: null
+        },
+        properties: {
+          type: Object,
+          default: {}
+        },
+        required: {
+          type: Array,
+          default: []
+        },
+        filter: {
+          type: Function
+        },
+        sortBy: {
+          type: String
+        }
+      },
 
       watch: {
         tags: {
           async handler(newTags, oldTags=[]) {
             // Subscribe to the new tags
-            await graffiti.subscribe(...newTags)
+            await graffiti.subscribe(newTags)
             // Unsubscribe to the existing tags
-            await graffiti.unsubscribe(...oldTags)
+            await graffiti.unsubscribe(oldTags)
           },
           immediate: true,
           deep: true
@@ -65,7 +89,14 @@ export default {
 
       computed: {
         objects() {
-          return graffiti.objects(...this.tags)
+          let os = graffiti.objects(this.tags, {
+            properties: this.properties,
+            required: this.required
+          })
+          os = this.mine!=null?(this.mine?os.mine:os.notMine):os
+          os = this.filter?os.filter(this.filter):os
+          os = this.sortBy?os.sortBy(this.sortBy):os
+          return os
         }
       },
 

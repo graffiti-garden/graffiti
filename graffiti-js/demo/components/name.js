@@ -1,34 +1,23 @@
 export const Name = {
 
-  props: ["of"],
-
-  methods: {
-    name(objects) {
-      const nameObjects = objects
-                 .filter(o=> 
-                   'name' in o &&
-                   'of' in o &&
-                   'timestamp' in o &&
-                   typeof o.name == 'string' &&
-                   o.of == this.of &&
-                   o._by == this.of &&
-                   typeof o.timestamp == 'number')
-                 .sortBy('-timestamp')
-
-      return nameObjects.length?
-        nameObjects[0].name : 'anonymous'
-    }
-  },
+  props: ['of'],
 
   template: `
-    <graffiti-objects :tags="[of]" v-slot="{objects}">
-      {{ name(objects) }}
-    </graffiti-objects>`
+    <GraffitiObjects v-slot="{objects}"
+      :tags="[of]"
+      :properties="{
+        type: {enum: ['Profile'] },
+        actor: {enum: [of] },
+        describes: {enum: [of] }
+      }"
+      :required="['describes', 'name']"
+      sortBy="-updated">
+
+      {{ objects.length? objects[0].name : 'Anonymous' }}
+    </GraffitiObjects>`
 }
 
 export const SetMyName = {
-
-  props: ["tags"],
 
   data: ()=> ({
     name: ''
@@ -37,10 +26,10 @@ export const SetMyName = {
   methods: {
     setMyName() {
       this.$graffitiUpdate({
+        type: 'Profile',
         name: this.name,
-        timestamp: Date.now(),
-        of: this.$graffitiMyID,
-        _tags: this.tags
+        describes: this.$graffitiMyActor,
+        tag: [this.$graffitiMyActor]
       })
       this.name = ''
     }

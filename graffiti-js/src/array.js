@@ -5,20 +5,27 @@ export default function(graffiti) {
 
   return class GraffitiArray extends Array {
 
+    by(ids) {
+      if (typeof ids == 'string') {
+        ids = [ids]
+      }
+      return this.filter(o=> ids.includes(o.actor))
+    }
+
     get mine() {
-      return this.filter(o=> o._by==graffiti.myID)
+      return this.filter(o=> o.actor==graffiti.myActor)
     }
 
     get notMine() {
-      return this.filter(o=> o._by!=graffiti.myID)
+      return this.filter(o=> o.actor!=graffiti.myActor)
     }
 
-    get authors() {
-      return [...new Set(this.map(o=> o._by))]
+    get actors() {
+      return [...new Set(this.map(o=> o.actor))]
     }
 
     removeMine() {
-      this.mine.map(o=> delete o._key)
+      this.mine.map(o=> delete o.id)
     }
 
     #getProperty(obj, propertyPath) {

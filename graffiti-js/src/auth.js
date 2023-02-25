@@ -25,12 +25,12 @@ export default {
 
     // Check to see if we are already logged in
     let token = window.localStorage.getItem('graffitiToken')
-    let myID  = window.localStorage.getItem('graffitiID')
+    let myActor  = window.localStorage.getItem('graffitiActor')
 
-    if (!token || !myID) {
+    if (!token || !myActor) {
       // Remove them both in case one exists
       // and the other does not
-      token = myID = null
+      token = myActor = null
 
       // Check to see if we are redirecting back
       const url = new URL(window.location)
@@ -85,26 +85,26 @@ export default {
         // Parse out the token
         const data = await response.json()
         token = data.access_token
-        myID = data.owner_id
+        myActor = data.actor
 
         // And make sure that the token is valid
-        if (!token || !myID) {
+        if (!token || !myActor) {
           throw new Error(`The authorization token could not be parsed from the response.\n\n${data}`)
         }
 
-        // Store the token and ID
+        // Store the token and actor URL
         window.localStorage.setItem('graffitiToken', token)
-        window.localStorage.setItem('graffitiID', myID)
+        window.localStorage.setItem('graffitiActor', myActor)
       }
     }
 
-    return { myID, token }
+    return { myActor, token }
 
   },
 
   logOut() {
     window.localStorage.removeItem('graffitiToken')
-    window.localStorage.removeItem('graffitiID')
+    window.localStorage.removeItem('graffitiActor')
     window.location.reload()
   },
 

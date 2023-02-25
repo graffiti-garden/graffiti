@@ -9,19 +9,13 @@ export default {
   }),
 
   methods: {
-    messageObjects: Chat.methods.messageObjects,
-    chatObjects(objects) {
-      return this.messageObjects(objects).filter(o=>
-        '_to' in o && o._to.length == 1)
-    },
-
     sendMessage() {
-      if (!this.message) return
+      if (!this.message || !this.recipient) return
       this.$graffitiUpdate({
-        message: this.message,
-        timestamp: Date.now(),
-        _to: [this.recipient],
-        _tags: [this.$graffitiMyID, this.recipient]
+        type: 'Note',
+        content: this.message,
+        bto: [this.recipient],
+        tag: [this.$graffitiMyActor, this.recipient]
       })
       this.message = ''
     }
@@ -29,38 +23,44 @@ export default {
 
   template: `
     Send private message to:
-    <graffiti-objects :tags="['demo']" v-slot="{objects}">
+    <GraffitiObjects v-slot="{objects}"
+      :tags="['demo']"
+      :mine="false">
+
       <select v-model="recipient">
-        <option v-for="id in objects.notMine.authors" :value="id">
-          <Name :of="id">
+        <option v-for="actor in objects.actors" :value="actor">
+          <Name :of="actor"/>
         </option>
       </select>
-    </graffiti-objects>
+    </GraffitiObjects>
 
     <form @submit.prevent="sendMessage">
       <input v-model="message">
       <input type="submit" value="Submit"/>
     </form>
 
-    <graffiti-objects :tags="[$graffitiMyID]" v-slot="{objects}">
+    <GraffitiObjects v-slot="{objects}"
+      :tags="[$graffitiMyActor]"
+      :properties="{type: {enum: ['Note']}}"
+      :required="['content','bto']">
 
       <h3>My Outbox</h3>
 
-      <ul v-for="object in chatObjects(objects).mine">
+      <ul v-for="object in objects.mine">
         <li>
-          To <em><Name :of="object._to[0]"/></em>:
-          {{ object.message }}
+          To <em><Name :of="object.bto[0]"/></em>:
+          {{ object.content }}
         </li>
       </ul>
 
       <h3>My Inbox</h3>
 
-      <ul v-for="object in chatObjects(objects).notMine">
+      <ul v-for="object in objects.notMine">
         <li>
-          From <em><Name :of="object._by"/></em>:
-          {{ object.message }}
+          From <em><Name :of="object.actor"/></em>:
+          {{ object.content }}
         </li>
       </ul>
 
-    </graffiti-objects>`
+    </GraffitiObjects>`
 }

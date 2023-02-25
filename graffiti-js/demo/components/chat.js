@@ -11,21 +11,13 @@ export default {
   }),
 
   methods: {
-    messageObjects(objects) {
-      return objects.filter(o=> 
-                      'message' in o &&
-                      'timestamp' in o &&
-                      typeof o.message == 'string' &&
-                      typeof o.timestamp == 'number')
-                    .sortBy('timestamp')
-    },
 
     sendMessage() {
       if (!this.message) return
       this.$graffitiUpdate({
-        message: this.message,
-        timestamp: Date.now(),
-        _tags: [this.channel]
+        type: 'Note',
+        content: this.message,
+        tag: [this.channel]
       })
       this.message = ''
     }
@@ -36,30 +28,34 @@ export default {
       Chat Channel: <input v-model="channel"/>
     </p>
 
-    <graffiti-objects :tags="[channel]" v-slot="{objects}">
-      <ul v-for="object in messageObjects(objects)">
+    <GraffitiObjects v-slot="{objects}"
+      :tags="[channel]"
+      :properties="{type: { enum: ['Note'] }}"
+      :required="['content']"
+      sortBy="published">
+
+      <ul v-for="object in objects">
         <li>
-          <em><Name :of="object._by"/></em>:
-          {{ object.message }}
+          <em><Name :of="object.actor"/></em>:
+          {{ object.content }}
 
-          <LikeButton :messageID="object._id" />
+          <LikeButton :messageID="object.id" />
 
-          <template v-if="object._by==$graffitiMyID">
-            <button @click="object.message+='!!'">
+          <template v-if="object.actor==$graffitiMyActor">
+            <button @click="object.content+='!!'">
               ‼️
             </button>
 
-            <button @click="delete object._key">
+            <button @click="delete object.id">
               ❌
             </button>
           </template>
         </li>
       </ul>
-    </graffiti-objects>
+    </GraffitiObjects>
 
     <form @submit.prevent="sendMessage">
       <input v-model="message">
       <input type="submit" value="Submit"/>
     </form>`
 }
-

@@ -1,29 +1,38 @@
+import Ajv from "https://cdn.jsdelivr.net/npm/ajv@8.12.0/+esm"
 import Auth from './src/auth.js'
 import GraffitiArray from './src/array.js'
+import { globalSchema, processLocalSchema, processUpdate } from './src/schema.js'
 
 export default class {
 
-  // There needs to be a new object map for each tag
-  constructor(
-    graffitiURL="https://graffiti.garden",
-    objectConstructor=()=>({})) {
+  constructor(options={}) {
+    options = {
+      url: "https://graffiti.garden",
+      objectConstructor: ()=>({}),
+      globalSchema, processLocalSchema, processUpdate,
+      ...options
+    }
 
-    this.graffitiURL = graffitiURL
+    this.url = options.url
     this.open = false
     this.eventTarget = new EventTarget()
-    this.tagMap = objectConstructor() // tag->{count, Set(uuid)}
-    this.objectMap = objectConstructor() // uuid->object
+    this.tagMap = options.objectConstructor() // tag->{count, Set(id)}
+    this.objectMap = options.objectConstructor() // uuid->object
     this.GraffitiArray = GraffitiArray(this)
+    this.ajv = new Ajv()
+    this.globalSchemaValidator = this.ajv.compile(globalSchema)
+    this.processLocalSchema = processLocalSchema
+    this.processUpdate = processUpdate
 
     this.#initialize()
   }
 
   async #initialize() {
     // Perform authorization
-    this.authParams = await Auth.connect(this.graffitiURL)
+    this.authParams = await Auth.connect(this.url)
 
     // Rewrite the URL
-    this.wsURL = new URL(this.graffitiURL)
+    this.wsURL = new URL(this.url)
     this.wsURL.host = "app." + this.wsURL.host
     if (this.wsURL.protocol == 'https:') {
       this.wsURL.protocol = 'wss:'
@@ -57,9 +66,9 @@ export default class {
   }
 
   // authorization functions
-  get myID() { return this.authParams.myID }
+  get myActor() { return this.authParams.myActor }
   toggleLogIn() {
-    this.myID? Auth.logOut() : Auth.logIn(this.graffitiURL)
+    this.myActor? Auth.logOut() : Auth.logIn(this.url)
   }
 
   async #onClose() {
@@ -125,40 +134,33 @@ export default class {
   }
 
   #updateCallback(object) {
-    const uuid = this.#objectUUID(object)
-
-    // Add the UUID to the tag map
+    // Add the ID to the tag map
     let subscribed = false
-    for (const tag of object._tags) {
+    for (const tag of object.tag) {
       if (!(tag in this.tagMap)) continue
-      this.tagMap[tag].uuids.add(uuid)
+      this.tagMap[tag].ids.add(object.id)
       subscribed = true
     }
 
     if (!subscribed) return
 
-    // Define object specific properties
-    if (!('_id' in object)) {
-      // Assign the object UUID
-      Object.defineProperty(object, '_id', { value: uuid })
-
-      // Add proxy functions so object modifications
-      // sync with the server
+    // Add proxy functions so object modifications
+    // sync with the server
+    if (!('__graffitiProxy' in object)) {
+      Object.defineProperty(object, '__graffitiProxy', { value: true })
       object = new Proxy(object, this.#objectHandler(object, true))
     }
 
-    this.objectMap[uuid] = object
+    this.objectMap[object.id] = object
   }
 
   #removeCallback(object) {
-    const uuid = this.#objectUUID(object)
-
-    // Remove the UUID from all relevant tag maps
+    // Remove the ID from all relevant tag maps
     let supported = false
     for (const tag in this.tagMap) {
-      if (this.tagMap[tag].uuids.has(uuid)) {
-        if (object._tags.includes(tag)) {
-          this.tagMap[tag].uuids.delete(uuid)
+      if (this.tagMap[tag].ids.has(object.id)) {
+        if (object.tag.includes(tag)) {
+          this.tagMap[tag].ids.delete(object.id)
         } else {
           supported = true
         }
@@ -166,14 +168,23 @@ export default class {
     }
 
     // If all tags have been removed, delete entirely
-    if (!supported && uuid in this.objectMap) {
-      delete this.objectMap[uuid]
+    if (!supported && object.id in this.objectMap) {
+      delete this.objectMap[object.id]
     }
   }
 
   async update(object) {
-    object._by = this.myID
-    if (!object._key) object._key = crypto.randomUUID()
+    object.actor = this.myActor
+    if (!object.id) object.id =
+      `graffitiobject://${this.myActor.substring(16)}:${crypto.randomUUID()}`
+
+    // Pre-process
+    this.processUpdate(object)
+
+    // Make sure it adheres to the spec
+    if (!this.globalSchemaValidator(object)) {
+      throw this.globalSchemaValidator.errors
+    }
 
     // Immediately replace the object
     this.#updateCallback(object)
@@ -225,10 +236,10 @@ export default class {
 
   #deleteObjectProperty(object, root, target, prop) {
     const originalObject = Object.assign({}, object)
-    if (root && ['_key', '_by', '_tags'].includes(prop)) {
+    if (root && ['id', 'actor', 'tag'].includes(prop)) {
       // This is a deletion of the whole object
       this.#removeCallback(object)
-      this.#request({ remove: object._key }).catch(e=> {
+      this.#request({ remove: object.id }).catch(e=> {
         this.#updateCallback(originalObject)
         throw e
       })
@@ -248,14 +259,11 @@ export default class {
     return await this.#request({ ls: null })
   }
 
-  async objectByKey(userID, objectKey) {
-    return await this.#request({ get: {
-      _by: userID,
-      _key: objectKey
-    }})
+  async objectByID(objectID) {
+    return await this.#request({get: objectID})
   }
 
-  objects(...tags) {
+  objects(tags, schema={}) {
     tags = tags.filter(tag=> tag!=null)
     for (const tag of tags) {
       if (!(tag in this.tagMap)) {
@@ -263,16 +271,26 @@ export default class {
       }
     }
 
-    // Merge by UUIDs from all tags and
+    // Compile the new schema
+    schema.type = "object"
+    schema.required = 'required' in schema?schema.required:[]
+    schema.properties = 'properties' in schema?schema.properties:{}
+    this.processLocalSchema(schema)
+    const localSchemaValidator = this.ajv.compile(schema)
+
+    // Merge by IDs from all tags and
     // convert to relevant objects
-    const uuids = new Set(tags.map(tag=>[...this.tagMap[tag].uuids]).flat())
-    const objects = [...uuids].map(uuid=> this.objectMap[uuid])
+    const ids = new Set(tags.map(tag=>[...this.tagMap[tag].ids]).flat())
+    const objects = [...ids]
+      .map(id=> this.objectMap[id])
+      .filter(o=> this.globalSchemaValidator(o) &&
+                        localSchemaValidator(o))
 
     // Return an array wrapped with graffiti functions
     return new this.GraffitiArray(...objects)
   }
 
-  async subscribe(...tags) {
+  async subscribe(tags) {
     tags = tags.filter(tag=> tag!=null)
     // Look at what is already subscribed to
     const subscribingTags = []
@@ -283,7 +301,7 @@ export default class {
       } else {
         // Create a new slot
         this.tagMap[tag] = {
-          uuids: new Set(),
+          ids: new Set(),
           count: 1
         }
         subscribingTags.push(tag)
@@ -299,7 +317,7 @@ export default class {
       } catch {}
   }
 
-  async unsubscribe(...tags) {
+  async unsubscribe(tags) {
     tags = tags.filter(tag=> tag!=null)
     // Decrease the count of each tag,
     // removing and marking if necessary
@@ -327,25 +345,12 @@ export default class {
 
     // Clear data
     for (let tag in this.tagMap) {
-      this.tagMap[tag].uuids = new Set()
+      this.tagMap[tag].ids = new Set()
     }
-    for (let uuid in this.objectMap) delete this.objectMap[uuid]
+    for (let id in this.objectMap) delete this.objectMap[id]
 
     // Resubscribe
     const tags = Object.keys(this.tagMap)
     if (tags.length) await this.#request({ subscribe: tags })
-  }
-
-  // Utility function to get a universally unique string
-  // that represents a particular object
-  #objectUUID(object) {
-    if (!object._by || !object._key) {
-      throw {
-        type: 'error',
-        content: 'the object you are trying to identify does not have an owner or key',
-        object
-      }
-    }
-    return object._by + object._key
   }
 }
