@@ -53,6 +53,10 @@ export default {
           type: Boolean,
           default: null
         },
+        schema: {
+          type: Object,
+          default: {}
+        },
         properties: {
           type: Object,
           default: {}
@@ -89,10 +93,10 @@ export default {
 
       computed: {
         objects() {
-          let os = graffiti.objects(this.tags, {
-            properties: this.properties,
-            required: this.required
-          })
+          const schema = Object.assign({}, this.schema)
+          if (!('properties' in schema)) schema.properties = this.properties
+          if (!('required'   in schema)) schema.required   = this.required
+          let os = graffiti.objects(this.tags, schema)
           os = this.mine!=null?(this.mine?os.mine:os.notMine):os
           os = this.filter?os.filter(this.filter):os
           os = this.sortBy?os.sortBy(this.sortBy):os
