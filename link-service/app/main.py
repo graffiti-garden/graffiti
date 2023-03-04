@@ -36,11 +36,11 @@ async def startup():
     # Create indexes if they don't already exist
     await app.db.create_index('id', unique=True)
     await app.db.create_index('actor')
-    await app.db.create_index('tag')
+    await app.db.create_index('context')
     await app.db.create_index('bto')
     await app.db.create_index('bcc')
 
-    # Keep track of the total set of tags that people are subscribed to
+    # Keep track of the total set of contexts that people are subscribed to
     # When that set changes, update the pipeline
     app.pubsub = PubSub(app.db)
 
@@ -104,7 +104,7 @@ async def reply(socket, msg):
             reply = await rest.get(app.db, msg['get'], socket.actor)
 
         elif 'ls' in msg:
-            reply = await rest.tags(app.db, socket.actor)
+            reply = await rest.contexts(app.db, socket.actor)
 
         output["reply"] = reply
 

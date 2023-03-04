@@ -8,7 +8,7 @@ class PubSub:
     def __init__(self, db):
         self.db = db
 
-        self.tag_to_sockets = {} # tag -> set(socket)
+        self.context_to_sockets = {} # context -> set(socket)
 
         self.resume_token = None
         self.restart_watcher()
@@ -20,46 +20,46 @@ class PubSub:
 
     @asynccontextmanager
     async def register(self, socket):
-        socket.tags = set()
+        socket.contexts = set()
 
         try:
             yield
         finally:
             # Remove all references to the socket
-            for tag in socket.tags:
-                self.tag_to_sockets[tag].remove(socket)
-                if not self.tag_to_sockets[tag]:
-                    del self.tag_to_sockets[tag]
+            for context in socket.contexts:
+                self.context_to_sockets[context].remove(socket)
+                if not self.context_to_sockets[context]:
+                    del self.context_to_sockets[context]
                     self.restart_watcher()
 
-    async def subscribe(self, tags, socket):
-        for tag in tags:
-            if tag in socket.tags:
-                raise Exception(f"you are already subscribed to the tag {tag}")
+    async def subscribe(self, contexts, socket):
+        for context in contexts:
+            if context in socket.contexts:
+                raise Exception(f"you are already subscribed to the context {context}")
 
-        for tag in tags:
-            socket.tags.add(tag)
-            if tag not in self.tag_to_sockets:
-                self.tag_to_sockets[tag] = { socket }
+        for context in contexts:
+            socket.contexts.add(context)
+            if context not in self.context_to_sockets:
+                self.context_to_sockets[context] = { socket }
                 self.restart_watcher()
             else:
-                self.tag_to_sockets[tag].add(socket)
+                self.context_to_sockets[context].add(socket)
 
         # In the background, begin processing existing results
-        asyncio.create_task(self.process_existing(tags, socket))
+        asyncio.create_task(self.process_existing(contexts, socket))
 
         return 'subscribed'
 
-    async def unsubscribe(self, tags, socket):
-        for tag in tags:
-            if tag not in socket.tags:
-                raise Exception(f"you are not subscribed to the tag {tag}")
+    async def unsubscribe(self, contexts, socket):
+        for context in contexts:
+            if context not in socket.contexts:
+                raise Exception(f"you are not subscribed to the context {context}")
 
-        for tag in tags:
-            socket.tags.remove(tag)
-            self.tag_to_sockets[tag].remove(socket)
-            if not self.tag_to_sockets[tag]:
-                del self.tag_to_sockets[tag]
+        for context in contexts:
+            socket.contexts.remove(context)
+            self.context_to_sockets[context].remove(socket)
+            if not self.context_to_sockets[context]:
+                del self.context_to_sockets[context]
                 self.restart_watcher()
 
         return 'unsubscribed'
@@ -67,11 +67,11 @@ class PubSub:
     # Initialize database interfaces
     async def watch(self):
 
-        tags_query = { "$elemMatch": { "$in": list(self.tag_to_sockets.keys()) }}
+        contexts_query = { "$elemMatch": { "$in": list(self.context_to_sockets.keys()) }}
         async with self.db.watch(
                 [ { '$match' : { '$or': [
-                    { 'fullDocument.tag': tags_query },
-                    { 'fullDocumentBeforeChange.tag': tags_query }
+                    { 'fullDocument.context': contexts_query },
+                    { 'fullDocumentBeforeChange.context': contexts_query }
                 ]}}],
                 full_document='whenAvailable',
                 full_document_before_change='whenAvailable',
@@ -82,10 +82,10 @@ class PubSub:
 
                 # Create a set of tasks for sending
                 # messages to relevant sockets
-                tags_new = denied_sockets = []
+                contexts_new = denied_sockets = []
                 if 'fullDocument' in change:
                     obj = change['fullDocument']
-                    tags_new = obj["tag"]
+                    contexts_new = obj["context"]
                     del obj['_id']
                     denied_sockets = self.collect_tasks(obj, tasks, "update")
 
@@ -95,7 +95,7 @@ class PubSub:
                     obj = {
                         "id": obj["id"],
                         "actor": obj["actor"],
-                        "tag": obj["tag"]
+                        "context": obj["context"]
                     }
 
                     # If users have permission to see the old
@@ -103,8 +103,8 @@ class PubSub:
                     for socket in denied_sockets:
                         self.task_with_permission(socket, obj, tasks, "remove")
 
-                    # Now only consider old tags and don't consider denied sockets
-                    obj["tag"] = list(set(obj["tag"]) - set(tags_new))
+                    # Now only consider old contexts and don't consider denied sockets
+                    obj["context"] = list(set(obj["context"]) - set(contexts_new))
                     self.collect_tasks(obj, tasks, "remove", done_sockets=denied_sockets)
 
                 # Send the changes
@@ -115,12 +115,12 @@ class PubSub:
         if not done_sockets: done_sockets = set()
         denied_sockets = set()
 
-        for tag in obj["tag"]:
-            if tag not in self.tag_to_sockets: continue
+        for context in obj["context"]:
+            if context not in self.context_to_sockets: continue
 
             # Ignore sockets that have already
             # been considered for sending
-            for socket in self.tag_to_sockets[tag] - done_sockets:
+            for socket in self.context_to_sockets[context] - done_sockets:
                 done_sockets.add(socket)
                 if not self.task_with_permission(socket, obj, tasks, msg):
                     denied_sockets.add(socket)
@@ -137,10 +137,10 @@ class PubSub:
             tasks.append(socket.send_json({msg: obj, "historical": False}))
         return has_permission
 
-    async def process_existing(self, tags, socket):
+    async def process_existing(self, contexts, socket):
         
         query = query_access(socket.actor) | \
-            { "tag": { "$elemMatch": { "$in": tags } } }
+            { "context": { "$elemMatch": { "$in": contexts } } }
 
         async for obj in self.db.find(query):
             del obj["_id"]

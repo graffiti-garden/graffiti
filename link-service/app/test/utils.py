@@ -20,7 +20,7 @@ def object_base(actor_id):
     object_base = {
         'actor': f"graffitiactor://{actor_id}",
         'id': f"graffitiobject://{actor_id}:{random_id()}",
-        'tag': ['something']
+        'context': ['something']
     }
     return object_base
 
@@ -29,7 +29,7 @@ def actor_id_and_token():
     id_ = random_sha()
     token = jwt.encode({
         "type": "token",
-        "owner_id": id_
+        'actor': f"graffitiactor://{id_}",
         }, secret, algorithm="HS256")
     return id_, token
 

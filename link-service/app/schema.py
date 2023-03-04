@@ -17,8 +17,8 @@ schema = {
         "messageID": { "$ref": "#/definitions/randomID" },
         "update": { "$ref": "#/definitions/object" },
         "remove": { "$ref": "#/definitions/objectURL" },
-        "subscribe": { "$ref": "#/definitions/tag" },
-        "unsubscribe": { "$ref": "#/definitions/tag" },
+        "subscribe": { "$ref": "#/definitions/context" },
+        "unsubscribe": { "$ref": "#/definitions/context" },
         "get": { "$ref": "#/definitions/objectURL" },
         "ls": { "type": "null" }
     },
@@ -33,11 +33,11 @@ schema = {
             "properties": {
                 "actor": { "$ref": "#/definitions/actorURL" },
                 "id":    { "$ref": "#/definitions/objectURL" },
-                "tag":   { "$ref": "#/definitions/tag" },
+                "context":   { "$ref": "#/definitions/context" },
                 "bto":   { "$ref": "#/definitions/actorURLs" },
                 "bcc":   { "$ref": "#/definitions/actorURLs" }
             },
-            "required": ["actor", "id", "tag"]
+            "required": ["actor", "id", "context"]
         },
         "actorURL": {
             # A SHA256 String
@@ -54,7 +54,7 @@ schema = {
             "type": "string",
             "pattern": object_url_regex
         },
-        "tag": {
+        "context": {
             "type": "array",
             "uniqueItems": True,
             "minItems": 1,

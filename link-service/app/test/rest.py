@@ -166,11 +166,11 @@ async def main():
         print("Could not re-remove object (as expected)")
 
         base  = object_base(my_actor_id)
-        tag = random_id()
+        context = random_id()
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                'tag': [tag]
+                'context': [context]
             }
         })
         result = await recv(ws)
@@ -183,51 +183,51 @@ async def main():
     async with websocket_connect(my_token) as ws:
         print("Created new user")
 
-        # List the tags associated with the user
+        # List the contexts associated with the user
         await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 0
-        print("User has no tags")
+        print("User has no contexts")
 
-        # Add 10 objects with the same tag
-        print("Adding 10 objects with the same tag")
+        # Add 10 objects with the same context
+        print("Adding 10 objects with the same context")
         for i in range(10):
             base  = object_base(my_actor_id)
             await send(ws, {
                 'messageID': random_id(),
                 'update': base | {
-                    'tag': ['hello']
+                    'context': ['hello']
                 }
             })
             result = await recv(ws)
             assert result['reply'] == 'inserted'
         print("...Done")
 
-        # List the tags associated with the user
+        # List the contexts associated with the user
         await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 1
         assert 'hello' in result["reply"]
-        print("User has one tag")
+        print("User has one context")
 
-        print("Adding an object the same, plus another tag")
+        print("Adding an object the same, plus another context")
         base  = object_base(my_actor_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                'tag': ['hello', 'goodbye']
+                'context': ['hello', 'goodbye']
             }
         })
         result = await recv(ws)
         assert result['reply'] == 'inserted'
 
-        # List the tags associated with the user
+        # List the contexts associated with the user
         await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 2
         assert 'hello' in result["reply"]
         assert 'goodbye' in result["reply"]
-        print("The user has the two tags")
+        print("The user has the two contexts")
         
         print("Removing the additional object")
         await send(ws, {
@@ -237,12 +237,12 @@ async def main():
         result = await recv(ws)
         assert result['reply'] == 'removed'
 
-        # Still one tag
+        # Still one context
         await send(ws, { 'messageID': random_id(), "ls": None })
         result = await recv(ws)
         assert len(result["reply"]) == 1
         assert 'hello' in result["reply"]
-        print("The user has only one tag")
+        print("The user has only one context")
 
 
         # Getting objects

@@ -33,7 +33,6 @@ async def remove(db, object_id, actor):
     if parse_object_URL(object_id)[0] != actor:
         raise Exception("object ID is inconsistent with actor.")
 
-    # Set the old tags as deleting
     old_object = await db.find_one_and_delete({
         "id": object_id,
     })
@@ -61,23 +60,23 @@ to get it.""")
     del object["_id"]
     return object
 
-async def tags(db, actor):
+async def contexts(db, actor):
     async for doc in db.aggregate([
         { "$match": {
             "actor": actor,
         }},
         { "$project": {
             "_id": 0,
-            "tag": 1,
+            "context": 1,
         }},
         { "$unwind": {
-            "path": "$tag"
+            "path": "$context"
         }},
         { "$group": {
             "_id": None,
-            "tag": { "$addToSet": "$tag" }
+            "context": { "$addToSet": "$context" }
         }}]):
 
-        return doc["tag"]
+        return doc["context"]
     else:
         return []

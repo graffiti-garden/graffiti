@@ -12,10 +12,10 @@ async def recv_historical(ws):
 
 async def main():
 
-    custom_tag = random_id()
-    custom_tag2 = random_id()
-    custom_tag4 = random_id()
-    custom_tag3 =  random_id()
+    custom_context = random_id()
+    custom_context2 = random_id()
+    custom_context4 = random_id()
+    custom_context3 =  random_id()
 
     my_id, my_token = actor_id_and_token()
     other_id, other_token = actor_id_and_token()
@@ -28,7 +28,7 @@ async def main():
             await send(ws, {
                 'messageID': random_id(),
                 'update': base | {
-                    'tag': [custom_tag],
+                    'context': [custom_context],
                     'content': random_id(),
                 }
             })
@@ -39,20 +39,20 @@ async def main():
         print("querying for them")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag]
+            'subscribe': [custom_context]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
         for i in range(10):
             result = await recv_historical(ws)
             assert 'update' in result
-            assert result['update']['tag'] == [custom_tag]
+            assert result['update']['context'] == [custom_context]
         print("...received")
 
         # Try subscribing again
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag]
+            'subscribe': [custom_context]
         })
         result = await recv_historical(ws)
         assert 'error' in result
@@ -61,7 +61,7 @@ async def main():
         print("unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'unsubscribe': [custom_tag]
+            'unsubscribe': [custom_context]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'unsubscribed'
@@ -69,18 +69,18 @@ async def main():
         # Try unsubscribing again
         await send(ws, {
             'messageID': random_id(),
-            'unsubscribe': [custom_tag]
+            'unsubscribe': [custom_context]
         })
         result = await recv_historical(ws)
         assert 'error' in result
         print("Could not unsubscribe again")
 
-        # Adding items with multiple tags and combinations
+        # Adding items with multiple contexts and combinations
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                'tag': [custom_tag2],
+                'context': [custom_context2],
                 'something': 'one'
             }
         })
@@ -90,7 +90,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                'tag': [custom_tag4],
+                'context': [custom_context4],
                 'something': 'two'
             }
         })
@@ -100,7 +100,7 @@ async def main():
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
-                'tag': [custom_tag4, custom_tag2],
+                'context': [custom_context4, custom_context2],
                 'something': 'three'
             }
         })
@@ -109,10 +109,10 @@ async def main():
         print("...added")
 
         # Try subscribing again
-        print("Subscribing to the tags")
+        print("Subscribing to the contexts")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag2, custom_tag4]
+            'subscribe': [custom_context2, custom_context4]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
@@ -130,7 +130,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'content': 'qwerty',
-                'tag': [custom_tag3],
+                'context': [custom_context3],
                 'bto': [object_base(other_id)["actor"]]
             }
         })
@@ -140,7 +140,7 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag3]
+            'subscribe': [custom_context3]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
@@ -153,7 +153,7 @@ async def main():
         # Recipient can see it
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag3]
+            'subscribe': [custom_context3]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'
@@ -165,7 +165,7 @@ async def main():
 
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag3]
+            'subscribe': [custom_context3]
         })
         result = await recv_historical(ws)
         assert result['reply'] == 'subscribed'

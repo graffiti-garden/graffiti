@@ -52,7 +52,7 @@ def valid_requests(my_actor):
     "messageID": random_id(),
     "unsubscribe": ["hello", "eriu", "alksdf"]
 }, {
-    # List tags
+    # List contexts
     "messageID": random_id(),
     "ls": None
 }, {
@@ -81,10 +81,10 @@ def valid_requests(my_actor):
         "foo": 1234
     }
 }, {
-    # Various tags
+    # Various contexts
     "messageID": random_id(),
     "update": base_object | {
-        "tag": ["aksjfdkd", "1"*1000, "😠"]
+        "context": ["aksjfdkd", "1"*1000, "😠"]
     }
 }, {
     # With bto/bcc
@@ -248,13 +248,13 @@ def invalid_requests(my_actor):
     "messageID": random_id(),
     "update": {
         'actor': my_actor,
-        'tag': ['something']
+        'context': ['something']
     }
 }, {
     "messageID": random_id(),
     "update": {
         'id': base_object['id'],
-        'tag': ['something']
+        'context': ['something']
     }
 }, {
     "messageID": random_id(),
@@ -266,13 +266,13 @@ def invalid_requests(my_actor):
     # Tags is not a list
     "messageID": random_id(),
     "update": base_object | {
-        'tag': 'something'
+        'context': 'something'
     }
 }, {
     # Tags is not a list of strings
     "messageID": random_id(),
     "update": base_object | {
-        'tag': [1]
+        'context': [1]
     }
 }, {
     # Tags is not a list

@@ -5,11 +5,11 @@ from utils import *
 
 async def main():
 
-    custom_tag = random_id()
-    custom_tag2 = random_id()
-    custom_tag3 = random_id()
-    private_tag1 = random_id()
-    private_tag2 = random_id()
+    custom_context = random_id()
+    custom_context2 = random_id()
+    custom_context3 = random_id()
+    private_context1 = random_id()
+    private_context2 = random_id()
 
     async def recv_future(ws):
         result = {'reply'}
@@ -20,22 +20,22 @@ async def main():
     my_id, my_token = actor_id_and_token()
     async with websocket_connect(my_token) as ws:
 
-        # Subscribe to the tag
-        print("Subscribing to tag")
+        # Subscribe to the context
+        print("Subscribing to context")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag]
+            'subscribe': [custom_context]
         })
         result = await recv(ws)
         assert result['reply'] == 'subscribed'
 
-        print(f"adding an item with the tag {custom_tag}")
+        print(f"adding an item with the context {custom_context}")
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'something': 'else',
-                'tag': [custom_tag]
+                'context': [custom_context]
             }
         })
         result = await recv_future(ws)
@@ -48,32 +48,32 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'how': 'r u?',
-                'tag': [custom_tag]
+                'context': [custom_context]
             }
         })
         result = await recv_future(ws)
         assert result['update']['how'] == 'r u?'
         print("Received as update")
 
-        print("Adding an item with a different tag")
+        print("Adding an item with a different context")
         base2 = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base2 | {
                 'another': 'thing',
-                'tag': [random_id()]
+                'context': [random_id()]
             }
         })
         timedout = False
         assert not await another_message(ws, recv=recv_future)
         print("The item is not received")
 
-        print("Replacing the first item's tag")
+        print("Replacing the first item's context")
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'another': 'thing',
-                'tag': [random_id()]
+                'context': [random_id()]
             }
         })
         result = await recv_future(ws)
@@ -81,12 +81,12 @@ async def main():
         print("It is removed from the perspective of the subscriber")
 
         # Put the item back
-        print("Putting the original tag and some other tags back in")
+        print("Putting the original context and some other contexts back in")
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'replacey': 'place',
-                'tag': [random_id(), custom_tag, random_id()]
+                'context': [random_id(), custom_context, random_id()]
             }
         })
         result = await recv_future(ws)
@@ -107,7 +107,7 @@ async def main():
         print("Unsubscribing")
         await send(ws, {
             'messageID': random_id(),
-            'unsubscribe': [custom_tag]
+            'unsubscribe': [custom_context]
         })
 
         # Re add the item
@@ -116,53 +116,53 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'im': 'back',
-                'tag': [random_id(), custom_tag, random_id()]
+                'context': [random_id(), custom_context, random_id()]
             }
         })
         timedout = False
         assert not await another_message(ws, recv=recv_future)
         print("The item is not received")
 
-        print("Subscribing to multiple tags")
+        print("Subscribing to multiple contexts")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [custom_tag2, custom_tag3]
+            'subscribe': [custom_context2, custom_context3]
         })
 
-        print("adding an item with the first tag")
+        print("adding an item with the first context")
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'two': 'twoey',
-                'tag': [custom_tag2]
+                'context': [custom_context2]
             }
         })
         result = await recv_future(ws)
         assert result['update']['two'] == 'twoey'
         print("Received as update")
 
-        print("adding an item with the second tag")
+        print("adding an item with the second context")
         base = object_base(my_id)
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'three': 'threey',
-                'tag': [custom_tag3]
+                'context': [custom_context3]
             }
         })
         result = await recv_future(ws)
         assert result['update']['three'] == 'threey'
         print("Received as update")
 
-        print("adding an item with both tags")
+        print("adding an item with both contexts")
         base = object_base(my_id)
         random = random_id()
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'both': 'asdf',
-                'tag': [random, custom_tag2, custom_tag3]
+                'context': [random, custom_context2, custom_context3]
             }
         })
         result = await recv_future(ws)
@@ -171,24 +171,24 @@ async def main():
         assert not await another_message(ws, recv=recv_future)
         print("A second update is not received")
 
-        print("Removing one tag from the item with both")
+        print("Removing one context from the item with both")
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'only': 'one',
-                'tag': [custom_tag3]
+                'context': [custom_context3]
             }
         })
         result = await recv_future(ws)
         assert result['update']['only'] == 'one'
-        assert result['update']['tag'] == [custom_tag3]
+        assert result['update']['context'] == [custom_context3]
         print("It is seen as an update")
         result = await recv_future(ws)
         assert result['remove']['id'] == base['id']
-        tags = result['remove']['tag']
-        assert len(tags) == 2
-        assert random in tags
-        assert custom_tag2 in tags
+        contexts = result['remove']['context']
+        assert len(contexts) == 2
+        assert random in contexts
+        assert custom_context2 in contexts
         print("It is also seen as a removal")
 
         print("Replacing it entirely")
@@ -196,7 +196,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'nothing': True,
-                'tag': [random_id()]
+                'context': [random_id()]
             }
         })
         result = await recv_future(ws)
@@ -210,7 +210,7 @@ async def main():
             async with websocket_connect(token) as ws:
                 await send(ws, {
                     'messageID': random_id(),
-                    'subscribe': [private_tag1, private_tag2]
+                    'subscribe': [private_context1, private_context2]
                 })
 
                 # See private message
@@ -239,13 +239,13 @@ async def main():
         print("Creating a private message to the users")
         await send(ws, {
             'messageID': random_id(),
-            'subscribe': [private_tag1, private_tag2]
+            'subscribe': [private_context1, private_context2]
         })
         await send(ws, {
             'messageID': random_id(),
             'update': base | {
                 'to': 'me',
-                'tag': [private_tag2],
+                'context': [private_context2],
                 'bcc': users
             }
         })
@@ -258,7 +258,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'private': 'message',
-                'tag': [private_tag2],
+                'context': [private_context2],
                 'bto': []
             }
         })
@@ -271,7 +271,7 @@ async def main():
             'messageID': random_id(),
             'update': base | {
                 'public': 'object',
-                'tag': [private_tag1],
+                'context': [private_context1],
             }
         })
         result = await recv_future(ws)
