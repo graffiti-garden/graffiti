@@ -33,11 +33,13 @@ schema = {
             "properties": {
                 "actor": { "$ref": "#/definitions/actorURL" },
                 "id":    { "$ref": "#/definitions/objectURL" },
-                "context":   { "$ref": "#/definitions/context" },
+                "context": { "$ref": "#/definitions/context" },
+                "updated": { "$ref": "#/definitions/ISODate" },
+                "published": { "$ref": "#/definitions/ISODate" },
                 "bto":   { "$ref": "#/definitions/actorURLs" },
                 "bcc":   { "$ref": "#/definitions/actorURLs" }
             },
-            "required": ["actor", "id", "context"]
+            "required": ["actor", "id", "context", "updated", "published"]
         },
         "actorURL": {
             # A SHA256 String
@@ -65,10 +67,14 @@ schema = {
             "type": "array",
             "items": { "$ref": "#/definitions/actorURL" }
         },
+        "ISODate": {
+            "type": "string",
+            "format": "date-time"
+        }
     }
 }
 
-validator = Draft7Validator(schema)
+validator = Draft7Validator(schema, format_checker=Draft7Validator.FORMAT_CHECKER)
 validate = lambda msg: validator.validate(msg)
 
 def query_access(actor):

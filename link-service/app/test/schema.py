@@ -98,7 +98,7 @@ def valid_requests(my_actor):
         "bcc": [random_actor()]
     }
 }, {
-    # _to noone ie "private note"
+    # to noone ie "private note"
     "messageID": random_id(),
     "update": base_object | {
         "bto": []
@@ -118,6 +118,17 @@ def valid_requests(my_actor):
     "messageID": random_id(),
     "update": base_object | {
         "bcc": [base_object["actor"], random_actor(), random_actor()]
+    }
+}, {
+    # Crazy timestamp
+    "messageID": random_id(),
+    "update": base_object | {
+        "published": datetime.datetime.fromtimestamp(0, tz=datetime.timezone.utc).isoformat(timespec='microseconds')
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "updated": datetime.datetime.fromtimestamp(0, tz=datetime.timezone(datetime.timedelta(hours=5))).isoformat(timespec='seconds')
     }
 }, {
     # Something more complicated
@@ -235,6 +246,23 @@ def invalid_requests(my_actor):
     "messageID": random_id(),
     "update": base_object | {
         "bto": [random_actor() + "1"]
+    }
+}, {
+    # improper timestamp
+    "messageID": random_id(),
+    "update": base_object | {
+        "published": 1677961139
+    }
+}, {
+    "messageID": random_id(),
+    "update": base_object | {
+        "updated": "asdf"
+    }
+}, {
+    # No time offset
+    "messageID": random_id(),
+    "update": base_object | {
+        "updated": "2022-09-27T18:00:00.000"
     }
 }, {
     # Object is not an object

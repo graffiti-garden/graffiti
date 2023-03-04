@@ -3,6 +3,7 @@ import json
 import string
 import random
 import asyncio
+import datetime
 from hashlib import sha256
 from os import getenv
 import websockets
@@ -16,11 +17,16 @@ def random_sha():
 def random_actor():
     return f"graffitiactor://{random_sha()}"
 
+def random_date():
+    return datetime.datetime.now().replace(tzinfo=datetime.timezone.utc).isoformat()
+
 def object_base(actor_id):
     object_base = {
         'actor': f"graffitiactor://{actor_id}",
         'id': f"graffitiobject://{actor_id}:{random_id()}",
-        'context': ['something']
+        'context': ['something'],
+        'updated': random_date(),
+        'published': random_date()
     }
     return object_base
 
