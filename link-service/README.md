@@ -42,14 +42,13 @@ exposes the Graffiti database API via a websocket served at `app.DOMAIN`. The AP
 - `remove`: removes an object the requester already inserted.
 - `subscribe`: fetches all the objects containing a set of contexts and streams future changes to objects with those contexts.
 - `unsubscribe`: stops streaming results from certain subscribed contexts.
-- `get`: fetches a particular object.
 - `list`: lists all contexts the requester has tagged objects with.
 
 The JSON objects are schemaless aside from 5 regulated fields, inherited from the [WC3 Activity Vocabulary](https://www.w3.org/TR/activitystreams-vocabulary/):
 
 - [`actor`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-actor): this field *must* be a URI containing the user's unique identifier returned by the `auth` module of the form `graffitiactor://ACTOR_ID`.
 - [`id`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-id): this field *must* be URI that that contains both the actor's ID and a unique key of the form `graffitiobject://ACTOR_ID:UNIQUE_KEY`. A user can't store more than one object with the same key; trying to create an object with the same key as an existing object will simply replace the existing object. Different users *can* store objects with the same key, so there is no worry of someone else replacing your object.
-- [`context`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-context): this *must* be a list of strings with at least one entry. Objects can only be seen by subscribing to one of its contexts.
+- [`context`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-context): this *must* be a list of strings with at least one entry. Objects can only be seen by subscribing to one of its contexts. It's `id` is an implicit context.
 - [`bto`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-bto), [`bcc`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-bcc): these fields are optional, but if included they *must* be equal to a list of unique actor URIs. The object will only be seen by it's creator and the listed users. If both fields are not included, anyone can see the object. If either or both of the fields exist and both are empty, only the creator can see the object. Both fields function exactly the same, their difference is simply semantic with `bto` referring to the primary private audience and `bcc` referring to the secondary public audience.
 - [`published`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-published), [`updated`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-updated): these fields are optional, but if included they *must* be equal to an ISO formatted date and time with offset. They do not need to be equal to the current time. These currently aren't used for anything may be useful in the future for syncing distributed Graffiti databases.
 

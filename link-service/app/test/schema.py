@@ -56,10 +56,6 @@ def valid_requests(my_actor):
     "messageID": random_id(),
     "ls": None
 }, {
-    # Get
-    "messageID": random_id(),
-    "get": f"graffitiobject://{random_sha()}:{random_id()}"
-}, {
     # Different sorts of objects
     "messageID": random_id(),
     "update": base_object | {
@@ -314,14 +310,6 @@ def invalid_requests(my_actor):
     # entries are not strings
     "messageID": random_id(),
     "subscribe": [1234]
-}, {
-    # Get is not a string
-    "messageID": random_id(),
-    "get": 12345
-}, {
-    # Get is ill-formed
-    "messageID": random_id(),
-    "get": "G" + base_object['id'][1:]
 }, {
     # Unsubscribe is not a list of strings
     "messageID": random_id(),

@@ -20,6 +20,58 @@ async def main():
     my_id, my_token = actor_id_and_token()
     async with websocket_connect(my_token) as ws:
 
+        print("Defining an object")
+        base = object_base(my_id)
+        print("Subscribing to it's ID")
+        await send(ws, {
+            'messageID': random_id(),
+            'subscribe': [base["id"]]
+        })
+        result = await recv(ws)
+        assert result['reply'] == 'subscribed'
+
+        print("Now updating the object")
+        await send(ws, {
+            'messageID': random_id(),
+            'update': base | {
+                'hello': 'world',
+                'context': [custom_context]
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['hello'] == 'world'
+        print("...received")
+
+        print("Replacing it")
+        await send(ws, {
+            'messageID': random_id(),
+            'update': base | {
+                'hello': 'goodbye',
+                'context': [custom_context2]
+            }
+        })
+        result = await recv_future(ws)
+        assert result['update']['hello'] == 'goodbye'
+        print("...received")
+
+        print("Removing it")
+        await send(ws, {
+            'messageID': random_id(),
+            'remove': base['id']
+        })
+        result = await recv_future(ws)
+        assert 'remove' in result
+        print("...removed")
+
+        print("Unsubscribing")
+        await send(ws, {
+            'messageID': random_id(),
+            'unsubscribe': [base["id"]]
+        })
+        result = await recv(ws)
+        print(result)
+        assert result['reply'] == 'unsubscribed'
+
         # Subscribe to the context
         print("Subscribing to context")
         await send(ws, {

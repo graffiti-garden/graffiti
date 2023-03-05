@@ -19,13 +19,12 @@ schema = {
         "remove": { "$ref": "#/definitions/objectURL" },
         "subscribe": { "$ref": "#/definitions/context" },
         "unsubscribe": { "$ref": "#/definitions/context" },
-        "get": { "$ref": "#/definitions/objectURL" },
         "ls": { "type": "null" }
     },
     "additionalProperties": False,
     "oneOf": [
         { "required": ["messageID", x] } for x in \
-        ["update", "remove", "subscribe", "unsubscribe", "get", "ls"]
+        ["update", "remove", "subscribe", "unsubscribe", "ls"]
     ],
     "definitions": {
         "object": {
@@ -76,15 +75,3 @@ schema = {
 
 validator = Draft7Validator(schema, format_checker=Draft7Validator.FORMAT_CHECKER)
 validate = lambda msg: validator.validate(msg)
-
-def query_access(actor):
-    return { "$or": [
-
-        # The object is public
-        {  "bto": { "$exists": False },
-           "bcc": { "$exists": False } },
-
-        # The actor is the recipient or sender
-        { "bto":   actor },
-        { "bcc":   actor },
-        { "actor": actor }]}

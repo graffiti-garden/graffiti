@@ -22,6 +22,30 @@ async def main():
     another_id, another_token = actor_id_and_token()
 
     async with websocket_connect(my_token) as ws:
+        print("adding 1 object")
+        base = object_base(my_id)
+        await send(ws, {
+            'messageID': random_id(),
+            'update': base | {
+                'context': [random_id()],
+                'content': 'single'
+            }
+        })
+        result = await recv_historical(ws)
+        assert result['reply'] == 'inserted'
+
+        print("querying for it by it's ID")
+        await send(ws, {
+            'messageID': random_id(),
+            'subscribe': [base["id"]]
+        })
+        result = await recv_historical(ws)
+        assert result['reply'] == 'subscribed'
+        result = await recv_historical(ws)
+        assert 'update' in result
+        assert result['update']['content'] == 'single'
+        print("...got it")
+
         print("adding 10 objects")
         for i in range(10):
             base = object_base(my_id)

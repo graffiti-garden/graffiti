@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from .schema import query_access
 
 class PubSub:
 
@@ -67,11 +66,13 @@ class PubSub:
     # Initialize database interfaces
     async def watch(self):
 
-        contexts_query = { "$elemMatch": { "$in": list(self.context_to_sockets.keys()) }}
+        contexts_query = { "$in": list(self.context_to_sockets.keys()) }
         async with self.db.watch(
                 [ { '$match' : { '$or': [
-                    { 'fullDocument.context': contexts_query },
-                    { 'fullDocumentBeforeChange.context': contexts_query }
+                    { 'fullDocument.context': { "$elemMatch": contexts_query }},
+                    { 'fullDocumentBeforeChange.context': { "$elemMatch": contexts_query }},
+                    { "fullDocument.id": contexts_query },
+                    { "fullDocumentBeforeChange.id": contexts_query }
                 ]}}],
                 full_document='whenAvailable',
                 full_document_before_change='whenAvailable',
@@ -105,17 +106,21 @@ class PubSub:
 
                     # Now only consider old contexts and don't consider denied sockets
                     obj["context"] = list(set(obj["context"]) - set(contexts_new))
-                    self.collect_tasks(obj, tasks, "remove", done_sockets=denied_sockets)
+                    self.collect_tasks(obj, tasks, "remove",
+                            done_sockets=denied_sockets,
+                            with_id='fullDocument' not in change)
 
                 # Send the changes
                 await asyncio.shield(asyncio.gather(*tasks))
                 self.resume_token = stream.resume_token
 
-    def collect_tasks(self, obj, tasks, msg, done_sockets=None):
+    def collect_tasks(self, obj, tasks, msg, done_sockets=None, with_id=True):
         if not done_sockets: done_sockets = set()
         denied_sockets = set()
 
-        for context in obj["context"]:
+        contexts = obj["context"]
+        if with_id: contexts = contexts + [obj["id"]]
+        for context in contexts:
             if context not in self.context_to_sockets: continue
 
             # Ignore sockets that have already
@@ -139,8 +144,22 @@ class PubSub:
 
     async def process_existing(self, contexts, socket):
         
-        query = query_access(socket.actor) | \
-            { "context": { "$elemMatch": { "$in": contexts } } }
+        query = { "$and": [
+            # Access
+            { "$or": [
+                # The object is public
+                {  "bto": { "$exists": False },
+                   "bcc": { "$exists": False } },
+
+                # The actor is the recipient or sender
+                { "bto":   socket.actor },
+                { "bcc":   socket.actor },
+                { "actor": socket.actor }]},
+            # Context
+            { "$or": [
+                { "context": { "$elemMatch": { "$in": contexts } } },
+                { "id": { "$in": contexts }}]}
+        ]}
 
         async for obj in self.db.find(query):
             del obj["_id"]
