@@ -110,6 +110,7 @@ export default class {
 
   #onMessage(event) {
     const data = JSON.parse(event.data)
+    console.log(data)
 
     if ('messageID' in data) {
       // It's a reply
@@ -124,8 +125,8 @@ export default class {
     } else if ('remove' in data) {
       this.#removeCallback(data['remove'])
 
-    } else if (data.type == 'error') {
-      if (data.reason == 'authorization') {
+    } else if ('error' in data) {
+      if (data.error == 'authorization') {
         Auth.logOut()
       }
       throw data
