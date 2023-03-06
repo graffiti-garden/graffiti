@@ -1,0 +1,251 @@
+:root {
+  --back: rgb(26, 26, 26);
+  --halfback: #2d2d2d;
+  --frontfaded: rgba(255, 255, 255, 0.7);
+  --front: rgba(255, 255, 255, 0.87);
+  --frontbold: #ca7acc;
+  --border: grey;
+}
+
+body {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  font-weight: 300;
+  font-size: 120%;
+  text-rendering: optimizeLegibility;
+  line-height: 1.7;
+  background: var(--back);
+  color: var(--front);
+  word-break: break-word;
+}
+
+header {
+  border-bottom: 1px solid var(--border);
+}
+
+main {
+  max-width: 50em;
+  margin: auto;
+  padding: 1rem;
+}
+
+header ul {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: space-between
+}
+
+header ul li {
+  padding: 0.5em;
+}
+
+main li {
+  padding: 0.3em;
+}
+
+strong * {
+  color: var(--frontbold) !important;
+}
+
+a {
+  color: var(--frontbold);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+pre,.prism-editor__textarea {
+  line-height: 1.2em !important;
+  padding: 0em !important;
+}
+
+code {
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace !important;
+}
+
+pre code {
+  font-size: 80% !important;
+  line-height: 0em !important;
+}
+
+pre, .component {
+  border-radius: 0.5em;
+  background: var(--halfback);
+}
+
+.component {
+  text-align: center;
+  font-size: 120%;
+  padding: 1em;
+  margin: 1em;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.component p {
+  min-height: 4em;
+}
+
+.component ul {
+  /*min-width: 5em;*/
+}
+
+input, button, footer a {
+  font-size: 150%;
+  font-weight: 500;
+  border-radius: 0.5em;
+  padding: 0.2em;
+  padding-left: 0.5em;
+  padding-right: 0.5em;
+  border: 0;
+  background: var(--back);
+  color: var(--front);
+  margin: 0.2em;
+}
+
+input:not([type]) {
+  border: 2px solid var(--border);
+}
+
+:is(input[type="submit"], button, footer a):hover {
+  background: var(--frontbold);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+a:hover {
+  cursor: pointer;
+}
+
+:is(h1,h2,h3,h4,h5,h6):hover .h-anchor {
+  opacity: 1;
+}
+
+a.h-anchor {
+  font-size: 70%;
+  float: left;
+  margin-left: -.87em;
+  padding-right: .23em;
+  margin-top: .3em;
+  opacity: 0;
+  text-decoration: underline;
+}
+
+#app {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+nav {
+  flex-grow: 0;
+  flex-shrink: 0;
+  flex-basis: 8em;
+  border-right: 1px solid var(--border);
+  padding: 1em;
+}
+
+code {
+  white-space: pre-wrap !important;
+}
+
+nav a {
+  color: var(--frontfaded);
+  font-weight: normal;
+}
+
+nav a:hover {
+  color: var(--frontbold);
+  text-decoration: none;
+}
+
+nav ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 0;
+}
+
+nav h2 {
+  font-size: 100%;
+  text-align: center;
+  margin: 1em;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.router-link-active {
+  color: var(--frontbold);
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 1em;
+  display: flex;
+  justify-content: flex-end;
+}
+
+footer a {
+  background: var(--halfback);
+  text-align: right;
+}
+
+footer a::before {
+  content: "Up Next:";
+}
+
+footer a::after {
+  content: "➤"
+}
+
+.columns {
+  display: flex;
+  justify-content: space-between;
+  margin: auto;
+  max-width: 20em;
+}
+
+fieldset {
+  padding: 2rem;
+  background: var(--halfback);
+  
+}
+
+.demo {
+  padding: 2rem;
+  /*! background: black; */
+}
+
+.waving {
+  animation: wave 0.8s linear infinite;
+  transform-origin: 80% 80%;
+}
+
+@keyframes wave {
+  25% {
+    transform: rotate(-10deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
+}
+
+.demo-render {
+  display: flex;
+  gap: 0;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 1rem 1rem 0 0;
+}
+
+.demo-code {
+  border-radius: 1rem;
+}
+
+.demo-render + .demo-code {
+  border-radius: 0 0 1rem 1rem;
+}
+

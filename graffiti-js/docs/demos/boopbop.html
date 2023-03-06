@@ -1,0 +1,20 @@
+<GraffitiObjects v-slot="{objects: boopbops}"
+  :context="[$graffitiMyActor]"
+  :mine="true"
+  :properties="{type: { enum: ['Boop', 'Bop']}}">
+
+  <ul v-for="type in ['Boop', 'Bop']">
+    <li v-for="boopbop in boopbops.filter(o=>o.type==type)">
+      {{ boopbop.type }}
+
+      <button @click="boopbop.type=
+        (boopbop.type=='Boop'?'Bop':'Boop')">
+        🔄
+      </button>
+
+      <button @click="delete boopbop.id">
+        ❌
+      </button>
+    </li>
+  </ul>
+</GraffitiObjects>

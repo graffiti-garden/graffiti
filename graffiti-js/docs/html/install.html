@@ -1,0 +1,28 @@
+<h1>
+  Install
+</h1>
+
+<p>
+  Graffiti can be installed in the browser without any compilation step using ES6 Modules.
+  To specify the import URLs we recommend using <a href="https://github.com/WICG/import-maps">import maps</a>.
+  Unfortunately, not all browsers support import maps just yet so you must include <a href="https://github.com/guybedford/es-module-shims">ES Module Shims</a> to hack the feature in.
+</p>
+
+<p>
+  Importing the shims and defining the import map can be done as follows:
+
+  <GraffitiPlayground path="installation-import" :render="false"/>
+</p>
+
+<p>
+  Once Graffiti is imported, all you need to do to hook it into Vue is call <code class="language-js">use</code> on the Graffiti Vue plugin.
+  Then your Vue app can be <a href="https://vuejs.org/guide/essentials/application.html#mounting-the-app">mounted as usual</a>. For example:
+
+  <GraffitiPlayground path="installation-script" :render="false"/>
+</p>
+
+<footer>
+  <router-link to="/logging-in">
+    Logging In
+  </router-link>
+</footer>

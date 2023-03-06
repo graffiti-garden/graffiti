@@ -1,0 +1,14 @@
+<button @click="$graffitiUpdate({
+    type: 'Boop',
+    context: [$graffitiMyActor]
+  })">
+  Boop
+</button>
+
+<GraffitiObjects v-slot="{objects: boops}"
+  :context="[$graffitiMyActor]"
+  :mine="true"
+  :properties="{ type: { enum: ['Boop'] }}">
+
+  # of times you booped: {{boops.length}}
+</GraffitiObjects>

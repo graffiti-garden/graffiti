@@ -1,7 +1,7 @@
 import Ajv from "https://cdn.jsdelivr.net/npm/ajv@8.12.0/+esm"
 import Auth from './src/auth.js'
 import GraffitiArray from './src/array.js'
-import { globalSchema, processLocalSchema, processUpdate } from './src/schema.js'
+import { globalSchema, baseLocalSchema } from './src/schema.js'
 
 export default class {
 
@@ -9,20 +9,19 @@ export default class {
     options = {
       url: "https://graffiti.garden",
       objectConstructor: ()=>({}),
-      globalSchema, processLocalSchema, processUpdate,
+      globalSchema, baseLocalSchema,
       ...options
     }
 
     this.url = options.url
     this.open = false
     this.eventTarget = new EventTarget()
-    this.tagMap = options.objectConstructor() // tag->{count, Set(id)}
+    this.contextMap = options.objectConstructor() // context->{count, Set(id)}
     this.objectMap = options.objectConstructor() // uuid->object
     this.GraffitiArray = GraffitiArray(this)
     this.ajv = new Ajv()
     this.globalSchemaValidator = this.ajv.compile(globalSchema)
-    this.processLocalSchema = processLocalSchema
-    this.processUpdate = processUpdate
+    this.baseLocalSchema = baseLocalSchema
 
     this.#initialize()
   }
@@ -134,15 +133,13 @@ export default class {
   }
 
   #updateCallback(object) {
-    // Add the ID to the tag map
+    // Add the ID to the context map
     let subscribed = false
-    for (const tag of object.tag) {
-      if (!(tag in this.tagMap)) continue
-      this.tagMap[tag].ids.add(object.id)
+    for (const context of object.context) {
+      if (!(context in this.contextMap)) continue
+      this.contextMap[context].ids.add(object.id)
       subscribed = true
     }
-
-    if (!subscribed) return
 
     // Add proxy functions so object modifications
     // sync with the server
@@ -151,23 +148,27 @@ export default class {
       object = new Proxy(object, this.#objectHandler(object, true))
     }
 
-    this.objectMap[object.id] = object
+    if (subscribed) {
+      this.objectMap[object.id] = object
+    }
+
+    return object
   }
 
   #removeCallback(object) {
-    // Remove the ID from all relevant tag maps
+    // Remove the ID from all relevant context maps
     let supported = false
-    for (const tag in this.tagMap) {
-      if (this.tagMap[tag].ids.has(object.id)) {
-        if (object.tag.includes(tag)) {
-          this.tagMap[tag].ids.delete(object.id)
+    for (const context in this.contextMap) {
+      if (this.contextMap[context].ids.has(object.id)) {
+        if (object.context.includes(context)) {
+          this.contextMap[context].ids.delete(object.id)
         } else {
           supported = true
         }
       }
     }
 
-    // If all tags have been removed, delete entirely
+    // If all contexts have been removed, delete entirely
     if (!supported && object.id in this.objectMap) {
       delete this.objectMap[object.id]
     }
@@ -175,11 +176,10 @@ export default class {
 
   async update(object) {
     object.actor = this.myActor
-    if (!object.id) object.id =
+    object.id =
       `graffitiobject://${this.myActor.substring(16)}:${crypto.randomUUID()}`
-
-    // Pre-process
-    this.processUpdate(object)
+    object.updated = new Date().toISOString()
+    object.published = object.updated
 
     // Make sure it adheres to the spec
     if (!this.globalSchemaValidator(object)) {
@@ -187,7 +187,7 @@ export default class {
     }
 
     // Immediately replace the object
-    this.#updateCallback(object)
+    object = this.#updateCallback(object)
 
     // Send it to the server
     try {
@@ -197,6 +197,8 @@ export default class {
       this.#removeCallback(object)
       throw e
     }
+
+    return object
   }
 
   #objectHandler(object, root) {
@@ -223,6 +225,7 @@ export default class {
     // sync with server and restore original if error
     const originalObject = Object.assign({}, object)
     if (Reflect.set(target, prop, val, receiver)) {
+      object.updated = new Date().toISOString()
       this.#removeCallback(originalObject)
       this.#updateCallback(object)
       this.#request({ update: object }).catch(e=> {
@@ -236,7 +239,7 @@ export default class {
 
   #deleteObjectProperty(object, root, target, prop) {
     const originalObject = Object.assign({}, object)
-    if (root && ['id', 'actor', 'tag'].includes(prop)) {
+    if (root && prop=='id') {
       // This is a deletion of the whole object
       this.#removeCallback(object)
       this.#request({ remove: object.id }).catch(e=> {
@@ -255,32 +258,24 @@ export default class {
     }
   }
 
-  async myTags() {
+  async myContexts() {
     return await this.#request({ ls: null })
   }
 
-  async objectByID(objectID) {
-    return await this.#request({get: objectID})
-  }
-
-  objects(tags, schema={}) {
-    tags = tags.filter(tag=> tag!=null)
-    for (const tag of tags) {
-      if (!(tag in this.tagMap)) {
-        throw `You are not subscribed to '${tag}'`
+  objects(contexts, schema={}) {
+    contexts = contexts.filter(context=> context!=null)
+    for (const context of contexts) {
+      if (!(context in this.contextMap)) {
+        throw `You are not subscribed to '${context}'`
       }
     }
 
-    // Compile the new schema
-    schema.type = "object"
-    schema.required = 'required' in schema?schema.required:[]
-    schema.properties = 'properties' in schema?schema.properties:{}
-    this.processLocalSchema(schema)
-    const localSchemaValidator = this.ajv.compile(schema)
+    const localSchema = merge(schema, baseLocalSchema)
+    const localSchemaValidator = this.ajv.compile(localSchema)
 
-    // Merge by IDs from all tags and
+    // Merge by IDs from all contexts and
     // convert to relevant objects
-    const ids = new Set(tags.map(tag=>[...this.tagMap[tag].ids]).flat())
+    const ids = new Set(contexts.map(context=>[...this.contextMap[context].ids]).flat())
     const objects = [...ids]
       .map(id=> this.objectMap[id])
       .filter(o=> this.globalSchemaValidator(o) &&
@@ -290,51 +285,63 @@ export default class {
     return new this.GraffitiArray(...objects)
   }
 
-  async subscribe(tags) {
-    tags = tags.filter(tag=> tag!=null)
+
+  async subscribe(contexts) {
+    contexts = contexts.filter(context=> context!=null)
     // Look at what is already subscribed to
-    const subscribingTags = []
-    for (const tag of tags) {
-      if (tag in this.tagMap) {
+    const subscribingContexts = []
+    for (const context of contexts) {
+      if (context in this.contextMap) {
         // Increase the count
-        this.tagMap[tag].count++
+        this.contextMap[context].count++
       } else {
         // Create a new slot
-        this.tagMap[tag] = {
+        this.contextMap[context] = {
           ids: new Set(),
           count: 1
         }
-        subscribingTags.push(tag)
+        subscribingContexts.push(context)
       }
     }
 
     // Try subscribing in the background
     // but don't raise an error since
     // the subscriptions will happen once connected
-    if (subscribingTags.length)
+    if (subscribingContexts.length)
       try {
-        await this.#request({ subscribe: subscribingTags })
+        await this.#request({ subscribe: subscribingContexts })
       } catch {}
   }
 
-  async unsubscribe(tags) {
-    tags = tags.filter(tag=> tag!=null)
-    // Decrease the count of each tag,
+  async unsubscribe(contexts) {
+    contexts = contexts.filter(context=> context!=null)
+    // Decrease the count of each context,
     // removing and marking if necessary
-    const unsubscribingTags = []
-    for (const tag of tags) {
-      this.tagMap[tag].count--
+    const unsubscribingContexts = []
+    for (const context of contexts) {
+      this.contextMap[context].count--
+    }
 
-      if (!this.tagMap[tag].count) {
-        unsubscribingTags.push(tag)
-        delete this.tagMap[tag]
+    // Delete completely unsubscribed contexts
+    for (const context of contexts) {
+      if (!this.contextMap[context].count) {
+        unsubscribingContexts.push(context)
+        delete this.contextMap[context]
+
+        const keys = new Set(Object.keys(contextMap))
+        for (const id of this.contextMap[context].ids) {
+          // Delete objects not attached to any subscription
+          const keysLeft = this.objectMap[id].context.reduce(
+            (a, c)=> a + (keys.has(c)?1:0), 0)
+          if (keysLeft) { delete this.objectMap[id] }
+        }
       }
     }
 
-    // Unsubscribe from all remaining tags
-    if (unsubscribingTags.length)
+    // Unsubscribe from all remaining contexts
+    if (unsubscribingContexts.length)
       try {
-        await this.#request({ unsubscribe: unsubscribingTags })
+        await this.#request({ unsubscribe: unsubscribingContexts })
       } catch {}
   }
 
@@ -344,13 +351,29 @@ export default class {
     this.eventTarget.dispatchEvent(new Event("open"))
 
     // Clear data
-    for (let tag in this.tagMap) {
-      this.tagMap[tag].ids = new Set()
+    for (let context in this.contextMap) {
+      this.contextMap[context].ids = new Set()
     }
     for (let id in this.objectMap) delete this.objectMap[id]
 
     // Resubscribe
-    const tags = Object.keys(this.tagMap)
-    if (tags.length) await this.#request({ subscribe: tags })
+    const contexts = Object.keys(this.contextMap)
+    if (contexts.length) await this.#request({ subscribe: contexts })
   }
+}
+
+// from https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6?permalink_comment_id=3889214#gistcomment-3889214
+function merge(source, target) {
+  target = Object.assign({}, target)
+  for (const [key, val] of Object.entries(source)) {
+    if (val !== null && typeof val === `object`) {
+      if (target[key] === undefined) {
+        target[key] = new val.__proto__.constructor();
+      }
+      merge(val, target[key]);
+    } else {
+      target[key] = val;
+    }
+  }
+  return target;
 }

@@ -1,0 +1,26 @@
+<GraffitiObjects v-slot="{objects: waves}"
+  :context="['https://graffiti.garden/graffiti-js/docs']"
+  :properties="{ type: { enum: ['Wave'] } }">
+
+  <button v-if="!$graffitiMyActor" @click="$graffitiToggleLogIn">
+    Log in to wave!
+  </button>
+  <template v-else>
+    <button v-if="waves.mine.length" class="waving"
+      @click="waves.removeMine()">
+      👋
+    </button>
+    <button v-else
+      @click="$graffitiUpdate({
+        type: 'Wave',
+        context: ['https://graffiti.garden/graffiti-js/docs']
+      })">
+        👋
+    </button>
+  </template>
+
+  <p>
+    {{waves.actors.length}}
+    people have waved from this page!
+  </p>
+</GraffitiObjects>

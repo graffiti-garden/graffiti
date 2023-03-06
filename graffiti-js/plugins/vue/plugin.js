@@ -34,18 +34,18 @@ export default {
 
     // Add static functions
     for (const key of [
-      'toggleLogIn', 'update', 'myTags', 'objectByID']) {
+      'toggleLogIn', 'update', 'myContexts']) {
       const vueKey = '$graffiti' + key.charAt(0).toUpperCase() + key.slice(1)
       app.config.globalProperties[vueKey] = graffiti[key].bind(graffiti)
     }
 
     // A component for subscribing and
-    // unsubscribing to tags that returns
+    // unsubscribing to contexts that returns
     // a reactive array of the results
     app.component('GraffitiObjects', {
 
       props: {
-        tags: {
+        context: {
           type: Array,
           required: true
         },
@@ -74,12 +74,12 @@ export default {
       },
 
       watch: {
-        tags: {
-          async handler(newTags, oldTags=[]) {
-            // Subscribe to the new tags
-            await graffiti.subscribe(newTags)
-            // Unsubscribe to the existing tags
-            await graffiti.unsubscribe(oldTags)
+        context: {
+          async handler(newContexts, oldContexts=[]) {
+            // Subscribe to the new contexts
+            await graffiti.subscribe(newContexts)
+            // Unsubscribe to the existing contexts 
+            await graffiti.unsubscribe(oldContexts)
           },
           immediate: true,
           deep: true
@@ -88,7 +88,7 @@ export default {
 
       // Handle unmounting too
       unmount() {
-        graffiti.unsubscribe(this.tags)
+        graffiti.unsubscribe(this.context)
       },
 
       computed: {
@@ -96,7 +96,7 @@ export default {
           const schema = Object.assign({}, this.schema)
           if (!('properties' in schema)) schema.properties = this.properties
           if (!('required'   in schema)) schema.required   = this.required
-          let os = graffiti.objects(this.tags, schema)
+          let os = graffiti.objects(this.context, schema)
           os = this.mine!=null?(this.mine?os.mine:os.notMine):os
           os = this.filter?os.filter(this.filter):os
           os = this.sortBy?os.sortBy(this.sortBy):os
@@ -107,5 +107,20 @@ export default {
       template: '<slot :objects="objects"></slot>'
     })
 
+    // A single graffiti object by it's ID
+    app.component('GraffitiObject', {
+      props: {
+        id: {
+          type: String,
+          required: true
+        }
+      },
+
+      template: `
+        <GraffitiObjects v-slot={objects}
+          :properties="{id: { enum: [id]}}">
+          <slot :object="objects.length?objects[0]:{}"></slot>
+        </GraffitiObjects>`
+    })
   }
 }

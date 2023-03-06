@@ -1,0 +1,24 @@
+<h1>
+  Logging In
+</h1>
+
+  <p>
+    Graffiti apps are read-only unless you log in.
+    To log in or out of Graffiti from a Vue app all you need to do is call the global <code class="language-js">$graffitiToggleLogIn</code> function.
+    You can log in from any domain.
+  </p>
+
+  <p>
+    To check whether a user is logged in, you can use the <code class="language-js">$graffitiMyActor</code> variable.
+    This variable is equal to a user's unique URI if they are logged in and <code class="language-js">null</code> otherwise.
+    We will come back to this variable in the <RouterLink to="/identity">Identity</RouterLink> section, but to make a basic button to log or out, we can just treat the variable as a boolean.
+    For example:
+
+    <GraffitiPlayground path="log-in" />
+  </p>
+
+<footer>
+  <router-link to="/object-basics">
+    Object Basics
+  </router-link>
+</footer>
