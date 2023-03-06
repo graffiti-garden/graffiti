@@ -110,7 +110,6 @@ export default class {
 
   #onMessage(event) {
     const data = JSON.parse(event.data)
-    console.log(data)
 
     if ('messageID' in data) {
       // It's a reply
@@ -175,7 +174,7 @@ export default class {
     }
   }
 
-  async update(object) {
+  update(object) {
     object.actor = this.myActor
     object.id =
       `graffitiobject://${this.myActor.substring(16)}:${crypto.randomUUID()}`
@@ -191,13 +190,10 @@ export default class {
     object = this.#updateCallback(object)
 
     // Send it to the server
-    try {
-      await this.#request({ update: object })
-    } catch(e) {
-      // Delete the temp object
+    this.#request({ update: object }).catch(e=>{
       this.#removeCallback(object)
       throw e
-    }
+    })
 
     return object
   }
