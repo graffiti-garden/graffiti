@@ -359,18 +359,16 @@ export default class {
   }
 }
 
-// from https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6?permalink_comment_id=3889214#gistcomment-3889214
+// loosely from https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6
 function merge(source, target) {
   target = Object.assign({}, target)
-  for (const [key, val] of Object.entries(source)) {
-    if (val !== null && typeof val === `object`) {
-      if (target[key] === undefined) {
-        target[key] = new val.__proto__.constructor();
-      }
-      merge(val, target[key]);
+  for (const key in source) {
+    if (source[key] instanceof Object &&
+        target[key] instanceof Object) {
+      target[key] = merge(source[key], target[key])
     } else {
-      target[key] = val;
+      target[key] = source[key]
     }
   }
-  return target;
+  return target
 }
