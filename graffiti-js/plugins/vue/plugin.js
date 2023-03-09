@@ -60,6 +60,9 @@ export default {
         filter: {
           type: Function
         },
+        sort: {
+          type: Function
+        },
         sortBy: {
           type: String
         }
@@ -93,6 +96,7 @@ export default {
           let os = graffiti.objects(this.contextWithDefault, schema)
           os = this.mine!=null?(this.mine?os.mine:os.notMine):os
           os = this.filter?os.filter(this.filter):os
+          os = this.sort?os.sort(this.sort):os
           os = this.sortBy?os.sortBy(this.sortBy):os
           return os
         }
@@ -112,7 +116,8 @@ export default {
 
       template: `
         <GraffitiObjects v-slot={objects}
-          :properties="{id: { enum: [id]}}">
+          :context=[id]>
+          :filter="o=> o.id==id">
           <slot :object="objects.length?objects[0]:{}"></slot>
         </GraffitiObjects>`
     })

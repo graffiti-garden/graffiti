@@ -2,10 +2,10 @@ import { h, compile } from "vue"
 import { PrismEditor } from "vue-prism-editor"
 
 const Renderer = {
-  props: ['code'],
+  props: ['code', 'data'],
 
   render() {
-    return h({render: compile(this.code), data: ()=>({message: ''})})
+    return h({render: compile(this.code), data: ()=>(this.data)})
   },
 
   errorCaptured(e) {
@@ -22,6 +22,10 @@ export default {
     'render': {
       type: Boolean,
       default: true
+    },
+    'data': {
+      type: Object,
+      default: {}
     }
   },
 
@@ -43,7 +47,7 @@ export default {
     <div class="demo">
       <fieldset v-if="render" class="demo-render">
         <legend>Demo</legend>
-        <Renderer :code="code"/>
+        <Renderer :code="code" :data="data"/>
       </fieldset>
       <fieldset class="demo-code">
         <legend>Source Code</legend>
