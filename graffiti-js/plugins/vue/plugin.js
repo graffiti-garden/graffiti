@@ -116,7 +116,7 @@ export default {
 
       template: `
         <GraffitiObjects v-slot={objects}
-          :context=[id]>
+          :context=[id]
           :filter="o=> o.id==id">
           <slot :object="objects.length?objects[0]:{}"></slot>
         </GraffitiObjects>`
