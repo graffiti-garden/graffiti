@@ -1,8 +1,12 @@
 <GraffitiObjects v-slot="{objects: waves}"
   :context="['https://graffiti.garden/graffiti-js/docs']"
-  :properties="{ type: { enum: ['Wave'] } }">
+  :schema="{
+    properties: {type: {enum: ['Wave']}},
+    required: ['type']
+  }">
 
-  <button v-if="!$graffitiMyActor" @click="$graffitiToggleLogIn">
+  <button v-if="!$graffitiMyActor"
+    @click="$graffitiToggleLogIn">
     Log in to wave!
   </button>
   <template v-else>
@@ -12,8 +16,8 @@
     </button>
     <button v-else
       @click="$graffitiUpdate({
-        type: 'Wave',
-        context: ['https://graffiti.garden/graffiti-js/docs']
+        context: ['https://graffiti.garden/graffiti-js/docs'],
+        type: 'Wave'
       })">
         👋
     </button>

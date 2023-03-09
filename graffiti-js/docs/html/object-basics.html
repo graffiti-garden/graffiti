@@ -9,30 +9,40 @@
 </p>
 
 <p>
-  Graffiti is not any old database, it has certain properties that allow you to limit <em>who</em> can see you data and <em>where</em> they can see it.
-  We'll get to that in the next sections on <RouterLink to="tags">tags</RouterLink>, <RouterLink to="identity">identity</RouterLink>, and <RouterLink to="filtering">filtering</RouterLink>,
+  Graffiti is not any old database, it has certain properties that allow you to limit <em>who</em> can see your data and <em>where</em> they can see it.
+  We'll get to that in the next sections on <RouterLink to="privacy">privacy</RouterLink> and <RouterLink to="context">context</RouterLink>
   but for now we're just going to introduce the basics of creating, viewing, and modifying data.
 </p>
 
 <p>
   To add data to the database you simply need to pass the JSON object you want to add to the global <code class="language-js">$graffitiUpdate</code> function.
+  In the example below, clicking the button creates an object with <code class="language-js">type</code> "Boop".
+</p>
+
+<GraffitiPlayground path="booper" />
+
+<p>
+  Did you click the button and nothing happened? Well, we also need a way to <em>view</em> objects in the Graffiti database.
 </p>
 
 <p>
   To see objects that you or others have created you can use 
   <code class="language-js">GraffitiObjects</code>,
   a <a href="https://vuejs.org/guide/components/slots.html#renderless-components">renderless Vue component</a>.
-  The component uses a <a href="https://vuejs.org/guide/components/slots.html#scoped-slots">scoped slot</a> to expose the variable <code class="language-js">objects</code> that code contained within the component's tags can access.
-  The <code class="language-js">objects</code> variable is an array of all the JSON objects matching certain criteria (which, again, we'll get to in future sections).
+  The component uses a <a href="https://vuejs.org/guide/components/slots.html#scoped-slots">scoped slot</a> to expose the variable <code class="language-js">objects</code>, which is an array
+  of all the JSON objects matching certain filters.
 </p>
 
 <p>
-  In the example below, clicking the button creates an object with <code class="language-js">type</code> "Boop".
-  Then using the <code class="language-js">GraffitiObjects</code> component, we're mapping the exposed <code class="language-js">objects</code> array to the variable <code class="language-js">boops</code>.
-  Then we simply display the <code class="language-js">length</code> of the <code class="language-js">boops</code> array.
+  Below, we're mapping the <code class="language-js">objects</code> variable exposed by the <code class="language-js">GraffitiObjects</code> component to the variable <code class="language-js">boops</code> &mdash; remapping the variable helps with readability and it prevents name collisions if you are using nested <code class="language-js">GraffitiObjects</code> components.
+  Then, we're filtering for objects that <em>you</em> have created and we use <a href="https://json-schema.org/">JSON schema</a> notation to filter for objects of type "Boop".
 </p>
 
-<GraffitiPlayground path="boop" />
+<GraffitiPlayground path="boop-viewer" />
+
+<p>
+  Note making a boop in the top component is immediately reflected in the bottom component. In fact, the change is reflected immediately on other devices and for other users which makes it possible to use Graffiti for things like instant messaging and collaborative editing.
+</p>
 
 <h2>
   Mutation
@@ -61,28 +71,60 @@ This is useful for clearing "reaction" objects such as "likes" or the "Wave" obj
 <GraffitiPlayground path="remove-mine" />
 
 <h2>
-  Regulated Properties
+  Filtering
 </h2>
 
-Graffiti objects are very flexible but there are certain properties with predetermined roles:
+<p>
+  As we saw in the last demo, you can filter objects using the keyword <code class="language-js">mine</code> and by passing in a JSON schema <code class="language-js">schema</code>.
+  Alternatively, you can also pass in a <code class="language-js">filter</code> function, or a <code class="language-js">sort</code> function which are equivalent to the <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter">prototypical Array functions</a>. For example:
+
+  <GraffitiPlayground path="boop-viewer-filter" />
+</p>
+
+<p>
+  Using <code class="language-js">filter</code> is more concise in this case, but it is less human-readable.
+  We recommend using <code class="language-js">schema</code> as much as possible unless there is something that requires special programmatic filtering that is outside the scope of JSON schema.
+</p>
+
+<p>
+  Another common key word is <code class="language-js">sortBy</code>
+</p>
+
+<h2>
+  Default Filtering
+</h2>
+
+<p>
+  Graffiti objects are very flexible but there are certain properties that are enforced either because they have special server-side meanings or because they are convention.
+</p>
+
+<p>
+  The following are special server-regulated fields:
+</p>
 
 <ul>
   <li>
     <code class="language-js">id</code>
     is a unique identifier associated with each object.
-    This allows you to "point" to objects.
-    For example, a reply object will point to the object it is replying to via it's <code class="language-js">id</code>.
+    As described above, deleting this required property deletes the whole object.
+    We also show how this can be used to "point" to objects in the <RouterLink to="/context">context section</RouterLink>.
+  </li>
+  <li>
+    <code class="language-js">context</code>
+    is a list of unique identifiers that specify "where" an object can be found.
+    We explore this property in the <RouterLink to="tags">context section</RouterLink>.
   </li>
   <li>
     <code class="language-js">actor</code>
-    is a unique identified associated with each user.
-    All objects that user creates must be "signed" with this identifier.
-    We'll explore this property in the <RouterLink to="identity">identity section</RouterLink>.
+    is a unique identified associated with each user and also attached to each object.
+    We explore how this can be used to associate data with a user in the context section and how it is related to private messaging in the privacy section.
   </li>
   <li>
-    <code class="language-js">tag</code>
-    is a list of unique identifiers that specify "where" an object can be found.
-    We'll explore this property in the <RouterLink to="tags">next section</RouterLink>.
+    <code class="language-js">published</code>
+    and
+    <code class="language-js">updated</code>
+    are required timestamps that specify when an object was created and when it was last updated.
+    These do not necessarily need to be accurate.
   </li>
   <li>
     <code class="language-js">bto</code>
@@ -90,15 +132,17 @@ Graffiti objects are very flexible but there are certain properties with predete
     <code class="language-js">bcc</code>
     optionally specify "who" is allowed to see an object,
     if that object is private.
-    We'll also explore these properties in the <RouterLink to="identity">identity section</RouterLink>.
+    We'll also explore these properties in the <RouterLink to="privacy">privacy section</RouterLink>.
   </li>
 </ul>
 
 <p>
-  <code class="language-js">id</code> and <code class="actor">actor</code> are assigned automatically when you call <code class="language-js">$graffitiUpdate</code>. The other properties must be assigned manually.
+<code class="language-js">id</code>, <code class="actor">actor</code>, <code class="language-js">published</code>, and <code class="language-js">updated</code>  are assigned automatically when you call <code class="language-js">$graffitiUpdate</code>. <code class="language-js">context</code> is also given a default as specified in the <RouterLink to="/context">context</RouterLink> section although this can be overridden.
+  <code class="language-js">bto</code> and <code class="language-js">bcc</code> must be assigned manually and make an obejct private if they exist.
 </p>
 
 <p>
+  In addition the special properties above, Graffiti objects 
   So long as the five properties above are formatted correctly, the Graffiti server will accept <em>any</em> other JSON properties.
   <em>However</em>, by default the Graffiti client library filters ingoing and outgoing objects to adhere to the
   <a href="https://www.w3.org/TR/activitystreams-vocabulary">
@@ -112,7 +156,7 @@ Graffiti objects are very flexible but there are certain properties with predete
 </p>
 
 <footer>
-  <router-link to="/tags">
-    Tags
+  <router-link to="/context">
+    Context
   </router-link>
 </footer>

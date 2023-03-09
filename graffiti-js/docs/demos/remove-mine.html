@@ -1,7 +1,9 @@
 <GraffitiObjects v-slot="{objects: boopbops}"
-  :context="[$graffitiMyActor]"
   :mine="true"
-  :properties="{type: { enum: ['Boop', 'Bop']}}">
+  :schema="{
+    properties: {type: {enum: ['Boop', 'Bop']}},
+    required: ['type']
+  }">
 
   <button @click="boopbops.removeMine()">
     Remove All My Boops and Bops
