@@ -135,7 +135,7 @@ export default class {
   #updateCallback(object) {
     // Add the ID to the context map
     let subscribed = false
-    for (const context of object.context) {
+    for (const context of [...object.context, object.id]) {
       if (!(context in this.contextMap)) continue
       this.contextMap[context].ids.add(object.id)
       subscribed = true
@@ -160,7 +160,7 @@ export default class {
     let supported = false
     for (const context in this.contextMap) {
       if (this.contextMap[context].ids.has(object.id)) {
-        if (object.context.includes(context)) {
+        if ([...object.context, object.id].includes(context)) {
           this.contextMap[context].ids.delete(object.id)
         } else {
           supported = true
