@@ -180,6 +180,7 @@ export default class {
       `graffitiobject://${this.myActor.substring(16)}:${crypto.randomUUID()}`
     object.updated = new Date().toISOString()
     object.published = object.updated
+    if (!('context' in object)) object.context = [this.myActor]
 
     // Make sure it adheres to the spec
     if (!this.globalSchemaValidator(object)) {
@@ -260,6 +261,7 @@ export default class {
   }
 
   objects(contexts, schema={}) {
+    if (!contexts) contexts = [this.myActor]
     contexts = contexts.filter(context=> context!=null)
     for (const context of contexts) {
       if (!(context in this.contextMap)) {

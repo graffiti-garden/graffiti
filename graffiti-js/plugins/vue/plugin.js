@@ -47,7 +47,7 @@ export default {
       props: {
         context: {
           type: Array,
-          required: true
+          default: null
         },
         mine: {
           type: Boolean,
@@ -56,14 +56,6 @@ export default {
         schema: {
           type: Object,
           default: {}
-        },
-        properties: {
-          type: Object,
-          default: {}
-        },
-        required: {
-          type: Array,
-          default: []
         },
         filter: {
           type: Function
@@ -74,7 +66,7 @@ export default {
       },
 
       watch: {
-        context: {
+        contextWithDefault: {
           async handler(newContexts, oldContexts=[]) {
             // Subscribe to the new contexts
             await graffiti.subscribe(newContexts)
@@ -88,15 +80,17 @@ export default {
 
       // Handle unmounting too
       unmount() {
-        graffiti.unsubscribe(this.context)
+        graffiti.unsubscribe(this.contextWithDefault)
       },
 
       computed: {
+        contextWithDefault() {
+          return !this.context?[this.$graffitiMyActor]:this.context
+        },
+
         objects() {
           const schema = Object.assign({}, this.schema)
-          if (!('properties' in schema)) schema.properties = this.properties
-          if (!('required'   in schema)) schema.required   = this.required
-          let os = graffiti.objects(this.context, schema)
+          let os = graffiti.objects(this.contextWithDefault, schema)
           os = this.mine!=null?(this.mine?os.mine:os.notMine):os
           os = this.filter?os.filter(this.filter):os
           os = this.sortBy?os.sortBy(this.sortBy):os
