@@ -5,7 +5,7 @@
 <p>
   Graffiti is essentially a shared database of JSON objects.
   You can put objects into the database that can represent things posts, likes, or profile information.
-  Then you or other people can query the database for objects that are relevant to you.
+  Then you or other people can query the database for objects that are relevant to them.
 </p>
 
 <p>
@@ -41,7 +41,7 @@
 <GraffitiPlayground path="boop-viewer" />
 
 <p>
-  Note making a boop in the top component is immediately reflected in the bottom component. In fact, the change is reflected immediately on other devices and for other users which makes it possible to use Graffiti for things like instant messaging and collaborative editing.
+  Note making a boop in the top component is immediately reflected in the bottom component. In fact, the change is reflected immediately on other devices and for other users which makes it possible to use Graffiti for things like instant messaging and real-time collaborative editing.
 </p>
 
 <h2>
@@ -71,7 +71,7 @@ This is useful for clearing "reaction" objects such as "likes" or the "Wave" obj
 <GraffitiPlayground path="remove-mine" />
 
 <h2>
-  Filtering
+  Filtering and Sorting
 </h2>
 
 <p>
@@ -87,7 +87,12 @@ This is useful for clearing "reaction" objects such as "likes" or the "Wave" obj
 </p>
 
 <p>
-  Another common key word is <code class="language-js">sortBy</code>
+  We also provide a more concise version of <code class="language-js">sort</code> via the function <code class="language-js">sortBy</code>.
+  This function sorts the array by a particular property.
+  For example, in later demos you will see <code class="language-js">:sortBy="-published"</code>
+  which sorts objects by <code class="language-js">published</code>, a field that stores the time that objects are created.
+  Adding the minus sign sorts objects in <em>reverse</em> order, putting the most recently created objects first.
+  You can also sort by nested properties using dot notation, e.g. <code class="language-js">:sortBy="foo.bar"</code>.
 </p>
 
 <h2>
@@ -107,52 +112,51 @@ This is useful for clearing "reaction" objects such as "likes" or the "Wave" obj
     <code class="language-js">id</code>
     is a unique identifier associated with each object.
     As described above, deleting this required property deletes the whole object.
-    We also show how this can be used to "point" to objects in the <RouterLink to="/context">context section</RouterLink>.
+    It also acts as a "link" to the object, as we'll see in <RouterLink to="/context">§Context</RouterLink>.
   </li>
   <li>
     <code class="language-js">context</code>
     is a list of unique identifiers that specify "where" an object can be found.
-    We explore this property in the <RouterLink to="tags">context section</RouterLink>.
+    We explore this property in depth in <RouterLink to="/context">§Context</RouterLink>.
   </li>
   <li>
     <code class="language-js">actor</code>
     is a unique identified associated with each user and also attached to each object.
-    We explore how this can be used to associate data with a user in the context section and how it is related to private messaging in the privacy section.
+    This is important for both <RouterLink to="/context">context</RouterLink> and <RouterLink to="/privacy">privacy</RouterLink>
+  </li>
+  <li>
+    <code class="language-js">bto</code>
+    and
+    <code class="language-js">bcc</code>
+    optionally specify who is allowed to see an object, via an array of actor URIs.
+    If either field is not included the object is public.,
+    We explore these properties in depth in <RouterLink to="/privacy">§Privacy</RouterLink>.
   </li>
   <li>
     <code class="language-js">published</code>
     and
     <code class="language-js">updated</code>
     are required timestamps that specify when an object was created and when it was last updated.
-    These do not necessarily need to be accurate.
-  </li>
-  <li>
-    <code class="language-js">bto</code>
-    and
-    <code class="language-js">bcc</code>
-    optionally specify "who" is allowed to see an object,
-    if that object is private.
-    We'll also explore these properties in the <RouterLink to="privacy">privacy section</RouterLink>.
   </li>
 </ul>
 
 <p>
-<code class="language-js">id</code>, <code class="actor">actor</code>, <code class="language-js">published</code>, and <code class="language-js">updated</code>  are assigned automatically when you call <code class="language-js">$graffitiUpdate</code>. <code class="language-js">context</code> is also given a default as specified in the <RouterLink to="/context">context</RouterLink> section although this can be overridden.
-  <code class="language-js">bto</code> and <code class="language-js">bcc</code> must be assigned manually and make an obejct private if they exist.
+<code class="language-js">id</code>, <code class="language-js">actor</code>, <code class="language-js">published</code>, and <code class="language-js">updated</code>  are assigned automatically when you call <code class="language-js">$graffitiUpdate</code>. <code class="language-js">context</code>, <code class="language-js">bto</code>, and <code class="language-js">bcc</code> must be assigned manually, although <code class="language-js">context</code> is given a default as specified in <RouterLink to="/context">§Context</RouterLink>.
 </p>
 
 <p>
-  In addition the special properties above, Graffiti objects 
-  So long as the five properties above are formatted correctly, the Graffiti server will accept <em>any</em> other JSON properties.
-  <em>However</em>, by default the Graffiti client library filters ingoing and outgoing objects to adhere to the
+  In addition the special properties above, it is <em>highly recommended</em> that the objects you create adhere to the
   <a href="https://www.w3.org/TR/activitystreams-vocabulary">
     Activity Vocabulary
   </a> specification.
+  In fact, by default the client library will prevent you from creating or viewing objects that violate the specification to encourage interoperability.
 </p>
 
 <p>
-  This means that while you technically allowed to develop a new schema, most other apps won't "speak" the same language and your content won't interoperate.
-  The Activity Vocabulary is flexible however, but it's best to extend the schema by inventing new properties rather than overwriting new ones.
+  Adhering to the Activity Vocabulary means making sure that certain properties have certain formats. For example, the properties <code class="language-js">type</code>, <code class="language-js">content</code>, and <code class="language-js">name</code> must be strings and the property <code class="language-js">image</code> must be an image URL or a list of image URLs.
+  The specification does not restrict you from defining <em>additional</em> properties.
+  For example, you could create a property <code class="language-js">weight</code> that defines how heavy an object is &mdash; maybe this is useful for creating an online video game.
+  Over time, we expect popular properties to become part of the <a href="https://en.wikipedia.org/wiki/Folksonomy">folksonomy</a>
 </p>
 
 <footer>
