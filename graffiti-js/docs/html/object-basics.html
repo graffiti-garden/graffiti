@@ -41,6 +41,11 @@
 <GraffitiPlayground path="boop-viewer" />
 
 <p>
+  JSON Schema is very flexible and eventually we suggest checking out it's <a href="https://json-schema.org/learn/getting-started-step-by-step.html">tutorial</a>, but to get you started: <code class="language-js">properties</code> describes the schema of certain properties <em>if those properties exist</em>. <code class="language-js">required</code> specifies which properties <em>must</em> exist.
+  Additional properties outside of those specified may also exist in the object. This can be disabled by setting <code class="language-js">additionalProperties: false</code> but we suggest that you never use this option as it can prevent interoperability between applications with different but overlapping schemas.
+</p>
+
+<p>
   Note making a boop in the top component is immediately reflected in the bottom component. In fact, the change is reflected immediately on other devices and for other users which makes it possible to use Graffiti for things like instant messaging and real-time collaborative editing.
 </p>
 
@@ -50,7 +55,7 @@
 
 <p>
   You can modify or delete any object you put into the Graffiti database.
-  To modify a Graffiti object, all you need to do is modify it locally and that change will be synced with the server and other users. In the example below we create a button that turns Boops into Bops, just by directly modifying an object's <code class="language-js">.type</code> property.
+  To modify a Graffiti object, all you need to do is modify it locally and that change will be synced with the server and other users. In the example below we create a button that turns Boops into Bops, just by directly modifying an object's <code class="language-js">type</code> property.
 </p>
 
 <p>
