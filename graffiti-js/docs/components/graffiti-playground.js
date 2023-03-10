@@ -5,7 +5,19 @@ const Renderer = {
   props: ['code', 'data'],
 
   render() {
-    return h({render: compile(this.code), data: ()=>(this.data)})
+    let hyperscript
+    try {
+      hyperscript = h({
+        render: compile(this.code),
+        data: ()=>(this.data)
+      })
+    } catch(e) {
+      hyperscript = h('div', {
+        class: 'error',
+        innerHTML: e.toString()
+      })
+    }
+    return hyperscript
   },
 
   errorCaptured(e) {

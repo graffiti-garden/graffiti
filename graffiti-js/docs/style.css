@@ -249,3 +249,7 @@ fieldset {
   border-radius: 0 0 1rem 1rem;
 }
 
+.error {
+  color: #e54f53;
+  font-weight: bold;
+}
