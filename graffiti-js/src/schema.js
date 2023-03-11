@@ -1,12 +1,12 @@
-export const globalSchema = {
+export default {
   type: 'object',
   properties: {
     //id: { $ref: "#/definitions/objectURI" },
     //actor: { $ref: "#/definitions/actorURI" },
     //published: { $ref: "#/definitions/ISODate" },
     //updated: { $ref: "#/definitions/ISODate" },
-    //bto: { $ref: "#/definitions/actorArray" },
-    //bcc: { $ref: "#/definitions/actorArray" },
+    bto: { $ref: "#/definitions/actorArray" },
+    bcc: { $ref: "#/definitions/actorArray" },
     type: { type: 'string' },
     content: { type: 'string' },
     name: { type: 'string' },
@@ -14,23 +14,12 @@ export const globalSchema = {
     mediaType: { type: 'string' },
   },
   definitions: {
-    actorURI: {
-      type: "string",
-      pattern: ""
-    },
-  }
-}
-
-// There *isn't* an attribution
-// (so we can assume all objects are made by their creator)
-// and the objects are *not* private
-// (to avoid publicly commenting on something private)
-export const baseLocalSchema = {
-  type: 'object',
-  properties: {
-    attributedTo: false,
-    bto: false,
-    bcc: false
+    actorArray: {
+      type: "array",
+      items: {
+        type: "string"
+      }
+    }
   }
 }
 

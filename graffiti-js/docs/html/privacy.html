@@ -1,0 +1,36 @@
+<h1>
+  Privacy
+</h1>
+
+<p>
+  Objects in Graffiti can only be found if you look in the right context.
+  This design can be interpretted as a form of 
+  <a href="https://en.wikipedia.org/wiki/Security_through_obscurity">security through obscurity</a>
+  or as a read-only form of
+  <a href="https://en.wikipedia.org/wiki/Object-capability_model">
+    object capabilities
+  </a>:
+  "if someone give's me a reference to the object then I can read it."
+</p>
+
+<p>
+  This makes context good at providing short-term privacy: if an object does not exist for very long, like a snap in Snapchat, it is unlikely for the reference to that object to travel outside it's intended audience.
+  Context is also good at providing some amount of social privacy
+  if you assume that other people are being polite and not going <em>out of their way</em> to find things they are not meant to see.
+  However, for strict long-term privacy
+  Graffiti also allows for a form of privacy akin to <a href="https://en.wikipedia.org/wiki/Access-control_list">access control lists</a>.
+</p>
+
+<p>
+  As we've mentioned every user has a unique "actor" URI. We can access it through <code class="language-js">$graffitiMyActor</code> and all objects made by a person must be signed with an <code class="language-js">actor</code> property.
+  To make private messages we can take advantage of the <code class="language-js">bto</code> and <code class="language-js">bcc</code> fields.
+</p>
+
+<h2>
+  Private Messaging
+</h2>
+
+<p>
+  <GraffitiPlayground path=poke :data="{recipient: ''}"/>
+  <GraffitiPlayground path=poke-inbox-outbox />
+</p>

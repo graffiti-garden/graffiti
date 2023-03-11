@@ -253,3 +253,9 @@ fieldset {
   color: #e54f53;
   font-weight: bold;
 }
+
+h3 {
+  font-size: 100%;
+  margin: 0;
+  border-bottom: 1px solid gray;
+}

@@ -1,7 +1,7 @@
 import Ajv from "https://cdn.jsdelivr.net/npm/ajv@8.12.0/+esm"
 import Auth from './src/auth.js'
 import GraffitiArray from './src/array.js'
-import { globalSchema, baseLocalSchema } from './src/schema.js'
+import globalSchema from './src/schema.js'
 
 export default class {
 
@@ -9,7 +9,7 @@ export default class {
     options = {
       url: "https://graffiti.garden",
       objectConstructor: ()=>({}),
-      globalSchema, baseLocalSchema,
+      globalSchema,
       ...options
     }
 
@@ -21,7 +21,6 @@ export default class {
     this.GraffitiArray = GraffitiArray(this)
     this.ajv = new Ajv()
     this.globalSchemaValidator = this.ajv.compile(globalSchema)
-    this.baseLocalSchema = baseLocalSchema
 
     this.#initialize()
   }
@@ -260,7 +259,7 @@ export default class {
     return await this.#request({ ls: null })
   }
 
-  objects(contexts, schema={}) {
+  objects(contexts, schema={}, filterPrivate=true, filterAttribution=true) {
     if (!contexts) contexts = [this.myActor]
     contexts = contexts.filter(context=> context!=null)
     for (const context of contexts) {
@@ -269,16 +268,27 @@ export default class {
       }
     }
 
-    const localSchema = merge(schema, baseLocalSchema)
-    const localSchemaValidator = this.ajv.compile(localSchema)
+    schema.type = 'object'
+    const localSchemaValidator = this.ajv.compile(schema)
 
     // Merge by IDs from all contexts and
     // convert to relevant objects
     const ids = new Set(contexts.map(context=>[...this.contextMap[context].ids]).flat())
-    const objects = [...ids]
+    let objects = [...ids]
       .map(id=> this.objectMap[id])
       .filter(o=> this.globalSchemaValidator(o) &&
-                        localSchemaValidator(o))
+                       localSchemaValidator(o))
+
+    // There *isn't* an attribution
+    // unless specifically querying for one
+    // (so we can assume all objects are made by their creator)
+    if (filterAttribution) objects=objects.filter(
+      o=>specificallyQuerying(localSchemaValidator, o, 'attributedTo'))
+    // and the objects are *not* private
+    // unless specifically querying for private objects
+    // (to avoid publicly commenting on something private)
+    if (filterPrivate) objects=objects.filter(
+      o=>specificallyQuerying(localSchemaValidator, o, 'bto', 'bcc'))
 
     // Return an array wrapped with graffiti functions
     return new this.GraffitiArray(...objects)
@@ -362,16 +372,19 @@ export default class {
   }
 }
 
-// loosely from https://gist.github.com/ahtcx/0cd94e62691f539160b32ecda18af3d6
-function merge(source, target) {
-  target = Object.assign({}, target)
-  for (const key in source) {
-    if (source[key] instanceof Object &&
-        target[key] instanceof Object) {
-      target[key] = merge(source[key], target[key])
-    } else {
-      target[key] = source[key]
-    }
+function specificallyQuerying(validator, obj, ...props) {
+  const nearMiss = Object.assign({}, obj)
+  for (const prop of props) {
+    delete nearMiss[prop]
   }
-  return target
+
+  if (validator(nearMiss)) {
+    // are not specifically looking for it
+    // make sure props are not contained
+    return props.reduce(
+      (a, prop) => a && !(prop in obj), true)
+  } else {
+    // specifically looking for it
+    return true
+  }
 }

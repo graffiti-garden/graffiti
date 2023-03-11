@@ -1,0 +1,20 @@
+<GraffitiObjects v-slot={objects:pokes}
+  :schema="{
+    properties: { type: { enum: ['Poke'] } },
+    required: ['type', 'bto']
+  }">
+
+  <h3>I Have Poked</h3>
+  <ul>
+    <li v-for="(poke, recipient) in pokes.mine.groupBy('bto')">
+      {{ recipient }}
+    </li>
+  </ul>
+
+  <h3>I Have Been Poked Poked By</h3>
+  <ul>
+    <li v-for="actor in pokes.notMine.actors">
+      {{actor}}
+    </li>
+  </ul>
+</GraffitiObjects>

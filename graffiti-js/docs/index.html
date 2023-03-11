@@ -33,23 +33,28 @@
       }
     }}
 
-    const sections = [
+    const guide = [
       'install',
       'logging-in',
       'object-basics',
       'context',
       'privacy',
+      'reference'
+    ]
+
+    const examples = [
+      'profile-creator',
+      'commenting',
       'moderation',
       'ordered-lists',
-      'spatial-contexts',
-      'other'
+      'spatial-contexts'
     ]
 
     const Router = createRouter({
       history: createWebHashHistory(),
       routes: [
         lazyDoc('introduction', '/'),
-        ...sections.map(s=> lazyDoc(s))
+        ...[...guide, ...examples].map(s=> lazyDoc(s))
       ],
       scrollBehavior (to, from, savedPosition) {
         return {left: 0, top: 0}
@@ -74,10 +79,12 @@
     }
 
     const TOC = {
-      template: `<ul>
-        ${sectionHTML('introduction', '/')}
-        ${sections.map(s=> sectionHTML(s)).join('')}
-      </ul>`
+      template: `
+      <ul>${sectionHTML('Overview', '/')}</ul>
+      <h3>Guide</h3>
+      <ul>${guide.map(s=> sectionHTML(s)).join('')}</ul>
+      <h3>Examples</h3>
+      <ul>${examples.map(s=> sectionHTML(s)).join('')}</ul>`
     }
 
     createApp()
