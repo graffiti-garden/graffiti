@@ -1,13 +1,37 @@
 :root {
   --back: rgb(26, 26, 26);
+  --backfaded: rgb(26, 26, 26, 0.8);
   --halfback: #2d2d2d;
   --frontfaded: rgba(255, 255, 255, 0.7);
   --front: rgba(255, 255, 255, 0.87);
   --frontbold: #ca7acc;
   --border: grey;
+  --blurpix: 4px;
 }
 
-body {
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: -1;
+  background-image: url(https://graffiti.garden/media/graffiti.jpg);
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 50% 50%;
+  height: calc(100vh + 2*var(--blurpix));
+  width: calc(100vw + 2*var(--blurpix));
+  filter: blur(var(--blurpix));
+  margin: calc(-1*var(--blurpix));
+}
+
+html {
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   font-weight: 300;
   font-size: 120%;
@@ -18,34 +42,40 @@ body {
   word-break: break-word;
 }
 
-header {
-  border-bottom: 1px solid var(--border);
+@font-face {
+  font-family: 'Rock Salt';
+  font-style: normal;
+  font-weight: 400;
+  src: url(https://fonts.gstatic.com/s/rocksalt/v18/MwQ0bhv11fWD6QsAVOZrt0M6p7NGrQ.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+#app {
+  display: flex;
+  flex-direction: row;
+}
+
+nav {
+  flex-grow: 0;
+  flex-shrink: 0;
+  flex-basis: 12rem;
+  padding: 1rem;
+  background: var(--backfaded);
 }
 
 main {
-  max-width: 50em;
-  margin: auto;
-  padding: 1rem;
-}
-
-header ul {
-  list-style-type: none;
-  margin: 0;
-  padding: 0;
+  max-width: 50rem;
+  margin-left:auto;
+  margin-right: auto;
+  padding: 4rem;
+  background: var(--back);
   display: flex;
-  justify-content: space-between
+  flex-direction: column;
+  gap: 1.5em;
 }
 
-header ul li {
-  padding: 0.5em;
-}
-
-main li {
-  padding: 0.3em;
-}
-
-strong * {
-  color: var(--frontbold) !important;
+.contents {
+  display: contents;
 }
 
 a {
@@ -56,6 +86,83 @@ a {
 
 a:hover {
   text-decoration: underline;
+}
+
+.router-link-active {
+  color: var(--frontbold);
+}
+
+a img {
+  height: 1.5em;
+}
+
+nav h1 {
+  font-size: 120%;
+  margin-bottom: 2rem;
+}
+
+nav a {
+  color: var(--frontfaded);
+  font-weight: normal;
+}
+
+nav a:hover {
+  color: var(--frontbold);
+  text-decoration: none;
+}
+
+.logo {
+  margin-top: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+nav ul {
+  list-style: none;
+}
+
+nav > ul > li {
+  font-weight: bold;
+  margin-top: 1rem;
+}
+
+nav > ul > li > ul {
+  margin-left: 1rem
+}
+
+h1 {
+  font-family: Rock Salt;
+  letter-spacing: 0.2em;
+  line-height: 1.3;
+}
+
+main li {
+  padding: 0.3em;
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+footer a {
+  background: var(--halfback);
+  text-align: right;
+}
+
+footer a::before {
+  content: "Up Next:";
+}
+
+footer a::after {
+  content: "➤"
+}
+
+strong * {
+  color: var(--frontbold) !important;
 }
 
 pre,.prism-editor__textarea {
@@ -80,31 +187,29 @@ pre, .component {
 .component {
   text-align: center;
   font-size: 120%;
-  padding: 1em;
-  margin: 1em;
+  padding: 1rem;
+  margin: 1rem;
   margin-left: 0;
   margin-right: 0;
 }
 
 .component p {
-  min-height: 4em;
-}
-
-.component ul {
-  /*min-width: 5em;*/
+  min-height: 4rem;
 }
 
 input, button, footer a {
   font-size: 150%;
   font-weight: 500;
-  border-radius: 0.5em;
-  padding: 0.2em;
-  padding-left: 0.5em;
-  padding-right: 0.5em;
+  border-radius: 1rem;
+  padding: 0.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
   border: 0;
-  background: var(--back);
   color: var(--front);
-  margin: 0.2em;
+}
+
+input, button {
+  background: var(--back);
 }
 
 input:not([type]) {
@@ -117,106 +222,20 @@ input:not([type]) {
   text-decoration: none;
 }
 
-a:hover {
-  cursor: pointer;
-}
-
-:is(h1,h2,h3,h4,h5,h6):hover .h-anchor {
-  opacity: 1;
-}
-
-a.h-anchor {
-  font-size: 70%;
-  float: left;
-  margin-left: -.87em;
-  padding-right: .23em;
-  margin-top: .3em;
-  opacity: 0;
-  text-decoration: underline;
-}
-
-#app {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-}
-
-nav {
-  flex-grow: 0;
-  flex-shrink: 0;
-  flex-basis: 8em;
-  border-right: 1px solid var(--border);
-  padding: 1em;
-}
-
 code {
   white-space: pre-wrap !important;
-}
-
-nav a {
-  color: var(--frontfaded);
-  font-weight: normal;
-}
-
-nav a:hover {
-  color: var(--frontbold);
-  text-decoration: none;
-}
-
-nav ul {
-  list-style: none;
-  padding: 0;
-  margin-top: 0;
-}
-
-nav h2 {
-  font-size: 100%;
-  text-align: center;
-  margin: 1em;
-  margin-left: 0;
-  margin-right: 0;
-}
-
-.router-link-active {
-  color: var(--frontbold);
-}
-
-footer {
-  border-top: 1px solid var(--border);
-  padding: 1em;
-  display: flex;
-  justify-content: flex-end;
-}
-
-footer a {
-  background: var(--halfback);
-  text-align: right;
-}
-
-footer a::before {
-  content: "Up Next:";
-}
-
-footer a::after {
-  content: "➤"
 }
 
 .columns {
   display: flex;
   justify-content: space-between;
   margin: auto;
-  max-width: 20em;
+  max-width: 20rem;
 }
 
 fieldset {
   padding: 2rem;
   background: var(--halfback);
-  
-}
-
-.demo {
-  padding: 2rem;
-  /*! background: black; */
 }
 
 .waving {
@@ -252,10 +271,4 @@ fieldset {
 .error {
   color: #e54f53;
   font-weight: bold;
-}
-
-h3 {
-  font-size: 100%;
-  margin: 0;
-  border-bottom: 1px solid gray;
 }

@@ -33,58 +33,70 @@
       }
     }}
 
-    const guide = [
-      'install',
-      'logging-in',
-      'object-basics',
-      'context',
-      'privacy',
-      'reference'
-    ]
-
-    const examples = [
-      'profile-creator',
-      'commenting',
-      'moderation',
-      'ordered-lists',
-      'spatial-contexts'
-    ]
+    const sections = {
+      'theory': [
+        'overview',
+        'motivation'
+      ],
+      'guide': [
+        'install',
+        'logging-in',
+        'object-basics',
+        'context',
+        'privacy',
+        'reference'
+      ],
+      'examples': [
+        'profile-creator',
+        'commenting',
+        'moderation',
+        'ordered-lists',
+        'spatial-contexts'
+      ]
+    }
 
     const Router = createRouter({
       history: createWebHashHistory(),
       routes: [
         lazyDoc('introduction', '/'),
-        ...[...guide, ...examples].map(s=> lazyDoc(s))
+        ...Object.values(sections).flat().map(
+          s=> lazyDoc(s))
       ],
       scrollBehavior (to, from, savedPosition) {
         return {left: 0, top: 0}
       }
     })
 
-    function sectionHTML(section, path=null) {
-      path = path?path:`/${section}`
-
-      const sectionTitle = section
+    function title(section) {
+      return section
         // Dashes to spaces
         .replace(/-/g, ' ')
         // Capitalize first letter of word
         .replace(/\b\w/g, x=> x.toUpperCase())
+    }
+
+    function sectionHTML(section, path=null) {
+      path = path?path:`/${section}`
 
       return `
         <li>
           <router-link to="${path}">
-            ${sectionTitle}
+            ${title(section)}
           </router-link>
         </li>`
     }
 
     const TOC = {
-      template: `
-      <ul>${sectionHTML('Overview', '/')}</ul>
-      <h3>Guide</h3>
-      <ul>${guide.map(s=> sectionHTML(s)).join('')}</ul>
-      <h3>Examples</h3>
-      <ul>${examples.map(s=> sectionHTML(s)).join('')}</ul>`
+      template: `<ul>
+      ${Object.keys(sections).map(
+        s=>`
+          <li>${title(s)}
+          <ul>
+            ${sections[s].map(
+              ss=> sectionHTML(ss))
+            .join('')}
+          </ul></li>`)
+      .join('')}</ul>`
     }
 
     createApp()
@@ -97,30 +109,25 @@
 </head>
 
 <body>
-  <header>
-    <ul>
-      <li>
-        <a target="_self" href="/">
-          Graffiti Homepage
-        </a>
-      </li>
-      <li>
-        <a target="_self" href="https://github.com/graffiti-garden/graffiti-js">
-          Graffiti.JS Github
-        </a>
-      </li>
-    </ul>
-  </header>
-
   <div id="app">
     <nav>
-      <h2>
-        Building a Graffiti App
-      </h2>
+      <h1>
+        <router-link to="/">
+          Graffiti
+        </router-link>
+      </h1>
       <toc></toc>
+      <ul>
+        <li>
+          <a target="_blank" class="logo" href="https://github.com/graffiti-garden">
+            <img src="./media/github.png"/>
+            Github
+          </a>
+        </li>
+      </ul>
     </nav>
     <main>
-      <router-view></router-view>
+      <router-view class="contents"></router-view>
     </main>
   </div>
 </body>
