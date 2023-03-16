@@ -1,7 +1,6 @@
 import Ajv from "https://cdn.jsdelivr.net/npm/ajv@8.12.0/+esm"
 import Auth from './src/auth.js'
 import GraffitiArray from './src/array.js'
-import globalSchema from './src/schema.js'
 
 export default class {
 
@@ -9,7 +8,6 @@ export default class {
     options = {
       url: "https://graffiti.garden",
       objectConstructor: ()=>({}),
-      globalSchema,
       ...options
     }
 
@@ -20,7 +18,6 @@ export default class {
     this.objectMap = options.objectConstructor() // uuid->object
     this.GraffitiArray = GraffitiArray(this)
     this.ajv = new Ajv()
-    this.globalSchemaValidator = this.ajv.compile(globalSchema)
 
     this.#initialize()
   }
@@ -184,11 +181,6 @@ export default class {
     // De-dupe contexts
     object.context = [...new Set(object.context)];
 
-    // Make sure it adheres to the spec
-    if (!this.globalSchemaValidator(object)) {
-      throw this.globalSchemaValidator.errors
-    }
-
     // Immediately replace the object
     object = this.#updateCallback(object)
 
@@ -279,8 +271,7 @@ export default class {
     const ids = new Set(contexts.map(context=>[...this.contextMap[context].ids]).flat())
     let objects = [...ids]
       .map(id=> this.objectMap[id])
-      .filter(o=> this.globalSchemaValidator(o) &&
-                       localSchemaValidator(o))
+      .filter(o=> localSchemaValidator(o))
 
     // There *isn't* an attribution
     // unless specifically querying for one
