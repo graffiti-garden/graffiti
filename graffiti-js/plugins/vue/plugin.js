@@ -65,6 +65,14 @@ export default {
         },
         sortBy: {
           type: String
+        },
+        filterPrivate: {
+          type: Boolean,
+          default: true
+        },
+        filterAttribution: {
+          type: Boolean,
+          default: true
         }
       },
 
@@ -93,7 +101,11 @@ export default {
 
         objects() {
           const schema = Object.assign({}, this.schema)
-          let os = graffiti.objects(this.contextWithDefault, schema)
+          let os = graffiti.objects(
+            this.contextWithDefault,
+            schema,
+            this.filterPrivate,
+            this.filterAttribution)
           os = this.mine!=null?(this.mine?os.mine:os.notMine):os
           os = this.filter?os.filter(this.filter):os
           os = this.sort?os.sort(this.sort):os
@@ -117,8 +129,10 @@ export default {
       template: `
         <GraffitiObjects v-slot={objects}
           :context=[id]
-          :filter="o=> o.id==id">
-          <slot :object="objects.length?objects[0]:{}"></slot>
+          :filter="o=> o.id==id"
+          :filterPrivate=false
+          :filterAttribution=false>
+          <slot :object="objects.length?objects[0]:null"></slot>
         </GraffitiObjects>`
     })
   }

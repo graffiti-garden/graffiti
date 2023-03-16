@@ -181,6 +181,9 @@ export default class {
     object.published = object.updated
     if (!('context' in object)) object.context = [this.myActor]
 
+    // De-dupe contexts
+    object.context = [...new Set(object.context)];
+
     // Make sure it adheres to the spec
     if (!this.globalSchemaValidator(object)) {
       throw this.globalSchemaValidator.errors
