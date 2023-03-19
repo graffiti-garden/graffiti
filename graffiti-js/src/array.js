@@ -1,40 +1,71 @@
+import Ajv from "https://cdn.jsdelivr.net/npm/ajv@8.12.0/+esm"
+const ajv = new Ajv()
+
 // Extend the array class to expose update
 // functionality, plus provide some
 // useful helper methods
-export default function(graffiti) {
+export default function(me, post, remove) {
 
   return class GraffitiArray extends Array {
 
-    //constructor(filters, ...elems) {
-    //}
+    constructor(context, filterFunction, ...elems) {
+      super(...elems)
+      this.context = context
+      this.filterFunction = filterFunction
+    }
 
-    //filter(callback) {
-      //return
-      //super.filter(
-    //}
+    filter(f) {
+      return new GraffitiArray(
+        this.context,
+        o=> f(o) && this.filterFunction(o),
+        ...super.filter(f))
+    }
 
-    //post(object) {
-      //if (!this.filterFunction(object)) {
-        //throw
-      //} else {
-        //return graffiti.post(object)
-      //}
-    //}
+    post(object) {
+      object.actor = me()
+      object.id =
+        `graffitiobject://${me().substring(16)}:${crypto.randomUUID()}`
+      object.updated = new Date().toISOString()
+      object.published = object.updated
 
-    //remove(object) {
-      //if (!this.includes(object)) {
-        //throw
-      //} else {
-        //return 
-      //}
-    //}
+      if (!this.filterFunction(object)) {
+        throw "The object does not match the arrays filters"
+      }
+
+      if ('context' in object) {
+        // MAKE SURE object.context intersects this.context
+        if (!this.context.some(c=>object.context.includes(c))) {
+          throw "The object's context does not match the array's context"
+        }
+      } else {
+        object.context = this.context
+      }
+
+      return post(object)
+    }
+
+    remove(...objects) {
+      for (const object of objects) {
+        if (!this.includes(object)) {
+          throw "The object can't be removed since it is not in the array"
+        } else {
+          remove(object)
+        }
+      }
+    }
+    
+    query(schema) {
+      schema.type = 'object'
+      const validator = ajv.compile(schema)
+      return this.filter(o=> validator(o))
+    }
 
     get mine() {
-      return this.filter(o=> o.actor==graffiti.me)
+      return this.filter(o=> o.actor==me())
     }
 
     get notMine() {
-      return this.filter(o=> o.actor!=graffiti.me)
+      return this.filter(o=> o.actor!=me())
     }
 
     by(...ids) {
@@ -46,7 +77,7 @@ export default function(graffiti) {
     }
 
     removeMine() {
-      this.mine.map(o=> delete o.id)
+      this.mine.map(o=> remove(o))
     }
 
     #getProperty(obj, propertyPath) {

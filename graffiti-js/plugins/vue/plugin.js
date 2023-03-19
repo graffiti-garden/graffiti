@@ -10,11 +10,10 @@ export default {
       ...options
     })
 
-    const glob = app.config.globalProperties
-
     // Begin to define a global property
-    Object.defineProperty(glob,  "$graffiti", { value: {} } )
-    Object.defineProperty(glob,  "$gf", { value: glob.$graffiti } )
+    const glob = app.config.globalProperties
+    Object.defineProperty(glob, "$graffiti", { value: {} } )
+    Object.defineProperty(glob, "$gf", { value: glob.$graffiti } )
     const gf = glob.$gf
 
     // Create a reactive variable that
@@ -42,8 +41,7 @@ export default {
     })
 
     // Add static functions
-    for (const key of [
-      'toggleLogIn', 'update', 'myContexts']) {
+    for (const key of ['toggleLogIn', 'myContexts']) {
       Object.defineProperty(gf, key, {
         value: graffiti[key].bind(graffiti),
         enumerable: true
@@ -64,7 +62,7 @@ export default {
           type: Boolean,
           default: null
         },
-        schema: {
+        query: {
           type: Object,
           default: {}
         },
@@ -75,15 +73,8 @@ export default {
           type: Function
         },
         sortBy: {
-          type: String
-        },
-        filterPrivate: {
-          type: Boolean,
-          default: true
-        },
-        filterAttribution: {
-          type: Boolean,
-          default: true
+          type: String,
+          default: '-published'
         }
       },
 
@@ -111,13 +102,9 @@ export default {
         },
 
         objects() {
-          const schema = Object.assign({}, this.schema)
-          let os = graffiti.objects(
-            this.contextWithDefault,
-            schema,
-            this.filterPrivate,
-            this.filterAttribution)
+          let os = graffiti.objects(this.contextWithDefault)
           os = this.mine!=null?(this.mine?os.mine:os.notMine):os
+          os = this.query?os.query(this.query):os
           os = this.filter?os.filter(this.filter):os
           os = this.sort?os.sort(this.sort):os
           os = this.sortBy?os.sortBy(this.sortBy):os
@@ -140,9 +127,7 @@ export default {
       template: `
         <GraffitiObjects v-slot={objects}
           :context=[id]
-          :filter="o=> o.id==id"
-          :filterPrivate=false
-          :filterAttribution=false>
+          :filter="o=>o.id==id">
           <slot :object="objects.length?objects[0]:null"></slot>
         </GraffitiObjects>`
     })

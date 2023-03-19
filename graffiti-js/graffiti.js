@@ -1,4 +1,3 @@
-import Ajv from "https://cdn.jsdelivr.net/npm/ajv@8.12.0/+esm"
 import Auth from './src/auth.js'
 import GraffitiArray from './src/array.js'
 
@@ -16,8 +15,10 @@ export default class {
     this.eventTarget = new EventTarget()
     this.contextMap = options.objectConstructor() // context->{count, Set(id)}
     this.objectMap = options.objectConstructor() // uuid->object
-    this.GraffitiArray = GraffitiArray(this)
-    this.ajv = new Ajv()
+    this.GraffitiArray = GraffitiArray(
+      ()=>this.me,
+      this.#post.bind(this),
+      this.#remove.bind(this))
 
     this.#initialize()
   }
@@ -141,7 +142,7 @@ export default class {
     // sync with the server
     if (!('__graffitiProxy' in object)) {
       Object.defineProperty(object, '__graffitiProxy', { value: true })
-      object = new Proxy(object, this.#objectHandler(object, true))
+      object = new Proxy(object, this.#objectHandler(object))
     }
 
     if (subscribed) {
@@ -170,14 +171,7 @@ export default class {
     }
   }
 
-  update(object) {
-    object.actor = this.me
-    object.id =
-      `graffitiobject://${this.me.substring(16)}:${crypto.randomUUID()}`
-    object.updated = new Date().toISOString()
-    object.published = object.updated
-    if (!('context' in object)) object.context = [this.me]
-
+  #post(object) {
     // De-dupe contexts
     object.context = [...new Set(object.context)];
 
@@ -193,60 +187,53 @@ export default class {
     return object
   }
 
-  #objectHandler(object, root) {
+  #remove(object) {
+    const originalObject = Object.assign({}, object)
+    this.#removeCallback(object)
+    this.#request({ remove: object.id }).catch(e=> {
+      this.#updateCallback(originalObject)
+      throw e
+    })
+    return true
+  }
+
+  #objectHandler(object) {
     return {
-      get: (target, prop, receiver)=>
-        this.#getObjectProperty(object, target, prop, receiver),
-      set: (target, prop, val, receiver)=>
-        this.#setObjectProperty(object, root, target, prop, val, receiver),
-      deleteProperty: (target, prop)=>
-        this.#deleteObjectProperty(object, root, target, prop)
-    }
-  }
-
-  #getObjectProperty(object, target, prop, receiver) {
-    if (typeof target[prop] === 'object' && target[prop] !== null) {
-      return new Proxy(Reflect.get(target, prop, receiver), this.#objectHandler(object, false))
-    } else {
-      return Reflect.get(target, prop, receiver)
-    }
-  }
-
-  #setObjectProperty(object, root, target, prop, val, receiver) {
-    // Store the original, perform the update,
-    // sync with server and restore original if error
-    const originalObject = Object.assign({}, object)
-    if (Reflect.set(target, prop, val, receiver)) {
-      object.updated = new Date().toISOString()
-      this.#removeCallback(originalObject)
-      this.#updateCallback(object)
-      this.#request({ update: object }).catch(e=> {
-        this.#removeCallback(object)
-        this.#updateCallback(originalObject)
-        throw e
-      })
-      return true
-    } else { return false }
-  }
-
-  #deleteObjectProperty(object, root, target, prop) {
-    const originalObject = Object.assign({}, object)
-    if (root && prop=='id') {
-      // This is a deletion of the whole object
-      this.#removeCallback(object)
-      this.#request({ remove: object.id }).catch(e=> {
-        this.#updateCallback(originalObject)
-        throw e
-      })
-      return true
-    } else {
-      if (Reflect.deleteProperty(target, prop)) {
-        this.#request({ update: object }).catch(e=> {
-          this.#updateCallback(originalObject)
-          throw e
-        })
-        return true
-      } else { return false }
+      get: (target, prop, receiver)=> {
+        if (typeof target[prop] === 'object' && target[prop] !== null) {
+          return new Proxy(
+            Reflect.get(target, prop, receiver),
+            this.#objectHandler(object))
+        } else {
+          return Reflect.get(target, prop, receiver)
+        }
+      },
+      set: (target, prop, val, receiver)=> {
+        // Store the original, perform the update,
+        // sync with server and restore original if error
+        const originalObject = Object.assign({}, object)
+        if (Reflect.set(target, prop, val, receiver)) {
+          object.updated = new Date().toISOString()
+          this.#removeCallback(originalObject)
+          this.#updateCallback(object)
+          this.#request({ update: object }).catch(e=> {
+            this.#removeCallback(object)
+            this.#updateCallback(originalObject)
+            throw e
+          })
+          return true
+        } else { return false }
+      }, 
+      deleteProperty: (target, prop)=> {
+        const originalObject = Object.assign({}, object)
+        if (Reflect.deleteProperty(target, prop)) {
+          this.#request({ update: object }).catch(e=> {
+            this.#updateCallback(originalObject)
+            throw e
+          })
+          return true
+        } else { return false }
+      }
     }
   }
 
@@ -254,7 +241,7 @@ export default class {
     return await this.#request({ ls: null })
   }
 
-  objects(contexts, schema={}, filterPrivate=true, filterAttribution=true) {
+  objects(contexts) {
     if (!contexts) contexts = [this.me]
     contexts = contexts.filter(context=> context!=null)
     for (const context of contexts) {
@@ -263,31 +250,17 @@ export default class {
       }
     }
 
-    schema.type = 'object'
-    const localSchemaValidator = this.ajv.compile(schema)
-
     // Merge by IDs from all contexts and
     // convert to relevant objects
-    const ids = new Set(contexts.map(context=>[...this.contextMap[context].ids]).flat())
-    let objects = [...ids]
-      .map(id=> this.objectMap[id])
-      .filter(o=> localSchemaValidator(o))
-
-    // There *isn't* an attribution
-    // unless specifically querying for one
-    // (so we can assume all objects are made by their creator)
-    if (filterAttribution) objects=objects.filter(
-      o=>specificallyQuerying(localSchemaValidator, o, 'attributedTo'))
-    // and the objects are *not* private
-    // unless specifically querying for private objects
-    // (to avoid publicly commenting on something private)
-    if (filterPrivate) objects=objects.filter(
-      o=>specificallyQuerying(localSchemaValidator, o, 'bto', 'bcc'))
+    const ids = new Set(contexts.map(c=>[...this.contextMap[c].ids]).flat())
+    const objects = [...ids].map(id=> this.objectMap[id])
 
     // Return an array wrapped with graffiti functions
-    return new this.GraffitiArray(...objects)
+    return new this.GraffitiArray(
+      contexts,
+      ()=>true,
+      ...objects)
   }
-
 
   async subscribe(contexts) {
     contexts = contexts.filter(context=> context!=null)
@@ -363,22 +336,5 @@ export default class {
     // Resubscribe
     const contexts = Object.keys(this.contextMap)
     if (contexts.length) await this.#request({ subscribe: contexts })
-  }
-}
-
-function specificallyQuerying(validator, obj, ...props) {
-  const nearMiss = Object.assign({}, obj)
-  for (const prop of props) {
-    delete nearMiss[prop]
-  }
-
-  if (validator(nearMiss)) {
-    // are not specifically looking for it
-    // make sure props are not contained
-    return props.reduce(
-      (a, prop) => a && !(prop in obj), true)
-  } else {
-    // specifically looking for it
-    return true
   }
 }
