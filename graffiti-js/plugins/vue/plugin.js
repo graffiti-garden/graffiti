@@ -10,6 +10,13 @@ export default {
       ...options
     })
 
+    const glob = app.config.globalProperties
+
+    // Begin to define a global property
+    Object.defineProperty(glob,  "$graffiti", { value: {} } )
+    Object.defineProperty(glob,  "$gf", { value: glob.$graffiti } )
+    const gf = glob.$gf
+
     // Create a reactive variable that
     // tracks connection state
     const connectionState = ref(false)
@@ -18,25 +25,29 @@ export default {
         connectionState.value = state
         waitForState(!state)
     })})(true)
-    Object.defineProperty(app.config.globalProperties, "$graffitiConnected", {
-      get: ()=> connectionState.value
+    Object.defineProperty(gf, "connected", {
+      get: ()=> connectionState.value,
+      enumerable: true
     })
 
     // Latch on to the graffiti ID
     // when the connection state first becomes true
-    let myActor = null
-    Object.defineProperty(app.config.globalProperties, "$graffitiMyActor", {
+    let me = null
+    Object.defineProperty(gf, "me", {
       get: ()=> {
-        if (connectionState.value) myActor = graffiti.myActor
-        return myActor
-      }
+        if (connectionState.value) me = graffiti.me
+        return me
+      },
+      enumerable: true
     })
 
     // Add static functions
     for (const key of [
       'toggleLogIn', 'update', 'myContexts']) {
-      const vueKey = '$graffiti' + key.charAt(0).toUpperCase() + key.slice(1)
-      app.config.globalProperties[vueKey] = graffiti[key].bind(graffiti)
+      Object.defineProperty(gf, key, {
+        value: graffiti[key].bind(graffiti),
+        enumerable: true
+      })
     }
 
     // A component for subscribing and
@@ -96,7 +107,7 @@ export default {
 
       computed: {
         contextWithDefault() {
-          return !this.context?[this.$graffitiMyActor]:this.context
+          return !this.context?[this.$gf.me]:this.context
         },
 
         objects() {

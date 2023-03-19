@@ -5,19 +5,40 @@ export default function(graffiti) {
 
   return class GraffitiArray extends Array {
 
-    by(ids) {
-      if (typeof ids == 'string') {
-        ids = [ids]
-      }
-      return this.filter(o=> ids.includes(o.actor))
-    }
+    //constructor(filters, ...elems) {
+    //}
+
+    //filter(callback) {
+      //return
+      //super.filter(
+    //}
+
+    //post(object) {
+      //if (!this.filterFunction(object)) {
+        //throw
+      //} else {
+        //return graffiti.post(object)
+      //}
+    //}
+
+    //remove(object) {
+      //if (!this.includes(object)) {
+        //throw
+      //} else {
+        //return 
+      //}
+    //}
 
     get mine() {
-      return this.filter(o=> o.actor==graffiti.myActor)
+      return this.filter(o=> o.actor==graffiti.me)
     }
 
     get notMine() {
-      return this.filter(o=> o.actor!=graffiti.myActor)
+      return this.filter(o=> o.actor!=graffiti.me)
+    }
+
+    by(...ids) {
+      return this.filter(o=> ids.includes(o.actor))
     }
 
     get actors() {

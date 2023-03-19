@@ -61,9 +61,9 @@ export default class {
   }
 
   // authorization functions
-  get myActor() { return this.authParams.myActor }
+  get me() { return this.authParams.myActor }
   toggleLogIn() {
-    this.myActor? Auth.logOut() : Auth.logIn(this.url)
+    this.me? Auth.logOut() : Auth.logIn(this.url)
   }
 
   async #onClose() {
@@ -171,12 +171,12 @@ export default class {
   }
 
   update(object) {
-    object.actor = this.myActor
+    object.actor = this.me
     object.id =
-      `graffitiobject://${this.myActor.substring(16)}:${crypto.randomUUID()}`
+      `graffitiobject://${this.me.substring(16)}:${crypto.randomUUID()}`
     object.updated = new Date().toISOString()
     object.published = object.updated
-    if (!('context' in object)) object.context = [this.myActor]
+    if (!('context' in object)) object.context = [this.me]
 
     // De-dupe contexts
     object.context = [...new Set(object.context)];
@@ -255,7 +255,7 @@ export default class {
   }
 
   objects(contexts, schema={}, filterPrivate=true, filterAttribution=true) {
-    if (!contexts) contexts = [this.myActor]
+    if (!contexts) contexts = [this.me]
     contexts = contexts.filter(context=> context!=null)
     for (const context of contexts) {
       if (!(context in this.contextMap)) {
