@@ -48,6 +48,27 @@ export default {
       })
     }
 
+    // TODO
+    // Do this by passing the object constructor to media
+    const torrentToBlobURL = reactive({})
+    Object.defineProperty(gf, 'media', {
+      value: {
+        store: graffiti.media.store.bind(graffiti.media),
+        fetchBlob:  graffiti.media.fetchBlob.bind(graffiti.media),
+        // Make this synchronous but return a reactive variable
+        fetchBlobURL(torrentReference) {
+          if (!(torrentReference in torrentToBlobURL)) {
+            torrentToBlobURL[torrentReference] = null
+
+            graffiti.media.fetchBlobURL(torrentReference).then(
+              u=> torrentToBlobURL[torrentReference] = u)
+          }
+          return torrentToBlobURL[torrentReference]
+        }
+      },
+      enumerable: true
+    })
+
     // A component for subscribing and
     // unsubscribing to contexts that returns
     // a reactive array of the results
@@ -104,32 +125,15 @@ export default {
         objects() {
           let os = graffiti.objects(this.contextWithDefault)
           os = this.mine!=null?(this.mine?os.mine:os.notMine):os
-          os = this.query?os.query(this.query):os
           os = this.filter?os.filter(this.filter):os
-          os = this.sort?os.sort(this.sort):os
-          os = this.sortBy?os.sortBy(this.sortBy):os
+          os = this.query?os.query(this.query):os
+          os = this.sort?os.sort(this.sort):(
+               this.sortBy?os.sortBy(this.sortBy):os)
           return os
         }
       },
 
       template: '<slot :objects="objects"></slot>'
-    })
-
-    // A single graffiti object by it's ID
-    app.component('GraffitiObject', {
-      props: {
-        id: {
-          type: String,
-          required: true
-        }
-      },
-
-      template: `
-        <GraffitiObjects v-slot={objects}
-          :context=[id]
-          :filter="o=>o.id==id">
-          <slot :object="objects.length?objects[0]:null"></slot>
-        </GraffitiObjects>`
     })
   }
 }
