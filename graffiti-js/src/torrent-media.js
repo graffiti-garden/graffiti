@@ -1,19 +1,11 @@
 import WebTorrent from 'https://cdn.jsdelivr.net/npm/webtorrent@2.0.15/dist/webtorrent.min.js'
-import HybridChunkStore from 'https://cdn.jsdelivr.net/npm/hybrid-chunk-store@1.2.0/+esm'
-// TODO
-// See if this can be done with native indexdb
-import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@7/+esm'
+import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@7.1.1/+esm'
 
 // Thanks to
 // https://github.com/ThaUnknown/pwa-haven/blob/main/torrent-client/src/modules/client.js
 
 export default class TorrentMedia {
   constructor() {
-    // TODO: is manual hybridchunkstore still necessary?
-    this.opts = {
-      storeCacheSlots: 0,
-      store: HybridChunkStore,
-    }
     this.cacheNS = 'torrent-data'
     this.lockEvents = new EventTarget() 
 
