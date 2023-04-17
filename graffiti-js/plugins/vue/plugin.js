@@ -1,5 +1,5 @@
-import { ref, reactive } from 'vue'
 import Graffiti from '../../graffiti.js'
+import { ref, reactive } from 'vue'
 
 export default {
   install(app, options) {
@@ -41,7 +41,7 @@ export default {
     })
 
     // Add static functions
-    for (const key of ['toggleLogIn', 'myContexts']) {
+    for (const key of ['toggleLogIn', 'myContexts', 'post', 'remove']) {
       Object.defineProperty(gf, key, {
         value: graffiti[key].bind(graffiti),
         enumerable: true
@@ -133,7 +133,18 @@ export default {
         }
       },
 
-      template: '<slot :objects="objects"></slot>'
+      template: '<slot :objects="objects"/>'
+    })
+
+    app.component('GraffitiObject', {
+      props: ["id"],
+
+      template: `
+        <GraffitiObjects v-slot="{objects}"
+          :context="[id]"
+          :filter="o=> o.id==id">
+          <slot :object="objects.length?objects[0]:{}"/>
+        </GraffitiObjects>`
     })
   }
 }

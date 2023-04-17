@@ -44,15 +44,15 @@ export default function(me, post, remove) {
       return post(object)
     }
 
-    remove(...objects) {
-      for (const object of objects) {
-        if (!this.includes(object)) {
-          throw "The object can't be removed since it is not in the array"
-        } else {
-          remove(object)
-        }
-      }
-    }
+    //remove(...objects) {
+      //for (const object of objects) {
+        //if (!this.includes(object)) {
+          //throw "The object can't be removed since it is not in the array"
+        //} else {
+          //remove(object)
+        //}
+      //}
+    //}
     
     query(schema) {
       schema.type = 'object'
@@ -76,9 +76,9 @@ export default function(me, post, remove) {
       return [...new Set(this.map(o=> o.actor))]
     }
 
-    removeMine() {
-      this.mine.map(o=> remove(o))
-    }
+    //removeMine() {
+      //this.mine.map(o=> remove(o))
+    //}
 
     sortBy(propertyPath) {
 

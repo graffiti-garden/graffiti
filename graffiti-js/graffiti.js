@@ -18,8 +18,8 @@ export default class {
     this.objectMap = options.objectConstructor() // uuid->object
     this.GraffitiArray = GraffitiArray(
       ()=>this.me,
-      this.#post.bind(this),
-      this.#remove.bind(this))
+      this.post.bind(this),
+      this.remove.bind(this))
     this.media = new TorrentMedia()
 
     this.#initialize()
@@ -173,7 +173,17 @@ export default class {
     }
   }
 
-  #post(object) {
+  post(object) {
+    object.actor = this.me
+    object.id =
+      `graffitiobject://${this.me.substring(16)}:${crypto.randomUUID()}`
+    object.updated = new Date().toISOString()
+    object.published = object.updated
+    if (!('context' in object) ||
+        !object.context.length) {
+      object.context = [this.me]
+    }
+
     // De-dupe contexts
     object.context = [...new Set(object.context)];
 
@@ -189,14 +199,15 @@ export default class {
     return object
   }
 
-  #remove(object) {
-    const originalObject = Object.assign({}, object)
-    this.#removeCallback(object)
-    this.#request({ remove: object.id }).catch(e=> {
-      this.#updateCallback(originalObject)
-      throw e
-    })
-    return true
+  remove(...objects) {
+    for (const object of objects) {
+      const originalObject = Object.assign({}, object)
+      this.#removeCallback(object)
+      this.#request({ remove: object.id }).catch(e=> {
+        this.#updateCallback(originalObject)
+        throw e
+      })
+    }
   }
 
   #objectHandler(object) {
