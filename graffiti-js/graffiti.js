@@ -356,7 +356,7 @@ export default class {
           // Delete objects not attached to any subscription
           const keysLeft = this.objectMap[id].context.reduce(
             (a, c)=> a + (c!=context&&keys.has(c)?1:0), 0)
-          if (keysLeft) { delete this.objectMap[id] }
+          if (!keysLeft) { delete this.objectMap[id] }
         }
 
         delete this.contextMap[context]
