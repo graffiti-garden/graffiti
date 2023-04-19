@@ -1,150 +1,124 @@
 import Graffiti from '../../graffiti.js'
-import { ref, reactive } from 'vue'
 
-export default {
-  install(app, options) {
+export default function GraffitiPlugin(Vue, options={}) {
+  return {
+    install(app, options) {
+      const graffiti = new Graffiti(options)
 
-    // Initialize graffiti with reactive entries
-    const graffiti = new Graffiti({
-      objectConstructor: ()=>reactive({}),
-      ...options
-    })
+      // Begin to define a global property that mirrors
+      // the vanilla spec but with some reactive props
+      const glob = app.config.globalProperties
+      Object.defineProperty(glob, "$graffiti", { value: {} } )
+      Object.defineProperty(glob, "$gf", { value: glob.$graffiti } )
+      const gf = glob.$gf
 
-    // Begin to define a global property
-    const glob = app.config.globalProperties
-    Object.defineProperty(glob, "$graffiti", { value: {} } )
-    Object.defineProperty(glob, "$gf", { value: glob.$graffiti } )
-    const gf = glob.$gf
+      // Add static functions
+      for (const key of ['toggleLogIn', 'post', 'remove', 'objects', 'myContexts']) {
+        Object.defineProperty(gf, key, {
+          enumerable: true,
+          value: graffiti[key].bind(graffiti)
+        })
+      }
 
-    // Create a reactive variable that
-    // tracks connection state
-    const connectionState = ref(false)
-    ;(function waitForState(state) {
-      graffiti.connectionState(state).then(()=> {
-        connectionState.value = state
-        waitForState(!state)
-    })})(true)
-    Object.defineProperty(gf, "connected", {
-      get: ()=> connectionState.value,
-      enumerable: true
-    })
+      // Create a reactive variable that
+      // tracks connection state
+      Object.defineProperty(gf, 'events', {
+        enumerable: true,
+        get: ()=> graffiti.events
+      })
+      const connectionState = Vue.ref(false)
+      gf.events.addEventListener('connected',
+        ()=> connectionState.value = true
+      )
+      gf.events.addEventListener('disconnected',
+        ()=> connectionState.value = false
+      )
+      Object.defineProperty(gf, "connected", {
+        enumerable: true,
+        get: ()=> connectionState.value
+      })
 
-    // Latch on to the graffiti ID
-    // when the connection state first becomes true
-    let me = null
-    Object.defineProperty(gf, "me", {
-      get: ()=> {
-        if (connectionState.value) me = graffiti.me
-        return me
-      },
-      enumerable: true
-    })
+      // Make "me" reactive by latching
+      // when the connection state first becomes true
+      let me = null
+      Object.defineProperty(gf, "me", {
+        enumerable: true,
+        get: ()=> {
+          if (connectionState.value) me = graffiti.me
+          return me
+        }
+      })
 
-    // Add static functions
-    for (const key of ['toggleLogIn', 'myContexts', 'post', 'remove']) {
-      Object.defineProperty(gf, key, {
-        value: graffiti[key].bind(graffiti),
+      const torrentToBlobURL = Vue.reactive({})
+      Object.defineProperty(gf, 'media', {
+        value: {
+          store: graffiti.media.store.bind(graffiti.media),
+          fetchBlob:  graffiti.media.fetchBlob.bind(graffiti.media),
+          // Make this synchronous but return a reactive variable
+          fetchBlobURL(torrentReference) {
+            if (!(torrentReference in torrentToBlobURL)) {
+              torrentToBlobURL[torrentReference] = null
+
+              graffiti.media.fetchBlobURL(torrentReference).then(
+                u=> torrentToBlobURL[torrentReference] = u)
+            }
+            return torrentToBlobURL[torrentReference]
+          }
+        },
         enumerable: true
       })
+
+      // A composable that returns a collection of objects
+      Object.defineProperty(gf, 'useObjects', {
+        value: context=> {
+          const objectMap = Vue.reactive({})
+
+          // Run the loop in the background
+          let running = true
+          let unwatch = ()=>null
+          let controller
+          ;(async ()=> {
+            while (running) {
+              controller = new AbortController();
+              const signal = controller.signal;
+
+              if (Vue.isRef(context) || Vue.isReactive(context)) {
+                unwatch = Vue.watch(context, ()=> {
+                  // Clear the object map and restart the loop
+                  Object.keys(objectMap).forEach(k=> delete objectMap[k])
+                  controller.abort()
+                  unwatch()
+                })
+              }
+              
+              const contextUnwrapped =
+                (Vue.isRef(context)?context.value:context)
+                .map(c=>Vue.isRef(c)?c.value:c)
+              for await (const object of graffiti.objects(contextUnwrapped, signal)) {
+                if (Object.keys(object).length > 1) {
+                  objectMap[object.id] = object
+                } else if (object.id in objectMap) {
+                  delete objectMap[object.id]
+                }
+              }
+            }
+          })()
+
+          Vue.onScopeDispose(()=> {
+            // Stop the loop
+            running = false
+            controller.abort()
+            unwatch()
+          })
+
+          // Strip IDs
+          const objects = Vue.computed(()=> Object.values(objectMap))
+          return { objects }
+        }
+      })
+
+      // Provide it globally to setup
+      app.provide('graffiti', gf)
     }
-
-    // TODO
-    // Do this by passing the object constructor to media
-    const torrentToBlobURL = reactive({})
-    Object.defineProperty(gf, 'media', {
-      value: {
-        store: graffiti.media.store.bind(graffiti.media),
-        fetchBlob:  graffiti.media.fetchBlob.bind(graffiti.media),
-        // Make this synchronous but return a reactive variable
-        fetchBlobURL(torrentReference) {
-          if (!(torrentReference in torrentToBlobURL)) {
-            torrentToBlobURL[torrentReference] = null
-
-            graffiti.media.fetchBlobURL(torrentReference).then(
-              u=> torrentToBlobURL[torrentReference] = u)
-          }
-          return torrentToBlobURL[torrentReference]
-        }
-      },
-      enumerable: true
-    })
-
-    // A component for subscribing and
-    // unsubscribing to contexts that returns
-    // a reactive array of the results
-    app.component('GraffitiObjects', {
-
-      props: {
-        context: {
-          type: Array,
-          default: null
-        },
-        mine: {
-          type: Boolean,
-          default: null
-        },
-        query: {
-          type: Object,
-          default: {}
-        },
-        filter: {
-          type: Function
-        },
-        sort: {
-          type: Function
-        },
-        sortBy: {
-          type: String,
-          default: '-published'
-        }
-      },
-
-      watch: {
-        contextWithDefault: {
-          async handler(newContexts, oldContexts=[]) {
-            // Subscribe to the new contexts
-            await graffiti.subscribe(newContexts)
-            // Unsubscribe to the existing contexts 
-            await graffiti.unsubscribe(oldContexts)
-          },
-          immediate: true,
-          deep: true
-        }
-      },
-
-      // Handle unmounting too
-      unmount() {
-        graffiti.unsubscribe(this.contextWithDefault)
-      },
-
-      computed: {
-        contextWithDefault() {
-          return !this.context?[this.$gf.me]:this.context
-        },
-
-        objects() {
-          let os = graffiti.objects(this.contextWithDefault)
-          os = this.mine!=null?(this.mine?os.mine:os.notMine):os
-          os = this.filter?os.filter(this.filter):os
-          os = this.query?os.query(this.query):os
-          os = this.sort?os.sort(this.sort):(
-               this.sortBy?os.sortBy(this.sortBy):os)
-          return os
-        }
-      },
-
-      template: '<slot :objects="objects"/>'
-    })
-
-    app.component('GraffitiObject', {
-      props: ["id"],
-
-      template: `
-        <GraffitiObjects v-slot="{objects}"
-          :context="[id]"
-          :filter="o=> o.id==id">
-          <slot :object="objects.length?objects[0]:{}"/>
-        </GraffitiObjects>`
-    })
   }
 }

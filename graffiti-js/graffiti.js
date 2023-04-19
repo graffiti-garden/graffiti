@@ -7,15 +7,15 @@ export default class {
   constructor(options={}) {
     options = {
       url: "https://graffiti.garden",
-      objectConstructor: ()=>({}),
       ...options
     }
 
     this.url = options.url
     this.open = false
+    this.events = new EventTarget()
     this.eventTarget = new EventTarget()
-    this.contextMap = options.objectConstructor() // context->{count, Set(id)}
-    this.objectMap = options.objectConstructor() // uuid->object
+    this.contextMap = {} // context->{Set(queryID), Set(id)}
+    this.objectMap = {} // uuid->object
     this.GraffitiArray = GraffitiArray(
       ()=>this.me,
       this.post.bind(this),
@@ -44,17 +44,6 @@ export default class {
     // Commence connection
     this.#connect()
   }
-  
-  // Wait for the connection to be
-  // open (state=true) or closed (state=false)
-  async connectionState(state) {
-    if (this.open != state) {
-      await new Promise(resolve => {
-        this.eventTarget.addEventListener(
-          state? "open": "closed", ()=> resolve())
-      })
-    }
-  }
 
   #connect() {
     this.ws = new WebSocket(this.wsURL)
@@ -72,7 +61,7 @@ export default class {
   async #onClose() {
     console.error("lost connection to graffiti server, attemping reconnect soon...")
     this.open = false
-    this.eventTarget.dispatchEvent(new Event("closed"))
+    this.events.dispatchEvent(new Event("disconnected"))
     await new Promise(resolve => setTimeout(resolve, 2000))
     this.#connect()
   }
@@ -87,9 +76,11 @@ export default class {
 
     // Create a listener for the reply
     const dataPromise = new Promise(resolve => {
-      this.eventTarget.addEventListener('$'+messageID, (e) => {
-        resolve(e.data)
-      })
+      this.eventTarget.addEventListener(
+        '$' + messageID,
+        e=> resolve(e.data),
+        { once: true, passive: true }
+      )
     })
 
     // Send the request
@@ -133,11 +124,11 @@ export default class {
 
   #updateCallback(object) {
     // Add the ID to the context map
-    let subscribed = false
+    let subscribedContexts = []
     for (const context of [...object.context, object.id]) {
       if (!(context in this.contextMap)) continue
       this.contextMap[context].ids.add(object.id)
-      subscribed = true
+      subscribedContexts.push(context)
     }
 
     // Add proxy functions so object modifications
@@ -147,30 +138,54 @@ export default class {
       object = new Proxy(object, this.#objectHandler(object))
     }
 
-    if (subscribed) {
+    if (subscribedContexts.length) {
       this.objectMap[object.id] = object
+
+      // Send to each listener
+      ;[...new Set(subscribedContexts.map(c=>[...this.contextMap[c].queries]).flat())]
+        .forEach(queryID=> {
+          const objectEvent = new Event('#' + queryID)
+          objectEvent.object = object
+          this.eventTarget.dispatchEvent(objectEvent)
+        })
     }
 
     return object
   }
 
   #removeCallback(object) {
-    // Remove the ID from all relevant context maps
-    let supported = false
+    const unsupportedContexts = []
+    const supportedContexts   = []
     for (const context in this.contextMap) {
       if (this.contextMap[context].ids.has(object.id)) {
+        // TODO: it is ambiguous whether object.id should be deleted...
         if ([...object.context, object.id].includes(context)) {
           this.contextMap[context].ids.delete(object.id)
+          unsupportedContexts.push(context)
         } else {
-          supported = true
+          supportedContexts.push(context)
         }
       }
     }
 
     // If all contexts have been removed, delete entirely
-    if (!supported && object.id in this.objectMap) {
+    if (!supportedContexts.length && object.id in this.objectMap) {
       delete this.objectMap[object.id]
     }
+
+    // These are all the queries that (may) see a delete
+    const unsupportedQueries = new Set(unsupportedContexts.map(c=>[...this.contextMap[c].queries]).flat())
+    // These queries won't see a delete
+    const supportedQueries   = new Set(  supportedContexts.map(c=>[...this.contextMap[c].queries]).flat())
+    // Only send messages to the queries with no support at all
+    // unsupportedQueries - supportedQueries
+    ;[...unsupportedQueries].filter(q=> !supportedQueries.has(q))
+      .forEach(queryID=> {
+        const objectEvent = new Event('#' + queryID)
+        // Strip the object to just it's ID for the event
+        objectEvent.object = { id: object.id }
+        this.eventTarget.dispatchEvent(objectEvent)
+      })
   }
 
   post(object) {
@@ -254,40 +269,61 @@ export default class {
     return await this.#request({ ls: null })
   }
 
-  objects(contexts) {
+  async *objects(contexts, signal) {
     if (!contexts) contexts = [this.me]
     contexts = contexts.filter(context=> context!=null)
-    for (const context of contexts) {
-      if (!(context in this.contextMap)) {
-        throw `You are not subscribed to '${context}'`
-      }
+
+    // Subscribe
+    const queryID = crypto.randomUUID()
+    this.#subscribe(contexts, queryID)
+
+    // Send existing objects
+    const ids = new Set(contexts.map(c=>[...this.contextMap[c].ids]).flat())
+    for (const id of ids) {
+      yield this.objectMap[id]
     }
 
-    // Merge by IDs from all contexts and
-    // convert to relevant objects
-    const ids = new Set(contexts.map(c=>[...this.contextMap[c].ids]).flat())
-    const objects = [...ids].map(id=> this.objectMap[id])
-
-    // Return an array wrapped with graffiti functions
-    return new this.GraffitiArray(
-      contexts,
-      ()=>true,
-      ...objects)
+    try {
+      // Wait for updates
+      while (true) {
+        yield await new Promise((resolve, reject)=> {
+          const retreive = e=> {
+            signal?.removeEventListener("abort", abort)
+            resolve(e.object)
+          }
+          const abort = ()=> {
+            this.eventTarget.removeEventListener('#' + queryID, retreive)
+            reject(this.reason)
+          }
+          this.eventTarget.addEventListener(
+            '#' + queryID,
+            retreive,
+            { once: true, passive: true }
+          )
+          signal?.addEventListener(
+            "abort",
+            abort,
+            { once: true, passive: true }
+          )
+        })
+      }
+    } catch {} finally {
+      this.#unsubscribe(contexts, queryID)
+    }
   }
 
-  async subscribe(contexts) {
-    contexts = contexts.filter(context=> context!=null)
+  async #subscribe(contexts, queryID) {
     // Look at what is already subscribed to
     const subscribingContexts = []
     for (const context of contexts) {
       if (context in this.contextMap) {
         // Increase the count
-        this.contextMap[context].count++
+        this.contextMap[context].queries.add(queryID)
       } else {
         // Create a new slot
         this.contextMap[context] = {
           ids: new Set(),
-          count: 1
+          queries: new Set([queryID])
         }
         subscribingContexts.push(context)
       }
@@ -302,18 +338,17 @@ export default class {
       } catch {}
   }
 
-  async unsubscribe(contexts) {
-    contexts = contexts.filter(context=> context!=null)
+  async #unsubscribe(contexts, queryID) {
     // Decrease the count of each context,
     // removing and marking if necessary
     const unsubscribingContexts = []
     for (const context of contexts) {
-      this.contextMap[context].count--
+      this.contextMap[context].queries.delete(queryID)
     }
 
     // Delete completely unsubscribed contexts
     for (const context of contexts) {
-      if (!this.contextMap[context].count) {
+      if (!this.contextMap[context].queries.size) {
         unsubscribingContexts.push(context)
 
         const keys = new Set(Object.keys(this.contextMap))
@@ -336,9 +371,7 @@ export default class {
   }
 
   async #onOpen() {
-    console.log("connected to the graffiti socket")
     this.open = true
-    this.eventTarget.dispatchEvent(new Event("open"))
 
     // Clear data
     for (let context in this.contextMap) {
@@ -349,5 +382,8 @@ export default class {
     // Resubscribe
     const contexts = Object.keys(this.contextMap)
     if (contexts.length) await this.#request({ subscribe: contexts })
+
+    console.log("connected to the graffiti socket")
+    this.events.dispatchEvent(new Event("connected"))
   }
 }
