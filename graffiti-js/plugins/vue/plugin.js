@@ -8,7 +8,7 @@ export default function GraffitiPlugin(Vue, options={}) {
       // Begin to define a global property that mirrors
       // the vanilla spec but with some reactive props
       const glob = app.config.globalProperties
-      Object.defineProperty(glob, "$graffiti", { value: {} } )
+      Object.defineProperty(glob, "$graffiti", { value: Vue.shallowReactive({}) } )
       Object.defineProperty(glob, "$gf", { value: glob.$graffiti } )
       const gf = glob.$gf
 
@@ -19,35 +19,24 @@ export default function GraffitiPlugin(Vue, options={}) {
           value: graffiti[key].bind(graffiti)
         })
       }
-
-      // Create a reactive variable that
-      // tracks connection state
       Object.defineProperty(gf, 'events', {
         enumerable: true,
         get: ()=> graffiti.events
       })
-      const connectionState = Vue.ref(false)
+
+      // These variables are reactive because
+      // $gf is shallow reactive
+      gf.me = ''
+      gf.connected = false
       gf.events.addEventListener('connected',
-        ()=> connectionState.value = true
+        ()=> {
+          gf.me = graffiti.me
+          gf.connected = true
+        }
       )
       gf.events.addEventListener('disconnected',
-        ()=> connectionState.value = false
+        ()=> gf.connected = false
       )
-      Object.defineProperty(gf, "connected", {
-        enumerable: true,
-        get: ()=> connectionState.value
-      })
-
-      // Make "me" reactive by latching
-      // when the connection state first becomes true
-      let me = null
-      Object.defineProperty(gf, "me", {
-        enumerable: true,
-        get: ()=> {
-          if (connectionState.value) me = graffiti.me
-          return me
-        }
-      })
 
       const torrentToBlobURL = Vue.reactive({})
       Object.defineProperty(gf, 'media', {
@@ -75,26 +64,36 @@ export default function GraffitiPlugin(Vue, options={}) {
 
           // Run the loop in the background
           let running = true
-          let unwatch = ()=>null
+          let unwatchers = new Set()
           let controller
           ;(async ()=> {
             while (running) {
               controller = new AbortController();
               const signal = controller.signal;
 
-              if (Vue.isRef(context) || Vue.isReactive(context)) {
-                unwatch = Vue.watch(context, ()=> {
-                  // Clear the object map and restart the loop
-                  Object.keys(objectMap).forEach(k=> delete objectMap[k])
-                  controller.abort()
-                  unwatch()
-                })
+              const watcher = watchVar=> {
+                if (Vue.isRef(watchVar) || Vue.isReactive(watchVar)) {
+                  const unwatch = Vue.watch(watchVar, ()=> {
+                    // Clear the object map and restart the loop
+                    Object.keys(objectMap).forEach(k=> delete objectMap[k])
+                    controller.abort()
+                    unwatch()
+                    unwatchers.delete(unwatch)
+                  })
+                  unwatchers.add(unwatch)
+                }
               }
-              
-              const contextUnwrapped =
-                (Vue.isRef(context)?context.value:context)
-                .map(c=>Vue.isRef(c)?c.value:c)
-              for await (const object of graffiti.objects(contextUnwrapped, signal)) {
+
+              // Watch the outer array
+              watcher(context)
+
+              // Unwrap and watch all inner arrays
+              const contextUnwrapped = Vue.isRef(context)? context.value : context
+              contextUnwrapped.forEach(c=> watcher(c))
+
+              // Unwrap more and loop
+              const contextUnwrappedMore = contextUnwrapped.map(c=>Vue.isRef(c)?c.value:c)
+              for await (const object of graffiti.objects(contextUnwrappedMore, signal)) {
                 if (Object.keys(object).length > 1) {
                   objectMap[object.id] = object
                 } else if (object.id in objectMap) {
@@ -108,7 +107,8 @@ export default function GraffitiPlugin(Vue, options={}) {
             // Stop the loop
             running = false
             controller.abort()
-            unwatch()
+            unwatchers.forEach(uw=> uw())
+            unwatchers.clear()
           })
 
           // Strip IDs
