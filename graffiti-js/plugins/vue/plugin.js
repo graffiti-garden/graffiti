@@ -12,17 +12,19 @@ export default function GraffitiPlugin(Vue, options={}) {
       Object.defineProperty(glob, "$gf", { value: glob.$graffiti } )
       const gf = glob.$gf
 
-      // Add static functions
+      // Add static functions and constants
       for (const key of ['toggleLogIn', 'post', 'remove', 'objects', 'myContexts']) {
         Object.defineProperty(gf, key, {
           enumerable: true,
           value: graffiti[key].bind(graffiti)
         })
       }
-      Object.defineProperty(gf, 'events', {
-        enumerable: true,
-        get: ()=> graffiti.events
-      })
+      for (const key of ['events', 'media']) {
+        Object.defineProperty(gf, key, {
+          enumerable: true,
+          get: ()=> graffiti[key]
+        })
+      }
 
       // These variables are reactive because
       // $gf is shallow reactive
@@ -37,25 +39,6 @@ export default function GraffitiPlugin(Vue, options={}) {
       gf.events.addEventListener('disconnected',
         ()=> gf.connected = false
       )
-
-      const torrentToBlobURL = Vue.reactive({})
-      Object.defineProperty(gf, 'media', {
-        value: {
-          store: graffiti.media.store.bind(graffiti.media),
-          fetchBlob:  graffiti.media.fetchBlob.bind(graffiti.media),
-          // Make this synchronous but return a reactive variable
-          fetchBlobURL(torrentReference) {
-            if (!(torrentReference in torrentToBlobURL)) {
-              torrentToBlobURL[torrentReference] = null
-
-              graffiti.media.fetchBlobURL(torrentReference).then(
-                u=> torrentToBlobURL[torrentReference] = u)
-            }
-            return torrentToBlobURL[torrentReference]
-          }
-        },
-        enumerable: true
-      })
 
       // A composable that returns a collection of objects
       Object.defineProperty(gf, 'useObjects', {

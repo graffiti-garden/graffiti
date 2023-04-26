@@ -11,10 +11,34 @@ export default class TorrentMedia {
 
     this.wt = new WebTorrent()
 
-    this.#initialize()
+    this._initialized = false
+    const { release, wait } = this.#lock()
+    this._initializeWaiter = wait
+    this.#initialize(release)
   }
 
-  async #initialize() {
+  async #initialized() {
+    if (this._initialized) return
+    return await this._initializeWaiter()
+  }
+
+  async store(file) {
+    await this.#initialized()
+    const { release, wait } = this.#lock()
+    this.wt.seed(file, this.opts, torrent=> {
+      this.#cache(torrent)
+      release(torrent)
+    })
+    return (await wait()).magnetURI
+  }
+
+  async fetch(torrentReference) {
+    await this.#initialized()
+    const wtf = await this.#fetchTorrentFile(torrentReference)
+    return await wtf.blob()
+  }
+
+  async #initialize(release) {
     // A cache of downloaded torrent files
     this.db = await openDB('graffiti', 1, {
       upgrade: db=> {
@@ -23,48 +47,34 @@ export default class TorrentMedia {
     })
 
     // Fetch existing torrent from cache and seed
+    const fetches = []
     for (const hash of await this.db.getAllKeys(this.cacheNS)) {
       const torrentData = await this.db.get(this.cacheNS, hash)
-      this.fetchTorrentFile(new Blob([torrentData]))
+      fetches.push(this.#fetchTorrentFile(new Blob([torrentData])))
     }
+    await Promise.all(fetches)
+
+    this._initialized = true
+    release()
   }
 
-  async cache(torrent) {
+  async #cache(torrent) {
     await this.db.put(this.cacheNS, torrent.torrentFile, torrent.infoHash)
   }
 
-  async store(file) {
-    const { release, wait } = this.lock()
-    this.wt.seed(file, this.opts, torrent=> {
-      this.cache(torrent)
-      release(torrent)
-    })
-    return (await wait()).magnetURI
-  }
-
-  async fetchTorrentFile(torrentReference) {
+  async #fetchTorrentFile(torrentReference) {
     const cachedTorrent = await this.wt.get(torrentReference)
     if (cachedTorrent) return cachedTorrent.files[0]
 
-    const { release, wait } = this.lock()
+    const { release, wait } = this.#lock()
     this.wt.add(torrentReference, this.opts, torrent=> {
-      this.cache(torrent)
+      this.#cache(torrent)
       release(torrent)
     })
     return (await wait()).files[0]
   }
 
-  async fetchBlob(torrentReference) {
-    const wtf = await this.fetchTorrentFile(torrentReference)
-    return await wtf.blob()
-  }
-
-  async fetchBlobURL(torrentReference) {
-    const blob = await this.fetchBlob(torrentReference)
-    return window.URL.createObjectURL(blob)
-  }
-
-  lock() {
+  #lock() {
     const random = crypto.randomUUID()
 
     return {
@@ -76,9 +86,11 @@ export default class TorrentMedia {
 
       wait: async ()=> {
         return await new Promise(resolve => {
-          this.lockEvents.addEventListener(random, (e) => {
-            resolve(e.data)
-          })
+          this.lockEvents.addEventListener(
+            random,
+            e=> resolve(e.data),
+            { once: true, passive: true }
+          )
         })
       }
     }

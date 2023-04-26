@@ -1,5 +1,4 @@
 import Auth from './src/auth.js'
-import GraffitiArray from './src/array.js'
 import TorrentMedia from './src/torrent-media.js'
 
 export default class {
@@ -16,10 +15,6 @@ export default class {
     this.eventTarget = new EventTarget()
     this.contextMap = {} // context->{Set(queryID), Set(id)}
     this.objectMap = {} // uuid->object
-    this.GraffitiArray = GraffitiArray(
-      ()=>this.me,
-      this.post.bind(this),
-      this.remove.bind(this))
     this.media = new TorrentMedia()
 
     this.#initialize()
