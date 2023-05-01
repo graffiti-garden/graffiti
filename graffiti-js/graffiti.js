@@ -347,12 +347,12 @@ export default class {
         unsubscribingContexts.push(context)
 
         const keys = new Set(Object.keys(this.contextMap))
-        for (const id of this.contextMap[context].ids) {
+        this.contextMap[context].ids.forEach(id=> {
           // Delete objects not attached to any subscription
-          const keysLeft = this.objectMap[id].context.reduce(
+          const keysLeft = [id, ...this.objectMap[id].context].reduce(
             (a, c)=> a + (c!=context&&keys.has(c)?1:0), 0)
           if (!keysLeft) { delete this.objectMap[id] }
-        }
+        })
 
         delete this.contextMap[context]
       }
