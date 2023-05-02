@@ -1,5 +1,7 @@
 import Graffiti from '../../graffiti.js'
 
+const REFRESH_RATE = 100 // milliseconds
+
 export default function GraffitiPlugin(Vue, options={}) {
   return {
     install(app, options) {
@@ -49,6 +51,7 @@ export default function GraffitiPlugin(Vue, options={}) {
           let running = true
           let unwatchers = new Set()
           let controller
+          let timeoutID = null
           ;(async ()=> {
             while (running) {
               controller = new AbortController();
@@ -62,6 +65,8 @@ export default function GraffitiPlugin(Vue, options={}) {
                     controller.abort()
                     unwatch()
                     unwatchers.delete(unwatch)
+                    clearTimeout(timeoutID)
+                    timeoutID = null
                   })
                   unwatchers.add(unwatch)
                 }
@@ -69,18 +74,32 @@ export default function GraffitiPlugin(Vue, options={}) {
 
               // Watch the outer array
               watcher(context)
-
               // Unwrap and watch all inner arrays
               const contextUnwrapped = Vue.isRef(context)? context.value : context
               contextUnwrapped.forEach(c=> watcher(c))
 
-              // Unwrap more and loop
+              // Unwrap more and stream changes into batches
+              const batch = {}
               const contextUnwrappedMore = contextUnwrapped.map(c=>Vue.isRef(c)?c.value:c)
               for await (const object of graffiti.objects(contextUnwrappedMore, signal)) {
                 if (Object.keys(object).length > 1) {
-                  objectMap[object.id] = object
+                  batch[object.id] = object
                 } else if (object.id in objectMap) {
-                  delete objectMap[object.id]
+                  batch[object.id] = false
+                }
+
+                // Flush the batch after timeout
+                if (!timeoutID) {
+                  timeoutID = setTimeout(()=> {
+                    for (const [id, object] of Object.entries(batch)) {
+                      if (object) {
+                        objectMap[id] = object
+                      } else {
+                        delete objectMap[id]
+                      }
+                    }
+                    timeoutID = null
+                  }, REFRESH_RATE)
                 }
               }
             }
@@ -91,7 +110,7 @@ export default function GraffitiPlugin(Vue, options={}) {
             running = false
             controller.abort()
             unwatchers.forEach(uw=> uw())
-            unwatchers.clear()
+            clearTimeout(timeoutID)
           })
 
           // Strip IDs
