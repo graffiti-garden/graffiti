@@ -50,9 +50,8 @@ export default class TorrentMedia {
     const fetches = []
     for (const hash of await this.db.getAllKeys(this.cacheNS)) {
       const torrentData = await this.db.get(this.cacheNS, hash)
-      fetches.push(this.#fetchTorrentFile(new Blob([torrentData])))
+      await this.#fetchTorrentFile(new Blob([torrentData]))
     }
-    await Promise.all(fetches)
 
     this._initialized = true
     release()
@@ -67,11 +66,19 @@ export default class TorrentMedia {
     if (cachedTorrent) return cachedTorrent.files[0]
 
     const { release, wait } = this.#lock()
-    this.wt.add(torrentReference, this.opts, torrent=> {
+    const torrent = this.wt.add(torrentReference, this.opts, torrent=> {
       this.#cache(torrent)
       release(torrent)
     })
-    return (await wait()).files[0]
+
+    torrent.once('error', err=> release(err))
+
+    const result = await wait()
+    if (result instanceof Error) {
+      throw result
+    } else {
+      return result.files[0]
+    }
   }
 
   #lock() {
