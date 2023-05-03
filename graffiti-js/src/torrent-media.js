@@ -11,10 +11,6 @@ export default class TorrentMedia {
 
     this.wt = new WebTorrent()
 
-    this.urlCache = {}
-    this.urlWaiters = {}
-    this.torrentWaiters = {}
-
     this._initialized = false
     const { release, wait } = this.#lock()
     this._initializeWaiter = wait
@@ -23,7 +19,7 @@ export default class TorrentMedia {
 
   async #initialized() {
     if (this._initialized) return
-    return await this._initializeWaiter
+    return await this._initializeWaiter()
   }
 
   async store(file) {
@@ -33,35 +29,13 @@ export default class TorrentMedia {
       this.#cache(torrent)
       release(torrent)
     })
-    return (await wait).magnetURI
+    return (await wait()).magnetURI
   }
 
   async fetch(torrentReference) {
     await this.#initialized()
     const wtf = await this.#fetchTorrentFile(torrentReference)
     return await wtf.blob()
-  }
-
-  async fetchURL(torrentReference) {
-    if (torrentReference in this.urlCache)
-      return this.urlCache[torrentReference]
-
-    if (torrentReference in this.urlWaiters)
-      return await this.urlWaiters[torrentReference]
-
-    // Lock so fetch only happens once
-    const { release, wait } = this.#lock()
-    this.urlWaiters[torrentReference] = wait
-
-    // Get the blob
-    const blob = await this.fetch(torrentReference)
-    const url = URL.createObjectURL(blob)
-
-    // Set and release
-    this.urlCache[torrentReference] = url
-    release(url)
-    delete this.urlWaiters[torrentReference]
-    return url
   }
 
   async #initialize(release) {
@@ -76,7 +50,11 @@ export default class TorrentMedia {
     const fetches = []
     for (const hash of await this.db.getAllKeys(this.cacheNS)) {
       const torrentData = await this.db.get(this.cacheNS, hash)
-      await this.#fetchTorrentFile(new Blob([torrentData]))
+      try {
+        await this.#fetchTorrentFile(new Blob([torrentData]))
+      } catch {
+        await this.db.delete(this.cacheNS, hash)
+      }
     }
 
     this._initialized = true
@@ -91,23 +69,15 @@ export default class TorrentMedia {
     const cachedTorrent = await this.wt.get(torrentReference)
     if (cachedTorrent) return cachedTorrent.files[0]
 
-    if (!(torrentReference in this.torrentWaiters)) {
-      const { release, wait } = this.#lock()
-      this.torrentWaiters[torrentReference] = wait
+    const { release, wait } = this.#lock()
+    const torrent = this.wt.add(torrentReference, this.opts, torrent=> {
+      this.#cache(torrent)
+      release(torrent)
+    })
 
-      const torrent = this.wt.add(torrentReference, this.opts, torrent=> {
-        this.#cache(torrent)
-        release(torrent)
-        delete this.torrentWaiters[torrentReference]
-      })
+    torrent.once('error', err=> release(err))
 
-      torrent.once('error', err=> {
-        release(err)
-        delete this.torrentWaiters[torrentReference]
-      })
-    }
-
-    const result = await this.torrentWaiters[torrentReference]
+    const result = await wait()
     if (result instanceof Error) {
       throw result
     } else {
@@ -125,13 +95,15 @@ export default class TorrentMedia {
         this.lockEvents.dispatchEvent(messageEvent)
       },
 
-      wait: new Promise(resolve => {
-        this.lockEvents.addEventListener(
-          random,
-          e=> resolve(e.data),
-          { once: true, passive: true }
-        )
-      })
+      wait: async ()=> {
+        return await new Promise(resolve => {
+          this.lockEvents.addEventListener(
+            random,
+            e=> resolve(e.data),
+            { once: true, passive: true }
+          )
+        })
+      }
     }
   }
 }
