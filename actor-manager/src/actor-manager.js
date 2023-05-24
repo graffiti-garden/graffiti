@@ -18,7 +18,7 @@ export default class Actors {
 
       // Connect to the database
       // to store and load identities
-      const request = indexedDB.open("actorstest3", 1)
+      const request = indexedDB.open("actorstest4", 1)
       request.onupgradeneeded = e=> {
         const db = e.target.result
         db.createObjectStore("actors", {
@@ -49,7 +49,8 @@ export default class Actors {
           s.openCursor().onsuccess = 
             ({target: { result: cursor }})=> {
               if (cursor) {
-                this.updateOrigin(...Object.entries(cursor.value)[0], false)
+                const {origin, thumbprint} = cursor.value
+                this.updateOrigin(origin, thumbprint, false)
                 cursor.continue()
               }
             }
@@ -126,7 +127,7 @@ export default class Actors {
     Object.keys(this.origins).forEach(async o=>{
       if (this.origins[o] == thumbprint) {
         // Don't propogate because this is implicit
-        await removeOrigin(o, false)
+        await this.removeOrigin(o, false)
       }
     })
 
@@ -139,11 +140,11 @@ export default class Actors {
         this.origins[origin] == thumbprint) return
 
     this.origins[origin] = thumbprint
+    const payload = {origin, thumbprint}
 
     const store = await this.store("origins")
-    store.put({origin: thumbprint})
-
-    this.forwardAction("update-origin", {origin: thumbprint}, propogate)
+    store.put(payload)
+    this.forwardAction("update-origin", payload, propogate)
   }
 
   async removeOrigin(origin, propogate=true) {
@@ -178,7 +179,8 @@ export default class Actors {
     } else if (action == "remove-actor") {
       await this.removeActor(payload, false)
     } else if (action == "update-origin") {
-      await this.updateOrigin(...Object.entries(payload)[0], false)
+      const {origin, thumbprint} = payload
+      await this.updateOrigin(origin, thumbprint, false)
     } else if (action == "remove-origin") {
       await this.removeOrigin(payload, false)
     }

@@ -11,17 +11,17 @@
       <h1>
         Graffiti Actor Manager
       </h1>
-      <!-- <ul>
+      <ul>
         <li>
-          <router-link to="/">My Actors</router-link>
+          <RouterLink to="/">My Actors</RouterLink>
         </li>
         <li> 
-          <router-link to="/apps">My Apps</router-link>
+          <RouterLink to="/apps">My Apps</RouterLink>
         </li>
-      </ul> -->
+      </ul>
     </header>
-    <!-- <main>
-      <router-view></router-view>
-    </main> -->
+    <main>
+      <RouterView/>
+    </main>
   </template>
 </template>
