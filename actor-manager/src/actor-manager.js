@@ -1,4 +1,4 @@
-import * as jose from "https://cdn.jsdelivr.net/npm/jose@4.13.1/+esm"
+import * as jose from "jose"
 
 export default class Actors {
   constructor() {
