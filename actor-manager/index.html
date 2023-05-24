@@ -3,7 +3,15 @@
 <head>
   <meta charset="utf-8">
   <title>Graffiti Actor Manager</title>
-  <link rel="stylesheet" href="./style.css" /> <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="./style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script>
+    const redirect = sessionStorage.redirect
+    delete sessionStorage.redirect
+    if (redirect && redirect !== location.href) {
+      history.replaceState(null, null, redirect)
+    }
+  </script>
   <script type="importmap">
     {
       "imports": {
