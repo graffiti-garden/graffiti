@@ -1,0 +1,21 @@
+<p>
+  An application hosted at the following domain would like access to one of your Graffiti actors.
+  <code>
+    {{origin}}
+  </code>
+</p>
+
+<p>
+  Which actor would you like it to use?
+  You can select a different actor or revoke access at any time.
+</p>
+
+<form @submit.prevent()>
+  <option v-for="actor in $root.actors" :value="actor.thumbprint">
+    {{ actor.nickname }}
+  </option>
+  <input type="submit"/>
+  <input type="button" @click="$router.push('/apps')">
+    Cancel
+  </input>
+</form>

@@ -1,0 +1,40 @@
+<p v-if="!$root.origins.length">
+  No applications have been granted access to your Graffiti actors. Go find some apps!
+</p>
+
+<template v-else>
+  <p>
+    Applications hosted at the following domains have been granted access to your Graffiti actors.
+  </p>
+
+  <table>
+    <tr>
+      <th>
+        Origin
+      </th>
+      <th>
+        Actor
+      </th>
+    </tr>
+    <tr v-for="origin in $root.origins">
+      <td>
+        {{ origin }}
+      </td>
+      <td>
+        <select>
+          <option>
+            <!-- //@click="$root.actorManager.removeOrigin(origin)"> -->
+            <b>
+              Revoke access
+            </b>
+          </option>
+          <option v-for="actor in $root.actors" :value="actor.thumbprint">
+            {{ actor.nickname }}
+          </option>
+        </select>
+      </td>
+      <td>
+      </td>
+    </tr>
+  </table>
+</template>

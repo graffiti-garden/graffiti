@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Graffiti Actor Manager</title>
+  <link rel="stylesheet" href="./style.css" /> <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://cdnjs.cloudflare.com/ajax/libs/vue/3.2.45/vue.esm-browser.min.js",
+        "@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@6.2.1/lib/esm/index.js",
+        "vue-router": "https://cdnjs.cloudflare.com/ajax/libs/vue-router/4.1.6/vue-router.esm-browser.min.js"
+      }
+    }
+  </script>
+  <script type="module" src="./js/main.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    <template v-if="!Object.keys(actors).length">
+      <welcome></welcome>
+    </template>
+    <template v-else>
+      <header>
+        <h1>
+          Graffiti Actor Manager
+        </h1>
+        <ul>
+          <li>
+            <router-link to="/actors">My Actors</router-link>
+          </li>
+          <li> 
+            <router-link to="/apps">My Apps</router-link>
+          </li>
+        </ul>
+      </header>
+      <main>
+        <router-view></router-view>
+      </main>
+    </template>
+  </div>
+</body>
+</html>
