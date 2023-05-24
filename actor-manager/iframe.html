@@ -1,14 +1,36 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script type="module" src="./js/iframe.js"></script>
-</head>
+  <script type="module">
+    import ActorManager from './src/actor-manager.js'
 
+    window.login = function() {
+      const actorManager = new ActorManager()
+      actorManager.onchange =
+        ({ action, payload })=> {
+          console.log("message from actor manager!")
+          console.log(action)
+          console.log(payload)
+        }
+      // window.open(`./#new-app/${encodeURIComponent(origin)}`, '_blank')
+    }
+
+    // Post messages to parent
+    const origin = new URL(document.referrer).origin
+    function postMessage(message) {
+      window.parent.postMessage(message, origin)
+    }
+
+    window.onmessage = function(data) {
+      console.log("message from parent!")
+      console.log(data)
+
+      postMessage("echo")
+    }
+  </script>
+</head>
 <body>
-  <div id="app">
-    <button @click="login">
-      Log In To Graffiti
-    </button>
-    {{storageGranted}}
-  </div>
+  <button onclick="login()">
+    Log In To Graffiti
+  </button>
 </body>
