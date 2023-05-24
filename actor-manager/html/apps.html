@@ -24,9 +24,9 @@
         <select>
           <option>
             <!-- //@click="$root.actorManager.removeOrigin(origin)"> -->
-            <b>
+            <strong>
               Revoke access
-            </b>
+            </strong>
           </option>
           <option v-for="actor in $root.actors" :value="actor.thumbprint">
             {{ actor.nickname }}

@@ -15,7 +15,10 @@
       </span>
     </td>
     <td>
-      <button @click="editing==actor.thumbprint?rename(actor):editing=actor.thumbprint;nickname=actor.nickname">
+      <button v-if="editing==actor.thumbprint" @click="rename(actor)">
+        Save
+      </button>
+      <button v-else @click="editing=actor.thumbprint;nickname=actor.nickname">
         ️Rename
       </button>
     </td>
@@ -27,6 +30,6 @@
   </tr>
 </table>
 
-<button @click="$root.actorManager.createActor('My New Actor')">
-  New Actor
-</button>
+<form @submit.prevent="$root.actorManager.createActor('My New Actor')">
+  <input type="submit" value="Create New Actor"/>
+</form>

@@ -33,17 +33,35 @@ const Actors = {
   template: await fetchHTML('actors')
 }
 
+const NewApp = {
+  props: ['origin'],
+
+  data() {
+    return {
+      selectedThumbprint: null
+    }
+  },
+
+  methods: {
+    save() {
+      if (this.selectedThumbprint) {
+        this.$root.actorManager.updateOrigin(this.origin, this.selectedThumbprint)
+        this.$router.push('/apps')
+      }
+    }
+  },
+
+  template: await fetchHTML('new-app')
+}
+
 const Apps = { template: await fetchHTML('apps') }
 const Welcome = { template: await fetchHTML('welcome') }
-const NewApp = { template: await fetchHTML('new-app') }
-NewApp.props = ['origin']
 
 const Router = createRouter({
   history: ["localhost","127.0.0.1"].includes(window.location.hostname)?
     createWebHashHistory() : createWebHistory(),
   routes: [
-    { path: '/', redirect: '/actors' },
-    { path: '/actors', component: Actors },
+    { path: '/', component: Actors },
     { path: '/apps', component: Apps },
     { path: '/new-app/:origin', component: NewApp, props: true }
   ],

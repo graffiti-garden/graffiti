@@ -3,14 +3,15 @@ import * as jose from "https://cdn.jsdelivr.net/npm/jose@4.13.1/+esm"
 export default class Actors {
   constructor() {
     this.actors = {}
-    this.keys = {}
-    this.origins = new Set()
+    this.privateKeys = {}
+    this.origins = {}
     this.onchange = ()=>{}
     this.dbInitialized = false
     this.events = new EventTarget()
 
     document.hasStorageAccess().then(hasAccess=> {
-      if (!hasAccess) throw "The actor manager can't work without local storage access!"
+      if (!hasAccess)
+       throw "The actor manager can't work without local storage access!"
 
       this.channel = new BroadcastChannel("actors")
       this.channel.onmessage = this.onChannelMessage.bind(this)
@@ -57,6 +58,22 @@ export default class Actors {
     })
   }
 
+  async store(s) {
+    if (!this.dbInitialized) {
+      await new Promise(resolve=>
+        this.events.addEventListener(
+          'dbInitialized',
+          ()=>resolve()), {
+            passive: true,
+            once: true
+          })
+    }
+
+    return this.db
+        .transaction([s], "readwrite")
+        .objectStore(s)
+  }
+
   async createActor(nickname, alg='ES256') {
     // Generate public private key
     const { publicKey, privateKey } =
@@ -73,29 +90,15 @@ export default class Actors {
     return actor
   }
 
-  async store(s) {
-    if (!this.dbInitialized) {
-      await new Promise(resolve=>
-        this.events.addEventListener(
-          'dbInitialized',
-          ()=>resolve()))
-    }
-
-    return this.db
-        .transaction([s], "readwrite")
-        .objectStore(s)
-  }
-
   async updateActor(actor, propogate=true) {
     // Update the actor internally
     // and potentially unpack the keys
     this.actors[actor.thumbprint] = actor
-    if (!(actor.thumbprint in this.keys)) {
-      this.keys[actor.thumbprint] =
+    if (!(actor.thumbprint in this.privateKeys)) {
+      this.privateKeys[actor.thumbprint] =
         await jose.importPKCS8(
           actor.pkcs8Pem,
-          actor.alg, 
-          { extractable: true }
+          actor.alg
         )
     }
 
@@ -113,11 +116,19 @@ export default class Actors {
 
     // Delete all associations
     delete this.actors[thumbprint]
-    delete this.keys[thumbprint]
+    delete this.privateKeys[thumbprint]
 
     // Delete in the database
     const store = await this.store("actors")
     store.delete(thumbprint)
+
+    // Remove any origins associated with the actor
+    Object.keys(this.origins).forEach(async o=>{
+      if (this.origins[o] == thumbprint) {
+        // Don't propogate because this is implicit
+        await removeOrigin(o, false)
+      }
+    })
 
     // Update others of the change
     this.forwardAction("remove-actor", actor, propogate)
@@ -136,10 +147,12 @@ export default class Actors {
   }
 
   async removeOrigin(origin, propogate=true) {
-    if (!this.origins.has(origin)) return
+    if (!(origin in this.origins)) return
 
-    this.origins.delete(origin)
-    ;(await this.store("origins")).delete(origin)
+    delete this.origins[origin]
+    const store = await this.store("origins")
+    store.delete(origin)
+
     this.forwardAction("remove-origin", origin, propogate)
   }
 
@@ -153,7 +166,6 @@ export default class Actors {
   }
 
   async rename(actor, nickname) {
-    console.log(actor)
     if (actor.nickname != nickname) {
       actor.nickname = nickname
       await this.updateActor(actor)
@@ -166,19 +178,20 @@ export default class Actors {
     } else if (action == "remove-actor") {
       await this.removeActor(payload, false)
     } else if (action == "update-origin") {
-      await this.updateOrigin(payload, false)
+      await this.updateOrigin(...Object.entries(payload)[0], false)
     } else if (action == "remove-origin") {
       await this.removeOrigin(payload, false)
     }
   }
 
-  async sign(thumbprint, origin, message) {
-    if (!(thumbprint in this.actors) ||
-        !this.origins.has(origin)) {
-      throw "The actor you're trying to embody either does not exist, or you do not have permission to be them."
+  async sign(origin, message) {
+    if (!(origin in this.origins)) {
+      throw "This origin does not have permission to embody any actor."
     }
 
-    const { jwk, alg, privateKey } = this.actors[thumbprint]
+    const thumbprint = this.origins[origin]
+    const { jwk, alg } = this.actors[thumbprint]
+    const privateKey = this.privateKeys[thumbprint]
 
     return await new jose.SignJWT(message)
       .setProtectedHeader({ jwk, alg })
