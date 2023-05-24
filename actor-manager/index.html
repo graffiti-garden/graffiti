@@ -1,6 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://cdnjs.cloudflare.com/ajax/libs/vue/3.2.45/vue.esm-browser.min.js",
+        "@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@6.2.1/lib/esm/index.js",
+        "vue-router": "https://cdnjs.cloudflare.com/ajax/libs/vue-router/4.1.6/vue-router.esm-browser.min.js"
+      }
+    }
+  </script>
   <meta charset="utf-8">
   <title>Graffiti Actor Manager</title>
   <link rel="stylesheet" href="./style.css" />
@@ -10,15 +19,6 @@
     delete sessionStorage.redirect
     if (redirect && redirect !== location.href) {
       history.replaceState(null, null, redirect)
-    }
-  </script>
-  <script type="importmap">
-    {
-      "imports": {
-        "vue": "https://cdnjs.cloudflare.com/ajax/libs/vue/3.2.45/vue.esm-browser.min.js",
-        "@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@6.2.1/lib/esm/index.js",
-        "vue-router": "https://cdnjs.cloudflare.com/ajax/libs/vue-router/4.1.6/vue-router.esm-browser.min.js"
-      }
     }
   </script>
   <script type="module" src="./js/main.js"></script>
