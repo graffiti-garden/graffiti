@@ -1,7 +1,8 @@
 <script setup>
-  import { inject, ref } from 'vue'
-  const actorManager = inject('actorManager')
-  const actors = inject('actors')
+  import { ref } from 'vue'
+  import useActorManager from '../actor-manager'
+
+  const { actorManager, actors } = useActorManager()
 
   const editing = ref('')
   const nickname = ref('')

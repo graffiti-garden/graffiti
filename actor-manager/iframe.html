@@ -1,36 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script type="module">
-    import ActorManager from './src/actor-manager.js'
-
-    window.login = function() {
-      const actorManager = new ActorManager()
-      actorManager.onchange =
-        ({ action, payload })=> {
-          console.log("message from actor manager!")
-          console.log(action)
-          console.log(payload)
-        }
-      // window.open(`./#new-app/${encodeURIComponent(origin)}`, '_blank')
-    }
-
-    // Post messages to parent
-    const origin = new URL(document.referrer).origin
-    function postMessage(message) {
-      window.parent.postMessage(message, origin)
-    }
-
-    window.onmessage = function(data) {
-      console.log("message from parent!")
-      console.log(data)
-
-      postMessage("echo")
-    }
-  </script>
+  <meta charset="utf-8">
+  <title>Graffiti Actor Manager iFrame</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-  <button onclick="login()">
-    Log In To Graffiti
-  </button>
+  <div id="app"></div>
+  <script type="module" src="./src/iframe.js"></script>
 </body>

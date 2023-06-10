@@ -1,7 +1,7 @@
 <script setup>
-  import Welcome from './components/Welcome.vue'
-  import { inject } from 'vue'
-  const actors = inject('actors')
+  import Welcome from './Welcome.vue'
+  import useActorManager from '../actor-manager';
+  const { actors } = useActorManager()
 </script>
 
 <template>

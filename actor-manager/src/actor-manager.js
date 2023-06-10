@@ -1,69 +1,80 @@
 import * as jose from "jose"
+import { ref, reactive } from "vue"
 
-export default class Actors {
+class ActorManager {
   constructor() {
     this.actors = {}
     this.privateKeys = {}
     this.origins = {}
     this.onchange = ()=>{}
-    this.dbInitialized = false
+    this.loggedIn = false
     this.events = new EventTarget()
 
-    document.hasStorageAccess().then(hasAccess=> {
-      if (!hasAccess)
-       throw "The actor manager can't work without local storage access!"
+    // If already have access, log in
+    this.logIn()
+  }
 
-      this.channel = new BroadcastChannel("actors")
-      this.channel.onmessage = this.onChannelMessage.bind(this)
-
-      // Connect to the database
-      // to store and load identities
-      const request = indexedDB.open("actorstest4", 1)
-      request.onupgradeneeded = e=> {
-        const db = e.target.result
-        db.createObjectStore("actors", {
-          keyPath: "thumbprint"
-        })
-        db.createObjectStore("origins", {
-          keyPath: "origin"
-        })
+  async logIn() {
+    // Get cross-origin storage permission
+    if (document.hasStorageAccess && !await document.hasStorageAccess()) {
+      try {
+        await document.requestStorageAccess()
+      } catch(e) {
+        throw "The actor manager can't work without local storage access!"
       }
+    }
 
-      // Load all existing things from the database
-      request.onsuccess = async e=> {
-        this.db = e.target.result
-        this.dbInitialized = true
-        this.events.dispatchEvent(new Event("dbInitialized"))
+    this.channel = new BroadcastChannel("actors")
+    this.channel.onmessage = this.onChannelMessage.bind(this)
 
-        // Load previous actors and origins
-        this.store("actors").then(s=>
-          s.openCursor().onsuccess = 
-            ({target: { result: cursor }})=> {
-              if (cursor) {
-                this.updateActor(cursor.value, false)
-                cursor.continue()
-              }
+    // Connect to the database
+    // to store and load identities
+    const request = indexedDB.open("actorstest4", 1)
+    request.onupgradeneeded = e=> {
+      const db = e.target.result
+      db.createObjectStore("actors", {
+        keyPath: "thumbprint"
+      })
+      db.createObjectStore("origins", {
+        keyPath: "origin"
+      })
+    }
+
+    // Load all existing things from the database
+    request.onsuccess = async e=> {
+      this.db = e.target.result
+      this.loggedIn = true
+      this.events.dispatchEvent(new Event("loggedIn"))
+      this.forwardAction("log-in", null, false)
+
+      // Load previous actors and origins
+      this.store("actors").then(s=>
+        s.openCursor().onsuccess = 
+          ({target: { result: cursor }})=> {
+            if (cursor) {
+              this.updateActor(cursor.value, false)
+              cursor.continue()
             }
-        )
-        this.store("origins").then(s=>
-          s.openCursor().onsuccess = 
-            ({target: { result: cursor }})=> {
-              if (cursor) {
-                const {origin, thumbprint} = cursor.value
-                this.updateOrigin(origin, thumbprint, false)
-                cursor.continue()
-              }
+          }
+      )
+      this.store("origins").then(s=>
+        s.openCursor().onsuccess = 
+          ({target: { result: cursor }})=> {
+            if (cursor) {
+              const {origin, thumbprint} = cursor.value
+              this.updateOrigin(origin, thumbprint, false)
+              cursor.continue()
             }
-        )
-      }
-    })
+          }
+      )
+    }
   }
 
   async store(s) {
-    if (!this.dbInitialized) {
+    if (!this.loggedIn) {
       await new Promise(resolve=>
         this.events.addEventListener(
-          'dbInitialized',
+          'loggedIn',
           ()=>resolve()), {
             passive: true,
             once: true
@@ -199,4 +210,43 @@ export default class Actors {
       .setProtectedHeader({ jwk, alg })
       .sign(privateKey)
   }
+}
+
+export default function useActorManager() {
+
+  const loggedIn = ref(false)
+  const actors = reactive({})
+  const origins = reactive({})
+
+  const actorManager = new ActorManager()
+  actorManager.onchange =
+    ({ action, payload })=> {
+
+      if (action == 'log-in') {
+        loggedIn.value = true
+
+      } else if (action.endsWith("actor")) {
+        const actor = payload
+        const thumbprint = actor.thumbprint
+
+        if (action.startsWith("update")) {
+          actors[thumbprint] = actor
+        } else {
+          delete actors[thumbprint]
+        }
+
+      } else if (action.endsWith("origin")) {
+
+        if (action.startsWith("update")) {
+          const {origin, thumbprint} = payload
+          origins[origin] = thumbprint
+        } else {
+          if (payload in origins) {
+            delete origins[payload]
+          }
+        }
+      }
+    }
+
+  return { actorManager, loggedIn, actors, origins }
 }
