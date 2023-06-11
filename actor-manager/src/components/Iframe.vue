@@ -26,7 +26,7 @@
 </script>
 
 <template>
-  <button v-if="!loggedIn" @click="actorManager.login">
+  <button v-if="!loggedIn" @click="actorManager.logIn">
     Enable Graffiti on This Site
   </button>
   <template v-else>
