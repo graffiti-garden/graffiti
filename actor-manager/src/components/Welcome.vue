@@ -1,6 +1,6 @@
 <script setup>
-  import { inject } from 'vue'
-  const actorManager = inject('actorManager')
+  import useActorManager from '../actor-manager';
+  const { actorManager } = useActorManager()
 </script>
 
 <template>
