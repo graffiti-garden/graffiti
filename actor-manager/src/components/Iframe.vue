@@ -6,7 +6,7 @@
   const referrer = document.referrer
   const origin = referrer? new URL(referrer).origin : 'example.com' 
 
-  const { loggedIn, actors, origins } = useActorManager()
+  const { actorManager, loggedIn, actors, origins } = useActorManager()
 
   if (referrer) {
 
