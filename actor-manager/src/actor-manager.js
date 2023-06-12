@@ -11,19 +11,25 @@ class ActorManager {
     this.events = new EventTarget()
 
     // If already have access, log in
-    this.logIn()
+    ;(async ()=> {
+      if (!document.hasStorageAccess || await document.hasStorageAccess()) {
+        this._logIn()
+      }
+    })()
   }
 
   async logIn() {
     // Get cross-origin storage permission
-    if (document.hasStorageAccess && !await document.hasStorageAccess()) {
-      try {
-        await document.requestStorageAccess()
-      } catch(e) {
-        throw "The actor manager can't work without local storage access!"
-      }
+    // if logging in manually (with user activation)
+    try {
+      await document.requestStorageAccess()
+    } catch(e) {
+      throw "The actor manager can't work without local storage access!"
     }
+    this._logIn()
+  }
 
+  async _logIn() {
     this.channel = new BroadcastChannel("actors")
     this.channel.onmessage = this.onChannelMessage.bind(this)
 
