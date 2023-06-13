@@ -73,7 +73,7 @@ class ActorManager {
     await cookieStore.set({
       name, value,
       expires: Date.now() + 1e12, // > 1 year
-      sameSite: 'strict',
+      sameSite: 'none',
       partitioned: false
     })
   }
