@@ -74,7 +74,8 @@ class ActorManager {
       name, value,
       expires: Date.now() + 1e12, // > 1 year
       sameSite: 'none',
-      partitioned: false
+      partitioned: false,
+      secure: true
     })
   }
 
@@ -102,7 +103,6 @@ class ActorManager {
   async updateActor(actor, propogate=true) {
     // Update the actor internally
     // and potentially unpack the keys
-    console.log(actor)
     this.actors[actor.thumbprint] = actor
     if (!(actor.thumbprint in this.privateKeys)) {
       this.privateKeys[actor.thumbprint] =
