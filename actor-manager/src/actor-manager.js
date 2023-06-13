@@ -22,10 +22,13 @@ class ActorManager {
   async logIn() {
     // Get cross-origin storage permission
     // if logging in manually (with user activation)
-    try {
-      await document.requestStorageAccess()
-    } catch(e) {
-      throw "The actor manager can't work without local storage access!"
+    if (document.requestStorageAccess) {
+      try {
+        await document.requestStorageAccess()
+      } catch(e) {
+        console.error(e)
+        throw "The actor manager can't work without local storage access!"
+      }
     }
     this._logIn()
   }
@@ -75,7 +78,7 @@ class ActorManager {
       expires: Date.now() + 1e12, // > 1 year
       sameSite: 'none',
       partitioned: false,
-      //secure: true
+      secure: true
     })
   }
 
