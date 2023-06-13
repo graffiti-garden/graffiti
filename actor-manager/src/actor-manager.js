@@ -75,7 +75,7 @@ class ActorManager {
       expires: Date.now() + 1e12, // > 1 year
       sameSite: 'none',
       partitioned: false,
-      secure: true
+      //secure: true
     })
   }
 
