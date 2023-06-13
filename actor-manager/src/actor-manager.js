@@ -3,11 +3,11 @@ import * as jose from "jose"
 import { ref, reactive } from "vue"
 
 class ActorManager {
-  constructor() {
+  constructor(onchange) {
+    this.onchange = onchange
     this.actors = {}
     this.privateKeys = {}
     this.origins = {}
-    this.onchange = ()=>{}
     this._loggedIn = false
     this.events = new EventTarget()
 
@@ -217,8 +217,7 @@ export default function useActorManager() {
   const actors = reactive({})
   const origins = reactive({})
 
-  const actorManager = new ActorManager()
-  actorManager.onchange =
+  const onChange = 
     ({ action, payload })=> {
 
       if (action == 'log-in') {
@@ -247,5 +246,6 @@ export default function useActorManager() {
       }
     }
 
+  const actorManager = new ActorManager(onChange)
   return { actorManager, loggedIn, actors, origins }
 }
