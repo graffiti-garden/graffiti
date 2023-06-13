@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "cookie-store": "^4.0.0-next.2",
     "jose": "~4.13.1",
     "vue": "~3.2.47",
     "vue-router": "~4.2.1"

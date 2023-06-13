@@ -1,3 +1,4 @@
+import { cookieStore } from "cookie-store"
 import * as jose from "jose"
 import { ref, reactive } from "vue"
 
@@ -7,7 +8,7 @@ class ActorManager {
     this.privateKeys = {}
     this.origins = {}
     this.onchange = ()=>{}
-    this.loggedIn = false
+    this._loggedIn = false
     this.events = new EventTarget()
 
     // If already have access, log in
@@ -33,63 +34,53 @@ class ActorManager {
     this.channel = new BroadcastChannel("actors")
     this.channel.onmessage = this.onChannelMessage.bind(this)
 
-    // Connect to the database
-    // to store and load identities
-    const request = indexedDB.open("actorstest4", 1)
-    request.onupgradeneeded = e=> {
-      const db = e.target.result
-      db.createObjectStore("actors", {
-        keyPath: "thumbprint"
-      })
-      db.createObjectStore("origins", {
-        keyPath: "origin"
-      })
-    }
+    this._loggedIn = true
+    this.events.dispatchEvent(new Event("log-in"))
+    this.forwardAction("log-in", null, false)
 
     // Load all existing things from the database
-    request.onsuccess = async e=> {
-      this.db = e.target.result
-      this.loggedIn = true
-      this.events.dispatchEvent(new Event("loggedIn"))
-      this.forwardAction("log-in", null, false)
+    for (const cookie of await cookieStore.getAll()) {
 
-      // Load previous actors and origins
-      this.store("actors").then(s=>
-        s.openCursor().onsuccess = 
-          ({target: { result: cursor }})=> {
-            if (cursor) {
-              this.updateActor(cursor.value, false)
-              cursor.continue()
-            }
-          }
-      )
-      this.store("origins").then(s=>
-        s.openCursor().onsuccess = 
-          ({target: { result: cursor }})=> {
-            if (cursor) {
-              const {origin, thumbprint} = cursor.value
-              this.updateOrigin(origin, thumbprint, false)
-              cursor.continue()
-            }
-          }
-      )
+      // Refresh the cookie's expiration
+      await this.put(cookie.name, cookie.value)
+
+      const name = cookie.name
+      const value = JSON.parse(cookie.value)
+      if (name.startsWith('actor')) {
+        this.updateActor(value, false)
+      } else if (name.startsWith('origin')) {
+        const {origin, thumbprint} = value
+        this.updateOrigin(origin, thumbprint, false)
+      }
     }
   }
 
-  async store(s) {
-    if (!this.loggedIn) {
+  async loggedIn() {
+    if (!this._loggedIn) {
       await new Promise(resolve=>
         this.events.addEventListener(
-          'loggedIn',
+          'log-in',
           ()=>resolve()), {
             passive: true,
             once: true
           })
     }
+  }
 
-    return this.db
-        .transaction([s], "readwrite")
-        .objectStore(s)
+  async put(name, value) {
+    value = JSON.stringify(value)
+    await this.loggedIn()
+    await cookieStore.set({
+      name, value,
+      expires: Date.now() + 1e12, // > 1 year
+      sameSite: 'strict',
+      partitioned: false
+    })
+  }
+
+  async delete(name) {
+    await this.loggedIn()
+    await cookieStore.delete(name)
   }
 
   async createActor(nickname, alg='ES256') {
@@ -121,8 +112,9 @@ class ActorManager {
     }
 
     // Save it in the database
-    const store = await this.store("actors")
-    store.put(JSON.parse(JSON.stringify(actor)))
+    await this.put(
+      `actor:${actor.thumbprint}`,
+      JSON.parse(JSON.stringify(actor)))
 
     // Update others of the change
     this.forwardAction("update-actor", actor, propogate)
@@ -137,8 +129,7 @@ class ActorManager {
     delete this.privateKeys[thumbprint]
 
     // Delete in the database
-    const store = await this.store("actors")
-    store.delete(thumbprint)
+    await this.delete(`actor:${thumbprint}`)
 
     // Remove any origins associated with the actor
     Object.keys(this.origins).forEach(async o=>{
@@ -157,19 +148,17 @@ class ActorManager {
         this.origins[origin] == thumbprint) return
 
     this.origins[origin] = thumbprint
-    const payload = {origin, thumbprint}
+    const value = {origin, thumbprint}
 
-    const store = await this.store("origins")
-    store.put(payload)
-    this.forwardAction("update-origin", payload, propogate)
+    await this.put(`origin:${origin}`, value)
+    this.forwardAction("update-origin", value, propogate)
   }
 
   async removeOrigin(origin, propogate=true) {
     if (!(origin in this.origins)) return
 
     delete this.origins[origin]
-    const store = await this.store("origins")
-    store.delete(origin)
+    await this.delete(`origin:${origin}`)
 
     this.forwardAction("remove-origin", origin, propogate)
   }
