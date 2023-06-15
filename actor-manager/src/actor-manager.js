@@ -196,7 +196,7 @@ class ActorManager {
     }
   }
 
-  async sign(origin, message) {
+  async sign(message, origin) {
     if (!(origin in this.origins)) {
       throw "This origin does not have permission to embody any actor."
     }

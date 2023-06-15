@@ -9,18 +9,24 @@
   const { actorManager, loggedIn, actors, origins } = useActorManager()
 
   if (referrer) {
-
     // Keep track of the actor ID
     // and post to the parent if changed
     const myActorID = computed(()=> 
       origin in origins? origins[origin] : null)
     watch(myActorID, (newID)=>
-    window.parent.postMessage(newID, origin))
+    window.parent.postMessage({
+      actorID: newID
+    }, origin))
 
-    window.onmessage = function(data) {
-      // TODO: make this sign a message
-      console.log(`message from parent: ${data}`)
-      postMessage("echo")
+    window.onmessage = async function({data: {messageID, message}}) {
+      // Sign any Messages from the parent
+      const reply = { messageID }
+      try {
+        reply.signedMessage = await actorManager.sign(message, origin)
+      } catch(e) {
+        reply.error = e.toString()
+      }
+      window.parent.postMessage(reply, origin)
     }
   }
 </script>
