@@ -15,6 +15,16 @@ export default class ActorClient {
       <form method="dialog">
         <button>Close</button>
       </form>`
+    // Click outside of dialog to close
+    this.dialog.addEventListener('click', e=>{
+      const rect = this.dialog.getBoundingClientRect()
+      if (
+        rect.top > e.clientY ||
+        rect.left > e.clientX ||
+        e.clientY > rect.top + rect.height ||
+        e.clientX > rect.left + rect.width)
+        this.dialog.close()
+    })
     this.dialog.prepend(this.iframe)
     document.body.prepend(this.dialog)
   }
