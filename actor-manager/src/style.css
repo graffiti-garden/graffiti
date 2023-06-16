@@ -1,6 +1,6 @@
 :root {
   --back: rgb(26, 26, 26, 0.95);
-  --halfback: #2d2d2d;
+  --halfback: rgb(70, 70, 70, 0.95);
   --frontfaded: rgba(255, 255, 255, 0.7);
   --front: rgba(230, 230, 230);
   --emph: #ca7acc;
@@ -75,6 +75,7 @@ h1 {
   letter-spacing: 0.2em;
   margin: 2rem;
   text-align: center;
+  color: var(--front);
 }
 
 a {
@@ -123,9 +124,9 @@ li+li>a {
   border-left: 1px solid var(--emphbold);
 }
 
-:is(li>a,button,input[type="submit"]):hover, li>.router-link-active {
+:is(li>a,button,input[type="submit"],select):hover, li>.router-link-active {
   cursor: pointer;
-  background: #706070;
+  background: var(--halfback);
   text-decoration: none;
 }
 
@@ -158,6 +159,7 @@ colgroup > :nth-child(3) {
 
 tr {
   font-weight: bold;
+  color: var(--front);
   border-bottom: 1px solid grey;
   border-top: 1px solid grey;
 }
@@ -167,6 +169,7 @@ td {
 }
 
 table input {
+  color: inherit;
   font-size: inherit;
   font-weight: inherit;
   outline: none;
