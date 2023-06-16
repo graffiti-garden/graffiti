@@ -12,10 +12,14 @@
 
   <template v-else>
     <p>
-      Applications hosted at the following domains have been granted access to your Graffiti actors.
+      Applications hosted at the following origins have been granted access to your Graffiti actors.
     </p>
 
     <table>
+      <colgroup>
+        <col>
+        <col>
+      </colgroup>
       <tr>
         <th>
           Origin

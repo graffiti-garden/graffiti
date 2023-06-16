@@ -20,7 +20,7 @@ html::before {
   left: 0;
   right: 0;
   z-index: -1;
-  /* background-image: url(https://graffiti.garden/pics/graffiti.jpg); */
+  background-image: url(./graffiti.jpg);
   background-size: cover;
   background-repeat: no-repeat;
   background-position: 50% 50%;
@@ -47,13 +47,13 @@ html {
   background-color: var(--back);
 }
 
-/* @font-face {
+@font-face {
   font-family: 'Rock Salt';
   font-style: normal;
   font-weight: 400;
-  src: url(https://fonts.gstatic.com/s/rocksalt/v18/MwQ0bhv11fWD6QsAVOZrt0M6p7NGrQ.woff2) format('woff2');
+  src: url(rock-salt.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-} */
+}
 
 body {
   max-width: 35em;
@@ -97,7 +97,7 @@ ul>li {
   width: 100%;
 }
 
-li>a, button {
+li>a, button, input[type="submit"], select {
   font-size: 1rem;
   width: 100%;
   text-align: center;
@@ -123,26 +123,37 @@ li+li>a {
   border-left: 1px solid var(--emphbold);
 }
 
-:is(li>a,button):hover, li>.router-link-active {
+:is(li>a,button,input[type="submit"]):hover, li>.router-link-active {
   cursor: pointer;
   background: #706070;
   text-decoration: none;
 }
 
 p {
-  margin-bottom: 1rem;
   color: var(--frontfaded);
 }
 
 main {
-  padding-top: 1rem;
-  padding-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin: 2rem;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 table {
   border-collapse: collapse;
   border-spacing: 1rem;
   width: 100%;
+}
+
+colgroup > :first-child {
+  width: 60%;
+}
+
+colgroup > :nth-child(3) {
+  width: 20%;
 }
 
 tr {
@@ -155,7 +166,7 @@ td {
   padding: 0.5rem;
 }
 
-input {
+table input {
   font-size: inherit;
   font-weight: inherit;
   outline: none;

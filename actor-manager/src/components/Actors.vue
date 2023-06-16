@@ -29,6 +29,11 @@
   </p>
 
   <table>
+    <colgroup>
+      <col>
+      <col>
+      <col>
+    </colgroup>  
     <tr v-for="actor in actors">
       <td>
         <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
