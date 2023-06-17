@@ -32,18 +32,20 @@
 </script>
 
 <template>
-  <button v-if="!loggedIn" @click="actorManager.logIn">
-    Enable Graffiti on This Site
-  </button>
-  <template v-else>
-    <template v-if="Object.keys(actors).length">
-      <a href="/">
-        ⚙️
+  <main>
+    <button v-if="!loggedIn" @click="actorManager.logIn">
+      Enable Graffiti on This Site
+    </button>
+    <template v-else>
+      <template v-if="Object.keys(actors).length">
+        <ActorSelector :origin="origin"/>
+        <a href="/">
+          Go To Actor Manager 🔗
+        </a>
+      </template>
+      <a v-else href="/">
+        Set Up on Graffiti
       </a>
-      <ActorSelector :origin="origin"/>
     </template>
-    <a v-else href="/">
-      Set Up on Graffiti
-    </a>
-  </template>
+  </main>
 </template>

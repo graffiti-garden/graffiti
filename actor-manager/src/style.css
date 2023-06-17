@@ -20,7 +20,7 @@ html::before {
   left: 0;
   right: 0;
   z-index: -1;
-  background-image: url(./graffiti.jpg);
+  background-image: url(/graffiti.jpg);
   background-size: cover;
   background-repeat: no-repeat;
   background-position: 50% 50%;
@@ -32,6 +32,8 @@ html::before {
 
 html {
   width: 100%;
+  height: 100%;
+  overflow: auto;
   position: absolute;
   top: 0;
   left: 0;
@@ -47,40 +49,64 @@ html {
   background-color: var(--back);
 }
 
+#app {
+  display: contents;
+}
+
 @font-face {
   font-family: 'Rock Salt';
   font-style: normal;
   font-weight: 400;
-  src: url(rock-salt.woff2) format('woff2');
+  src: url(/rock-salt.woff2) format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 body {
-  max-width: 35em;
+  max-width: 600px;
   width: 100%;
-  margin-top: 5vh;
-  margin-bottom: 5vh;
-  margin-left: 1vw;
-  margin-right: 1vw;
   padding: 4vw;
-  padding-top: 0;
-  padding-bottom: 0;
-  border-radius: 1em;
   background: var(--back);
+  border-radius: 1em;
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+@media (max-width: 600px) {
+  body {
+    border-radius: 0;
+    margin: auto; 
+    overflow: auto
+  }
+
+  html {
+    justify-content: safe center;
+  }
 }
 
 h1 {
   font-size: 1rem;
   font-family: Rock Salt;
   letter-spacing: 0.2em;
-  margin: 2rem;
   text-align: center;
   color: var(--front);
 }
 
 a {
-  color: #b77ab9;
+  color: var(--frontfaded);
   text-decoration: none;
+}
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+main > a {
+  text-decoration: underline dotted;
+  text-align: center;
 }
 
 a:hover {
@@ -137,9 +163,7 @@ p {
 main {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-  margin: 2rem;
-  margin-left: 0;
+  gap: min(2rem,10vh);
   margin-right: 0;
 }
 
@@ -166,6 +190,11 @@ tr {
 
 td {
   padding: 0.5rem;
+}
+
+table input::selection {
+  color: inherit;
+  background-color: var(--halfback)
 }
 
 table input {
