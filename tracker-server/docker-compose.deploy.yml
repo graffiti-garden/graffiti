@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+
+  nginx:
+    volumes:
+      - ./config/nginx/deploy.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt/live/tracker.${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/tracker.${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
+    ports:
+      - 80:80
+      - 443:443
+    environment:
+      DOMAIN: ${DOMAIN}
+
+  graffiti-tracker:
+    environment:
+      DEBUG: 'false'

@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+
+  graffiti-tracker:
+    container_name: graffiti-tracker
+    build: app
+    volumes:
+      - ./app:/mount/app
+    depends_on:
+      - mongo
+
+  peerjs:
+    image: peerjs/peerjs-server:1.0.0
+    container_name: graffiti-peerjs
+
+  nginx:
+    image: nginx:1.25.1
+    container_name: graffiti-nginx
+    volumes:
+      - ./config/nginx/base.conf:/etc/nginx/templates/base.conf.template:ro
+
+  mongo:
+    image: mongo:6.0.6
+    container_name: graffiti-mongo
+    restart: always
+    command: "--bind_ip_all --replSet rs0"
+    volumes:
+      - ./config/mongo:/docker-entrypoint-initdb.d/
+    extra_hosts:
+      - "mongo:127.0.0.1"

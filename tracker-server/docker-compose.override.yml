@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+
+  graffiti-tracker:
+    environment:
+      DEBUG: 'true'
+
+  nginx:
+    volumes:
+      - ./config/nginx/debug.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - 5001:5001
+    environment:
+      DOMAIN: 'localhost'

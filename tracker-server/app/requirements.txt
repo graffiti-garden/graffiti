@@ -1,0 +1,6 @@
+motor==3.1.2               # Async MongoDB interface
+
+jsonschema==4.17.3         # Validate JSON
+
+fastapi==0.97.0            # Web framework
+uvicorn[standard]==0.22.0  # ASGI server
