@@ -49,24 +49,28 @@ async def on_connect(socket: WebSocket, token: str|None=None):
     # (prevents peer impersonation)
     socket.peer = sha256(peer_proof.encode()).hexdigest()
 
-    # Send it as proof
-    try:
-        await socket.send_json({
-            'peer_id': socket.peer
-        })
-    except:
-        return
-
     # Register with the pub/sub manager
-    async with app.tracker.register(socket):
+    try:
+        async with app.tracker.register(socket):
+            await socket.send_json({
+                'peer_id': socket.peer
+            })
 
-        # And reply back and forth
-        while True:
-            try:
-                msg = await socket.receive_json()
-                await reply(socket, msg)
-            except:
-                break
+            # And reply back and forth
+            while True:
+                try:
+                    msg = await socket.receive_json()
+                    await reply(socket, msg)
+                except:
+                    break
+    except Exception as e:
+        try:
+            await socket.send_json({
+                'reply': 'error',
+                'detail': str(e)
+            })
+        except:
+            return
 
 async def reply(socket, msg):
     # Initialize the output

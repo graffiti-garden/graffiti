@@ -78,7 +78,7 @@ class Tracker:
     @asynccontextmanager
     async def register(self, socket):
         if socket.peer in self.peers:
-            raise f"Peer with ID {socker.peer} already exists"
+            raise Exception(f"Peer with ID {socket.peer} already exists")
 
         self.peers.add(socket.peer)
         socket.subscriptions = set()

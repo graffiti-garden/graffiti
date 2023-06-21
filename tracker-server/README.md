@@ -1,4 +1,4 @@
-# Tracker
+# Tracker Server
 
 This library operates like a [websocket bittorrent tracker](https://github.com/webtorrent/bittorrent-tracker) with some changes:
 - Rather than sending batched announcements, this tracker pushes individual peer changes as they occur. This reduces traffic when peers are subscribed to many hashes with relatively static peers.
