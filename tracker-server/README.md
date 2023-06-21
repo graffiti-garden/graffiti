@@ -20,7 +20,7 @@ By using a hash, no peer can impersonate any other.
 
 After the connection has been established, the client may send JSON messages consisting of a random message ID, an action string, and an array of one or more [info hashes](https://www.bittorrent.org/beps/bep_0052.html#infohash):
 
-```json
+```js
 {
     messageID: 'a sha256 hash',
     action: 'an action',
@@ -30,16 +30,16 @@ After the connection has been established, the client may send JSON messages con
 
 The possible actions are `announce`, `unannounce`, `subscribe`, and `unsubscribe`.
 
-Sending an `announce` action declares that the peer either has or wants data from other peers related to the included info hashes.
+By sending an `announce` action, a peer declares that it wants other peers interested in the included info hashes to know about it (via it's peer ID).
 Sending an `unannounce` action removes that declaration for the included info hashes.
 When the client disconnects, the tracker will automatically unannounce all info hashes that the peer has announced.
 
-Sending a `subscribe` action declares that the peer is interested in knowing which peers have announced the included info hashes.
+By sending a `subscribe` action, a peer declares that it is interested in knowing which peers have announced the included info hashes.
 All peers that have already announced the included info hashes will be send to the subscribing peer.
 As additional peers announce or unannounce the included info hashes, the subscribing peer will be updated until they send an `unsubscribe` action.
 The updates are JSON:
 
-```json
+```js
 {
     action: 'anounce or unanounce'
     peer: 'a sha256 hash',
@@ -78,7 +78,7 @@ On your server install:
 
 ### SSL
 
-Add CNAME entries for the `tracker.DOMAIN` and `peerjs.DOMAIN` subdomains by adding these lines to your DNS (where `DOMAIN` is replaced with your server's domain):
+Add an A and CNAME entry for the `tracker.DOMAIN` and `peerjs.DOMAIN` subdomains by adding these lines to your DNS (where `DOMAIN` is replaced with your server's domain):
 
 ```
 tracker.DOMAIN.  1800 IN A DOMAIN_IP
@@ -89,6 +89,12 @@ Once these changes propagate (it might take up to an hour), generate SSL certifi
 
 ```bash
 sudo certbot certonly --standalone -d tracker.DOMAIN,peerjs.DOMAIN
+```
+
+Every couple of months you will need to run
+
+```bash
+sudo certbot renew
 ```
 
 ### Configuration
