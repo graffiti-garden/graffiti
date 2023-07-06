@@ -1,0 +1,20 @@
+{
+  "name": "@graffiti-garden/actor-client",
+  "version": "1.0.0",
+  "description": "client for the actor manager",
+  "main": "client.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/actor-client.git"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/actor-client/issues"
+  },
+  "homepage": "https://github.com/graffiti-garden/actor-client#readme"
+}
