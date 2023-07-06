@@ -1,0 +1,23 @@
+{
+  "name": "@graffiti-garden/graffiti-js",
+  "version": "1.0.0",
+  "description": "client graffiti library",
+  "main": "graffiti.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti-js.git"
+  },
+  "keywords": [
+    "social",
+    "media"
+  ],
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti-js/issues"
+  },
+  "homepage": "https://github.com/graffiti-garden/graffiti-js#readme"
+}
