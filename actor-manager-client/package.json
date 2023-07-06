@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/actor-client",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "client for the actor manager",
   "main": "client.js",
   "type": "module",
