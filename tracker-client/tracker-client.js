@@ -12,7 +12,6 @@ export default class TrackerClient {
           websocketURL(subdomainURL('tracker', url)),
           url,
           this.#onUpdate.bind(this)))
-      // sha256Hex(crypto.randomUUID()).then(peerProof=> {
   }
 
   async *subscribe(uri) {
