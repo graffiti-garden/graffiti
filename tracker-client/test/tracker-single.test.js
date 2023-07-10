@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import TrackerSingle from '../src/tracker-single'
 import { sha256Hex } from '../src/util'
 
+const TRACKER_LINK = "wss://tracker.graffiti.garden"
+
 async function randomHash() {
   return await sha256Hex(crypto.randomUUID())
 }
@@ -9,7 +11,7 @@ async function randomHash() {
 async function connectToTracker(onUpdate=()=>{}) {
   return new TrackerSingle(
     await randomHash(),
-    "wss://tracker.graffiti.garden",
+    TRACKER_LINK,
     onUpdate
   )
 }
@@ -17,8 +19,32 @@ async function connectToTracker(onUpdate=()=>{}) {
 describe('Tracker Single', ()=> {
 
   // TODO:
-  // - invalid double subscription with same peer
+  // - Does double subscription work? i.e. one peers subs to the same thing twice? what happens when one unsubs?
   // - full client with multiple trackers
+
+  it('Double connection', async()=> {
+    const peerProof = await randomHash()
+    const ts1 = new TrackerSingle(
+      peerProof,
+      TRACKER_LINK,
+      ()=>{}
+    )
+    const ts2 = new TrackerSingle(
+      peerProof,
+      TRACKER_LINK,
+      ()=>{}
+    )
+
+    // First will accept
+    await expect(
+      ts1.request("announce", await randomHash())
+    ).resolves.to.equal("announced")
+
+    // Second will reject because it is already subscribed
+    await expect(
+      ts2.request("announce", await randomHash())
+    ).rejects.toThrowError()
+  })
 
   it('Error on invalid hash', async () => {
     const ts = await connectToTracker()

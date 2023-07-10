@@ -4,9 +4,9 @@ import Tracker from './src/tracker-single.js'
 export default class TrackerClient {
 
   constructor(peerProof, ...serverURLs) {
-    this.#announces = new EventTarget()
+    this.announces = new EventTarget()
 
-    this.#trackers = serverURLs.map(url=>
+    this.trackers = serverURLs.map(url=>
         new Tracker(
           peerProof,
           websocketURL(subdomainURL('tracker', url)),
@@ -20,7 +20,7 @@ export default class TrackerClient {
     try {
       while (true) {
         const message = await new Promise(resolve=>
-          this.#announces.addEventListener(
+          this.announces.addEventListener(
             infoHash,
             e=> resolve(e.message),
             { once: true, passive: true }))
@@ -43,12 +43,12 @@ export default class TrackerClient {
     const e = new Event(message.info_hash)
     delete message.info_hash
     e.message = message
-    this.#announces.dispatchEvent(e)
+    this.announces.dispatchEvent(e)
   }
 
   async #request(action, ...infoHashes) {
     return await Promise.all(
-      this.#trackers.map(t=>
+      this.trackers.map(t=>
         t.request(action, ...infoHashes)))
   }
 

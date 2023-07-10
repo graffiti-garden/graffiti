@@ -31,11 +31,11 @@ export default class TrackerSingle {
 
     // Wait to open
     if (!this.open) {
-      if (!this.opening) this.#connect()
-      await new Promise(resolve =>
+      if (!this.opening) throw "tracker has disconnected"
+      await new Promise((resolve, reject) =>
         this.openEvent.addEventListener(
           'open',
-          ()=> resolve(),
+          e=> 'detail' in e? reject(e.detail) : resolve(),
           { once: true, passive: true }))
     }
 
@@ -60,21 +60,25 @@ export default class TrackerSingle {
 
   #onMessage({data}) {
     const message = JSON.parse(data)
-
-    if ('reply' in message) {
+    
+    if (!this.open) {
+      const e = new Event("open")
+      if ('peer_id' in message) {
+        this.open = true
+        this.opening = false
+        this.openEvent.dispatchEvent(e)
+      } else if ('reply' in message && message['reply'] == 'error') {
+        this.opening = false
+        e.detail = message.detail
+        this.openEvent.dispatchEvent(e)
+      }
+    } else if ('reply' in message) {
       if ('messageID' in message) {
         // Route the reply back to it's awaiter
         const replyEvent = new Event(message.messageID)
         replyEvent.message = message
         this.replyEvents.dispatchEvent(replyEvent)
-      } else {
-        throw message
       }
-    } else if (!this.open && 'peer_id' in message) {
-      // This must be the first message
-      this.open = true
-      this.opening = false
-      this.openEvent.dispatchEvent(new Event("open"))
     } else if ('action' in message) {
       this.onUpdate(message)
     }
