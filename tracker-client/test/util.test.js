@@ -6,19 +6,4 @@ describe('Util', ()=> {
     expect(sha256Hex('something'))
     .resolves.to.equal("3fc9b689459d738f8c88a3a48aa9e33542016b7a4052e001aaa536fca74813cb")
   })
-
-  it('Subdomain URL', ()=> {
-    expect(subdomainURL("1234", "https://example.com/"))
-    .to.equal("https://1234.example.com/")
-  })
-
-  it('Websocket URL http', ()=> {
-    expect(websocketURL("http://example.com/"))
-    .to.equal("ws://example.com/")
-  })
-
-  it('Websocket URL https', ()=> {
-    expect(websocketURL("https://something.example.com/"))
-    .to.equal("wss://something.example.com/")
-  })
 })

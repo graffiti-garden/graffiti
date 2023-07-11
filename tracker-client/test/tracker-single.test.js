@@ -2,41 +2,33 @@ import { describe, expect, it } from 'vitest'
 import TrackerSingle from '../src/tracker-single'
 import { randomHash, sha256Hex } from '../src/util'
 
-const TRACKER_LINK = "wss://tracker.graffiti.garden"
+const trackerLinks = [
+  "ws://localhost:8000",
+  "wss://tracker.graffiti.garden"
+]
+
+trackerLinks.forEach(link=> {
 
 async function connectToTracker(onUpdate=()=>{}) {
   return new TrackerSingle(
     await randomHash(),
-    TRACKER_LINK,
+    link,
     onUpdate
   )
 }
 
-describe('Tracker Single', ()=> {
-
-  // it('localhost', async()=> {
-  //   const peerProof = await randomHash()
-  //   const ts = new TrackerSingle(
-  //     peerProof,
-  //     "ws://tracker.127.0.0.1:5001",
-  //     m=> console.log(m)
-  //   )
-
-  //   await expect(
-  //     ts.request("announce", await randomHash())
-  //   ).resolves.to.equal("announced")
-  // })
+describe(`Tracker Single on ${link}`, ()=> {
 
   it('Double connection', async()=> {
     const peerProof = await randomHash()
     const ts1 = new TrackerSingle(
       peerProof,
-      TRACKER_LINK,
+      link,
       ()=>{}
     )
     const ts2 = new TrackerSingle(
       peerProof,
-      TRACKER_LINK,
+      link,
       ()=>{}
     )
 
@@ -183,4 +175,5 @@ describe('Tracker Single', ()=> {
       ts.request("unsubscribe", hash)
     ).resolves.to.equal("unsubscribed")
   })
+})
 })

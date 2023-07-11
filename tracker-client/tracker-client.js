@@ -10,7 +10,7 @@ export default class TrackerClient {
     this.trackers = serverURLs.map(url=>
         new Tracker(
           peerProof,
-          websocketURL(subdomainURL('tracker', url)),
+          url,
           this.#onUpdate.bind(this)))
 
     this.openSubscriptions = new Set()

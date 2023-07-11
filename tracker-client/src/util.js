@@ -22,19 +22,3 @@ export async function sha256Hex(message) {
 export async function randomHash() {
   return await sha256Hex(crypto.randomUUID())
 }
-
-export function subdomainURL(subdomain, url) {
-  url = new URL(url)
-  url.host = subdomain + '.' + url.host
-  return url.toString()
-}
-
-export function websocketURL(url) {
-  url = new URL(url)
-  if (url.protocol == 'https:') {
-    url.protocol = 'wss:'
-  } else {
-    url.protocol = 'ws:'
-  }
-  return url.toString()
-}
