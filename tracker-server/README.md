@@ -4,9 +4,6 @@ This library operates like a [websocket bittorrent tracker](https://github.com/w
 - Rather than sending batched announcements, this tracker pushes individual peer changes as they occur. This reduces traffic when peers are subscribed to many hashes with relatively static peers.
 - Announcement and subscription are separated. This reduces traffic when peers are seeding vastly more data than they are leeching.
 
-The docker compose file also launches a [PeerJS server](https://github.com/peers/peerjs-server) instance to allow peers to connect after finding each other via the tracker.
-The tracker is served at `tracker.DOMAIN` and PeerJS at `peerjs.DOMAIN`.
-
 ## API
 
 ### Establishing Connection
@@ -78,32 +75,22 @@ On your server install:
 
 ### SSL
 
-Add an A and CNAME entry for the `tracker.DOMAIN` and `peerjs.DOMAIN` subdomains by adding these lines to your DNS (where `DOMAIN` is replaced with your server's domain):
+Add an A for `DOMAIN` (e.g. `tracker.graffiti.garden`) by adding the following to your DNS:
 
 ```
-tracker.DOMAIN.  1800 IN A DOMAIN_IP
-peerjs.DOMAIN.   1800 IN CNAME peerjs.DOMAIN
+DOMAIN.  1800 IN A DOMAIN_IP
 ```
     
 Once these changes propagate (it might take up to an hour), generate SSL certificates with:
 
 ```bash
-sudo certbot certonly --standalone -d tracker.DOMAIN,peerjs.DOMAIN
+sudo certbot certonly --standalone -d DOMAIN
 ```
 
 Every couple of months you will need to run
 
 ```bash
 sudo certbot renew
-```
-
-### Configuration
-
-Clone this repository onto the server and in the root directory of the repository create a file called `.env` with contents as follows:
-
-```bash
-# The domain name that points to the server
-DOMAIN="example.com"
 ```
 
 ### Launching
