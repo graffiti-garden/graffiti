@@ -84,7 +84,7 @@ export default class TrackerSingle {
     }
   }
 
-  async #onClose() {
+  async #onClose(e) {
     this.open = false
   }
 

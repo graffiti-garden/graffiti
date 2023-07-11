@@ -4,30 +4,50 @@ import Tracker from './src/tracker-single.js'
 export default class TrackerClient {
 
   constructor(peerProof, ...serverURLs) {
+    this.peerProof = peerProof
     this.announces = new EventTarget()
 
     this.trackers = serverURLs.map(url=>
         new Tracker(
           peerProof,
           websocketURL(subdomainURL('tracker', url)),
-          url,
           this.#onUpdate.bind(this)))
+
+    this.openSubscriptions = new Set()
   }
 
-  async *subscribe(uri) {
-    const infoHash = sha256Hex(uri)
+  async *subscribe(uri, signal) {
+
+    if (this.openSubscriptions.has(uri))
+      throw "You are already subscribed to that URI"
+    this.openSubscriptions.add(uri)
+    const infoHash = await sha256Hex(uri)
     this.#request('subscribe', infoHash)
+
     try {
       while (true) {
-        const message = await new Promise(resolve=>
+        yield await new Promise((resolve, reject)=> {
+          const retreive = e=> {
+            signal?.removeEventListener("abort", abort)
+            resolve(e.message)
+          }
+          const abort = e=> {
+            this.announces.removeEventListener(infoHash, retreive)
+            reject(signal.reason)
+          }
           this.announces.addEventListener(
             infoHash,
-            e=> resolve(e.message),
-            { once: true, passive: true }))
-        yield message
+            retreive,
+            { once: true, passive: true })
+          signal?.addEventListener(
+            "abort",
+            abort,
+            { once: true, passive: true })
+        })
       }
     } finally {
       this.#request('unsubscribe', infoHash)
+      this.openSubscriptions.delete(uri)
     }
   }
 
@@ -53,7 +73,7 @@ export default class TrackerClient {
   }
 
   async #announceAction(action, ...uris) {
-    const infoHashes = uris.map(u=> sha256Hex(u))
+    const infoHashes = await Promise.all(uris.map(u=> sha256Hex(u)))
     return await this.#request(action, ...infoHashes)
   }
 }

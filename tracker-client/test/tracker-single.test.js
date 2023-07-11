@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import TrackerSingle from '../src/tracker-single'
-import { sha256Hex } from '../src/util'
+import { randomHash, sha256Hex } from '../src/util'
 
 const TRACKER_LINK = "wss://tracker.graffiti.garden"
-
-async function randomHash() {
-  return await sha256Hex(crypto.randomUUID())
-}
 
 async function connectToTracker(onUpdate=()=>{}) {
   return new TrackerSingle(
@@ -18,9 +14,18 @@ async function connectToTracker(onUpdate=()=>{}) {
 
 describe('Tracker Single', ()=> {
 
-  // TODO:
-  // - Does double subscription work? i.e. one peers subs to the same thing twice? what happens when one unsubs?
-  // - full client with multiple trackers
+  // it('localhost', async()=> {
+  //   const peerProof = await randomHash()
+  //   const ts = new TrackerSingle(
+  //     peerProof,
+  //     "ws://tracker.127.0.0.1:5001",
+  //     m=> console.log(m)
+  //   )
+
+  //   await expect(
+  //     ts.request("announce", await randomHash())
+  //   ).resolves.to.equal("announced")
+  // })
 
   it('Double connection', async()=> {
     const peerProof = await randomHash()
@@ -149,7 +154,33 @@ describe('Tracker Single', ()=> {
     ).resolves.to.equal("announced")
 
     ts1.close()
-    await new Promise(r=> setTimeout(r, 100));
+    await new Promise(r=> setTimeout(r, 300));
     expect(numUpdates).to.equal(2)
+  })
+
+  it("Double subscription", async ()=>{
+    let numAnnounces = 0
+    const hash = await randomHash()
+    const ts = await connectToTracker(update=> {
+      expect(update.action).to.equal("announce")
+      numAnnounces++
+    })
+    await expect(
+      ts.request("subscribe", hash)
+    ).resolves.to.equal("subscribed")
+    await expect(
+      ts.request("subscribe", hash)
+    ).resolves.to.equal("subscribed")
+    await expect(
+      ts.request("announce", hash)
+    ).resolves.to.equal("announced")
+    await new Promise(r=> setTimeout(r, 100));
+    expect(numAnnounces).to.equal(1)
+    await expect(
+      ts.request("unsubscribe", hash)
+    ).resolves.to.equal("unsubscribed")
+    await expect(
+      ts.request("unsubscribe", hash)
+    ).resolves.to.equal("unsubscribed")
   })
 })

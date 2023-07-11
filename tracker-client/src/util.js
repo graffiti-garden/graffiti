@@ -19,7 +19,11 @@ export async function sha256Hex(message) {
   return uint8ToHex(await sha256Uint8(message))
 }
 
-export function subdomainURL(url, subdomain) {
+export async function randomHash() {
+  return await sha256Hex(crypto.randomUUID())
+}
+
+export function subdomainURL(subdomain, url) {
   url = new URL(url)
   url.host = subdomain + '.' + url.host
   return url.toString()

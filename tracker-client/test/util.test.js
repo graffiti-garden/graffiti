@@ -8,7 +8,7 @@ describe('Util', ()=> {
   })
 
   it('Subdomain URL', ()=> {
-    expect(subdomainURL("https://example.com/", "1234"))
+    expect(subdomainURL("1234", "https://example.com/"))
     .to.equal("https://1234.example.com/")
   })
 
