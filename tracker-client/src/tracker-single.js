@@ -31,7 +31,7 @@ export default class TrackerSingle {
 
     // Wait to open
     if (!this.open) {
-      if (!this.opening) throw "tracker has disconnected"
+      if (!this.opening) throw "not connected to tracker"
       await new Promise((resolve, reject) =>
         this.openEvent.addEventListener(
           'open',
@@ -84,8 +84,12 @@ export default class TrackerSingle {
     }
   }
 
-  async #onClose(e) {
+  async #onClose() {
     this.open = false
+    this.opening = false
+    const e = new Event("open")
+    e.detail = "not connected to tracker"
+    this.openEvent.dispatchEvent(e)
   }
 
   close() {

@@ -1,4 +1,4 @@
-import { sha256Hex, websocketURL, subdomainURL } from './src/util.js'
+import { sha256Hex } from './src/util.js'
 import Tracker from './src/tracker-single.js'
 
 export default class TrackerClient {
@@ -67,9 +67,15 @@ export default class TrackerClient {
   }
 
   async #request(action, ...infoHashes) {
-    return await Promise.all(
+    const outputs = (await Promise.allSettled(
       this.trackers.map(t=>
-        t.request(action, ...infoHashes)))
+        t.request(action, ...infoHashes))))
+    if (outputs.every(o=> o.status=='rejected')) {
+      throw "not connected to any tracker"
+    } else {
+      return outputs.map(o=>
+         o.status=='fulfilled'? o.value : "error: " + o.reason)
+    }
   }
 
   async #announceAction(action, ...uris) {

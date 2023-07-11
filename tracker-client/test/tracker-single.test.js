@@ -19,6 +19,16 @@ async function connectToTracker(onUpdate=()=>{}) {
 
 describe(`Tracker Single on ${link}`, ()=> {
 
+  it('Downed tracker', async()=> {
+    const ts = new TrackerSingle(
+      await randomHash(),
+      "ws://tracker.example.com",
+      ()=>{})
+    await expect(
+      ts.request("announce", await randomHash())
+    ).rejects.toThrowError()
+  })
+
   it('Double connection', async()=> {
     const peerProof = await randomHash()
     const ts1 = new TrackerSingle(

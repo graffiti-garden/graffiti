@@ -57,6 +57,27 @@ describe('Multiple trackers', ()=> {
     assert(announces[2].includes(peers[0]))
     assert(announces[2].includes(peers[2]))
   })
-})
 
-  // Test with downed trackers (they should automatically be removed)
+
+  it("One downed tracker", async()=> {
+      const tc = new TrackerClient(
+        await randomHash(),
+        ...trackerLinks,
+        "ws://tracker.example.com")
+      
+      const output = await tc.announce("hello")
+      expect(output.length).to.equal(3)
+      expect(output[0]).to.equal("announced")
+      expect(output[1]).to.equal("announced")
+      expect(output[2]).to.include("error")
+  })
+
+  it("All downed trackers", async()=> {
+      const tc = new TrackerClient(
+        await randomHash(),
+        "ws://tracker.example.com",
+        "ws://tracker.example2.com")
+      
+      expect(tc.announce("hello")).rejects.toThrowError()
+  })
+})
