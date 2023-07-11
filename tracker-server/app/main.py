@@ -95,4 +95,8 @@ if __name__ == "__main__":
     args = {}
     if getenv('DEBUG') == 'true':
         args['reload'] = True
+    else:
+        args['port'] = 443
+        args['ssl_certfile'] = '/etc/ssl/certs/fullchain.pem'
+        args['ssl_keyfile']  = '/etc/ssl/certs/privkey.pem'
     uvicorn.run('app.main:app', host='0.0.0.0', **args)

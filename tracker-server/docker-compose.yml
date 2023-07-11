@@ -9,16 +9,8 @@ services:
       - ./app:/mount/app
     depends_on:
       - mongo
-
-  peerjs:
-    image: peerjs/peerjs-server:1.0.0
-    container_name: graffiti-peerjs
-
-  nginx:
-    image: nginx:1.25.1
-    container_name: graffiti-nginx
-    volumes:
-      - ./config/nginx/base.conf:/etc/nginx/templates/base.conf.template:ro
+    ports:
+      - 8000:8000
 
   mongo:
     image: mongo:6.0.6
