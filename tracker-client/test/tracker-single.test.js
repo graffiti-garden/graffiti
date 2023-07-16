@@ -6,6 +6,7 @@ const trackerLinks = [
   "ws://localhost:8000",
   "wss://tracker.graffiti.garden"
 ]
+const timeoutTime = 500
 
 trackerLinks.forEach(link=> {
 
@@ -110,14 +111,14 @@ describe(`Tracker Single on ${link}`, ()=> {
       ts1.request("announce", hash)
     ).resolves.to.equal("announced")
 
-    await new Promise(r=> setTimeout(r, 100));
+    await new Promise(r=> setTimeout(r, timeoutTime));
     expect(numUpdates).to.equal(1)
 
     await expect(
       ts1.request("unannounce", hash)
     ).resolves.to.equal("unannounced")
 
-    await new Promise(r=> setTimeout(r, 100));
+    await new Promise(r=> setTimeout(r, timeoutTime));
     expect(numUpdates).to.equal(2)
 
     await expect(
@@ -127,7 +128,7 @@ describe(`Tracker Single on ${link}`, ()=> {
       ts1.request("announce", hash)
     ).resolves.to.equal("announced")
 
-    await new Promise(r=> setTimeout(r, 100));
+    await new Promise(r=> setTimeout(r, timeoutTime));
     expect(numUpdates).to.equal(2)
   })
 
@@ -156,7 +157,7 @@ describe(`Tracker Single on ${link}`, ()=> {
     ).resolves.to.equal("announced")
 
     ts1.close()
-    await new Promise(r=> setTimeout(r, 300));
+    await new Promise(r=> setTimeout(r, timeoutTime));
     expect(numUpdates).to.equal(2)
   })
 
@@ -176,7 +177,7 @@ describe(`Tracker Single on ${link}`, ()=> {
     await expect(
       ts.request("announce", hash)
     ).resolves.to.equal("announced")
-    await new Promise(r=> setTimeout(r, 100));
+    await new Promise(r=> setTimeout(r, timeoutTime));
     expect(numAnnounces).to.equal(1)
     await expect(
       ts.request("unsubscribe", hash)
@@ -184,6 +185,44 @@ describe(`Tracker Single on ${link}`, ()=> {
     await expect(
       ts.request("unsubscribe", hash)
     ).resolves.to.equal("unsubscribed")
+  }, 10000)
+
+  it("Previous and future announces", async ()=>{
+    let announced1 = [] 
+    const ts1 = await connectToTracker(async update=> {
+      expect(update.action).to.equal("announce")
+      if (update.peer != await sha256Hex(ts1.peerProof)) {
+        announced1.push(update.peer)
+      }
+    })
+    let announced2 = []
+
+    const ts2 = await connectToTracker(async update=> {
+      expect(update.action).to.equal("announce")
+      if (update.peer != await sha256Hex(ts2.peerProof)) {
+        announced2.push(update.peer)
+      }
+    })
+
+    const hash = await randomHash()
+    await expect(
+      ts1.request("announce", hash)
+    ).resolves.to.equal("announced")
+    await expect(
+      ts1.request("subscribe", hash)
+    ).resolves.to.equal("subscribed")
+    await expect(
+      ts2.request("subscribe", hash)
+    ).resolves.to.equal("subscribed")
+    await expect(
+      ts2.request("announce", hash)
+    ).resolves.to.equal("announced")
+    await new Promise(r=> setTimeout(r, timeoutTime));
+
+    expect(announced1.length).to.equal(1)
+    expect(announced2.length).to.equal(1)
+    expect(announced1[0]).to.equal(await sha256Hex(ts2.peerProof))
+    expect(announced2[0]).to.equal(await sha256Hex(ts1.peerProof))
   })
 })
 })
