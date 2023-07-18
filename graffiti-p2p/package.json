@@ -1,0 +1,35 @@
+{
+  "name": "@graffiti-garden/graffiti-p2p",
+  "version": "1.0.0",
+  "description": "This client library interacts with the [tracker server](https://github.com/graffiti-garden/tracker-server/)",
+  "main": "graffiti-p2p.js",
+  "type": "module",
+  "scripts": {
+    "test": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti-p2p.git"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti-p2p/issues"
+  },
+  "homepage": "https://github.com/graffiti-garden/graffiti-p2p#readme",
+  "dependencies": {
+    "@graffiti-garden/tracker-client": "^1.0.0",
+    "jose": "^4.14.4",
+    "peerjs": "^1.4.7"
+  },
+  "devDependencies": {
+    "@vitest/browser": "^0.33.0",
+    "vitest": "^0.33.0",
+    "webdriverio": "^8.12.1"
+  },
+  "overrides": {
+    "webdriverio": {
+      "puppeteer-core": "^20.8.2"
+    }
+  }
+}
