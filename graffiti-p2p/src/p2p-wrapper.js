@@ -31,7 +31,6 @@ export default class P2PWrapper {
     this.tracker = new TrackerClient(peerProof, ...this.options.trackers)
     this.events.dispatchEvent(new Event("open"))
     this.open = true
-
   }
 
   async get(Class, ...args) {

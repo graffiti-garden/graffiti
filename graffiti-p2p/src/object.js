@@ -1,4 +1,6 @@
-class GraffitiObject {
+import * as jose from 'jose'
+
+export default class GraffitiObject {
 
   static toURI(actor, path) {
     return `object:${actor}:${path}`
@@ -12,24 +14,14 @@ class GraffitiObject {
 
     options = {
       objectConstructor: ()=>({}),
-      signMessage: async message=>{
-        const alg = 'ES256'
-        const { publicKey, privateKey } =
-          await jose.generateKeyPair(alg, { extractable: true })
-        const jwk = await jose.exportJWK(publicKey)
-
-        return await new jose.SignJWT(message)
-          .setProtectedHeader({ jwk, alg })
-          .sign(privateKey)
-      },
       ...options
     }
 
-    this.signMessage = options.signMessage
+    this.me = options.actor
 
     this._value = options.objectConstructor()
     Object.defineProperty(this._value, '__graffiti', { value: true })
-    Object.defineProperty(this._value, 'id', {value: uri})
+    Object.defineProperty(this._value, 'id', {value: this.constructor.toURI(actor, path)})
     Object.defineProperty(this._value, 'actor', {value: actor})
     Object.defineProperty(this._value, 'path', {value: path})
 
@@ -46,17 +38,17 @@ class GraffitiObject {
     if (payload.updated <= this.updated) return
     if (actor != this.actor) return
     if (payload.path != this.path) return
-    if (!this.isObject(payload.value)) return
+    if (!(payload.value instanceof Object)) return
 
-    this.store(payload.value, payload.updated, jwt)
+    this.#store(payload.value, payload.updated, jwt)
   }
 
   async onAnnounce(peer) {
-    if (!(this.peers.has(peer))) {
+    if (!this.peers.has(peer)) {
       if (this.jwt) {
         await this.wire.send(peer, this.jwt)
       }
-      this.peers.add(peers)
+      this.peers.add(peer)
     }
   }
 
@@ -65,11 +57,23 @@ class GraffitiObject {
   }
 
   async set(value) {
-    const jwt = await this.signMessage({
+    if (this.actor != this.me.id)
+      throw `No permission to modify this object`
+    if (!(value instanceof Object))
+      throw `Value is not an object: ${JSON.stringify(value)}`
+
+    const updated = Date.now()
+    const jwt = await this.me.signMessage({
       value,
       updated,
-      path
+      path: this.path
     })
+
+    // Make sure the headers didn't get swapped?
+    const { _, protectedHeader } =
+      await jose.jwtVerify(jwt, jose.EmbeddedJWK)
+    if (await jose.calculateJwkThumbprint(protectedHeader.jwk) != this.actor)
+      throw "An error occurred during signing"
 
     this.#store(value, updated, jwt)
   }
@@ -84,40 +88,42 @@ class GraffitiObject {
 
     this.updated = updated
     this.jwt = jwt
-    this.wire.gossip(peers, jwt)
+    this.wire.gossip([...this.peers], jwt)
   }
 
-  value() {
-    return new Proxy(this._value, {
-
+  objectHandler() {
+    return {
       get: (target, prop, receiver)=> {
         // Make sure handling is recursive
         if (typeof target[prop] === 'object' && target[prop] !== null) {
           return new Proxy(
-            Reflect.get(target, prop, receiver), this.objectHandler(identity))
+            Reflect.get(target, prop, receiver), this.objectHandler())
         } else {
           return Reflect.get(target, prop, receiver)
         }
       },
       set: (target, prop, val, receiver)=> {
-        if (!identity || identity.actor != this.actor) {
+        if (this.actor != this.me.id) {
           throw "Trying to modify an object that isn't yours"
         }
         if (Reflect.set(target, prop, val, receiver)) {
-          // Set the value
-          this.set(this._value, identity)
+          this.set(this._value)
           return true
         } else { return false }
       }, 
       deleteProperty: (target, prop)=> {
-        if (!identity || identity.actor != this.actor) {
+        if (this.actor != this.me.id) {
           throw "Trying to modify an object that isn't yours"
         }
         if (Reflect.deleteProperty(target, prop)) {
-          this.set(this._value, identity)
+          this.set(this._value)
           return true
         } else { return false }
       }
-    })
+    }
+  }
+
+  value() {
+    return new Proxy(this._value, this.objectHandler())
   }
 }
