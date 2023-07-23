@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import P2PWrapper from "../src/p2p-wrapper"
 import { randomHash } from '../src/util'
+import { default as _options } from './options'
 
-describe('P2P Wrapper', ()=> {
+describe('P2P Wrapper', async ()=> {
 
-  const options = {
-    // trackers: ["wss://tracker.graffiti.garden"]
-    trackers: ["ws://localhost:8000"]
-  }
+  const options = await _options()
 
   it('repeated get and destroy', async ()=> {
 
@@ -18,15 +16,15 @@ describe('P2P Wrapper', ()=> {
     }
 
     const pw = new P2PWrapper(options)
-    const t1 = await pw.get(Test, "one", "two")
+    const t1 = pw.get(Test, "one", "two")
 
-    expect(pw.get(Test, "one", "two")).resolves.to.equal(t1)
+    expect(pw.get(Test, "one", "two")).to.equal(t1)
 
-    expect(pw.get(Test, "one", "three")).resolves.to.not.equal(t1)
+    expect(pw.get(Test, "one", "three")).to.not.equal(t1)
 
     await pw.delete(Test, "one", "two")
 
-    expect(pw.get(Test, "one", "two")).resolves.to.not.equal(t1)
+    expect(pw.get(Test, "one", "two")).to.not.equal(t1)
   })
 
   it('one wrapper to another', async ()=> {
@@ -59,14 +57,15 @@ describe('P2P Wrapper', ()=> {
 
     // Create two independent wrappers
     const pw1 = new P2PWrapper(options)
-    const t1 = await pw1.get(Test)
-
-    await new Promise(r=> setTimeout(r, 1500));
-
+    const t1 = pw1.get(Test)
     const pw2 = new P2PWrapper(options)
-    const t2 = await pw2.get(Test)
+    const t2 = pw2.get(Test)
 
-    // Wait a bit
+    // Immediately send
+    await pw2.isOpen()
+    await t1.send(pw2.peer, "hello")
+
+    // Wait a bit for everything to resolve
     await new Promise(r=> setTimeout(r, 1500));
   
     // Make sure announcement of first is seen in second and vice versa
@@ -75,9 +74,7 @@ describe('P2P Wrapper', ()=> {
     expect(t1.announced[0]).to.equal(pw2.peer)
     expect(t2.announced[0]).to.equal(pw1.peer)
 
-    // Send a message from one to the other
-    await t1.wire.send(pw2.peer, "hello")
-    await new Promise(r=> setTimeout(r, 1500));
+    // Make sure message is seen
     expect(t2.messages.length).to.equal(1)
     expect(t2.messages[0][0]).to.equal(pw1.peer)
     expect(t2.messages[0][1]).to.equal("hello")

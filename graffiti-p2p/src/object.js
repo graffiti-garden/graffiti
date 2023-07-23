@@ -3,6 +3,8 @@ import * as jose from 'jose'
 export default class GraffitiObject {
 
   static toURI(actor, path) {
+    if(typeof actor === "undefined")
+      throw "Actor is not defined"
     return `object:${actor}:${path}`
   }
 
@@ -45,10 +47,10 @@ export default class GraffitiObject {
 
   async onAnnounce(peer) {
     if (!this.peers.has(peer)) {
-      if (this.jwt) {
-        await this.wire.send(peer, this.jwt)
-      }
       this.peers.add(peer)
+      if (this.jwt) {
+        await this.send(peer, this.jwt)
+      }
     }
   }
 
@@ -75,10 +77,10 @@ export default class GraffitiObject {
     if (await jose.calculateJwkThumbprint(protectedHeader.jwk) != this.actor)
       throw "An error occurred during signing"
 
-    this.#store(value, updated, jwt)
+    await this.#store(value, updated, jwt)
   }
 
-  #store(value, updated, jwt) {
+  async #store(value, updated, jwt) {
     // Don't destroy the object reference
     for (const prop in this._value) {
       if (!(prop in value))
@@ -88,7 +90,7 @@ export default class GraffitiObject {
 
     this.updated = updated
     this.jwt = jwt
-    this.wire.gossip([...this.peers], jwt)
+    await this.gossip([...this.peers], jwt)
   }
 
   objectHandler() {
@@ -123,7 +125,7 @@ export default class GraffitiObject {
     }
   }
 
-  value() {
+  get value() {
     return new Proxy(this._value, this.objectHandler())
   }
 }

@@ -33,7 +33,7 @@ export default class P2PWrapper {
     this.open = true
   }
 
-  async get(Class, ...args) {
+  async isOpen() {
     if (!this.open) {
       await new Promise(resolve => {
         this.events.addEventListener(
@@ -43,33 +43,64 @@ export default class P2PWrapper {
         )
       })
     }
+  }
 
+  get(Class, ...args) {
     const uri = Class.toURI(...args)
-
     if (uri in this.wrapMap) return this.wrapMap[uri]
 
-    const wrapped = new Class(...args, this.options)
+    const wrapped = new Class(...args, {wrapper: this, ...this.options})
     this.wrapMap[uri] = wrapped
 
-    // Wait for stuff to happen if already exists but wire, announce, etc. not finished
+    this.workingOnIt.add(uri)
+    this.isOpen().then(()=> {
 
-    wrapped.wire = await this.peerMux.createWire(uri, wrapped.onMessage?.bind(wrapped))
-    await this.tracker.announce(uri)
+      this.peerMux.createWire(uri, wrapped.onMessage?.bind(wrapped)).then(
 
-    this.subscribeKillSwitches[uri] = new AbortController()
-    const signal = this.subscribeKillSwitches[uri].signal
+        async wire=> {
+          wrapped.wire = wire
+          await this.tracker.announce(uri)
 
-    // Subscribe
-    ;(async ()=> {
-      for await (const {action, peer} of this.tracker.subscribe(uri, signal)) {
-        if (peer == this.peer) continue
-        if (action == 'announce') {
-          wrapped.onAnnounce(peer)
-        } else {
-          wrapped.onUnannounce(peer)
+          this.subscribeKillSwitches[uri] = new AbortController()
+          const signal = this.subscribeKillSwitches[uri].signal
+
+          // Subscribe
+          ;(async ()=> {
+            for await (const {action, peer} of this.tracker.subscribe(uri, signal)) {
+              if (peer == this.peer) continue
+              if (action == 'announce') {
+                wrapped.onAnnounce(peer)
+              } else {
+                wrapped.onUnannounce(peer)
+              }
+            }
+          })()
+
+          this.workingOnIt.delete(uri)
+          this.events.dispatchEvent(new Event(uri))
         }
+      )
+    })
+
+    wrapped.isOpen = async ()=> {
+      if (this.workingOnIt.has(uri)) {
+        await new Promise(resolve => {
+          this.events.addEventListener(
+            uri,
+            ()=>resolve(),
+            { once: true, passive: true }
+          )
+        })
       }
-    })()
+    }
+    wrapped.send = async (...args)=> {
+      await wrapped.isOpen()
+      return await wrapped.wire.send(...args)
+    }
+    wrapped.gossip = async (...args)=> {
+      await wrapped.isOpen()
+      return await wrapped.wire.gossip(...args)
+    }
 
     return wrapped
   }
@@ -79,6 +110,7 @@ export default class P2PWrapper {
     const uri = Class.toURI(...args)
 
     if (uri in this.wrapMap) {
+      await this.wrapMap[uri].isOpen()
       this.subscribeKillSwitches[uri].abort()
       await this.wrapMap[uri].wire.destroy()
       await this.tracker.unannounce(uri)
