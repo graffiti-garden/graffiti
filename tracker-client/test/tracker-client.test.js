@@ -71,7 +71,7 @@ describe('Client interface with single tracker', ()=> {
     let timedOut = false
     const listener = async ()=> {
       try {
-        for await (const message of tc.subscribe(uri, AbortSignal.timeout(1000))) {
+        for await (const message of tc.subscribe(uri, AbortSignal.timeout(3000))) {
           actions++
         }
       } catch(err) {
@@ -82,6 +82,7 @@ describe('Client interface with single tracker', ()=> {
     }
     listener()
 
+    await new Promise(r=> setTimeout(r, 2000));
     await tc.announce(uri)
     await new Promise(r=> setTimeout(r, 2000));
     expect(actions).to.equal(1)

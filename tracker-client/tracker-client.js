@@ -7,6 +7,9 @@ export default class TrackerClient {
     this.peerProof = peerProof
     this.announces = new EventTarget()
 
+    if (!serverURLs || !serverURLs.length)
+      serverURLs = ["wss://tracker.graffiti.garden"]
+
     this.trackers = serverURLs.map(url=>
         new Tracker(
           peerProof,
