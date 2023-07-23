@@ -13,11 +13,12 @@ services:
       - 8000:8000
 
   mongo:
-    image: mongo:6.0.6
+    image: mongo:6.0.8-jammy
     container_name: graffiti-mongo
     restart: always
     command: "--bind_ip_all --replSet rs0"
     volumes:
       - ./config/mongo:/docker-entrypoint-initdb.d/
+      - ./db:/data/db
     extra_hosts:
       - "mongo:127.0.0.1"
