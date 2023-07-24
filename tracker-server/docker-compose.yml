@@ -19,6 +19,5 @@ services:
     command: "--bind_ip_all --replSet rs0"
     volumes:
       - ./config/mongo:/docker-entrypoint-initdb.d/
-      - ./db:/data/db
     extra_hosts:
       - "mongo:127.0.0.1"

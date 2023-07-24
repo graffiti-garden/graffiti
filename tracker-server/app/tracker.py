@@ -115,6 +115,8 @@ class Tracker:
                 elif 'fullDocumentBeforeChange' in change:
                     obj = change['fullDocumentBeforeChange']
                     action = "unannounce"
+                else:
+                    continue
 
                 peer = obj["peer"]
                 info_hash = obj["info_hash"]
@@ -127,5 +129,5 @@ class Tracker:
                     "info_hash": info_hash
                 }) for socket in self.subscriptions[info_hash]]
 
-                # Send the changes
-                await asyncio.gather(*tasks)
+                # Send the changes (ignoring failed sends)
+                await asyncio.gather(*tasks, return_exceptions=True)
