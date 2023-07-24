@@ -1,6 +1,3 @@
-import * as jose from 'jose'
-import { sha256Hex } from './util'
-
 export default class GraffitiObject {
 
   static toURI(actor, path) {

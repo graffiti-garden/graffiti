@@ -1,8 +1,9 @@
-import ActorManager from "../src/actor-manager"
+// import ActorManager from "../src/actor-manager"
 
 export default async function options() {
-  const actorManager = new ActorManager()
-  await actorManager.createActor(crypto.randomUUID())
+  // const actorManager = new ActorManager()
+  // await actorManager.createActor(crypto.randomUUID())
+  const me = crypto.randomUUID()
 
   return {
     // trackers: ["ws://localhost:8000"],
@@ -16,6 +17,18 @@ export default async function options() {
       host: "peerjs.graffiti.garden",
       secure: true
     },
-    actorManager
+    // mock the actor manager
+    actorManager: {
+      me,
+      async sign(payload, actor) {
+        actor = actor?actor:me
+        if (actor != me)
+          throw "Can't sign if not you."
+        return { payload, actor }
+      },
+      async verify({ payload, actor }) {
+        return { payload, actor }
+      }
+    }
   }
 }

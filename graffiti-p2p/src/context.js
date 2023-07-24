@@ -24,7 +24,7 @@ export default class GraffitiContext {
     if (!this.peers.has(peer)) {
       this.peers.add(peer)
       Object.values(this._objects).forEach(
-        o=>this.wire.send(peer, o.jwt))
+        o=>this.wire.send(peer, o.signed))
     }
   }
 

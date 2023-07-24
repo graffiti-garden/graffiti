@@ -52,11 +52,11 @@ describe('Object', async ()=> {
     const pw2 = new P2PWrapper(options2)
     const object2 = pw2.get(GraffitiObject, pw1.options.actorManager.me, path)
     const object2Value = object2.value
-    await new Promise(r=> setTimeout(r, 3000));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object2Value.something).to.equal('else')
 
     delete object1Value.something
-    await new Promise(r=> setTimeout(r, 3000));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object2Value.something).toBeUndefined()
   }, timeout)
 
@@ -83,11 +83,11 @@ describe('Object', async ()=> {
     const object2Value = object2.value
 
     object1Value.feelings = 'like'
-    await new Promise(r=> setTimeout(r, 3000));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object2Value.feelings).to.equal('like')
 
     object2Value.feelings += ' a lot'
-    await new Promise(r=> setTimeout(r, 3000));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object1Value.feelings).to.equal('like a lot')
   }, timeout)
 
