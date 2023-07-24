@@ -7,11 +7,16 @@ export default async function options() {
   const jwk = await jose.exportJWK(publicKey)
 
   return {
-    trackers: ["ws://localhost:8000"],
+    // trackers: ["ws://localhost:8000"],
+    trackers: ["wss://tracker.graffiti.garden"],
+    // peerjs: {
+    //   host: "localhost",
+    //   ssl: false,
+    //   port: "9000"
+    // },
     peerjs: {
-      host: "localhost",
-      ssl: false,
-      port: "9000"
+      host: "peerjs.graffiti.garden",
+      secure: true
     },
     actor: {
       id: await jose.calculateJwkThumbprint(jwk),

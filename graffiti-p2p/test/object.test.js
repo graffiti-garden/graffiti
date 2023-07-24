@@ -28,7 +28,7 @@ describe('Object', ()=> {
     const pw2 = new P2PWrapper(await options())
     const object2 = pw2.get(GraffitiObject, pw1.options.actor.id, path)
     const object2Value = object2.value
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object2Value.hello).to.equal('world')
   })
 
@@ -48,11 +48,11 @@ describe('Object', ()=> {
     const pw2 = new P2PWrapper(await options())
     const object2 = pw2.get(GraffitiObject, pw1.options.actor.id, path)
     const object2Value = object2.value
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object2Value.something).to.equal('else')
 
     delete object1Value.something
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object2Value.something).toBeUndefined()
   })
 
@@ -80,11 +80,11 @@ describe('Object', ()=> {
     const object2Value = object2.value
 
     object1Value.feelings = 'like'
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object2Value.feelings).to.equal('like')
 
     object2Value.feelings += ' a lot'
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
     expect(object1Value.feelings).to.equal('like a lot')
   })
 

@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import PeerMux from '../src/peer-mux'
 import { randomHash } from '../src/util'
+import options from './options'
 
-const peerjsOptions = {
-  host: "localhost",
-  ssl: false,
-  port: "9000"
-}
+const peerjsOptions = (await options()).peerjs
 
 describe('Peer Mux', ()=> {
 
