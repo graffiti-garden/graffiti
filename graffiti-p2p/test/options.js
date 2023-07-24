@@ -1,10 +1,8 @@
-import * as jose from 'jose'
+import ActorManager from "../src/actor-manager"
 
 export default async function options() {
-  const alg = 'ES256'
-  const { publicKey, privateKey } =
-    await jose.generateKeyPair(alg, { extractable: true })
-  const jwk = await jose.exportJWK(publicKey)
+  const actorManager = new ActorManager()
+  await actorManager.createActor(crypto.randomUUID())
 
   return {
     // trackers: ["ws://localhost:8000"],
@@ -18,13 +16,6 @@ export default async function options() {
       host: "peerjs.graffiti.garden",
       secure: true
     },
-    actor: {
-      id: await jose.calculateJwkThumbprint(jwk),
-      async signMessage(message) {
-        return await new jose.SignJWT(message)
-          .setProtectedHeader({ jwk, alg })
-          .sign(privateKey)
-      }
-    }
+    actorManager
   }
 }

@@ -1,5 +1,4 @@
 import { sha256Hex } from "./util"
-import * as jose from 'jose'
 import GraffitiObject from "./object"
 
 export default class GraffitiContext {
@@ -16,7 +15,7 @@ export default class GraffitiContext {
       objectConstructor: ()=>({}),
       ...options
     }
-    this.me = options.actor
+    this.actorManager = options.actorManager
     this.wrapper = options.wrapper
     this._objects = options.objectConstructor()
   }
@@ -33,11 +32,9 @@ export default class GraffitiContext {
     this.peers.delete(peer)
   }
 
-  async onMessage(peer, jwt) {
+  async onMessage(peer, signed) {
     await this.onAnnounce(peer)
-    const { payload, protectedHeader } =
-      await jose.jwtVerify(jwt, jose.EmbeddedJWK)
-    const actor = await jose.calculateJwkThumbprint(protectedHeader.jwk)
+    const { payload, actor } = await this.actorManager.verify(signed)
 
     if (payload.context != this.contextPath) return
 
@@ -47,13 +44,10 @@ export default class GraffitiContext {
     if (payload.path &&
         payload.hash != await sha256Hex(payload.path)) return
 
-    await this.#store(hashURI, payload.path, actor, payload.updated, jwt)
+    await this.#store(hashURI, payload.path, actor, payload.updated, signed)
   }
 
   async add(object, remove=false) {
-    if (this.me.id != object.actor)
-      throw "Can't add an object to the context that isn't yours!"
-
     const updated = Date.now()
 
     const hash = await sha256Hex(object.path)
@@ -61,23 +55,23 @@ export default class GraffitiContext {
 
     const path = remove? null : object.path
 
-    const jwt = await this.me.signMessage({
+    const signed = await this.actorManager.sign({
       hash,
       path,
       updated,
       context: this.contextPath
-    })
-    await this.#store(hashURI, path, object.actor, updated, jwt)
+    }, object.actor)
+    await this.#store(hashURI, path, object.actor, updated, signed)
   }
 
-  async #store(hashURI, path, actor, updated, jwt) {
+  async #store(hashURI, path, actor, updated, signed) {
     this._objects[hashURI] = {
       path,
       actor,
       updated,
-      jwt
+      signed
     }
-    await this.gossip([...this.peers], jwt)
+    await this.gossip([...this.peers], signed)
   }
 
   async delete(object) {

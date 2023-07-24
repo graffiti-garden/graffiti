@@ -1,4 +1,5 @@
 import * as jose from 'jose'
+import { sha256Hex } from './util'
 
 export default class GraffitiObject {
 
@@ -19,7 +20,7 @@ export default class GraffitiObject {
       ...options
     }
 
-    this.me = options.actor
+    this.actorManager = options.actorManager
 
     this._value = options.objectConstructor()
     Object.defineProperty(this._value, '__graffiti', { value: true })
@@ -30,19 +31,18 @@ export default class GraffitiObject {
     this.peers = new Set() 
   }
 
-  async onMessage(peer, jwt) {
+  async onMessage(peer, signed) {
     await this.onAnnounce(peer)
 
-    const { payload, protectedHeader } =
-      await jose.jwtVerify(jwt, jose.EmbeddedJWK)
-    const actor = await jose.calculateJwkThumbprint(protectedHeader.jwk)
+    // Verify the JWT and the signature
+    const { payload, actor } = await this.actorManager.verify(signed)
 
     if (payload.updated <= this.updated) return
-    if (actor != this.actor) return
+    if (actor != this.actor ) return
     if (payload.path != this.path) return
     if (!(payload.value instanceof Object)) return
 
-    this.#store(payload.value, payload.updated, jwt)
+    this.#store(payload.value, payload.updated, signed)
   }
 
   async onAnnounce(peer) {
@@ -59,25 +59,18 @@ export default class GraffitiObject {
   }
 
   async set(value) {
-    if (this.actor != this.me.id)
-      throw `No permission to modify this object`
     if (!(value instanceof Object))
       throw `Value is not an object: ${JSON.stringify(value)}`
-
     const updated = Date.now()
-    const jwt = await this.me.signMessage({
+
+    // Pack it up into a JWT
+    const signed = await this.actorManager.sign({
       value,
       updated,
       path: this.path
-    })
+    }, this.actor)
 
-    // Make sure the headers didn't get swapped?
-    const { _, protectedHeader } =
-      await jose.jwtVerify(jwt, jose.EmbeddedJWK)
-    if (await jose.calculateJwkThumbprint(protectedHeader.jwk) != this.actor)
-      throw "An error occurred during signing"
-
-    await this.#store(value, updated, jwt)
+    await this.#store(value, updated, signed)
   }
 
   async #store(value, updated, jwt) {
@@ -105,7 +98,7 @@ export default class GraffitiObject {
         }
       },
       set: (target, prop, val, receiver)=> {
-        if (this.actor != this.me.id) {
+        if (this.actor != this.actorManager.me) {
           throw "Trying to modify an object that isn't yours"
         }
         if (Reflect.set(target, prop, val, receiver)) {
@@ -114,7 +107,7 @@ export default class GraffitiObject {
         } else { return false }
       }, 
       deleteProperty: (target, prop)=> {
-        if (this.actor != this.me.id) {
+        if (this.actor != this.actorManager.me) {
           throw "Trying to modify an object that isn't yours"
         }
         if (Reflect.deleteProperty(target, prop)) {
