@@ -19,18 +19,18 @@ describe('Context', async ()=> {
     const context = pw.get(GraffitiContext, path)
 
     // Objects starts off empty
-    expect(context.values()).toBeInstanceOf(Array)
-    expect(context.values().length).to.equal(0)
+    expect(context.posts()).toBeInstanceOf(Array)
+    expect(context.posts().length).to.equal(0)
 
     // Add an object
     const objectWrapped = pw.get(GraffitiObject, pw.options.actorManager.me, await randomHash())
     await context.add(objectWrapped.value)
-    expect(context.values().length).to.equal(1)
-    expect(context.values()[0].id).to.equal(objectWrapped.value.id)
+    expect(context.posts().length).to.equal(1)
+    expect(context.posts()[0].id).to.equal(objectWrapped.value.id)
 
     // Delete an object
     await context.delete(objectWrapped.value)
-    expect(context.values().length).to.equal(0)
+    expect(context.posts().length).to.equal(0)
   }, timeout)
 
   it('adding someone else\'s object', async()=> {
@@ -59,15 +59,15 @@ describe('Context', async ()=> {
 
     // Wait for context to propogate
     await new Promise(r=> setTimeout(r, 1000));
-    expect(context2.values().length).to.equal(1)
+    expect(context2.posts().length).to.equal(1)
 
     // Wait for the object content to propogate
     await new Promise(r=> setTimeout(r, 1000));
-    expect(context2.values()[0].something).to.equal("1234")
+    expect(context2.posts()[0].something).to.equal("1234")
 
     // Delete from the context
     await context1.delete(objectWrapped.value)
     await new Promise(r=> setTimeout(r, 1000));
-    expect(context2.values().length).to.equal(0)
+    expect(context2.posts().length).to.equal(0)
   }, timeout)
 })

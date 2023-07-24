@@ -17,13 +17,13 @@ export default class GraffitiContext {
     }
     this.actorManager = options.actorManager
     this.wrapper = options.wrapper
-    this._objects = options.objectConstructor()
+    this._posts = options.objectConstructor()
   }
 
   async onAnnounce(peer) {
     if (!this.peers.has(peer)) {
       this.peers.add(peer)
-      Object.values(this._objects).forEach(
+      Object.values(this._posts).forEach(
         o=>this.wire.send(peer, o.signed))
     }
   }
@@ -39,8 +39,8 @@ export default class GraffitiContext {
     if (payload.context != this.contextPath) return
 
     const hashURI = GraffitiObject.toURI(actor, payload.hash)
-    if (hashURI in this._objects &&
-        payload.updated <= this._objects[hashURI].updated) return
+    if (hashURI in this._posts &&
+        payload.updated <= this._posts[hashURI].updated) return
     if (payload.path &&
         payload.hash != await sha256Hex(payload.path)) return
 
@@ -65,7 +65,7 @@ export default class GraffitiContext {
   }
 
   async #store(hashURI, path, actor, updated, signed) {
-    this._objects[hashURI] = {
+    this._posts[hashURI] = {
       path,
       actor,
       updated,
@@ -78,8 +78,8 @@ export default class GraffitiContext {
     return await this.add(object, true)
   }
 
-  values() {
-    return Object.values(this._objects)
+  posts() {
+    return Object.values(this._posts)
       .filter(o=> o.path)
       .map(o=> this.wrapper.get(GraffitiObject, o.actor, o.path).value)
   }
