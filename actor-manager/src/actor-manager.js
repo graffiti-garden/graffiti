@@ -87,10 +87,10 @@ export default class ActorManager {
         origin: ()=> true
       })
 
-    return {
+    return JSON.parse(JSON.stringify({
       payload: jose.UnsecuredJWT.decode(jwt).payload,
       actor: credential.id
-    }
+    }))
   }
 }
 
