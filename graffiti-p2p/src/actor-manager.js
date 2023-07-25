@@ -48,7 +48,7 @@ export default class ActorManager {
     await navigator.locks.request("actorManager", async()=> {
       authentication = await client.authenticate([], challenge, {
         "authenticatorType": "auto",
-        "userVerification": "discouraged",
+        "userVerification": "required",
         "debug": false
       })
     })
@@ -57,13 +57,12 @@ export default class ActorManager {
     if (!await get(id)) {
       throw "No public key exists for that user."
     }
-    this.meWrapper.value = credential.id
+    this.meWrapper.value = id
     return this.me
   }
 
   async sign(object, actor) {
     actor = actor? actor : this.me
-    console.log(actor)
 
     const jwt = new jose.UnsecuredJWT(object).encode()
 

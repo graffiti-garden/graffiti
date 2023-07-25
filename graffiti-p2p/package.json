@@ -5,7 +5,9 @@
   "main": "graffiti-p2p.js",
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "demo": "vite",
+    "build-demo": "vite build"
   },
   "repository": {
     "type": "git",
@@ -25,7 +27,9 @@
     "peerjs": "^1.4.7"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "^4.2.3",
     "@vitest/browser": "^0.33.0",
+    "vite": "^4.4.7",
     "vitest": "^0.33.0",
     "webdriverio": "^8.12.1"
   },

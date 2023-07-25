@@ -5,10 +5,11 @@ import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 
 // TODO:
+// refactor object and context so that it works with reactivity
 // - store stuff in IDB
 // - mirrors
-// - hook in with vue
 // - make an actual demo
+// don't seed things that have zero stuff
 
 export default class Graffiti {
   constructor(options) {
