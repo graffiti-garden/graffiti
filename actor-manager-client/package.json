@@ -1,11 +1,12 @@
 {
   "name": "@graffiti-garden/actor-client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "client for the actor manager",
   "main": "client.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"‼️ ONCE THE SERVER IS RUNNING, GO TO https://localhost/test\"; serve"
+    "demo": "vite",
+    "build-demo": "vite build"
   },
   "repository": {
     "type": "git",
@@ -17,7 +18,8 @@
     "url": "https://github.com/graffiti-garden/actor-client/issues"
   },
   "homepage": "https://github.com/graffiti-garden/actor-client#readme",
-  "devDependencies": {
-    "https-localhost": "^4.7.1"
+  "dependencies": {
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.4.7"
   }
 }
