@@ -2,6 +2,14 @@ import * as jose from 'jose'
 import { client, server } from '@passwordless-id/webauthn' 
 import { cookieStore } from "cookie-store"
 
+const webauthnOptions = {
+  authenticatorType: "auto",
+  userVerification: "discouraged",
+  attestation: false,
+  debug: false,
+  mediation: "silent"
+}
+
 export default class ActorManager {
 
   async createActor(name) {
@@ -9,13 +17,7 @@ export default class ActorManager {
 
     let registration
     await navigator.locks.request("actorManager", async()=> {
-      registration = await client.register(name, challenge, {
-        authenticatorType: "auto",
-        userVerification: "discouraged",
-        attestation: false,
-        debug: false,
-        mediation: "silent"
-      })
+      registration = await client.register(name, challenge, webauthnOptions)
     });
 
     // Store the public key
@@ -37,12 +39,7 @@ export default class ActorManager {
 
     let authentication
     await navigator.locks.request("actorManager", async()=> {
-      authentication = await client.authenticate([], challenge, {
-        authenticatorType: "auto",
-        userVerification: "discouraged",
-        debug: false,
-        mediation: "silent"
-      })
+      authentication = await client.authenticate([], challenge, webauthnOptions)
     })
 
     const id = authentication.credentialId
@@ -70,11 +67,7 @@ export default class ActorManager {
       authentication = await client.authenticate(
         [actor],
         await sha256Hex(jwt),
-        {
-          "userVerification": "discouraged",
-          "debug": false
-        }
-      )
+        webauthnOptions)
     })
 
     return { jwt, authentication, credential }
