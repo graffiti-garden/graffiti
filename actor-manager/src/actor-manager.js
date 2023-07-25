@@ -19,7 +19,14 @@ export default class ActorManager {
 
     // Store the public key
     const credential = registration.credential
-    await cookieStore.set(credential.id, JSON.stringify(credential))
+    await cookieStore.set({
+      name: credential.id,
+      value: JSON.stringify(credential),
+      expires: Date.now() + 1e12, // > 1 year
+      sameSite: 'none',
+      partitioned: false,
+      secure: true
+    })
 
     return credential.id
   }
