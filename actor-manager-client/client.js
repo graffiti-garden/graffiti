@@ -16,6 +16,7 @@ export default class ActorClient {
     this.iframe.style.position = "fixed"
     this.iframe.style.top = "0"
     this.iframe.style.left = "0"
+    this.iframe.style.background = "black"
     document.body.prepend(this.iframe)
   }
 
@@ -28,14 +29,20 @@ export default class ActorClient {
   }
 
   async verify(signed) {
-    return await this.#sendAndReceive("verify", JSON.parse(JSON.stringify(signed)))
+    return await this.#sendAndReceive("verify", signed)
   }
 
   async #sendAndReceive(action, message) {
     this.iframe.focus()
     // Create a random ID for reply
     const messageID = crypto.randomUUID()
-    this.iframe.contentWindow.postMessage({messageID, action, message}, this.origin)
+    this.iframe.contentWindow.postMessage(
+      JSON.parse(JSON.stringify({
+        messageID,
+        action,
+        message
+      })),
+      this.origin)
 
     // Wait for a reply via events or throw an error
     const data = await new Promise(resolve => {
