@@ -10,10 +10,11 @@ export default class ActorManager {
     let registration
     await navigator.locks.request("actorManager", async()=> {
       registration = await client.register(name, challenge, {
-        "authenticatorType": "auto",
-        "userVerification": "required",
-        "attestation": false,
-        "debug": false
+        authenticatorType: "auto",
+        userVerification: "discouraged",
+        attestation: false,
+        debug: false,
+        mediation: "silent"
       })
     });
 
@@ -37,9 +38,10 @@ export default class ActorManager {
     let authentication
     await navigator.locks.request("actorManager", async()=> {
       authentication = await client.authenticate([], challenge, {
-        "authenticatorType": "auto",
-        "userVerification": "required",
-        "debug": false
+        authenticatorType: "auto",
+        userVerification: "discouraged",
+        debug: false,
+        mediation: "silent"
       })
     })
 
