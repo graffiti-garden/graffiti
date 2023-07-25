@@ -35,7 +35,6 @@ export default class ActorClient {
     this.iframe.focus()
     // Create a random ID for reply
     const messageID = crypto.randomUUID()
-    console.log(this.origin)
     this.iframe.contentWindow.postMessage({messageID, action, message}, this.origin)
 
     // Wait for a reply via events or throw an error
