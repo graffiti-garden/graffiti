@@ -22,7 +22,7 @@ export default class ActorManager {
     await cookieStore.set({
       name: credential.id,
       value: JSON.stringify(credential),
-      expires: Date.now() + 1e14, // >> 1 year
+      expires: Date.now() + 1e14, // >>> 1 year
       sameSite: 'none',
       partitioned: false,
       secure: true
@@ -87,10 +87,10 @@ export default class ActorManager {
         origin: ()=> true
       })
 
-    return JSON.parse(JSON.stringify({
+    return {
       payload: jose.UnsecuredJWT.decode(jwt).payload,
       actor: credential.id
-    }))
+    }
   }
 }
 
