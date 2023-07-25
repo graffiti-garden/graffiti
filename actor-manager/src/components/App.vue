@@ -1,27 +1,34 @@
 <script setup>
-  import Welcome from './Welcome.vue'
-  import useActorManager from '../actor-manager';
-  const { actors } = useActorManager()
+  import { ref } from 'vue'
+  import ActorManager from '../actor-manager';
+
+  const am = new ActorManager()
+  const name = ref('')
+  const creating = ref(false)
 </script>
 
 <template>
-  <Welcome v-if="!Object.keys(actors).length"/>
-  <template v-else>
-    <header>
-      <h1>
-        Graffiti Actor Manager
-      </h1>
-      <ul>
-        <li>
-          <RouterLink to="/">My Actors</RouterLink>
-        </li>
-        <li> 
-          <RouterLink to="/apps">My Apps</RouterLink>
-        </li>
-      </ul>
-    </header>
-    <main>
-      <RouterView/>
-    </main>
-  </template>
+  <header>
+    <h1>
+      Graffiti Actor Manager
+    </h1>
+  </header>
+  <main>
+    <ul v-if="!creating">
+      <li>
+        <button @click="creating=true">
+          Create New Actor
+        </button>
+      </li>
+      <li>
+        <button @click="am.selectActor()">
+          View Actors
+        </button>
+      </li>
+    </ul>
+    <form v-else @submit.prevent="am.createActor(name).then(()=>{name='';creating=false})">
+      <input type="text" autocomplete="username webauthn" placeholder="Choose a username..." v-focus v-model="name">
+      <input type="submit" value="Create Actor">
+    </form>
+  </main>
 </template>

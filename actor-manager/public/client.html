@@ -6,41 +6,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-  <button onclick="window.ac.manageActors()">
-    Manage Actors
+  <button onclick="window.selectActor()">
+    Select Actor
   </button>
 
   <div id="actorID"></div>
 
-  <br>
+  <!-- <br>
 
   <input id="message"/>
   <button onclick="signMessage()">
     Sign Message
-  </button>
+  </button> -->
 
   <pre id="output"><pre>
 
   <script type="module">
     import ActorClient from './client.js'
-    window.ac = new ActorClient(window.location.origin)
+    window.ac = new ActorClient("http://localhost:5173")
 
-    function setActorID(actorID) {
+    window.selectActor = async function() {
+      window.actorID = await window.ac.selectActor()
       document.getElementById('actorID').innerHTML = actorID
     }
-    window.ac.onActorChange = setActorID
-    setActorID(window.ac.actorID)
 
-    window.signMessage = async function() {
-      const message = document.getElementById('message').value
-      let output
-      try {
-        output = await window.ac.signMessage({message})
-      } catch(e) {
-        output = `Error!! ${e.toString()}`
-      }
-      document.getElementById('output').innerHTML = output
-    }
+    // window.signMessage = async function() {
+    //   const message = document.getElementById('message').value
+    //   let output
+    //   try {
+    //     output = await window.ac.signMessage({message})
+    //   } catch(e) {
+    //     output = `Error!! ${e.toString()}`
+    //   }
+    //   document.getElementById('output').innerHTML = output
+    // }
   </script>
 </body>
 </html>
