@@ -17,10 +17,9 @@ export default class ActorManager {
       })
     });
 
-
     // Store the public key
     const credential = registration.credential
-    await cookieStore.set(credential.id, credential)
+    await cookieStore.set(credential.id, JSON.stringify(credential))
 
     return credential.id
   }
@@ -45,6 +44,12 @@ export default class ActorManager {
   }
 
   async sign(object, actor) {
+    // Make sure to get the certificate associated
+    const credentialWrapper = await cookieStore.get(actor)
+    if (!credentialWrapper)
+      throw "No stored public key associated with this user."
+    const credential = JSON.parse(credentialWrapper.value)
+
     const jwt = new jose.UnsecuredJWT(object).encode()
 
     // Add the signature with webauthn
@@ -59,11 +64,6 @@ export default class ActorManager {
         }
       )
     })
-
-    // Make sure to get the certificate associated
-    const credential = await cookieStore.get(actor)
-    if (!credential)
-      throw "No stored public key associated with this user."
 
     return { jwt, authentication, credential }
   }
