@@ -22,7 +22,7 @@ export default class ActorManager {
     await cookieStore.set({
       name: credential.id,
       value: JSON.stringify(credential),
-      expires: Date.now() + 1e12, // > 1 year
+      expires: Date.now() + 1e14, // >> 1 year
       sameSite: 'none',
       partitioned: false,
       secure: true
@@ -51,6 +51,9 @@ export default class ActorManager {
   }
 
   async sign(object, actor) {
+    if (!actor)
+      throw "You must sign with an actor ID"
+
     // Make sure to get the certificate associated
     const credentialWrapper = await cookieStore.get(actor)
     if (!credentialWrapper)
