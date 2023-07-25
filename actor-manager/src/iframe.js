@@ -1,14 +1,10 @@
 import ActorManager from './actor-manager';
 
-const am = new ActorManager()
 const referrer = document.referrer
 
-let send = ()=>{}
 if (referrer) {
+  const am = new ActorManager()
   const origin = new URL(referrer).origin
-  send = message=> {
-    window.parent.postMessage(message, origin)
-  }
 
   window.onmessage = async function({ data }) {
     // Sign or verify messages
@@ -33,6 +29,6 @@ if (referrer) {
       reply.error = e.toString()
     }
 
-    send(reply)
+    window.parent.postMessage(message, origin)
   }
 }
