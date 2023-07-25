@@ -29,7 +29,7 @@
     Your signed message: "{{ signed }}"
   </p>
 
-  <form @submit.prevent="error=null;ac.verify(signed).then(r=>result=r).catch(e=>error=e.toString())">
+  <form @submit.prevent="error=null;ac.verify(signed).then(r=>Object.assign(result,r)).catch(e=>error=e.toString())">
     <input type="submit" value="Verify Signed Message">
   </form>
 
