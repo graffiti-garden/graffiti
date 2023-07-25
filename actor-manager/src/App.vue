@@ -1,6 +1,6 @@
 <script setup>
   import { ref } from 'vue'
-  import ActorManager from '../actor-manager';
+  import ActorManager from './actor-manager';
 
   const am = new ActorManager()
   const name = ref('')
