@@ -7,8 +7,8 @@
   const actorID = ref('')
   const message = ref('')
   const signed = reactive({})
-  const verifyLoading = ref(false)
-  const verified = ref(false)
+  const error = ref(null)
+  const result = reactive({})
 </script>
 
 <template>
@@ -29,17 +29,17 @@
     Your signed message: "{{ signed }}"
   </p>
 
-  <form @submit.prevent="verifyLoading=true;ac.verify(signed).then(()=>verified=true).catch(()=> verified=false).finally(()=> verifyLoading=false)">
+  <form @submit.prevent="error=null;ac.verify(signed).then(r=>result=r).catch(e=>error=e.toString())">
     <input type="submit" value="Verify Signed Message">
   </form>
 
   <p>
     Message Verified?
-    <template v-if="verifyLoading">
-      Loading...
+    <template v-if="error">
+      {{ error }}
     </template>
     <template v-else>
-      {{ verified }}
+      {{ result }}
     </template>
   </p>
 </template>
