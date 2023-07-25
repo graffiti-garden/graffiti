@@ -29,6 +29,6 @@ if (referrer) {
       reply.error = e.toString()
     }
 
-    window.parent.postMessage(message, origin)
+    window.parent.postMessage(reply, origin)
   }
 }
