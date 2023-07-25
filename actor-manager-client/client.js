@@ -28,7 +28,7 @@ export default class ActorClient {
   }
 
   async verify(signed) {
-    return await this.#sendAndReceive("verify", signed)
+    return await this.#sendAndReceive("verify", JSON.parse(JSON.stringify(signed)))
   }
 
   async #sendAndReceive(action, message) {
