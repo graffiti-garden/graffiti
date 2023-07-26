@@ -33,7 +33,9 @@ export default class ActorClient {
   }
 
   async #sendAndReceive(action, message) {
+    const focusedEl = document.activeElement
     this.iframe.focus()
+
     // Create a random ID for reply
     const messageID = crypto.randomUUID()
     this.iframe.contentWindow.postMessage(
@@ -53,6 +55,7 @@ export default class ActorClient {
       )
     })
 
+    focusedEl.focus()
     if ('reply' in data) {
       return data.reply
     } else {
