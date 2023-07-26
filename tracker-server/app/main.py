@@ -4,10 +4,12 @@ import re
 from os import getenv
 from hashlib import sha256
 import uvicorn
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Response
 from fastapi.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
 
 from .tracker import Tracker
+from .keyserver import KeyServer, Credential
 from .schema import validate
 
 app = FastAPI()
@@ -22,9 +24,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    client = AsyncIOMotorClient('mongo')
     app.tracker = Tracker()
-    await app.tracker.initialize()
-    
+    await app.tracker.initialize(client)
+    app.key_server = KeyServer()
+    await app.key_server.initialize(client)
+
 @app.websocket("/")
 async def on_connect(socket: WebSocket, token: str|None=None):
     await socket.accept()
@@ -90,6 +95,22 @@ async def reply(socket, msg):
     action_function = getattr(app.tracker, msg["action"])
     output["reply"] = await action_function(msg["info_hashes"], socket)
     await socket.send_json(output)
+
+@app.get("/")
+async def info():
+    return {
+        "name": "Graffiti Tracker",
+        "description": "A websocket tracker for peer-to-peer Graffiti",
+        "website": "https://github.com/graffiti-garden/tracker-server/"
+    }
+
+@app.post("/key")
+async def post_key(credential: Credential, response: Response):
+    return await app.key_server.post_key(credential, response)
+
+@app.get("/key/{key}")
+async def get_key(key: str, response: Response):
+    return await app.key_server.get_key(key, response)
 
 if __name__ == "__main__":
     args = {}

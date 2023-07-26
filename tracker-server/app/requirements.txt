@@ -1,6 +1,8 @@
-motor==3.2.0               # Async MongoDB interface
+motor==3.2.0                # Async MongoDB interface
 
-jsonschema==4.18.4         # Validate JSON
+jsonschema==4.18.4          # Validate JSON
 
 fastapi==0.100.0            # Web framework
-uvicorn[standard]==0.23.1  # ASGI server
+uvicorn[standard]==0.23.1   # ASGI server
+
+aiohttp==3.8.5              # Async HTTP requests for testing

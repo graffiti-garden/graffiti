@@ -8,8 +8,7 @@ class Tracker:
         self.peers = set()
         self.subscriptions = {} # info_hash -> set(socket)
 
-    async def initialize(self):
-        client = AsyncIOMotorClient('mongo')
+    async def initialize(self, client):
         if 'announces' not in await client.graffiti.list_collection_names():
             await client.graffiti.create_collection(
                 'announces',
