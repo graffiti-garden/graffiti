@@ -46,7 +46,7 @@ The updates are JSON:
 
 ## Testing
 
- To run the server locally at [localhost:5001](), run:
+ To run the server locally at [localhost:8000](), run:
 
 ```bash
 sudo docker compose up --build

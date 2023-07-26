@@ -1,6 +1,5 @@
 import asyncio
 from contextlib import asynccontextmanager
-from motor.motor_asyncio import AsyncIOMotorClient
 
 class Tracker:
 
