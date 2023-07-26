@@ -36,13 +36,9 @@ describe('Multiple trackers', ()=> {
     })
     listeners.forEach(l=>l())
 
-    // console.log("here!")
     await clients[0].announce(uri)
-    // console.log("here!")
     await clients[1].announce(uri)
-    // console.log("here!")
     await clients[2].announce(uri)
-    // console.log("here!")
     await new Promise(r=> setTimeout(r, 1000));
 
     expect(announces[0].length).to.equal(4)
