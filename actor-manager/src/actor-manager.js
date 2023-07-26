@@ -12,24 +12,32 @@ const webauthnOptions = {
 
 export default class ActorManager {
 
+  constructor(tracker="https://tracker.graffiti.garden") {
+    this.tracker = tracker
+  }
+
   async createActor(name) {
     const challenge = crypto.randomUUID()
 
+    // Create the public key with webauthn
     let registration
     await navigator.locks.request("actorManager", async()=> {
       registration = await client.register(name, challenge, webauthnOptions)
     });
 
-    // Store the public key
+    // Store the public key in the keyserver
     const credential = registration.credential
-    await cookieStore.set({
-      name: credential.id,
-      value: JSON.stringify(credential),
-      expires: Date.now() + 1e14, // >>> 1 year
-      sameSite: 'none',
-      partitioned: false,
-      secure: true
+    await fetch(`${this.tracker}/key`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credential)
     })
+
+    // And in local storage...
+    localStorage.setItem(credential.id, JSON.stringify(credential))
 
     return credential.id
   }
@@ -42,22 +50,12 @@ export default class ActorManager {
       authentication = await client.authenticate([], challenge, webauthnOptions)
     })
 
-    const id = authentication.credentialId
-    if (!await cookieStore.get(id)) {
-      throw "No public key exists for that user."
-    }
-    return id
+    return authentication.credentialId
   }
 
   async sign(object, actor) {
     if (!actor)
       throw "You must sign with an actor ID"
-
-    // Make sure to get the certificate associated
-    const credentialWrapper = await cookieStore.get(actor)
-    if (!credentialWrapper)
-      throw "No stored public key associated with this user."
-    const credential = JSON.parse(credentialWrapper.value)
 
     const jwt = new jose.UnsecuredJWT(object).encode()
 
@@ -70,10 +68,24 @@ export default class ActorManager {
         webauthnOptions)
     })
 
-    return { jwt, authentication, credential }
+    return { jwt, authentication }
   }
 
-  async verify({jwt, authentication, credential}) {
+  async verify({ jwt, authentication }) {
+    // Try to get the credential from local storage...
+    const credentialString = localStorage.getItem(authentication.credentialId)
+
+    let credential
+    if (!credentialString) {
+      // If not, get it from the key server and cache
+      const response = await fetch(`${this.tracker}/key/${authentication.credentialId}`)
+      if (response.status != "200") throw "Public key is not in key server"
+      credential = await response.json()
+      localStorage.setItem(credential.id, JSON.stringify(credential))
+    } else {
+      credential = JSON.parse(credentialString)
+    }
+
     await server.verifyAuthentication(
       authentication,
       credential,
