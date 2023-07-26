@@ -49,20 +49,15 @@ describe('Actor Manager', ()=> {
 
     expect(am.verify({
       jwt:            signed1.jwt,
-      authentication: signed1.authentication,
-      credential:     signed2.credential
+      authentication: signed2.authentication,
     })).rejects.toThrowError()
 
     expect(am.verify({
       jwt:            signed1.jwt,
-      authentication: signed2.authentication,
-      credential:     signed2.credential
-    })).rejects.toThrowError()
-
-    expect(am.verify({
-      jwt:            signed2.jwt,
-      authentication: signed1.authentication,
-      credential:     signed2.credential
+      authentication: {
+        ...signed2.authentication,
+        credentialId: crypto.randomUUID()
+      }
     })).rejects.toThrowError()
   }, 100000)
 })
