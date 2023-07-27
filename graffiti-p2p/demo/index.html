@@ -7,6 +7,14 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="./src/index.js"></script>
+  <script type="module">
+    import * as Vue from 'vue'
+    import App from './App.vue'
+    import GraffitiPlugin from '../plugins/vue'
+
+    Vue.createApp(App)
+      .use(GraffitiPlugin(Vue))
+      .mount('#app')
+  </script>
 </body>
 </html>
