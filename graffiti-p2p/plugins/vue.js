@@ -1,5 +1,7 @@
 import Graffiti from '../graffiti-p2p.js'
 
+const REFRESH_RATE = 100 // milliseconds
+
 export default function GraffitiPlugin(Vue) {
   return {
     install(app, options) {
@@ -7,7 +9,6 @@ export default function GraffitiPlugin(Vue) {
 
       // A composable that returns a collection of objects
       graffiti.usePosts = contextPath=> {
-
         const postMap = Vue.reactive({})
 
         // Run the loop in the background
@@ -40,7 +41,7 @@ export default function GraffitiPlugin(Vue) {
               // Flush the batch after timeout
               if (!timeoutID) {
                 timeoutID = setTimeout(()=> {
-                  for (const update in batch) {
+                  for (const update of Object.values(batch)) {
                     if (update.action == "add") {
                       postMap[update.hashURI] = update.post
                     } else {
