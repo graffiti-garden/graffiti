@@ -18,19 +18,19 @@ describe('Context', async ()=> {
     const path = await randomHash()
     const context = pw1.get(GraffitiContext, path)
 
-    // Objects starts off empty
-    expect(context.posts()).toBeInstanceOf(Array)
-    expect(context.posts().length).to.equal(0)
+    // Posts starts off empty
+    expect(context.posts(AbortSignal.timeout(500)).next()).rejects.toThrowError()
 
     // Add an object
     const objectWrapped = pw1.get(GraffitiObject, actor1, await randomHash())
     await context.add(objectWrapped.value)
-    expect(context.posts().length).to.equal(1)
-    expect(context.posts()[0].id).to.equal(objectWrapped.value.id)
+    const result = (await context.posts(AbortSignal.timeout(500)).next()).value
+    expect(result.action).to.equal("add")
+    expect(result.post.id).to.equal(objectWrapped.value.id)
 
-    // Delete an object
+    // // Delete an object
     await context.delete(objectWrapped.value)
-    expect(context.posts().length).to.equal(0)
+    expect(context.posts(AbortSignal.timeout(500)).next()).rejects.toThrowError()
   }, timeout)
 
   it('adding someone else\'s object', async()=> {
@@ -56,15 +56,44 @@ describe('Context', async ()=> {
 
     // Wait for context to propogate
     await new Promise(r=> setTimeout(r, 1000));
-    expect(context2.posts().length).to.equal(1)
-
-    // Wait for the object content to propogate
-    await new Promise(r=> setTimeout(r, 1000));
-    expect(context2.posts()[0].something).to.equal("1234")
+    const result = (await context2.posts(AbortSignal.timeout(500)).next()).value
+    expect(result.action).to.equal("add")
+    const post = result.post
+    expect(post.id).to.equal(objectWrapped.value.id)
+    expect(post.something).to.equal("1234")
 
     // Delete from the context
     await context1.delete(objectWrapped.value)
     await new Promise(r=> setTimeout(r, 1000));
-    expect(context2.posts().length).to.equal(0)
+    expect(context2.posts(AbortSignal.timeout(500)).next()).rejects.toThrowError()
   }, timeout)
+
+  it('subscription in background', async()=> {
+    const contextPath = await randomHash()
+    const context1 = pw1.get(GraffitiContext, contextPath)
+    const context2 = pw2.get(GraffitiContext, contextPath)
+
+    let update = null
+    async function listener() {
+      for await (const postUpdate of context2.posts(AbortSignal.timeout(5000))) {
+        update = postUpdate
+      }
+    }
+    listener()
+
+    const objectWrapped = pw1.get(GraffitiObject, actor1, await randomHash())
+    objectWrapped.value.hello = "world"
+    await context1.add(objectWrapped.value)
+
+    await new Promise(r=> setTimeout(r, 1000));
+    expect(update.action).to.equal("add")
+    expect(update.post.hello).to.equal("world")
+    const hashURI = update.hashURI
+
+    await context1.delete(objectWrapped.value)
+
+    await new Promise(r=> setTimeout(r, 1000));
+    expect(update.action).to.equal("delete")
+    expect(update.hashURI).to.equal(hashURI)
+  })
 })

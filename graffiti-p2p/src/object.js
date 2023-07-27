@@ -6,21 +6,15 @@ export default class GraffitiObject {
     return `object:${actor}:${path}`
   }
 
-  constructor(actor, path, actorClient, wrapper, options) {
+  constructor(actor, path, actorClient) {
     this.jwt = null
     this.actor = actor
     this.path = path
     this.updated = 0
 
-    options = {
-      objectConstructor: ()=>({}),
-      ...options
-    }
-
     this.actorClient = actorClient
 
-    this._value = options.objectConstructor()
-    Object.defineProperty(this._value, '__graffiti', { value: true })
+    this._value = {}
     Object.defineProperty(this._value, 'id', {value: this.constructor.toURI(actor, path)})
     Object.defineProperty(this._value, 'actor', {value: actor})
     Object.defineProperty(this._value, 'path', {value: path})

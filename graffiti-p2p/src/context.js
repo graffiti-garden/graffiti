@@ -6,17 +6,13 @@ export default class GraffitiContext {
     return `context:${contextPath}`
   }
 
-  constructor(contextPath, actorClient, wrapper, options) {
+  constructor(contextPath, actorClient, wrapper) {
     this.contextPath = contextPath
     this.peers = new Set() 
-
-    options = {
-      objectConstructor: ()=>({}),
-      ...options
-    }
+    this._posts = {}
+    this.eventTarget = new EventTarget()
     this.actorClient = actorClient
     this.wrapper = wrapper
-    this._posts = options.objectConstructor()
   }
 
   async onAnnounce(peer) {
@@ -70,6 +66,19 @@ export default class GraffitiContext {
       updated,
       signed
     }
+
+    // Send an event
+    const updateEvent = new Event("update")
+    updateEvent.update = path? {
+      action: "add",
+      post: this.wrapper.get(GraffitiObject, actor, path).value,
+      hashURI 
+    } : {
+      action: "delete",
+      hashURI
+    }
+    this.eventTarget.dispatchEvent(updateEvent)
+
     await this.gossip([...this.peers], signed)
   }
 
@@ -77,9 +86,37 @@ export default class GraffitiContext {
     return await this.add(object, true)
   }
 
-  posts() {
-    return Object.values(this._posts)
-      .filter(o=> o.path)
-      .map(o=> this.wrapper.get(GraffitiObject, o.actor, o.path).value)
+  async * posts(signal) {
+    for (const [hashURI, post] of Object.entries(this._posts).filter(([hashURI, post])=> post.path)) {
+      yield {
+        action: "add",
+        post: this.wrapper.get(GraffitiObject, post.actor, post.path).value,
+        hashURI
+      }
+    }
+
+    // Wait for updates
+    while (true) {
+      yield new Promise((resolve, reject)=> {
+        const retreive = e=> {
+          signal?.removeEventListener("abort", abort)
+          resolve(e.update)
+        }
+        const abort = ()=> {
+          this.eventTarget.removeEventListener("update", retreive)
+          reject(signal.reason)
+        }
+        this.eventTarget.addEventListener(
+          "update",
+          retreive,
+          { once: true, passive: true }
+        )
+        signal?.addEventListener(
+          "abort",
+          abort,
+          { once: true, passive: true }
+        )
+      })
+    }
   }
 }

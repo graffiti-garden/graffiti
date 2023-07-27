@@ -13,23 +13,22 @@ import { randomHash, sha256Hex } from "./util"
  */
 export default class P2PWrapper {
 
-  constructor(actorClient, options={}) {
+  constructor(actorClient, options) {
     this.actorClient = actorClient
-    this.options = options
     this.wrapMap = {}
     this.subscribeKillSwitches = {}
     this.workingOnIt = new Set()
 
     this.open = false
     this.events = new EventTarget()
-    this.#initialize()
+    this.#initialize(options)
   }
 
-  async #initialize() {
+  async #initialize(options) {
     const peerProof = await randomHash()
     this.peer = await sha256Hex(peerProof)
-    this.peerMux = new PeerMux(this.peer, this.options.peerjs)
-    this.tracker = new TrackerClient(peerProof, ...this.options.trackers)
+    this.peerMux = new PeerMux(this.peer, options.peerjs)
+    this.tracker = new TrackerClient(peerProof, ...options.trackers)
     this.events.dispatchEvent(new Event("open"))
     this.open = true
   }
@@ -50,7 +49,7 @@ export default class P2PWrapper {
     const uri = Class.toURI(...args)
     if (uri in this.wrapMap) return this.wrapMap[uri]
 
-    const wrapped = new Class(...args, this.actorClient, this, this.options)
+    const wrapped = new Class(...args, this.actorClient, this)
     this.wrapMap[uri] = wrapped
 
     this.workingOnIt.add(uri)
