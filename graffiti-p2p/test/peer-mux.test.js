@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import PeerMux from '../src/peer-mux'
 import { randomHash } from '../src/util'
-import options from './options'
+import { options } from './mock'
 
-const peerjsOptions = (await options()).peerjs
+const peerjsOptions = options.peerjs
 
 describe('Peer Mux', ()=> {
 
@@ -111,7 +111,7 @@ describe('Peer Mux', ()=> {
     expect(send2(m1id, "hello from m2")).rejects.toThrowError()
     await new Promise(r=> setTimeout(r, 500));
     expect(send2(m1id, "hello from m2")).rejects.toThrowError()
-  })
+  }, 10000)
 
   async function gossipToPeers(numPeers, fanout) {
 

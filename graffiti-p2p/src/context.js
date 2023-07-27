@@ -6,8 +6,7 @@ export default class GraffitiContext {
     return `context:${contextPath}`
   }
 
-  constructor(contextPath, options) {
-
+  constructor(contextPath, actorClient, wrapper, options) {
     this.contextPath = contextPath
     this.peers = new Set() 
 
@@ -15,8 +14,8 @@ export default class GraffitiContext {
       objectConstructor: ()=>({}),
       ...options
     }
-    this.actorManager = options.actorManager
-    this.wrapper = options.wrapper
+    this.actorClient = actorClient
+    this.wrapper = wrapper
     this._posts = options.objectConstructor()
   }
 
@@ -34,7 +33,7 @@ export default class GraffitiContext {
 
   async onMessage(peer, signed) {
     await this.onAnnounce(peer)
-    const { payload, actor } = await this.actorManager.verify(signed)
+    const { payload, actor } = await this.actorClient.verify(signed)
 
     if (payload.context != this.contextPath) return
 
@@ -55,7 +54,7 @@ export default class GraffitiContext {
 
     const path = remove? null : object.path
 
-    const signed = await this.actorManager.sign({
+    const signed = await this.actorClient.sign({
       hash,
       path,
       updated,

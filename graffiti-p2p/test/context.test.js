@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import options from './options'
+import { options, actorClientMock } from './mock'
 import P2PWrapper from "../src/p2p-wrapper"
 import GraffitiContext from "../src/context"
 import GraffitiObject from '../src/object'
@@ -9,21 +9,21 @@ const timeout = 20000
 
 describe('Context', async ()=> {
 
-  const options1 = await options()
-  const options2 = await options()
+  const { actor: actor1, actorClient: actorClient1 } = actorClientMock()
+  const { actor: actor2, actorClient: actorClient2 } = actorClientMock()
+  const pw1 = new P2PWrapper(actorClient1, options)
+  const pw2 = new P2PWrapper(actorClient2, options)
 
   it('basic context properties', async ()=> {
-    const pw = new P2PWrapper(options1)
-
     const path = await randomHash()
-    const context = pw.get(GraffitiContext, path)
+    const context = pw1.get(GraffitiContext, path)
 
     // Objects starts off empty
     expect(context.posts()).toBeInstanceOf(Array)
     expect(context.posts().length).to.equal(0)
 
     // Add an object
-    const objectWrapped = pw.get(GraffitiObject, pw.options.actorManager.me, await randomHash())
+    const objectWrapped = pw1.get(GraffitiObject, actor1, await randomHash())
     await context.add(objectWrapped.value)
     expect(context.posts().length).to.equal(1)
     expect(context.posts()[0].id).to.equal(objectWrapped.value.id)
@@ -34,11 +34,10 @@ describe('Context', async ()=> {
   }, timeout)
 
   it('adding someone else\'s object', async()=> {
-    const pw1 = new P2PWrapper(options1)
     const path = await randomHash()
     const context = pw1.get(GraffitiContext, path)
 
-    const objectWrapped = pw1.get(GraffitiObject, await randomHash(), await randomHash())
+    const objectWrapped = pw1.get(GraffitiObject, actor2, await randomHash())
 
     // Cannot add someone else's object
     expect(context.add(objectWrapped.value)).rejects.toThrowError()
@@ -47,12 +46,10 @@ describe('Context', async ()=> {
   it('adding and removing object in remote context', async()=> {
     const contextPath = await randomHash()
 
-    const pw1 = new P2PWrapper(options1)
     const context1 = pw1.get(GraffitiContext, contextPath)
-    const pw2 = new P2PWrapper(options2)
     const context2 = pw2.get(GraffitiContext, contextPath)
 
-    const objectWrapped = pw1.get(GraffitiObject, pw1.options.actorManager.me, await randomHash())
+    const objectWrapped = pw1.get(GraffitiObject, actor1, await randomHash())
     objectWrapped.value.something = "1234"
 
     await context1.add(objectWrapped.value)

@@ -6,7 +6,7 @@ export default class GraffitiObject {
     return `object:${actor}:${path}`
   }
 
-  constructor(actor, path, options) {
+  constructor(actor, path, actorClient, wrapper, options) {
     this.jwt = null
     this.actor = actor
     this.path = path
@@ -17,7 +17,7 @@ export default class GraffitiObject {
       ...options
     }
 
-    this.actorManager = options.actorManager
+    this.actorClient = actorClient
 
     this._value = options.objectConstructor()
     Object.defineProperty(this._value, '__graffiti', { value: true })
@@ -32,7 +32,7 @@ export default class GraffitiObject {
     await this.onAnnounce(peer)
 
     // Verify the JWT and the signature
-    const { payload, actor } = await this.actorManager.verify(signed)
+    const { payload, actor } = await this.actorClient.verify(signed)
 
     if (payload.updated <= this.updated) return
     if (actor != this.actor ) return
@@ -61,7 +61,7 @@ export default class GraffitiObject {
     const updated = Date.now()
 
     // Pack it up into a JWT
-    const signed = await this.actorManager.sign({
+    const signed = await this.actorClient.sign({
       value,
       updated,
       path: this.path
@@ -95,20 +95,26 @@ export default class GraffitiObject {
         }
       },
       set: (target, prop, val, receiver)=> {
-        if (this.actor != this.actorManager.me) {
-          throw "Trying to modify an object that isn't yours"
-        }
+        const existing = Reflect.get(target, prop, receiver)
         if (Reflect.set(target, prop, val, receiver)) {
-          this.set(this._value)
+          this.set(this._value).catch(error=> {
+            if (existing) {
+              Reflect.set(target, prop, existing, receiver)
+            }
+            throw error
+          })
           return true
         } else { return false }
       }, 
       deleteProperty: (target, prop)=> {
-        if (this.actor != this.actorManager.me) {
-          throw "Trying to modify an object that isn't yours"
-        }
+        const existing = Reflect.get(target, prop)
         if (Reflect.deleteProperty(target, prop)) {
-          this.set(this._value)
+          this.set(this._value).catch(error=> {
+            if (existing) {
+              Reflect.set(target, prop, existing)
+            }
+            throw error
+          })
           return true
         } else { return false }
       }

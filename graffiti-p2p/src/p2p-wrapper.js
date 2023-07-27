@@ -13,7 +13,8 @@ import { randomHash, sha256Hex } from "./util"
  */
 export default class P2PWrapper {
 
-  constructor(options={}) {
+  constructor(actorClient, options={}) {
+    this.actorClient = actorClient
     this.options = options
     this.wrapMap = {}
     this.subscribeKillSwitches = {}
@@ -49,7 +50,7 @@ export default class P2PWrapper {
     const uri = Class.toURI(...args)
     if (uri in this.wrapMap) return this.wrapMap[uri]
 
-    const wrapped = new Class(...args, {wrapper: this, ...this.options})
+    const wrapped = new Class(...args, this.actorClient, this, this.options)
     this.wrapMap[uri] = wrapped
 
     this.workingOnIt.add(uri)
