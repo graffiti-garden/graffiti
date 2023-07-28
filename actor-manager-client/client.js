@@ -1,7 +1,7 @@
 export default class ActorClient {
 
-  constructor(origin="https://actor.graffiti.garden") {
-    this.origin = origin
+  constructor(origin) {
+    this.origin = origin??"https://actor.graffiti.garden"
     this.messageEvents = new EventTarget()
 
     window.onmessage = this.#onIframeMessage.bind(this)
