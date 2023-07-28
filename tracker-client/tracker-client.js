@@ -3,7 +3,7 @@ import Tracker from './src/tracker-single.js'
 
 export default class TrackerClient {
 
-  constructor(peerProof, ...serverURLs) {
+  constructor(peerProof, serverURLs) {
     this.peerProof = peerProof
     this.announces = new EventTarget()
 

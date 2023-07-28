@@ -15,10 +15,10 @@ describe('Client interface with single tracker', ()=> {
     const uri = "something"
     const tc1 = new TrackerClient(
       await randomHash(),
-      link)
+      [link])
     const tc2 = new TrackerClient(
       await randomHash(),
-      link)
+      [link])
 
     const listener = async ()=> {
       for await (const message of tc1.subscribe(uri)) {
@@ -37,7 +37,7 @@ describe('Client interface with single tracker', ()=> {
     const uri = "something1"
     const tc = new TrackerClient(
       await randomHash(),
-      link)
+      [link])
 
     tc.subscribe(uri).next()
     expect(tc.subscribe(uri).next()).rejects.toThrowError()
@@ -47,7 +47,7 @@ describe('Client interface with single tracker', ()=> {
     const uri = "something2"
     const tc = new TrackerClient(
       await randomHash(),
-      link)
+      [link])
 
     const controller = new AbortController();
     const signal = controller.signal;
@@ -65,7 +65,7 @@ describe('Client interface with single tracker', ()=> {
     const uri = "something3"
     const tc = new TrackerClient(
       await randomHash(),
-      link)
+      [link])
 
     let actions = 0
     let timedOut = false

@@ -18,13 +18,13 @@ describe('Multiple trackers', ()=> {
     const clients = [
       new TrackerClient(
         await randomHash(),
-        ...trackerLinks),
+        trackerLinks),
       new TrackerClient(
         await randomHash(),
-        trackerLinks[0]),
+        [trackerLinks[0]]),
       new TrackerClient(
         await randomHash(),
-        trackerLinks[1])
+        [trackerLinks[1]])
     ]
     const announces = [[],[],[]]
     const peers = await Promise.all(clients.map(c=>sha256Hex(c.peerProof)))
@@ -58,8 +58,8 @@ describe('Multiple trackers', ()=> {
   it("One downed tracker", async()=> {
       const tc = new TrackerClient(
         await randomHash(),
-        ...trackerLinks,
-        "ws://tracker.example.com")
+        [...trackerLinks,
+        "ws://tracker.example.com"])
       
       const output = await tc.announce("hello")
       expect(output.length).to.equal(3)
@@ -71,8 +71,8 @@ describe('Multiple trackers', ()=> {
   it("All downed trackers", async()=> {
       const tc = new TrackerClient(
         await randomHash(),
-        "ws://tracker.example.com",
-        "ws://tracker.example2.com")
+        ["ws://tracker.example.com",
+        "ws://tracker.example2.com"])
       
       expect(tc.announce("hello")).rejects.toThrowError()
   })
