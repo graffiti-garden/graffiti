@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import PeerMux from '../src/peer-mux'
 import { randomHash } from '../src/util'
-import { options } from './mock'
-
-const peerjsOptions = options.peerjs
 
 describe('Peer Mux', ()=> {
 
   it("Peers send each other", async ()=> {
 
-    const m1 = new PeerMux(await randomHash(), peerjsOptions)
-    const m2 = new PeerMux(await randomHash(), peerjsOptions)
+    const m1 = new PeerMux(await randomHash())
+    const m2 = new PeerMux(await randomHash())
 
     await m1.isOpen()
     await m2.isOpen()
@@ -45,8 +42,8 @@ describe('Peer Mux', ()=> {
 
   it("Peers send on different channels", async ()=> {
 
-    const m1 = new PeerMux(await randomHash(), peerjsOptions)
-    const m2 = new PeerMux(await randomHash(), peerjsOptions)
+    const m1 = new PeerMux(await randomHash())
+    const m2 = new PeerMux(await randomHash())
 
     await m1.isOpen()
     await m2.isOpen()
@@ -77,8 +74,8 @@ describe('Peer Mux', ()=> {
 
   it("Peers disconnect", async ()=> {
 
-    const m1 = new PeerMux(await randomHash(), peerjsOptions)
-    const m2 = new PeerMux(await randomHash(), peerjsOptions)
+    const m1 = new PeerMux(await randomHash())
+    const m2 = new PeerMux(await randomHash())
 
     await m1.isOpen()
     await m2.isOpen()
@@ -117,7 +114,7 @@ describe('Peer Mux', ()=> {
 
     const peerMuxes = await Promise.all(
       Array(numPeers).fill().map(async ()=>
-        new PeerMux(await randomHash(), peerjsOptions)))
+        new PeerMux(await randomHash())))
     await Promise.all(peerMuxes.map(m=> m.isOpen()))
 
     const received = {}

@@ -16,8 +16,11 @@ import { sha256Hex, sha256Uint8, encoder, decoder } from './util'
  */
 export default class PeerMux {
 
-  constructor(peerID, peerjsOptions={}) {
-    this.peer = new Peer(peerID, peerjsOptions)
+  constructor(peerID, peerjsOptions) {
+    this.peer = new Peer(peerID, peerjsOptions?? {
+      host: "peerjs.graffiti.garden",
+      secure: true
+    })
 
     this.connections = {} // peerID-> connection
     this.wires = {} // infoHash-> {key, onMessage}

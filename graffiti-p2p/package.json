@@ -20,8 +20,8 @@
   },
   "homepage": "https://github.com/graffiti-garden/graffiti-p2p#readme",
   "dependencies": {
-    "@graffiti-garden/actor-client": "^1.0.2",
-    "@graffiti-garden/tracker-client": "^1.0.0",
+    "@graffiti-garden/actor-client": "^1.0.3",
+    "@graffiti-garden/tracker-client": "^1.0.3",
     "@passwordless-id/webauthn": "^1.2.4",
     "idb-keyval": "^6.2.1",
     "jose": "^4.14.4",

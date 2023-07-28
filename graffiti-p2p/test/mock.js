@@ -14,18 +14,3 @@ export function actorClientMock() {
 
   return {actor: me, actorClient}
 }
-
-
-export const options = {
-  // trackers: ["ws://localhost:8000"],
-  trackers: ["wss://tracker.graffiti.garden"],
-  // peerjs: {
-  //   host: "localhost",
-  //   ssl: false,
-  //   port: "9000"
-  // },
-  peerjs: {
-    host: "peerjs.graffiti.garden",
-    secure: true
-  }
-}

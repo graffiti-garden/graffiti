@@ -7,7 +7,6 @@ import { randomHash } from "./src/util"
 // TODO:
 // Make sign only ask for a single authentication
 // context+posts returned by usePosts. posts.add(), posts.delete()??
-// make options cleaner
 
 // - store stuff in IDB
 // - make an actual demo
@@ -19,16 +18,6 @@ import { randomHash } from "./src/util"
 
 export default class Graffiti {
   constructor(options) {
-    options = {
-      actorManager: "https://actor.graffiti.garden",
-      trackers: ["wss://tracker.graffiti.garden"],
-      peerjs: {
-        host: "peerjs.graffiti.garden",
-        secure: true
-      },
-      ...options
-    }
-
     this.actorClient = new ActorClient(options.actorManager)
     this.wrapper = new P2PWrapper(this.actorClient, options)
     this.objectContainer = options.objectContainer
