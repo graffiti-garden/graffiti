@@ -6,7 +6,7 @@ export default class GraffitiObject {
     return `object:${actor}:${path}`
   }
 
-  constructor(actor, path, actorClient) {
+  constructor(actorClient, wrapper, actor, path, container) {
     this.jwt = null
     this.actor = actor
     this.path = path
@@ -14,7 +14,7 @@ export default class GraffitiObject {
 
     this.actorClient = actorClient
 
-    this._value = {}
+    this._value = container? container() : {}
     Object.defineProperty(this._value, 'id', {value: this.constructor.toURI(actor, path)})
     Object.defineProperty(this._value, 'actor', {value: actor})
     Object.defineProperty(this._value, 'path', {value: path})
@@ -81,12 +81,9 @@ export default class GraffitiObject {
     return {
       get: (target, prop, receiver)=> {
         // Make sure handling is recursive
-        if (typeof target[prop] === 'object' && target[prop] !== null) {
-          return new Proxy(
-            Reflect.get(target, prop, receiver), this.objectHandler())
-        } else {
-          return Reflect.get(target, prop, receiver)
-        }
+        const got = Reflect.get(target, prop, receiver)
+        return (typeof got === 'object' && got !== null)?
+          new Proxy(got, this.objectHandler()) : got
       },
       set: (target, prop, val, receiver)=> {
         const existing = Reflect.get(target, prop, receiver)

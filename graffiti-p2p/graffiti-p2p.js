@@ -5,6 +5,10 @@ import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 
 // TODO:
+// Make sign only ask for a single authentication
+// context+posts returned by usePosts. posts.add(), posts.delete()??
+// make options cleaner
+
 // - store stuff in IDB
 // - make an actual demo
 // - mirror
@@ -27,19 +31,20 @@ export default class Graffiti {
 
     this.actorClient = new ActorClient(options.actorManager)
     this.wrapper = new P2PWrapper(this.actorClient, options)
+    this.objectContainer = options.objectContainer
   }
 
   async selectActor() {
     return await this.actorClient.selectActor()
   }
 
-  async post(value, actor) {
-    const object = this.wrapper.get(GraffitiObject, actor, await randomHash())
+  async post(value, actor, container) {
+    const object = this.wrapper.get(GraffitiObject, actor, await randomHash(), this.objectContainer)
     await object.set(value)
     return object.value
   }
 
   context(path) {
-    return this.wrapper.get(GraffitiContext, path)
+    return this.wrapper.get(GraffitiContext, path, this.objectContainer)
   }
 }

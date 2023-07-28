@@ -49,7 +49,7 @@ export default class P2PWrapper {
     const uri = Class.toURI(...args)
     if (uri in this.wrapMap) return this.wrapMap[uri]
 
-    const wrapped = new Class(...args, this.actorClient, this)
+    const wrapped = new Class(this.actorClient, this, ...args)
     this.wrapMap[uri] = wrapped
 
     this.workingOnIt.add(uri)

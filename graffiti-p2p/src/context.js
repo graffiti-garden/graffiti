@@ -6,13 +6,14 @@ export default class GraffitiContext {
     return `context:${contextPath}`
   }
 
-  constructor(contextPath, actorClient, wrapper) {
+  constructor(actorClient, wrapper, contextPath, objectContainer) {
     this.contextPath = contextPath
     this.peers = new Set() 
     this._posts = {}
     this.eventTarget = new EventTarget()
     this.actorClient = actorClient
     this.wrapper = wrapper
+    this.objectContainer = objectContainer
   }
 
   async onAnnounce(peer) {
@@ -71,7 +72,7 @@ export default class GraffitiContext {
     const updateEvent = new Event("update")
     updateEvent.update = path? {
       action: "add",
-      post: this.wrapper.get(GraffitiObject, actor, path).value,
+      post: this.wrapper.get(GraffitiObject, actor, path, this.objectContainer).value,
       hashURI 
     } : {
       action: "delete",
@@ -90,7 +91,7 @@ export default class GraffitiContext {
     for (const [hashURI, post] of Object.entries(this._posts).filter(([hashURI, post])=> post.path)) {
       yield {
         action: "add",
-        post: this.wrapper.get(GraffitiObject, post.actor, post.path).value,
+        post: this.wrapper.get(GraffitiObject, post.actor, post.path, this.objectContainer).value,
         hashURI
       }
     }

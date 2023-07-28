@@ -5,7 +5,10 @@ const REFRESH_RATE = 100 // milliseconds
 export default function GraffitiPlugin(Vue) {
   return {
     install(app, options) {
-      const graffiti = new Graffiti(options)
+      const graffiti = new Graffiti({
+        ...options,
+        objectContainer: ()=> Vue.reactive({})
+      })
 
       // A composable that returns a collection of objects
       graffiti.usePosts = contextPath=> {
