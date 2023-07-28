@@ -90,7 +90,7 @@ export default class GraffitiObject {
         if (Reflect.set(target, prop, val, receiver)) {
           this.set(this._value).catch(error=> {
             if (existing) {
-              Reflect.set(target, prop, existing, receiver)
+              target[prop] = existing
             }
             throw error
           })
@@ -102,7 +102,7 @@ export default class GraffitiObject {
         if (Reflect.deleteProperty(target, prop)) {
           this.set(this._value).catch(error=> {
             if (existing) {
-              Reflect.set(target, prop, existing)
+              target[prop] = existing
             }
             throw error
           })

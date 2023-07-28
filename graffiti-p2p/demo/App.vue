@@ -35,6 +35,12 @@
       <button @click="post.content+='!!'">
         ‼️
       </button>
+      <button @click="gf.context(context).delete(post)">
+        ␡
+      </button>
+      <button @click="delete post.content">
+        bah
+      </button>
     </li>
   </ul>
 
