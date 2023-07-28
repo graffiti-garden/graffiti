@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/tracker-client",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "client for the tracker server",
   "main": "tracker-client.js",
   "scripts": {
