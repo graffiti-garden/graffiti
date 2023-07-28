@@ -5,7 +5,6 @@ import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 
 // TODO:
-// refactor object and context so that it works with reactivity
 // - store stuff in IDB
 // - make an actual demo
 // - mirror

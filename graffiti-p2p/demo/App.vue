@@ -2,17 +2,17 @@
   import { ref, inject } from 'vue'
   const me = ref('')
 
+  const context = ref('something')
   const gf = inject('graffiti')
-  const { posts } = gf.usePosts("something")
+  const { posts } = gf.usePosts(context)
 
   const message = ref('')
   async function postMessage() {
-    gf.context("something")
     const object = await gf.post({
       type: "Note",
       content: message.value
     }, me.value)
-    await gf.context("something").add(object)
+    await gf.context(context.value).add(object)
   }
 </script>
 
@@ -27,9 +27,14 @@
     Your Actor ID is: "{{ me }}"
   </p>
 
+  <input v-model="context">
+
   <ul>
     <li v-for="post of posts">
       {{ post.content }}
+      <button @click="post.content+='!!'">
+        ‼️
+      </button>
     </li>
   </ul>
 
