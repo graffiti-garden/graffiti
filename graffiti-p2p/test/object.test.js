@@ -23,19 +23,18 @@ describe('Object', async ()=> {
   it('setting and receiving an object', async ()=> {
     const path = "something"
     const object1 = pw1.get(GraffitiObject, actor1, path)
-    const object1Value = object1.value
-    await object1.set({hello: 'world'})
-    expect(object1Value.hello).to.equal('world')
+    await object1.apply(o=> o.hello = "world").post()
+    expect(object1.value.hello).to.equal('world')
 
     const object2 = pw2.get(GraffitiObject, actor1, path)
-    const object2Value = object2.value
     await new Promise(r=> setTimeout(r, 2000));
-    expect(object2Value.hello).to.equal('world')
+    expect(object2.value.hello).to.equal('world')
   }, timeout)
 
   it('setting an object, not yours', async ()=> {
     const object = pw1.get(GraffitiObject, actor2, '1234')
-    expect(object.set({hello: 'world'})).rejects.toThrowError()
+    object.apply(o=> o.hello="world")
+    expect(object.post()).rejects.toThrowError()
   }, timeout)
 
   it('setting and deleting an object implicitly', async ()=> {
@@ -54,7 +53,7 @@ describe('Object', async ()=> {
     expect(object2Value.something).toBeUndefined()
   }, timeout)
 
-  it('error on implicit set or delete', async ()=> {
+  it('reset on error on implicit set or delete', async ()=> {
     const path = "something"
     const objectFrom1 = await pw1.get(GraffitiObject, actor1, path)
     objectFrom1.value.something = "special"
@@ -90,11 +89,6 @@ describe('Object', async ()=> {
     object2Value.feelings += ' a lot'
     await new Promise(r=> setTimeout(r, 2000));
     expect(object1Value.feelings).to.equal('like a lot')
-  }, timeout)
-
-  it('setting an object not an object', async()=> {
-    const object = pw1.get(GraffitiObject, actor1, '1234')
-    expect(object.set("1234")).rejects.toThrowError()
   }, timeout)
 
   // TODO:
