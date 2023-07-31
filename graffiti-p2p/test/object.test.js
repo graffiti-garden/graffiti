@@ -91,6 +91,23 @@ describe('Object', async ()=> {
     expect(object1Value.feelings).to.equal('like a lot')
   }, timeout)
 
+  it('deleting', async ()=> {
+    const path = crypto.randomUUID()
+
+    const object1 = pw1.get(GraffitiObject, actor1, path)
+    await object1.apply(o=> o.hello = "world").post()
+    expect(object1.value.hello).to.equal('world')
+
+    const object2 = pw2.get(GraffitiObject, actor1, path)
+    await new Promise(r=> setTimeout(r, 2000));
+    expect(object2.value.hello).to.equal('world')
+
+    await object1.delete()
+    expect(object1.value.hello).toBeUndefined()
+    await new Promise(r=> setTimeout(r, 2000));
+    expect(object2.value.hello).toBeUndefined()
+  }, timeout)
+
   // TODO:
   // sending bad messages
   // it('invalid JWT')

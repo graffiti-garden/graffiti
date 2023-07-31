@@ -35,7 +35,6 @@ export default class GraffitiObject {
 
     this.peers = new Set() 
     this.functionsToApply = new Set()
-    this.contextChanges = {}
     this.unsigned = {}
     this.signed = null
   }
@@ -45,14 +44,12 @@ export default class GraffitiObject {
     return this
   }
 
-  addContext(contextPath) {
-    this.contextChanges[contextPath] = true
-    return this
-  }
-
-  deleteContext(contextPath) {
-    this.contextChanges[contextPath] = false
-    return this
+  async delete() {
+    await this
+    // Remove all properties
+    .apply(v=>Object.keys(v).forEach(k=> delete v[k]))
+    // And post
+    .post()
   }
 
   async post() {
@@ -61,27 +58,36 @@ export default class GraffitiObject {
     this.functionsToApply.forEach(func=>func(this._value))
     this.functionsToApply.clear()
 
-    // Hash the contexts and hide the path
-    const encryptedContexts =
-      Object.assign(this.unsigned.encryptedContexts?? {},
-        ...await Promise.all(
-          Object.entries(this.contextChanges).map(async ([context, toAdd])=> ({
-            [await sha256Hex(context)]:
-              toAdd? encrypt(this.path, context) : false
-          }))
-        )
-      )
-    this.contextChanges = {}
-
-    const unsigned = {
-      updated: Date.now(),
-      hashPath: await sha256Hex(this.path),
-      encryptedValue: await encrypt(JSON.stringify(this._value), this.path),
-      encryptedContexts
-    }
-
-    let signed
+    let unsigned, signed
     try {
+      // Make sure the context is still
+      // an array of string if it exists
+      if (this._value.context) {
+        if (!(this._value.context instanceof Array)) {
+          throw "value.context must be an array"
+        }
+        this._value.context.forEach(c=> {
+          if (!(c instanceof String)) {
+            throw `context ${c} is not a string`
+          }
+        })
+      }
+
+      unsigned = {
+        updated: Date.now(),
+        hashPath: await sha256Hex(this.path),
+        // Encrypt the list of contexts and the value by the context
+        encryptedValue: await encrypt(JSON.stringify(this._value), this.path),
+        encryptedContexts:
+          Object.assign({},
+            ...await Promise.all(
+              Object.keys(this._value.context ?? {}).map(async context=> ({
+                [await sha256Hex(context)]: encrypt(this.path, context)
+              }))
+            )
+          )
+      }
+
       signed = await this.actorClient.sign(unsigned, this.actor)
     } catch(e) {
       // Restore the original object without
@@ -111,8 +117,14 @@ export default class GraffitiObject {
     try {
       const decrypted = await decrypt(unsigned.encryptedValue, this.path)
       value = JSON.parse(decrypted)
-    } catch {}
+    } catch {
+      return
+    }
     if (!(value instanceof Object)) return
+    if (value.context) {
+      if (!(value.context instanceof Array)) return
+      if (value.context.some(c=> !(c instanceof String))) return
+    }
 
     // Don't destroy the object reference
     for (const prop in this._value) {
@@ -143,6 +155,7 @@ export default class GraffitiObject {
     await this.gossip([...this.peers], signed)
 
     // Also share it with context (by gossiping directly)
+    // Including deleted ones??
     // for (context of contexts) {
     //   get(context).onMessage(null, signed)
     // }
