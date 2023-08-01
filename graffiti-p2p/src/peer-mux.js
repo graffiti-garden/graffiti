@@ -1,6 +1,5 @@
 import Peer from 'peerjs'
-import * as jose from 'jose'
-import { sha256Hex, sha256Uint8, encoder, decoder } from './util'
+import { sha256Hex } from './util'
 
 /**
  * A wrapper around peerJS so that peers
@@ -66,17 +65,12 @@ export default class PeerMux {
     connection.on('data', this.#onMessage.bind(this, connection.peer))
   }
 
-  async #onMessage(peer, message) {
-    const { infoHash, encrypted } = message
+  async #onMessage(peer, messageWrapper) {
+    const { infoHash, message } = messageWrapper
     if (!(infoHash in this.wires)) return
 
-    // Decrypt the message
-    const { plaintext } =
-      await jose.compactDecrypt(encrypted, this.wires[infoHash].key)
-    const decrypted =  JSON.parse(decoder.decode(plaintext))
-
     // Forward to the appropriate wire
-    this.wires[infoHash]?.onMessage(peer, decrypted)
+    this.wires[infoHash]?.onMessage(peer, message)
   }
 
   async createWire(uri, onMessage) {
@@ -86,21 +80,13 @@ export default class PeerMux {
     if (infoHash in this.wires)
       throw "A wire with that uri already exists"
 
-    const key = await sha256Uint8('key:' + uri)
-    this.wires[infoHash] = { key, onMessage }
+    this.wires[infoHash] = { onMessage }
 
     const send = async (peer, message)=> {
 
       // If sending to self, skip encryption
       if (peer == this.peer.id)
         return this.wires[infoHash]?.onMessage(peer, message)
-
-      // Encrypt the message
-      const encrypted = await new jose.CompactEncrypt(encoder.encode(JSON.stringify(message)))
-                    .setProtectedHeader({
-                      alg: 'dir',
-                      enc: 'A128CBC-HS256',
-                    }).encrypt(key)
 
       // Connect to the peer
       if (!(peer in this.connections)) {
@@ -122,7 +108,7 @@ export default class PeerMux {
 
       // And send it to the relevant peer
       connection.send({
-        encrypted,
+        message,
         infoHash
       })
     }
