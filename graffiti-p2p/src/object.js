@@ -1,19 +1,4 @@
-import * as jose from 'jose'
-import { sha256Hex, sha256Uint8, encoder, decoder } from "./util"
-
-async function encrypt(value, password) {
-  return new jose.CompactEncrypt(encoder.encode(value))
-      .setProtectedHeader({
-        alg: 'dir',
-        enc: 'A128CBC-HS256',
-      }).encrypt(await sha256Uint8('key:'+password))
-}
-
-async function decrypt(encrypted, password) {
-  const { plaintext } =
-    await jose.compactDecrypt(encrypted, await sha256Uint8('key:'+password))
-  return decoder.decode(plaintext)
-}
+import { encrypt, decrypt, sha256Hex } from './util'
 
 export default class GraffitiObject {
 
@@ -124,6 +109,19 @@ export default class GraffitiObject {
     if (value.context) {
       if (!(value.context instanceof Array)) return
       if (value.context.some(c=> !(c instanceof String))) return
+
+      // Make sure all of the contexts have hash paths
+      if(value.context.some(async context=> {
+        const hashedContext = await sha256Hex(context)
+        if (!(hashedContext in unsigned.encryptedContexts)) return true
+        let decrypted
+        try {
+          decrypted = await decrypt(unsigned.encryptedContexts[hashedContext], objectPath)
+        } catch {
+          return true
+        }
+        if (decrypted != this.path) return true
+      })) return
     }
 
     // Don't destroy the object reference
@@ -155,7 +153,6 @@ export default class GraffitiObject {
     await this.gossip([...this.peers], signed)
 
     // Also share it with context (by gossiping directly)
-    // Including deleted ones??
     // for (context of contexts) {
     //   get(context).onMessage(null, signed)
     // }
