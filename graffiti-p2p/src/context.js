@@ -1,4 +1,5 @@
-import { sha256Hex } from "./util"
+import { verify } from './crypto'
+import { sha256Hex } from './util'
 import GraffitiObject from "./object"
 
 export default class GraffitiContext {
@@ -17,6 +18,7 @@ export default class GraffitiContext {
   }
 
   async onAnnounce(peer) {
+    if (!peer) return
     if (!this.peers.has(peer)) {
       this.peers.add(peer)
       Object.values(this._posts).forEach(
@@ -30,68 +32,61 @@ export default class GraffitiContext {
 
   async onMessage(peer, signed) {
     await this.onAnnounce(peer)
-    const { payload, actor } = await this.actorClient.verify(signed)
 
-    if (payload.context != this.contextPath) return
+    // Verify the JWT and the signature
+    let unsigned, actor, value, path
+    try {
+      ;({ unsigned, actor, value, path } =
+         await verify(signed, this.actorClient, { contextPath: this.contextPath}))
+    } catch(e) {
+      return
+    }
+    const hashURI = GraffitiObject.toURI(actor, unsigned.hashPath)
 
-    const hashURI = GraffitiObject.toURI(actor, payload.hash)
-    if (hashURI in this._posts &&
-        payload.updated <= this._posts[hashURI].updated) return
-    if (payload.path &&
-        payload.hash != await sha256Hex(payload.path)) return
+    // Does post already exist?
+    if (hashURI in this._posts) {
+      if (unsigned.updated <= this._posts[hashURI].updated ?? 0) return
 
-    await this.#store(hashURI, payload.path, actor, payload.updated, signed)
-  }
+      if (!value) {
+        delete this._posts[hashURI]
 
-  async add(object, remove=false) {
-    const updated = Date.now()
+        const updateEvent = new Event("update")
+        updateEvent.update = {
+          action: "delete",
+          hashURI
+        }
+        this.eventTarget.dispatchEvent(updateEvent)
+      }
+    } else {
+      if (value && value.context && value.context.includes(this.contextPath)) { 
+        const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+        this._posts[hashURI] = {
+          value: object.value,
+          updated: unsigned.updated,
+          signed
+        }
 
-    const hash = await sha256Hex(object.path)
-    const hashURI = GraffitiObject.toURI(object.actor, hash)
-
-    const path = remove? null : object.path
-
-    const signed = await this.actorClient.sign({
-      hash,
-      path,
-      updated,
-      context: this.contextPath
-    }, object.actor)
-    await this.#store(hashURI, path, object.actor, updated, signed)
-  }
-
-  async #store(hashURI, path, actor, updated, signed) {
-    this._posts[hashURI] = {
-      path,
-      actor,
-      updated,
-      signed
+        const updateEvent = new Event("update")
+        updateEvent.update = {
+          action: "add",
+          value: object.value,
+          hashURI
+        }
+        this.eventTarget.dispatchEvent(updateEvent)
+      }
     }
 
-    // Send an event
-    const updateEvent = new Event("update")
-    updateEvent.update = path? {
-      action: "add",
-      post: this.wrapper.get(GraffitiObject, actor, path, this.objectContainer).value,
-      hashURI 
-    } : {
-      action: "delete",
-      hashURI
+    if (path) {
+      const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+      await object.onMessage(null, signed)
     }
-    this.eventTarget.dispatchEvent(updateEvent)
-
-    await this.gossip([...this.peers], signed)
-  }
-
-  async delete(object) {
-    return await this.add(object, true)
   }
 
   async * posts(signal) {
-    for (const [hashURI, post] of Object.entries(this._posts).filter(([hashURI, post])=> post.path)) {
+    for (const [hashURI, {value}] of Object.entries(this._posts)) {
       yield {
         action: "add",
-        post: this.wrapper.get(GraffitiObject, post.actor, post.path, this.objectContainer).value,
+        value,
         hashURI
       }
     }

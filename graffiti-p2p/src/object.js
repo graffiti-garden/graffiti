@@ -1,4 +1,5 @@
-import { encrypt, decrypt, sha256Hex } from './util'
+import { sign, verify } from './crypto'
+import GraffitiContext from './context'
 
 export default class GraffitiObject {
 
@@ -11,6 +12,7 @@ export default class GraffitiObject {
   constructor(actorClient, wrapper, actor, path, container) {
     this.actor = actor
     this.path = path
+    this.wrapper = wrapper
     this.actorClient = actorClient
 
     this._value = container? container() : {}
@@ -40,40 +42,13 @@ export default class GraffitiObject {
   async post() {
     // Apply the functions
     const existing = Object.assign({}, this._value)
+    const existingContexts = [...(this._value.context??[])]
     this.functionsToApply.forEach(func=>func(this._value))
     this.functionsToApply.clear()
 
     let unsigned, signed
     try {
-      // Make sure the context is still
-      // an array of string if it exists
-      if (this._value.context) {
-        if (!(this._value.context instanceof Array)) {
-          throw "value.context must be an array"
-        }
-        this._value.context.forEach(c=> {
-          if (!(c instanceof String)) {
-            throw `context ${c} is not a string`
-          }
-        })
-      }
-
-      unsigned = {
-        updated: Date.now(),
-        hashPath: await sha256Hex(this.path),
-        // Encrypt the list of contexts and the value by the context
-        encryptedValue: await encrypt(JSON.stringify(this._value), this.path),
-        encryptedContexts:
-          Object.assign({},
-            ...await Promise.all(
-              Object.keys(this._value.context ?? {}).map(async context=> ({
-                [await sha256Hex(context)]: encrypt(this.path, context)
-              }))
-            )
-          )
-      }
-
-      signed = await this.actorClient.sign(unsigned, this.actor)
+      ({ unsigned, signed } = await sign(this._value, this.actorClient))
     } catch(e) {
       // Restore the original object without
       // without destroying reference
@@ -85,60 +60,45 @@ export default class GraffitiObject {
       throw e
     }
 
-    await this.#store(unsigned, signed)
+    const allContexts = [...new Set([...existingContexts, ...(this._value.context??[])])]
+    await this.#store(unsigned, signed, allContexts)
+
+    return this.value
   }
 
   async onMessage(peer, signed) {
     await this.onAnnounce(peer)
 
-    // Verify the JWT and the signature
-    const { payload: unsigned, actor } = await this.actorClient.verify(signed)
-
-    if (unsigned.updated <= this.unsigned.updated ?? 0) return
-    if (actor != this.actor ) return
-    if (unsigned.hashPath != await sha256Hex(this.path)) return
-
-    let value
+    let unsigned, actor, value
     try {
-      const decrypted = await decrypt(unsigned.encryptedValue, this.path)
-      value = JSON.parse(decrypted)
+       ({ unsigned, actor, value } =
+         await verify(signed, this.actorClient, { path: this.path}))
     } catch {
       return
     }
-    if (!(value instanceof Object)) return
-    if (value.context) {
-      if (!(value.context instanceof Array)) return
-      if (value.context.some(c=> !(c instanceof String))) return
 
-      // Make sure all of the contexts have hash paths
-      if(value.context.some(async context=> {
-        const hashedContext = await sha256Hex(context)
-        if (!(hashedContext in unsigned.encryptedContexts)) return true
-        let decrypted
-        try {
-          decrypted = await decrypt(unsigned.encryptedContexts[hashedContext], objectPath)
-        } catch {
-          return true
-        }
-        if (decrypted != this.path) return true
-      })) return
-    }
+    // Make sure actor is right
+    if (actor != this.actor) return
+    // Make sure it is new
+    if (unsigned.updated <= this.unsigned.updated ?? 0) return
 
     // Don't destroy the object reference
+    const allContexts = [...new Set([...(value.context??[]), ...(this._value.context??[])])]
     for (const prop in this._value) {
       if (!(prop in value))
         delete this._value[prop]
     }
     Object.assign(this._value, value)
 
-    this.#store(unsigned, signed)
+    await this.#store(unsigned, signed, allContexts)
   }
 
   async onAnnounce(peer) {
+    if (!peer) return
     if (!this.peers.has(peer)) {
       this.peers.add(peer)
       if (this.signed) {
-        await this.send(peer, this.signed)
+        this.send(peer, this.signed)
       }
     }
   }
@@ -147,15 +107,16 @@ export default class GraffitiObject {
     this.peers.delete(peer)
   }
 
-  async #store(unsigned, signed) {
+  async #store(unsigned, signed, allContexts) {
     this.unsigned = unsigned
     this.signed = signed
-    await this.gossip([...this.peers], signed)
 
-    // Also share it with context (by gossiping directly)
-    // for (context of contexts) {
-    //   get(context).onMessage(null, signed)
-    // }
+    for (const context of allContexts) {
+      const contextWrapper = this.wrapper.get(GraffitiContext, context, this.objectContainer)
+      await contextWrapper.onMessage(null, signed)
+    }
+
+    await this.gossip([...this.peers], signed)
   }
 
   objectHandler() {

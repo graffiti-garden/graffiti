@@ -107,9 +107,4 @@ describe('Object', async ()=> {
     await new Promise(r=> setTimeout(r, 2000));
     expect(object2.value.hello).toBeUndefined()
   }, timeout)
-
-  // TODO:
-  // sending bad messages
-  // it('invalid JWT')
-  // it('invalid date')
 })
