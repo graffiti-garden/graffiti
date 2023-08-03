@@ -10,9 +10,6 @@
   function selectActor(thumbprint) {
     postMessage({selected: thumbprint})
   }
-  function close() {
-    postMessage({close: "true"})
-  }
 
   const referrer = document.referrer
   if (referrer) {
@@ -49,7 +46,7 @@
 
 <template>
   <header>
-    <button @click="close()">
+    <button @click="selectActor(null)">
       ❌
     </button>
   </header>
