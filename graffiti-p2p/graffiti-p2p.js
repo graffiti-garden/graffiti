@@ -4,14 +4,19 @@ import GraffitiObject from './src/object'
 import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 
-// TODO:
-// - Make webauthn experience smoother - why does it not ask for password on monitor??
+// - Restore encryption in mux (to prevent leak of signatures)
 // - store stuff in IDB
-// - make an actual demo
-// - tracker client reconnect
+// - clean up authentication UI
+
+// Hard??
+// - tracker client and peerjs reconnect
 // - mirror
+
+// V hard???
 // - Private messaging
-// - optimization?
+
+// - make an actual demo
+// - optimization
 
 export default class Graffiti {
   constructor(options) {

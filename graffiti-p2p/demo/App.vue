@@ -8,6 +8,9 @@
 
   const message = ref('')
   async function postMessage() {
+    if (!me.value) {
+      return alert("You need to sign in before posting!")
+    }
     await gf.post({
       type: "Note",
       content: message.value,
@@ -33,15 +36,17 @@
   <ul>
     <li v-for="post of posts">
       {{ post.content }}
-      <button @click="post.content+='!!'">
-        ‼️
-      </button>
-      <button @click="gf.delete(post)">
-        ␡
-      </button>
-      <button @click="delete post.content">
-        bah
-      </button>
+      <template v-if="post.actor==me">
+        <button @click="post.content+='!!'">
+          ‼️
+        </button>
+        <button @click="gf.delete(post)">
+          ␡
+        </button>
+        <button @click="delete post.content">
+          clear
+        </button>
+      </template>
     </li>
   </ul>
 
