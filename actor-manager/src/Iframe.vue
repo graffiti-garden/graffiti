@@ -54,10 +54,14 @@
     </button>
   </header>
   <main>
-    <ul>
+    <ul v-if="Object.keys(actorManager.actors).length">
       <li v-for="actor in Object.values(actorManager.actors)" @click="selectActor(actor.thumbprint)">
         {{ actor.nickname }}
       </li>
     </ul>
+    <p v-else>
+      It looks like you don't have any actors!
+      Go to the <a target="_blank" href="/">Graffiti Actor Manager</a> to create some.
+    </p>
   </main>
 </template>
