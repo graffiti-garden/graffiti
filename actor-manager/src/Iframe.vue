@@ -4,18 +4,22 @@
 
   const actorManager = new ActorManager(()=> reactive({}))
 
-  let selectActor = thumbprint=>{
-    console.log(`Selected actor: ${thumbprint}`)
+  let postMessage = message=> {
+    console.log(message)
+  }
+  function selectActor(thumbprint) {
+    postMessage({selected: thumbprint})
+  }
+  function close() {
+    postMessage({close: "true"})
   }
 
   const referrer = document.referrer
   if (referrer) {
     const origin = new URL(referrer).origin
 
-    selectActor = thumbprint=> {
-      window.parent.postMessage({
-        selected: thumbprint
-      }, origin)
+    postMessage = message=> {
+      window.parent.postMessage(message, origin)
     }
 
     window.onmessage = async function({ data }) {
@@ -26,10 +30,10 @@
       try {
         if (action == 'sign') {
           const { message, actor } = data.message
-          reply.reply = await am.sign(message, actor)
+          reply.reply = await actorManager.sign(message, actor)
 
         } else if (action == 'verify') {
-          reply.reply = await am.verify(data.message)
+          reply.reply = await actorManager.verify(data.message)
 
         } else {
           throw `Invalid action ${action}`
@@ -38,12 +42,17 @@
         reply.error = e.toString()
       }
 
-      window.parent.postMessage(reply, origin)
+      postMessage(reply)
     }
   }
 </script>
 
 <template>
+  <header>
+    <button @click="close()">
+      ❌
+    </button>
+  </header>
   <main>
     <ul>
       <li v-for="actor in Object.values(actorManager.actors)" @click="selectActor(actor.thumbprint)">
