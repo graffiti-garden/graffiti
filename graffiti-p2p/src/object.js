@@ -41,8 +41,7 @@ export default class GraffitiObject {
 
   async post() {
     // Apply the functions
-    const existing = Object.assign({}, this._value)
-    const existingContexts = [...(this._value.context??[])]
+    const existing = structuredClone(this._value)
     this.functionsToApply.forEach(func=>func(this._value))
     this.functionsToApply.clear()
 
@@ -60,8 +59,7 @@ export default class GraffitiObject {
       throw e
     }
 
-    const allContexts = [...new Set([...existingContexts, ...(this._value.context??[])])]
-    await this.#store(unsigned, signed, allContexts)
+    await this.#store(unsigned, signed, existing.context, this._value.context)
 
     return this.value
   }
@@ -83,14 +81,14 @@ export default class GraffitiObject {
     if (unsigned.updated <= this.unsigned.updated ?? 0) return
 
     // Don't destroy the object reference
-    const allContexts = [...new Set([...(value.context??[]), ...(this._value.context??[])])]
+    const oldContext = structuredClone(this._value.context)
     for (const prop in this._value) {
       if (!(prop in value))
         delete this._value[prop]
     }
     Object.assign(this._value, value)
 
-    await this.#store(unsigned, signed, allContexts)
+    await this.#store(unsigned, signed, oldContext, this._value.context)
   }
 
   async onAnnounce(peer) {
@@ -107,10 +105,14 @@ export default class GraffitiObject {
     this.peers.delete(peer)
   }
 
-  async #store(unsigned, signed, allContexts) {
+  async #store(unsigned, signed, oldContext, newContext) {
     this.unsigned = unsigned
     this.signed = signed
 
+    const allContexts = [...new Set([
+      ...(oldContext ?? []),
+      ...(newContext ?? [])
+    ])]
     for (const context of allContexts) {
       const contextWrapper = this.wrapper.get(GraffitiContext, context, this.objectContainer)
       await contextWrapper.onMessage(null, signed)

@@ -80,6 +80,8 @@ export default class GraffitiContext {
       const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
       await object.onMessage(null, signed)
     }
+
+    // await this.gossip([...this.peers], signed)
   }
 
   async * posts(signal) {

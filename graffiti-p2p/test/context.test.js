@@ -63,6 +63,61 @@ describe('Context', async ()=> {
     expect(update.hashURI).to.equal(hashURI)
   })
 
-  // Implicitly set context
-  // Set an invalid context -> not an array, not a string, null, 
+  it('existing contexts', async()=> {
+    const contextPath = await randomHash()
+    const context1 = pw1.get(GraffitiContext, contextPath)
+    const context2 = pw2.get(GraffitiContext, contextPath)
+
+    const objectWrapped = pw1.get(GraffitiObject, actor1, await randomHash())
+    await objectWrapped.apply(o=> {
+      o.hi = "hello",
+      o.context = [contextPath]
+    }).post()
+
+    const result1 = (await context1.posts(AbortSignal.timeout(500)).next()).value
+    expect(result1.action).to.equal("add")
+    expect(result1.value.hi).to.equal("hello")
+
+    const result2 = (await context2.posts(AbortSignal.timeout(500)).next()).value
+    await new Promise(r=> setTimeout(r, 1000));
+    expect(result2.action).to.equal("add")
+    expect(result2.value.hi).to.equal("hello")
+
+    await objectWrapped.delete()
+    expect(context1.posts(AbortSignal.timeout(500)).next()).rejects.toThrowError()
+
+    await new Promise(r=> setTimeout(r, 1000));
+    expect(context2.posts(AbortSignal.timeout(500)).next()).rejects.toThrowError()
+  })
+
+  it('implicitly set context', async()=> {
+    const contextPath = await randomHash()
+    const context2 = pw2.get(GraffitiContext, contextPath)
+
+    const object = pw1.get(GraffitiObject, actor1, await randomHash()).value
+    object.context = [contextPath]
+
+    await new Promise(r=> setTimeout(r, 1000));
+
+    const result2 = (await context2.posts(AbortSignal.timeout(500)).next()).value
+    expect(result2.action).to.equal("add")
+    expect(result2.value.id).to.equal(object.id)
+  })
+
+  it('set the context to something bad', async()=> {
+    const objectWrapper = pw1.get(GraffitiObject, actor1, await randomHash())
+    const object = objectWrapper.value
+
+    object.context = [1234]
+    await new Promise(r=> setTimeout(r, 1000));
+    expect(object.context).toBeUndefined()
+
+    object.context = ["123434"]
+    await new Promise(r=> setTimeout(r, 1000));
+    expect(object.context[0]).to.equal("123434")
+
+    expect(objectWrapper.apply(o=> o.context.push(1234)).post()).rejects.toThrowError()
+    await new Promise(r=> setTimeout(r, 1000));
+    expect(object.context.length).to.equal(1)
+  })
 })

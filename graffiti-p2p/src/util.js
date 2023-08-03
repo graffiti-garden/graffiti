@@ -1,5 +1,3 @@
-import * as jose from 'jose'
-
 export const encoder = new TextEncoder()
 export const decoder = new TextDecoder()
 
@@ -21,18 +19,4 @@ export async function sha256Hex(message) {
 
 export async function randomHash() {
   return await sha256Hex(crypto.randomUUID())
-}
-
-export async function encrypt(value, password) {
-  return new jose.CompactEncrypt(encoder.encode(value))
-      .setProtectedHeader({
-        alg: 'dir',
-        enc: 'A128CBC-HS256',
-      }).encrypt(await sha256Uint8('key:'+password))
-}
-
-export async function decrypt(encrypted, password) {
-  const { plaintext } =
-    await jose.compactDecrypt(encrypted, await sha256Uint8('key:'+password))
-  return decoder.decode(plaintext)
 }
