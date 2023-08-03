@@ -52,9 +52,11 @@ export default class ActorManager {
   async deleteActor(thumbprint, propogate=true) {
     this.#checkActor(thumbprint)
 
-    const nickname = this.actors[thumbprint].nickname
-    if (!confirm(`Are you absolutely sure you want to delete the actor ${nickname}. This cannot be undone.`)) {
-      throw `User interaction denied deleting actor "${nickname}", ID "${thumbprint}".`
+    if (propogate) {
+      const nickname = this.actors[thumbprint].nickname
+      if (!confirm(`Are you absolutely sure you want to delete the actor ${nickname}. This cannot be undone.`)) {
+        throw `User interaction denied deleting actor "${nickname}", ID "${thumbprint}".`
+      }
     }
 
     // Delete all associations
