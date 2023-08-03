@@ -46,46 +46,41 @@ export default class GraffitiContext {
     // Does post already exist?
     if (hashURI in this._posts) {
       if (unsigned.updated <= this._posts[hashURI].updated ?? 0) return
-
-      if (!value) {
-        delete this._posts[hashURI]
-
-        const updateEvent = new Event("update")
-        updateEvent.update = {
-          action: "delete",
-          hashURI
-        }
-        this.eventTarget.dispatchEvent(updateEvent)
-      }
-    } else {
-      if (value && value.context && value.context.includes(this.contextPath)) { 
-        const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
-        this._posts[hashURI] = {
-          value: object.value,
-          updated: unsigned.updated,
-          signed
-        }
-
-        const updateEvent = new Event("update")
-        updateEvent.update = {
-          action: "add",
-          value: object.value,
-          hashURI
-        }
-        this.eventTarget.dispatchEvent(updateEvent)
-      }
     }
 
-    if (path) {
-      const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+    const object = path? this.wrapper.get(GraffitiObject, actor, path, this.objectContainer) : null
+
+    // If we already have a value and the update does not have one
+    if (hashURI in this._posts && this._posts[hashURI].value && !value) {
+      const updateEvent = new Event("update")
+      updateEvent.update = {
+        action: "delete",
+        hashURI
+      }
+      this.eventTarget.dispatchEvent(updateEvent)
+    } else if ( !(hashURI in this._posts && this._posts[hashURI].value) && value) {
+      const updateEvent = new Event("update")
+      updateEvent.update = {
+        action: "add",
+        value: object.value,
+        hashURI
+      }
+      this.eventTarget.dispatchEvent(updateEvent)
+    }
+
+    this._posts[hashURI] = {
+      updated: unsigned.updated,
+      signed,
+      value: value? object.value : null
+    }
+    if (object) {
       await object.onMessage(null, signed)
     }
-
-    // await this.gossip([...this.peers], signed)
+    await this.gossip([...this.peers], signed)
   }
 
   async * posts(signal) {
-    for (const [hashURI, {value}] of Object.entries(this._posts)) {
+    for (const [hashURI, {value}] of Object.entries(this._posts).filter(([hashURI, {value}])=>value)) {
       yield {
         action: "add",
         value,

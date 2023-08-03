@@ -41,7 +41,7 @@ export default class GraffitiObject {
 
   async post() {
     // Apply the functions
-    const existing = structuredClone(this._value)
+    const existing = JSON.parse(JSON.stringify(this._value))
     this.functionsToApply.forEach(func=>func(this._value))
     this.functionsToApply.clear()
 
@@ -81,7 +81,7 @@ export default class GraffitiObject {
     if (unsigned.updated <= this.unsigned.updated ?? 0) return
 
     // Don't destroy the object reference
-    const oldContext = structuredClone(this._value.context)
+    const oldContext = [...(this._value.context??[])]
     for (const prop in this._value) {
       if (!(prop in value))
         delete this._value[prop]

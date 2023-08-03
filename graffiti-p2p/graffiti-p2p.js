@@ -6,25 +6,6 @@ import { randomHash } from "./src/util"
 
 // TODO:
 
-// const obj = gf.create(actor, value)
-// .set("x", "y")
-// .addContext(`actor:${actor}`)
-// .addContext(`tag:stuff`) // If you just have access to one context you shouldn't be able to see the others
-// .post() // sign and gossip over object channel and all context channels
-
-// obj.x = "y"
-
-// gf.modify(obj)
-// .set("x", "y")
-// .set(o=>o.x.y.z, "qwerty")
-// .removeContext("stuff")
-// .addContext("somethingElse")
-// .post()
-
-// gf.delete(obj) // deletes all properties and removes from all contexts, no post required
-
-// const { posts } = gf.useContext(`actor:${actor}`)
-
 // - store stuff in IDB
 // - make an actual demo
 // - mirror
@@ -46,8 +27,17 @@ export default class Graffiti {
 
   async post(value, actor) {
     const object = this.wrapper.get(GraffitiObject, actor, await randomHash(), this.objectContainer)
-    await object.set(value)
-    return object.value
+    return await object.apply(o=>Object.assign(o,value)).post()
+  }
+
+  async edit(post, func) {
+    const object = this.wrapper.get(GraffitiObject, post.actor, post.path, this.objectContainer)
+    return await object.apply(func).post()
+  }
+
+  async delete(post) {
+    const object = this.wrapper.get(GraffitiObject, post.actor, post.path, this.objectContainer)
+    await object.delete()
   }
 
   context(path) {

@@ -8,11 +8,12 @@
 
   const message = ref('')
   async function postMessage() {
-    const object = await gf.post({
+    await gf.post({
       type: "Note",
-      content: message.value
+      content: message.value,
+      context: [context.value]
     }, me.value)
-    await gf.context(context.value).add(object)
+    message.value = ''
   }
 </script>
 
@@ -35,7 +36,7 @@
       <button @click="post.content+='!!'">
         ‼️
       </button>
-      <button @click="gf.context(context).delete(post)">
+      <button @click="gf.delete(post)">
         ␡
       </button>
       <button @click="delete post.content">

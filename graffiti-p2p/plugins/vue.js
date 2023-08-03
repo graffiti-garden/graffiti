@@ -47,7 +47,7 @@ export default function GraffitiPlugin(Vue) {
                   timeoutID = setTimeout(()=> {
                     for (const update of Object.values(batch)) {
                       if (update.action == "add") {
-                        postMap[update.hashURI] = update.post
+                        postMap[update.hashURI] = update.value
                       } else {
                         if (update.hashURI in postMap)
                           delete postMap[update.hashURI]
