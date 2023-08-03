@@ -5,14 +5,13 @@ import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 
 // TODO:
-
+// - Make webauthn experience smoother - why does it not ask for password on monitor??
 // - store stuff in IDB
 // - make an actual demo
+// - tracker client reconnect
 // - mirror
-
-// - efficiency?
-//   - when to seed stuff?
-//   - when to clear key cache?
+// - Private messaging
+// - optimization?
 
 export default class Graffiti {
   constructor(options) {

@@ -105,7 +105,6 @@ export default class P2PWrapper {
     return wrapped
   }
 
-
   async delete(Class, ...args) {
     const uri = Class.toURI(...args)
 

@@ -135,5 +135,7 @@ describe('Crypto', async ()=> {
     expect(verify(signed, actorClient, { path: crypto.randomUUID() })).rejects.toThrowError()
   })
 
-  // TODO: artificially constructed, wrong thigns to verify
+  // TODO:
+  // - artificially constructed, wrong thigns to verify
+  // - Path and actor shouldn't ever actually be set
 })

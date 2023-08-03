@@ -120,4 +120,7 @@ describe('Context', async ()=> {
     await new Promise(r=> setTimeout(r, 1000));
     expect(object.context.length).to.equal(1)
   })
+
+  // Multiple contexts
+  // What is going on in safari context??
 })

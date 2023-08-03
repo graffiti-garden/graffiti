@@ -1,4 +1,4 @@
-import { verify } from './crypto'
+import { sign, verify } from './crypto'
 import { sha256Hex } from './util'
 import GraffitiObject from "./object"
 
@@ -80,36 +80,48 @@ export default class GraffitiContext {
   }
 
   async * posts(signal) {
-    for (const [hashURI, {value}] of Object.entries(this._posts).filter(([hashURI, {value}])=>value)) {
-      yield {
+    yield * Object.entries(this._posts)
+      .filter(([hashURI, {value}])=>value)
+      .map   (([hashURI, {value}])=>({
         action: "add",
         value,
         hashURI
-      }
-    }
+      }))
 
-    // Wait for updates
-    while (true) {
-      yield new Promise((resolve, reject)=> {
-        const retreive = e=> {
-          signal?.removeEventListener("abort", abort)
-          resolve(e.update)
-        }
-        const abort = ()=> {
-          this.eventTarget.removeEventListener("update", retreive)
-          reject(signal.reason)
-        }
-        this.eventTarget.addEventListener(
-          "update",
-          retreive,
-          { once: true, passive: true }
-        )
-        signal?.addEventListener(
-          "abort",
-          abort,
-          { once: true, passive: true }
-        )
+    let results = []
+    let resolve, reject, promise
+    const makePromise = ()=> {
+      promise = new Promise((_resolve, _reject)=> {
+        resolve = _resolve
+        reject = _reject
       })
+    }
+    makePromise()
+
+    const retreive = e=> {
+      results.push(e.update)
+      resolve()
+      makePromise()
+    }
+    this.eventTarget.addEventListener(
+      "update",
+      retreive,
+      { passive: true })
+
+    const abort = ()=> {
+      this.eventTarget.removeEventListener("update", retreive)
+      reject(signal.reason)
+    }
+    signal?.addEventListener(
+      "abort",
+      abort,
+      { once: true, passive: true }
+    )
+
+    while (true) {
+      await promise
+      yield * results
+      results = []
     }
   }
 }
