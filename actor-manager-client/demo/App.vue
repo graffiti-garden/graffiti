@@ -6,7 +6,7 @@
 
   const actorID = ref('')
   const message = ref('')
-  const signed = reactive({})
+  const signed = ref('')
   const error = ref(null)
   const result = reactive({})
 </script>
@@ -20,7 +20,7 @@
     Your Actor ID is: "{{ actorID }}"
   </p>
 
-  <form @submit.prevent="ac.sign({message}, actorID).then(s=>{Object.assign(signed,s);message=''})">
+  <form @submit.prevent="ac.sign({message}, actorID).then(s=>{signed=s;message=''})">
     <input v-model="message">
     <input type="submit" value="Sign Message">
   </form>

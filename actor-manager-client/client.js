@@ -3,25 +3,54 @@ export default class ActorClient {
   constructor(origin) {
     this.origin = origin??"https://actor.graffiti.garden"
     this.messageEvents = new EventTarget()
+    this.selectEvents = new EventTarget()
 
     window.onmessage = this.#onIframeMessage.bind(this)
 
-    // Create an iframe within a dialog
+    // Create an iframe...
     this.iframe = document.createElement('iframe')
     this.iframe.src = this.origin + '/iframe.html'
-    this.iframe.allow = "publickey-credentials-get *"
-    this.iframe.width = "1"
-    this.iframe.height = "1"
-    this.iframe.style.border = "none"
-    this.iframe.style.position = "fixed"
-    this.iframe.style.top = "0"
-    this.iframe.style.left = "0"
-    this.iframe.style.background = "black"
-    document.body.prepend(this.iframe)
+
+    // ... within a dialog
+    this.dialog = document.createElement('dialog')
+    this.dialog.style.padding = 0
+    this.dialog.style.border = "none"
+
+    // Click outside of dialog to close
+    this.dialog.addEventListener('click', e=>{
+      const rect = this.dialog.getBoundingClientRect()
+      if (
+        rect.top > e.clientY ||
+        rect.left > e.clientX ||
+        e.clientY > rect.top + rect.height ||
+        e.clientX > rect.left + rect.width)
+        this.dialog.close()
+    })
+    this.dialog.prepend(this.iframe)
+    document.body.prepend(this.dialog)
   }
 
   async selectActor() {
-    return await this.#sendAndReceive("select")
+    // Make the iframe visible
+    this.dialog.showModal()
+
+    // Wait for a message
+    const selected = await new Promise(resolve => {
+      this.selectEvents.addEventListener(
+        "selected",
+        e=> resolve(e.selected),
+        { once: true, passive: true }
+      )
+    })
+
+    // Make the iframe invisible again
+    this.dialog.close()
+
+    if (!selected) {
+      throw "User canceled"
+    }
+
+    return selected
   }
 
   async sign(message, actor) {
@@ -33,9 +62,6 @@ export default class ActorClient {
   }
 
   async #sendAndReceive(action, message) {
-    const focusedEl = document.activeElement
-    this.iframe.focus()
-
     // Create a random ID for reply
     const messageID = crypto.randomUUID()
     this.iframe.contentWindow.postMessage(
@@ -55,7 +81,6 @@ export default class ActorClient {
       )
     })
 
-    focusedEl.focus()
     if ('reply' in data) {
       return data.reply
     } else {
@@ -65,8 +90,14 @@ export default class ActorClient {
 
 
   #onIframeMessage({data}) {
-    const messageEvent = new Event(data.messageID)
-    messageEvent.data = data
-    this.messageEvents.dispatchEvent(messageEvent)
+    if ('messageID' in data) {
+      const messageEvent = new Event(data.messageID)
+      messageEvent.data = data
+      this.messageEvents.dispatchEvent(messageEvent)
+    } else if ('selected' in data) {
+      const selectEvent = new Event("selected")
+      selectEvent.selected = data.selected
+      this.selectEvents.dispatchEvent(selectEvent)
+    }
   }
 }
