@@ -23,8 +23,15 @@ export default class ActorClient {
         rect.top > e.clientY ||
         rect.left > e.clientX ||
         e.clientY > rect.top + rect.height ||
-        e.clientX > rect.left + rect.width)
+        e.clientX > rect.left + rect.width) {
+
+        // Throw a null event
+        const selectEvent = new Event("selected")
+        selectEvent.selected = null
+        this.selectEvents.dispatchEvent(selectEvent)
+
         this.dialog.close()
+      }
     })
     this.dialog.prepend(this.iframe)
     document.body.prepend(this.dialog)
@@ -47,7 +54,7 @@ export default class ActorClient {
     this.dialog.close()
 
     if (!selected) {
-      throw "User canceled"
+      throw "User cancled actor selection."
     }
 
     return selected
