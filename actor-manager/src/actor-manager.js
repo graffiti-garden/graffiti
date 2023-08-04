@@ -8,9 +8,11 @@ export default class ActorManager {
   #_initialized = false
   #channel = null
   #channelID = crypto.randomUUID()
+  #onInitialize = ()=>{}
 
-  constructor(actorContainer) {
+  constructor(actorContainer, onInitialize) {
     this.actors = actorContainer ? actorContainer() : {}
+    if (onInitialize) this.#onInitialize = onInitialize
 
     // Initialize
     ;(async ()=> {
@@ -112,6 +114,7 @@ export default class ActorManager {
     this.#channel.onmessage = this.#onChannelMessage.bind(this)
 
     this.#_initialized = true
+    this.#onInitialize()
     this.#events.dispatchEvent(new Event("initialized"))
 
     // Load all existing things from the database

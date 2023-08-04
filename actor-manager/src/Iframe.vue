@@ -1,8 +1,10 @@
 <script setup>
-  import { reactive } from 'vue'
+  import { reactive, ref } from 'vue'
   import ActorManager from './actor-manager';
 
-  const actorManager = new ActorManager(()=> reactive({}))
+  const initialized = ref(false)
+
+  const actorManager = new ActorManager(()=> reactive({}), ()=> initialized.value=true)
 
   let postMessage = message=> {
     console.log(message)
@@ -50,7 +52,7 @@
       ❌
     </button>
   </header>
-  <main>
+  <main v-if="initialized">
     <ul v-if="Object.keys(actorManager.actors).length">
       <li v-for="actor in Object.values(actorManager.actors)" @click="selectActor(actor.thumbprint)">
         {{ actor.nickname }}
@@ -60,5 +62,10 @@
       It looks like you don't have any actors!
       Go to the <a target="_blank" href="/">Graffiti Actor Manager</a> to create some.
     </p>
+  </main>
+  <main v-else>
+    <button @click="actorManager.initialize">
+      Enable Graffiti on This Site
+    </button>
   </main>
 </template>

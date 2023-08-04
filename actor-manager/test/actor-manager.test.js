@@ -101,7 +101,6 @@ describe('Actor Manager', ()=> {
   it('sign with deleted account', async ()=> {
     const am1 = new ActorManager()
     const actor1 = await am1.createActor(crypto.randomUUID())
-    console.log(actor1)
 
     const am2 = new ActorManager()
     await am2.initialize()
