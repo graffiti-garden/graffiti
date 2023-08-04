@@ -22,10 +22,7 @@ describe('Crypto', async ()=> {
   })
 
   it('sign', async ()=> {
-    await sign({
-      path: crypto.randomUUID(),
-      actor
-    }, actorClient)
+    await sign({}, actor, crypto.randomUUID(), actorClient)
   })
 
   for (const context of [
@@ -34,11 +31,7 @@ describe('Crypto', async ()=> {
     ["hi", "ho"]
   ]) {
     it(`sign with valid context: ${JSON.stringify(context)}`, async ()=> {
-      await sign({
-        path: crypto.randomUUID(),
-        actor,
-        context
-      }, actorClient)
+      await sign({ context }, actor, crypto.randomUUID(), actorClient)
     })
   }
 
@@ -54,21 +47,15 @@ describe('Crypto', async ()=> {
       [{}]
   ]) {
     it(`sign with invalid context: ${JSON.stringify(context)}`, async ()=> {
-      expect(sign({
-        path: crypto.randomUUID(),
-        actor,
-        context
-      }, actorClient)).rejects.toThrowError()
+      expect(sign({ context }, actor, crypto.randomUUID(), actorClient)).rejects.toThrowError()
     })
   }
 
   it(`sign and verify with path`, async ()=> {
     const path = crypto.randomUUID()
     const { signed, unsigned } = await sign({
-      path,
-      actor,
       something: "hello"
-    }, actorClient)
+    }, actor, path, actorClient)
 
     const { unsigned: unsignedOut, actor: actorOut, value } =
      await verify(signed, actorClient, { path })
@@ -81,11 +68,9 @@ describe('Crypto', async ()=> {
   it(`sign and verify with context`, async ()=> {
     const contextPath = crypto.randomUUID()
     const { unsigned, signed } = await sign({
-      path: crypto.randomUUID(),
-      actor,
       hello: "world",
       context: [contextPath]
-    }, actorClient)
+    }, actor, crypto.randomUUID(), actorClient)
 
     const { unsigned: unsignedOut, actor: actorOut, value } =
      await verify(signed, actorClient, { contextPath })
@@ -97,10 +82,8 @@ describe('Crypto', async ()=> {
 
   it(`sign and verify without either`, async ()=> {
     const { unsigned, signed } = await sign({
-      path: crypto.randomUUID(),
-      actor,
       something: "hello"
-    }, actorClient)
+    }, actor, crypto.randomUUID(), actorClient)
 
     const { unsigned: unsignedOut, actor: actorOut, value } =
      await verify(signed, actorClient, {})
@@ -112,11 +95,9 @@ describe('Crypto', async ()=> {
 
   it(`verify with wrong context`, async ()=> {
     const { unsigned, signed } = await sign({
-      path: crypto.randomUUID(),
-      actor,
       hello: "world",
       context: [crypto.randomUUID()]
-    }, actorClient)
+    }, actor, crypto.randomUUID(), actorClient)
 
     const { unsigned: unsignedOut, actor: actorOut, value } =
      await verify(signed, actorClient, { contextPath: crypto.randomUUID() })
@@ -127,15 +108,26 @@ describe('Crypto', async ()=> {
   })
 
   it(`verify with wrong path`, async ()=> {
-    const { signed } = await sign({
-      path: crypto.randomUUID(),
-      actor
-    }, actorClient)
+    const { signed } = await sign({}, actor, crypto.randomUUID(), actorClient)
 
     expect(verify(signed, actorClient, { path: crypto.randomUUID() })).rejects.toThrowError()
   })
 
+  for (const object of [
+    { actor: crypto.randomUUID() },
+    { path: crypto.randomUUID() },
+    { id:   crypto.randomUUID() },
+    { actor:   false },
+    { actor:   true },
+    { actor:   1234 },
+    { actor:   "skdfjkj" },
+    { actor:   "skdfjkj" , path: "123k4jkj"},
+  ]) {
+    it(`fails with bad object: ${JSON.stringify(object)}`, async ()=> {
+      expect(sign(object, actor, crypto.randomUUID(), actorClient)).rejects.toThrowError()
+    })
+  }
+
   // TODO:
   // - artificially constructed, wrong thigns to verify
-  // - Path and actor shouldn't ever actually be set
 })

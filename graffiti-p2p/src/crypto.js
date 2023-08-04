@@ -9,7 +9,10 @@ const valueSchemaValidate = ajv.compile({
     context: {
       type: "array",
       items: { type: "string" }
-    }
+    },
+    actor: false,
+    path: false,
+    id: false
   },
 })
 const unsignedSchemaValidate = ajv.compile({
@@ -43,27 +46,27 @@ export async function decrypt(encrypted, password) {
   return decoder.decode(plaintext)
 }
 
-export async function sign(value, actorClient) {
+export async function sign(value, actor, path, actorClient) {
   if (!valueSchemaValidate(value)) {
     throw valueSchemaValidate.errors
   }
 
   const unsigned = {
     updated: Date.now(),
-    hashPath: await sha256Hex(value.path),
+    hashPath: await sha256Hex(path),
     // Encrypt the list of contexts and the value by the context
-    encryptedValue: await encrypt(JSON.stringify(value), value.path),
+    encryptedValue: await encrypt(JSON.stringify(value), path),
     encryptedContexts:
       Object.assign({},
         ...await Promise.all(
           (value.context ?? []).map(async context=> ({
-            [await sha256Hex(context)]: await encrypt(value.path, context)
+            [await sha256Hex(context)]: await encrypt(path, context)
           }))
         )
       )
   }
 
-  const signed = await actorClient.sign(unsigned, value.actor)
+  const signed = await actorClient.sign(unsigned, actor)
 
   return { signed, unsigned }
 }

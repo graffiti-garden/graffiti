@@ -50,25 +50,18 @@ export default class GraffitiObject {
 
   async post() {
     // Apply the functions
-    const existing = JSON.parse(JSON.stringify(this._value))
-    this.functionsToApply.forEach(func=>func(this._value))
+    const clone = JSON.parse(JSON.stringify(this._value))
+    this.functionsToApply.forEach(func=>func(clone))
     this.functionsToApply.clear()
 
     let unsigned, signed
     try {
-      ({ unsigned, signed } = await sign(this._value, this.actorClient))
+      ({ unsigned, signed } = await sign(clone, this.actor, this.path, this.actorClient))
     } catch(e) {
-      // Restore the original object without
-      // without destroying reference
-      for (const prop in this._value) {
-        if (!(prop in existing))
-          delete this._value[prop]
-      }
-      Object.assign(this._value, existing)
       throw e
     }
 
-    await this.#store(unsigned, signed, existing.context, this._value.context)
+    await this.#store(unsigned, signed, clone)
 
     return this.value
   }
@@ -89,15 +82,7 @@ export default class GraffitiObject {
     // Make sure it is new
     if (unsigned.updated <= this.unsigned.updated ?? 0) return
 
-    // Don't destroy the object reference
-    const oldContext = [...(this._value.context??[])]
-    for (const prop in this._value) {
-      if (!(prop in value))
-        delete this._value[prop]
-    }
-    Object.assign(this._value, value)
-
-    await this.#store(unsigned, signed, oldContext, this._value.context)
+    await this.#store(unsigned, signed, value)
   }
 
   async onAnnounce(peer) {
@@ -114,13 +99,22 @@ export default class GraffitiObject {
     this.peers.delete(peer)
   }
 
-  async #store(unsigned, signed, oldContext, newContext) {
+  async #store(unsigned, signed, newValue) {
     this.unsigned = unsigned
     this.signed = signed
 
+    // Store the old context
+    const oldContext = [...(this._value.context??[])]
+
+    for (const prop in this._value) {
+      if (!(prop in newValue))
+        delete this._value[prop]
+    }
+    Object.assign(this._value, newValue)
+
     const allContexts = [...new Set([
       ...(oldContext ?? []),
-      ...(newContext ?? [])
+      ...(this._value.context ?? [])
     ])]
     for (const context of allContexts) {
       const contextWrapper = this.wrapper.get(GraffitiContext, context, this.objectContainer)
@@ -141,11 +135,11 @@ export default class GraffitiObject {
           new Proxy(got, this.objectHandler()) : got
       },
       set: (target, prop, val, receiver)=> {
-        this.apply(()=> Reflect.set(target, prop, val, receiver)).post()
+        this.apply(target=> Reflect.set(target, prop, val)).post()
         return true
       }, 
       deleteProperty: (target, prop)=> {
-        this.apply(()=> Reflect.deleteProperty(target, prop)).post()
+        this.apply(target=> Reflect.deleteProperty(target, prop)).post()
         return true
       }
     }

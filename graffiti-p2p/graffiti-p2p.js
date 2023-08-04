@@ -24,13 +24,15 @@ export default class Graffiti {
     this.wrapper = new P2PWrapper(this.actorClient, options)
     this.objectContainer = options.objectContainer
 
-    const objectStore = createStore('graffiti', 'objects')
-    values(objectStore).then(existingObjects=> {
-      for (const {actor, path, signed} of existingObjects) {
-        const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
-        object.onMessage(null, signed)
-      }
-    })
+    setTimeout(async ()=> { // TODO: fix this hack
+      const objectStore = createStore('graffiti', 'objects')
+      values(objectStore).then(existingObjects=> {
+        for (const {actor, path, signed} of existingObjects) {
+          const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+          object.onMessage(null, signed)
+        }
+      })
+    }, 1000)
   }
 
   async selectActor() {
