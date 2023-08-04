@@ -76,7 +76,7 @@ export default class GraffitiContext {
     if (object) {
       await object.onMessage(null, signed)
     }
-    await this.gossip([...this.peers], signed)
+    this.gossip([...this.peers], signed)
   }
 
   async * posts(signal) {

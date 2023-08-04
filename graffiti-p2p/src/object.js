@@ -1,6 +1,15 @@
 import { sign, verify } from './crypto'
 import GraffitiContext from './context'
 
+// import { set, values, createStore } from 'idb-keyval';
+
+// const objectStore = createStore('graffiti', 'objects')
+// set(this.id, {actor: this.actor, path: this.path, signed}, objectStore)
+// for (const {actor, path, signed} of await values(objectStore)) {
+//   const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+//   object.onMessage(null, signed)
+// }
+
 export default class GraffitiObject {
 
   static toURI(actor, path) {
@@ -118,7 +127,9 @@ export default class GraffitiObject {
       await contextWrapper.onMessage(null, signed)
     }
 
-    await this.gossip([...this.peers], signed)
+    this.gossip([...this.peers], signed)
+
+    // Store it in IDB
   }
 
   objectHandler() {

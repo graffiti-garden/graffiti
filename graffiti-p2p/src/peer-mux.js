@@ -1,5 +1,6 @@
 import Peer from 'peerjs'
 import { sha256Hex } from './util'
+import { encrypt, decrypt } from './crypto'
 
 /**
  * A wrapper around peerJS so that peers
@@ -65,12 +66,14 @@ export default class PeerMux {
     connection.on('data', this.#onMessage.bind(this, connection.peer))
   }
 
-  async #onMessage(peer, messageWrapper) {
-    const { infoHash, message } = messageWrapper
+  async #onMessage(peer, message) {
+    const { infoHash, encrypted } = message
     if (!(infoHash in this.wires)) return
 
+    const decrypted = await decrypt(encrypted, infoHash)
+
     // Forward to the appropriate wire
-    this.wires[infoHash]?.onMessage(peer, message)
+    this.wires[infoHash]?.onMessage(peer, JSON.parse(decrypted))
   }
 
   async createWire(uri, onMessage) {
@@ -87,6 +90,8 @@ export default class PeerMux {
       // If sending to self, skip encryption
       if (peer == this.peer.id)
         return this.wires[infoHash]?.onMessage(peer, message)
+
+      const encrypted = await encrypt(JSON.stringify(message), infoHash)
 
       // Connect to the peer
       if (!(peer in this.connections)) {
@@ -108,7 +113,7 @@ export default class PeerMux {
 
       // And send it to the relevant peer
       connection.send({
-        message,
+        encrypted,
         infoHash
       })
     }
