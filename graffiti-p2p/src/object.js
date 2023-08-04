@@ -1,14 +1,6 @@
 import { sign, verify } from './crypto'
 import GraffitiContext from './context'
-
-// import { set, values, createStore } from 'idb-keyval';
-
-// const objectStore = createStore('graffiti', 'objects')
-// set(this.id, {actor: this.actor, path: this.path, signed}, objectStore)
-// for (const {actor, path, signed} of await values(objectStore)) {
-//   const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
-//   object.onMessage(null, signed)
-// }
+import { set, get, createStore } from 'idb-keyval';
 
 export default class GraffitiObject {
 
@@ -21,11 +13,12 @@ export default class GraffitiObject {
   constructor(actorClient, wrapper, actor, path, container) {
     this.actor = actor
     this.path = path
+    this.id = this.constructor.toURI(actor, path)
     this.wrapper = wrapper
     this.actorClient = actorClient
 
     this._value = container? container() : {}
-    Object.defineProperty(this._value, 'id', {value: this.constructor.toURI(actor, path)})
+    Object.defineProperty(this._value, 'id', {value: this.id})
     Object.defineProperty(this._value, 'actor', {value: actor})
     Object.defineProperty(this._value, 'path', {value: path})
 
@@ -33,6 +26,13 @@ export default class GraffitiObject {
     this.functionsToApply = new Set()
     this.unsigned = {}
     this.signed = null
+
+    this.objectStore = createStore('graffiti', 'objects')
+    get(this.id, this.objectStore).then(fromStore=> {
+      if (fromStore) {
+        this.onMessage(null, fromStore.signed)
+      }
+    })
   }
 
   apply(func) {
@@ -127,9 +127,9 @@ export default class GraffitiObject {
       await contextWrapper.onMessage(null, signed)
     }
 
-    this.gossip([...this.peers], signed)
+    set(this.id, {actor: this.actor, path: this.path, signed}, this.objectStore)
 
-    // Store it in IDB
+    this.gossip([...this.peers], signed)
   }
 
   objectHandler() {

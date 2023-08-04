@@ -3,17 +3,17 @@ import ActorClient from '@graffiti-garden/actor-client'
 import GraffitiObject from './src/object'
 import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
+import { createStore, values } from "idb-keyval"
 
-// - Restore encryption in mux (to prevent leak of signatures)
-// - store stuff in IDB
 // - clean up authentication UI
+  // Log in fix, CSS, etc.
 
 // Hard??
 // - tracker client and peerjs reconnect
-// - mirror
 
 // V hard???
 // - Private messaging
+// - mirror -> do it with the server???
 
 // - make an actual demo
 // - optimization
@@ -23,6 +23,14 @@ export default class Graffiti {
     this.actorClient = new ActorClient(options.actorManager)
     this.wrapper = new P2PWrapper(this.actorClient, options)
     this.objectContainer = options.objectContainer
+
+    const objectStore = createStore('graffiti', 'objects')
+    values(objectStore).then(existingObjects=> {
+      for (const {actor, path, signed} of existingObjects) {
+        const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+        object.onMessage(null, signed)
+      }
+    })
   }
 
   async selectActor() {
