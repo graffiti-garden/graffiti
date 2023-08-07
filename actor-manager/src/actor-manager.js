@@ -56,7 +56,7 @@ export default class ActorManager {
 
     if (propogate) {
       const nickname = this.actors[thumbprint].nickname
-      if (!confirm(`Are you absolutely sure you want to delete the actor ${nickname}. This cannot be undone.`)) {
+      if (!confirm(`Are you absolutely sure you want to delete the actor "${nickname}". This cannot be undone.`)) {
         throw `User interaction denied deleting actor "${nickname}", ID "${thumbprint}".`
       }
     }
@@ -158,9 +158,9 @@ export default class ActorManager {
         pkcs8Pem
       }),
       expires: Date.now() + 1e14, // > 1 year
-      sameSite: 'none',
+      sameSite: 'lax',
       partitioned: false,
-      secure: true
+      // secure: true
     })
   }
 
