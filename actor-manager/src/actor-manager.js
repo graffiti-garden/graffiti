@@ -1,18 +1,15 @@
 import * as jose from 'jose'
-import { cookieStore } from "cookie-store"
 
 export default class ActorManager {
 
-  #events = new EventTarget()
   #privateKeys = {}
   #_initialized = false
   #channel = null
-  #channelID = crypto.randomUUID()
-  #onInitialize = ()=>{}
 
-  constructor(actorContainer, onInitialize) {
+  constructor(actorContainer) {
     this.actors = actorContainer ? actorContainer() : {}
-    if (onInitialize) this.#onInitialize = onInitialize
+    this.events = new EventTarget()
+    this.channelID = crypto.randomUUID()
 
     // Initialize
     ;(async ()=> {
@@ -49,6 +46,10 @@ export default class ActorManager {
     await this.#updateActor(actor, pkcs8Pem)
 
     return thumbprint
+  }
+
+  async selectActor(thumbprint, channelID) {
+    await this.#forwardAction("select-actor", { thumbprint, channelID }, true)
   }
 
   async deleteActor(thumbprint, propogate=true) {
@@ -114,11 +115,10 @@ export default class ActorManager {
     this.#channel.onmessage = this.#onChannelMessage.bind(this)
 
     this.#_initialized = true
-    this.#onInitialize()
-    this.#events.dispatchEvent(new Event("initialized"))
+    this.events.dispatchEvent(new Event("initialized"))
 
     // Load all existing things from the database
-    for (const { value } of await cookieStore.getAll()) {
+    for (const value of Object.values(localStorage)) {
       let actor, pkcs8Pem
       try {
         ;({ actor, pkcs8Pem } = JSON.parse(value))
@@ -132,7 +132,7 @@ export default class ActorManager {
   async #initialized() {
     if (!this.#_initialized) {
       await new Promise(resolve=>
-        this.#events.addEventListener(
+        this.events.addEventListener(
           'initialized',
           ()=>resolve()), {
             passive: true,
@@ -144,29 +144,23 @@ export default class ActorManager {
   async #putActorCookie(actor, pkcs8Pem) {
     await this.#initialized()
     if (!pkcs8Pem) {
-      const { value } = await cookieStore.get(actor.thumbprint)
+      const value = localStorage.getItem(actor.thumbprint)
       try {
         ;({ pkcs8Pem } = JSON.parse(value))
       } catch {
         throw `Actor with ID ${thumbprint} does not have a private key`
       }
     }
-    await cookieStore.set({
-      name: actor.thumbprint,
-      value: JSON.stringify({
+    localStorage.setItem(actor.thumbprint,
+      JSON.stringify({
         actor,
         pkcs8Pem
-      }),
-      expires: Date.now() + 1e14, // > 1 year
-      sameSite: 'lax',
-      partitioned: false,
-      // secure: true
-    })
+      }))
   }
 
   async #deleteActorCookie(thumbprint) {
     await this.#initialized()
-    await cookieStore.delete(thumbprint)
+    localStorage.removeItem(thumbprint)
   }
 
   async #forwardAction(action, payload, propogate) {
@@ -176,7 +170,7 @@ export default class ActorManager {
         JSON.parse(JSON.stringify({
           action,
           payload,
-          id: this.#channelID
+          id: this.channelID
         }))
       )
     }
@@ -205,12 +199,18 @@ export default class ActorManager {
   }
 
   async #onChannelMessage({data: {action, payload, id}}) {
-    if (id == this.#channelID) return
+    if (id == this.channelID) return
     if (action == "update-actor") {
       const { actor, pkcs8Pem } = payload
       await this.#updateActor(actor, pkcs8Pem, false)
     } else if (action == "delete-actor") {
       await this.deleteActor(payload, false)
+    } else if (action == "select-actor") {
+      const { thumbprint, channelID } = payload
+      if (channelID != this.channelID) return
+      const selectEvent = new Event("selected")
+      selectEvent.thumbprint = thumbprint
+      this.events.dispatchEvent(selectEvent)
     }
   }
 }
