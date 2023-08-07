@@ -10,36 +10,15 @@ export default class ActorClient {
     // Create an iframe...
     this.iframe = document.createElement('iframe')
     this.iframe.src = this.origin + '/iframe.html'
-
-    // ... within a dialog
-    this.dialog = document.createElement('dialog')
-    this.dialog.style.padding = 0
-    this.dialog.style.border = "none"
-
-    // Click outside of dialog to close
-    this.dialog.addEventListener('click', e=>{
-      const rect = this.dialog.getBoundingClientRect()
-      if (
-        rect.top > e.clientY ||
-        rect.left > e.clientX ||
-        e.clientY > rect.top + rect.height ||
-        e.clientX > rect.left + rect.width) {
-
-        // Throw a null event
-        const selectEvent = new Event("selected")
-        selectEvent.selected = null
-        this.selectEvents.dispatchEvent(selectEvent)
-
-        this.dialog.close()
-      }
-    })
-    this.dialog.prepend(this.iframe)
-    document.body.prepend(this.dialog)
+    this.iframe.style.display = "none"
+    document.body.prepend(this.iframe)
   }
 
   async selectActor() {
-    // Make the iframe visible
-    this.dialog.showModal()
+    const url = new URL(this.origin)
+    url.pathname = "select.html"
+    url.searchParams.set("channel", this.channelID)
+    window.open(url)
 
     // Wait for a message
     const selected = await new Promise(resolve => {
@@ -49,9 +28,6 @@ export default class ActorClient {
         { once: true, passive: true }
       )
     })
-
-    // Make the iframe invisible again
-    this.dialog.close()
 
     if (!selected) {
       throw "User cancled actor selection."
@@ -95,7 +71,6 @@ export default class ActorClient {
     }
   }
 
-
   #onIframeMessage({data}) {
     if ('messageID' in data) {
       const messageEvent = new Event(data.messageID)
@@ -105,6 +80,8 @@ export default class ActorClient {
       const selectEvent = new Event("selected")
       selectEvent.selected = data.selected
       this.selectEvents.dispatchEvent(selectEvent)
+    } else if ("channelID" in data) {
+      this.channelID = data.channelID
     }
   }
 }

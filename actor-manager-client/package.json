@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/actor-client",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "client for the actor manager",
   "main": "client.js",
   "type": "module",
@@ -21,8 +21,5 @@
   "dependencies": {
     "@vitejs/plugin-vue": "^4.2.3",
     "vite": "^4.4.7"
-  },
-  "devDependencies": {
-    "vite-plugin-mkcert": "^1.16.0"
   }
 }
