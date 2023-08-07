@@ -5,16 +5,16 @@ import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 import { createStore, values } from "idb-keyval"
 
-// - clean up authentication UI
-  // Log in fix, CSS, etc.
 
-// Hard??
+  ///////
+// - do it on another domain
+// - localhost testing of actors
 // - tracker client and peerjs reconnect
-
-// V hard???
+// - mirror -> do it with the server??? (fix issues with peer stuff???)
 // - Private messaging
-// - mirror -> do it with the server???
+  ///////
 
+// - clean up authentication UI
 // - make an actual demo
 // - optimization
 
