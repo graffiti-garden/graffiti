@@ -2,6 +2,7 @@ export default class ActorClient {
 
   constructor(origin) {
     this.origin = origin??"https://actor.graffiti.garden"
+    // this.origin = origin??"http://localhost:5173"
     this.messageEvents = new EventTarget()
     this.selectEvents = new EventTarget()
 
@@ -9,16 +10,13 @@ export default class ActorClient {
 
     // Create an iframe...
     this.iframe = document.createElement('iframe')
-    this.iframe.src = this.origin + '/iframe.html'
+    this.iframe.src = this.origin
     this.iframe.style.display = "none"
     document.body.prepend(this.iframe)
   }
 
   async selectActor() {
-    const url = new URL(this.origin)
-    url.pathname = "select.html"
-    url.searchParams.set("channel", this.channelID)
-    window.open(url)
+    this.iframe.style.display = "block"
 
     // Wait for a message
     const selected = await new Promise(resolve => {
@@ -80,8 +78,6 @@ export default class ActorClient {
       const selectEvent = new Event("selected")
       selectEvent.selected = data.selected
       this.selectEvents.dispatchEvent(selectEvent)
-    } else if ("channelID" in data) {
-      this.channelID = data.channelID
     }
   }
 }
