@@ -11,12 +11,36 @@ export default class ActorClient {
     // Create an iframe...
     this.iframe = document.createElement('iframe')
     this.iframe.src = this.origin
-    this.iframe.style.display = "none"
-    document.body.prepend(this.iframe)
+
+    // ... within a dialog
+    this.dialog = document.createElement('dialog')
+    this.dialog.style.padding = 0
+    this.dialog.style.border = "none"
+
+    // Click outside of dialog to close
+    this.dialog.addEventListener('click', e=>{
+      const rect = this.dialog.getBoundingClientRect()
+      if (
+        rect.top > e.clientY ||
+        rect.left > e.clientX ||
+        e.clientY > rect.top + rect.height ||
+        e.clientX > rect.left + rect.width) {
+
+        // Throw a null event
+        const selectEvent = new Event("selected")
+        selectEvent.selected = null
+        this.selectEvents.dispatchEvent(selectEvent)
+
+        this.dialog.close()
+      }
+    })
+    this.dialog.prepend(this.iframe)
+    document.body.prepend(this.dialog)
   }
 
   async selectActor() {
-    this.iframe.style.display = "block"
+    // Make the iframe visible
+    this.dialog.showModal()
 
     // Wait for a message
     const selected = await new Promise(resolve => {
@@ -30,6 +54,9 @@ export default class ActorClient {
     if (!selected) {
       throw "User cancled actor selection."
     }
+
+    // Make the iframe invisible again
+    this.dialog.close()
 
     return selected
   }
