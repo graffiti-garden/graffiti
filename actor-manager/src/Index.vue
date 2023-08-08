@@ -3,10 +3,9 @@
   import ActorManager from './actor-manager';
 
   const initialized = ref(false)
-  const actorManager = new ActorManager(()=> reactive({}))
-  actorManager.events.addEventListener("initialized", ()=> {
-    initialized.value = true
-  })
+  const actorManager = new ActorManager(
+    ()=> reactive({}),
+    ()=> initialized.value=true)
 
   const createNickname = ref('')
   const creating = ref(false)

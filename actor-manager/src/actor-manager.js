@@ -6,9 +6,10 @@ export default class ActorManager {
   #_initialized = false
   #channel = null
 
-  constructor(actorContainer) {
+  constructor(actorContainer, onInitialize) {
     this.actors = actorContainer ? actorContainer() : {}
     this.events = new EventTarget()
+    this.onInitialize = onInitialize ?? (()=>{})
     this.channelID = crypto.randomUUID()
 
     // Initialize
@@ -117,6 +118,7 @@ export default class ActorManager {
 
     this.#_initialized = true
     this.events.dispatchEvent(new Event("initialized"))
+    this.onInitialize()
 
     // Load all existing things from the database
     for (const value of Object.values(localStorage)) {
