@@ -1,6 +1,10 @@
 import ActorManager from './actor-manager';
 
 const actorManager = new ActorManager()
+window.actorManager = actorManager
+actorManager.events.addEventListener("initialized", ()=> {
+  postMessage({initialized: true})
+})
 
 let postMessage = message=> {
   console.log(message)
