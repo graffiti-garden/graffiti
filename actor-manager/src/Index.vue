@@ -2,7 +2,12 @@
   import { reactive, ref } from 'vue'
   import ActorManager from './actor-manager';
 
+  const initialized = ref(false)
   const actorManager = new ActorManager(()=> reactive({}))
+  actorManager.events.addEventListener("initialized", ()=> {
+    initialized.value = true
+  })
+
   const createNickname = ref('')
   const creating = ref(false)
 
@@ -13,6 +18,50 @@
     actorManager.renameActor(actor.thumbprint, editingNickname.value)
     editing.value = ''
   }
+
+  let postMessage = message=> {
+    console.log(message)
+  }
+
+  const referrer = document.referrer
+  if (referrer) {
+    const origin = new URL(referrer).origin
+
+    postMessage = message=> {
+      window.parent.postMessage(message, origin)
+    }
+  }
+
+  window.onmessage = async function({ data }) {
+    // Sign or verify messages
+    const reply = { messageID: data.messageID }
+
+    const action = data.action
+    try {
+      if (action == 'sign') {
+        const { message, actor } = data.message
+        reply.reply = await actorManager.sign(message, actor)
+
+      } else if (action == 'verify') {
+        reply.reply = await actorManager.verify(data.message)
+
+      } else {
+        throw `Invalid action ${action}`
+      }
+    } catch(e) {
+      reply.error = e.toString()
+    }
+
+    postMessage(reply)
+  }
+
+  function selectActor(thumbprint) {
+    postMessage({selected: thumbprint})
+  }
+
+  window.onbeforeunload = ()=> {
+    selectActor(null)
+  }
 </script>
 
 <template>
@@ -20,8 +69,16 @@
     <h1>
       Graffiti Actor Manager
     </h1>
+    <button @click="selectActor(null)">
+      ❌
+    </button>
   </header>
-  <main>
+  <main v-if="!initialized">
+    <button @click="actorManager.initialize">
+      Enable Graffiti on This Site
+    </button>
+  </main>
+  <main v-else>
     <table>
       <colgroup>
         <col>
@@ -33,7 +90,7 @@
           <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
             <input v-model="editingNickname" v-focus @focus="$event.target.select()"/>
           </form>
-          <span v-else>
+          <span v-else @click="selectActor(actor.thumbprint)">
             {{ actor.nickname }}
           </span>
         </td>
