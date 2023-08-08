@@ -26,6 +26,7 @@ export default class ActorManager {
       try {
         await document.requestStorageAccess()
       } catch(e) {
+        console.error(e)
         throw "The actor manager can't work without local storage access!"
       }
     }
