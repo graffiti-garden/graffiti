@@ -22,12 +22,10 @@
   "dependencies": {
     "@graffiti-garden/actor-client": "^1.0.6",
     "@graffiti-garden/tracker-client": "^1.0.3",
-    "@passwordless-id/webauthn": "^1.2.4",
     "ajv": "^8.12.0",
     "idb-keyval": "^6.2.1",
     "jose": "^4.14.4",
-    "peerjs": "^1.4.7",
-    "vite-plugin-mkcert": "^1.16.0"
+    "peerjs": "^1.4.7"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.3",
