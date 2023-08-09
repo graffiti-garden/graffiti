@@ -20,7 +20,7 @@
   },
   "homepage": "https://github.com/graffiti-garden/graffiti-p2p#readme",
   "dependencies": {
-    "@graffiti-garden/actor-client": "^1.0.7",
+    "@graffiti-garden/actor-client": "^1.0.8",
     "@graffiti-garden/tracker-client": "^1.0.3",
     "ajv": "^8.12.0",
     "idb-keyval": "^6.2.1",
