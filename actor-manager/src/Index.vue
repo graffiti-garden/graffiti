@@ -2,22 +2,6 @@
   import { reactive, ref } from 'vue'
   import ActorManager from './actor-manager';
 
-  const initialized = ref(false)
-  const actorManager = new ActorManager(
-    ()=> reactive({}),
-    ()=> initialized.value=true)
-
-  const createNickname = ref('')
-  const creating = ref(false)
-
-  const editing = ref(false)
-  const editingNickname = ref('')
-  function rename(actor) {
-    if (!editingNickname.value) return
-    actorManager.renameActor(actor.thumbprint, editingNickname.value)
-    editing.value = ''
-  }
-
   let postMessage = message=> {
     console.log(message)
   }
@@ -29,6 +13,25 @@
     postMessage = message=> {
       window.parent.postMessage(message, origin)
     }
+  }
+
+  const initialized = ref(false)
+  const actorManager = new ActorManager(
+    ()=> reactive({}),
+    ()=> {
+      initialized.value=true
+      postMessage({ initialized: "true" })
+    })
+
+  const createNickname = ref('')
+  const creating = ref(false)
+
+  const editing = ref(false)
+  const editingNickname = ref('')
+  function rename(actor) {
+    if (!editingNickname.value) return
+    actorManager.renameActor(actor.thumbprint, editingNickname.value)
+    editing.value = ''
   }
 
   window.onmessage = async function({ data }) {

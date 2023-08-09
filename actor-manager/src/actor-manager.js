@@ -2,6 +2,9 @@ import * as jose from 'jose'
 
 export default class ActorManager {
 
+  // TODO: remove selection stuff
+  // Make everything private
+
   #privateKeys = {}
   #_initialized = false
   #channel = null
