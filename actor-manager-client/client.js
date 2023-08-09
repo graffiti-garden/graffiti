@@ -17,8 +17,7 @@ export default class ActorClient {
 
     // ... within a dialog
     this.dialog = document.createElement('dialog')
-    this.dialog.style.padding = 0
-    this.dialog.style.border = "none"
+    this.dialog.className = "graffiti-actor-manager"
 
     // Click outside of dialog to close
     this.dialog.addEventListener('click', e=>{
