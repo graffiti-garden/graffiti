@@ -5,6 +5,9 @@ export default class ActorClient {
     // this.origin = origin??"http://localhost:5173"
     this.messageEvents = new EventTarget()
     this.selectEvents = new EventTarget()
+    this.initializeEvents = new EventTarget()
+
+    this.initialized = false
 
     window.onmessage = this.#onIframeMessage.bind(this)
 
@@ -70,6 +73,17 @@ export default class ActorClient {
   }
 
   async #sendAndReceive(action, message) {
+    // Make sure the iframe is set up
+    if (!this.initialized) {
+      await new Promise(resolve => {
+        this.initializeEvents.addEventListener(
+          "initialized",
+          e=> resolve(),
+          { once: true, passive: true }
+        )
+      })
+    }
+
     // Create a random ID for reply
     const messageID = crypto.randomUUID()
     this.iframe.contentWindow.postMessage(
@@ -105,6 +119,9 @@ export default class ActorClient {
       const selectEvent = new Event("selected")
       selectEvent.selected = data.selected
       this.selectEvents.dispatchEvent(selectEvent)
+    } else if ('initialized' in data) {
+      this.initialized = true
+      this.initializeEvents.dispatchEvent(new Event("initialized"))
     }
   }
 }
