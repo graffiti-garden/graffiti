@@ -5,14 +5,15 @@ import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 import { createStore, values } from "idb-keyval"
 
-
   ///////
 // - clean up authentication UI
+// - make actor and ID URIs
 // - tracker client and peerjs reconnect
+// - make an actual demo
+//
+// - optimization (when to evict seeds?)
 // - mirror? for async and if webrtc fails
 // - Private messaging
-// - make an actual demo
-// - optimization (when to evict seeds?)
   ///////
 
 export default class Graffiti {

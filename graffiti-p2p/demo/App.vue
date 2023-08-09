@@ -1,9 +1,10 @@
 <script setup>
   import { ref, inject } from 'vue'
-  const me = ref('')
-
-  const context = ref('something')
   const gf = inject('graffiti')
+
+  const me = ref('')
+  const context = ref('something')
+
   const { posts } = gf.usePosts(context)
 
   const message = ref('')
