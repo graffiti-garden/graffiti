@@ -7,16 +7,13 @@ import { createStore, values } from "idb-keyval"
 
 
   ///////
-// - do it on another domain
-// - localhost testing of actors
-// - tracker client and peerjs reconnect
-// - mirror -> do it with the server??? (fix issues with peer stuff???)
-// - Private messaging
-  ///////
-
 // - clean up authentication UI
+// - tracker client and peerjs reconnect
+// - mirror? for async and if webrtc fails
+// - Private messaging
 // - make an actual demo
-// - optimization
+// - optimization (when to evict seeds?)
+  ///////
 
 export default class Graffiti {
   constructor(options) {
@@ -24,15 +21,13 @@ export default class Graffiti {
     this.wrapper = new P2PWrapper(this.actorClient, options)
     this.objectContainer = options.objectContainer
 
-    setTimeout(async ()=> { // TODO: fix this hack
-      const objectStore = createStore('graffiti', 'objects')
-      values(objectStore).then(existingObjects=> {
-        for (const {actor, path, signed} of existingObjects) {
-          const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
-          object.onMessage(null, signed)
-        }
-      })
-    }, 1000)
+    const objectStore = createStore('graffiti', 'objects')
+    values(objectStore).then(existingObjects=> {
+      for (const {actor, path, signed} of existingObjects) {
+        const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+        object.onMessage(null, signed)
+      }
+    })
   }
 
   async selectActor() {
@@ -54,7 +49,11 @@ export default class Graffiti {
     await object.delete()
   }
 
-  context(path) {
-    return this.wrapper.get(GraffitiContext, path, this.objectContainer)
+  async * posts(contextPath, signal) {
+    const context = this.wrapper.get(
+      GraffitiContext,
+      contextPath,
+      this.objectContainer)
+    yield * context.posts(signal)
   }
 }

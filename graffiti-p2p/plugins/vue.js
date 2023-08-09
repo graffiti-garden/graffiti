@@ -37,9 +37,13 @@ export default function GraffitiPlugin(Vue) {
 
             // Unwrap more and stream changes into batches
             const batch = {}
-            const context = graffiti.context(Vue.isRef(contextPath)? contextPath.value : contextPath)
+            const postIterator = graffiti.posts(
+              Vue.isRef(contextPath)?
+              contextPath.value :
+              contextPath,
+              signal)
             try {
-              for await (const postUpdate of context.posts(signal)) {
+              for await (const postUpdate of postIterator) {
                 batch[postUpdate.hashURI] = postUpdate
 
                 // Flush the batch after timeout
