@@ -1,13 +1,27 @@
 .graffiti-actor-manager {
   border-color: #ca7acc;
+  box-sizing: border-box;
   border-width: 2px;
   padding: 0;
+  margin: 0;
   border-radius: 1rem;
-  width: 100vw;
-  height: 100vh;
-  margin: 1rem;
   box-shadow: 0 0 2rem black;
   overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  display: block;
+  min-width: 90vw;
+  min-height: 90vh;
+  height: 90vh;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.graffiti-actor-manager[open] {
+  pointer-events: inherit;
+  opacity: 1;
 }
 
 .graffiti-actor-manager::backdrop {
