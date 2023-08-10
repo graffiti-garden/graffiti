@@ -53,12 +53,12 @@ export default class ActorClient {
       )
     })
 
+    // Make the iframe invisible again
+    this.dialog.close()
+
     if (!selected) {
       throw "User cancled actor selection."
     }
-
-    // Make the iframe invisible again
-    this.dialog.close()
 
     return selected
   }
