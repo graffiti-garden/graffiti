@@ -158,12 +158,17 @@
             </div>
           </label>
           <button @click="creating=true">
-            Create New Actor
+            Add Actor...
           </button>
         </fieldset>
 
         <button @click="selectActor(selected)" :disabled="!selected">
-          Log In With Selected Actor
+          <template v-if="selected">
+            Log In With <strong>{{ actorManager.actors[selected].nickname }}</strong>
+          </template>
+          <template v-else>
+            To Log In, Select an Actor
+          </template>
         </button>
       </template>
     </template>

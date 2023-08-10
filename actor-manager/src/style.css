@@ -1,10 +1,11 @@
 :root {
   --back: rgb(26, 26, 26, 0.7);
-  --halfback: rgb(70, 70, 70, 0.95);
+  --halfback: rgba(69, 69, 69, 0.5);
+  --halfback2: rgba(42, 42, 42, 0.5);
+  --hover: rgba(202, 122, 204, 0.5);
   --frontfaded: rgba(255, 255, 255, 0.7);
   --front: rgba(230, 230, 230);
-  --emph: #ca7acc;
-  --emphbold: #b371b5;
+  --emph: rgb(202, 122, 204);
   --blurpix: 4px;
 }
 
@@ -102,25 +103,47 @@ fieldset {
   overflow: scroll;
   flex-basis: 0;
   flex-grow: 1;
+  border-radius: 1rem;
 }
+
+fieldset > *:nth-child(even) {
+  background: var(--halfback);
+}
+
+fieldset > *:nth-child(odd) {
+  background: var(--halfback2);
+}
+
+/* legend {
+  margin-top: -1em;
+} */
 
 fieldset > :not(legend) {
   display: flex;
   height: 3rem;
-  padding: 0.5rem;
+  padding: 1rem;
   gap: 0.5rem;
   width: 100%;
   border-bottom: 1px solid white;
   align-items: center;
+  justify-content: center;
+}
+
+fieldset > button {
+  border: none;
+  border-radius: 0;
+  text-align: center;
 }
 
 label:hover {
   cursor: pointer;
-  background-color: var(--halfback);
+  background-color: var(--hover);
 }
 
 label > :is(form,span) {
   flex: 1;
+  color: white;
+  font-weight: bold;
 }
 
 button {
@@ -128,7 +151,7 @@ button {
   text-align: center;
   display: block;
   border-radius: 1rem;
-  border: 2px solid var(--emphbold);
+  border: 2px solid var(--emph);
   padding: 1rem;
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
@@ -176,12 +199,12 @@ menu {
 
 button:hover {
   cursor: pointer;
-  background: var(--halfback);
+  background: var(--hover);
 }
 
 input::selection {
   color: inherit;
-  background-color: var(--halfback)
+  background-color: var(--hover)
 }
 
 input[type="text"] {
@@ -194,4 +217,50 @@ input[type="text"] {
   outline: 1px dotted grey;
   width: 100%;
   outline-offset: 0.25rem;
+}
+
+input[type="radio"] {
+  appearance: none;
+  margin: 0;
+  font: inherit;
+  color: currentColor;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 0.15rem solid var(--emph);
+  border-radius: 50%;
+  transform: translateY(-0.075rem);
+  display: grid;
+  place-content: center;
+}
+
+input[type="radio"]::before {
+  content: "";
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  transform: scale(0);
+  transition: 120ms transform ease-in-out;
+  background-color: var(--emph);
+}
+
+input[type="radio"]:checked::before {
+  transform: scale(1);
+}
+
+menu {
+  background-color: black;;
+}
+
+li {
+  list-style: none;
+  width: 100%;
+}
+
+li button {
+  width: 100%;
+  border-radius: 0;
+}
+
+li + li button {
+  border-top: none;
 }
