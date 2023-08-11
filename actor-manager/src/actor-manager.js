@@ -43,7 +43,7 @@ export default class ActorManager {
       await jose.generateKeyPair(alg, { extractable: true })
     const jwk = await jose.exportJWK(publicKey)
     const pkcs8Pem = await jose.exportPKCS8(privateKey)
-    const thumbprint = await jose.calculateJwkThumbprint(jwk)
+    const thumbprint = 'actor:' + await jose.calculateJwkThumbprint(jwk)
 
     const actor = { thumbprint, jwk, nickname, alg }
 
@@ -183,6 +183,9 @@ export default class ActorManager {
   }
 
   async #updateActor(actor, pkcs8Pem, propogate=true) {
+    if (!actor.thumbprint.startsWith('actor:')) {
+      throw "Invalid actor URI"
+    }
     // Update the actor internally
     // and potentially unpack the keys
     if (!pkcs8Pem && !(actor.thumbprint in this.#privateKeys)) {

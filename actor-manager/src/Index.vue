@@ -105,7 +105,7 @@
 
         <p>
           This manager let's you add, delete, and select different
-          <emph>actors</emph> which are kind of like accounts.
+          <em>actors</em> which are kind of like accounts.
           You might have an actor for 
         </p>
 
