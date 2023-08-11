@@ -105,7 +105,7 @@ export default class ActorManager {
   async verify(signed) {
     const { payload, protectedHeader } =
       await jose.jwtVerify(signed, jose.EmbeddedJWK)
-    const actor = await jose.calculateJwkThumbprint(protectedHeader.jwk)
+    const actor = 'actor:' + await jose.calculateJwkThumbprint(protectedHeader.jwk)
     return { payload, actor }
   }
 
