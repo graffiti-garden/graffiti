@@ -7,6 +7,10 @@ export default class GraffitiObject {
   static toURI(actor, path) {
     if(typeof actor === "undefined")
       throw "Actor is not defined"
+    if (!actor.startsWith('actor:')) {
+      throw "Actor URI is invalid"
+    }
+    actor = actor.slice(6)
     return `object:${actor}:${path}`
   }
 

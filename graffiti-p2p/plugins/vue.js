@@ -18,13 +18,14 @@ export default function GraffitiPlugin(Vue) {
         let running = true
         let controller
         let timeoutID = null
+        let unwatch = ()=>{}
         ;(async ()=> {
 
           while (running) {
             controller = new AbortController();
             const signal = controller.signal;
 
-            const unwatch =
+            unwatch =
               Vue.isRef(contextPath)?
                 Vue.watch(contextPath, ()=> {
                   // Clear the object map and restart the loop

@@ -17,7 +17,7 @@ describe('Object', async ()=> {
     const object1 = pw1.get(GraffitiObject, actor1, path)
     expect(object1.value.actor).to.equal(actor1)
     expect(object1.value.path).to.equal(path)
-    expect(object1.value.id).to.equal(`object:${actor1}:${path}`)
+    expect(object1.value.id).to.equal(`object:${actor1.slice(6)}:${path}`)
   }, timeout)
 
   it('setting and receiving an object', async ()=> {

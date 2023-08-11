@@ -6,14 +6,8 @@ import { randomHash } from "./src/util"
 import { createStore, values } from "idb-keyval"
 
   ///////
-// - clean up authentication UI
-// - make actor and ID URIs
 // - tracker client and peerjs reconnect
-// - horse house chat! :)
-//
 // - optimization (when to evict seeds?)
-// - mirror? for async and if webrtc fails
-// - Private messaging
   ///////
 
 export default class Graffiti {

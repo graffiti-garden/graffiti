@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/graffiti-p2p",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "This client library interacts with the [tracker server](https://github.com/graffiti-garden/tracker-server/)",
   "main": "graffiti-p2p.js",
   "type": "module",
@@ -32,11 +32,11 @@
     "@vitest/browser": "^0.33.0",
     "vite": "^4.4.7",
     "vitest": "^0.33.0",
-    "webdriverio": "^8.12.1"
+    "webdriverio": "8.12.1"
   },
   "overrides": {
     "webdriverio": {
-      "puppeteer-core": "^20.8.2"
+      "puppeteer-core": "20.8.2"
     }
   }
 }

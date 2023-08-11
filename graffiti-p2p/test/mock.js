@@ -1,5 +1,5 @@
 export function actorClientMock() {
-  const me = crypto.randomUUID()
+  const me = 'actor:'+crypto.randomUUID()
 
   const actorClient = {
     async sign(payload, actor) {
