@@ -3,7 +3,7 @@ import ActorClient from '@graffiti-garden/actor-client'
 import GraffitiObject from './src/object'
 import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
-import { createStore, values } from "idb-keyval"
+import { createStore, values, del } from "idb-keyval"
 
   ///////
 // - tracker client and peerjs reconnect
@@ -18,9 +18,13 @@ export default class Graffiti {
 
     const objectStore = createStore('graffiti', 'objects')
     values(objectStore).then(existingObjects=> {
-      for (const {actor, path, signed} of existingObjects) {
-        const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
-        object.onMessage(null, signed)
+      for (const [id, {actor, path, signed}] of Object.entries(existingObjects)) {
+        try {
+          const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+          object.onMessage(null, signed)
+        } catch {
+          del(id, objectStore)
+        }
       }
     })
   }
