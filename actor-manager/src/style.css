@@ -116,15 +116,19 @@ fieldset > ul {
   border-radius: 1rem;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-  overflow: hidden;
 }
 
-fieldset > ul > :nth-child(even) {
+fieldset > ul > :nth-child(even) > * {
   background: var(--halfback);
 }
 
-fieldset > ul > :nth-child(odd) {
+fieldset > ul > :nth-child(odd) > * {
   background: var(--halfback2);
+}
+
+fieldset > ul > * > *:hover {
+  cursor: pointer;
+  background: var(--hover);
 }
 
 legend {
@@ -154,11 +158,6 @@ fieldset ul > li > button {
   border-radius: 1rem;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
-}
-
-label:hover {
-  cursor: pointer;
-  background-color: var(--hover);
 }
 
 label > :is(form,span) {
