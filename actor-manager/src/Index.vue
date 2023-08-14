@@ -154,6 +154,11 @@
                       </button>
                     </li>
                     <li>
+                      <a :href="actorManager.exportActor(actor.thumbprint)" :download="`${actor.nickname}.json`">
+                        Export
+                      </a>
+                    </li>
+                    <li>
                       <button @click="
                         menuOpen=null;
                         selected=(selected===actor.thumbprint)?null:selected;

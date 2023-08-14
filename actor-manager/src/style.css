@@ -166,7 +166,7 @@ label > :is(form,span) {
   font-weight: bold;
 }
 
-button {
+:is(button,a) {
   font-size: 1rem;
   text-align: center;
   display: block;
@@ -179,6 +179,8 @@ button {
   white-space: nowrap;
   background: none;
   color: var(--emph);
+  text-decoration: none;
+  line-height: 1.2rem;
 }
 
 header button {
@@ -230,7 +232,7 @@ menu {
   }
 }
 
-button:hover {
+:is(button,a):hover {
   cursor: pointer;
   background: var(--hover);
 }
@@ -289,11 +291,11 @@ li {
   width: 100%;
 }
 
-menu li button {
+menu li :is(button,a) {
   width: 100%;
   border-radius: 0;
 }
 
-menu li + li button {
+menu li + li :is(button,a) {
   border-top: none;
 }

@@ -89,6 +89,13 @@ export default class ActorManager {
     }
   }
 
+  exportActor(thumbprint) {
+    this.#checkActor(thumbprint)
+    const stored = localStorage.getItem(thumbprint)
+    const blob = new Blob([stored], { type: "application/json" })
+    return URL.createObjectURL(blob)
+  }
+
   async sign(message, thumbprint) {
     this.#checkActor(thumbprint)
     const nickname = this.actors[thumbprint].nickname
