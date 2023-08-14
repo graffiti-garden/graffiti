@@ -128,43 +128,49 @@
       <template v-else>
         <fieldset>
           <legend>Your Actors</legend>
-          <label v-for="actor in Object.values(actorManager.actors)" :for="actor.thumbprint" :key="actor.thumbprint">
-            <input type="radio" :id="actor.thumbprint" :value="actor.thumbprint" v-model="selected">
-            <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
-              <input type="text" v-model="editingNickname" v-focus @focus="$event.target.select()"/>
-            </form>
-            <span v-else>
-              {{ actor.nickname }}
-            </span>
-            <div class="dropdown">
-              <button @click="menuOpen=
-                menuOpen==actor.thumbprint?
-                null:actor.thumbprint">
-                ...
+          <ul>
+            <li v-for="actor in Object.values(actorManager.actors)" :key="actor.thumbprint">
+              <label :for="actor.thumbprint">
+                <input type="radio" :id="actor.thumbprint" :value="actor.thumbprint" v-model="selected">
+                <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
+                  <input type="text" v-model="editingNickname" v-focus @focus="$event.target.select()"/>
+                </form>
+                <span v-else>
+                  {{ actor.nickname }}
+                </span>
+                <div class="dropdown">
+                  <button @click="menuOpen=
+                    menuOpen==actor.thumbprint?
+                    null:actor.thumbprint">
+                    ...
+                  </button>
+                  <menu v-if="menuOpen==actor.thumbprint" v-click-away="()=>menuOpen=null">
+                    <li>
+                      <button @click="
+                        menuOpen=null;
+                        editing=actor.thumbprint;
+                        editingNickname=actor.nickname;">
+                        ️Rename
+                      </button>
+                    </li>
+                    <li>
+                      <button @click="
+                        menuOpen=null;
+                        selected=(selected===actor.thumbprint)?null:selected;
+                        actorManager.deleteActor(actor.thumbprint)">
+                        Delete
+                      </button>
+                    </li>
+                  </menu>
+                </div>
+              </label>
+            </li>
+            <li>
+              <button @click="creating=true">
+                Add Actor...
               </button>
-              <menu v-if="menuOpen==actor.thumbprint" v-click-away="()=>menuOpen=null">
-                <li>
-                  <button @click="
-                    menuOpen=null;
-                    editing=actor.thumbprint;
-                    editingNickname=actor.nickname;">
-                    ️Rename
-                  </button>
-                </li>
-                <li>
-                  <button @click="
-                    menuOpen=null;
-                    selected=(selected===actor.thumbprint)?null:selected;
-                    actorManager.deleteActor(actor.thumbprint)">
-                    Delete
-                  </button>
-                </li>
-              </menu>
-            </div>
-          </label>
-          <button @click="creating=true">
-            Add Actor...
-          </button>
+            </li>
+          </ul>
         </fieldset>
 
         <button @click="selectActor(selected)" :disabled="!selected">

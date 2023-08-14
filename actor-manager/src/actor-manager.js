@@ -4,9 +4,9 @@ export default class ActorManager {
 
   // TODO:
   // enter to log in
-  // legend styling
   // welcome message
   // import/export
+  // style creation
   // cancel on create
   // style dropdown menu
 
