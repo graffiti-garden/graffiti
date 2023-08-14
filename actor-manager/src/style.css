@@ -208,10 +208,10 @@ header button::before {
   position: relative;
 }
 
-menu {
-  position: absolute;
-  right: 0;
-  z-index: 1;
+.dropdown.open > button{
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: 0;
 }
 
 @media (max-width: 600px) {
@@ -249,7 +249,7 @@ input[type="text"] {
   outline: none;
   border: none;
   background: none;
-  outline: 1px dotted grey;
+  outline: 2px dotted var(--frontfaded);
   width: 100%;
   outline-offset: 0.25rem;
 }
@@ -282,20 +282,28 @@ input[type="radio"]:checked::before {
   transform: scale(1);
 }
 
-menu {
-  background-color: black;;
-}
-
 li {
   list-style: none;
   width: 100%;
 }
 
+menu {
+  border-radius: 1rem;
+  border: 2px solid var(--emph);
+  border-top-right-radius: 0;
+  overflow: hidden;
+  background-color: black;;
+  position: absolute;
+  right: 0;
+  z-index: 1;
+}
+
 menu li :is(button,a) {
   width: 100%;
+  border: none;
   border-radius: 0;
 }
 
 menu li + li :is(button,a) {
-  border-top: none;
+  border-top: 2px solid var(--emph);
 }

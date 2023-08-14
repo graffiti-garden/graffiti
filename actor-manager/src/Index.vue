@@ -138,13 +138,15 @@
                 <span v-else>
                   {{ actor.nickname }}
                 </span>
-                <div class="dropdown">
+                <div :class="menuOpen==actor.thumbprint?['dropdown','open']:'dropdown'">
                   <button @click="menuOpen=
                     menuOpen==actor.thumbprint?
                     null:actor.thumbprint">
                     ...
                   </button>
-                  <menu v-if="menuOpen==actor.thumbprint" v-click-away="()=>menuOpen=null">
+                  <menu
+                   v-if="menuOpen==actor.thumbprint"
+                   v-click-away="()=>menuOpen=null">
                     <li>
                       <button @click="
                         menuOpen=null;
