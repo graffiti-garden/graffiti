@@ -6,7 +6,6 @@ export default class ActorManager {
   // enter to log in
   // legend styling
   // welcome message
-  // delete selected error
   // import/export
   // cancel on create
   // style dropdown menu

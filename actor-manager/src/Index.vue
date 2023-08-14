@@ -128,7 +128,7 @@
       <template v-else>
         <fieldset>
           <legend>Your Actors</legend>
-          <label v-for="actor in Object.values(actorManager.actors)" :for="actor.thumbprint">
+          <label v-for="actor in Object.values(actorManager.actors)" :for="actor.thumbprint" :key="actor.thumbprint">
             <input type="radio" :id="actor.thumbprint" :value="actor.thumbprint" v-model="selected">
             <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
               <input type="text" v-model="editingNickname" v-focus @focus="$event.target.select()"/>
@@ -154,6 +154,7 @@
                 <li>
                   <button @click="
                     menuOpen=null;
+                    selected=(selected===actor.thumbprint)?null:selected;
                     actorManager.deleteActor(actor.thumbprint)">
                     Delete
                   </button>
