@@ -16,12 +16,13 @@ export default class ActorManager {
   #privateKeys = {}
   #_initialized = false
   #channel = null
+  #events = new EventTarget()
+  #channelID = crypto.randomUUID()
+  #onInitialize = ()=>{}
 
   constructor(actorContainer, onInitialize) {
     this.actors = actorContainer ? actorContainer() : {}
-    this.events = new EventTarget()
-    this.onInitialize = onInitialize ?? (()=>{})
-    this.channelID = crypto.randomUUID()
+    this.#onInitialize = onInitialize ?? this.#onInitialize
 
     // Initialize
     ;(async ()=> {
@@ -124,8 +125,8 @@ export default class ActorManager {
     this.#channel.onmessage = this.#onChannelMessage.bind(this)
 
     this.#_initialized = true
-    this.events.dispatchEvent(new Event("initialized"))
-    this.onInitialize()
+    this.#events.dispatchEvent(new Event("initialized"))
+    this.#onInitialize()
 
     // Load all existing things from the database
     for (const value of Object.values(localStorage)) {
@@ -142,7 +143,7 @@ export default class ActorManager {
   async #initialized() {
     if (!this.#_initialized) {
       await new Promise(resolve=>
-        this.events.addEventListener(
+        this.#events.addEventListener(
           'initialized',
           ()=>resolve()), {
             passive: true,
@@ -180,7 +181,7 @@ export default class ActorManager {
         JSON.parse(JSON.stringify({
           action,
           payload,
-          id: this.channelID
+          id: this.#channelID
         }))
       )
     }
@@ -212,7 +213,7 @@ export default class ActorManager {
   }
 
   async #onChannelMessage({data: {action, payload, id}}) {
-    if (id == this.channelID) return
+    if (id == this.#channelID) return
     if (action == "update-actor") {
       const { actor, pkcs8Pem } = payload
       await this.#updateActor(actor, pkcs8Pem, false)
