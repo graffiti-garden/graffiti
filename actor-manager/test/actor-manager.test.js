@@ -110,41 +110,4 @@ describe('Actor Manager', ()=> {
     await new Promise(r=> setTimeout(r, 100));
     expect(am1.sign({}, actor1)).rejects.toThrowError()
   })
-
-  it('select actor', async()=> {
-    const am1 = new ActorManager()
-    const actor1 = await am1.createActor(crypto.randomUUID())
-
-    const am2 = new ActorManager()
-    await am2.initialize()
-    const am3 = new ActorManager()
-    await am3.initialize()
-
-    let selected1 = null
-    am1.events.addEventListener("selected", e=> {
-      selected1 = e.thumbprint
-    })
-    let selected2 = null
-    am2.events.addEventListener("selected", e=> {
-      selected2 = e.thumbprint
-    })
-    let selected3 = null
-    am3.events.addEventListener("selected", e=> {
-      selected3 = e.thumbprint
-    })
-
-    await am1.selectActor(actor1, am2.channelID)
-    await new Promise(r=> setTimeout(r, 100));
-
-    expect(selected1).to.equal(null)
-    expect(selected2).to.equal(actor1)
-    expect(selected3).to.equal(null)
-
-    await am1.selectActor(actor1, am3.channelID)
-    await new Promise(r=> setTimeout(r, 100));
-
-    expect(selected1).to.equal(null)
-    expect(selected2).to.equal(actor1)
-    expect(selected3).to.equal(actor1)
-  })
 })

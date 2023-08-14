@@ -2,8 +2,16 @@ import * as jose from 'jose'
 
 export default class ActorManager {
 
-  // TODO: remove selection stuff
+  // TODO:
   // Make everything private
+  // enter to log in
+  // legend styling
+  // welcome message
+  // delete selected error
+  // import/export
+  // reset form (selected, creating, etc) on close
+  // cancel on create
+  // style dropdown menu
 
   #privateKeys = {}
   #_initialized = false
@@ -51,10 +59,6 @@ export default class ActorManager {
     await this.#updateActor(actor, pkcs8Pem)
 
     return thumbprint
-  }
-
-  async selectActor(thumbprint, channelID) {
-    await this.#forwardAction("select-actor", { thumbprint, channelID }, true)
   }
 
   async deleteActor(thumbprint, propogate=true) {
@@ -214,12 +218,6 @@ export default class ActorManager {
       await this.#updateActor(actor, pkcs8Pem, false)
     } else if (action == "delete-actor") {
       await this.deleteActor(payload, false)
-    } else if (action == "select-actor") {
-      const { thumbprint, channelID } = payload
-      if (channelID != this.channelID) return
-      const selectEvent = new Event("selected")
-      selectEvent.thumbprint = thumbprint
-      this.events.dispatchEvent(selectEvent)
     }
   }
 }
