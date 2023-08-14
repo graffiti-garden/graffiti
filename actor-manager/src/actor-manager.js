@@ -3,13 +3,11 @@ import * as jose from 'jose'
 export default class ActorManager {
 
   // TODO:
-  // Make everything private
   // enter to log in
   // legend styling
   // welcome message
   // delete selected error
   // import/export
-  // reset form (selected, creating, etc) on close
   // cancel on create
   // style dropdown menu
 

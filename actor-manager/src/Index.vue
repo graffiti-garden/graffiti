@@ -63,6 +63,10 @@
 
   function selectActor(thumbprint) {
     postMessage({selected: thumbprint})
+    selected.value = null
+    creating.value = false
+    createNickname.value = ''
+    editing.value = null
   }
 
   window.onbeforeunload = ()=> {
