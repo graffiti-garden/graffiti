@@ -122,5 +122,4 @@ describe('Context', async ()=> {
   })
 
   // Multiple contexts
-  // What is going on in safari context??
 })

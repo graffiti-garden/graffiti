@@ -7,7 +7,9 @@ import { createStore, entries, del } from "idb-keyval"
 
   ///////
 // - tracker client and peerjs reconnect
-// - optimization (when to evict seeds?)
+// - optimization
+//   - only send stuff (esp. big stuff like images) if other person *doesn't* have it
+//   - don't block when sending stuff to peers
   ///////
 
 export default class Graffiti {
