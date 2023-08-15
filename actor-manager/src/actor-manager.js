@@ -4,7 +4,6 @@ export default class ActorManager {
 
   // TODO:
   // more pronounced disabled/enabled button
-  // welcome message
   // import
   // style creation
   // cancel on create

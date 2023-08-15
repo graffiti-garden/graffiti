@@ -83,6 +83,8 @@ main {
   border-radius: 1rem;
   display: flex;
   flex-direction: column;
+  overflow-y: scroll;
+  scrollbar-color: var(--emph) rgba(0,0,0,0);
 }
 
 header {
@@ -167,6 +169,11 @@ label > :is(form,span) {
 }
 
 :is(button,a) {
+  color: var(--emph);
+  text-decoration: none;
+}
+
+:is(button,menu a) {
   font-size: 1rem;
   text-align: center;
   display: block;
@@ -178,8 +185,6 @@ label > :is(form,span) {
   transition: 0.1s;
   white-space: nowrap;
   background: none;
-  color: var(--emph);
-  text-decoration: none;
   line-height: 1.2rem;
 }
 

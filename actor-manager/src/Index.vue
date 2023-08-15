@@ -67,6 +67,7 @@
     creating.value = false
     createNickname.value = ''
     editing.value = null
+    document.activeElement.blur()
   }
 
   window.onbeforeunload = ()=> {
@@ -116,18 +117,16 @@
       <template v-if="!initialized || !Object.keys(actorManager.actors).length">
 
         <p>
-          Welcome to Graffiti!
-          Graffiti is an infrastructure underlying different social networks.
+          Welcome to <a href="https://graffiti.garden">Graffiti</a>!
+          Graffiti is a system that connects different social media applications
+          so that you can seamlessly migrate between them without losing your data or relationships.
+          If you are tech savvy you can also modify existing Graffiti applications or create your own.
         </p>
 
         <p>
           This manager let's you add, delete, and select different
-          <em>actors</em> which are kind of like accounts.
-          You might have an actor for 
-        </p>
-
-        <p>
-          Your actor is kept on your device.
+          <em>actors</em> which are your identities within the Graffiti application ecosystem.
+          Create a new actor to get started.
         </p>
 
         <button v-if="!initialized" @click="actorManager.initialize">
