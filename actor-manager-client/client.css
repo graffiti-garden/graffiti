@@ -11,9 +11,9 @@
   transition: opacity 0.3s;
   pointer-events: none;
   display: block;
-  min-width: 90vw;
-  min-height: 90vh;
-  height: 90vh;
+  min-width: 90dvw;
+  min-height: 90dvh;
+  height: 90dvh;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
