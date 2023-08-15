@@ -242,6 +242,29 @@ header button::before {
   background: var(--hover);
 }
 
+:is(button,input[type=submit]).highlight {
+  background: var(--hover);
+  color: var(--front);
+}
+
+:is(button,input[type=submit]).highlight:hover {
+  background: var(--emph);
+}
+
+:is(button,input[type=submit]):focus {
+  outline: 2px solid var(--front);
+}
+
+button:disabled {
+  border: 2px solid grey;
+  color: grey;
+}
+
+button:disabled:hover {
+  cursor: auto;
+  background: none;
+}
+
 input::selection {
   color: inherit;
   background-color: var(--hover)
@@ -325,10 +348,6 @@ menu li :is(button,a) {
 
 menu li + li :is(button,a) {
   border-top: 2px solid var(--emph);
-}
-
-button:focus {
-  background: green;
 }
 
 form {

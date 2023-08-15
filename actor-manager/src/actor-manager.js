@@ -3,9 +3,7 @@ import * as jose from 'jose'
 export default class ActorManager {
 
   // TODO:
-  // more pronounced disabled/enabled button
-
-  // menu animation styling
+  // fix safari quirks
 
   #privateKeys = {}
   #_initialized = false

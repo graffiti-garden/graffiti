@@ -104,11 +104,14 @@
     </h1>
 
     <form v-if="adding">
-      <button @click="adding=false;creating=true">
+      <button @click="adding=false;creating=true" class="highlight">
         Create a New Actor
       </button>
-      <button @click="adding=false;importing=true">
+      <button @click="adding=false;importing=true" class="highlight">
         Import an Existing Actor
+      </button>
+      <button @click="adding=false">
+        Cancel
       </button>
     </form>
     
@@ -123,7 +126,7 @@
           This nickname is not public and can be changed at any time.
         </label>
         <input type="text" id="nickname" placeholder="Choose a nickname......" v-focus v-model="createNickname">
-        <input type="submit" value="Create Actor">
+        <input type="submit" value="Create Actor" class="highlight">
         <button @click="creating=false;createNickname=''">
           Cancel
         </button>
@@ -162,10 +165,10 @@
           Enable Graffiti on This Site
         </button>
         <form v-else>
-          <button @click="creating=true">
+          <button @click="creating=true" class="highlight">
             Create a New Actor
           </button>
-          <button @click="importing=true">
+          <button @click="importing=true" class="highlight">
             Import an Existing Actor
           </button>
         </form>
@@ -230,12 +233,12 @@
           </ul>
         </fieldset>
 
-        <button :disabled="!selected" ref="selectButton" @click="selectActor(selected)">
+        <button :disabled="!selected" ref="selectButton" @click="selectActor(selected)" :class="selected?'highlight':''">
           <template v-if="selected">
             Log In With <strong>{{ actorManager.actors[selected].nickname }}</strong>
           </template>
           <template v-else>
-            To Log In, Select an Actor
+            Select an Actor to Log In
           </template>
         </button>
       </template>
