@@ -153,7 +153,7 @@
           Welcome to <a href="https://graffiti.garden">Graffiti</a>!
           Graffiti is a system that connects different social media applications
           so that you can seamlessly migrate between them without losing your data or relationships.
-          With a little bit of web programming, you can also modify any existing Graffiti applications or create your own.
+          With a little bit of web programming, you can also modify existing Graffiti applications or create your own.
         </p>
 
         <p>
@@ -192,7 +192,7 @@
                   {{ actor.nickname }}
                 </span>
                 <div :class="menuOpen==actor.thumbprint?['dropdown','open']:'dropdown'">
-                  <button @click="menuOpen=
+                  <button @click.prevent="menuOpen=
                     menuOpen==actor.thumbprint?
                     null:actor.thumbprint">
                     ...
@@ -201,7 +201,7 @@
                     v-if="menuOpen==actor.thumbprint"
                     v-click-away="()=>menuOpen=null">
                     <li>
-                      <button @click="
+                      <button @click.prevent="
                         menuOpen=null;
                         editing=actor.thumbprint;
                         editingNickname=actor.nickname;">
@@ -214,7 +214,7 @@
                       </a>
                     </li>
                     <li>
-                      <button @click="
+                      <button @click.prevent="
                         menuOpen=null;
                         selected=(selected===actor.thumbprint)?null:selected;
                         actorManager.deleteActor(actor.thumbprint)">
