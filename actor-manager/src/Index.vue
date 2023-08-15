@@ -82,14 +82,12 @@
   // whenever a selection is made
   const selectButton = ref(null)
   watch(selected, s=> { 
-    if (!s) return
-    focusSelect()
+    if (s) {
+      nextTick(()=> {
+        selectButton.value.focus()
+      })
+    }
   })
-  function focusSelect() {
-    nextTick(()=> {
-      selectButton.value.focus()
-    })
-  }
 </script>
 
 <template>
@@ -184,7 +182,12 @@
                   :id="actor.thumbprint"
                   :value="actor.thumbprint"
                   v-model="selected"
-                  @click="focusSelect">
+                  @click="()=> {
+                    // Toggle radio button off
+                    if (selected == actor.thumbprint) {
+                      selected=null;
+                    }
+                  }">
                 <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
                   <input type="text" v-model="editingNickname" v-focus @focus="$event.target.select()"/>
                 </form>
