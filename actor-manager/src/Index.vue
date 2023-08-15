@@ -37,6 +37,7 @@
   const selected = ref(null)
 
   const createNickname = ref('')
+  const adding = ref(false)
   const creating = ref(false)
   const importing = ref(false)
 
@@ -66,6 +67,7 @@
   function selectActor(thumbprint) {
     postMessage({selected: thumbprint})
     selected.value = null
+    adding.value = false
     creating.value = false
     createNickname.value = ''
     editing.value = null
@@ -100,8 +102,17 @@
     <h1>
       Graffiti Actor Manager
     </h1>
+
+    <form v-if="adding">
+      <button @click="adding=false;creating=true">
+        Create a New Actor
+      </button>
+      <button @click="adding=false;importing=true">
+        Import an Existing Actor
+      </button>
+    </form>
     
-    <template v-if="creating">
+    <template v-else-if="creating">
 
       <form @submit.prevent="
         actorManager.createActor(createNickname);
@@ -212,7 +223,7 @@
               </label>
             </li>
             <li>
-              <button @click="creating=true">
+              <button @click="adding=true">
                 Add Actor...
               </button>
             </li>
