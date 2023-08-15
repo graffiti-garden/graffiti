@@ -3,10 +3,10 @@ import * as jose from 'jose'
 export default class ActorManager {
 
   // TODO:
-  // more pronounced disabled/enabled button
-  // import
   // style creation
-  // cancel on create
+  // more pronounced disabled/enabled button
+
+  // menu animation styling
 
   #privateKeys = {}
   #_initialized = false
@@ -52,7 +52,7 @@ export default class ActorManager {
     const actor = { thumbprint, jwk, nickname, alg }
 
     // Update internally and externally
-    await this.#updateActor(actor, pkcs8Pem)
+    await this.updateActor(actor, pkcs8Pem)
 
     return thumbprint
   }
@@ -83,7 +83,7 @@ export default class ActorManager {
     const actor = this.actors[thumbprint]
     if (actor.nickname != nickname) {
       actor.nickname = nickname
-      await this.#updateActor(actor, null)
+      await this.updateActor(actor, null)
     }
   }
 
@@ -138,7 +138,7 @@ export default class ActorManager {
       } catch(e) {
         continue
       }
-      this.#updateActor(actor, pkcs8Pem, false)
+      this.updateActor(actor, pkcs8Pem, false)
     }
   }
 
@@ -189,7 +189,7 @@ export default class ActorManager {
     }
   }
 
-  async #updateActor(actor, pkcs8Pem, propogate=true) {
+  async updateActor(actor, pkcs8Pem, propogate=true) {
     if (!actor.thumbprint.startsWith('actor:')) {
       throw "Invalid actor URI"
     }
@@ -218,7 +218,7 @@ export default class ActorManager {
     if (id == this.#channelID) return
     if (action == "update-actor") {
       const { actor, pkcs8Pem } = payload
-      await this.#updateActor(actor, pkcs8Pem, false)
+      await this.updateActor(actor, pkcs8Pem, false)
     } else if (action == "delete-actor") {
       await this.deleteActor(payload, false)
     }

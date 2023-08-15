@@ -1,6 +1,7 @@
 <script setup>
   import { reactive, ref, nextTick, watch } from 'vue'
   import ActorManager from './actor-manager';
+  import DropActor from './DropActor.vue'
 
   let postMessage = message=> {
     console.log(message)
@@ -37,6 +38,7 @@
 
   const createNickname = ref('')
   const creating = ref(false)
+  const importing = ref(false)
 
   window.onmessage = async function({ data }) {
     // Sign or verify messages
@@ -100,8 +102,8 @@
     </h1>
     
     <template v-if="creating">
-      Choose a nickname for your actor.
-      This nickname is not public and only used within this manager to identify different actors.
+      Choose a private nickname for your actor.
+      This nickname is not public and can be changed at any time.
 
       <form @submit.prevent="
         actorManager.createActor(createNickname);
@@ -110,6 +112,21 @@
         <input placeholder="Choose a nickname......" v-focus v-model="createNickname">
         <input type="submit" value="Create Actor">
       </form>
+
+      <button @click="creating=false;createNickname=''">
+        Cancel
+      </button>
+    </template>
+
+    <template v-else-if="importing">
+      <DropActor :onactor="async (actor, pkcs8Pem)=>{
+        await actorManager.updateActor(actor, pkcs8Pem);
+        importing=false
+      }"/>
+
+      <button @click="importing=false">
+        Cancel
+      </button>
     </template>
 
     <template v-else>
@@ -126,15 +143,19 @@
         <p>
           This manager let's you add, delete, and select different
           <em>actors</em> which are your identities within the Graffiti application ecosystem.
-          Create a new actor to get started.
         </p>
 
         <button v-if="!initialized" @click="actorManager.initialize">
           Enable Graffiti on This Site
         </button>
-        <button v-else @click="creating=true">
-          Create a New Actor
-        </button>
+        <div v-else>
+          <button @click="creating=true">
+            Create a New Actor
+          </button>
+          <button @click="importing=true">
+            Import an Existing Actor
+          </button>
+        </div>
       </template>
 
       <template v-else>
