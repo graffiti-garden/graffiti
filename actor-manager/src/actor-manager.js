@@ -2,9 +2,6 @@ import * as jose from 'jose'
 
 export default class ActorManager {
 
-  // TODO:
-  // fix safari border and "your actors" disappear on scale
-
   #privateKeys = {}
   #_initialized = false
   #channel = null
