@@ -307,3 +307,7 @@ menu li :is(button,a) {
 menu li + li :is(button,a) {
   border-top: 2px solid var(--emph);
 }
+
+button:focus {
+  background: green;
+}

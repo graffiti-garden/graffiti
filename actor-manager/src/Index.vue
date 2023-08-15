@@ -1,5 +1,5 @@
 <script setup>
-  import { reactive, ref } from 'vue'
+  import { reactive, ref, nextTick, watch } from 'vue'
   import ActorManager from './actor-manager';
 
   let postMessage = message=> {
@@ -72,6 +72,19 @@
   window.onbeforeunload = ()=> {
     selectActor(null)
   }
+
+  // Select the submit button
+  // whenever a selection is made
+  const selectButton = ref(null)
+  watch(selected, s=> { 
+    if (!s) return
+    focusSelect()
+  })
+  function focusSelect() {
+    nextTick(()=> {
+      selectButton.value.focus()
+    })
+  }
 </script>
 
 <template>
@@ -131,7 +144,11 @@
           <ul>
             <li v-for="actor in Object.values(actorManager.actors)" :key="actor.thumbprint">
               <label :for="actor.thumbprint">
-                <input type="radio" :id="actor.thumbprint" :value="actor.thumbprint" v-model="selected">
+                <input type="radio"
+                  :id="actor.thumbprint"
+                  :value="actor.thumbprint"
+                  v-model="selected"
+                  @click="focusSelect">
                 <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
                   <input type="text" v-model="editingNickname" v-focus @focus="$event.target.select()"/>
                 </form>
@@ -145,8 +162,8 @@
                     ...
                   </button>
                   <menu
-                   v-if="menuOpen==actor.thumbprint"
-                   v-click-away="()=>menuOpen=null">
+                    v-if="menuOpen==actor.thumbprint"
+                    v-click-away="()=>menuOpen=null">
                     <li>
                       <button @click="
                         menuOpen=null;
@@ -180,7 +197,7 @@
           </ul>
         </fieldset>
 
-        <button @click="selectActor(selected)" :disabled="!selected">
+        <button :disabled="!selected" ref="selectButton" @click="selectActor(selected)">
           <template v-if="selected">
             Log In With <strong>{{ actorManager.actors[selected].nickname }}</strong>
           </template>

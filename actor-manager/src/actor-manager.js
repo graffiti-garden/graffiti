@@ -3,12 +3,11 @@ import * as jose from 'jose'
 export default class ActorManager {
 
   // TODO:
-  // enter to log in
+  // more pronounced disabled/enabled button
   // welcome message
-  // import/export
+  // import
   // style creation
   // cancel on create
-  // style dropdown menu
 
   #privateKeys = {}
   #_initialized = false
