@@ -101,6 +101,15 @@ h1 {
   color: var(--front);
 }
 
+h1 a {
+  color: var(--front);
+}
+
+h1 a:hover {
+  background: none;
+  color: var(--emph);
+}
+
 fieldset {
   overflow-y: scroll;
   scrollbar-color: var(--emph) rgba(0,0,0,0);
@@ -140,7 +149,7 @@ legend {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   padding-left: 1rem;
-  border: 1px solid white;
+  border: 1px solid var(--front);
 }
 
 fieldset > ul > li > * {
@@ -149,7 +158,7 @@ fieldset > ul > li > * {
   padding: 1rem;
   gap: 0.5rem;
   width: 100%;
-  border: 1px solid white;
+  border: 1px solid var(--front);
   border-top: 0;
   align-items: center;
   justify-content: center;
@@ -168,9 +177,12 @@ label > :is(form,span) {
   font-weight: bold;
 }
 
-button, a, input[type=submit] {
-  color: var(--emph);
+a {
   text-decoration: none;
+}
+
+button, :is(p,ul) a, input[type=submit] {
+  color: var(--emph);
 }
 
 button, input[type=submit], menu a {
@@ -237,9 +249,13 @@ header button::before {
   }
 }
 
-:is(button,a,input[type=submit]):hover {
+:is(button,ul a,input[type=submit]):hover {
   cursor: pointer;
   background: var(--hover);
+}
+
+p a:hover {
+  text-decoration: underline;
 }
 
 :is(button,input[type=submit]).highlight {

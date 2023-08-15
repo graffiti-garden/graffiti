@@ -98,7 +98,9 @@
   </header>
   <main>
     <h1>
-      Graffiti Actor Manager
+      <a target="_blank" href="https://graffiti.garden">
+        Graffiti Actor Manager
+      </a>
     </h1>
 
     <form v-if="adding">
@@ -148,7 +150,7 @@
       <template v-if="!initialized || !Object.keys(actorManager.actors).length">
 
         <p>
-          Welcome to <a href="https://graffiti.garden">Graffiti</a>!
+          Welcome to <a target="_blank" href="https://graffiti.garden">Graffiti</a>!
           Graffiti is a system that connects different social media applications
           so that you can seamlessly migrate between them without losing your data or relationships.
           With a little bit of web programming, you can also modify existing Graffiti applications or create your own.
