@@ -102,20 +102,22 @@
     </h1>
     
     <template v-if="creating">
-      Choose a private nickname for your actor.
-      This nickname is not public and can be changed at any time.
 
       <form @submit.prevent="
         actorManager.createActor(createNickname);
         creating=false;
         createNickname=''">
-        <input placeholder="Choose a nickname......" v-focus v-model="createNickname">
+        <label for="nickname">
+          Choose a private nickname for your actor.
+          This nickname is not public and can be changed at any time.
+        </label>
+        <input type="text" id="nickname" placeholder="Choose a nickname......" v-focus v-model="createNickname">
         <input type="submit" value="Create Actor">
+        <button @click="creating=false;createNickname=''">
+          Cancel
+        </button>
       </form>
 
-      <button @click="creating=false;createNickname=''">
-        Cancel
-      </button>
     </template>
 
     <template v-else-if="importing">
@@ -137,7 +139,7 @@
           Welcome to <a href="https://graffiti.garden">Graffiti</a>!
           Graffiti is a system that connects different social media applications
           so that you can seamlessly migrate between them without losing your data or relationships.
-          If you are tech savvy you can also modify existing Graffiti applications or create your own.
+          With a little bit of web programming, you can also modify any existing Graffiti applications or create your own.
         </p>
 
         <p>
@@ -148,14 +150,14 @@
         <button v-if="!initialized" @click="actorManager.initialize">
           Enable Graffiti on This Site
         </button>
-        <div v-else>
+        <form v-else>
           <button @click="creating=true">
             Create a New Actor
           </button>
           <button @click="importing=true">
             Import an Existing Actor
           </button>
-        </div>
+        </form>
       </template>
 
       <template v-else>

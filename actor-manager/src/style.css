@@ -168,12 +168,12 @@ label > :is(form,span) {
   font-weight: bold;
 }
 
-:is(button,a) {
+button, a, input[type=submit] {
   color: var(--emph);
   text-decoration: none;
 }
 
-:is(button,menu a) {
+button, input[type=submit], menu a {
   font-size: 1rem;
   text-align: center;
   display: block;
@@ -237,7 +237,7 @@ header button::before {
   }
 }
 
-:is(button,a):hover {
+:is(button,a,input[type=submit]):hover {
   cursor: pointer;
   background: var(--hover);
 }
@@ -251,12 +251,26 @@ input[type="text"] {
   color: inherit;
   font-size: inherit;
   font-weight: inherit;
-  outline: none;
-  border: none;
   background: none;
-  outline: 2px dotted var(--frontfaded);
   width: 100%;
-  outline-offset: 0.25rem;
+}
+
+main > form > input[type="text"] {
+  padding: 1rem;
+  border: 2px solid var(--frontfaded);
+  border-radius: 1rem;
+  font-weight: bold;
+}
+
+main > form > input[type="text"]:focus {
+  outline: 2px solid var(--emph);
+}
+
+ul input[type="text"] {
+  color: inherit;
+  border: none;
+  outline: 2px dotted var(--frontfaded);
+  outline-offset: 0.1rem;
 }
 
 input[type="radio"] {
@@ -315,4 +329,12 @@ menu li + li :is(button,a) {
 
 button:focus {
   background: green;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 1rem;
 }

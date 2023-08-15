@@ -3,7 +3,6 @@ import * as jose from 'jose'
 export default class ActorManager {
 
   // TODO:
-  // style creation
   // more pronounced disabled/enabled button
 
   // menu animation styling
