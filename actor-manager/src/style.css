@@ -25,15 +25,15 @@ html::before {
   background-size: cover;
   background-repeat: no-repeat;
   background-position: 50% 50%;
-  height: calc(100vh + 2*var(--blurpix));
-  width: calc(100vw + 2*var(--blurpix));
+  height: calc(100dvh + 2*var(--blurpix));
+  width: calc(100dvw + 2*var(--blurpix));
   filter: blur(var(--blurpix));
   margin: calc(-1*var(--blurpix));
 }
 
 html {
-  width: 100vw;
-  height: 100vh;
+  width: 100dvw;
+  height: 100dvh;
   overflow: hidden;
   position: absolute;
   top: 0;
@@ -70,15 +70,15 @@ main {
   flex: 1;
   max-width: 600px;
   width: 100%;
-  gap: 4vh;
-  padding-top: 4vh;
-  padding-bottom: 4vh;
-  margin-top: 4vh;
-  margin-bottom: 4vh;
-  margin-left: 4vw;
-  margin-right: 4vw;
-  padding-left: 4vw;
-  padding-right: 4vw;
+  gap: 4dvh;
+  padding-top: 4dvh;
+  padding-bottom: 4dvh;
+  margin-top: 4dvh;
+  margin-bottom: 4dvh;
+  margin-left: 4dvw;
+  margin-right: 4dvw;
+  padding-left: 4dvw;
+  padding-right: 4dvw;
   background: var(--back);
   border-radius: 1rem;
   display: flex;
