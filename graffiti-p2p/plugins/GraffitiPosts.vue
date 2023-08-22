@@ -1,10 +1,25 @@
 <script setup>
-import { inject, toRefs } from 'vue'
+import { inject, computed, toRefs } from 'vue'
 const gf = inject('graffiti')
 
-const props = defineProps(["context"])
+const props = defineProps(["context", "filter"])
+// {
+//   context: {
+//     type: "String"
+//   },
+//   filter: {
+//     type: "Function"
+//   }
+// })
+
 const { context } = toRefs(props)
-const { posts } = gf.usePosts(context)
+const { posts: postsRaw } = gf.usePosts(context)
+
+const posts = computed(()=> {
+  let posts = postsRaw.value
+  posts = props.filter?posts.filter(props.filter):posts
+  return posts
+})
 </script>
 
 <template>

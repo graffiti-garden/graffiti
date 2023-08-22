@@ -31,7 +31,10 @@
 
   <input v-model="context">
 
-  <GraffitiPosts v-slot={posts} :context="context">
+  <GraffitiPosts v-slot={posts} :context="context" :filter="p=> 
+    typeof p.content == 'string' &&
+    p.type == 'Note'
+  ">
     <ul>
       <li v-for="post in posts">
         {{ post.content }}
