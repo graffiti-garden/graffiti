@@ -4,8 +4,6 @@
 
   const context = ref('something')
 
-  const { posts } = gf.usePosts(context)
-
   const message = ref('')
   async function postMessage() {
     if (!gf.me) {
@@ -33,22 +31,24 @@
 
   <input v-model="context">
 
-  <ul>
-    <li v-for="post of posts">
-      {{ post.content }}
-      <template v-if="post.actor==$gf.me">
-        <button @click="post.content+='!!'">
-          ‼️
-        </button>
-        <button @click="gf.delete(post)">
-          ␡
-        </button>
-        <button @click="delete post.content">
-          clear
-        </button>
-      </template>
-    </li>
-  </ul>
+  <GraffitiPosts v-slot={posts} :context="context">
+    <ul>
+      <li v-for="post in posts">
+        {{ post.content }}
+        <template v-if="post.actor==$gf.me">
+          <button @click="post.content+='!!'">
+            ‼️
+          </button>
+          <button @click="gf.delete(post)">
+            ␡
+          </button>
+          <button @click="delete post.content">
+            clear
+          </button>
+        </template>
+      </li>
+    </ul>
+  </GraffitiPosts>
 
   <form @submit.prevent="postMessage">
     <input v-model="message">

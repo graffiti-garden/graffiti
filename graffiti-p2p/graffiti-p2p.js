@@ -62,10 +62,24 @@ export default class Graffiti {
   }
 
   async * posts(contextPath, signal) {
-    const context = this.wrapper.get(
-      GraffitiContext,
-      contextPath,
-      this.objectContainer)
-    yield * context.posts(signal)
+    if (contextPath) {
+      const context = this.wrapper.get(
+        GraffitiContext,
+        contextPath,
+        this.objectContainer)
+      yield * context.posts(signal)
+    } else {
+      await new Promise((resolve, reject)=> {
+        if (signal) {
+          signal.addEventListener(
+            "abort",
+            ()=> reject(signal.reason),
+            { once: true, passive: true }
+          )
+        } else {
+          throw "No context."
+        }
+      })
+    }
   }
 }

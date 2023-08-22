@@ -1,4 +1,5 @@
 import Graffiti from '../graffiti-p2p.js'
+import GraffitiPosts from './GraffitiPosts.vue'
 
 const REFRESH_RATE = 100 // milliseconds
 
@@ -90,6 +91,9 @@ export default function GraffitiPlugin(Vue) {
 
       // Provide it globally to setup
       app.provide('graffiti', graffiti)
+
+      // Add the component
+      app.component('GraffitiPosts', GraffitiPosts)
     }
   }
 }
