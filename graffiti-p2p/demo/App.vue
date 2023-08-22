@@ -2,34 +2,33 @@
   import { ref, inject } from 'vue'
   const gf = inject('graffiti')
 
-  const me = ref('')
   const context = ref('something')
 
   const { posts } = gf.usePosts(context)
 
   const message = ref('')
   async function postMessage() {
-    if (!me.value) {
+    if (!gf.me) {
       return alert("You need to sign in before posting!")
     }
     await gf.post({
       type: "Note",
       content: message.value,
       context: [context.value]
-    }, me.value)
+    })
     message.value = ''
   }
 </script>
 
 <template>
   <p>
-    <button @click="$gf.selectActor().then(actor=>me=actor)">
+    <button @click="$gf.selectActor">
       Select Actor
     </button>
   </p>
 
   <p>
-    Your Actor ID is: "{{ me }}"
+    Your Actor ID is: "{{ $gf.me }}"
   </p>
 
   <input v-model="context">
@@ -37,7 +36,7 @@
   <ul>
     <li v-for="post of posts">
       {{ post.content }}
-      <template v-if="post.actor==me">
+      <template v-if="post.actor==$gf.me">
         <button @click="post.content+='!!'">
           ‼️
         </button>

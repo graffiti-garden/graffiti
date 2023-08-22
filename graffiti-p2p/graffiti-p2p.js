@@ -18,6 +18,10 @@ export default class Graffiti {
     this.wrapper = new P2PWrapper(this.actorClient, options)
     this.objectContainer = options.objectContainer
 
+    this.meContainer = options.objectContainer?
+      options.objectContainer() : {}
+    this.meContainer.value = localStorage.getItem("graffiti-me")
+
     const objectStore = createStore('graffiti', 'objects')
     entries(objectStore).then(existingObjects=> {
       for (const [id, {actor, path, signed}] of existingObjects) {
@@ -31,11 +35,18 @@ export default class Graffiti {
     })
   }
 
+  get me() {
+    return this.meContainer.value
+  }
+
   async selectActor() {
-    return await this.actorClient.selectActor()
+    const me = await this.actorClient.selectActor()
+    localStorage.setItem("graffiti-me", me)
+    this.meContainer.value = me
   }
 
   async post(value, actor) {
+    actor=actor?? this.me
     const object = this.wrapper.get(GraffitiObject, actor, await randomHash(), this.objectContainer)
     return await object.apply(o=>Object.assign(o,value)).post()
   }
