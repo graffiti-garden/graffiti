@@ -1,21 +1,8 @@
 <script setup>
-  import { ref, inject } from 'vue'
-  const gf = inject('graffiti')
+  import { ref } from 'vue'
 
   const context = ref('something')
-
   const message = ref('')
-  async function postMessage() {
-    if (!gf.me) {
-      return alert("You need to sign in before posting!")
-    }
-    await gf.post({
-      type: "Note",
-      content: message.value,
-      context: [context.value]
-    })
-    message.value = ''
-  }
 </script>
 
 <template>
@@ -32,8 +19,8 @@
   <input v-model="context">
 
   <GraffitiPosts v-slot={posts} :context="context" :filter="p=> 
-    typeof p.content == 'string' &&
-    p.type == 'Note'
+    p.type == 'Note' &&
+    typeof p.content == 'string'
   ">
     <ul>
       <li v-for="post in posts">
@@ -42,7 +29,7 @@
           <button @click="post.content+='!!'">
             ‼️
           </button>
-          <button @click="gf.delete(post)">
+          <button @click="$gf.delete(post)">
             ␡
           </button>
           <button @click="delete post.content">
@@ -53,8 +40,15 @@
     </ul>
   </GraffitiPosts>
 
-  <form @submit.prevent="postMessage">
+  <form v-if="$gf.me" @submit.prevent="$gf.post({
+    type: 'Note',
+    content: message,
+    context: [context]
+  }); message=''">
     <input v-model="message">
     <input type="submit" value="Post">
   </form>
+  <div v-else>
+    You need to log in to post yourself.
+  </div>
 </template>

@@ -1,4 +1,4 @@
-import Graffiti from '../graffiti-p2p.js'
+import Graffiti from '../../graffiti-p2p.js'
 import GraffitiPosts from './GraffitiPosts.vue'
 
 const REFRESH_RATE = 100 // milliseconds
