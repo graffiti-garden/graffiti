@@ -8,13 +8,13 @@
 <body>
   <div id="app"></div>
   <script type="module">
-    import * as Vue from 'vue'
+    import { createApp } from 'vue'
     import App from './App.vue'
     import '@graffiti-garden/actor-client/client.css'
     import GraffitiPlugin from '../plugins/vue/plugin'
 
-    Vue.createApp(App)
-      .use(GraffitiPlugin(Vue))
+    createApp(App)
+      .use(GraffitiPlugin)
       .mount('#app')
   </script>
 </body>

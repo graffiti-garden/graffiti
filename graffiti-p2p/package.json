@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "test": "vitest",
-    "demo": "vite",
-    "build-demo": "vite build"
+    "demo": "vite --config vite-demo.config.js",
+    "build-demo": "vite build --config vite-demo.config.js",
+    "build": "vite build"
   },
   "repository": {
     "type": "git",
