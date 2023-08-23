@@ -72,19 +72,29 @@ export default class GraffitiPostArray extends Array {
   }
 
   groupBy(propertyPath) {
-    return this.reduce((chain, obj)=> {
+    const reduced = this.reduce((chain, obj)=> {
       const property = getProperty(obj, propertyPath)
       if (property in chain) {
         chain[property].push(obj)
       } else {
-        chain[property] = new GraffitiPostArray(
-          this.context,
-          o=> getProperty(o, propertyPath)==property
-              && this.filterFunction(o),
-          obj)
+        chain[property] = [obj]
       }
       return chain
     }, {})
+
+    // Wrap each vanilla array with
+    // the graffiti post array
+    for (const property of Object.keys(reduced)) {
+      reduced[property] = new GraffitiPostArray(
+        this.graffiti,
+        this.context,
+        // Make sure the property in the group is maintained
+        o=> getProperty(o, propertyPath)==property
+            && this.filterFunction(o),
+        ...reduced[property])
+    }
+
+    return reduced
   }
 }
 
