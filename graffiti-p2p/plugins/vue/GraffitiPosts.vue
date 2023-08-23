@@ -2,15 +2,10 @@
 import { inject, computed, toRefs } from 'vue'
 const gf = inject('graffiti')
 
-const props = defineProps(["context", "filter"])
-// {
-//   context: {
-//     type: "String"
-//   },
-//   filter: {
-//     type: "Function"
-//   }
-// })
+const props = defineProps({
+  context: String,
+  filter: Function
+})
 
 const { context } = toRefs(props)
 const { posts: postsRaw } = gf.usePosts(context)
