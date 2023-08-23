@@ -1,5 +1,6 @@
 import Graffiti from '../../graffiti-p2p.js'
 import GraffitiPosts from './GraffitiPosts.vue'
+import GraffitiPostArray from '../../src/posts.js'
 
 const REFRESH_RATE = 100 // milliseconds
 
@@ -80,7 +81,12 @@ export default function GraffitiPlugin(Vue) {
         })
 
         // Strip IDs
-        return { posts: Vue.computed(()=> Object.values(postMap)) }
+        return { posts: Vue.computed(()=> new GraffitiPostArray(
+          graffiti,
+          Vue.isRef(contextPath)? contextPath.value : contextPath,
+          null,
+          ...Object.values(postMap)
+        ))}
       }
 
       // Begin to define a global property that mirrors

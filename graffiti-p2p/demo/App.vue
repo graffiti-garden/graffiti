@@ -38,17 +38,16 @@
         </template>
       </li>
     </ul>
-  </GraffitiPosts>
 
-  <form v-if="$gf.me" @submit.prevent="$gf.post({
-    type: 'Note',
-    content: message,
-    context: [context]
-  }); message=''">
-    <input v-model="message">
-    <input type="submit" value="Post">
-  </form>
-  <div v-else>
-    You need to log in to post yourself.
-  </div>
+    <form v-if="$gf.me" @submit.prevent="posts.post({
+      type: 'Note',
+      content: message
+    }); message=''">
+      <input v-model="message">
+      <input type="submit" value="Post">
+    </form>
+    <div v-else>
+      You need to log in to post yourself.
+    </div>
+  </GraffitiPosts>
 </template>
