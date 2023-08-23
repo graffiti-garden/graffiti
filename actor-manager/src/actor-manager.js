@@ -91,9 +91,10 @@ export default class ActorManager {
   async sign(message, thumbprint) {
     this.#checkActor(thumbprint)
     const nickname = this.actors[thumbprint].nickname
-    if (!confirm(`Would you allow this app to use the actor "${nickname}"?`)) {
-      throw `User interaction denied signing ${JSON.stringify(message)} with actor "${nickname}", ID "${thumbprint}".`
-    }
+    // TODO: make this more secure
+    // if (!confirm(`Would you allow this app to use the actor "${nickname}"?`)) {
+    //   throw `User interaction denied signing ${JSON.stringify(message)} with actor "${nickname}", ID "${thumbprint}".`
+    // }
 
     const { jwk, alg } = this.actors[thumbprint]
     const privateKey = this.#privateKeys[thumbprint]
