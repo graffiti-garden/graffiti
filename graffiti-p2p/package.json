@@ -1,14 +1,11 @@
 {
   "name": "@graffiti-garden/graffiti-p2p",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "This client library interacts with the [tracker server](https://github.com/graffiti-garden/tracker-server/)",
   "main": "graffiti-p2p.js",
   "type": "module",
   "scripts": {
-    "test": "vitest",
-    "demo": "vite --config vite-demo.config.js",
-    "build-demo": "vite build --config vite-demo.config.js",
-    "build": "vite build"
+    "test": "vitest"
   },
   "repository": {
     "type": "git",
@@ -29,10 +26,8 @@
     "peerjs": "^1.4.7"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^4.2.3",
-    "@vitest/browser": "^0.33.0",
-    "vite": "^4.4.7",
-    "vitest": "^0.33.0",
+    "@vitest/browser": "0.33.0",
+    "vitest": "0.33.0",
     "webdriverio": "8.12.1"
   },
   "overrides": {
