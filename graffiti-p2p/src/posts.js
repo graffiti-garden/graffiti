@@ -1,4 +1,4 @@
-export default class GraffitiPostArray extends Array {
+export default class PostArray extends Array {
 
   constructor(graffiti, context, filterFunction, ...elems) {
     super(...elems)
@@ -9,7 +9,7 @@ export default class GraffitiPostArray extends Array {
 
   // disable all in-place methods
   push() { 
-    throw "To add or remove elements to this array, use GraffitiPostArray.post, $gf.post, or $gf.delete"
+    throw "To add or remove elements to this array, use PostArray.post, $gf.post, or $gf.delete"
   }
   shift() { this.push() }
   slice() { this.push() }
@@ -19,7 +19,7 @@ export default class GraffitiPostArray extends Array {
   sort() { this.push() }
 
   filter(f) {
-    return new GraffitiPostArray(
+    return new PostArray(
       this.graffiti,
       this.context,
       o=> f(o) && this.filterFunction(o),
@@ -85,7 +85,7 @@ export default class GraffitiPostArray extends Array {
     // Wrap each vanilla array with
     // the graffiti post array
     for (const property of Object.keys(reduced)) {
-      reduced[property] = new GraffitiPostArray(
+      reduced[property] = new PostArray(
         this.graffiti,
         this.context,
         // Make sure the property in the group is maintained

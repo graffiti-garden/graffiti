@@ -4,6 +4,7 @@ import GraffitiObject from './src/object'
 import GraffitiContext from './src/context'
 import { randomHash } from "./src/util"
 import { createStore, entries, del } from "idb-keyval"
+import PostArray from './src/posts'
 
   ///////
 // - tracker client and peerjs reconnect
@@ -11,6 +12,8 @@ import { createStore, entries, del } from "idb-keyval"
 //   - only send stuff (esp. big stuff like images) if other person *doesn't* have it
 //   - don't block when sending stuff to peers
   ///////
+
+export { PostArray }
 
 export default class Graffiti {
   constructor(options) {
