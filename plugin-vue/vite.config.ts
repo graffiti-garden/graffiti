@@ -8,7 +8,8 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'plugin.js'),
       name: 'plugin',
-      fileName: 'plugin'
+      fileName: 'plugin',
+      formats: ['es']
     },
     rollupOptions: {
       external: ['vue'],

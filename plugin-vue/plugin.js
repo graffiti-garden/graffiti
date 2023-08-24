@@ -1,5 +1,4 @@
-import Graffiti from '@graffiti-garden/graffiti-p2p'
-import GraffitiPostArray from '@graffiti-garden/graffiti-p2p/src/posts.js'
+import { default as Graffiti, PostArray } from '@graffiti-garden/graffiti-p2p'
 
 import GraffitiPosts from './GraffitiPosts.vue'
 import { reactive, isRef, watch, onScopeDispose, computed } from 'vue'
@@ -82,7 +81,7 @@ export default {
       })
 
       // Strip IDs
-      return { posts: computed(()=> new GraffitiPostArray(
+      return { posts: computed(()=> new PostArray(
         graffiti,
         isRef(contextPath)? contextPath.value : contextPath,
         null,
