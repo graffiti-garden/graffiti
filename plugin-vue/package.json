@@ -1,5 +1,5 @@
 {
-  "name": "@graffiti-garden/vue-plugin",
+  "name": "@graffiti-garden/plugin-vue",
   "version": "1.0.0",
   "description": "Plugin for peer-to-peer Graffiti",
   "type": "module",
@@ -20,14 +20,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/graffiti-garden/vue-plugin.git"
+    "url": "git+ssh://git@github.com/graffiti-garden/plugin-vue.git"
   },
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "bugs": {
-    "url": "https://github.com/graffiti-garden/vue-plugin/issues"
+    "url": "https://github.com/graffiti-garden/plugin-vue/issues"
   },
-  "homepage": "https://github.com/graffiti-garden/vue-plugin#readme",
+  "homepage": "https://github.com/graffiti-garden/plugin-vue#readme",
   "dependencies": {
     "@graffiti-garden/actor-client": "^1.0.11",
     "@graffiti-garden/graffiti-p2p": "^1.1.2",
