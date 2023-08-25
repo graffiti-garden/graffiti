@@ -16,7 +16,7 @@ import PostArray from './src/posts'
 export { PostArray }
 
 export default class Graffiti {
-  constructor(options) {
+  constructor(options={}) {
     this.actorClient = new ActorClient(options.actorManager)
     this.wrapper = new P2PWrapper(this.actorClient, options)
     this.objectContainer = options.objectContainer
