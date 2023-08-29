@@ -78,6 +78,14 @@
     selectActor(null)
   }
 
+  // Global escape
+  document.onkeydown = e=> {
+    if (e.key == "Escape") {
+      selectActor(null)
+      e.preventDefault()
+    }
+  }
+
   // Select the submit button
   // whenever a selection is made
   const selectButton = ref(null)
