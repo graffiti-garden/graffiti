@@ -1,17 +1,12 @@
 {
   "name": "@graffiti-garden/plugin-vue",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Plugin for peer-to-peer Graffiti",
   "type": "module",
-  "files": ["plugin.js", "dist"],
   "main": "./plugin.js",
   "browser": "./dist/plugin.js",
-  "module": "./dist/plugin.js",
   "exports": {
-    ".": {
-      "import": "./dist/plugin.js",
-      "require": "./plugin.js"
-    }
+    ".": "./plugin.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -31,7 +26,7 @@
   "homepage": "https://github.com/graffiti-garden/plugin-vue#readme",
   "dependencies": {
     "@graffiti-garden/actor-client": "^1.0.11",
-    "@graffiti-garden/graffiti-p2p": "^1.2.2",
+    "@graffiti-garden/graffiti-p2p": "^1.2.5",
     "vue": "^3.3.4"
   },
   "devDependencies": {
