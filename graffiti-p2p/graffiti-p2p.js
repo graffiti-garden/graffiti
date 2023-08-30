@@ -23,7 +23,18 @@ export default class Graffiti {
 
     this.meContainer = options.objectContainer?
       options.objectContainer() : {}
-    this.meContainer.value = localStorage.getItem("graffiti-me")
+    this.meContainer.value = null
+    const fetchMe = ()=>
+      this.meContainer.value = localStorage.getItem("graffiti-me")
+    if (this.actorClient.initialized) {
+      fetchMe()
+    } else {
+      this.actorClient.initializeEvents.addEventListener(
+        "initialized",
+        fetchMe,
+        { once: true, passive: true }
+      )
+    }
 
     const objectStore = createStore('graffiti', 'objects')
     entries(objectStore).then(existingObjects=> {
