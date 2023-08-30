@@ -1,10 +1,13 @@
 {
   "name": "@graffiti-garden/graffiti-p2p",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "This client library interacts with the [tracker server](https://github.com/graffiti-garden/tracker-server/)",
   "type": "module",
   "main": "./graffiti-p2p.js",
   "browser": "./dist/graffiti-p2p.js",
+  "exports": {
+    ".": "./graffiti-p2p.js"
+  },
   "scripts": {
     "test": "vitest",
     "build": "vite build"
