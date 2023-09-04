@@ -20,17 +20,19 @@ describe('Client interface with single tracker', ()=> {
       await randomHash(),
       [link])
 
+    let count = 0
     const listener = async ()=> {
       for await (const message of tc1.subscribe(uri)) {
         expect(message.action).to.equal("announce")
         expect(message.peer).to.equal(await sha256Hex(tc2.peerProof))
+        count++
       }
     }
     listener()
 
-    const result = await tc2.announce(uri)
-    expect(JSON.stringify(result)).to.equal(JSON.stringify(["announced"]))
-    await new Promise(r=> setTimeout(r, 100));
+    await tc2.announce(uri)
+    await new Promise(r=> setTimeout(r, 500));
+    expect(count).to.equal(1)
   })
 
   it('No double subscriptions', async ()=>{

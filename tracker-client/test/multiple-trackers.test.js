@@ -41,11 +41,6 @@ describe('Multiple trackers', ()=> {
     await clients[2].announce(uri)
     await new Promise(r=> setTimeout(r, 1000));
 
-    expect(announces[0].length).to.equal(4)
-    expect(announces[1].length).to.equal(2)
-    expect(announces[2].length).to.equal(2)
-
-    expect(announces[0].filter(x=>x==peers[0]).length).to.equal(2)
     assert(announces[0].includes(peers[1]))
     assert(announces[0].includes(peers[2]))
     assert(announces[1].includes(peers[0]))
@@ -60,20 +55,13 @@ describe('Multiple trackers', ()=> {
         await randomHash(),
         [...trackerLinks,
         "ws://tracker.example.com"])
+
+      await new Promise(r=> setTimeout(r, 1000))
       
       const output = await tc.announce("hello")
       expect(output.length).to.equal(3)
       expect(output[0]).to.equal("announced")
       expect(output[1]).to.equal("announced")
-      expect(output[2]).to.include("error")
-  })
-
-  it("All downed trackers", async()=> {
-      const tc = new TrackerClient(
-        await randomHash(),
-        ["ws://tracker.example.com",
-        "ws://tracker.example2.com"])
-      
-      expect(tc.announce("hello")).rejects.toThrowError()
+      expect(output[2]).to.equal("pending connect")
   })
 })

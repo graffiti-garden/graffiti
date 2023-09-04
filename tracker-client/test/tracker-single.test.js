@@ -11,11 +11,13 @@ const timeoutTime = 500
 trackerLinks.forEach(link=> {
 
 async function connectToTracker(onUpdate=()=>{}) {
-  return new TrackerSingle(
+  const ts = new TrackerSingle(
     await randomHash(),
     link,
     onUpdate
   )
+  await ts.tilOpen()
+  return ts
 }
 
 describe(`Tracker Single on ${link}`, ()=> {
@@ -25,9 +27,12 @@ describe(`Tracker Single on ${link}`, ()=> {
       await randomHash(),
       "ws://tracker.example.com",
       ()=>{})
-    await expect(
-      ts.request("announce", await randomHash())
-    ).rejects.toThrowError()
+
+    // Expect this to hang
+    await expect(Promise.race([
+      ts.tilOpen(),
+      new Promise(r=> setTimeout(()=> r("timedout"), 1000))
+    ])).resolves.toEqual("timedout")
   })
 
   it('Double connection', async()=> {
@@ -37,21 +42,22 @@ describe(`Tracker Single on ${link}`, ()=> {
       link,
       ()=>{}
     )
+
+    // First will accept
+    await ts1.tilOpen()
+
     const ts2 = new TrackerSingle(
       peerProof,
       link,
       ()=>{}
     )
 
-    // First will accept
-    await expect(
-      ts1.request("announce", await randomHash())
-    ).resolves.to.equal("announced")
-
-    // Second will reject because it is already subscribed
-    await expect(
-      ts2.request("announce", await randomHash())
-    ).rejects.toThrowError()
+    // Second will hang because there is already a subscription
+    await expect(Promise.race([
+      // Expect this to hang
+      ts2.tilOpen(),
+      new Promise(r=> setTimeout(()=> r("timedout"), 1000))
+    ])).resolves.toEqual("timedout")
   })
 
   it('Error on invalid hash', async () => {
