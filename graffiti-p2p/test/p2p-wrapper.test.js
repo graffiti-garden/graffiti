@@ -62,6 +62,7 @@ describe('P2P Wrapper', async ()=> {
     const t2 = pw2.get(Test)
 
     // Immediately send
+    await pw1.isOpen()
     await pw2.isOpen()
     await t1.send(pw2.peer, "hello")
 

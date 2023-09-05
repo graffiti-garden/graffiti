@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import PeerMux from '../src/peer-mux'
+import PeerMux, { RECONNECT_TIMEOUT } from '../src/peer-mux'
 import { randomHash } from '../src/util'
 
 describe('Peer Mux', ()=> {
@@ -101,14 +101,49 @@ describe('Peer Mux', ()=> {
     m1.destroy()
     await new Promise(r=> setTimeout(r, 500));
 
-    expect(send1(m2.peer.id, "hello from m1")).rejects.toThrowError()
+    await expect(send1(m2.peer.id, "hello from m1")).rejects.toThrowError()
     await new Promise(r=> setTimeout(r, 500));
-    expect(send1(m2.peer.id, "hello from m1")).rejects.toThrowError()
+    await expect(send1(m2.peer.id, "hello from m1")).rejects.toThrowError()
 
-    expect(send2(m1id, "hello from m2")).rejects.toThrowError()
+    await expect(send2(m1id, "hello from m2", 1000)).rejects.toThrowError()
     await new Promise(r=> setTimeout(r, 500));
-    expect(send2(m1id, "hello from m2")).rejects.toThrowError()
+    await expect(send2(m1id, "hello from m2", 1000)).rejects.toThrowError()
   }, 10000)
+
+  it("Peers reconnect", async ()=> {
+
+    const m1 = new PeerMux(await randomHash())
+    const m2 = new PeerMux(await randomHash())
+
+    let m1Received = 0
+    let m2Received = 0
+    const { send: send1 } = await m1.createWire("something", (peer, m)=>{
+      m1Received++
+    })
+    const { send: send2 } = await m2.createWire("something", (peer, m)=>{
+      m2Received++
+    })
+
+    await m1.isOpen()
+    await m2.isOpen()
+
+    // Destroy peer 1!
+    const m1id = m1.peer.id
+    m1.destroy()
+
+    await expect(send1(m2.peer.id, "hello from m1")).rejects.toThrowError()
+    await expect(send2(m1id, "hello from m2")).rejects.toThrowError()
+
+    await new Promise(r=> setTimeout(r, 500));
+    expect(m1Received).toEqual(0)
+
+    // Wait for reconnect
+    await new Promise(r=> setTimeout(r, RECONNECT_TIMEOUT))
+
+    await send1(m2.peer.id, "hello from m1 now")
+    await new Promise(r=> setTimeout(r, 500));
+    expect(m2Received).toEqual(1)
+  }, 20000)
 
   async function gossipToPeers(numPeers, fanout) {
 

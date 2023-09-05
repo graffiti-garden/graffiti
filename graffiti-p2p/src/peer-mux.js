@@ -2,6 +2,8 @@ import Peer from 'peerjs'
 import { sha256Hex } from './util'
 import { encrypt, decrypt } from './crypto'
 
+export const RECONNECT_TIMEOUT = 5000
+
 /**
  * A wrapper around peerJS so that peers
  * can talk about multiple topics over the
@@ -17,16 +19,40 @@ import { encrypt, decrypt } from './crypto'
 export default class PeerMux {
 
   constructor(peerID, peerjsOptions) {
-    this.peer = new Peer(peerID, peerjsOptions?? {
+    this.peerID = peerID
+    this.peerjsOptions = peerjsOptions?? {
       host: "peerjs.graffiti.garden",
       secure: true
-    })
+    }
 
-    this.connections = {} // peerID-> connection
     this.wires = {} // infoHash-> {key, onMessage}
 
-    this.open = false
-    this.peer.on('open', ()=> this.open = true)
+    this.open()
+  }
+
+  open() {
+    this.peer = new Peer(this.peerID, this.peerjsOptions)
+
+    this._open = false
+    this.connections = {} // peerID-> connection
+
+    this.peer.once('open', ()=> {
+      console.log(`Established connection to ${this.peer._options.host} with ID "${this.peer.id}"`)
+      this._open = true
+    })
+
+    this.peer.once('disconnected', ()=> {
+      console.error(`Lost connection to ${this.peer._options.host}, reconnecting soon...`)
+      this._open = false
+      this.connections = {}
+      this.peer = null
+
+      // Reconnect after timeout
+      setTimeout(
+        ()=> this.open(),
+        RECONNECT_TIMEOUT
+      )
+    })
 
     this.errorEvents = new EventTarget()
     this.peer.on('error', e=>{
@@ -46,10 +72,10 @@ export default class PeerMux {
   }
 
   async isOpen() {
-    if (this.open) return
+    if (this._open) return
 
     await new Promise(resolve => 
-      this.peer.on('open', ()=> resolve()))
+      this.peer.once('open', ()=> resolve()))
   }
 
   destroy() {
@@ -58,11 +84,10 @@ export default class PeerMux {
 
   #onConnection(connection) {
     this.connections[connection.peer] = connection
-    connection.on('close', ()=> delete this.connections[connection.peer])
-    connection.on('error', e=> {
-      console.error("connection error")
-      console.error(e)
+    connection.once('close', ()=> {
+      delete this.connections[connection.peer]
     })
+    connection.on('error', e=> console.error(e))
     connection.on('data', this.#onMessage.bind(this, connection.peer))
   }
 
@@ -77,7 +102,6 @@ export default class PeerMux {
   }
 
   async createWire(uri, onMessage) {
-    await this.isOpen()
 
     const infoHash = await sha256Hex(uri)
     if (infoHash in this.wires)
@@ -85,30 +109,48 @@ export default class PeerMux {
 
     this.wires[infoHash] = { onMessage }
 
-    const send = async (peer, message)=> {
-
+    const send = async (peer, message, timeout=5000)=> {
       // If sending to self, skip encryption
-      if (peer == this.peer.id)
+      if (peer == this.peerID)
         return this.wires[infoHash]?.onMessage(peer, message)
 
       const encrypted = await encrypt(JSON.stringify(message), infoHash)
 
       // Connect to the peer
       if (!(peer in this.connections)) {
+        await this.isOpen()
         this.#onConnection(this.peer.connect(peer))
       }
       const connection = this.connections[peer]
 
       // Wait for it to open or error
       if (!connection.open) {
-        await Promise.race([
-          new Promise(resolve => 
-            connection.on('open', ()=>resolve())),
-          new Promise((resolve, reject)=> 
-            this.errorEvents.addEventListener(
-              peer,
-              e=> reject(e.error),
-              { once: true, passive: true }))])
+        await new Promise((resolve, reject)=> {
+
+          let timeoutID
+          const onOpen = ()=> {
+            this.errorEvents.removeEventListener(peer, onError)
+            clearTimeout(timeoutID)
+            resolve()
+          }
+          const onError = e=> {
+            connection.removeListener('open', onOpen)
+            clearTimeout(timeoutID)
+            reject(e.error)
+          }
+          const onTimeout = ()=> {
+            connection.removeListener('open', onOpen)
+            this.errorEvents.removeEventListener(peer, onError)
+            reject("Timed out")
+          }
+
+          timeoutID = setTimeout(onTimeout, timeout)
+          this.errorEvents.addEventListener(
+            peer,
+            onError,
+            { once: true, passive: true })
+          connection.once('open', onOpen)
+        })
       }
 
       // And send it to the relevant peer

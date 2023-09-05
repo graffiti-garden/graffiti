@@ -7,7 +7,6 @@ import { createStore, entries, del } from "idb-keyval"
 import PostArray from './src/posts'
 
   ///////
-// - tracker client and peerjs reconnect
 // - optimization
 //   - only send stuff (esp. big stuff like images) if other person *doesn't* have it
 //   - don't block when sending stuff to peers

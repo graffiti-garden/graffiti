@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/graffiti-p2p",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "description": "This client library interacts with the [tracker server](https://github.com/graffiti-garden/tracker-server/)",
   "type": "module",
   "main": "./graffiti-p2p.js",
@@ -14,7 +14,8 @@
   },
   "scripts": {
     "test": "vitest",
-    "build": "vite build"
+    "build": "vite build",
+    "demo": "vite --config vite-demo.config.js"
   },
   "repository": {
     "type": "git",
@@ -28,7 +29,7 @@
   "homepage": "https://github.com/graffiti-garden/graffiti-p2p#readme",
   "dependencies": {
     "@graffiti-garden/actor-client": "^1.0.11",
-    "@graffiti-garden/tracker-client": "^1.0.3",
+    "@graffiti-garden/tracker-client": "^1.0.4",
     "ajv": "^8.12.0",
     "idb-keyval": "^6.2.1",
     "jose": "^4.14.4",
