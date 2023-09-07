@@ -4,11 +4,11 @@ export function actorClientMock() {
   const actorClient = {
     async sign(payload, actor) {
       if (actor != me) throw "this is not u"
-      return { payload, actor }
+      return JSON.stringify({ payload, actor })
     },
 
-    async verify({ payload, actor }) {
-      return { payload, actor }
+    async verify(signed) {
+      return JSON.parse(signed)
     }
   }
 

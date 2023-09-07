@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, assert, it } from 'vitest'
 import P2PWrapper from "../src/p2p-wrapper"
 import { randomHash } from '../src/util'
 import { actorClientMock } from './mock'
@@ -38,16 +38,11 @@ describe('P2P Wrapper', async ()=> {
 
       constructor() {
         this.announced = []
-        this.unannounced = []
         this.messages = []
       }
 
       onAnnounce(peer) {
         this.announced.push(peer)
-      }
-
-      onUnannounce(peer) {
-        this.unannounced.push(peer)
       }
 
       onMessage(peer, message) {
@@ -75,6 +70,11 @@ describe('P2P Wrapper', async ()=> {
     expect(t1.announced[0]).to.equal(pw2.peer)
     expect(t2.announced[0]).to.equal(pw1.peer)
 
+    expect(t1.peers.size).to.equal(1)
+    expect(t2.peers.size).to.equal(1)
+    assert(t1.peers.has(pw2.peer))
+    assert(t2.peers.has(pw1.peer))
+
     // Make sure message is seen
     expect(t2.messages.length).to.equal(1)
     expect(t2.messages[0][0]).to.equal(pw1.peer)
@@ -84,7 +84,6 @@ describe('P2P Wrapper', async ()=> {
     // unannounce is seen by the other
     await pw1.delete(Test)
     await new Promise(r=> setTimeout(r, 1500));
-    expect(t2.unannounced.length).to.equal(1)
-    expect(t2.unannounced[0]).to.equal(pw1.peer)
+    expect(t2.peers.size).to.equal(0)
   }, 10000)
 })

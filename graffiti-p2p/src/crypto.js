@@ -19,7 +19,7 @@ const unsignedSchemaValidate = ajv.compile({
   type: "object",
   properties: {
     updated: { type: "number" },
-    hashPath: { type: "string" },
+    pathHash: { type: "string" },
     encryptedValue: { type: "string" },
     encryptedContexts: {
       type: "object",
@@ -28,7 +28,7 @@ const unsignedSchemaValidate = ajv.compile({
       }
     }
   },
-  required: ["updated", "hashPath", "encryptedValue", "encryptedContexts"],
+  required: ["updated", "pathHash", "encryptedValue", "encryptedContexts"],
   additionalProperties: false,
 })
 
@@ -53,7 +53,7 @@ export async function sign(value, actor, path, actorClient) {
 
   const unsigned = {
     updated: Date.now(),
-    hashPath: await sha256Hex(path),
+    pathHash: await sha256Hex(path),
     // Encrypt the list of contexts and the value by the context
     encryptedValue: await encrypt(JSON.stringify(value), path),
     encryptedContexts:
@@ -68,10 +68,14 @@ export async function sign(value, actor, path, actorClient) {
 
   const signed = await actorClient.sign(unsigned, actor)
 
-  return { signed, unsigned }
+  return { signed, updated: unsigned.updated, pathHash: unsigned.pathHash }
 }
 
-export async function verify(signed, actorClient, { path, contextPath }) {
+export async function verify(signed, actorClient, { path, contextPath, signedHash }) {
+  if (signedHash && await sha256Hex(signed) != signedHash) {
+    throw 'signed message does not match hash'
+  }
+
   // Verify the JWT and the signature
   const { payload: unsigned, actor } = await actorClient.verify(signed)
 
@@ -88,7 +92,7 @@ export async function verify(signed, actorClient, { path, contextPath }) {
 
   let value = null
   if (path) {
-    if (unsigned.hashPath != await sha256Hex(path)) {
+    if (unsigned.pathHash != await sha256Hex(path)) {
       throw `Signed path does not match given path, ${path}`
     }
 
@@ -115,5 +119,5 @@ export async function verify(signed, actorClient, { path, contextPath }) {
     }
   }
 
-  return { unsigned, actor, path, value }
+  return { updated: unsigned.updated, pathHash: unsigned.pathHash, signedHash, actor, path, value }
 }

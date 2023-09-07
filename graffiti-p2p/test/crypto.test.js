@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { encrypt, decrypt, sign, verify } from "../src/crypto"
 import { actorClientMock } from './mock'
+import { sha256Hex } from '../src/util'
 
 describe('Crypto', async ()=> {
 
@@ -53,57 +54,76 @@ describe('Crypto', async ()=> {
 
   it(`sign and verify with path`, async ()=> {
     const path = crypto.randomUUID()
-    const { signed, unsigned } = await sign({
+    const { signed, updated, pathHash } = await sign({
       something: "hello"
     }, actor, path, actorClient)
 
-    const { unsigned: unsignedOut, actor: actorOut, value } =
+    const { updated: updatedOut, pathHash: pathHashOut, actor: actorOut, value } =
      await verify(signed, actorClient, { path })
 
     expect(actorOut).to.equal(actor)
-    expect(unsigned.updated).to.equal(unsignedOut.updated)
+    expect(updatedOut).to.equal(updated)
+    expect(pathHashOut).to.equal(pathHash)
     expect(value.something).to.equal("hello")
   })
 
   it(`sign and verify with context`, async ()=> {
     const contextPath = crypto.randomUUID()
-    const { unsigned, signed } = await sign({
+    const { signed, updated, pathHash } = await sign({
       hello: "world",
       context: [contextPath]
     }, actor, crypto.randomUUID(), actorClient)
 
-    const { unsigned: unsignedOut, actor: actorOut, value } =
+    const { updated: updatedOut, pathHash: pathHashOut, actor: actorOut, value } =
      await verify(signed, actorClient, { contextPath })
 
     expect(actorOut).to.equal(actor)
-    expect(unsigned.updated).to.equal(unsignedOut.updated)
+    expect(updatedOut).to.equal(updated)
+    expect(pathHashOut).to.equal(pathHash)
     expect(value.hello).to.equal("world")
   })
 
   it(`sign and verify without either`, async ()=> {
-    const { unsigned, signed } = await sign({
+    const { updated, signed } = await sign({
       something: "hello"
     }, actor, crypto.randomUUID(), actorClient)
 
-    const { unsigned: unsignedOut, actor: actorOut, value } =
+    const { updated: updatedOut, actor: actorOut, value } =
      await verify(signed, actorClient, {})
 
     expect(actorOut).to.equal(actor)
-    expect(unsigned.updated).to.equal(unsignedOut.updated)
+    expect(updated).to.equal(updatedOut)
     expect(value).to.equal(null)
   })
 
+  it(`sign and verify with wrong hash`, async ()=> {
+    const { signed } = await sign({
+      something: "hello"
+    }, actor, crypto.randomUUID(), actorClient)
+
+    await expect(verify(signed, actorClient, {signedHash: "1234"})).rejects.toThrowError()
+  })
+
+  it(`sign and verify with right hash`, async ()=> {
+    const { signed } = await sign({
+      something: "hello"
+    }, actor, crypto.randomUUID(), actorClient)
+    const signedHash = await sha256Hex(signed)
+
+    await verify(signed, actorClient, { signedHash })
+  })
+
   it(`verify with wrong context`, async ()=> {
-    const { unsigned, signed } = await sign({
+    const { updated, signed } = await sign({
       hello: "world",
       context: [crypto.randomUUID()]
     }, actor, crypto.randomUUID(), actorClient)
 
-    const { unsigned: unsignedOut, actor: actorOut, value } =
+    const { updated: updatedOut, actor: actorOut, value } =
      await verify(signed, actorClient, { contextPath: crypto.randomUUID() })
 
     expect(actorOut).to.equal(actor)
-    expect(unsigned.updated).to.equal(unsignedOut.updated)
+    expect(updated).to.equal(updatedOut)
     expect(value).to.equal(null)
   })
 

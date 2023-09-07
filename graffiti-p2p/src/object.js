@@ -1,6 +1,7 @@
 import { sign, verify } from './crypto'
 import GraffitiContext from './context'
 import { set, get, createStore } from 'idb-keyval';
+import { sha256Hex } from './util';
 
 export default class GraffitiObject {
 
@@ -27,9 +28,9 @@ export default class GraffitiObject {
     Object.defineProperty(this._value, 'actor', {value: actor})
     Object.defineProperty(this._value, 'path', {value: path})
 
-    this.peers = new Set()
     this.updated = 0
     this.signed = null
+    this.signedHash = null
 
     this.objectStore = createStore('graffiti', 'objects')
   }
@@ -45,61 +46,66 @@ export default class GraffitiObject {
     const clone = JSON.parse(JSON.stringify(this._value))
     if (func) func(clone)
 
-    let unsigned, signed
+    let updated, pathHash, signed
     try {
-      ({ unsigned, signed } = await sign(clone, this.actor, this.path, this.actorClient))
+      ({ updated, pathHash, signed } = await sign(clone, this.actor, this.path, this.actorClient))
     } catch(e) {
       throw e
     }
 
     this.onVerified({
-      unsigned,
+      updated,
+      pathHash,
       actor: this.actor,
       path: this.path,
+      signedHash: await sha256Hex(signed),
       value: clone
     }, signed)
 
     return this.value
   }
 
-  async onMessage(peer, signed) {
-    this.onAnnounce(peer)
-
-    let verified
-    try {
-       verified = await verify(signed, this.actorClient, { path: this.path})
-    } catch {
-      return
-    }
-
-    this.onVerified(verified, signed)
-  }
-
-  async onAnnounce(peer) {
-    if (!peer) return
-    if (!this.peers.has(peer)) {
-      this.peers.add(peer)
-      if (this.signed) {
-        this.send(peer, this.signed)
+  onMessage(peer, message) {
+    if ('have' in message) {
+      if ( message.have != this.signedHash ) {
+        this.send(peer, { request: message.have })
       }
+
+    } else if ('request' in message) {
+      if (message.request == this.signedHash) {
+        this.send(peer, {
+          signed: this.signed,
+          signedHash: this.signedHash
+        })
+      }
+
+    } else if ('signed' in message && 'signedHash' in message) {
+      if (message.signedHash == this.signedHash) return
+
+      verify(message.signed, this.actorClient, { path: this.path, signedHash: message.signedHash}).then(
+        verified=> this.onVerified(verified, message.signed)
+      )
     }
   }
 
-  onUnannounce(peer) {
-    this.peers.delete(peer)
+  onAnnounce(peer) {
+    if (this.signedHash) {
+      this.send(peer, { have: this.signedHash } )
+    }
   }
 
   onVerified(verified, signed) {
-    const { unsigned, actor, value, path } = verified
+    const { updated, signedHash, actor, value, path } = verified
 
     // Make sure actor and path are right
     if (actor != this.actor) return
     if (path  != this.path)  return
     // Make sure it is new
-    if (unsigned.updated <= this.updated) return
+    if (updated <= this.updated) return
 
     this.signed = signed
-    this.updated = unsigned.updated
+    this.signedHash = signedHash
+    this.updated = updated
 
     // Store the old context
     const oldContext = [...(this._value.context??[])]
@@ -122,7 +128,7 @@ export default class GraffitiObject {
 
     set(this.id, { verified, signed }, this.objectStore)
 
-    this.gossip([...this.peers], signed)
+    this.gossip({ have: signedHash })
   }
 
   objectHandler() {

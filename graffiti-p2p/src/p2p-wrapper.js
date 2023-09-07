@@ -51,12 +51,23 @@ export default class P2PWrapper {
 
     const wrapped = new Class(this.actorClient, this, ...args)
     this.wrapMap[uri] = wrapped
+    
+    // Keep track of peers
+    wrapped.peers = new Set()
+    wrapped.onPeer = peer=> {
+      if (!wrapped.peers.has(peer)) {
+        wrapped.peers.add(peer)
+        wrapped.onAnnounce(peer)
+      }
+    }
 
     this.workingOnIt.add(uri)
     this.isOpen().then(()=> {
 
-      this.peerMux.createWire(uri, wrapped.onMessage?.bind(wrapped)).then(
-
+      this.peerMux.createWire(uri, (peer, message)=> {
+        wrapped.onPeer(peer)
+        wrapped.onMessage(peer, message)
+      }).then(
         async wire=> {
           wrapped.wire = wire
           await this.tracker.announce(uri)
@@ -67,11 +78,12 @@ export default class P2PWrapper {
           // Subscribe
           ;(async ()=> {
             for await (const {action, peer} of this.tracker.subscribe(uri, signal)) {
-              if (peer == this.peer) continue
+              if (!peer || peer == this.peer) continue
+
               if (action == 'announce') {
-                wrapped.onAnnounce(peer)
-              } else {
-                wrapped.onUnannounce(peer)
+                wrapped.onPeer(peer)
+              } else if (action == 'unannounce') {
+                wrapped.peers.delete(peer)
               }
             }
           })()
@@ -97,9 +109,9 @@ export default class P2PWrapper {
       await wrapped.isOpen()
       return await wrapped.wire.send(...args)
     }
-    wrapped.gossip = async (...args)=> {
+    wrapped.gossip = async (message)=> {
       await wrapped.isOpen()
-      return await wrapped.wire.gossip(...args)
+      return await wrapped.wire.gossip([...wrapped.peers], message)
     }
 
     return wrapped

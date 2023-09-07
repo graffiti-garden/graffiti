@@ -8,57 +8,70 @@ export default class GraffitiContext {
   }
 
   constructor(actorClient, wrapper, contextPath, objectContainer) {
-    this.contextPath = contextPath
-    this.peers = new Set() 
-    this._posts = {}
     this.actorClient = actorClient
     this.wrapper = wrapper
+    this.contextPath = contextPath
     this.objectContainer = objectContainer
+
+    this.posts = {} // hashURI-> { updated, sighedHash }
+    this.signed = {} // signedHash -> signed
   }
 
-  async onAnnounce(peer) {
-    if (!peer) return
-    if (!this.peers.has(peer)) {
-      this.peers.add(peer)
-      Object.values(this._posts).forEach(
-        o=>this.send(peer, o.signed))
+  onAnnounce(peer) {
+    this.send(peer, {
+      have: Object.keys(this.signed)
+    })
+  }
+
+  onMessage(peer, message) {
+    if ('have' in message) {
+      // Ask for all the pieces we don't have
+      const request = message.have.filter(
+        signedHash=> !(signedHash in this.signed)
+      )
+      if (request.length) {
+        this.send(peer, { request })
+      }
+
+    } else if ('request' in message) {
+      // Send the pieces we do have
+      message.request.forEach(signedHash=> {
+        if (signedHash in this.signed) {
+          this.send(peer, {
+            signed: this.signed[signedHash],
+            signedHash
+          })
+        }
+      })
+
+    } else if ('signed' in message && 'signedHash' in message) {
+
+      // Ignore pieces we already have
+      if (message.signedHash in this.signed) return
+
+      // Make sure it checks out
+      verify(message.signed, this.actorClient, { contextPath: this.contextPath, signedHash: message.signedHash}).then(
+        verified=> this.onVerified(verified, message.signed)
+      )
     }
-  }
-
-  async onUnannounce(peer) {
-    this.peers.delete(peer)
-  }
-
-  async onMessage(peer, signed) {
-    this.onAnnounce(peer)
-
-    // Verify the JWT and the signature
-    let verified
-    try {
-      verified = await verify(signed, this.actorClient, { contextPath: this.contextPath})
-    } catch(e) {
-      return
-    }
-
-    this.onVerified(verified, signed)
   }
 
   onVerified(verified, signed) {
-    const {unsigned, actor, path, value} = verified
+    const { pathHash, updated, signedHash, actor, path, value } = verified
 
     // Is our context relevant?
     if (!value.context || !value.context.includes(this.contextPath)) return
 
-    const hashURI = GraffitiObject.toURI(actor, unsigned.hashPath)
-    const { updated } = unsigned
+    const hashURI = GraffitiObject.toURI(actor, pathHash)
 
     // Does post already exist?
-    if (hashURI in this._posts) {
-      if (updated <= this._posts[hashURI].updated ?? 0) return
+    if (hashURI in this.posts) {
+      if (updated <= this.posts[hashURI].updated ?? 0) return
     }
 
     // Add it to our own posts
-    this._posts[hashURI] = { updated, signed }
+    this.posts[hashURI] = { updated, signedHash }
+    this.signed[signedHash] = signed
 
     // Seed the object
     if (path) {
@@ -67,6 +80,8 @@ export default class GraffitiContext {
     }
 
     // Gossip to peers
-    this.gossip([...this.peers], signed)
+    this.gossip({
+      have: [signedHash]
+    })
   }
 }
