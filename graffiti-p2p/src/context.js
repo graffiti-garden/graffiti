@@ -21,7 +21,7 @@ export default class GraffitiContext {
     if (!this.peers.has(peer)) {
       this.peers.add(peer)
       Object.values(this._posts).forEach(
-        o=>this.wire.send(peer, o.signed))
+        o=>this.send(peer, o.signed))
     }
   }
 
@@ -33,13 +33,21 @@ export default class GraffitiContext {
     this.onAnnounce(peer)
 
     // Verify the JWT and the signature
-    let unsigned, actor, path
+    let verified
     try {
-      ;({ unsigned, actor, path } =
-         await verify(signed, this.actorClient, { contextPath: this.contextPath}))
+      verified = await verify(signed, this.actorClient, { contextPath: this.contextPath})
     } catch(e) {
       return
     }
+
+    this.onVerified(verified, signed)
+  }
+
+  onVerified(verified, signed) {
+    const {unsigned, actor, path, value} = verified
+
+    // Is our context relevant?
+    if (!value.context || !value.context.includes(this.contextPath)) return
 
     const hashURI = GraffitiObject.toURI(actor, unsigned.hashPath)
     const { updated } = unsigned
@@ -52,10 +60,10 @@ export default class GraffitiContext {
     // Add it to our own posts
     this._posts[hashURI] = { updated, signed }
 
-    // Seed the object if it exists
+    // Seed the object
     if (path) {
       const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
-      object.onMessage(null, signed)
+      object.onVerified(verified, signed)
     }
 
     // Gossip to peers

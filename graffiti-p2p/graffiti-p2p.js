@@ -37,11 +37,12 @@ export default class Graffiti {
 
     const objectStore = createStore('graffiti', 'objects')
     entries(objectStore).then(existingObjects=> {
-      for (const [id, {actor, path, signed}] of existingObjects) {
+      for (const [id, {verified, signed}] of existingObjects) {
         try {
-          const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
-          object.onMessage(null, signed)
-        } catch {
+          const object = this.wrapper.get(GraffitiObject, verified.actor, verified.path, this.objectContainer)
+          object.onVerified(verified, signed)
+        } catch(e) {
+          console.error(e)
           del(id, objectStore)
         }
       }

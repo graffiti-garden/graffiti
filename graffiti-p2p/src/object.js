@@ -28,15 +28,10 @@ export default class GraffitiObject {
     Object.defineProperty(this._value, 'path', {value: path})
 
     this.peers = new Set()
-    this.unsigned = {}
+    this.updated = 0
     this.signed = null
 
     this.objectStore = createStore('graffiti', 'objects')
-    get(this.id, this.objectStore).then(fromStore=> {
-      if (fromStore) {
-        this.onMessage(null, fromStore.signed)
-      }
-    })
   }
 
   async delete() {
@@ -57,7 +52,12 @@ export default class GraffitiObject {
       throw e
     }
 
-    this.#store(unsigned, signed, clone)
+    this.onVerified({
+      unsigned,
+      actor: this.actor,
+      path: this.path,
+      value: clone
+    }, signed)
 
     return this.value
   }
@@ -65,20 +65,14 @@ export default class GraffitiObject {
   async onMessage(peer, signed) {
     this.onAnnounce(peer)
 
-    let unsigned, actor, value
+    let verified
     try {
-       ({ unsigned, actor, value } =
-         await verify(signed, this.actorClient, { path: this.path}))
+       verified = await verify(signed, this.actorClient, { path: this.path})
     } catch {
       return
     }
 
-    // Make sure actor is right
-    if (actor != this.actor) return
-    // Make sure it is new
-    if (unsigned.updated <= this.unsigned.updated ?? 0) return
-
-    this.#store(unsigned, signed, value)
+    this.onVerified(verified, signed)
   }
 
   async onAnnounce(peer) {
@@ -95,29 +89,38 @@ export default class GraffitiObject {
     this.peers.delete(peer)
   }
 
-  #store(unsigned, signed, newValue) {
-    this.unsigned = unsigned
+  onVerified(verified, signed) {
+    const { unsigned, actor, value, path } = verified
+
+    // Make sure actor and path are right
+    if (actor != this.actor) return
+    if (path  != this.path)  return
+    // Make sure it is new
+    if (unsigned.updated <= this.updated) return
+
     this.signed = signed
+    this.updated = unsigned.updated
 
     // Store the old context
     const oldContext = [...(this._value.context??[])]
 
+    // Assign the new value without destroying the reference
     for (const prop in this._value) {
-      if (!(prop in newValue))
+      if (!(prop in value))
         delete this._value[prop]
     }
-    Object.assign(this._value, newValue)
+    Object.assign(this._value, value)
 
-    const allContexts = [...new Set([
-      ...(oldContext ?? []),
+    const allContexts = new Set([
+      ...oldContext,
       ...(this._value.context ?? [])
-    ])]
-    for (const context of allContexts) {
+    ])
+    allContexts.forEach(context=> {
       const contextWrapper = this.wrapper.get(GraffitiContext, context, this.objectContainer)
-      contextWrapper.onMessage(null, signed)
-    }
+      contextWrapper.onVerified(verified, signed)
+    })
 
-    set(this.id, {actor: this.actor, path: this.path, signed}, this.objectStore)
+    set(this.id, { verified, signed }, this.objectStore)
 
     this.gossip([...this.peers], signed)
   }

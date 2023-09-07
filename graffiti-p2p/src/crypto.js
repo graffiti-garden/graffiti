@@ -72,7 +72,6 @@ export async function sign(value, actor, path, actorClient) {
 }
 
 export async function verify(signed, actorClient, { path, contextPath }) {
-
   // Verify the JWT and the signature
   const { payload: unsigned, actor } = await actorClient.verify(signed)
 
