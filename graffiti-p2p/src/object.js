@@ -21,13 +21,13 @@ export default class GraffitiObject {
     this.wrapper = wrapper
     this.actorClient = actorClient
 
+    this.objectContainer = container
     this._value = container? container() : {}
     Object.defineProperty(this._value, 'id', {value: this.id})
     Object.defineProperty(this._value, 'actor', {value: actor})
     Object.defineProperty(this._value, 'path', {value: path})
 
-    this.peers = new Set() 
-    this.functionsToApply = new Set()
+    this.peers = new Set()
     this.unsigned = {}
     this.signed = null
 
@@ -39,24 +39,16 @@ export default class GraffitiObject {
     })
   }
 
-  apply(func) {
-    this.functionsToApply.add(func)
-    return this
-  }
-
   async delete() {
-    await this
-    // Remove all properties
-    .apply(v=>Object.keys(v).forEach(k=> delete v[k]))
-    // And post
-    .post()
+    await this.post(
+      // Remove all properties
+      v=>Object.keys(v).forEach(k=> delete v[k]))
   }
 
-  async post() {
-    // Apply the functions
+  async post(func) {
+    // Clone and apply the functions
     const clone = JSON.parse(JSON.stringify(this._value))
-    this.functionsToApply.forEach(func=>func(clone))
-    this.functionsToApply.clear()
+    if (func) func(clone)
 
     let unsigned, signed
     try {
@@ -65,13 +57,13 @@ export default class GraffitiObject {
       throw e
     }
 
-    await this.#store(unsigned, signed, clone)
+    this.#store(unsigned, signed, clone)
 
     return this.value
   }
 
   async onMessage(peer, signed) {
-    await this.onAnnounce(peer)
+    this.onAnnounce(peer)
 
     let unsigned, actor, value
     try {
@@ -86,7 +78,7 @@ export default class GraffitiObject {
     // Make sure it is new
     if (unsigned.updated <= this.unsigned.updated ?? 0) return
 
-    await this.#store(unsigned, signed, value)
+    this.#store(unsigned, signed, value)
   }
 
   async onAnnounce(peer) {
@@ -103,7 +95,7 @@ export default class GraffitiObject {
     this.peers.delete(peer)
   }
 
-  async #store(unsigned, signed, newValue) {
+  #store(unsigned, signed, newValue) {
     this.unsigned = unsigned
     this.signed = signed
 
@@ -122,7 +114,7 @@ export default class GraffitiObject {
     ])]
     for (const context of allContexts) {
       const contextWrapper = this.wrapper.get(GraffitiContext, context, this.objectContainer)
-      await contextWrapper.onMessage(null, signed)
+      contextWrapper.onMessage(null, signed)
     }
 
     set(this.id, {actor: this.actor, path: this.path, signed}, this.objectStore)
@@ -139,11 +131,11 @@ export default class GraffitiObject {
           new Proxy(got, this.objectHandler()) : got
       },
       set: (target, prop, val, receiver)=> {
-        this.apply(target=> Reflect.set(target, prop, val)).post()
+        this.post(target=> Reflect.set(target, prop, val))
         return true
       }, 
       deleteProperty: (target, prop)=> {
-        this.apply(target=> Reflect.deleteProperty(target, prop)).post()
+        this.post(target=> Reflect.deleteProperty(target, prop))
         return true
       }
     }

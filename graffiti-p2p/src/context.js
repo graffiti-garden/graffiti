@@ -11,7 +11,6 @@ export default class GraffitiContext {
     this.contextPath = contextPath
     this.peers = new Set() 
     this._posts = {}
-    this.eventTarget = new EventTarget()
     this.actorClient = actorClient
     this.wrapper = wrapper
     this.objectContainer = objectContainer
@@ -31,97 +30,35 @@ export default class GraffitiContext {
   }
 
   async onMessage(peer, signed) {
-    await this.onAnnounce(peer)
+    this.onAnnounce(peer)
 
     // Verify the JWT and the signature
-    let unsigned, actor, value, path
+    let unsigned, actor, path
     try {
-      ;({ unsigned, actor, value, path } =
+      ;({ unsigned, actor, path } =
          await verify(signed, this.actorClient, { contextPath: this.contextPath}))
     } catch(e) {
       return
     }
+
     const hashURI = GraffitiObject.toURI(actor, unsigned.hashPath)
+    const { updated } = unsigned
 
     // Does post already exist?
     if (hashURI in this._posts) {
-      if (unsigned.updated <= this._posts[hashURI].updated ?? 0) return
+      if (updated <= this._posts[hashURI].updated ?? 0) return
     }
 
-    const object = path? this.wrapper.get(GraffitiObject, actor, path, this.objectContainer) : null
+    // Add it to our own posts
+    this._posts[hashURI] = { updated, signed }
 
-    // If we already have a value and the update does not have one
-    if (hashURI in this._posts && this._posts[hashURI].value && !value) {
-      const updateEvent = new Event("update")
-      updateEvent.update = {
-        action: "delete",
-        hashURI
-      }
-      this.eventTarget.dispatchEvent(updateEvent)
-    } else if ( !(hashURI in this._posts && this._posts[hashURI].value) && value) {
-      const updateEvent = new Event("update")
-      updateEvent.update = {
-        action: "add",
-        value: object.value,
-        hashURI
-      }
-      this.eventTarget.dispatchEvent(updateEvent)
+    // Seed the object if it exists
+    if (path) {
+      const object = this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+      object.onMessage(null, signed)
     }
 
-    this._posts[hashURI] = {
-      updated: unsigned.updated,
-      signed,
-      value: value? object.value : null
-    }
-    if (object) {
-      await object.onMessage(null, signed)
-    }
+    // Gossip to peers
     this.gossip([...this.peers], signed)
-  }
-
-  async * posts(signal) {
-    yield * Object.entries(this._posts)
-      .filter(([hashURI, {value}])=>value)
-      .map   (([hashURI, {value}])=>({
-        action: "add",
-        value,
-        hashURI
-      }))
-
-    let results = []
-    let resolve, reject, promise
-    const makePromise = ()=> {
-      promise = new Promise((_resolve, _reject)=> {
-        resolve = _resolve
-        reject = _reject
-      })
-    }
-    makePromise()
-
-    const retreive = e=> {
-      results.push(e.update)
-      resolve()
-      makePromise()
-    }
-    this.eventTarget.addEventListener(
-      "update",
-      retreive,
-      { passive: true })
-
-    const abort = ()=> {
-      this.eventTarget.removeEventListener("update", retreive)
-      reject(signal.reason)
-    }
-    signal?.addEventListener(
-      "abort",
-      abort,
-      { once: true, passive: true }
-    )
-
-    while (true) {
-      await promise
-      yield * results
-      results = []
-    }
   }
 }

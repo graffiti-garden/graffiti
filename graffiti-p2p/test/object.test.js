@@ -23,7 +23,7 @@ describe('Object', async ()=> {
   it('setting and receiving an object', async ()=> {
     const path = "something"
     const object1 = pw1.get(GraffitiObject, actor1, path)
-    await object1.apply(o=> o.hello = "world").post()
+    await object1.post(o=> o.hello = "world")
     expect(object1.value.hello).to.equal('world')
 
     const object2 = pw2.get(GraffitiObject, actor1, path)
@@ -33,8 +33,7 @@ describe('Object', async ()=> {
 
   it('setting an object, not yours', async ()=> {
     const object = pw1.get(GraffitiObject, actor2, '1234')
-    object.apply(o=> o.hello="world")
-    expect(object.post()).rejects.toThrowError()
+    expect(object.post(o=> o.hello="world")).rejects.toThrowError()
   }, timeout)
 
   it('setting and deleting an object implicitly', async ()=> {
@@ -95,7 +94,7 @@ describe('Object', async ()=> {
     const path = crypto.randomUUID()
 
     const object1 = pw1.get(GraffitiObject, actor1, path)
-    await object1.apply(o=> o.hello = "world").post()
+    await object1.post(o=> o.hello = "world")
     expect(object1.value.hello).to.equal('world')
 
     const object2 = pw2.get(GraffitiObject, actor1, path)

@@ -1,16 +1,16 @@
 import P2PWrapper from "./src/p2p-wrapper"
 import ActorClient from '@graffiti-garden/actor-client'
 import GraffitiObject from './src/object'
-import GraffitiContext from './src/context'
+import GraffitiContext from "./src/context"
 import { randomHash } from "./src/util"
 import { createStore, entries, del } from "idb-keyval"
 import PostArray from './src/posts'
 
-  ///////
+///////
 // - optimization
 //   - only send stuff (esp. big stuff like images) if other person *doesn't* have it
-//   - don't block when sending stuff to peers
-  ///////
+//   - limit what is seeded...
+///////
 
 export { PostArray }
 
@@ -20,9 +20,9 @@ export default class Graffiti {
     this.wrapper = new P2PWrapper(this.actorClient, options)
     this.objectContainer = options.objectContainer
 
-    this.meContainer = options.objectContainer?
-      options.objectContainer() : {}
+    this.meContainer = options.meContainer?? {}
     this.meContainer.value = null
+
     const fetchMe = ()=>
       this.meContainer.value = localStorage.getItem("graffiti-me")
     if (this.actorClient.initialized) {
@@ -56,43 +56,43 @@ export default class Graffiti {
     const me = await this.actorClient.selectActor()
     localStorage.setItem("graffiti-me", me)
     this.meContainer.value = me
+    return me
+  }
+
+  // Alias
+  async logIn() { return await this.selectActor() }
+  async logOut() {
+    localStorage.removeItem("graffiti-me")
+    this.meContainer.value = null
+    return null
+  }
+
+  openWrapper({ actor, path }) {
+    return this.wrapper.get(GraffitiObject, actor, path, this.objectContainer)
+  }
+
+  open(post) {
+    return this.openWrapper(post).value
   }
 
   async post(value, actor) {
-    actor=actor?? this.me
-    const object = this.wrapper.get(GraffitiObject, actor, await randomHash(), this.objectContainer)
-    return await object.apply(o=>Object.assign(o,value)).post()
+    return await this.openWrapper({
+      actor: actor?? this.me,
+      path: await randomHash()
+    }).post(o=>Object.assign(o,value))
   }
 
   async edit(post, func) {
-    const object = this.wrapper.get(GraffitiObject, post.actor, post.path, this.objectContainer)
-    return await object.apply(func).post()
+    return await this.openWrapper(post).post(func)
   }
 
-  async delete(post) {
-    const object = this.wrapper.get(GraffitiObject, post.actor, post.path, this.objectContainer)
-    await object.delete()
+  async delete(...posts) {
+    await Promise.all(posts.map(p=>this.openWrapper(p).delete()))
   }
 
-  async * posts(contextPath, signal) {
-    if (contextPath) {
-      const context = this.wrapper.get(
-        GraffitiContext,
-        contextPath,
-        this.objectContainer)
-      yield * context.posts(signal)
-    } else {
-      await new Promise((resolve, reject)=> {
-        if (signal) {
-          signal.addEventListener(
-            "abort",
-            ()=> reject(signal.reason),
-            { once: true, passive: true }
-          )
-        } else {
-          throw "No context."
-        }
-      })
-    }
+  subscribe(...contexts) {
+    contexts.forEach(context=>
+      this.wrapper.get(GraffitiContext, context, this.objectContainer)
+    )
   }
 }
