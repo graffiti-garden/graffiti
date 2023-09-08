@@ -4,7 +4,7 @@ import GraffitiPosts from '../src/posts'
 describe('Posts', async ()=> {
 
   it("Basic array stuff", ()=> {
-    const posts = new GraffitiPosts(null, null, null, 1, 2, 3)
+    const posts = new GraffitiPosts(null, null, 1, 2, 3)
     expect(posts[0]).to.equal(1)
     expect(posts[1]).to.equal(2)
     expect(posts[2]).to.equal(3)
@@ -12,7 +12,7 @@ describe('Posts', async ()=> {
   })
 
   it("No modification", ()=> {
-    const posts = new GraffitiPosts(null, null, null, 1, 2, 3)
+    const posts = new GraffitiPosts(null, null, 1, 2, 3)
     expect(()=> posts.push(4)).toThrowError()
     expect(()=> posts.shift(4)).toThrowError()
     expect(()=> posts.unshift(4)).toThrowError()
@@ -23,7 +23,7 @@ describe('Posts', async ()=> {
   })
 
   it("force modification", ()=> {
-    const posts = new GraffitiPosts(null, null, null, 1, 2, 3)
+    const posts = new GraffitiPosts(null, null, 1, 2, 3)
     expect(posts.length).toEqual(3)
     posts.forcePush(7)
     expect(posts.length).toEqual(4)
@@ -39,7 +39,7 @@ describe('Posts', async ()=> {
   it("By and not by", ()=> {
     const actor1 = "alskdjfkdjf"
     const actor2 = "alsdkfjskdjfkdjf"
-    const posts = new GraffitiPosts(null, null, null, {
+    const posts = new GraffitiPosts(null, null, {
       hello: "world",
       actor: actor1
     }, {
@@ -74,7 +74,7 @@ describe('Posts', async ()=> {
     const actor1 = "chip"
     const actor2 = "dale"
     const actor3 = "nuts"
-    const posts = new GraffitiPosts(null, null, null, {
+    const posts = new GraffitiPosts(null, null, {
       actor: actor1
     }, {
       actor: actor1
@@ -106,7 +106,7 @@ describe('Posts', async ()=> {
   })
 
   it("sortBy", ()=> {
-    const posts = new GraffitiPosts(null, null, null, {
+    const posts = new GraffitiPosts(null, null, {
       s: 4
     }, {
       s: 10
@@ -136,7 +136,7 @@ describe('Posts', async ()=> {
   })
 
   it("sortBy strings", ()=> {
-    const posts = new GraffitiPosts(null, null, null, {
+    const posts = new GraffitiPosts(null, null, {
       s: "b"
     }, {
       s: "a"
@@ -163,7 +163,7 @@ describe('Posts', async ()=> {
 
   it("sortBy nested", ()=> {
     const inputs = [1, 10, 5, 7, -9]
-    const posts = new GraffitiPosts(null, null, null, 
+    const posts = new GraffitiPosts(null, null, 
       ...inputs.map(i=>({
         something: {
           really: {
@@ -191,7 +191,7 @@ describe('Posts', async ()=> {
   })
 
   it("sortBy invalid", ()=> {
-    const posts = new GraffitiPosts(null, null, null, {
+    const posts = new GraffitiPosts(null, null, {
       something: true,
     }, {
       without: 1
@@ -206,7 +206,7 @@ describe('Posts', async ()=> {
     const actor1 = "laura les"
     const actor2 = "dylan brady"
     const actor3 = "sophie"
-    const posts = new GraffitiPosts(null, null, null, {
+    const posts = new GraffitiPosts(null, null, {
       hello: "world",
       actor: actor2
     }, {
@@ -324,12 +324,11 @@ describe('Posts', async ()=> {
   })
 
   it("post after groupBy", ()=> {
-    const context = "asdf"
     const posts = new GraffitiPosts({
       async post(object, actor) {
         return object
       }
-    }, context, null, {
+    }, null, {
       tag: "cool"
     }, {
       tag: "uncool"

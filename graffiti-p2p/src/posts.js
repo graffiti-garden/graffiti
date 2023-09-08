@@ -1,28 +1,27 @@
 export default class PostArray extends Array {
 
-  constructor(graffiti, context, filterFunction, ...elems) {
+  constructor(graffiti, filterFunction, ...elems) {
     super(...elems)
     this.graffiti = graffiti
-    this.context = context
     this.filterFunction = filterFunction?? (()=>true)
 
     // disable all in-place methods
     for (const method of ['push', 'shift', 'slice', 'unshift', 'pop', 'reverse', 'sort']) {
-      this[method] = ()=> {
+      this.constructor.prototype[method] = ()=> {
         throw "To add or remove elements to this array, use PostArray.post, gf.post, or gf.delete"
       }
 
       // however, add a "force method"
-      this['force' + method[0].toUpperCase() + method.slice(1)] = (...args)=> {
+      this.constructor.prototype['force' + method[0].toUpperCase() + method.slice(1)] = (...args)=> {
         return super[method](...args)
       }
     }
+
   }
 
   filter(f) {
     return new PostArray(
       this.graffiti,
-      this.context,
       o=> f(o) && this.filterFunction(o),
       ...super.filter(f))
   }
@@ -33,11 +32,6 @@ export default class PostArray extends Array {
 
     if (!this.filterFunction(object)) {
       throw "The object does not match the arrays filters"
-    }
-
-    // MAKE SURE object.context intersects this.context
-    if (!object.context.includes(this.context)) {
-      throw "The object's context does not match the array's context"
     }
 
     delete object.actor
@@ -85,7 +79,6 @@ export default class PostArray extends Array {
     for (const property of Object.keys(reduced)) {
       reduced[property] = new PostArray(
         this.graffiti,
-        this.context,
         // Make sure the property in the group is maintained
         o=> getProperty(o, propertyPath)==property
             && this.filterFunction(o),
@@ -105,3 +98,4 @@ function getProperty(obj, propertyPath) {
   }
   return obj
 }
+
