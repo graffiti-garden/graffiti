@@ -22,6 +22,20 @@ describe('Posts', async ()=> {
     expect(()=> posts.reverse()).toThrowError()
   })
 
+  it("force modification", ()=> {
+    const posts = new GraffitiPosts(null, null, null, 1, 2, 3)
+    expect(posts.length).toEqual(3)
+    posts.forcePush(7)
+    expect(posts.length).toEqual(4)
+    expect(posts[3]).toEqual(7)
+    expect(posts.forcePop()).toEqual(7)
+    expect(posts.length).toEqual(3)
+    posts.forceReverse()
+    expect(posts[0]).toEqual(3)
+    expect(posts[1]).toEqual(2)
+    expect(posts[2]).toEqual(1)
+  })
+
   it("By and not by", ()=> {
     const actor1 = "alskdjfkdjf"
     const actor2 = "alsdkfjskdjfkdjf"

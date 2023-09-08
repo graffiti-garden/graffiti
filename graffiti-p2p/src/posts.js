@@ -5,18 +5,19 @@ export default class PostArray extends Array {
     this.graffiti = graffiti
     this.context = context
     this.filterFunction = filterFunction?? (()=>true)
-  }
 
-  // disable all in-place methods
-  push() { 
-    throw "To add or remove elements to this array, use PostArray.post, $gf.post, or $gf.delete"
+    // disable all in-place methods
+    for (const method of ['push', 'shift', 'slice', 'unshift', 'pop', 'reverse', 'sort']) {
+      this[method] = ()=> {
+        throw "To add or remove elements to this array, use PostArray.post, gf.post, or gf.delete"
+      }
+
+      // however, add a "force method"
+      this['force' + method[0].toUpperCase() + method.slice(1)] = (...args)=> {
+        return super[method](...args)
+      }
+    }
   }
-  shift() { this.push() }
-  slice() { this.push() }
-  unshift() { this.push() }
-  pop() { this.push() }
-  reverse() { this.push() }
-  sort() { this.push() }
 
   filter(f) {
     return new PostArray(
@@ -29,9 +30,6 @@ export default class PostArray extends Array {
   async post(object, actor) {
     actor = actor??this.graffiti.me
     object.actor = actor
-    if (!object.context || !object.context.length) {
-      object.context = [ this.context ]
-    }
 
     if (!this.filterFunction(object)) {
       throw "The object does not match the arrays filters"
