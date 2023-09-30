@@ -10,7 +10,7 @@ const trackerLinks = [
 describe('Multiple trackers', ()=> {
 
   it("Overlapping tracker subscriptionss", async()=> {
-    const uri = "dfjdjfhjh"
+    const infoHash = await randomHash()
 
     // 0 announce -> heard by 0, 1, 2
     // 1 announce -> heard by 0, 1
@@ -30,16 +30,16 @@ describe('Multiple trackers', ()=> {
     const peers = await Promise.all(clients.map(c=>sha256Hex(c.peerProof)))
 
     const listeners = [0,1,2].map(i=> async()=> {
-      for await (const message of clients[i].subscribe(uri)) {
+      for await (const message of clients[i].subscribe(infoHash)) {
         announces[i].push(message.peer)
       }
     })
     listeners.forEach(l=>l())
 
-    await clients[0].announce(uri)
-    await clients[1].announce(uri)
-    await clients[2].announce(uri)
-    await new Promise(r=> setTimeout(r, 1000));
+    await clients[0].announce(infoHash)
+    await clients[1].announce(infoHash)
+    await clients[2].announce(infoHash)
+    await new Promise(r=> setTimeout(r, 3000));
 
     assert(announces[0].includes(peers[1]))
     assert(announces[0].includes(peers[2]))
@@ -56,9 +56,9 @@ describe('Multiple trackers', ()=> {
         [...trackerLinks,
         "ws://tracker.example.com"])
 
-      await new Promise(r=> setTimeout(r, 1000))
+      await new Promise(r=> setTimeout(r, 2000))
       
-      const output = await tc.announce("hello")
+      const output = await tc.announce(await randomHash())
       expect(output.length).to.equal(3)
       expect(output[0]).to.equal("announced")
       expect(output[1]).to.equal("announced")

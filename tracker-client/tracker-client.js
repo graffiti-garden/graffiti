@@ -19,12 +19,11 @@ export default class TrackerClient {
     this.openSubscriptions = new Set()
   }
 
-  async *subscribe(uri, signal) {
+  async *subscribe(infoHash, signal) {
 
-    if (this.openSubscriptions.has(uri))
-      throw "You are already subscribed to that URI"
-    this.openSubscriptions.add(uri)
-    const infoHash = await sha256Hex(uri)
+    if (this.openSubscriptions.has(infoHash))
+      throw "You are already subscribed to that info hash"
+    this.openSubscriptions.add(infoHash)
     this.#request('subscribe', infoHash)
 
     try {
@@ -50,16 +49,16 @@ export default class TrackerClient {
       }
     } finally {
       this.#request('unsubscribe', infoHash)
-      this.openSubscriptions.delete(uri)
+      this.openSubscriptions.delete(infoHash)
     }
   }
 
-  async announce(...uris) {
-    return await this.#announceAction('announce', ...uris)
+  async announce(...infoHashes) {
+    return await this.#announceAction('announce', ...infoHashes)
   }
 
-  async unannounce(...uris) {
-    return await this.#announceAction('unannounce', ...uris)
+  async unannounce(...infoHashes) {
+    return await this.#announceAction('unannounce', ...infoHashes)
   }
 
   #onUpdate(message) {
@@ -81,8 +80,7 @@ export default class TrackerClient {
     }
   }
 
-  async #announceAction(action, ...uris) {
-    const infoHashes = await Promise.all(uris.map(u=> sha256Hex(u)))
+  async #announceAction(action, ...infoHashes) {
     return await this.#request(action, ...infoHashes)
   }
 }
