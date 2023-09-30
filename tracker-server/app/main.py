@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from .tracker import Tracker
-from .keyserver import KeyServer, Credential
 from .schema import validate
 
 app = FastAPI()
@@ -27,8 +26,6 @@ async def startup():
     client = AsyncIOMotorClient('mongo')
     app.tracker = Tracker()
     await app.tracker.initialize(client)
-    app.key_server = KeyServer()
-    await app.key_server.initialize(client)
 
 @app.websocket("/")
 async def on_connect(socket: WebSocket, token: str|None=None):
@@ -103,14 +100,6 @@ async def info():
         "description": "A websocket tracker for peer-to-peer Graffiti",
         "website": "https://github.com/graffiti-garden/tracker-server/"
     }
-
-@app.post("/key")
-async def post_key(credential: Credential, response: Response):
-    return await app.key_server.post_key(credential, response)
-
-@app.get("/key/{key}")
-async def get_key(key: str, response: Response):
-    return await app.key_server.get_key(key, response)
 
 if __name__ == "__main__":
     args = {}
