@@ -1,8 +1,22 @@
 import Peer from 'peerjs'
-import { sha256Hex } from './util'
-import { encrypt, decrypt } from './crypto'
+import * as jose from 'jose'
+import { encoder, decoder } from './util'
 
 export const RECONNECT_TIMEOUT = 5000
+
+async function encrypt(value, password) {
+  return new jose.CompactEncrypt(encoder.encode(value))
+      .setProtectedHeader({
+        alg: 'dir',
+        enc: 'A128CBC-HS256',
+      }).encrypt(password) // password is uint8
+}
+
+async function decrypt(encrypted, password) {
+  const { plaintext } =
+    await jose.compactDecrypt(encrypted, password)
+  return decoder.decode(plaintext)
+}
 
 /**
  * A wrapper around peerJS so that peers
@@ -12,7 +26,7 @@ export const RECONNECT_TIMEOUT = 5000
  * Communication over those topics is encrypted.
  * 
  * const pm = new PeerMux(myPeerID)
- * const wire = await pm.createWire(topicURI, onMessage)
+ * const wire = await pm.createWire(infoHash, password, onMessage)
  * await wire.send(peer, message)
  * await wire.gossip(peers, message, fanout)
  */
@@ -20,12 +34,13 @@ export default class PeerMux {
 
   constructor(peerID, peerjsOptions) {
     this.peerID = peerID
-    this.peerjsOptions = peerjsOptions?? {
+    this.peerjsOptions = {
       host: "peerjs.graffiti.garden",
-      secure: true
+      secure: true,
+      ...(peerjsOptions?? {})
     }
 
-    this.wires = {} // infoHash-> {key, onMessage}
+    this.wires = {} // infoHash-> { password, onMessage }
 
     this.open()
   }
@@ -95,26 +110,24 @@ export default class PeerMux {
     const { infoHash, encrypted } = message
     if (!(infoHash in this.wires)) return
 
-    const decrypted = await decrypt(encrypted, infoHash)
+    const decrypted = await decrypt(encrypted, this.wires[infoHash].password)
 
     // Forward to the appropriate wire
     this.wires[infoHash]?.onMessage(peer, JSON.parse(decrypted))
   }
 
-  async createWire(uri, onMessage) {
-
-    const infoHash = await sha256Hex(uri)
+  createWire(infoHash, password, onMessage) {
     if (infoHash in this.wires)
       throw "A wire with that uri already exists"
 
-    this.wires[infoHash] = { onMessage }
+    this.wires[infoHash] = { onMessage, password }
 
-    const send = async (peer, message, timeout=5000)=> {
+    const send = async (peer, message, timeout=10000)=> {
       // If sending to self, skip encryption
       if (peer == this.peerID)
         return this.wires[infoHash]?.onMessage(peer, message)
 
-      const encrypted = await encrypt(JSON.stringify(message), infoHash)
+      const encrypted = await encrypt(JSON.stringify(message), password)
 
       // Connect to the peer
       if (!(peer in this.connections)) {

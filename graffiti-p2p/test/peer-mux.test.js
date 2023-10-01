@@ -1,25 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import PeerMux, { RECONNECT_TIMEOUT } from '../src/peer-mux'
-import { randomHash } from '../src/util'
+import { randomHash, sha256Hex, sha256Uint8 } from '../src/util'
 
-describe('Peer Mux', ()=> {
+const options = {
+  'localhost': {
+    host: 'localhost',
+    port: '9000',
+    secure: false
+  },
+  'graffiti.garden': {}
+}
+
+for (const [name, peerJSOptions] of Object.entries(options)) {
+
+describe(`Peer Mux ${name}`, ()=> {
 
   it("Peers send each other", async ()=> {
 
-    const m1 = new PeerMux(await randomHash())
-    const m2 = new PeerMux(await randomHash())
+    const m1 = new PeerMux(await randomHash(), peerJSOptions)
+    const m2 = new PeerMux(await randomHash(), peerJSOptions)
 
     await m1.isOpen()
     await m2.isOpen()
 
     let m1Received = 0
     let m2Received = 0
-    const { send: send1 } = await m1.createWire("something", (peer, m)=>{
+    const infoHash = await sha256Hex("something")
+    const password = await sha256Uint8("password12345")
+    const { send: send1 } = m1.createWire(infoHash, password, (peer, m)=>{
       expect(peer).to.equal(m2.peer.id)
       expect(m).to.equal("hello from m2")
       m1Received++
     })
-    const { send: send2 } = await m2.createWire("something", (peer, m)=>{
+    const { send: send2 } = m2.createWire(infoHash, password, (peer, m)=>{
       expect(peer).to.equal(m1.peer.id)
       expect(m).to.equal("hello from m1")
       m2Received++
@@ -27,65 +40,105 @@ describe('Peer Mux', ()=> {
 
     await send1(m2.peer.id, "hello from m1")
 
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
 
     expect(m1Received).to.equal(0)
     expect(m2Received).to.equal(1)
 
     await send2(m1.peer.id, "hello from m2")
 
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
 
     expect(m1Received).to.equal(1)
     expect(m2Received).to.equal(1)
-  })
+  }, 10000)
 
   it("Peers send on different channels", async ()=> {
 
-    const m1 = new PeerMux(await randomHash())
-    const m2 = new PeerMux(await randomHash())
+    const m1 = new PeerMux(await randomHash(), peerJSOptions)
+    const m2 = new PeerMux(await randomHash(), peerJSOptions)
 
     await m1.isOpen()
     await m2.isOpen()
 
     let m1Received = 0
     let m2Received = 0
-    const { send: send1 } = await m1.createWire("something1", (peer, m)=>{
+    const infoHash1 = await sha256Hex("something1")
+    const infoHash2 = await sha256Hex("something2")
+    const password = await sha256Uint8("password12345")
+    const { send: send1 } = m1.createWire(infoHash1, password, (peer, m)=>{
       m1Received++
     })
-    const { send: send2 } = await m2.createWire("something2", (peer, m)=>{
+    const { send: send2 } = m2.createWire(infoHash2, password, (peer, m)=>{
       m2Received++
     })
 
     await send1(m2.peer.id, "hello from m1")
 
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
 
     expect(m1Received).to.equal(0)
     expect(m2Received).to.equal(0)
 
     await send2(m1.peer.id, "hello from m2")
 
-    await new Promise(r=> setTimeout(r, 500));
+    await new Promise(r=> setTimeout(r, 1000));
 
     expect(m1Received).to.equal(0)
     expect(m2Received).to.equal(0)
-  })
+  }, 10000)
 
-  it("Peers disconnect", async ()=> {
+  it("Wrong password", async ()=> {
 
-    const m1 = new PeerMux(await randomHash())
-    const m2 = new PeerMux(await randomHash())
+    const m1 = new PeerMux(await randomHash(), peerJSOptions)
+    const m2 = new PeerMux(await randomHash(), peerJSOptions)
 
     await m1.isOpen()
     await m2.isOpen()
 
     let m1Received = 0
     let m2Received = 0
-    const { send: send1 } = await m1.createWire("something", (peer, m)=>{
+    const infoHash = await sha256Hex("something!")
+    const password1 = await sha256Uint8("password12345")
+    const password2 = await sha256Uint8("birthday-pet")
+    const { send: send1 } = m1.createWire(infoHash, password1, (peer, m)=>{
       m1Received++
     })
-    const { send: send2 } = await m2.createWire("something", (peer, m)=>{
+    const { send: send2 } = m2.createWire(infoHash, password2, (peer, m)=>{
+      m2Received++
+    })
+
+    await send1(m2.peer.id, "hello from m1")
+
+    await new Promise(r=> setTimeout(r, 1000));
+
+    expect(m1Received).to.equal(0)
+    expect(m2Received).to.equal(0)
+
+    await send2(m1.peer.id, "hello from m2")
+
+    await new Promise(r=> setTimeout(r, 1000));
+
+    expect(m1Received).to.equal(0)
+    expect(m2Received).to.equal(0)
+  }, 10000)
+
+  it("Peers disconnect", async ()=> {
+
+    const m1 = new PeerMux(await randomHash(), peerJSOptions)
+    const m2 = new PeerMux(await randomHash(), peerJSOptions)
+
+    await m1.isOpen()
+    await m2.isOpen()
+
+    let m1Received = 0
+    let m2Received = 0
+    const infoHash = await sha256Hex("something")
+    const password = await sha256Uint8("password12345")
+    const { send: send1 } = m1.createWire(infoHash, password, (peer, m)=>{
+      m1Received++
+    })
+    const { send: send2 } = m2.createWire(infoHash, password, (peer, m)=>{
       m2Received++
     })
 
@@ -112,15 +165,17 @@ describe('Peer Mux', ()=> {
 
   it("Peers reconnect", async ()=> {
 
-    const m1 = new PeerMux(await randomHash())
-    const m2 = new PeerMux(await randomHash())
+    const m1 = new PeerMux(await randomHash(), peerJSOptions)
+    const m2 = new PeerMux(await randomHash(), peerJSOptions)
 
     let m1Received = 0
     let m2Received = 0
-    const { send: send1 } = await m1.createWire("something", (peer, m)=>{
+    const infoHash = await sha256Hex("something~~")
+    const password = await sha256Uint8("password12345")
+    const { send: send1 } = m1.createWire(infoHash, password, (peer, m)=>{
       m1Received++
     })
-    const { send: send2 } = await m2.createWire("something", (peer, m)=>{
+    const { send: send2 } = m2.createWire(infoHash, password, (peer, m)=>{
       m2Received++
     })
 
@@ -132,7 +187,7 @@ describe('Peer Mux', ()=> {
     m1.destroy()
 
     await expect(send1(m2.peer.id, "hello from m1")).rejects.toThrowError()
-    await expect(send2(m1id, "hello from m2")).rejects.toThrowError()
+    await expect(send2(m1id, "hello from m2", 1000)).rejects.toThrowError()
 
     await new Promise(r=> setTimeout(r, 500));
     expect(m1Received).toEqual(0)
@@ -153,10 +208,11 @@ describe('Peer Mux', ()=> {
     await Promise.all(peerMuxes.map(m=> m.isOpen()))
 
     const received = {}
-    const topic = await randomHash()
+    const infoHash = await randomHash()
+    const password = await sha256Uint8('')
     const message = await randomHash()
     const wires = await Promise.all(peerMuxes.map(receivingMux=>
-      receivingMux.createWire(topic, (sendingPeer, m)=> {
+      receivingMux.createWire(infoHash, password, (sendingPeer, m)=> {
         expect(sendingPeer).to.equal(peerMuxes[0].peer.id)
         expect(m).to.equal(message)
         expect(received).to.not.have.property(receivingMux.peer.id)
@@ -194,3 +250,5 @@ describe('Peer Mux', ()=> {
     await gossipToPeers(10, 5)
   }, 10000)
 })
+
+}
