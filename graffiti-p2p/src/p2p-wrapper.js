@@ -1,20 +1,23 @@
 import PeerMux from "./peer-mux.js"
 import TrackerClient from "@graffiti-garden/tracker-client"
-import { randomHash, sha256Hex } from "./util"
+import { randomHash, sha256Hex, sha256Uint8 } from "./util"
 
 /**
  * Wraps a class with p2p connectivity.
+ * The class must have a particular URI,
+ * and messages related to that URI from other
+ * peers will be routed to it.
+ * 
+ * Classes with the same URI are collapsed.
  * 
  * It will call
  * class.toURI
  * class.onMessage
- * class.onUnannounce
  * class.onAnnounce
  */
 export default class P2PWrapper {
 
-  constructor(actorClient, options={}) {
-    this.actorClient = actorClient
+  constructor(options={}) {
     this.wrapMap = {}
     this.subscribeKillSwitches = {}
     this.workingOnIt = new Set()
@@ -49,7 +52,7 @@ export default class P2PWrapper {
     const uri = Class.toURI(...args)
     if (uri in this.wrapMap) return this.wrapMap[uri]
 
-    const wrapped = new Class(this.actorClient, this, ...args)
+    const wrapped = new Class(...args)
     this.wrapMap[uri] = wrapped
     
     // Keep track of peers
@@ -62,36 +65,36 @@ export default class P2PWrapper {
     }
 
     this.workingOnIt.add(uri)
-    this.isOpen().then(()=> {
 
-      this.peerMux.createWire(uri, (peer, message)=> {
+    this.isOpen().then(async ()=> {
+      wrapped.infoHash = await sha256Hex(uri)
+      const password = await sha256Uint8('key:'+uri)
+
+      wrapped.wire = this.peerMux.createWire(wrapped.infoHash, password, (peer, message)=> {
         wrapped.onPeer(peer)
         wrapped.onMessage(peer, message)
-      }).then(
-        async wire=> {
-          wrapped.wire = wire
-          await this.tracker.announce(uri)
+      })
 
-          this.subscribeKillSwitches[uri] = new AbortController()
-          const signal = this.subscribeKillSwitches[uri].signal
+      await this.tracker.announce(wrapped.infoHash)
 
-          // Subscribe
-          ;(async ()=> {
-            for await (const {action, peer} of this.tracker.subscribe(uri, signal)) {
-              if (!peer || peer == this.peer) continue
+      this.subscribeKillSwitches[uri] = new AbortController()
+      const signal = this.subscribeKillSwitches[uri].signal
 
-              if (action == 'announce') {
-                wrapped.onPeer(peer)
-              } else if (action == 'unannounce') {
-                wrapped.peers.delete(peer)
-              }
-            }
-          })()
+      // Subscribe
+      ;(async ()=> {
+        for await (const {action, peer} of this.tracker.subscribe(wrapped.infoHash, signal)) {
+          if (!peer || peer == this.peer) continue
 
-          this.workingOnIt.delete(uri)
-          this.events.dispatchEvent(new Event(uri))
+          if (action == 'announce') {
+            wrapped.onPeer(peer)
+          } else if (action == 'unannounce') {
+            wrapped.peers.delete(peer)
+          }
         }
-      )
+      })()
+
+      this.workingOnIt.delete(uri)
+      this.events.dispatchEvent(new Event(uri))
     })
 
     wrapped.isOpen = async ()=> {
@@ -121,10 +124,11 @@ export default class P2PWrapper {
     const uri = Class.toURI(...args)
 
     if (uri in this.wrapMap) {
-      await this.wrapMap[uri].isOpen()
+      const wrapped = this.wrapMap[uri]
+      await wrapped.isOpen()
       this.subscribeKillSwitches[uri].abort()
-      await this.wrapMap[uri].wire.destroy()
-      await this.tracker.unannounce(uri)
+      await wrapped.wire.destroy()
+      await this.tracker.unannounce(wrapped.infoHash)
       delete this.wrapMap[uri]
     }
   }

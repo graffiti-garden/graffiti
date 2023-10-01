@@ -1,9 +1,6 @@
 import { describe, expect, assert, it } from 'vitest'
 import P2PWrapper from "../src/p2p-wrapper"
 import { randomHash } from '../src/util'
-import { actorClientMock } from './mock'
-
-const { actorClient } = actorClientMock()
 
 describe('P2P Wrapper', async ()=> {
 
@@ -15,7 +12,7 @@ describe('P2P Wrapper', async ()=> {
       }
     }
 
-    const pw = new P2PWrapper(actorClient)
+    const pw = new P2PWrapper()
     const t1 = pw.get(Test, "one", "two")
 
     expect(pw.get(Test, "one", "two")).to.equal(t1)
@@ -51,9 +48,9 @@ describe('P2P Wrapper', async ()=> {
     }
 
     // Create two independent wrappers
-    const pw1 = new P2PWrapper(actorClient)
+    const pw1 = new P2PWrapper()
     const t1 = pw1.get(Test)
-    const pw2 = new P2PWrapper(actorClient)
+    const pw2 = new P2PWrapper()
     const t2 = pw2.get(Test)
 
     // Immediately send
