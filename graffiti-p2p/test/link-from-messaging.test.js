@@ -1,6 +1,6 @@
 import { describe, it, assert, expect } from 'vitest'
 import { actorClientMock } from './mock'
-import routeMessage, { messageSchemaValidate, signaturePayloadValidate } from "../src/link-messaging"
+import routeMessage, { messageSchemaValidate, signaturePayloadValidate } from "../src/link-from-messaging"
 import { sha256Hex } from '../src/util'
 
 describe('Link messaging', async ()=> {
@@ -11,6 +11,7 @@ describe('Link messaging', async ()=> {
     { intent: 'have', clocks: { 'ksdjfkdjf': 1 } },
     { intent: 'want', clocks: { 'jfhjdhHFDJH-_34': -10, 'REIUIdjfh394': 3000 } },
     { intent: 'give', signature: '9493989', target: null },
+    { intent: 'give', signature: 'asdkfjdk' },
     { intent: 'give', signature: 'kasjdfkjdkfjd', target: 'kdjfkj' },
     { intent: 'give', signature: 'ka434ufdhf', target: { something: 'sdkfj'} }
   ]) {
@@ -32,8 +33,6 @@ describe('Link messaging', async ()=> {
     { intent: 'have', clocks: { 'asdkfj': 0.1 } },
     { intent: 'have', clocks: { ['a'.repeat(400)]: 1 } },
     { intent: 'give', clocks: { 'askdfjkdj': 1 } },
-    { intent: 'give', signature: 'asdkfjdk' },
-    { intent: 'give', signature: 'asdkfjdk' },
     { intent: 'give', target: '' },
     { intent: 'give', signature: 1, target: '' }
   ]) {
@@ -158,6 +157,46 @@ describe('Link messaging', async ()=> {
       intent: 'give',
       signature,
       target
+    }, null, null, ()=>{}, actorClient)).rejects.toThrowError()
+  })
+
+  it('Give delete', async ()=> {
+    const payload = {
+      source: 'my-source',
+      targetHash: '1234',
+      isDelete: true,
+      clock: 0
+    }
+
+    const signature = await actorClient.sign(payload, actor)
+
+    let giving = false
+    const onGive = args=> {
+      giving = true
+      expect(args.target).toBeUndefined()
+    }
+
+    await routeMessage({
+      intent: 'give',
+      signature
+    }, null, null, onGive, actorClient)
+
+    assert(giving)
+  })
+
+  it('Give not delete no target', async ()=> {
+    const payload = {
+      source: 'my-source',
+      targetHash: '1234',
+      isDelete: false,
+      clock: 0
+    }
+
+    const signature = await actorClient.sign(payload, actor)
+
+    await expect(routeMessage({
+      intent: 'give',
+      signature,
     }, null, null, ()=>{}, actorClient)).rejects.toThrowError()
   })
 })

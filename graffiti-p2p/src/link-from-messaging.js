@@ -31,7 +31,7 @@ export const messageSchemaValidate = ajv.compile({
     }
   },
   then: {
-    required: ["target", "signature"]
+    required: ["signature"]
   },
   else: {
     required: ["clocks"]
@@ -60,7 +60,7 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
   } else if (message.intent == 'want') {
     onWant(message.clocks)
   } else if (message.intent == 'give') {
-    const { signature, target } = message
+    const { signature } = message
 
     const { payload, actor } = await actorClient.verify(signature)
 
@@ -70,9 +70,21 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
 
     const { source, targetHash, clock, isDelete } = payload
 
-    if (targetHash != await sha256Hex(JSON.stringify(target))) {
-      throw "Signed hash of target does not match the hash of target"
+    console.log("one")
+    const target = message.target
+    if (isDelete) {
+      if (target != undefined) {
+        throw "Target can't be included when object is deleted"
+      }
+    } else {
+      if (target == undefined) {
+        throw "Target must be included when object is not deleted"
+      }
+      if (targetHash != await sha256Hex(JSON.stringify(target))) {
+        throw "Signed hash of target does not match the hash of target"
+      }
     }
+    console.log("two")
 
     onGive({
       source,
