@@ -1,52 +1,54 @@
-import Ajv from "ajv"
+import Ajv2020 from "ajv/dist/2020"
 import { sha256Hex } from "./util"
 
-const ajv = new Ajv()
+const ajv = new Ajv2020()
 export const messageSchemaValidate = ajv.compile({
   type: "object",
-  properties: {
-    intent: {
-      type: "string",
-      enum: ["have", "want", "give"]
-    },
-    clocks: {
-      type: "object",
-      patternProperties: {
-        // actor plus target hash
-        "^[A-Za-z0-9_-]{1,300}$":
-        // Clock
-        { type: "integer" }
+  unevaluatedProperties: false,
+  required: ["intent"],
+  oneOf: [{
+    properties: {
+      intent: { enum: ["have", "want"] },
+      links: {
+        type: "object",
+        patternProperties: {
+          // actor + targetHash + salt
+          "^[A-Za-z0-9_-]{1,300}$":
+          // is not deleted?
+          { type: "boolean" }
+        },
+        minProperties: 1,
+        additionalProperties: false
       },
-      minProperties: 1,
-      additionalProperties: false
     },
-    signature: { type: "string" },
-    target: {},
-  },
-  required: ['intent'],
-  additionalProperties: false,
-  if: {
+    required: ["links"]
+  }, {
     properties: {
       intent: { const: "give" },
-    }
-  },
-  then: {
-    required: ["signature"]
-  },
-  else: {
-    required: ["clocks"]
-  },
+    },
+    oneOf: [{
+      properties: {
+        addSignature: { type: "string"},
+        target: {}
+      },
+      required: ["addSignature", "target"]
+    }, {
+      properties: {
+        deleteSignature: { type: "string" },
+      },
+      required: ["deleteSignature"]
+    }]
+  }]
 })
 
-export const signaturePayloadValidate = ajv.compile({
+export const addSignaturePayloadValidate = ajv.compile({
   type: "object",
   properties: {
     source: { type: "string" },
     targetHash: { type: "string" },
-    clock: { type: "integer" },
-    isDelete: { type: "boolean" }
+    salt: { type: "string" }
   },
-  required: ['source', 'targetHash', 'clock', 'isDelete'],
+  required: ['source', 'targetHash', 'salt'],
   additionalProperties: false
 })
 
@@ -56,44 +58,49 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
   }
 
   if (message.intent == 'have') {
-    onHave(message.clocks)
+    onHave(message.links)
   } else if (message.intent == 'want') {
-    onWant(message.clocks)
+    onWant(message.links)
   } else if (message.intent == 'give') {
-    const { signature } = message
 
-    const { payload, actor } = await actorClient.verify(signature)
-
-    if (!signaturePayloadValidate(payload)) {
-      throw signaturePayloadValidate.errors
+    let deleting, addSignature, target, deleteActor
+    if ('target' in message) {
+      deleting = false
+      target = message.target
+      addSignature = message.addSignature
+    } else {
+      deleting = true
+      const { payload, actor } = await actorClient.verify(message.deleteSignature)
+      addSignature = payload
+      deleteActor = actor
     }
 
-    const { source, targetHash, clock, isDelete } = payload
+    const { payload, actor } = await actorClient.verify(addSignature)
 
-    console.log("one")
-    const target = message.target
-    if (isDelete) {
-      if (target != undefined) {
-        throw "Target can't be included when object is deleted"
-      }
-    } else {
-      if (target == undefined) {
-        throw "Target must be included when object is not deleted"
-      }
+    if (!addSignaturePayloadValidate(payload)) {
+      throw addSignaturePayloadValidate.errors
+    }
+
+    const { source, targetHash, salt } = payload
+
+    if (!deleting) {
       if (targetHash != await sha256Hex(JSON.stringify(target))) {
         throw "Signed hash of target does not match the hash of target"
       }
+    } else {
+      if (deleteActor != actor) {
+        throw "Actor that deletes must match actor that created"
+      }
     }
-    console.log("two")
 
     onGive({
       source,
       target,
       targetHash,
-      signature,
+      salt,
       actor,
-      clock,
-      isDelete
+      deleting,
+      message
     })
   }
 }
