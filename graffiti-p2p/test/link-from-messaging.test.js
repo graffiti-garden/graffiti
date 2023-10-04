@@ -1,6 +1,6 @@
 import { describe, it, assert, expect } from 'vitest'
 import { actorClientMock } from './mock'
-import routeMessage, { addSignaturePayloadValidate, messageSchemaValidate } from "../src/link-from-messaging"
+import routeMessage, { signaturePayloadValidate, messageSchemaValidate } from "../src/link-from-messaging"
 import { randomHash, sha256Hex } from '../src/util'
 
 describe('Link messaging', async ()=> {
@@ -10,11 +10,11 @@ describe('Link messaging', async ()=> {
   for (const message of [
     { intent: 'have', links: { 'ksdjfkdjf': true } },
     { intent: 'want', links: { 'jfhjdhHFDJH-_34': true, 'REIUIdjfh394': false } },
-    { intent: 'give', addSignature: '9493989', target: null },
-    { intent: 'give', deleteSignature: 'asdkfjdk' },
-    { intent: 'give', addSignature: 'kasjdfkjdkfjd', target: 1 },
-    { intent: 'give', addSignature: 'kasjdfkjdkfjd', target: 'kdjfkj' },
-    { intent: 'give', addSignature: 'ka434ufdhf', target: { something: 'sdkfj'} }
+    { intent: 'give', signature: 'asdkfjdk' },
+    { intent: 'give', signature: '9493989', target: null },
+    { intent: 'give', signature: 'kasjdfkjdkfjd', target: 1 },
+    { intent: 'give', signature: 'kasjdfkjdkfjd', target: 'kdjfkj' },
+    { intent: 'give', signature: 'ka434ufdhf', target: { something: 'sdkfj'} }
   ]) {
     it (`Valid message: ${JSON.stringify(message)}`, ()=> {
       assert(messageSchemaValidate(message))
@@ -36,9 +36,7 @@ describe('Link messaging', async ()=> {
     { intent: 'have', links: { 'asdkjfkdj': true }, target: ''},
     { intent: 'give', links: { 'askdfjkdj': true } },
     { intent: 'give', target: '' },
-    { intent: 'give', addSignature: 1, target: '' },
-    { intent: 'give', deleteSignature: 'aksdjfkdj', addSignature: 'aksdjfkd', target: '' },
-    { intent: 'give', deleteSignature: 'aksdjfkdj', target: 1 }
+    { intent: 'give', signature: 1, target: '' },
   ]) {
     it (`Invalid message: ${JSON.stringify(message)}`, ()=> {
       assert(!messageSchemaValidate(message))
@@ -71,39 +69,43 @@ describe('Link messaging', async ()=> {
   })
 
   for (const payload of [
-    { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'ksdjkdjjf' }
+    { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'ksdjkdjjf', deleted: false },
+    { source: 'asdfj39483kdfj', targetHash: 'kdjfk34djf', salt: 'ksdjkdj9234jf', deleted: true }
   ]) {
     it (`Valid signature payload schema: ${JSON.stringify(payload)}`, ()=> {
-      assert(addSignaturePayloadValidate(payload))
+      assert(signaturePayloadValidate(payload))
     })
   }
 
   for (const payload of [
     {},
-    { source2: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'kasdjfk'},
-    { targetHash: 'kdjfkdjf', salt: 'kasdjfk'},
-    { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 10 },
-    { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'ksdjkdjjf', something: 'else' },
+    { source2: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'kasdjfk', deleted: false},
+    { source2: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'kasdjfk', deleted: true},
+    { targetHash: 'kdjfkdjf', salt: 'kasdjfk', deleted: true},
+    { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 10, deleted: false },
+    { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'aksdjfk', deleted: null },
+    { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'ksdjkdjjf', something: 'else', deleted: true },
   ]) {
     it (`Inalid signature payload schema: ${JSON.stringify(payload)}`, ()=> {
-      assert(!addSignaturePayloadValidate(payload))
+      assert(!signaturePayloadValidate(payload))
     })
   }
 
-  it('Give', async ()=> {
+  it('Give add', async ()=> {
     const target = { something: 'cool', what: 1234 }
 
     const payload = {
       source: 'my-source',
       targetHash: await sha256Hex(JSON.stringify(target)),
-      salt: crypto.randomUUID()
+      salt: crypto.randomUUID(),
+      deleted: false
     }
 
-    const addSignature = await actorClient.sign(payload, actor)
+    const signature = await actorClient.sign(payload, actor)
 
     const message = {
       intent: 'give',
-      addSignature,
+      signature,
       target
     }
 
@@ -112,7 +114,7 @@ describe('Link messaging', async ()=> {
       giving = true
       expect(args.source).toEqual(payload.source)
       expect(args.targetHash).toEqual(payload.targetHash)
-      expect(args.deleting).toEqual(false)
+      expect(args.deleted).toEqual(false)
       expect(args.salt).toEqual(payload.salt)
       expect(args.target).toEqual(target)
       expect(args.actor).toEqual(actor)
@@ -128,8 +130,9 @@ describe('Link messaging', async ()=> {
   it('Give invalid signature', async ()=> {
     await expect(routeMessage({
       intent: 'give',
-      addSignature: 'blahblahblah',
-      target: 'something'
+      signature: 'blahblahblah',
+      target: 'something',
+      deleted: false
     }, null, null, ()=>{}, actorClient)).rejects.toThrowError()
   })
 
@@ -138,11 +141,11 @@ describe('Link messaging', async ()=> {
 
     const payload = {}
 
-    const addSignature = await actorClient.sign(payload, actor)
+    const signature = await actorClient.sign(payload, actor)
 
     await expect(routeMessage({
       intent: 'give',
-      addSignature,
+      signature,
       target
     }, null, null, ()=>{}, actorClient)).rejects.toThrowError()
   })
@@ -153,14 +156,15 @@ describe('Link messaging', async ()=> {
     const payload = {
       source: 'my-source',
       targetHash: '1234',
-      salt: crypto.randomUUID()
+      salt: crypto.randomUUID(),
+      deleted: false
     }
 
-    const addSignature = await actorClient.sign(payload, actor)
+    const signature = await actorClient.sign(payload, actor)
 
     await expect(routeMessage({
       intent: 'give',
-      addSignature,
+      signature,
       target
     }, null, null, ()=>{}, actorClient)).rejects.toThrowError()
   })
@@ -169,22 +173,22 @@ describe('Link messaging', async ()=> {
     const payload = {
       source: 'my-source',
       targetHash: '1234',
-      salt: crypto.randomUUID()
+      salt: crypto.randomUUID(),
+      deleted: true
     }
 
-    const addSignature = await actorClient.sign(payload, actor)
-    const deleteSignature = await actorClient.sign(addSignature, actor)
+    const signature = await actorClient.sign(payload, actor)
 
     let giving = false
     const onGive = args=> {
       giving = true
       expect(args.target).toBeUndefined()
-      expect(args.deleting).toEqual(true)
+      expect(args.deleted).toEqual(true)
     }
 
     await routeMessage({
       intent: 'give',
-      deleteSignature
+      signature
     }, null, null, onGive, actorClient)
 
     assert(giving)

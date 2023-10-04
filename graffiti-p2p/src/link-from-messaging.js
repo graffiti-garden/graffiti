@@ -25,30 +25,22 @@ export const messageSchemaValidate = ajv.compile({
   }, {
     properties: {
       intent: { const: "give" },
+      signature: { type: "string"},
+      target: {},
     },
-    oneOf: [{
-      properties: {
-        addSignature: { type: "string"},
-        target: {}
-      },
-      required: ["addSignature", "target"]
-    }, {
-      properties: {
-        deleteSignature: { type: "string" },
-      },
-      required: ["deleteSignature"]
-    }]
+    required: ["intent", "signature"]
   }]
 })
 
-export const addSignaturePayloadValidate = ajv.compile({
+export const signaturePayloadValidate = ajv.compile({
   type: "object",
   properties: {
     source: { type: "string" },
     targetHash: { type: "string" },
-    salt: { type: "string" }
+    salt: { type: "string" },
+    deleted: { type: "boolean" }
   },
-  required: ['source', 'targetHash', 'salt'],
+  required: ['source', 'targetHash', 'salt', 'deleted'],
   additionalProperties: false
 })
 
@@ -62,34 +54,23 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
   } else if (message.intent == 'want') {
     onWant(message.links)
   } else if (message.intent == 'give') {
+    const { signature, target } = message
 
-    let deleting, addSignature, target, deleteActor
-    if ('target' in message) {
-      deleting = false
-      target = message.target
-      addSignature = message.addSignature
-    } else {
-      deleting = true
-      const { payload, actor } = await actorClient.verify(message.deleteSignature)
-      addSignature = payload
-      deleteActor = actor
+    const { payload, actor } = await actorClient.verify(signature)
+
+    if (!signaturePayloadValidate(payload)) {
+      throw signaturePayloadValidate.errors
     }
 
-    const { payload, actor } = await actorClient.verify(addSignature)
+    const { source, targetHash, salt, deleted } = payload
 
-    if (!addSignaturePayloadValidate(payload)) {
-      throw addSignaturePayloadValidate.errors
-    }
-
-    const { source, targetHash, salt } = payload
-
-    if (!deleting) {
-      if (targetHash != await sha256Hex(JSON.stringify(target))) {
-        throw "Signed hash of target does not match the hash of target"
+    if (deleted) {
+      if (target != undefined) {
+        throw "Cannot include target in a deletion"
       }
     } else {
-      if (deleteActor != actor) {
-        throw "Actor that deletes must match actor that created"
+      if (targetHash != await sha256Hex(JSON.stringify(target))) {
+        throw "Signed hash of target does not match the hash of target"
       }
     }
 
@@ -99,7 +80,7 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
       targetHash,
       salt,
       actor,
-      deleting,
+      deleted,
       message
     })
   }
