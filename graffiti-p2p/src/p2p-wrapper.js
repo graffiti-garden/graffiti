@@ -11,9 +11,13 @@ import { randomHash, sha256Hex, sha256Uint8 } from "./util"
  * Classes with the same URI are collapsed.
  * 
  * It will call
- * class.toURI
- * class.onMessage
- * class.onAnnounce
+ * class.toURI(...constructorArgs)
+ * class.onMessage(peer, message)
+ * class.onAnnounce(peer)
+ * 
+ * and add the functions
+ * class.send(peer, message)
+ * class.gossip(message)
  */
 export default class P2PWrapper {
 

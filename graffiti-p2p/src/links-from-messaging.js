@@ -13,7 +13,7 @@ export const messageSchemaValidate = ajv.compile({
         type: "object",
         patternProperties: {
           // actor + targetHash + salt
-          "^[A-Za-z0-9_-]{1,300}$":
+          ".*":
           // is not deleted?
           { type: "boolean" }
         },
@@ -50,9 +50,9 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
   }
 
   if (message.intent == 'have') {
-    onHave(message.links)
+    await onHave(message.links)
   } else if (message.intent == 'want') {
-    onWant(message.links)
+    await onWant(message.links)
   } else if (message.intent == 'give') {
     const { signature, target } = message
 
@@ -74,14 +74,14 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
       }
     }
 
-    onGive({
+    await onGive({
       source,
       target,
       targetHash,
       salt,
       actor,
       deleted,
-      message
+      signature
     })
   }
 }

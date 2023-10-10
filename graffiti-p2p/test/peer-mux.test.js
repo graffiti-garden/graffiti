@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import PeerMux, { RECONNECT_TIMEOUT } from '../src/peer-mux'
 import { randomHash, sha256Hex, sha256Uint8 } from '../src/util'
 
+// run with "peerjs -p 9000"
+
 const options = {
   'localhost': {
     host: 'localhost',

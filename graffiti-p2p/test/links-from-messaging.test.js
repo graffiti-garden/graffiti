@@ -1,7 +1,7 @@
 import { describe, it, assert, expect } from 'vitest'
 import { actorClientMock } from './mock'
-import routeMessage, { signaturePayloadValidate, messageSchemaValidate } from "../src/link-from-messaging"
-import { randomHash, sha256Hex } from '../src/util'
+import routeMessage, { signaturePayloadValidate, messageSchemaValidate } from "../src/links-from-messaging"
+import { sha256Hex } from '../src/util'
 
 describe('Link messaging', async ()=> {
 
@@ -29,7 +29,6 @@ describe('Link messaging', async ()=> {
     { intent: 'want' },
     { intent: 'give' },
     { intent: 'have', links: {}},
-    { intent: 'have', links: { '!!!': false } },
     { intent: 'have', links: { 'aksdjfkdj': 1 } },
     { intent: 'have', links: { ['a'.repeat(400)]: 1 } },
     { intent: 'have', links: { 'asdkjfkdj': true }, something: 'else' },
@@ -118,7 +117,7 @@ describe('Link messaging', async ()=> {
       expect(args.salt).toEqual(payload.salt)
       expect(args.target).toEqual(target)
       expect(args.actor).toEqual(actor)
-      expect(args.message).toEqual(message)
+      expect(args.signature).toEqual(signature)
       expect(Object.keys(args).length).toEqual(7)
     }
 
