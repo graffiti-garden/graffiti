@@ -35,6 +35,7 @@ export default function (actorClient) {
       for (const { actor, target, targetHash, salt, deleted } of Object.values(this.have)) {
         if (!deleted) {
           callback({
+            source: this.source,
             actor,
             targetHash,
             target,
@@ -147,7 +148,7 @@ export default function (actorClient) {
       }
 
       // Only include the target if not deleted
-      const output = { actor, target, targetHash, salt, deleted }
+      const output = { source: this.source, actor, target, targetHash, salt, deleted }
       if (!deleted) output.target = target
 
       this.callbacks.forEach(cb=> cb(output))
