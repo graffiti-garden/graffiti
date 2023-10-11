@@ -1,4 +1,4 @@
-import { describe, it, expect, assert } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { actorClientMock } from './mock'
 import { sha256Hex } from '../src/util'
 import linksFrom from '../src/links-from'
@@ -24,7 +24,7 @@ describe('Link from', ()=> {
 
   it('capability components', async ()=> {
     const { actor, actorClient } = actorClientMock()
-    const source = "askdjf"
+    const source = crypto.randomUUID()
     const lf = new (linksFrom(actorClient))(source)
     const target = "hi"
     const { link, signature } = await lf.createPostCapability(target, actor)
@@ -47,7 +47,8 @@ describe('Link from', ()=> {
   ]) {
     it(`invalid capability: ${JSON.stringify(modify)}`, async ()=> {
       const { actor, actorClient } = actorClientMock()
-      const lf = new (linksFrom(actorClient))("something cool!")
+      const source = "something cool!"
+      const lf = new (linksFrom(actorClient))(source)
 
       const { link, signature } = await lf.createPostCapability("yo", actor)
 
@@ -60,11 +61,11 @@ describe('Link from', ()=> {
 
   it('local add and delete', async ()=> {
     const { actor, actorClient } = actorClientMock()
-    const source = "something cool!"
+    const source = crypto.randomUUID()
     const lf = new (linksFrom(actorClient))(source)
 
     const recieved = []
-    lf.addListener((m)=> {
+    await lf.addListener((m)=> {
       recieved.push(m)
     })
 
@@ -106,14 +107,15 @@ describe('Link from', ()=> {
 
   it('local add before listener', async ()=> {
     const { actor, actorClient } = actorClientMock()
-    const lf = new (linksFrom(actorClient))("something cool!")
+    const source = crypto.randomUUID()
+    const lf = new (linksFrom(actorClient))(source)
 
     const target = 12345
     const postCap = await lf.createPostCapability(target, actor)
     await lf.useCapability(postCap)
 
     const recieved = []
-    lf.addListener((m)=> {
+    await lf.addListener((m)=> {
       recieved.push(m)
     })
 
@@ -126,14 +128,15 @@ describe('Link from', ()=> {
 
   it('local delete before listener', async ()=> {
     const { actor, actorClient } = actorClientMock()
-    const lf = new (linksFrom(actorClient))("something cool!")
+    const source = crypto.randomUUID()
+    const lf = new (linksFrom(actorClient))(source)
 
     const target = 12345
     const postCap = await lf.createPostCapability(target, actor)
     await lf.useCapability(postCap)
 
     let salt, targetHash
-    lf.addListener(m=> {
+    await lf.addListener(m=> {
       salt = m.salt
       targetHash = m.targetHash
     })
@@ -145,18 +148,19 @@ describe('Link from', ()=> {
     await lf.useCapability(deleteCap)
 
     let count = 0
-    lf.addListener(m=> count++)
+    await lf.addListener(m=> count++)
     expect(count).toEqual(0)
   })
 
   it('multiple callbacks', async ()=> {
     const { actor, actorClient } = actorClientMock()
-    const lf = new (linksFrom(actorClient))("something cool!")
+    const source = crypto.randomUUID()
+    const lf = new (linksFrom(actorClient))(source)
 
     const recieved1 = []
     const recieved2 = []
 
-    lf.addListener(m=> {
+    await lf.addListener(m=> {
       recieved1.push(m)
     })
 
@@ -164,7 +168,7 @@ describe('Link from', ()=> {
     const postCap = await lf.createPostCapability(target, actor)
     await lf.useCapability(postCap)
 
-    lf.addListener((m)=> {
+    await lf.addListener((m)=> {
       recieved2.push(m)
     })
 
@@ -179,11 +183,12 @@ describe('Link from', ()=> {
 
   it('delete callbacks', async ()=> {
     const { actor, actorClient } = actorClientMock()
-    const lf = new (linksFrom(actorClient))("something cool!")
+    const source = crypto.randomUUID()
+    const lf = new (linksFrom(actorClient))(source)
 
     const recieved = []
     const callback = m=> recieved.push(m)
-    lf.addListener(callback)
+    await lf.addListener(callback)
     expect(recieved.length).toEqual(0)
 
     const target1 = '🤷‍♀️'
@@ -209,9 +214,10 @@ describe('Link from', ()=> {
 
   it('add and delete one peer to another', async ()=> {
     const { actor: actor1, actorClient: actorClient1 } = actorClientMock()
-    const lf1 = new (linksFrom(actorClient1))("something cool!")
+    const source = crypto.randomUUID()
+    const lf1 = new (linksFrom(actorClient1, true))(source)
     const { actor: actor2, actorClient: actorClient2 } = actorClientMock()
-    const lf2 = new (linksFrom(actorClient2))("something cool!")
+    const lf2 = new (linksFrom(actorClient2))(source)
 
     addSendGossip(lf1, lf2)
 
@@ -238,11 +244,11 @@ describe('Link from', ()=> {
       }
     }
 
-    lf1.addListener(checkMessage(0))
+    await lf1.addListener(checkMessage(0))
 
     await lf1.useCapability(postCap)
 
-    lf2.addListener(checkMessage(1))
+    await lf2.addListener(checkMessage(1))
 
     expect(got[0]).toEqual(1)
     expect(got[1]).toEqual(1)
@@ -252,14 +258,17 @@ describe('Link from', ()=> {
     await lf2.useCapability(delCap)
 
     expect(got[0]).toEqual(2)
+    // TODO: Callback not getting called because it already exists...
     expect(got[1]).toEqual(2)
   })
 
   it('non-matching sources', async ()=> {
     const { actor: actor1, actorClient: actorClient1 } = actorClientMock()
-    const lf1 = new (linksFrom(actorClient1))("my source")
+    const source1 = crypto.randomUUID()
+    const lf1 = new (linksFrom(actorClient1))(source1)
     const { actor: actor2, actorClient: actorClient2 } = actorClientMock()
-    const lf2 = new (linksFrom(actorClient2))("your source")
+    const source2 = crypto.randomUUID()
+    const lf2 = new (linksFrom(actorClient2))(source2)
     addSendGossip(lf1, lf2)
 
     const postCap = await lf1.createPostCapability('hi', actor1)
@@ -267,8 +276,8 @@ describe('Link from', ()=> {
 
     let count1 = 0
     let count2 = 0
-    lf1.addListener(m=> count1++)
-    lf2.addListener(m=> count2++)
+    await lf1.addListener(m=> count1++)
+    await lf2.addListener(m=> count2++)
 
     expect(count1).toEqual(1)
     expect(count2).toEqual(0)
@@ -278,9 +287,10 @@ describe('Link from', ()=> {
 
   it('onAnnounce', async ()=> {
     const { actor: actor1, actorClient: actorClient1 } = actorClientMock()
-    const lf1 = new (linksFrom(actorClient1))("same source")
+    const source = crypto.randomUUID()
+    const lf1 = new (linksFrom(actorClient1))(source)
     const { actor: actor2, actorClient: actorClient2 } = actorClientMock()
-    const lf2 = new (linksFrom(actorClient2))("same source")
+    const lf2 = new (linksFrom(actorClient2, true))(source)
     lf1.send = (peer, message) => peer.onMessage(lf1, message)
     lf2.send = (peer, message) => peer.onMessage(lf2, message)
 
@@ -289,8 +299,8 @@ describe('Link from', ()=> {
 
     let count1 = 0
     let count2 = 0
-    lf1.addListener(m=>count1++)
-    lf2.addListener(m=>count2++)
+    await lf1.addListener(m=>count1++)
+    await lf2.addListener(m=>count2++)
 
     expect(count1).toEqual(1)
     expect(count2).toEqual(0)

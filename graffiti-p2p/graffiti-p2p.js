@@ -2,9 +2,6 @@ import ActorClient from '@graffiti-garden/actor-client'
 import P2PWrapper from "./src/p2p-wrapper"
 import linksFrom from './src/links-from'
 
-// TODO:
-// - save things to "disk"
-
 export default class Graffiti {
   #actorClient; #wrapper; #LinksFrom; #meCallbacks;
 
@@ -86,17 +83,3 @@ export default class Graffiti {
     this.#newLinksFrom(source).removeListener(f)
   }
 }
-
-// import { createStore, entries, del } from "idb-keyval"
-// const objectStore = createStore('graffiti', 'objects')
-// entries(objectStore).then(existingObjects=> {
-//   for (const [id, {verified, signed}] of existingObjects) {
-//     try {
-//       const object = this.wrapper.get(GraffitiObject, verified.actor, verified.path, this.objectContainer)
-//       object.onVerified(verified, signed)
-//     } catch(e) {
-//       console.error(e)
-//       del(id, objectStore)
-//     }
-//   }
-// })
