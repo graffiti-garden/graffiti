@@ -1,12 +1,12 @@
 import routeMessage, { signaturePayloadValidate } from './links-from-messaging'
 import { sha256Hex } from './util'
-import { createStore as createStoreDB, set as setDB, get as getDB, entries as entriesDB } from "idb-keyval"
+import { createStore as createStoreDB, set as setDB, get as getDB, keys as keysDB } from "idb-keyval"
 
 export default function (actorClient, noStorage=false) {
 
   const store = {}
   const createStore = noStorage? ()=> {} : createStoreDB
-  const entries = noStorage? ()=> Object.entries(store) : entriesDB
+  const keys = noStorage? ()=> Object.keys(store) : keysDB
   const get =  noStorage? id=> id in store? store[id] : null : getDB
   const set = noStorage? (id, value)=> store[id] = value : setDB
 
@@ -60,9 +60,11 @@ export default function (actorClient, noStorage=false) {
 
     async addListener(callback) {
       // Call the function with all existing data
-      const linkEntries = await entries(this.linkStore)
+      const linkIds = await keys(this.linkStore)
 
-      for (const [id, { actor, target, targetHash, salt, deleted }] of linkEntries) {
+      for (const id of linkIds) {
+        const { actor, target, targetHash, salt, deleted } = await get(id, this.linkStore)
+
         if (!deleted) {
           callback({
             id,
@@ -84,9 +86,11 @@ export default function (actorClient, noStorage=false) {
     }
     
     async onAnnounce(peer) {
-      const linkEntries = await entries(this.linkStore)
-      const links = linkEntries.map(
-        ([id, { deleted }])=> [id, deleted]
+      const linkIds = await keys(this.linkStore)
+      const links = await Promise.all(
+        linkIds.map(
+          async id=> [id, (await get(id, this.linkStore)).deleted]
+        )
       )
       if (links.length) {
         await this.send(peer, {
@@ -124,18 +128,16 @@ export default function (actorClient, noStorage=false) {
     }
 
     async #onHave(peer, links) {
-      const linkEntries = await entries(this.linkStore)
-      const wanted = 
-        Object.entries(links)
-              .filter(
-                ([ id, deleted ]) =>
-                  // We have not seen the id before
-                  !(id in linkEntries) ||
-                  // Or we have, but is is not deleted...
-                  (!linkEntries[id].deleted &&
-                  // and the incoming message is a deletion
-                    deleted)
-                )
+      const wanted = (await Promise.all(
+        Object.entries(links).map(async ([id, deleted])=> {
+          const entry = await get(id, this.linkStore)
+          // We have not seen the id before
+          // Or we have, but is is not deleted...
+          // and the incoming message is a deletion
+          return (!entry || (!entry.deleted && deleted))?
+            [id, deleted] : null
+        })
+      )).filter(a=>a)
       if (wanted.length) {
         await this.send(peer, {
           intent: 'want',
