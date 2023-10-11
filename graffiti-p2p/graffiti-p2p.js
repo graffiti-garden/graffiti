@@ -3,10 +3,6 @@ import P2PWrapper from "./src/p2p-wrapper"
 import linksFrom from './src/links-from'
 
 // TODO:
-// - give links IDs
-// - make link capabilities more transparent
-//   - capability = { link, signature }
-//   - link = { source, target, actor, deleted, targetHash, salt, id }
 // - save things to "disk"
 
 export default class Graffiti {
@@ -57,38 +53,36 @@ export default class Graffiti {
     return this.#wrapper.get(this.#LinksFrom, source)
   }
 
-  async createPostCapability(source, target, actor) {
+  async createPostLinkCapability(source, target, actor) {
     actor = actor?? this.me
     return await this.#newLinksFrom(source).createPostCapability(target, actor)
   }
 
-  async createDeleteCapability({ source, targetHash, salt, actor }) {
+  async createDeleteLinkCapability({ source, targetHash, salt, actor }) {
     return await this.#newLinksFrom(source).createDeleteCapability(targetHash, salt, actor)
   }
 
-  async useCapability(source, capability) {
-    return await this.#newLinksFrom(source).useCapability(capability)
+  async useLinkCapability(capability) {
+    return await this.#newLinksFrom(capability.link.source).useCapability(capability)
   }
 
-  async post(source, target, actor) {
-    return await this.useCapability(
-      source,
-      await this.createPostCapability(source, target, actor)
+  async postLink(source, target, actor) {
+    return await this.useLinkCapability(
+      await this.createPostLinkCapability(source, target, actor)
     )
   }
 
-  async delete({ source, targetHash, salt, actor }) {
-    return await this.useCapability(
-      source,
-      await this.createDeleteCapability({ source, targetHash, salt, actor })
+  async deleteLink({ source, targetHash, salt, actor }) {
+    return await this.useLinkCapability(
+      await this.createDeleteLinkCapability({ source, targetHash, salt, actor })
     )
   }
 
-  addListener(source, f) {
+  addLinkListener(source, f) {
     this.#newLinksFrom(source).addListener(f)
   }
 
-  removeListener(source, f) {
+  removeLinkListener(source, f) {
     this.#newLinksFrom(source).removeListener(f)
   }
 }

@@ -46,19 +46,19 @@
           listEl.insertAdjacentElement("beforeend", buttonEl)
           buttonEl.innerText = "Delete"
           buttonEl.onclick = ()=> {
-            gf.delete(link)
+            gf.deleteLink(link)
           }
         }
       }
     }
 
-    gf.addListener(context, listener)
+    gf.addLinkListener(context, listener)
 
     gf.addMeListener(me=> {
       document.getElementById("actor").innerText = me
       document.getElementById("posts").innerHTML = ''
-      gf.removeListener(context, listener)
-      gf.addListener(context, listener)
+      gf.removeLinkListener(context, listener)
+      gf.addLinkListener(context, listener)
     })
 
     const form = document.getElementById("poster")
@@ -69,7 +69,7 @@
       const message = messageEl.value
       messageEl.value = ''
 
-      await gf.post(context, message)
+      await gf.postLink(context, message)
     })
   </script>
 </body>
