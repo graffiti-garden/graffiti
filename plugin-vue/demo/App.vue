@@ -7,47 +7,41 @@
 
 <template>
   <p>
-    <button @click="$gf.selectActor">
+    <button @click="$gf.logIn">
       Select Actor
+    </button>
+    <button @click="$gf.logOut">
+      Log Out
     </button>
   </p>
 
   <p>
-    Your Actor ID is: "{{ $gf.me }}"
+    Your Actor ID is: {{ $gf.me }}
   </p>
 
   <input v-model="context">
 
-  <GraffitiPosts v-slot={posts} :context="context" :filter="p=> 
-    p.type == 'Note' &&
-    typeof p.content == 'string'
-  ">
+  <GraffitiLinks v-slot="{ links }" :source="context">
     <ul>
-      <li v-for="post in posts">
-        {{ post.content }}
-        <template v-if="post.actor==$gf.me">
-          <button @click="post.content+='!!'">
-            ‼️
-          </button>
-          <button @click="$gf.delete(post)">
+      <li v-for="link in links">
+        {{ link.target }}
+        <template v-if="link.actor==$gf.me">
+          <button @click="$gf.deleteLink(link)">
             ␡
-          </button>
-          <button @click="delete post.content">
-            clear
           </button>
         </template>
       </li>
     </ul>
+  </GraffitiLinks>
 
-    <form v-if="$gf.me" @submit.prevent="posts.post({
-      type: 'Note',
-      content: message
-    }); message=''">
-      <input v-model="message">
-      <input type="submit" value="Post">
-    </form>
-    <div v-else>
-      You need to log in to post yourself.
-    </div>
-  </GraffitiPosts>
+  <form v-if="$gf.me" @submit.prevent="
+    $gf.postLink(context, message);
+    message='';
+  ">
+    <input v-model="message">
+    <input type="submit" value="Post">
+  </form>
+  <div v-else>
+    You need to log in to post yourself.
+  </div>
 </template>

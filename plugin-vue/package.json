@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/plugin-vue",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Plugin for peer-to-peer Graffiti",
   "type": "module",
   "files": ["plugin.js", "GraffitiPosts.vue", "dist"],
@@ -30,7 +30,7 @@
   "homepage": "https://github.com/graffiti-garden/plugin-vue#readme",
   "dependencies": {
     "@graffiti-garden/actor-client": "^1.0.11",
-    "@graffiti-garden/graffiti-p2p": "^1.2.7",
+    "@graffiti-garden/graffiti-p2p": "^1.3.0",
     "vue": "^3.3.4"
   },
   "devDependencies": {
