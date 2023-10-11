@@ -1,9 +1,9 @@
 {
   "name": "@graffiti-garden/plugin-vue",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Plugin for peer-to-peer Graffiti",
   "type": "module",
-  "files": ["plugin.js", "GraffitiPosts.vue", "dist"],
+  "files": ["plugin.js", "GraffitiLinks.vue", "dist"],
   "main": "./plugin.js",
   "browser": "./dist/plugin.js",
   "exports": {
