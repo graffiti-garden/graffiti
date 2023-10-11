@@ -1,5 +1,6 @@
 import { describe, it, expect, assert } from 'vitest'
 import { actorClientMock } from './mock'
+import { sha256Hex } from '../src/util'
 import linksFrom from '../src/links-from'
 
 function addSendGossip(...peers) {
@@ -21,9 +22,46 @@ function addSendGossip(...peers) {
 
 describe('Link from', ()=> {
 
+  it('capability components', async ()=> {
+    const { actor, actorClient } = actorClientMock()
+    const source = "askdjf"
+    const lf = new (linksFrom(actorClient))(source)
+    const target = "hi"
+    const { link, signature } = await lf.createPostCapability(target, actor)
+    expect(link.target).toEqual(target)
+    expect(link.actor).toEqual(actor)
+    expect(link.source).toEqual(source)
+    expect(link.deleted).toEqual(false)
+    expect(link.targetHash).toBeDefined()
+    expect(link.salt).toBeDefined()
+    expect(link.id).toBeDefined()
+  })
+
+  for (const modify of [
+    l=> l.targetHash = "1234",
+    l=> l.source = "ksdjfkdj",
+    l=> l.salt = "qkwjkjr",
+    l=> l.deleted = !l.deleted,
+    l=> l.actor = "kjasdjf"
+    // l=> null
+  ]) {
+    it(`invalid capability: ${JSON.stringify(modify)}`, async ()=> {
+      const { actor, actorClient } = actorClientMock()
+      const lf = new (linksFrom(actorClient))("something cool!")
+
+      const { link, signature } = await lf.createPostCapability("yo", actor)
+
+      // Modify the link
+      modify(link)
+
+      await expect(lf.useCapability({link, signature})).rejects.toThrowError()
+    })
+  }
+
   it('local add and delete', async ()=> {
     const { actor, actorClient } = actorClientMock()
-    const lf = new (linksFrom(actorClient))("something cool!")
+    const source = "something cool!"
+    const lf = new (linksFrom(actorClient))(source)
 
     const recieved = []
     lf.addListener((m)=> {
@@ -45,6 +83,11 @@ describe('Link from', ()=> {
     expect(m1.deleted).toBeFalsy()
     const targetHash = m1.targetHash
     const salt = m1.salt
+    expect(m1.id).toEqual(
+      await sha256Hex(JSON.stringify({
+        source, targetHash, salt, actor
+      }))
+    )
 
     const delCap = await lf.createDeleteCapability(targetHash, salt, actor)
     expect(recieved.length).toEqual(1)
@@ -58,6 +101,7 @@ describe('Link from', ()=> {
     expect(m2.salt).toEqual(salt)
     expect(m2.targetHash).toEqual(targetHash)
     expect(m2.deleted).toBeTruthy()
+    expect(m1.id).toEqual(m2.id)
   })
 
   it('local add before listener', async ()=> {

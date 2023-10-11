@@ -1,4 +1,4 @@
-import routeMessage from './links-from-messaging'
+import routeMessage, { signaturePayloadValidate } from './links-from-messaging'
 import { sha256Hex } from './util'
 
 export default function (actorClient) {
@@ -7,10 +7,6 @@ export default function (actorClient) {
     constructor(source) {
       this.source = source
       this.callbacks = new Set()
-
-      // id (actor + targetHash + salt) ->
-      // { actor, target, targetHash, salt, deleted, actor, signature }
-      // TODO: put the target (+signature?) into storage
       this.have = {}
     }
 
@@ -26,15 +22,41 @@ export default function (actorClient) {
       return await this.#createCapability(targetHash, salt, actor, true)
     }
 
-    async useCapability(capability) {
-      await this.onMessage(null, capability)
+    async useCapability({ link, signature }, verified=false) {
+      if (!verified) {
+        const { payload, actor } = await actorClient.verify(signature)
+
+        if (
+          !signaturePayloadValidate(payload) ||
+          link.actor != actor ||
+          link.source != this.source ||
+          link.source != payload.source ||
+          link.targetHash != payload.targetHash ||
+          link.salt != payload.salt ||
+          link.deleted != payload.deleted || (
+            !link.deleted &&
+            link.targetHash != await sha256Hex(JSON.stringify(link.target))
+          )
+        ) {
+          throw "Capability signature does not match link"
+        }
+      }
+
+      const { deleted, target } = link
+
+      await this.onMessage(null,
+        this.#constructGiveMessage({ signature, deleted, target })
+      )
+
+      return link
     }
 
     addListener(callback) {
       // Call the function with all existing data
-      for (const { actor, target, targetHash, salt, deleted } of Object.values(this.have)) {
+      for (const [id, { actor, target, targetHash, salt, deleted }] of Object.entries(this.have)) {
         if (!deleted) {
           callback({
+            id,
             source: this.source,
             actor,
             targetHash,
@@ -73,6 +95,12 @@ export default function (actorClient) {
         actorClient
       )
     }
+    async #makeID(source, targetHash, salt, actor) {
+      return await sha256Hex(JSON.stringify({
+        source, targetHash, salt, actor
+      }))
+    }
+
 
     #constructGiveMessage({ signature, deleted, target }) {
       const output = {
@@ -133,7 +161,8 @@ export default function (actorClient) {
       if (source != this.source)
         throw "Source in message does not match"
 
-      const id = actor+targetHash+salt
+      const id = await this.#makeID(source, targetHash, salt, actor)
+
       if (id in this.have &&
           (this.have[id].deleted || !deleted))
         throw "Not a new message!"
@@ -148,7 +177,7 @@ export default function (actorClient) {
       }
 
       // Only include the target if not deleted
-      const output = { source: this.source, actor, target, targetHash, salt, deleted }
+      const output = { source: this.source, actor, targetHash, salt, deleted, id }
       if (!deleted) output.target = target
 
       this.callbacks.forEach(cb=> cb(output))
@@ -164,7 +193,20 @@ export default function (actorClient) {
         deleted
       }, actor)
 
-      return this.#constructGiveMessage({signature, deleted, target})
+      const link = {
+        id: await this.#makeID(this.source, targetHash, salt, actor),
+        source: this.source,
+        actor,
+        targetHash,
+        salt,
+        deleted
+      }
+
+      if (!deleted) {
+        link.target = target
+      }
+
+      return { signature, link }
     }
   }
 }

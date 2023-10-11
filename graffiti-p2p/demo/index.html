@@ -33,9 +33,6 @@
     const context = "uri:graffiti.garden:object"
 
     function listener(link) {
-      // TODO: fix this.
-      link.id = link.targetHash + link.salt + link.actor
-
       if (link.deleted) {
         document.getElementById(link.id)?.remove()
       } else {
