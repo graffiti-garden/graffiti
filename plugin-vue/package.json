@@ -30,7 +30,7 @@
   "homepage": "https://github.com/graffiti-garden/plugin-vue#readme",
   "dependencies": {
     "@graffiti-garden/actor-client": "^1.0.11",
-    "@graffiti-garden/graffiti-p2p": "^1.3.0",
+    "@graffiti-garden/graffiti-p2p": "^1.3.1",
     "vue": "^3.3.4"
   },
   "devDependencies": {

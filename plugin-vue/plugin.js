@@ -1,7 +1,7 @@
 import Graffiti from '@graffiti-garden/graffiti-p2p'
 
 import GraffitiLinks from './GraffitiLinks.vue'
-import { shallowReactive, reactive, isRef, watch, onScopeDispose, computed } from 'vue'
+import { shallowReactive, reactive, unref, isRef, watch, onScopeDispose, computed, watchEffect } from 'vue'
 
 const REFRESH_RATE = 100 // milliseconds
 
@@ -62,10 +62,7 @@ export default {
         }
       }
 
-      graffiti.addLinkListener(
-        isRef(source)? source.value : source,
-        listener
-      )
+      graffiti.addLinkListener(unref(source), listener)
 
       const unwatch =
         isRef(source)?
@@ -82,14 +79,17 @@ export default {
         // Stop the loop
         unwatch()
         clearTimeout(timeoutID)
-        graffiti.removeLinkListener(
-          isRef(source)? source.value : source,
-          listener
-        )
+        graffiti.removeLinkListener(unref(source), listener)
       })
 
-      // Strip IDs
-      return { links: computed(()=> Object.values(linkMap)) }
+      // Strip IDs without creating a ref
+      const links = reactive([])
+      watchEffect(()=> {
+        const mapValues = Object.values(linkMap)
+        Object.assign(links, mapValues)
+        links.length = mapValues.length
+      })
+      return { links }
     }})
 
     // Begin to define a global property that mirrors
