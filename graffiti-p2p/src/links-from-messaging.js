@@ -1,5 +1,6 @@
 import Ajv2020 from "ajv/dist/2020"
 import { sha256Hex } from "./util"
+import * as stringify from 'fast-json-stable-stringify'
 
 const ajv = new Ajv2020()
 export const messageSchemaValidate = ajv.compile({
@@ -35,7 +36,7 @@ export const messageSchemaValidate = ajv.compile({
 export const signaturePayloadValidate = ajv.compile({
   type: "object",
   properties: {
-    source: { type: "string" },
+    source: {},
     targetHash: { type: "string" },
     salt: { type: "string" },
     deleted: { type: "boolean" }
@@ -69,7 +70,7 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
         throw "Cannot include target in a deletion"
       }
     } else {
-      if (targetHash != await sha256Hex(JSON.stringify(target))) {
+      if (targetHash != await sha256Hex(stringify(target))) {
         throw "Signed hash of target does not match the hash of target"
       }
     }

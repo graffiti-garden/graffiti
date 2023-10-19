@@ -5,7 +5,11 @@
   "type": "module",
   "main": "./graffiti-p2p.js",
   "browser": "./dist/graffiti-p2p.js",
-  "files": ["graffiti-p2p.js", "src", "dist"],
+  "files": [
+    "graffiti-p2p.js",
+    "src",
+    "dist"
+  ],
   "exports": {
     ".": {
       "default": "./graffiti-p2p.js",
@@ -32,6 +36,7 @@
     "@graffiti-garden/actor-client": "^1.0.11",
     "@graffiti-garden/tracker-client": "^1.1.0",
     "ajv": "^8.12.0",
+    "fast-json-stable-stringify": "^2.1.0",
     "idb-keyval": "^6.2.1",
     "jose": "^4.14.4",
     "peerjs": "^1.4.7"

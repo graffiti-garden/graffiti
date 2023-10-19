@@ -1,6 +1,7 @@
 import routeMessage, { signaturePayloadValidate } from './links-from-messaging'
 import { sha256Hex } from './util'
 import { createStore as createStoreDB, set as setDB, get as getDB, keys as keysDB } from "idb-keyval"
+import * as stringify from 'fast-json-stable-stringify'
 
 export default function (actorClient, noStorage=false) {
 
@@ -11,16 +12,19 @@ export default function (actorClient, noStorage=false) {
   const set = noStorage? (id, value)=> store[id] = value : setDB
 
   return class LinksFrom {
-    constructor(source) {
-      this.source = source
-      this.callbacks = new Set()
-      this.linkStore = createStore('graffiti:' + this.source, 'links')
+    static toURI(source) {
+      return stringify(source)
     }
 
-    static toURI(source) { return source }
+    constructor(source) {
+      this.source = source
+      this.sourceURI = this.constructor.toURI(source)
+      this.callbacks = new Set()
+      this.linkStore = createStore('graffiti:' + this.sourceURI, 'links')
+    }
 
     async createPostCapability(target, actor) {
-      const targetHash = await sha256Hex(JSON.stringify(target))
+      const targetHash = await sha256Hex(stringify(target))
       const salt = crypto.randomUUID()
       return await this.#createCapability(targetHash, salt, actor, false, target)
     }
@@ -33,16 +37,17 @@ export default function (actorClient, noStorage=false) {
       if (!verified) {
         const { payload, actor } = await actorClient.verify(signature)
 
+        const sourceURI = this.constructor.toURI(link.source)
         if (
           !signaturePayloadValidate(payload) ||
           link.actor != actor ||
-          link.source != this.source ||
-          link.source != payload.source ||
+          sourceURI != this.sourceURI ||
+          sourceURI != this.constructor.toURI(payload.source) ||
           link.targetHash != payload.targetHash ||
           link.salt != payload.salt ||
           link.deleted != payload.deleted || (
             !link.deleted &&
-            link.targetHash != await sha256Hex(JSON.stringify(link.target))
+            link.targetHash != await sha256Hex(stringify(link.target))
           )
         ) {
           throw "Capability signature does not match link"
@@ -110,11 +115,10 @@ export default function (actorClient, noStorage=false) {
       )
     }
     async #makeID(source, targetHash, salt, actor) {
-      return await sha256Hex(JSON.stringify({
+      return await sha256Hex(stringify({
         source, targetHash, salt, actor
       }))
     }
-
 
     #constructGiveMessage({ signature, deleted, target }) {
       const output = {
@@ -172,7 +176,7 @@ export default function (actorClient, noStorage=false) {
       deleted,
       signature
     }) {
-      if (source != this.source)
+      if (this.constructor.toURI(source) != this.sourceURI)
         throw "Source in message does not match"
 
       const id = await this.#makeID(source, targetHash, salt, actor)

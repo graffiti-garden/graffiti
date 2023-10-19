@@ -57,7 +57,6 @@ describe('Link messaging', async ()=> {
       want++
     }
 
-    console.log("here")
     await routeMessage({ intent: 'have', links }, onHave, onWant)
     expect(have).toEqual(1)
     expect(want).toEqual(0)
@@ -69,7 +68,10 @@ describe('Link messaging', async ()=> {
 
   for (const payload of [
     { source: 'asdfjkdfj', targetHash: 'kdjfkdjf', salt: 'ksdjkdjjf', deleted: false },
-    { source: 'asdfj39483kdfj', targetHash: 'kdjfk34djf', salt: 'ksdjkdj9234jf', deleted: true }
+    { source: 'asdfj39483kdfj', targetHash: 'kdjfk34djf', salt: 'ksdjkdj9234jf', deleted: true },
+    { source: 1234, targetHash: 'kdjfk34djf', salt: 'ksdjkdj9234jf', deleted: true },
+    { source: {}, targetHash: 'kdjfk34djf', salt: 'ksdjkdj9234jf', deleted: true },
+    { source: { something: 'cool', like: 'this'}, targetHash: 'kdjfk34djf', salt: 'ksdjkdj9234jf', deleted: true }
   ]) {
     it (`Valid signature payload schema: ${JSON.stringify(payload)}`, ()=> {
       assert(signaturePayloadValidate(payload))

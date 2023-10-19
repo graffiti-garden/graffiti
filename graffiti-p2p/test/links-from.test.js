@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { actorClientMock } from './mock'
 import { sha256Hex } from '../src/util'
 import linksFrom from '../src/links-from'
+import * as stringify from 'fast-json-stable-stringify'
 
 function addSendGossip(...peers) {
   for (const peer of peers) {
@@ -45,7 +46,7 @@ describe('Link from', ()=> {
     l=> l.actor = "kjasdjf"
     // l=> null
   ]) {
-    it(`invalid capability: ${JSON.stringify(modify)}`, async ()=> {
+    it(`invalid capability: ${stringify(modify)}`, async ()=> {
       const { actor, actorClient } = actorClientMock()
       const source = "something cool!"
       const lf = new (linksFrom(actorClient))(source)
@@ -85,7 +86,7 @@ describe('Link from', ()=> {
     const targetHash = m1.targetHash
     const salt = m1.salt
     expect(m1.id).toEqual(
-      await sha256Hex(JSON.stringify({
+      await sha256Hex(stringify({
         source, targetHash, salt, actor
       }))
     )
@@ -214,10 +215,12 @@ describe('Link from', ()=> {
 
   it('add and delete one peer to another', async ()=> {
     const { actor: actor1, actorClient: actorClient1 } = actorClientMock()
-    const source = crypto.randomUUID()
-    const lf1 = new (linksFrom(actorClient1, true))(source)
+    const randomness = crypto.randomUUID()
+    const source1 = { a: "hello", b: randomness }
+    const source2 = { b: randomness, a: "hello" }
+    const lf1 = new (linksFrom(actorClient1, true))(source1)
     const { actor: actor2, actorClient: actorClient2 } = actorClientMock()
-    const lf2 = new (linksFrom(actorClient2))(source)
+    const lf2 = new (linksFrom(actorClient2))(source2)
 
     addSendGossip(lf1, lf2)
 
