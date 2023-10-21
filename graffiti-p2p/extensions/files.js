@@ -2,7 +2,7 @@ import Ajv2020 from "ajv/dist/2020"
 import { sha256Hex } from "../src/util"
 
 const ajv = new Ajv2020()
-const fileReferenceValidate = ajv.compile({
+export const fileReferenceValidate = ajv.compile({
   type: "object",
   properties: {
     type: { const: "FileReference" },

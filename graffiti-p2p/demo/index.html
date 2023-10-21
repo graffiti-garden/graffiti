@@ -21,11 +21,13 @@
 
   <form id="poster">
     <input id="message"/>
+    <input type="file" accept="image/*" id="image-selector">
     <input type="submit" value="Post">
   </form>
 
   <script type="module">
     import Graffiti from '../graffiti-p2p'
+    import { fileLink, fileReferenceValidate, fileLinkCallback } from '../extensions/files.js'
     import '@graffiti-garden/actor-client/client.css'
 
     window.gf = new Graffiti()
@@ -35,11 +37,17 @@
     function listener(link) {
       if (link.deleted) {
         document.getElementById(link.id)?.remove()
-      } else {
+      } else if (
+        typeof link.target == 'object' &&
+        link.target.type == 'Note' &&
+        typeof link.target.content == 'string' && 
+        (!link.target.image || fileReferenceValidate(link.target.image))
+      ) {
+
         const listEl = document.createElement("li")
         document.getElementById("posts").appendChild(listEl)
         listEl.id = link.id
-        listEl.innerText = link.target
+        listEl.innerText = link.target.content
 
         if (link.actor == gf.me) {
           const buttonEl = document.createElement("button")
@@ -48,6 +56,22 @@
           buttonEl.onclick = ()=> {
             gf.deleteLink(link)
           }
+        }
+
+        if (link.target.image) {
+          const imgEl = document.createElement("img")
+          imgEl.style = "max-width: 10rem;"
+          imgEl.src = "https://upload.wikimedia.org/wikipedia/commons/b/b9/Youtube_loading_symbol_1_(wobbly).gif"
+          listEl.insertAdjacentElement("beforeend", imgEl)
+          gf.addLinkListener(link.target.image,
+            fileLinkCallback(link.target.image, f=> {
+              const reader = new FileReader()
+              reader.readAsDataURL(f)
+              reader.onload = e=> {
+                imgEl.src = e.target.result
+              }
+            })
+          )
         }
       }
     }
@@ -69,7 +93,21 @@
       const message = messageEl.value
       messageEl.value = ''
 
-      await gf.postLink(context, message)
+      const output = {
+        type: 'Note',
+        content: message
+      }
+
+      const imageInput = document.getElementById("image-selector")
+      if (imageInput.files.length) {
+        const file = imageInput.files[0]
+        const [imageReference, imageTarget] = await fileLink(file)
+        imageInput.value = ''
+        output.image = imageReference
+        await gf.postLink(imageReference, imageTarget)
+      }
+
+      await gf.postLink(context, output)
     })
   </script>
 </body>
