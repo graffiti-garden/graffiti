@@ -16,6 +16,14 @@ export default function (actorClient, noStorage=false) {
       return stringify(source)
     }
 
+    #_sourceHash = null
+    async #sourceHash() {
+      if (!this.#_sourceHash) {
+        this.#_sourceHash = await sha256Hex(this.sourceURI)
+      }
+      return this.#_sourceHash
+    }
+
     constructor(source) {
       this.source = source
       this.sourceURI = this.constructor.toURI(source)
@@ -38,17 +46,20 @@ export default function (actorClient, noStorage=false) {
         const { payload, actor } = await actorClient.verify(signature)
 
         const sourceURI = this.constructor.toURI(link.source)
+        if (!signaturePayloadValidate(payload)) {
+          throw signaturePayloadValidate.errors
+        }
         if (
-          !signaturePayloadValidate(payload) ||
           link.actor != actor ||
           sourceURI != this.sourceURI ||
-          sourceURI != this.constructor.toURI(payload.source) ||
+          await this.#sourceHash() != payload.sourceHash ||
           link.targetHash != payload.targetHash ||
           link.salt != payload.salt ||
           link.deleted != payload.deleted || (
             !link.deleted &&
             link.targetHash != await sha256Hex(stringify(link.target))
-          )
+          ) ||
+          link.id != await this.#makeID(link.targetHash, link.salt, link.actor)
         ) {
           throw "Capability signature does not match link"
         }
@@ -114,15 +125,16 @@ export default function (actorClient, noStorage=false) {
         actorClient
       )
     }
-    async #makeID(source, targetHash, salt, actor) {
+    async #makeID(targetHash, salt, actor) {
       return await sha256Hex(stringify({
-        source, targetHash, salt, actor
+        sourceHash: await this.#sourceHash(), targetHash, salt, actor
       }))
     }
 
     #constructGiveMessage({ signature, deleted, target }) {
       const output = {
         intent: 'give',
+        source: this.source,
         signature
       }
       if (!deleted) {
@@ -170,16 +182,17 @@ export default function (actorClient, noStorage=false) {
     async #onGive({
       source,
       target,
+      sourceHash,
       targetHash,
       salt,
       actor,
       deleted,
       signature
     }) {
-      if (this.constructor.toURI(source) != this.sourceURI)
+      if (sourceHash != await this.#sourceHash())
         throw "Source in message does not match"
 
-      const id = await this.#makeID(source, targetHash, salt, actor)
+      const id = await this.#makeID(targetHash, salt, actor)
 
       const entry = await get(id, this.linkStore)
       if (entry &&
@@ -199,14 +212,14 @@ export default function (actorClient, noStorage=false) {
 
     async #createCapability(targetHash, salt, actor, deleted, target) {
       const signature = await actorClient.sign({
-        source: this.source,
+        sourceHash: await this.#sourceHash(),
         targetHash,
         salt,
         deleted
       }, actor)
 
       const link = {
-        id: await this.#makeID(this.source, targetHash, salt, actor),
+        id: await this.#makeID(targetHash, salt, actor),
         source: this.source,
         actor,
         targetHash,

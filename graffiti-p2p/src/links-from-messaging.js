@@ -26,22 +26,34 @@ export const messageSchemaValidate = ajv.compile({
   }, {
     properties: {
       intent: { const: "give" },
-      signature: { type: "string"},
-      target: {},
+      signature: { type: "string" },
+      source: {},
+      target: {}
     },
-    required: ["intent", "signature"]
+    required: ["intent", "signature", "source"]
   }]
 })
 
 export const signaturePayloadValidate = ajv.compile({
   type: "object",
   properties: {
-    source: {},
-    targetHash: { type: "string" },
-    salt: { type: "string" },
+    sourceHash: {
+      type: "string",
+      minLength: 64,
+      maxLength: 64
+    },
+    targetHash: {
+      type: "string",
+      minLength: 64,
+      maxLength: 64
+    },
+    salt: {
+      type: "string",
+      maxLength: 36
+    },
     deleted: { type: "boolean" }
   },
-  required: ['source', 'targetHash', 'salt', 'deleted'],
+  required: ['sourceHash', 'targetHash', 'salt', 'deleted'],
   additionalProperties: false
 })
 
@@ -55,7 +67,7 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
   } else if (message.intent == 'want') {
     await onWant(message.links)
   } else if (message.intent == 'give') {
-    const { signature, target } = message
+    const { signature, source, target } = message
 
     const { payload, actor } = await actorClient.verify(signature)
 
@@ -63,7 +75,11 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
       throw signaturePayloadValidate.errors
     }
 
-    const { source, targetHash, salt, deleted } = payload
+    const { sourceHash, targetHash, salt, deleted } = payload
+
+    if (sourceHash != await sha256Hex(stringify(source))) {
+      throw "Signed hash of source does not match hash of source"
+    }
 
     if (deleted) {
       if (target != undefined) {
@@ -78,6 +94,7 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
     await onGive({
       source,
       target,
+      sourceHash,
       targetHash,
       salt,
       actor,

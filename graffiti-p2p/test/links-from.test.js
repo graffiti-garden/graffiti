@@ -87,7 +87,7 @@ describe('Link from', ()=> {
     const salt = m1.salt
     expect(m1.id).toEqual(
       await sha256Hex(stringify({
-        source, targetHash, salt, actor
+        sourceHash: await sha256Hex(stringify(source)), targetHash, salt, actor
       }))
     )
 
