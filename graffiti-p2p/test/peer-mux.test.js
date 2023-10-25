@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import PeerMux, { RECONNECT_TIMEOUT } from '../src/peer-mux'
+import PeerMux, { RECONNECT_TIMEOUT, encrypt, decrypt } from '../src/peer-mux'
 import { randomHash, sha256Hex, sha256Uint8 } from '../src/util'
 
 // run with "peerjs -p 9000"
@@ -16,6 +16,22 @@ const options = {
 for (const [name, peerJSOptions] of Object.entries(options)) {
 
 describe(`Peer Mux ${name}`, ()=> {
+
+  it("encrypt, decrypt", async ()=> {
+    const message = "hello world"
+    const password = await sha256Uint8("password12345")
+    const encryption = await encrypt(message, password)
+    const decryption = await decrypt(encryption, password)
+    expect(decryption).toEqual(message)
+  })
+
+  it("encrypt, decrypt with wrong password", async ()=> {
+    const message = "hello world"
+    const password1 = await sha256Uint8("password12345")
+    const password2 = await sha256Uint8("laskdjfkdjfkj")
+    const encryption = await encrypt(message, password1)
+    await expect(decrypt(encryption, password2)).rejects.toThrowError()
+  })
 
   it("Peers send each other", async ()=> {
 

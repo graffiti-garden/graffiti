@@ -4,18 +4,37 @@ import { encoder, decoder } from './util'
 
 export const RECONNECT_TIMEOUT = 5000
 
-async function encrypt(value, password) {
-  return new jose.CompactEncrypt(encoder.encode(value))
+export async function encrypt(value, password) {
+  // Compress with gzip
+  const byteArray = encoder.encode(value)
+  const cs = new CompressionStream("gzip")
+  const writer = cs.writable.getWriter()
+  writer.write(byteArray)
+  writer.close()
+  const compressedBuffer = await new Response(cs.readable).arrayBuffer()
+  const compressed = new Uint8Array(compressedBuffer)
+  // console.log(`compression ratio: ${compressed.length/byteArray.length}`)
+
+  // Encrypt
+  return new jose.CompactEncrypt(compressed)
       .setProtectedHeader({
         alg: 'dir',
         enc: 'A128CBC-HS256',
       }).encrypt(password) // password is uint8
 }
 
-async function decrypt(encrypted, password) {
-  const { plaintext } =
+export async function decrypt(encrypted, password) {
+  // Decrypt
+  const { plaintext: compressed } =
     await jose.compactDecrypt(encrypted, password)
-  return decoder.decode(plaintext)
+
+  // Decompress
+  const cs = new DecompressionStream("gzip")
+  const writer = cs.writable.getWriter()
+  writer.write(compressed)
+  writer.close()
+  const decompressed = await new Response(cs.readable).arrayBuffer()
+  return decoder.decode(decompressed)
 }
 
 /**
@@ -123,10 +142,11 @@ export default class PeerMux {
     this.wires[infoHash] = { onMessage, password }
 
     const send = async (peer, message, timeout=10000)=> {
-      // If sending to self, skip encryption
+      // If sending to self, skip compression and encryption
       if (peer == this.peerID)
         return this.wires[infoHash]?.onMessage(peer, message)
 
+      // Encrypt the message
       const encrypted = await encrypt(JSON.stringify(message), password)
 
       // Connect to the peer
