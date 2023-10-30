@@ -14,6 +14,7 @@ export async function encrypt(value, password) {
   const compressedBuffer = await new Response(cs.readable).arrayBuffer()
   const compressed = new Uint8Array(compressedBuffer)
   // console.log(`compression ratio: ${compressed.length/byteArray.length}`)
+  // console.log(`compressed size: ${compressed.length}`)
 
   // Encrypt
   return new jose.CompactEncrypt(compressed)
