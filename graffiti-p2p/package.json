@@ -7,6 +7,7 @@
   "browser": "./dist/graffiti-p2p.js",
   "files": [
     "graffiti-p2p.js",
+    "extensions",
     "src",
     "dist"
   ],
