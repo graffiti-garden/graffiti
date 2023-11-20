@@ -2,14 +2,6 @@ version: '3.8'
 
 services:
 
-  graffiti-auth:
-    container_name: graffiti-auth
-    build: auth
-    volumes:
-      - ./auth:/mount/auth
-    environment:
-      AUTH_CODE_EXP_TIME: 5 # minutes
-
   graffiti-app:
     container_name: graffiti-app
     build: app
@@ -17,15 +9,13 @@ services:
       - ./app:/mount/app
     depends_on:
       - mongo
-
-  nginx:
-    image: nginx:1.23.3
-    container_name: graffiti-nginx
-    volumes:
-      - ./config/nginx/base.conf:/etc/nginx/templates/base.conf.template:ro
+    environment:
+      DEBUG: 'true'
+    ports:
+      - 8000:8000
 
   mongo:
-    image: mongo:6.0.3-focal
+    image: mongo:6.0.8-jammy
     container_name: graffiti-mongo
     restart: always
     command: "--bind_ip_all --replSet rs0"

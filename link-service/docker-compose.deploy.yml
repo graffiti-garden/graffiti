@@ -2,44 +2,11 @@ version: '3.8'
 
 services:
 
-  nginx:
-    volumes:
-      - ./config/nginx/deploy.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt/live/app.${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
-      - /etc/letsencrypt/live/app.${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
-    ports:
-      - 80:80
-      - 443:443
-    environment:
-      DOMAIN: ${DOMAIN}
-
-  mailserver:
-    image: mailserver/docker-mailserver:11.2.0
-    container_name: graffiti-mailserver
-    hostname: ${DOMAIN}
-    domainname: ${DOMAIN}
-    volumes:
-      - ./config/mailserver:/tmp/docker-mailserver/
-      - /etc/letsencrypt/live/app.${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
-      - /etc/letsencrypt/live/app.${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
-      - /etc/localtime:/etc/localtime:ro
-    expose:
-      - 25
-    env_file: config/mailserver.env
-    cap_add:
-      - NET_ADMIN
-      - SYS_PTRACE
-    restart: always
-
-  graffiti-auth:
-    environment:
-      DEBUG: 'false'
-      DOMAIN: ${DOMAIN}
-      AUTH_SECRET: ${SECRET}
-    depends_on:
-      - mailserver
-
   graffiti-app:
     environment:
       DEBUG: 'false'
-      AUTH_SECRET: ${SECRET}
+    ports:
+      - 443:443
+    volumes:
+      - /etc/letsencrypt/live/link.${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/link.${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
