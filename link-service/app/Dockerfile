@@ -1,10 +1,11 @@
-FROM python:3.12.0-slim-bookworm
-# TODO: build essentials may not be necessary
-# once make slim once aiohttp/frozenlist updates
-RUN apt update && apt install build-essential -y
-
+FROM python:3.12.0-alpine3.18
 COPY requirements.txt /tmp/
-RUN pip install -r /tmp/requirements.txt
+
+# Don't save build dependencies
+# to keep things small
+RUN apk add --no-cache build-base libffi-dev && \
+    pip install -r /tmp/requirements.txt && \
+    apk del build-base libffi-dev
 
 WORKDIR /mount
 CMD python -m app.main
