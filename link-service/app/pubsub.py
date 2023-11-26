@@ -1,169 +1,181 @@
 import asyncio
-from datetime import datetime, timezone
+import struct
+from enum import Enum
+from fastapi import APIRouter, WebSocket
 from contextlib import asynccontextmanager
+from .db import db_connection
 
-class PubSub:
+@asynccontextmanager
+async def lifespan(router: APIRouter):
+    router.subscriptions = {} # info_hash -> set(socket)
+    asyncio.create_task(watch())
+    yield
 
-    def __init__(self, db):
-        self.db = db
+router = APIRouter(lifespan=lifespan)
 
-        self.context_to_sockets = {} # context -> set(socket)
+@asynccontextmanager
+async def register(socket):
+    await socket.accept()
+    socket.subscriptions = set()
 
-        self.resume_token = None
-        self.restart_watcher()
-
-    def restart_watcher(self):
-        if hasattr(self, 'watch_task'):
-            self.watch_task.cancel()
-        self.watch_task = asyncio.create_task(self.watch())
-
-    @asynccontextmanager
-    async def register(self, socket):
-        socket.contexts = set()
-
+    try:
+        yield
+    finally:
+        unsubscribe_all(socket)
         try:
-            yield
-        finally:
-            # Remove all references to the socket
-            for context in socket.contexts:
-                self.context_to_sockets[context].remove(socket)
-                if not self.context_to_sockets[context]:
-                    del self.context_to_sockets[context]
-                    self.restart_watcher()
-
-    async def subscribe(self, contexts, socket):
-        for context in contexts:
-            if context in socket.contexts:
-                raise Exception(f"you are already subscribed to the context {context}")
-
-        for context in contexts:
-            socket.contexts.add(context)
-            if context not in self.context_to_sockets:
-                self.context_to_sockets[context] = { socket }
-                self.restart_watcher()
-            else:
-                self.context_to_sockets[context].add(socket)
-
-        # In the background, begin processing existing results
-        asyncio.create_task(self.process_existing(contexts, socket))
-
-        return 'subscribed'
-
-    async def unsubscribe(self, contexts, socket):
-        for context in contexts:
-            if context not in socket.contexts:
-                raise Exception(f"you are not subscribed to the context {context}")
-
-        for context in contexts:
-            socket.contexts.remove(context)
-            self.context_to_sockets[context].remove(socket)
-            if not self.context_to_sockets[context]:
-                del self.context_to_sockets[context]
-                self.restart_watcher()
-
-        return 'unsubscribed'
-
-    # Initialize database interfaces
-    async def watch(self):
-
-        contexts_query = { "$in": list(self.context_to_sockets.keys()) }
-        async with self.db.watch(
-                [ { '$match' : { '$or': [
-                    { 'fullDocument.context': { "$elemMatch": contexts_query }},
-                    { 'fullDocumentBeforeChange.context': { "$elemMatch": contexts_query }},
-                    { "fullDocument.id": contexts_query },
-                    { "fullDocumentBeforeChange.id": contexts_query }
-                ]}}],
-                full_document='whenAvailable',
-                full_document_before_change='whenAvailable',
-                resume_after=self.resume_token) as stream:
-
-            async for change in stream:
-                tasks = []
-
-                # Create a set of tasks for sending
-                # messages to relevant sockets
-                contexts_new = denied_sockets = []
-                if 'fullDocument' in change:
-                    obj = change['fullDocument']
-                    contexts_new = obj["context"]
-                    del obj['_id']
-                    denied_sockets = self.collect_tasks(obj, tasks, "update")
-
-                if 'fullDocumentBeforeChange' in change:
-
-                    obj = change['fullDocumentBeforeChange']
-                    obj = {
-                        "id": obj["id"],
-                        "actor": obj["actor"],
-                        "context": obj["context"]
-                    }
-
-                    # If users have permission to see the old
-                    # object but not the new, send a removal
-                    for socket in denied_sockets:
-                        self.task_with_permission(socket, obj, tasks, "remove")
-
-                    # Now only consider old contexts and don't consider denied sockets
-                    obj["context"] = list(set(obj["context"]) - set(contexts_new))
-                    self.collect_tasks(obj, tasks, "remove",
-                            done_sockets=denied_sockets,
-                            with_id='fullDocument' not in change)
-
-                # Send the changes
-                await asyncio.shield(asyncio.gather(*tasks))
-                self.resume_token = stream.resume_token
-
-    def collect_tasks(self, obj, tasks, msg, done_sockets=None, with_id=True):
-        if not done_sockets: done_sockets = set()
-        denied_sockets = set()
-
-        contexts = obj["context"]
-        if with_id: contexts = contexts + [obj["id"]]
-        for context in contexts:
-            if context not in self.context_to_sockets: continue
-
-            # Ignore sockets that have already
-            # been considered for sending
-            for socket in self.context_to_sockets[context] - done_sockets:
-                done_sockets.add(socket)
-                if not self.task_with_permission(socket, obj, tasks, msg):
-                    denied_sockets.add(socket)
-
-        return denied_sockets
-
-    def task_with_permission(self, socket, obj, tasks, msg):
-        has_permission = socket.actor == obj['actor'] or \
-            (('bto' not in obj) and ('bcc' not in obj)) or \
-            ('bto' in obj and socket.actor in obj['bto']) or \
-            ('bcc' in obj and socket.actor in obj['bcc'])
-
-        if has_permission:
-            tasks.append(socket.send_json({msg: obj, "historical": False}))
-        return has_permission
-
-    async def process_existing(self, contexts, socket):
+            await socket.close()
+        except: pass
         
-        query = { "$and": [
-            # Access
-            { "$or": [
-                # The object is public
-                {  "bto": { "$exists": False },
-                   "bcc": { "$exists": False } },
+msg_header_format = '!BB16s'
+msg_header_length = struct.calcsize(msg_header_format)
 
-                # The actor is the recipient or sender
-                { "bto":   socket.actor },
-                { "bcc":   socket.actor },
-                { "actor": socket.actor }]},
-            # Context
-            { "$or": [
-                { "context": { "$elemMatch": { "$in": contexts } } },
-                { "id": { "$in": contexts }}]}
-        ]}
+class RequestHeader(Enum):
+    SUBSCRIBE   = 1
+    UNSUBSCRIBE = 0
 
-        async for obj in self.db.find(query):
-            del obj["_id"]
+class ResponseHeader(Enum):
+    SUCCESS          = b'0'
+    ANNOUNCE         = b'1'
+    ERROR_WITH_ID    = b'e'
+    ERROR_WITHOUT_ID = b'f'
+
+async def send_error(socket: WebSocket, message, message_id=None):
+    if message_id:
+        header = ResponseHeader.ERROR_WITH_ID.value + message_id
+    else:
+        header = ResponseHeader.ERROR_WITHOUT_ID.value
+
+    await socket.send_bytes(header + message.encode())
+
+@router.websocket("/")
+async def stream(socket: WebSocket):
+    async with register(socket):
+        while True:
             try:
-                await socket.send_json({ "update": obj, "historical": True })
-            except Exception as e:
+                msg = await socket.receive_bytes()
+            except:
                 break
+
+            if len(msg) < msg_header_length:
+                try:
+                    await send_error(socket, 'not enough data')
+                finally:
+                    break
+        
+            version, request, message_id = struct.unpack(
+                msg_header_format,
+                msg[:msg_header_length]
+            ) 
+
+            if version != 0:
+                try:
+                    await send_error(socket, 'this is version zero', message_id)
+                    continue
+                except:
+                    break
+
+            body = msg[msg_header_length:]
+
+            if not len(body):
+                try:
+                    await send_error(socket, 'no info hash', message_id)
+                    continue
+                except:
+                    break
+
+            if len(body) % 32 != 0:
+                try:
+                    await send_error(socket, 'info hashes must each be exactly 32 bytes', message_id)
+                    continue
+                except:
+                    break
+            info_hashes = [body[i:i+32] for i in range(0, len(body), 32)]
+            
+            if request == RequestHeader.SUBSCRIBE.value:
+                subscribe(socket, info_hashes)
+            elif request == RequestHeader.UNSUBSCRIBE.value:
+                unsubscribe(socket, info_hashes)
+            else:
+                try:
+                    await send_error(socket, 'invalid request', message_id)
+                    continue
+                except:
+                    break
+            
+            await socket.send_bytes(ResponseHeader.SUCCESS.value + message_id)
+
+def subscribe(socket, info_hashes):
+    for info_hash in info_hashes:
+        socket.subscriptions.add(info_hash)
+        if info_hash not in router.subscriptions:
+            router.subscriptions[info_hash] = set()
+        router.subscriptions[info_hash].add(socket)
+
+    asyncio.create_task(process_existing(socket, info_hashes))
+
+def unsubscribe(socket, info_hashes):
+    for info_hash in info_hashes:
+        if info_hash in socket.subscriptions:
+            socket.subscriptions.remove(info_hash)
+            router.subscriptions[info_hash].remove(socket)
+            if not router.subscriptions[info_hash]:
+                del router.subscriptions[info_hash]
+
+def unsubscribe_all(socket):
+    return unsubscribe(socket, socket.subscriptions.copy())
+
+async def announce(socket, editor_public_key, container_signed):
+    await socket.send_bytes(
+        ResponseHeader.ANNOUNCE.value + 
+        editor_public_key +
+        container_signed
+    )
+
+async def process_existing(socket, info_hashes):
+    # TODO: account for expiration!!
+    async for doc in db_connection().find({"info_hash": { "$in": info_hashes}}):
+        try:
+            await announce(socket, doc['editor_public_key'], doc['container_signed'])
+        except:
+            break
+
+async def watch():
+    # TODO: account for expiration!!
+    async with db_connection().watch(
+            [{'$match' : {}}], # Match all
+            full_document='whenAvailable',
+            full_document_before_change='whenAvailable') as stream:
+
+        async for change in stream:
+
+            socket_union = set()
+            container_signed = b''
+            editor_public_key = None
+
+            for doc_state in ['fullDocumentBeforeChange', 'fullDocument']:
+                if doc_state in change:
+                    doc = change[doc_state]
+                    info_hash = doc['info_hash']
+                    editor_public_key = doc['editor_public_key']
+                    if doc_state == 'fullDocument':
+                        container_signed = doc['container_signed']
+                    
+                    # Get all the sockets subscibed to the
+                    # new and old info hash, if they exist
+                    if info_hash in router.subscriptions:
+                        socket_union += router.subscriptions[info_hash]
+
+            # If no sockets are subscribed to the
+            # info hash, either before or after change,
+            # there is nothing to do.
+            if not socket_union or not editor_public_key: continue
+                
+            # Send the new document to all relevant info hashes.
+            tasks = [announce(
+                socket,
+                editor_public_key,
+                container_signed
+            ) for socket in socket_union]
+
+            # Send the changes (ignoring failed sends)
+            await asyncio.gather(*tasks, return_exceptions=True)

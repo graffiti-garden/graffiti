@@ -2,7 +2,7 @@
 
 import uvicorn
 from os import getenv
-from fastapi import FastAPI, WebSocket, Depends, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from contextlib import asynccontextmanager
@@ -12,14 +12,18 @@ from fastapi.responses import PlainTextResponse
 
 from .db import db_intialize
 from . import rest
+from . import pubsub
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield await db_intialize()
+    await db_intialize()
+    # TODO: this is to fix a bug with lifespans
+    # not working in routers yet.
+    # See: https://github.com/tiangolo/fastapi/discussions/9664
+    async with pubsub.lifespan(pubsub.router):
+        yield
 
-app = FastAPI(
-    lifespan=lifespan,
-)
+app = FastAPI(lifespan=lifespan)
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request, exc):
@@ -37,8 +41,9 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Add the router
+# Add rest and pubsub
 app.include_router(rest.router)
+app.include_router(pubsub.router)
 
 @app.get("/")
 async def info():

@@ -18,7 +18,7 @@ services:
     image: mongo:6.0.8-jammy
     container_name: graffiti-mongo
     restart: always
-    command: "--bind_ip_all --replSet rs0"
+    command: "--bind_ip_all --replSet rs0 --quiet --logpath /dev/null"
     volumes:
       - ./config/mongo:/docker-entrypoint-initdb.d/
       - ./db:/data/db

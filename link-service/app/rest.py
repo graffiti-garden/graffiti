@@ -39,7 +39,7 @@ async def get(
     else:
         raise HTTPException(404, 'link not found')
 
-put_metadata_format = '!H32s64sQQ'
+put_metadata_format = '!B32s64sQQ'
 put_metadata_length = struct.calcsize(put_metadata_format)
 signature_length = 64
 payload_max_length = 256
