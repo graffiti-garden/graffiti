@@ -2,11 +2,11 @@ version: '3.8'
 
 services:
 
-  graffiti-app:
+  graffiti-linker:
     environment:
       DEBUG: 'false'
     ports:
       - 443:443
     volumes:
-      - /etc/letsencrypt/live/link.${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
-      - /etc/letsencrypt/live/link.${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
+      - /etc/letsencrypt/live/${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro

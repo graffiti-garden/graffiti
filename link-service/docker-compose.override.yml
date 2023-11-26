@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+
+  graffiti-linker:
+    environment:
+      DEBUG: 'true'
+    ports:
+      - 8000:8000

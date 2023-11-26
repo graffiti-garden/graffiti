@@ -2,68 +2,19 @@
 
 import unittest
 import aiohttp
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from ..rest import put_metadata_format
 import time
-import struct
 from random import randbytes
 import base64
-
-URL_BASE = 'http://localhost:8000/'
+from .utils import URL_BASE, editor_public_private_keys, generate_info_hash_and_pok, put
 
 class TestRest(unittest.IsolatedAsyncioTestCase):
-
-    def editor_public_private_keys(self):
-        private_key = Ed25519PrivateKey.generate()
-        public_key = private_key.public_key().public_bytes_raw()
-        return public_key, private_key
-
-    def generate_info_hash_and_pok(self, editor_public_key):
-        uri_private_key = Ed25519PrivateKey.generate()
-        info_hash = uri_private_key.public_key().public_bytes_raw()
-        pok = uri_private_key.sign(editor_public_key)
-        return info_hash, pok
     
-    async def put(
-        self,
-        editor_public_key,
-        editor_private_key,
-        version,
-        info_hash,
-        pok,
-        counter,
-        expiration,
-        payload
-    ):
-        container = struct.pack(put_metadata_format,
-            version,
-            info_hash,
-            pok,
-            counter,
-            expiration
-        ) + payload
-
-        container_signed = container + editor_private_key.sign(container)
-
-        editor_public_key_base64 = base64.urlsafe_b64encode(editor_public_key).decode()
-
-        url = f'{URL_BASE}{editor_public_key_base64}'
-
-        async with aiohttp.ClientSession() as session:
-
-            # Put the data
-            async with session.put(
-                url,
-                data=container_signed) as response:
-
-                return url, container_signed, response.status, await response.read()
-
     async def test_good_put(self):
         # All the arguments to the input
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
 
-        url, container_signed, status, response = await self.put(
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,
@@ -88,9 +39,9 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         expiration = int(time.time()) + 100
 
         # Put some data
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
-        url, container_signed, status, response = await self.put(
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,
@@ -105,7 +56,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
         # Replace it with increasingly larger counters
         for counter in [124, 125, 1000, 9999]:
-            url2, container_signed2, status, response = await self.put(
+            url2, container_signed2, status, response = await put(
                 editor_public_key=editor_public_key,
                 editor_private_key=editor_private_key,
                 info_hash=info_hash,
@@ -132,9 +83,9 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         init_expiration = int(time.time())
 
         # Put some data
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
-        url, container_signed, status, response = await self.put(
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,
@@ -149,7 +100,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
         # Replace it with increasingly larger counters
         for offset_c, offset_e in [[1, 1], [2, 1], [100, 100], [9999, 100]]:
-            url2, container_signed2, status, response = await self.put(
+            url2, container_signed2, status, response = await put(
                 editor_public_key=editor_public_key,
                 editor_private_key=editor_private_key,
                 info_hash=info_hash,
@@ -173,9 +124,9 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
     async def test_replace_dec_counter(self):
         # Put some data
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
-        url, container_signed, status, response = await self.put(
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,
@@ -190,7 +141,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
         # Try to replace it but with a smaller counter
         for counter in [0, 500, 42069, 42069]:
-            url2, container_signed2, status, response = await self.put(
+            url2, container_signed2, status, response = await put(
                 editor_public_key=editor_public_key,
                 editor_private_key=editor_private_key,
                 info_hash=info_hash,
@@ -216,9 +167,9 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         expiration = int(time.time()) + 100
 
         # Put some data
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
-        url, container_signed, status, response = await self.put(
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,
@@ -233,7 +184,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
         # Increase the counter, but decrease expiration
         for offset in [1, 100, int(time.time())-10]:
-            url2, container_signed2, status, response = await self.put(
+            url2, container_signed2, status, response = await put(
                 editor_public_key=editor_public_key,
                 editor_private_key=editor_private_key,
                 info_hash=info_hash,
@@ -256,10 +207,10 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(resp, container_signed)
 
     async def test_invalid_pok(self):
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
-        info_hash2, pok2 = self.generate_info_hash_and_pok(editor_public_key)
-        url, container_signed, status, response = await self.put(
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
+        info_hash2, pok2 = generate_info_hash_and_pok(editor_public_key)
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,
@@ -275,10 +226,10 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response, b'invalid proof of knowledge')
 
     async def test_invalid_signature(self):
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        editor_public_key2, editor_private_key2 = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
-        url, container_signed, status, response = await self.put(
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        editor_public_key2, editor_private_key2 = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key2,
             info_hash=info_hash,
@@ -294,11 +245,11 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
     async def test_huge_payload(self):
         # All the arguments to the input
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
 
         # Put some data
-        url, container_signed, status, response = await self.put(
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,
@@ -327,11 +278,11 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
     async def test_version_nonzero(self):
         # All the arguments to the input
-        editor_public_key, editor_private_key = self.editor_public_private_keys()
-        info_hash, pok = self.generate_info_hash_and_pok(editor_public_key)
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok = generate_info_hash_and_pok(editor_public_key)
 
         # Put some data
-        url, container_signed, status, response = await self.put(
+        url, container_signed, status, response = await put(
             editor_public_key=editor_public_key,
             editor_private_key=editor_private_key,
             info_hash=info_hash,

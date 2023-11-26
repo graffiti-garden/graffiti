@@ -1,5 +1,6 @@
 import asyncio
 import struct
+from time import time
 from enum import Enum
 from fastapi import APIRouter, WebSocket
 from contextlib import asynccontextmanager
@@ -132,19 +133,21 @@ async def announce(socket, editor_public_key, container_signed):
     )
 
 async def process_existing(socket, info_hashes):
-    # TODO: account for expiration!!
-    async for doc in db_connection().find({"info_hash": { "$in": info_hashes}}):
+    async for doc in db_connection().find({
+        "info_hash": { "$in": info_hashes},
+        "expiration": { "$gt": time() }
+    }):
         try:
             await announce(socket, doc['editor_public_key'], doc['container_signed'])
         except:
             break
 
 async def watch():
-    # TODO: account for expiration!!
     async with db_connection().watch(
-            [{'$match' : {}}], # Match all
-            full_document='whenAvailable',
-            full_document_before_change='whenAvailable') as stream:
+        [{'$match' : {}}], # Match all
+        full_document='whenAvailable',
+        full_document_before_change='whenAvailable'
+    ) as stream:
 
         async for change in stream:
 
@@ -157,7 +160,7 @@ async def watch():
                     doc = change[doc_state]
                     info_hash = doc['info_hash']
                     editor_public_key = doc['editor_public_key']
-                    if doc_state == 'fullDocument':
+                    if doc_state == 'fullDocument' and doc['expiration'] > time():
                         container_signed = doc['container_signed']
                     
                     # Get all the sockets subscibed to the
@@ -165,10 +168,7 @@ async def watch():
                     if info_hash in router.subscriptions:
                         socket_union += router.subscriptions[info_hash]
 
-            # If no sockets are subscribed to the
-            # info hash, either before or after change,
-            # there is nothing to do.
-            if not socket_union or not editor_public_key: continue
+            if not editor_public_key: continue
                 
             # Send the new document to all relevant info hashes.
             tasks = [announce(

@@ -1,63 +1,80 @@
-import jwt
-import json
-import string
-import random
-import asyncio
-import datetime
-from hashlib import sha256
-from os import getenv
-import websockets
+import struct
+import aiohttp
+import base64
+from ..rest import put_metadata_format
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-def random_id(n=20):
-    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(n))
+URL_BASE = 'http://localhost:8000/'
 
-def random_sha():
-    return sha256(random_id().encode()).hexdigest()
+def editor_public_private_keys():
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key().public_bytes_raw()
+    return public_key, private_key
 
-def random_actor():
-    return f"graffitiactor://{random_sha()}"
+def generate_info_hash_and_pok(editor_public_key):
+    uri_private_key = Ed25519PrivateKey.generate()
+    info_hash = uri_private_key.public_key().public_bytes_raw()
+    pok = uri_private_key.sign(editor_public_key)
+    return info_hash, pok
 
-def random_date():
-    return datetime.datetime.now().replace(tzinfo=datetime.timezone.utc).isoformat()
+async def put(
+    editor_public_key,
+    editor_private_key,
+    version,
+    info_hash,
+    pok,
+    counter,
+    expiration,
+    payload
+):
+    container = struct.pack(put_metadata_format,
+        version,
+        info_hash,
+        pok,
+        counter,
+        expiration
+    ) + payload
 
-def object_base(actor_id):
-    object_base = {
-        'actor': f"graffitiactor://{actor_id}",
-        'id': f"graffitiobject://{actor_id}:{random_id()}",
-        'context': ['something'],
-        'updated': random_date(),
-        'published': random_date()
-    }
-    return object_base
+    container_signed = container + editor_private_key.sign(container)
 
-def actor_id_and_token():
-    secret = getenv('AUTH_SECRET')
-    id_ = random_sha()
-    token = jwt.encode({
-        "type": "token",
-        'actor': f"graffitiactor://{id_}",
-        }, secret, algorithm="HS256")
-    return id_, token
+    editor_public_key_base64 = base64.urlsafe_b64encode(editor_public_key).decode()
 
-def websocket_connect(token=None):
-    link = "ws://localhost:8000"
-    if token:
-        link += f"?token={token}"
-    return websockets.connect(link)
+    url = f'{URL_BASE}{editor_public_key_base64}'
 
-async def send(ws, j):
-    await ws.send(json.dumps(j))
+    async with aiohttp.ClientSession() as session:
 
-async def recv(ws):
-    return json.loads(await ws.recv())
+        # Put the data
+        async with session.put(
+            url,
+            data=container_signed) as response:
 
+            return url, container_signed, response.status, await response.read()
 
-async def another_message(ws, recv=recv):
-    try:
-        async with asyncio.timeout(0.1):
-            result = await recv(ws)
-            print(result)
-    except TimeoutError:
-        return False
-    else:
-        return True
+# async def put_link(
+#     source,
+#     payload,
+#     expiration,
+#     counter,
+#     private_key=Ed25519PrivateKey.generate()
+# ):
+#     public_key, private_key = editor_public_private_keys()
+
+#     uri_private_key = Ed25519PrivateKey.generate()
+#     info_hash = uri_private_key.public_key().public_bytes_raw()
+#     pok = uri_private_key.sign(editor_public_key)
+
+#     await put(
+#         public_key,
+#         private_key,
+#         0,
+#         info_hash,
+#         pok,
+#         counter,
+#         expiration,
+#         payload
+#     )
+
+#     return private_key
+
+# async def unpack_container(msg):
+#     return editor_public_key, source, payload, expiration, counter

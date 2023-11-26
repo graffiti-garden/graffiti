@@ -1,5 +1,5 @@
-# FROM python:3.12.0-slim-bookworm
-FROM python:3.11.6-slim-bookworm
+# TODO: make slim once aiohttp/frozenlist updates
+FROM python:3.12.0-bookworm
 
 COPY requirements.txt /tmp/
 RUN pip install -r /tmp/requirements.txt

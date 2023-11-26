@@ -24,8 +24,6 @@ The application will be up at [http://localhost:8000](http://localhost:8000).
 There are a series of test scripts in the `app/test` folder which you can run as follows
 
     docker compose exec graffiti-app python -m unittest app.test.test_rest
-    
-Only run these scripts locally! They will fill your server up with a lot of junk.
 
 ## Deployment
 
