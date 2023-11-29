@@ -1,7 +1,9 @@
 import struct
 import aiohttp
 import base64
+from random import randbytes
 from ..rest import put_metadata_format
+from ..pubsub import RequestHeader, msg_header_format
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from contextlib import asynccontextmanager
 
@@ -16,7 +18,7 @@ def generate_info_hash_and_pok(editor_public_key, uri_private_key=None):
     uri_private_key = uri_private_key if uri_private_key else Ed25519PrivateKey.generate()
     info_hash = uri_private_key.public_key().public_bytes_raw()
     pok = uri_private_key.sign(editor_public_key)
-    return info_hash, pok
+    return info_hash, pok, uri_private_key
 
 async def put(
     editor_public_key,
@@ -31,8 +33,7 @@ async def put(
     container = struct.pack(put_metadata_format,
         version,
         info_hash,
-        pok,
-        counter,
+        pok, counter,
         expiration
     ) + payload
 
@@ -51,12 +52,7 @@ async def put(
 
             return url, container_signed, response.status, await response.read()
 
-"""
-Put a random link containing a random
-payload at the given uri, with the
-given editor key
-"""
-async def put_random_link(
+async def put_simple(
     expiration,
     counter,
     payload=None,
@@ -64,27 +60,44 @@ async def put_random_link(
     uri_private_key=None
 ):
     payload = payload if payload else randbytes(16)
-    editor_public_key, _ = editor_public_private_keys(editor_private_key)
-    info_hash, pok = generate_info_hash_and_pok(editor_public_key, uri_private_key)
+    editor_public_key, editor_private_key = editor_public_private_keys(editor_private_key)
+    info_hash, pok, uri_private_key = generate_info_hash_and_pok(editor_public_key, uri_private_key)
+            
+    url, container_signed, status, response = \
+        await put(
+            editor_public_key,
+            editor_private_key,
+            0,
+            info_hash,
+            pok,
+            counter,
+            expiration,
+            payload
+        )
 
-    await put(
-        editor_public_key,
-        editor_private_key,
-        0,
-        info_hash,
-        pok,
-        counter,
-        expiration,
-        payload
-    )
+    if status != 200:
+        raise Exception(response)
 
-    return editor_public_key, editor_private_key, info_hash, uri_private_key, payload
+    return editor_public_key, editor_private_key, info_hash, uri_private_key, container_signed
 
 @asynccontextmanager
 async def socket_connection():
     async with aiohttp.ClientSession() as session:
         async with session.ws_connect(URL_BASE) as ws:
             yield ws
+
+async def subscribe_uris(ws, info_hashes, unsubscribe=False):
+    request = RequestHeader.SUBSCRIBE if not unsubscribe else RequestHeader.UNSUBSCRIBE
+
+    message_id = randbytes(16)
+    await ws.send_bytes(struct.pack(
+        msg_header_format,
+        0,
+        request.value,
+        message_id
+    ) + b''.join(info_hashes))
+
+    return message_id
 
 # async def unpack_container(msg):
 #     return editor_public_key, source, payload, expiration, counter
