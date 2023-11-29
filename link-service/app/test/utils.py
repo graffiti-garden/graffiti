@@ -1,6 +1,7 @@
 import struct
 import aiohttp
 import base64
+from time import time
 from random import randbytes
 from ..rest import put_metadata_format
 from ..pubsub import RequestHeader, msg_header_format
@@ -53,8 +54,8 @@ async def put(
             return url, container_signed, response.status, await response.read()
 
 async def put_simple(
-    expiration,
-    counter,
+    expiration=int(time()) + 100,
+    counter=0,
     payload=None,
     editor_private_key=None,
     uri_private_key=None
@@ -98,6 +99,3 @@ async def subscribe_uris(ws, info_hashes, unsubscribe=False):
     ) + b''.join(info_hashes))
 
     return message_id
-
-# async def unpack_container(msg):
-#     return editor_public_key, source, payload, expiration, counter

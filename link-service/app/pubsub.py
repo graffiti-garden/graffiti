@@ -166,7 +166,7 @@ async def watch():
                     # Get all the sockets subscibed to the
                     # new and old info hash, if they exist
                     if info_hash in router.subscriptions:
-                        socket_union += router.subscriptions[info_hash]
+                        socket_union = socket_union.union(router.subscriptions[info_hash])
 
             if not editor_public_key: continue
                 

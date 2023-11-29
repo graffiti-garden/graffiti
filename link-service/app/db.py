@@ -4,7 +4,7 @@ import asyncio
 from time import time
 from motor.motor_asyncio import AsyncIOMotorClient
 
-EXPIRATION_INTERVAL = 10 # seconds
+EXPIRATION_INTERVAL = 2 # seconds
 
 async def db_intialize():
     client = AsyncIOMotorClient('mongo')

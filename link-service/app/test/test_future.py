@@ -1,338 +1,181 @@
 #!/usr/bin/env python3
 
 import asyncio
-from utils import *
+import unittest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from time import time
+from ..pubsub import ResponseHeader
+from random import randbytes
+from .utils import socket_connection, subscribe_uris, put_simple
 
-async def main():
+class TestFuture(unittest.IsolatedAsyncioTestCase):
+    async def test_sub_put(self): 
+        uri_private_key = Ed25519PrivateKey.generate()
+        info_hash = uri_private_key.public_key().public_bytes_raw()
 
-    custom_context = random_id()
-    custom_context2 = random_id()
-    custom_context3 = random_id()
-    private_context1 = random_id()
-    private_context2 = random_id()
+        async with socket_connection() as ws:
+            message_id = await subscribe_uris(ws, [info_hash])
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
 
-    async def recv_future(ws):
-        result = {'reply'}
-        while 'reply' in result or ('historical' in result and result['historical']):
-            result = await recv(ws)
-        return result
+            editor_pub, _, info_hash2, _, container_signed = \
+                await put_simple(uri_private_key=uri_private_key)
 
-    my_id, my_token = actor_id_and_token()
-    async with websocket_connect(my_token) as ws:
+            self.assertEqual(info_hash, info_hash2)
 
-        print("Defining an object")
-        base = object_base(my_id)
-        print("Subscribing to it's ID")
-        await send(ws, {
-            'messageID': random_id(),
-            'subscribe': [base["id"]]
-        })
-        result = await recv(ws)
-        assert result['reply'] == 'subscribed'
+            # Get the value itself
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed)
+    
+    async def test_sub_unsub_put(self):
+        uri_private_key = Ed25519PrivateKey.generate()
+        info_hash = uri_private_key.public_key().public_bytes_raw()
 
-        print("Now updating the object")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'hello': 'world',
-                'context': [custom_context]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['hello'] == 'world'
-        print("...received")
+        async with socket_connection() as ws:
+            message_id = await subscribe_uris(ws, [info_hash])
+            self.assertEqual(await ws.receive_bytes(), ResponseHeader.SUCCESS.value + message_id)
 
-        print("Replacing it")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'hello': 'goodbye',
-                'context': [custom_context2]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['hello'] == 'goodbye'
-        print("...received")
+            message_id = await subscribe_uris(ws, [info_hash], unsubscribe=True)
+            self.assertEqual(await ws.receive_bytes(), ResponseHeader.SUCCESS.value + message_id)
 
-        print("Removing it")
-        await send(ws, {
-            'messageID': random_id(),
-            'remove': base['id']
-        })
-        result = await recv_future(ws)
-        assert 'remove' in result
-        print("...removed")
+            _, _, info_hash2, _, _ = \
+                await put_simple(uri_private_key=uri_private_key)
+            self.assertEqual(info_hash, info_hash2)
 
-        print("Unsubscribing")
-        await send(ws, {
-            'messageID': random_id(),
-            'unsubscribe': [base["id"]]
-        })
-        result = await recv(ws)
-        print(result)
-        assert result['reply'] == 'unsubscribed'
+            times_out = False
+            try:
+                await asyncio.wait_for(ws.receive_bytes(), 0.5)
+            except TimeoutError:
+                times_out = True
+            self.assertTrue(times_out)
 
-        # Subscribe to the context
-        print("Subscribing to context")
-        await send(ws, {
-            'messageID': random_id(),
-            'subscribe': [custom_context]
-        })
-        result = await recv(ws)
-        assert result['reply'] == 'subscribed'
+    async def test_sub_wrong_hash(self):
+        async with socket_connection() as ws:
+            message_id = await subscribe_uris(ws, [randbytes(32)])
+            self.assertEqual(await ws.receive_bytes(), ResponseHeader.SUCCESS.value + message_id)
+            await put_simple()
 
-        print(f"adding an item with the context {custom_context}")
-        base = object_base(my_id)
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'something': 'else',
-                'context': [custom_context]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['something'] == 'else'
-        print("Received as update")
+            times_out = False
+            try:
+                await asyncio.wait_for(ws.receive_bytes(), 0.5)
+            except TimeoutError:
+                times_out = True
+            self.assertTrue(times_out)
 
-        print("Adding another item")
-        base = object_base(my_id)
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'how': 'r u?',
-                'context': [custom_context]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['how'] == 'r u?'
-        print("Received as update")
+    async def test_replace(self):
+        uri_private_key = Ed25519PrivateKey.generate()
+        info_hash = uri_private_key.public_key().public_bytes_raw()
 
-        print("Adding an item with a different context")
-        base2 = object_base(my_id)
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base2 | {
-                'another': 'thing',
-                'context': [random_id()]
-            }
-        })
-        timedout = False
-        assert not await another_message(ws, recv=recv_future)
-        print("The item is not received")
+        async with socket_connection() as ws:
+            message_id = await subscribe_uris(ws, [info_hash])
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
 
-        print("Replacing the first item's context")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'another': 'thing',
-                'context': [random_id()]
-            }
-        })
-        result = await recv_future(ws)
-        assert 'remove' in result
-        print("It is removed from the perspective of the subscriber")
+            editor_pub, editor_priv, info_hash2, _, container_signed = \
+                await put_simple(uri_private_key=uri_private_key)
+            self.assertEqual(info_hash, info_hash2)
 
-        # Put the item back
-        print("Putting the original context and some other contexts back in")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'replacey': 'place',
-                'context': [random_id(), custom_context, random_id()]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['replacey'] == 'place'
-        print("It is updated from the perspective of the subscriber")
+            # Get the value itself
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed)
 
-        # Delete it
-        print("Removing the item...")
-        await send(ws, {
-            'messageID': random_id(),
-            'remove': base['id']
-        })
-        result = await recv_future(ws)
-        assert 'remove' in result
-        print("It is removed from the perspective of the subscriber")
+            # Replace it
+            editor_pub2, _, info_hash3, _, container_signed2 = \
+                await put_simple(counter=1, editor_private_key=editor_priv, uri_private_key=uri_private_key)
+            self.assertEqual(editor_pub2, editor_pub)
+            self.assertEqual(info_hash3, info_hash)
+            self.assertNotEqual(container_signed2, container_signed)
 
-        # Unsubscribe
-        print("Unsubscribing")
-        await send(ws, {
-            'messageID': random_id(),
-            'unsubscribe': [custom_context]
-        })
+            # Get the replaced value
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed2)
 
-        # Re add the item
-        print("Putting the item back")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'im': 'back',
-                'context': [random_id(), custom_context, random_id()]
-            }
-        })
-        timedout = False
-        assert not await another_message(ws, recv=recv_future)
-        print("The item is not received")
+    async def test_replace_info_hash_twice(self):
+        uri_private_key = Ed25519PrivateKey.generate()
+        info_hash = uri_private_key.public_key().public_bytes_raw()
 
-        print("Subscribing to multiple contexts")
-        await send(ws, {
-            'messageID': random_id(),
-            'subscribe': [custom_context2, custom_context3]
-        })
+        async with socket_connection() as ws:
+            message_id = await subscribe_uris(ws, [info_hash])
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
 
-        print("adding an item with the first context")
-        base = object_base(my_id)
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'two': 'twoey',
-                'context': [custom_context2]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['two'] == 'twoey'
-        print("Received as update")
+            editor_pub, editor_priv, info_hash2, _, container_signed = \
+                await put_simple(uri_private_key=uri_private_key)
+            self.assertEqual(info_hash, info_hash2)
 
-        print("adding an item with the second context")
-        base = object_base(my_id)
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'three': 'threey',
-                'context': [custom_context3]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['three'] == 'threey'
-        print("Received as update")
+            # Get the value itself
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed)
 
-        print("adding an item with both contexts")
-        base = object_base(my_id)
-        random = random_id()
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'both': 'asdf',
-                'context': [random, custom_context2, custom_context3]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['both'] == 'asdf'
-        print("Received as update")
-        assert not await another_message(ws, recv=recv_future)
-        print("A second update is not received")
+            # Replace it with a different info hash
+            editor_pub2, _, info_hash3, _, container_signed2 = \
+                await put_simple(counter=1, editor_private_key=editor_priv)
+            self.assertEqual(editor_pub2, editor_pub)
+            self.assertNotEqual(info_hash3, info_hash)
+            self.assertNotEqual(container_signed2, container_signed)
 
-        print("Removing one context from the item with both")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'only': 'one',
-                'context': [custom_context3]
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['only'] == 'one'
-        assert result['update']['context'] == [custom_context3]
-        print("It is seen as an update")
-        result = await recv_future(ws)
-        assert result['remove']['id'] == base['id']
-        contexts = result['remove']['context']
-        assert len(contexts) == 2
-        assert random in contexts
-        assert custom_context2 in contexts
-        print("It is also seen as a removal")
+            # Get the replaced value
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed2)
 
-        print("Replacing it entirely")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'nothing': True,
-                'context': [random_id()]
-            }
-        })
-        result = await recv_future(ws)
-        assert 'remove' in result
-        print("It is seen as a removal")
-        assert not await another_message(ws, recv=recv_future)
-        print("A second update is not received")
+            # Replace it again 
+            editor_pub3, _, info_hash4, _, _ = \
+                await put_simple(counter=2, editor_private_key=editor_priv)
+            self.assertEqual(editor_pub3, editor_pub)
+            self.assertNotEqual(info_hash4, info_hash)
 
-        # View private messages from others
-        async def listen(id, token):
-            async with websocket_connect(token) as ws:
-                await send(ws, {
-                    'messageID': random_id(),
-                    'subscribe': [private_context1, private_context2]
-                })
+            # Time out because an update is only sent the first time
+            times_out = False
+            try:
+                await asyncio.wait_for(ws.receive_bytes(), 0.5)
+            except TimeoutError:
+                times_out = True
+            self.assertTrue(times_out)
 
-                # See private message
-                result = await recv_future(ws)
-                assert result['update']['to'] == 'me'
+    async def test_sub_multiple(self):
+        uri_to_info_hash = {}
+        for i in range(10):
+            uri_private_key = Ed25519PrivateKey.generate()
+            uri_to_info_hash[uri_private_key] = \
+                uri_private_key.public_key().public_bytes_raw()
 
-                # See it being deleted
-                result = await recv_future(ws)
-                assert 'remove' in result
+        async with socket_connection() as ws:
+            # Subscribe to all of them
+            message_id = await subscribe_uris(ws, uri_to_info_hash.values())
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
 
-                # See public object
-                result = await recv_future(ws)
-                assert result['update']['public'] == 'object'
+            # Post each of them
+            for uri_private_key, info_hash in uri_to_info_hash.items():
+                editor_pub, editor_priv, info_hash2, _, container_signed = \
+                    await put_simple(uri_private_key=uri_private_key)
+                self.assertEqual(info_hash, info_hash2)
 
-        print("Create a private message to two recipients")
-        tasks = []
-        users = []
-        for i in range(100):
-            id, token = actor_id_and_token()
-            tasks.append(asyncio.create_task(listen(id, token)))
-            users.append(object_base(id)["actor"])
+                # Get the value
+                msg = await ws.receive_bytes()
+                self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed)
 
-        print("Waiting for them to come online")
-        await asyncio.sleep(1)
+    async def test_expire(self):
+        uri_private_key = Ed25519PrivateKey.generate()
+        info_hash = uri_private_key.public_key().public_bytes_raw()
 
-        print("Creating a private message to the users")
-        await send(ws, {
-            'messageID': random_id(),
-            'subscribe': [private_context1, private_context2]
-        })
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'to': 'me',
-                'context': [private_context2],
-                'bcc': users
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['to'] == 'me'
-        print("The sender sees it")
+        async with socket_connection() as ws:
+            message_id = await subscribe_uris(ws, [info_hash])
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
 
-        print("Removing recipients to create a personal object")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'private': 'message',
-                'context': [private_context2],
-                'bto': []
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['private'] == 'message'
-        print("The sender still sees it")
+            editor_pub, _, info_hash2, _, container_signed = \
+                await put_simple(expiration=int(time()+2), uri_private_key=uri_private_key)
 
-        print("Making it public")
-        await send(ws, {
-            'messageID': random_id(),
-            'update': base | {
-                'public': 'object',
-                'context': [private_context1],
-            }
-        })
-        result = await recv_future(ws)
-        assert result['update']['public'] == 'object'
-        print("The sender still sees it")
+            self.assertEqual(info_hash, info_hash2)
 
-        for task in tasks:
-            await task
-        print("All tasks are good")
+            # Get the value itself
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed)
+
+            # And get it after it expires
+            msg = await ws.receive_bytes()
+            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    unittest.main()
