@@ -2,8 +2,8 @@ version: '3.8'
 
 services:
 
-  graffiti-linker:
-    container_name: graffiti-linker
+  graffiti-link-service:
+    container_name: graffiti-link-service
     build: app
     volumes:
       - ./app:/mount/app

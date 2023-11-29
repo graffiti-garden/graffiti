@@ -48,9 +48,9 @@ app.include_router(pubsub.router)
 @app.get("/")
 async def info():
     return {
-        "name": "Graffiti Link Server",
-        "description": "An end-to-end encrypted link server",
-        "website": "https://github.com/graffiti-garden/link-server/"
+        "name": "Graffiti Link Service",
+        "description": "An end-to-end encrypted link service",
+        "website": "https://github.com/graffiti-garden/link-service/"
     }
 
 if __name__ == "__main__":

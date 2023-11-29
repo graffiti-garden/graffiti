@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
 
-  graffiti-linker:
+  graffiti-link-service:
     environment:
       DEBUG: 'false'
     ports:
