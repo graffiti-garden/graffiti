@@ -37,41 +37,49 @@ docker compose exec graffiti-link-service python -m unittest app.test.test_rest
 
 ## Deployment
 
-Make sure the server has [Docker compose installed](https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository).
+Make sure the server has [Docker enging and compose](https://docs.docker.com/engine/install/#server), [Certbot](https://certbot.eff.org/instructions), and [Tor](https://community.torproject.org/onion-services/setup/install/) installed.
 
-Then, if you are deploying the service behind a reverse proxy, you can simply run it as described above.
-You may want to change the port in `docker-compose.override.yml` to something that doesn't conflict:
+Purchase a domain name if you don't already have one and generate a vanity hidden service onion address if you would like using [mkp224o](https://github.com/cathugger/mkp224o).
 
-```yml
-graffiti-link-service:
-    ports:
-        - 8000:12345
-```
-
-If you are not using a reverse proxy, follow the instructions below.
-
-### SSL
-
-First add a DNS entry for your domain, where `DOMAIN` is replaced with your desired domain (for example `graffiti.example.com`), and `DOMAIN_IP` is the IP of the server:
+Add a DNS entry for your domain, where `DOMAIN` is replaced with your desired domain (for example `graffiti.example.com`), and `DOMAIN_IP` is the IP of the server:
 
 ```
 DOMAIN. 1800 IN A SERVER_IP
 ```
 
-While these changes propagate (it might take up to an hour) install certbot according to [these instructions](https://certbot.eff.org/instructions?ws=other&os=ubuntufocal).
-
-Once you can ping `DOMAIN` and get your server's IP, run:
+Once you can ping `DOMAIN` and get your server's IP (it can take up to an hour for DNS changes to propogate), run:
 
 ```bash
 sudo certbot certonly --standalone -d DOMAIN
 ```
 
-Then clone this repository onto the server and in the root directory of the repository create a file called `.env` with your domain:
+If you generated a vanity onion address, copy the contents to `/var/run/lib/graffiti/`:
 
 ```bash
-DOMAIN=graffiti.example.com
+sudo cp -r graffiti54as6d54....onion /var/lib/tor/graffiti
 ```
-Once everything is set up, you can start the server by running the following in the cloned repo:
+
+Clone this repository to the server. Then link `torrc` into the system config file:
+
+```bash
+sudo ln -f link-service/config/tor/torrc /etc/tor/torrc
+```
+
+Then enable and restart `tor`:
+
+```bash
+sudo systemctl enable --now tor
+sudo systemctl restart tor
+```
+
+In the root of the repository, create a `.env` file defining your public domain and onion domains. If you didn't generate a vanity onion address, one will have been randomly selected when you started tor:
+
+```bash
+echo "DOMAIN=graffiti.example.com" >> link-service/.env
+echo "ONION_DOMAIN=$(sudo cat /var/lib/tor/graffiti/hostname)" >> link-service/.env
+```
+
+Once all this setup is complete, `cd` into the repo and start the service with
 
 ```bash
 sudo docker compose -f docker-compose.yml -f docker-compose.deploy.yml up --build
