@@ -5,8 +5,16 @@ services:
   graffiti-link-service:
     environment:
       DEBUG: 'false'
+
+  nginx:
+    image: nginx:1.25.3-alpine-slim
     ports:
+      - 80:80
       - 443:443
+    environment:
+      DOMAIN: ${DOMAIN}
+      ONION_DOMAIN: ${ONION_DOMAIN}
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx
     volumes:
-      - /etc/letsencrypt/live/${DOMAIN}/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
-      - /etc/letsencrypt/live/${DOMAIN}/privkey.pem:/etc/ssl/certs/privkey.pem:ro
+      - ./config/nginx/nginx.conf:/etc/nginx/templates/nginx.conf.template
+      - /etc/letsencrypt/:/etc/letsencrypt/:ro

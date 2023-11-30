@@ -1,0 +1,2 @@
+HiddenServiceDir /var/lib/tor/graffiti/
+HiddenServicePort 80 80
