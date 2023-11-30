@@ -53,9 +53,19 @@ async def stream(socket: WebSocket):
     async with register(socket):
         while True:
             try:
-                msg = await socket.receive_bytes()
+                msg = await socket.receive()
             except:
                 break
+
+            if msg["type"] != 'websocket.receive':
+                break
+
+            if 'bytes' not in msg:
+                try:
+                    await send_error(socket, 'expecting bytes')
+                    continue
+                except:
+                    break
 
             if len(msg) < msg_header_length:
                 try:
