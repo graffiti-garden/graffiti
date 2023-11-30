@@ -59,7 +59,16 @@ If you generated a vanity onion address, copy the contents to `/var/run/lib/graf
 sudo cp -r graffiti54as6d54....onion /var/lib/tor/graffiti
 ```
 
-Clone this repository to the server. Then link `torrc` into the system config file:
+Create a user-owned `/srv/docker` folder, `cd` into it and, clone this repository.
+
+```bash
+sudo mkdir /srv/docker
+sudo chown -R $(whoami):$(whoami) /srv/docker
+cd /srv/docker
+git clone https://github.com/graffiti-garden/link-service
+```
+
+Then link `torrc` into the system config file:
 
 ```bash
 sudo ln -f link-service/config/tor/torrc /etc/tor/torrc
@@ -79,14 +88,21 @@ echo "DOMAIN=graffiti.example.com" >> link-service/.env
 echo "ONION_DOMAIN=$(sudo cat /var/lib/tor/graffiti/hostname)" >> link-service/.env
 ```
 
-Once all this setup is complete, `cd` into the repo and start the service with
+Finally, link the service file into `systemd` and enable it.
 
 ```bash
-sudo docker compose -f docker-compose.yml -f docker-compose.deploy.yml up --build
+sudo ln -f link-service/config/system/graffiti-link.service /etc/systemd/system/
+sudo systemctl enable --now graffiti-link.service
 ```
 
-and shut it down by running
+You can check on the status with
 
 ```bash
-sudo docker compose down --remove-orphans
+sudo systemctl status graffiti-link.service
+```
+
+or restart with
+
+```bash
+sudo systemctl restart graffiti-link.service
 ```
