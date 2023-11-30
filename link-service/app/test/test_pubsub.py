@@ -9,6 +9,18 @@ from .utils import socket_connection
 
 class TestPubSub(unittest.IsolatedAsyncioTestCase):
 
+    async def test_not_bytes(self):
+        async with socket_connection() as ws:
+            await ws.send_str('hello')
+            reply = await ws.receive() 
+            self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
+            self.assertEqual(reply.data, ResponseHeader.ERROR_WITHOUT_ID.value + b'expecting bytes')
+
+            await ws.send_json({})
+            reply = await ws.receive() 
+            self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
+            self.assertEqual(reply.data, ResponseHeader.ERROR_WITHOUT_ID.value + b'expecting bytes')
+
     async def test_invalid_header(self):
         for num_bytes in [0, 5, struct.calcsize(msg_header_format) - 1]:
             async with socket_connection() as ws:

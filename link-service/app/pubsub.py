@@ -67,6 +67,8 @@ async def stream(socket: WebSocket):
                 except:
                     break
 
+            msg = msg['bytes']
+
             if len(msg) < msg_header_length:
                 try:
                     await send_error(socket, 'not enough data')
