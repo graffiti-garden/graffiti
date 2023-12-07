@@ -39,7 +39,7 @@ async def get(
     else:
         raise HTTPException(404, 'link not found')
 
-put_metadata_format = '!B32s64sQQ'
+put_metadata_format = '!B32s64sqq'
 put_metadata_length = struct.calcsize(put_metadata_format)
 signature_length = 64
 payload_max_length = 256
@@ -66,8 +66,8 @@ async def put(
     # version:             2 byte unsigned short
     # info_hash:          32 byte Ed25519 public key
     # proof_of_knowledge: 64 byte Ed25519 signature
-    # counter              8 byte unsigned long long
-    # expiration           8 byte unsigned long long
+    # counter              8 byte signed long long
+    # expiration           8 byte signed long long
     version, info_hash, proof_of_knowledge, counter, expiration\
     = struct.unpack(
         put_metadata_format,

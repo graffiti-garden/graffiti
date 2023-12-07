@@ -34,6 +34,31 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
                 resp = await response.read()
                 self.assertEqual(resp, container_signed)
 
+    async def test_huge_int(self):
+        # All the arguments to the input
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok, _ = generate_info_hash_and_pok(editor_public_key)
+
+        url, container_signed, status, response = await put(
+            editor_public_key=editor_public_key,
+            editor_private_key=editor_private_key,
+            info_hash=info_hash,
+            pok=pok,
+            version=0,
+            counter=-2**63,
+            expiration=2**63 - 1,
+            payload=randbytes(100)
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response, b'')
+
+        # Make sure you can get the data
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                resp = await response.read()
+                self.assertEqual(resp, container_signed)
+
     async def test_replace_inc_counter(self):
         # fix the expiration
         expiration = int(time.time()) + 100
