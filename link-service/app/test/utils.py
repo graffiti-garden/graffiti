@@ -4,7 +4,7 @@ import base64
 from time import time
 from random import randbytes
 from ..rest import put_metadata_format
-from ..pubsub import RequestHeader, msg_header_format
+from ..pubsub import RequestHeader, ResponseHeader, msg_header_format
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from contextlib import asynccontextmanager
 
@@ -99,3 +99,6 @@ async def subscribe_uris(ws, info_hashes, unsubscribe=False):
     ) + b''.join(info_hashes))
 
     return message_id
+
+def response_header_byte(name):
+    return struct.pack('!B', ResponseHeader[name].value)

@@ -5,7 +5,7 @@ import aiohttp
 from ..pubsub import msg_header_format, RequestHeader, ResponseHeader
 import struct
 from random import randbytes
-from .utils import socket_connection
+from .utils import socket_connection, response_header_byte
 
 class TestPubSub(unittest.IsolatedAsyncioTestCase):
 
@@ -14,12 +14,12 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
             await ws.send_str('hello')
             reply = await ws.receive() 
             self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
-            self.assertEqual(reply.data, ResponseHeader.ERROR_WITHOUT_ID.value + b'expecting bytes')
+            self.assertEqual(reply.data, response_header_byte('ERROR_WITHOUT_ID') + b'expecting bytes')
 
             await ws.send_json({})
             reply = await ws.receive() 
             self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
-            self.assertEqual(reply.data, ResponseHeader.ERROR_WITHOUT_ID.value + b'expecting bytes')
+            self.assertEqual(reply.data, response_header_byte('ERROR_WITHOUT_ID') + b'expecting bytes')
 
     async def test_invalid_header(self):
         for num_bytes in [0, 5, struct.calcsize(msg_header_format) - 1]:
@@ -27,7 +27,7 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
                 await ws.send_bytes(randbytes(num_bytes))
                 reply = await ws.receive() 
                 self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
-                self.assertEqual(reply.data, ResponseHeader.ERROR_WITHOUT_ID.value + b'not enough data')
+                self.assertEqual(reply.data, response_header_byte('ERROR_WITHOUT_ID') + b'not enough data')
 
                 reply = await ws.receive()
                 self.assertEqual(reply.type, aiohttp.WSMsgType.CLOSE)
@@ -46,7 +46,7 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
                 reply = await ws.receive() 
                 self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
                 self.assertEqual(reply.data,
-                    ResponseHeader.ERROR_WITH_ID.value +
+                    response_header_byte('ERROR_WITH_ID') +
                     message_id +
                     b'no info hash'
                 )
@@ -64,7 +64,7 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
             reply = await ws.receive() 
             self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
             self.assertEqual(reply.data,
-                ResponseHeader.ERROR_WITH_ID.value +
+                response_header_byte('ERROR_WITH_ID') +
                 message_id +
                 b'this is version zero'
             )
@@ -82,7 +82,7 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
             reply = await ws.receive() 
             self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
             self.assertEqual(reply.data,
-                ResponseHeader.ERROR_WITH_ID.value +
+                response_header_byte('ERROR_WITH_ID') +
                 message_id +
                 b'invalid request'
             )
@@ -103,11 +103,11 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
                         reply = await ws.receive()
                         if test_good:
                             self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
-                            self.assertEqual(reply.data, ResponseHeader.SUCCESS.value + message_id)
+                            self.assertEqual(reply.data, response_header_byte('SUCCESS') + message_id)
                         else:
                             self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
                             self.assertEqual(reply.data,
-                                ResponseHeader.ERROR_WITH_ID.value +
+                                response_header_byte('ERROR_WITH_ID') +
                                 message_id +
                                 b'info hashes must each be exactly 32 bytes'
                             )

@@ -35,16 +35,21 @@ class RequestHeader(Enum):
     UNSUBSCRIBE = 0
 
 class ResponseHeader(Enum):
-    SUCCESS          = b'0'
-    ANNOUNCE         = b'1'
-    ERROR_WITH_ID    = b'e'
-    ERROR_WITHOUT_ID = b'f'
+    ANNOUNCE         = 0
+    SUCCESS          = 1
+    ERROR_WITH_ID    = 2
+    ERROR_WITHOUT_ID = 3
 
 async def send_error(socket: WebSocket, message, message_id=None):
     if message_id:
-        header = ResponseHeader.ERROR_WITH_ID.value + message_id
+        header = struct.pack('!B16s',
+          ResponseHeader.ERROR_WITH_ID.value,
+          message_id
+        )
     else:
-        header = ResponseHeader.ERROR_WITHOUT_ID.value
+        header = struct.pack('!B',
+          ResponseHeader.ERROR_WITHOUT_ID.value
+        )
 
     await socket.send_bytes(header + message.encode())
 
@@ -115,7 +120,10 @@ async def stream(socket: WebSocket):
                 except:
                     break
             
-            await socket.send_bytes(ResponseHeader.SUCCESS.value + message_id)
+            await socket.send_bytes(struct.pack('!B16s',
+              ResponseHeader.SUCCESS.value,
+              message_id
+            ))
 
 def subscribe(socket, info_hashes):
     for info_hash in info_hashes:
@@ -138,11 +146,10 @@ def unsubscribe_all(socket):
     return unsubscribe(socket, socket.subscriptions.copy())
 
 async def announce(socket, editor_public_key, container_signed):
-    await socket.send_bytes(
-        ResponseHeader.ANNOUNCE.value + 
-        editor_public_key +
-        container_signed
-    )
+    await socket.send_bytes(struct.pack('!B32s',
+        ResponseHeader.ANNOUNCE.value,
+        editor_public_key,
+    ) + container_signed)
 
 async def process_existing(socket, info_hashes):
     async for doc in db_connection().find({

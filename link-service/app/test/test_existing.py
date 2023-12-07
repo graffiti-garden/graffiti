@@ -4,8 +4,7 @@ import unittest
 import asyncio
 from time import time
 from random import randbytes
-from ..pubsub import ResponseHeader
-from .utils import put_simple, socket_connection, subscribe_uris
+from .utils import put_simple, socket_connection, subscribe_uris, response_header_byte
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 class TestExisting(unittest.IsolatedAsyncioTestCase):
@@ -15,11 +14,11 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
 
             # Get the value itself
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
 
     async def test_put_multiple_same_sub(self):
         uri_private_key = Ed25519PrivateKey.generate()
@@ -30,12 +29,12 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             editor_pub, _, info_hash, _, container_signed = \
                 await put_simple(uri_private_key=uri_private_key)
 
-            entries.append(ResponseHeader.ANNOUNCE.value + editor_pub + container_signed)
+            entries.append(response_header_byte('ANNOUNCE') + editor_pub + container_signed)
         
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
 
             msgs = set()
             for i in range(num_entries):
@@ -51,14 +50,14 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         for i in range(num_entries):
             editor_pub, _, info_hash, _, container_signed = \
                 await put_simple()
-            entries[info_hash] = ResponseHeader.ANNOUNCE.value + editor_pub + container_signed
+            entries[info_hash] = response_header_byte('ANNOUNCE') + editor_pub + container_signed
 
         self.assertEqual(len(entries), num_entries)
 
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, entries.keys())
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
 
             msgs = set()
             for i in range(num_entries):
@@ -74,7 +73,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         for i in range(num_entries):
             editor_pub, _, info_hash, _, container_signed = \
                 await put_simple()
-            entries[info_hash] = ResponseHeader.ANNOUNCE.value + editor_pub + container_signed
+            entries[info_hash] = response_header_byte('ANNOUNCE') + editor_pub + container_signed
 
         self.assertEqual(len(entries), num_entries)
 
@@ -82,7 +81,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             for info_hash in entries:
                 message_id = await subscribe_uris(ws, [info_hash])
                 msg = await ws.receive_bytes()
-                self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+                self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
                 msg = await ws.receive_bytes()
                 self.assertEqual(msg, entries[info_hash])
 
@@ -93,7 +92,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [randbytes(32)])
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
 
             times_out = False
             try:
@@ -115,9 +114,9 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.ANNOUNCE.value + editor_pub + container_signed2)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed2)
 
     async def test_unsub(self):
         _, _, info_hash, _, _ = \
@@ -126,7 +125,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [info_hash], unsubscribe=True)
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
 
             # Get the value itself
             times_out = False
@@ -145,7 +144,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, ResponseHeader.SUCCESS.value + message_id)
+            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
 
             times_out = False
             try:
