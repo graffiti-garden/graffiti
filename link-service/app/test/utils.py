@@ -9,7 +9,6 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from contextlib import asynccontextmanager
 
 URL_BASE = 'http://localhost:8000/'
-# URL_BASE = 'https://link.graffiti.garden/'
 
 def editor_public_private_keys(private_key=None):
     private_key = private_key if private_key else Ed25519PrivateKey.generate()

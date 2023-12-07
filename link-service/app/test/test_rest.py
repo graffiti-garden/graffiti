@@ -140,7 +140,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response, b'')
 
         # Try to replace it but with a smaller counter
-        for counter in [0, 500, 42069, 42069]:
+        for counter in [0, 500, 42068, 42069]:
             url2, container_signed2, status, response = await put(
                 editor_public_key=editor_public_key,
                 editor_private_key=editor_private_key,
@@ -151,9 +151,9 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
                 expiration=int(time.time() + 100),
                 payload=randbytes(100)
             )
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 409)
             # It should return the previous value
-            self.assertEqual(response, container_signed)
+            self.assertEqual(response, b'counter must increase')
             self.assertEqual(url, url2)
 
             # Getting should return the ORIGINAL value
@@ -183,7 +183,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response, b'')
 
         # Increase the counter, but decrease expiration
-        for offset in [1, 100, int(time.time())-10]:
+        for offset in [1, 100, int(time.time())-10, expiration]:
             url2, container_signed2, status, response = await put(
                 editor_public_key=editor_public_key,
                 editor_private_key=editor_private_key,
@@ -194,9 +194,9 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
                 expiration=expiration - offset,
                 payload=randbytes(100)
             )
-            self.assertEqual(status, 200)
+            self.assertEqual(status, 409)
             # It should return the previous value
-            self.assertEqual(response, container_signed)
+            self.assertEqual(response, b'expiration cannot decrease')
             self.assertEqual(url, url2)
 
             # Getting should return the ORIGINAL value

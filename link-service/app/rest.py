@@ -142,6 +142,11 @@ async def put(
     }], upsert=True)
 
     if existing:
-        return ByteResponse(existing['container_signed'])
+        if existing['counter'] >= counter:
+            raise HTTPException(409, 'counter must increase')
+        elif existing['expiration'] > expiration:
+            raise HTTPException(409, 'expiration cannot decrease')
+        else:
+            return ByteResponse(existing['container_signed'])
     else:
         return ByteResponse(None)
