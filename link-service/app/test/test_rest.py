@@ -5,6 +5,7 @@ import aiohttp
 import time
 from random import randbytes
 import base64
+import asyncio
 from .utils import URL_BASE, editor_public_private_keys, generate_info_hash_and_pok, put
 
 class TestRest(unittest.IsolatedAsyncioTestCase):
@@ -105,7 +106,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
 
     async def test_replace_inc_counter_inc_expiration(self):
         init_counter = 123
-        init_expiration = int(time.time())
+        init_expiration = int(time.time())+2
 
         # Put some data
         editor_public_key, editor_private_key = editor_public_private_keys()
@@ -188,6 +189,25 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
                     resp = await response.read()
                     self.assertEqual(resp, container_signed)
 
+    async def test_replace_bad_expiration(self):
+        for offset in [1, 10, 1000, int(time.time())]:
+            # Put some data
+            editor_public_key, editor_private_key = editor_public_private_keys()
+            info_hash, pok, _ = generate_info_hash_and_pok(editor_public_key)
+            url, container_signed, status, response = await put(
+                editor_public_key=editor_public_key,
+                editor_private_key=editor_private_key,
+                info_hash=info_hash,
+                pok=pok,
+                version=0,
+                counter=42069,
+                expiration=int(time.time()) - offset,
+                payload=randbytes(0)
+            )
+
+            self.assertEqual(status, 400)
+            self.assertEqual(response, b'data has already expired')
+
     async def test_replace_dec_expiration(self):
         expiration = int(time.time()) + 100
 
@@ -208,7 +228,7 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response, b'')
 
         # Increase the counter, but decrease expiration
-        for offset in [1, 100, int(time.time())-10, expiration]:
+        for offset in [1, 80]:
             url2, container_signed2, status, response = await put(
                 editor_public_key=editor_public_key,
                 editor_private_key=editor_private_key,
@@ -344,6 +364,39 @@ class TestRest(unittest.IsolatedAsyncioTestCase):
         editor_public_key_base64 = base64.urlsafe_b64encode(randbytes(32)).decode()
         url = f'{URL_BASE}{editor_public_key_base64}'
 
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                self.assertEqual(response.status, 404)
+                self.assertEqual(await response.read(), b'link not found')
+
+    async def test_expiration(self):
+        expiration_time = 2
+        # All the arguments to the input
+        editor_public_key, editor_private_key = editor_public_private_keys()
+        info_hash, pok, _ = generate_info_hash_and_pok(editor_public_key)
+
+        url, container_signed, status, response = await put(
+            editor_public_key=editor_public_key,
+            editor_private_key=editor_private_key,
+            info_hash=info_hash,
+            pok=pok,
+            version=0,
+            counter=123,
+            expiration=int(time.time() + expiration_time),
+            payload=randbytes(100)
+        )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response, b'')
+
+        # Make sure you can get the data
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                resp = await response.read()
+                self.assertEqual(resp, container_signed)
+
+        # Wait for the expiration time and fetch again
+        await asyncio.sleep(expiration_time)
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 self.assertEqual(response.status, 404)

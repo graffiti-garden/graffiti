@@ -1,5 +1,6 @@
 import struct
 import base64
+from time import time
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -32,6 +33,7 @@ async def get(
 
     result = await db.find_one({
         "editor_public_key": editor_public_key,
+        "expiration": { '$gt': time() }
     })
 
     if result:
@@ -76,6 +78,9 @@ async def put(
 
     if version > 0:
         raise HTTPException(400, 'this is version zero')
+
+    if expiration <= time():
+        raise HTTPException(400, 'data has already expired')
 
     # The payload is the middle rest of the container
     payload = container[put_metadata_length:]
