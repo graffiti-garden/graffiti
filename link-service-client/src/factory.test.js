@@ -1,10 +1,10 @@
-import LinkFactory from './link-factory'
+import LinkFactory from './factory'
 import { describe, expect, it, assert } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
 import { concatBytes, randomBytes, utf8ToBytes, bytesToHex } from '@noble/hashes/utils'
 
 const serviceURL = 'https://link.graffiti.garden'
-// const serviceURL = 'http://localhost:8000'
+
 function randomString(length=64) {
   return bytesToHex(randomBytes(length/2))
 }
@@ -242,5 +242,5 @@ describe(`Link Factory`, ()=> {
     await new Promise(r => setTimeout(r, (expirationTime + 1)*1000))
     await expect(lf.get(created.publicKey, sourceURI))
       .rejects.toEqual('link not found')
-  }, 20000)
+  })
 })

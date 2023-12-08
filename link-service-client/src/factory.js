@@ -1,11 +1,8 @@
 import { randomBytes, concatBytes, utf8ToBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
-import { ed25519 as curve, ed25519 } from '@noble/curves/ed25519';
+import { ed25519 as curve } from '@noble/curves/ed25519';
 import { xchacha20poly1305 as cipher } from '@noble/ciphers/chacha';
-
-const VERSION = new Uint8Array([0])
-const INFO_HASH_PREFIX = 'i'
-const CIPHER_PREFIX = 'c'
+import { PUT_VERSION, INFO_HASH_PREFIX, CIPHER_PREFIX } from './constants'
 
 class Link {
   constructor(linkFactory, publicKey, containerSigned, sourceURI) {
@@ -16,7 +13,7 @@ class Link {
     // Verify the signature
     const container = containerSigned.slice(0, containerSigned.byteLength-64)
     const signature = containerSigned.slice(containerSigned.byteLength-64)
-    if (!ed25519.verify(signature, container, publicKey)) {
+    if (!curve.verify(signature, container, publicKey)) {
       throw "invalid signature"
     }
 
@@ -42,7 +39,7 @@ class Link {
     // Verify the pok
     const pok = container.slice(byteOffset, byteOffset+64)
     byteOffset += 64
-    if (!ed25519.verify(pok, publicKey, infoHash)) {
+    if (!curve.verify(pok, publicKey, infoHash)) {
       throw "invalid proof of knowledge"
     }
 
@@ -182,7 +179,7 @@ export default class LinkFactory {
 
     // Pack it all together
     const container = concatBytes(
-      VERSION,
+      PUT_VERSION,
       infoHash,
       pok,
       intBytes,
