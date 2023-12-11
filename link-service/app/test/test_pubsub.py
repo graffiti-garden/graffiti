@@ -87,30 +87,93 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
                 b'invalid request'
             )
 
-    async def test_info_hash(self):
+    async def test_bad_info_hash(self):
         async with socket_connection() as ws:
-            for test_good in [True, False]:
+            for byte_nums in [1, 5, 12, 24, 37, 1000]:
+                info_hashes = randbytes(byte_nums)
                 for request in [RequestHeader.SUBSCRIBE, RequestHeader.UNSUBSCRIBE]:
-                    for byte_nums in [32, 64, 128, 32*32] if test_good else [1, 5, 12, 24, 37, 1000]:
-                        message_id = randbytes(16)
-                        await ws.send_bytes(struct.pack(
-                            msg_header_format,
-                            0,
-                            request.value,
-                            message_id
-                        ) + randbytes(byte_nums))
+                    message_id = randbytes(16)
+                    await ws.send_bytes(struct.pack(
+                        msg_header_format,
+                        0,
+                        request.value,
+                        message_id
+                    ) + randbytes(byte_nums))
 
-                        reply = await ws.receive()
-                        if test_good:
-                            self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
-                            self.assertEqual(reply.data, response_header_byte('SUCCESS') + message_id)
-                        else:
-                            self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
-                            self.assertEqual(reply.data,
-                                response_header_byte('ERROR_WITH_ID') +
-                                message_id +
-                                b'info hashes must each be exactly 32 bytes'
-                            )
+                    reply = await ws.receive()
+                    self.assertEqual(reply.type, aiohttp.WSMsgType.binary)
+                    self.assertEqual(reply.data,
+                        response_header_byte('ERROR_WITH_ID') +
+                        message_id +
+                        b'info hashes must each be exactly 32 bytes'
+                    )
+
+    async def test_good_info_hash(self):
+        async with socket_connection() as ws:
+            for byte_nums in [32, 64, 128, 32*32]:
+                info_hashes = randbytes(byte_nums)
+                for request in [RequestHeader.SUBSCRIBE, RequestHeader.UNSUBSCRIBE]:
+                    message_id = randbytes(16)
+                    await ws.send_bytes(struct.pack(
+                        msg_header_format,
+                        0,
+                        request.value,
+                        message_id
+                    ) + info_hashes)
+
+                    reply = await ws.receive()
+                    self.assertEqual(reply.type, aiohttp.WSMsgType.binary)
+                    self.assertEqual(reply.data, response_header_byte('SUCCESS') + message_id)
+
+    async def test_double_subscribe(self):
+        async with socket_connection() as ws:
+            info_hashes = randbytes(64)
+
+            message_id = randbytes(16)
+            await ws.send_bytes(struct.pack(
+                msg_header_format,
+                0,
+                RequestHeader.SUBSCRIBE.value,
+                message_id
+            ) + randbytes(32) + info_hashes + randbytes(128) ) # Sub with random overlap
+
+            reply = await ws.receive()
+            self.assertEqual(reply.type, aiohttp.WSMsgType.binary)
+            self.assertEqual(reply.data, response_header_byte('SUCCESS') + message_id)
+
+            # Subscribe again
+            message_id = randbytes(16)
+            await ws.send_bytes(struct.pack(
+                msg_header_format,
+                0,
+                RequestHeader.SUBSCRIBE.value,
+                message_id
+            ) + randbytes(64) + info_hashes + randbytes(64) )
+            reply = await ws.receive()
+            self.assertEqual(reply.type, aiohttp.WSMsgType.binary)
+            self.assertEqual(reply.data,
+                response_header_byte('ERROR_WITH_ID') +
+                message_id +
+                b'already subscribed'
+            )
+
+    async def test_unsubscribe_without_subscribe(self):
+        async with socket_connection() as ws:
+            message_id = randbytes(16)
+            await ws.send_bytes(struct.pack(
+                msg_header_format,
+                0,
+                RequestHeader.UNSUBSCRIBE.value,
+                message_id
+            ) + randbytes(128))
+
+            reply = await ws.receive()
+            self.assertEqual(reply.type, aiohttp.WSMsgType.binary)
+            self.assertEqual(reply.data,
+                response_header_byte('ERROR_WITH_ID') +
+                message_id +
+                b'not subscribed'
+            )
 
     async def test_close(self):
         async with socket_connection() as ws:

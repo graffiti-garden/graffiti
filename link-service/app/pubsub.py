@@ -110,22 +110,33 @@ async def stream(socket: WebSocket):
             info_hashes = [body[i:i+32] for i in range(0, len(body), 32)]
             
             if request == RequestHeader.SUBSCRIBE.value:
-                subscribe(socket, info_hashes)
+                error =   subscribe(socket, info_hashes)
             elif request == RequestHeader.UNSUBSCRIBE.value:
-                unsubscribe(socket, info_hashes)
+                error = unsubscribe(socket, info_hashes)
             else:
                 try:
                     await send_error(socket, 'invalid request', message_id)
                     continue
                 except:
                     break
-            
-            await socket.send_bytes(struct.pack('!B16s',
-              ResponseHeader.SUCCESS.value,
-              message_id
-            ))
+
+            try:
+                if error:
+                    await send_error(socket, error, message_id)
+                else:
+                    await socket.send_bytes(struct.pack('!B16s',
+                        ResponseHeader.SUCCESS.value,
+                        message_id
+                    ))
+            except:
+                break
 
 def subscribe(socket, info_hashes):
+    # Check for double subscriptions
+    for info_hash in info_hashes:
+        if info_hash in socket.subscriptions:
+            return "already subscribed"
+
     for info_hash in info_hashes:
         socket.subscriptions.add(info_hash)
         if info_hash not in router.subscriptions:
@@ -135,6 +146,11 @@ def subscribe(socket, info_hashes):
     asyncio.create_task(process_existing(socket, info_hashes))
 
 def unsubscribe(socket, info_hashes):
+    # Check for unsubscribing non-subscribed
+    for info_hash in info_hashes:
+        if info_hash not in socket.subscriptions:
+            return "not subscribed"
+
     for info_hash in info_hashes:
         if info_hash in socket.subscriptions:
             socket.subscriptions.remove(info_hash)

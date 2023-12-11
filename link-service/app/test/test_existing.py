@@ -118,23 +118,6 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed2)
 
-    async def test_unsub(self):
-        _, _, info_hash, _, _ = \
-        await put_simple()
-
-        async with socket_connection() as ws:
-            message_id = await subscribe_uris(ws, [info_hash], unsubscribe=True)
-            msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
-
-            # Get the value itself
-            times_out = False
-            try:
-                await asyncio.wait_for(ws.receive_bytes(), 0.5)
-            except TimeoutError:
-                times_out = True
-            self.assertTrue(times_out)
-
     async def test_expire(self):
         editor_pub, _, info_hash, _, container_signed = \
             await put_simple(int(time()+1))
