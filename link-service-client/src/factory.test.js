@@ -14,42 +14,42 @@ describe(`Link Factory`, ()=> {
 
   it('basic put', async()=> {
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const sourceURI = randomString()
-    const targetURI = randomString()
+    const source = randomString()
+    const target = randomString()
     const expiration = soon()
 
-    const { created, existing } = await lf.create(sourceURI, targetURI, expiration)
+    const { created, existing } = await lf.create(source, target, expiration)
     expect(existing).toBeUndefined()
-    expect(created.sourceURI).toEqual(sourceURI)
-    expect(created.targetURI).toEqual(targetURI)
+    expect(created.source).toEqual(source)
+    expect(created.target).toEqual(target)
     expect(created.expiration).toEqual(BigInt(expiration))
     expect(created.counter).toEqual(BigInt(0))
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, sourceURI)
-    expect(gotten.sourceURI).toEqual(sourceURI)
-    expect(gotten.targetURI).toEqual(targetURI)
+    const gotten = await lf.get(created.publicKey, source)
+    expect(gotten.source).toEqual(source)
+    expect(gotten.target).toEqual(target)
   })
 
   it('replace target', async()=> {
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const sourceURI = randomString()
-    const targetURI = randomString()
+    const source = randomString()
+    const target = randomString()
     const expiration = soon()
 
     // Create and make sure it workd
-    const { created } = await lf.create(sourceURI, targetURI, expiration)
+    const { created } = await lf.create(source, target, expiration)
 
     // Replace
-    const newTargetURI = randomString()
+    const newTarget = randomString()
     const { created: replaced, existing } =
-      await created.modify({targetURI: newTargetURI})
-    expect(replaced.targetURI).toEqual(newTargetURI)
-    expect(existing.targetURI).toEqual(targetURI)
+      await created.modify({target: newTarget})
+    expect(replaced.target).toEqual(newTarget)
+    expect(existing.target).toEqual(target)
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, sourceURI)
-    expect(gotten.targetURI).toEqual(newTargetURI)
+    const gotten = await lf.get(created.publicKey, source)
+    expect(gotten.target).toEqual(newTarget)
   })
 
   it('put expired data', async()=> {
@@ -64,8 +64,8 @@ describe(`Link Factory`, ()=> {
     const expiration = BigInt(soon())
 
     // Create and make sure it workd
-    const sourceURI = randomString()
-    const { created } = await lf.create(sourceURI, randomString(), expiration)
+    const source = randomString()
+    const { created } = await lf.create(source, randomString(), expiration)
 
     // Replace
     const newExpiration = expiration + 1n
@@ -75,7 +75,7 @@ describe(`Link Factory`, ()=> {
     expect(existing.expiration).toEqual(expiration)
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, sourceURI)
+    const gotten = await lf.get(created.publicKey, source)
     expect(gotten.expiration).toEqual(BigInt(newExpiration))
   })
 
@@ -84,9 +84,9 @@ describe(`Link Factory`, ()=> {
     const expiration = soon()
 
     // Create and make sure it workd
-    const sourceURI = randomString()
-    const targetURI = randomString()
-    const { created } = await lf.create(sourceURI, targetURI, BigInt(expiration))
+    const source = randomString()
+    const target = randomString()
+    const { created } = await lf.create(source, target, BigInt(expiration))
 
     // Replace
     const newExpiration = expiration - Math.floor(Math.random()* 100)
@@ -95,36 +95,36 @@ describe(`Link Factory`, ()=> {
       .rejects.toEqual("expiration cannot decrease")
 
     // Manually try to force it
-    await expect(lf.create(sourceURI, targetURI, newExpiration, 1, created.editorNonce))
+    await expect(lf.create(source, target, newExpiration, 1, created.editorNonce))
       .rejects.toEqual("expiration cannot decrease")
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, sourceURI)
+    const gotten = await lf.get(created.publicKey, source)
     // Expiration does not update backwards!!
     expect(gotten.expiration).toEqual(BigInt(expiration))
   })
 
   it('replace source', async()=> {
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const sourceURI = randomString()
-    const targetURI = randomString()
+    const source = randomString()
+    const target = randomString()
 
     // Create and make sure it workd
-    const { created } = await lf.create(sourceURI, targetURI, soon())
+    const { created } = await lf.create(source, target, soon())
 
     // Replace
-    const newSourceURI = randomString()
+    const newSource = randomString()
     const { created: replaced, existing } =
-      await created.modify({sourceURI: newSourceURI})
-    expect(replaced.sourceURI).toEqual(newSourceURI)
+      await created.modify({source: newSource})
+    expect(replaced.source).toEqual(newSource)
     expect(existing).toBeNull()
 
     // Fetch it
-    const gotten1 = await lf.get(created.publicKey, newSourceURI)
-    expect(gotten1.sourceURI).toEqual(newSourceURI)
-    expect(gotten1.targetURI).toEqual(targetURI)
-    await expect(lf.get(created.publicKey, sourceURI))
-      .rejects.toEqual('info hash and source uri mismatch')
+    const gotten1 = await lf.get(created.publicKey, newSource)
+    expect(gotten1.source).toEqual(newSource)
+    expect(gotten1.target).toEqual(target)
+    await expect(lf.get(created.publicKey, source))
+      .rejects.toEqual('info hash and source mismatch')
   })
 
   it('shared ownership', async()=> {
@@ -132,35 +132,35 @@ describe(`Link Factory`, ()=> {
     const lf1 = new LinkFactory(serviceURL, mockNonceToPrivateKey(sharedSecret))
     const lf2 = new LinkFactory(serviceURL, mockNonceToPrivateKey(sharedSecret))
 
-    const sourceURI = randomString()
-    const { created } = await lf1.create(sourceURI, randomString(), soon())
+    const source = randomString()
+    const { created } = await lf1.create(source, randomString(), soon())
     assert(created.isMine())
 
-    const gotten = await lf2.get(created.publicKey, sourceURI)
+    const gotten = await lf2.get(created.publicKey, source)
     assert(gotten.isMine())
 
-    const newTargetURI = randomString()
-    await gotten.modify({targetURI: newTargetURI})
-    const gotten2 = await lf1.get(created.publicKey, sourceURI)
-    expect(gotten2.targetURI).toEqual(newTargetURI)
+    const newTarget = randomString()
+    await gotten.modify({target: newTarget})
+    const gotten2 = await lf1.get(created.publicKey, source)
+    expect(gotten2.target).toEqual(newTarget)
   })
 
   it('different ownership', async()=> {
     const lf1 = new LinkFactory(serviceURL, mockNonceToPrivateKey())
     const lf2 = new LinkFactory(serviceURL, mockNonceToPrivateKey())
 
-    const sourceURI = randomString()
-    const { created } = await lf1.create(sourceURI, randomString(), soon())
+    const source = randomString()
+    const { created } = await lf1.create(source, randomString(), soon())
     assert(created.isMine())
 
-    const gotten = await lf2.get(created.publicKey, sourceURI)
+    const gotten = await lf2.get(created.publicKey, source)
     assert(!gotten.isMine())
-    const newTargetURI = randomString()
-    await expect(gotten.modify({targetURI: newTargetURI}))
+    const newTarget = randomString()
+    await expect(gotten.modify({target: newTarget}))
       .rejects.toEqual('you cannot modify a link that is not yours')
 
     // Manually try it
-    const { created: replaced, existing } = await lf2.create(sourceURI, newTargetURI, soon(), 1, created.editorNonce)
+    const { created: replaced, existing } = await lf2.create(source, newTarget, soon(), 1, created.editorNonce)
     expect(existing).toBeUndefined()
     // It ends up with a different public key
     assert(!replaced.publicKey.every((val, i)=> val==created.publicKey[i]))
@@ -176,60 +176,60 @@ describe(`Link Factory`, ()=> {
     assert(minCounter < maxCounter)
 
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const sourceURI = randomString()
-    const targetURI = randomString()
+    const source = randomString()
+    const target = randomString()
     const expiration = soon()
     const { created } = await lf.create(
-      sourceURI, targetURI, expiration, maxCounter)
+      source, target, expiration, maxCounter)
 
     // // Manually move counter backwards
     expect(lf.create(
-      sourceURI, targetURI, expiration, minCounter, created.editorNonce)
+      source, target, expiration, minCounter, created.editorNonce)
     ).rejects.toEqual("counter must increase")
   })
 
   it('big target', async()=> {
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const targetURI = 'x'.repeat(256 - 16 - 24 - 24)
-    await lf.create(randomString(), targetURI, soon())
+    const target = 'x'.repeat(256 - 16 - 24 - 24)
+    await lf.create(randomString(), target, soon())
   })
 
   it('too big target', async()=> {
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const targetURI = 'x'.repeat(256 - 16 - 24 - 24 + 1)
-    await expect(lf.create(randomString(), targetURI, soon()))
-      .rejects.toEqual('target URI is too big')
+    const target = 'x'.repeat(256 - 16 - 24 - 24 + 1)
+    await expect(lf.create(randomString(), target, soon()))
+      .rejects.toEqual('target is too big')
   })
 
   it('unicode', async()=> {
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const sourceURI = '👻👩🏿‍❤️‍👩🏼👩‍👩‍👧‍👦👯‍♂️👍🏾🤜🏿𝔤𝔯𝔞𝔣𝔣𝔦𝔱𝔦🤛🏿'
-    const targetURI = '👀👨🏽‍❤️‍💋‍👨🏿👨‍👨‍👧‍👧🖖🏻🫸🏼Ｇｒａｆｆｉｔｉ🫷🏼'
-    const { created } = await lf.create(sourceURI, targetURI, soon())
-    expect(created.sourceURI).toEqual(sourceURI)
-    expect(created.targetURI).toEqual(targetURI)
+    const source = '👻👩🏿‍❤️‍👩🏼👩‍👩‍👧‍👦👯‍♂️👍🏾🤜🏿𝔤𝔯𝔞𝔣𝔣𝔦𝔱𝔦🤛🏿'
+    const target = '👀👨🏽‍❤️‍💋‍👨🏿👨‍👨‍👧‍👧🖖🏻🫸🏼Ｇｒａｆｆｉｔｉ🫷🏼'
+    const { created } = await lf.create(source, target, soon())
+    expect(created.source).toEqual(source)
+    expect(created.target).toEqual(target)
 
-    const gotten = await lf.get(created.publicKey, sourceURI)
-    expect(gotten.sourceURI).toEqual(sourceURI)
-    expect(gotten.targetURI).toEqual(targetURI)
+    const gotten = await lf.get(created.publicKey, source)
+    expect(gotten.source).toEqual(source)
+    expect(gotten.target).toEqual(target)
   })
 
   it('expire', async ()=> {
     const expirationTime = 3 // seconds
     const lf = new LinkFactory(serviceURL, mockNonceToPrivateKey())
-    const sourceURI = randomString()
-    const targetURI = randomString()
+    const source = randomString()
+    const target = randomString()
     const expiration = Math.ceil(Date.now()/1000) + expirationTime
 
     // Create and fetch
-    const { created } = await lf.create(sourceURI, targetURI, expiration)
-    const gotten = await lf.get(created.publicKey, sourceURI)
-    expect(gotten.sourceURI).toEqual(sourceURI)
-    expect(gotten.targetURI).toEqual(targetURI)
+    const { created } = await lf.create(source, target, expiration)
+    const gotten = await lf.get(created.publicKey, source)
+    expect(gotten.source).toEqual(source)
+    expect(gotten.target).toEqual(target)
 
     // Wait the expiration time
     await new Promise(r => setTimeout(r, (expirationTime + 1)*1000))
-    await expect(lf.get(created.publicKey, sourceURI))
+    await expect(lf.get(created.publicKey, source))
       .rejects.toEqual('link not found')
   })
 })

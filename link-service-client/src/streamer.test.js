@@ -5,7 +5,7 @@ import { randomString } from './test-utils'
 
 const link = 'wss://link.graffiti.garden'
 
-describe(`Websocket connection`, ()=> {
+describe(`Basic Streaming`, ()=> {
   it('no info hash', async()=> {
     const ls = new LinkStreamer(link)
     await ls.tilOpen()
@@ -42,8 +42,8 @@ describe(`Websocket connection`, ()=> {
 
   it('subscribe not a string', async()=> {
     const ls = new LinkStreamer(link)
-    for (const badURI of [null, 10, true, NaN, [], {}]) {
-      await expect(ls.subscribe(badURI).next()).rejects.toEqual("uri must be a string")
+    for (const badSource of [null, 10, true, NaN, [], {}]) {
+      await expect(ls.subscribe(badSource).next()).rejects.toEqual("source must be a string")
     }
   })
 

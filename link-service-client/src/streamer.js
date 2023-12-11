@@ -12,7 +12,7 @@ export default class LinkStreamer {
     this.connectionEvents = new EventTarget()
     this.replyEvents      = new EventTarget()
     this.announceEvents   = new EventTarget()
-    this.uriSubscriptions      = {}
+    this.subscriptions      = {}
     this.#connect()
   }
 
@@ -27,9 +27,9 @@ export default class LinkStreamer {
     this.open = true
     this.connectionEvents.dispatchEvent(new Event("open"))
 
-    // Send all the announces and subscriptions!
-    if (Object.keys(this.uriSubscriptions).length) {
-      this.request(true, ...Object.values(this.uriSubscriptions))
+    // Send all the subscriptions!
+    if (Object.keys(this.subscriptions).length) {
+      this.request(true, ...Object.values(this.subscriptions))
     }
   }
 
@@ -171,22 +171,22 @@ export default class LinkStreamer {
     }
   }
 
-  async * subscribe(uri, signal) {
-    // Make sure the uri is a string
-    if (typeof uri != 'string')
-      throw "uri must be a string"
+  async * subscribe(source, signal) {
+    // Make sure the sourceis a string
+    if (typeof source != 'string')
+      throw "source must be a string"
 
-    // Make sure the URI isn't already subscribed
-    if (uri in this.uriSubscriptions)
+    // Make sure the source isn't already subscribed
+    if (source in this.subscriptions)
       throw "already subscribed"
 
     // Convert to info hash
-    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + uri)
+    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source)
     const infoHash = curve.getPublicKey(infoHashPrivateKey)
     const infoHashString = decoder.decode(infoHash)
 
     // Mark the subscription
-    this.uriSubscriptions[uri] = infoHash
+    this.subscriptions[source] = infoHash
 
     // Create callback functions that
     // reference dynamic resolve and reject.
@@ -245,9 +245,9 @@ export default class LinkStreamer {
         })
       }
     } finally {
-      // unsubscribe and free the uri
+      // unsubscribe and free the source
       await this.request(false, infoHash)
-      delete this.uriSubscriptions[uri]
+      delete this.subscriptions[source]
     }
   }
 }

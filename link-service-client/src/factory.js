@@ -6,10 +6,10 @@ import { PUT_VERSION, INFO_HASH_PREFIX, CIPHER_PREFIX } from './constants'
 const decoder = new TextDecoder()
 
 class Link {
-  constructor(linkFactory, publicKey, containerSigned, sourceURI) {
+  constructor(linkFactory, publicKey, containerSigned, source) {
     this.linkFactory = linkFactory
     this.publicKey = publicKey
-    this.sourceURI = sourceURI
+    this.source = source
 
     // Verify the signature
     const container = containerSigned.slice(0, containerSigned.byteLength-64)
@@ -31,10 +31,10 @@ class Link {
     // Verify the info hash
     const infoHash = container.slice(byteOffset, byteOffset+32)
     byteOffset += 32
-    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + sourceURI)
+    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source)
     const infoHashDerived = curve.getPublicKey(infoHashPrivateKey)
     if (!infoHash.every((val, i)=> val == infoHashDerived[i])) {
-      throw "info hash and source uri mismatch"
+      throw "info hash and source mismatch"
     }
 
     // Verify the pok
@@ -55,17 +55,17 @@ class Link {
     byteOffset += 24
 
     // Decrypt the target
-    const cipherKey = sha256(CIPHER_PREFIX + sourceURI)
+    const cipherKey = sha256(CIPHER_PREFIX + source)
     const cipherNonce = container.slice(byteOffset, byteOffset+24)
     byteOffset += 24
-    const targetURIEncrypted = container.slice(byteOffset)
-    let targetURIBytes
+    const targetEncrypted = container.slice(byteOffset)
+    let targetBytes
     try {
-      targetURIBytes = cipher(cipherKey, cipherNonce).decrypt(targetURIEncrypted)
+      targetBytes = cipher(cipherKey, cipherNonce).decrypt(targetEncrypted)
     } catch {
-      throw "source URI does not decode the target"
+      throw "source does not decode the target"
     }
-    this.targetURI = decoder.decode(targetURIBytes)
+    this.target = decoder.decode(targetBytes)
   }
 
   isMine() {
@@ -78,7 +78,7 @@ class Link {
     return publicKey.every((val, i)=> val == this.publicKey[i])
   }
 
-  async modify({sourceURI, targetURI, expiration}) {
+  async modify({source, target, expiration}) {
     // Perform validation (even though server
     // would do this too)
     if (!this.isMine())
@@ -87,8 +87,8 @@ class Link {
       throw "expiration cannot decrease"
 
     return await this.linkFactory.create(
-      sourceURI ?? this.sourceURI, 
-      targetURI ?? this.targetURI,
+      source ?? this.source, 
+      target ?? this.target,
       expiration ?? this.expiration,
       this.counter + 1n,
       this.editorNonce
@@ -114,11 +114,11 @@ export default class LinkFactory {
     return `${this.serviceURL}/${publicKeyBase64}`
   }
 
-  parse(publicKey, containerSigned, sourceURI) {
-    return new Link(this, publicKey, containerSigned, sourceURI)
+  parse(publicKey, containerSigned, source) {
+    return new Link(this, publicKey, containerSigned, source)
   }
 
-  async get(publicKey, sourceURI) {
+  async get(publicKey, source) {
     const response = await fetch(this.#publicKeyToURL(publicKey))
     if (response.status != 200) {
       throw await response.text()
@@ -126,14 +126,14 @@ export default class LinkFactory {
       return this.parse(
         publicKey,
         new Uint8Array(await response.arrayBuffer()),
-        sourceURI
+        source
       )
     }
   }
 
-  async create(sourceURI, targetURI, expiration, counter=0, editorNonce=null) {
+  async create(source, target, expiration, counter=0, editorNonce=null) {
     // Make sure that the source and target are strings
-    for (const uri in [sourceURI, targetURI]) {
+    for (const uri in [source, target]) {
       if (typeof uri != 'string') {
         throw `URI must be a string : ${uri}`
       }
@@ -154,7 +154,7 @@ export default class LinkFactory {
     const publicKey  = curve.getPublicKey(privateKey)
 
     // Derive the infohash and proof of knowledge
-    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + sourceURI)
+    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source)
     const infoHash = curve.getPublicKey(infoHashPrivateKey)
     const pok = curve.sign(publicKey, infoHashPrivateKey)
 
@@ -167,15 +167,15 @@ export default class LinkFactory {
     const intBytes = new Uint8Array(intBuffer)
 
     // Encrypt the payload using the uri
-    const cipherKey = sha256(CIPHER_PREFIX + sourceURI)
+    const cipherKey = sha256(CIPHER_PREFIX + source)
     const cipherNonce = randomBytes(24)
-    const targetURIEncrypted =
+    const targetEncrypted =
       cipher(cipherKey, cipherNonce).encrypt(
-        utf8ToBytes(targetURI)
+        utf8ToBytes(target)
       )
     // 256 minus two 24-byte nonces
-    if (targetURIEncrypted.length > 208) {
-      throw "target URI is too big"
+    if (targetEncrypted.length > 208) {
+      throw "target is too big"
     }
 
     // Pack it all together
@@ -186,7 +186,7 @@ export default class LinkFactory {
       intBytes,
       editorNonce,
       cipherNonce,
-      targetURIEncrypted
+      targetEncrypted
     )
 
     // Sign the container
@@ -205,14 +205,14 @@ export default class LinkFactory {
       throw await response.text()
     } else {
       const output = {
-        created: this.parse(publicKey, containerSigned, sourceURI)
+        created: this.parse(publicKey, containerSigned, source)
       }
 
       // Include existing data if it exists
       const oldContainerSigned = new Uint8Array(await response.arrayBuffer())
       if (oldContainerSigned.byteLength) {
         try {
-          output.existing = this.parse(publicKey, oldContainerSigned, sourceURI)
+          output.existing = this.parse(publicKey, oldContainerSigned, source)
         } catch {
           output.existing = null
         }
