@@ -20,6 +20,9 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
 
+            # Mark as complete
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
+
     async def test_put_multiple_same_sub(self):
         uri_private_key = Ed25519PrivateKey.generate()
         entries = []
@@ -44,6 +47,8 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             for msg in msgs:
                 self.assertIn(msg, entries)
 
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
+
     async def test_put_multiple_diff_sub(self):
         entries = {}
         num_entries = 10
@@ -67,6 +72,8 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             for msg in msgs:
                 self.assertIn(msg, entries.values())
 
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + b''.join(entries.keys()))
+
     async def test_sub_seperately(self):
         entries = {}
         num_entries = 10
@@ -84,22 +91,18 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
                 msg = await ws.receive_bytes()
                 self.assertEqual(msg, entries[info_hash])
+                self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
     async def test_sub_wrong_hash(self):
         _, _, info_hash, _, _ = \
             await put_simple()
 
         async with socket_connection() as ws:
-            message_id = await subscribe_uris(ws, [randbytes(32)])
+            info_hash = randbytes(32)
+            message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
-
-            times_out = False
-            try:
-                await asyncio.wait_for(ws.receive_bytes(), 0.5)
-            except TimeoutError:
-                times_out = True
-            self.assertTrue(times_out)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
     async def test_replace(self):
         editor_pub, editor_priv, info_hash, uri_priv, container_signed = \
@@ -117,6 +120,8 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed2)
+            # Then complete message
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
     async def test_expire(self):
         editor_pub, _, info_hash, _, container_signed = \
@@ -128,13 +133,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
-
-            times_out = False
-            try:
-                await asyncio.wait_for(ws.receive_bytes(), 1)
-            except TimeoutError:
-                times_out = True
-            self.assertTrue(times_out)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,6 +16,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
             editor_pub, _, info_hash2, _, container_signed = \
                 await put_simple(uri_private_key=uri_private_key)
@@ -33,6 +34,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [info_hash])
             self.assertEqual(await ws.receive_bytes(), response_header_byte('SUCCESS') + message_id)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
             message_id = await subscribe_uris(ws, [info_hash], unsubscribe=True)
             self.assertEqual(await ws.receive_bytes(), response_header_byte('SUCCESS') + message_id)
@@ -50,8 +52,10 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
     async def test_sub_wrong_hash(self):
         async with socket_connection() as ws:
-            message_id = await subscribe_uris(ws, [randbytes(32)])
+            info_hash = randbytes(32)
+            message_id = await subscribe_uris(ws, [info_hash])
             self.assertEqual(await ws.receive_bytes(), response_header_byte('SUCCESS') + message_id)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
             await put_simple()
 
             times_out = False
@@ -69,6 +73,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
             editor_pub, editor_priv, info_hash2, _, container_signed = \
                 await put_simple(uri_private_key=uri_private_key)
@@ -97,6 +102,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
             editor_pub, editor_priv, info_hash2, _, container_signed = \
                 await put_simple(uri_private_key=uri_private_key)
@@ -143,6 +149,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
             message_id = await subscribe_uris(ws, uri_to_info_hash.values())
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + b''.join(uri_to_info_hash.values()))
 
             # Post each of them
             for uri_private_key, info_hash in uri_to_info_hash.items():
@@ -162,6 +169,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
             message_id = await subscribe_uris(ws, [info_hash])
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
+            self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
             editor_pub, _, info_hash2, _, container_signed = \
                 await put_simple(expiration=int(time()+2), uri_private_key=uri_private_key)

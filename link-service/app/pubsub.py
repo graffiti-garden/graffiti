@@ -39,6 +39,7 @@ class ResponseHeader(Enum):
     SUCCESS          = 1
     ERROR_WITH_ID    = 2
     ERROR_WITHOUT_ID = 3
+    BACKLOG_COMPLETE = 4
 
 async def send_error(socket: WebSocket, message, message_id=None):
     if message_id:
@@ -131,6 +132,10 @@ async def stream(socket: WebSocket):
             except:
                 break
 
+            # Finally, after reply is sent, process existing if necessary
+            if request == RequestHeader.SUBSCRIBE.value:
+                asyncio.create_task(process_existing(socket, info_hashes))
+
 def subscribe(socket, info_hashes):
     # Check for double subscriptions
     for info_hash in info_hashes:
@@ -142,8 +147,6 @@ def subscribe(socket, info_hashes):
         if info_hash not in router.subscriptions:
             router.subscriptions[info_hash] = set()
         router.subscriptions[info_hash].add(socket)
-
-    asyncio.create_task(process_existing(socket, info_hashes))
 
 def unsubscribe(socket, info_hashes):
     # Check for unsubscribing non-subscribed
@@ -176,6 +179,15 @@ async def process_existing(socket, info_hashes):
             await announce(socket, doc['editor_public_key'], doc['container_signed'])
         except:
             break
+
+    try:
+        # Send a message that marks the backlog
+        # of these info hashes as complete
+        await socket.send_bytes(struct.pack('!B',
+            ResponseHeader.BACKLOG_COMPLETE.value,
+        ) + b''.join(info_hashes))
+    except Exception as e:
+        pass
 
 async def watch():
     async with db_connection().watch(

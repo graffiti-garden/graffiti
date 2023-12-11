@@ -125,6 +125,11 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(reply.type, aiohttp.WSMsgType.binary)
                     self.assertEqual(reply.data, response_header_byte('SUCCESS') + message_id)
 
+                    if request == RequestHeader.SUBSCRIBE:
+                        reply = await ws.receive()
+                        self.assertEqual(reply.type, aiohttp.WSMsgType.binary)
+                        self.assertEqual(reply.data, response_header_byte('BACKLOG_COMPLETE') + info_hashes)
+
     async def test_double_subscribe(self):
         async with socket_connection() as ws:
             info_hashes = randbytes(64)
