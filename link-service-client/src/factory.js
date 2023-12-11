@@ -3,6 +3,7 @@ import { sha256 } from "@noble/hashes/sha256";
 import { ed25519 as curve } from '@noble/curves/ed25519';
 import { xchacha20poly1305 as cipher } from '@noble/ciphers/chacha';
 import { PUT_VERSION, INFO_HASH_PREFIX, CIPHER_PREFIX } from './constants'
+const decoder = new TextDecoder()
 
 class Link {
   constructor(linkFactory, publicKey, containerSigned, sourceURI) {
@@ -64,7 +65,7 @@ class Link {
     } catch {
       throw "source URI does not decode the target"
     }
-    this.targetURI = new TextDecoder().decode(targetURIBytes)
+    this.targetURI = decoder.decode(targetURIBytes)
   }
 
   isMine() {

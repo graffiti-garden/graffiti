@@ -1,20 +1,9 @@
 import LinkFactory from './factory'
 import { describe, expect, it, assert } from 'vitest'
-import { sha256 } from '@noble/hashes/sha256'
-import { concatBytes, randomBytes, utf8ToBytes, bytesToHex } from '@noble/hashes/utils'
+import { randomBytes } from '@noble/hashes/utils'
+import { mockNonceToPrivateKey, randomString, soon } from './test-utils'
 
 const serviceURL = 'https://link.graffiti.garden'
-
-function randomString(length=64) {
-  return bytesToHex(randomBytes(length/2))
-}
-function soon() {
-  return Math.ceil(Date.now()/1000) + 100
-}
-function mockNonceToPrivateKey(secret) {
-  secret = secret ?? randomString()
-  return nonce=> sha256(concatBytes(nonce, utf8ToBytes(secret)))
-}
 
 describe(`Link Factory`, ()=> {
 
