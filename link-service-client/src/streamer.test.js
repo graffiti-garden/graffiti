@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, assert } from 'vitest'
+import { describe, expect, it, assert } from 'vitest'
 import LinkStreamer from './streamer'
 import { randomBytes, concatBytes } from '@noble/hashes/utils'
 import { randomString } from './test-utils'

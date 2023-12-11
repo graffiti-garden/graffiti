@@ -124,15 +124,15 @@ export default class LinkStreamer {
         // we're paying attention to
         const publicKey = data.slice(1, 33)
         const containerSigned = data.slice(33)
-        const infoHash = containerSigned.slice(1)
+        const infoHash = containerSigned.slice(1, 33)
         const infoHashString = decoder.decode(infoHash)
 
         // Create and dispatch an event
         const announceEvent = new Event(infoHashString)
         announceEvent.value = {
           type: 'announce',
-          publicKey,
-          containerSigned
+          publicKey: new Uint8Array(publicKey),
+          containerSigned: new Uint8Array(containerSigned)
         }
         this.announceEvents.dispatchEvent(announceEvent)
         break
