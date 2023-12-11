@@ -16,4 +16,5 @@ export const STREAM_RESPONSE_HEADERS = {
   SUCCESS:          1,
   ERROR_WITH_ID:    2,
   ERROR_WITHOUT_ID: 3,
+  BACKLOG_COMPLETE: 4
 }
