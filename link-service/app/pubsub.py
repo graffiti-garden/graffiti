@@ -78,7 +78,8 @@ async def stream(socket: WebSocket):
             if len(msg) < msg_header_length:
                 try:
                     await send_error(socket, 'not enough data')
-                finally:
+                    continue
+                except:
                     break
         
             version, request, message_id = struct.unpack(

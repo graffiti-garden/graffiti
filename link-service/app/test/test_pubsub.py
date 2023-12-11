@@ -22,15 +22,12 @@ class TestPubSub(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(reply.data, response_header_byte('ERROR_WITHOUT_ID') + b'expecting bytes')
 
     async def test_invalid_header(self):
-        for num_bytes in [0, 5, struct.calcsize(msg_header_format) - 1]:
-            async with socket_connection() as ws:
+        async with socket_connection() as ws:
+            for num_bytes in [0, 5, struct.calcsize(msg_header_format) - 1]:
                 await ws.send_bytes(randbytes(num_bytes))
                 reply = await ws.receive() 
                 self.assertEqual(reply.type, aiohttp.WSMsgType.BINARY)
                 self.assertEqual(reply.data, response_header_byte('ERROR_WITHOUT_ID') + b'not enough data')
-
-                reply = await ws.receive()
-                self.assertEqual(reply.type, aiohttp.WSMsgType.CLOSE)
 
     async def test_no_info_hash(self):
         async with socket_connection() as ws:
