@@ -165,10 +165,11 @@ def unsubscribe(socket, info_hashes):
 def unsubscribe_all(socket):
     return unsubscribe(socket, socket.subscriptions.copy())
 
-async def announce(socket, editor_public_key, container_signed):
-    await socket.send_bytes(struct.pack('!B32s',
+async def announce(socket, editor_public_key, prev_info_hash, container_signed):
+    await socket.send_bytes(struct.pack('!B32s32s',
         ResponseHeader.ANNOUNCE.value,
         editor_public_key,
+        prev_info_hash
     ) + container_signed)
 
 async def process_existing(socket, info_hashes):
@@ -177,7 +178,7 @@ async def process_existing(socket, info_hashes):
         "expiration": { "$gt": time() }
     }):
         try:
-            await announce(socket, doc['editor_public_key'], doc['container_signed'])
+            await announce(socket, doc['editor_public_key'], doc['info_hash'], doc['container_signed'])
         except:
             break
 
@@ -202,12 +203,18 @@ async def watch():
             socket_union = set()
             container_signed = b''
             editor_public_key = None
+            prev_info_hash = None
 
             for doc_state in ['fullDocumentBeforeChange', 'fullDocument']:
                 if doc_state in change:
                     doc = change[doc_state]
+
                     info_hash = doc['info_hash']
+                    if doc_state == 'fullDocumentBeforeChange' or not prev_info_hash:
+                        prev_info_hash = info_hash
+
                     editor_public_key = doc['editor_public_key']
+
                     if doc_state == 'fullDocument' and doc['expiration'] > time():
                         container_signed = doc['container_signed']
                     
@@ -222,6 +229,7 @@ async def watch():
             tasks = [announce(
                 socket,
                 editor_public_key,
+                prev_info_hash,
                 container_signed
             ) for socket in socket_union]
 

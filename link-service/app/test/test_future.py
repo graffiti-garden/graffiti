@@ -25,7 +25,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
             # Get the value itself
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed)
     
     async def test_sub_unsub_put(self):
         uri_private_key = Ed25519PrivateKey.generate()
@@ -81,7 +81,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
             # Get the value itself
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed)
 
             # Replace it
             editor_pub2, _, info_hash3, _, container_signed2 = \
@@ -92,7 +92,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
             # Get the replaced value
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed2)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed2)
 
     async def test_replace_info_hash_twice(self):
         uri_private_key = Ed25519PrivateKey.generate()
@@ -110,7 +110,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
             # Get the value itself
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed)
 
             # Replace it with a different info hash
             editor_pub2, _, info_hash3, _, container_signed2 = \
@@ -121,7 +121,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
             # Get the replaced value
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed2)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed2)
 
             # Replace it again 
             editor_pub3, _, info_hash4, _, _ = \
@@ -159,7 +159,7 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
                 # Get the value
                 msg = await ws.receive_bytes()
-                self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
+                self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed)
 
     async def test_expire(self):
         uri_private_key = Ed25519PrivateKey.generate()
@@ -178,11 +178,11 @@ class TestFuture(unittest.IsolatedAsyncioTestCase):
 
             # Get the value itself
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed)
 
             # And get it after it expires
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash)
 
 if __name__ == "__main__":
     unittest.main()

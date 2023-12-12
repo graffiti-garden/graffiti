@@ -3,6 +3,7 @@
 import unittest
 import asyncio
 from time import time
+import struct
 from random import randbytes
 from .utils import put_simple, socket_connection, subscribe_uris, response_header_byte
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -18,7 +19,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
 
             # Get the value itself
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed)
 
             # Mark as complete
             self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
@@ -32,7 +33,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             editor_pub, _, info_hash, _, container_signed = \
                 await put_simple(uri_private_key=uri_private_key)
 
-            entries.append(response_header_byte('ANNOUNCE') + editor_pub + container_signed)
+            entries.append(response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed)
         
         async with socket_connection() as ws:
             message_id = await subscribe_uris(ws, [info_hash])
@@ -55,7 +56,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         for i in range(num_entries):
             editor_pub, _, info_hash, _, container_signed = \
                 await put_simple()
-            entries[info_hash] = response_header_byte('ANNOUNCE') + editor_pub + container_signed
+            entries[info_hash] = response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed
 
         self.assertEqual(len(entries), num_entries)
 
@@ -80,7 +81,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
         for i in range(num_entries):
             editor_pub, _, info_hash, _, container_signed = \
                 await put_simple()
-            entries[info_hash] = response_header_byte('ANNOUNCE') + editor_pub + container_signed
+            entries[info_hash] = response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed
 
         self.assertEqual(len(entries), num_entries)
 
@@ -119,7 +120,7 @@ class TestExisting(unittest.IsolatedAsyncioTestCase):
             msg = await ws.receive_bytes()
             self.assertEqual(msg, response_header_byte('SUCCESS') + message_id)
             msg = await ws.receive_bytes()
-            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + container_signed2)
+            self.assertEqual(msg, response_header_byte('ANNOUNCE') + editor_pub + info_hash + container_signed2)
             # Then complete message
             self.assertEqual(await ws.receive_bytes(), response_header_byte('BACKLOG_COMPLETE') + info_hash)
 
