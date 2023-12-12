@@ -91,8 +91,8 @@ describe(`Basic Streaming`, ()=> {
 
     // Get an announce with a null container
     const announce = (await iterator.next()).value
-    expect(announce.type).toEqual('announce')
-    expect(announce.containerSigned.length).toEqual(0)
+    expect(announce.type).toEqual('unannounce')
+    expect(announce.containerSigned).toBeUndefined()
   })
 
   it('expire', async ()=> {
@@ -115,7 +115,7 @@ describe(`Basic Streaming`, ()=> {
 
     // Wait again...
     const unannounce = (await iterator.next()).value
-    expect(unannounce.type).toEqual('announce')
-    expect(unannounce.containerSigned.length).toEqual(0)
+    expect(unannounce.type).toEqual('unannounce')
+    expect(unannounce.containerSigned).toBeUndefined()
   }, 10000)
 })

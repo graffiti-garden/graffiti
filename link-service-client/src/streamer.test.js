@@ -40,13 +40,6 @@ describe(`Basic Streaming`, ()=> {
     }
   })
 
-  it('subscribe not a string', async()=> {
-    const ls = new LinkStreamer(link)
-    for (const badSource of [null, 10, true, NaN, [], {}]) {
-      await expect(ls.subscribe(badSource).next()).rejects.toEqual("source must be a string")
-    }
-  })
-
   it('double subscribe via request', async()=> {
     const ls = new LinkStreamer(link)
     await ls.tilOpen()

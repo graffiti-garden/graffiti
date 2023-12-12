@@ -19,7 +19,7 @@ describe(`Link Factory`, ()=> {
     const expiration = soon()
 
     const { created, existing } = await lf.create(source, target, expiration)
-    expect(existing).toBeUndefined()
+    expect(existing).toBeNull()
     expect(created.source).toEqual(source)
     expect(created.target).toEqual(target)
     expect(created.expiration).toEqual(BigInt(expiration))
@@ -161,7 +161,7 @@ describe(`Link Factory`, ()=> {
 
     // Manually try it
     const { created: replaced, existing } = await lf2.create(source, newTarget, soon(), 1, created.editorNonce)
-    expect(existing).toBeUndefined()
+    expect(existing).toBeNull()
     // It ends up with a different public key
     assert(!replaced.publicKey.every((val, i)=> val==created.publicKey[i]))
   })

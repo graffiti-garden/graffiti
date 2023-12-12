@@ -5,11 +5,16 @@ import { xchacha20poly1305 as cipher } from '@noble/ciphers/chacha';
 import { PUT_VERSION, INFO_HASH_PREFIX, CIPHER_PREFIX } from './constants'
 const decoder = new TextDecoder()
 
-class Link {
+export class Link {
+  #linkFactory: LinkFactory
+  publicKey: Uint8Array
+  source: string
+  target: string
+  counter: bigint
+  expiration: bigint
+  editorNonce: Uint8Array
 
-  #linkFactory = null
-
-  constructor(linkFactory, publicKey, containerSigned, source) {
+  constructor(linkFactory: LinkFactory, publicKey: Uint8Array, containerSigned: Uint8Array, source: string) {
     this.#linkFactory = linkFactory
     this.publicKey = publicKey
     this.source = source
@@ -62,7 +67,7 @@ class Link {
     const cipherNonce = container.slice(byteOffset, byteOffset+24)
     byteOffset += 24
     const targetEncrypted = container.slice(byteOffset)
-    let targetBytes
+    let targetBytes: Uint8Array
     try {
       targetBytes = cipher(cipherKey, cipherNonce).decrypt(targetEncrypted)
     } catch {
@@ -71,7 +76,7 @@ class Link {
     this.target = decoder.decode(targetBytes)
   }
 
-  isMine() {
+  isMine(): boolean {
     // Generate the public key from the nonce
     const privateKey =
      this.#linkFactory.editorNonceToPrivateKey(this.editorNonce)
@@ -81,12 +86,15 @@ class Link {
     return publicKey.every((val, i)=> val == this.publicKey[i])
   }
 
-  async modify({source, target, expiration}) {
+  async modify(
+    {source, target, expiration}:
+    {source: string, target?: string, expiration?: bigint|number}
+  ) : Promise<CreatedAndExistingLinks> {
     // Perform validation (even though server
     // would do this too)
     if (!this.isMine())
       throw "you cannot modify a link that is not yours"
-    if (expiration < this.expiration)
+    if (expiration && expiration < this.expiration)
       throw "expiration cannot decrease"
 
     return await this.#linkFactory.create(
@@ -99,14 +107,22 @@ class Link {
   }
 }
 
-export default class LinkFactory {
+export type EditorNonceToPrivateKey = (editorNonce: Uint8Array)=> Uint8Array
+export interface CreatedAndExistingLinks {
+  created: Link,
+  existing: Link|null
+}
 
-  constructor(serviceURL, editorNonceToPrivateKey) {
+export default class LinkFactory {
+  serviceURL: string
+  editorNonceToPrivateKey: EditorNonceToPrivateKey
+
+  constructor(serviceURL: string, editorNonceToPrivateKey: EditorNonceToPrivateKey) {
     this.serviceURL = serviceURL
     this.editorNonceToPrivateKey = editorNonceToPrivateKey
   }
 
-  #publicKeyToURL(publicKey) {
+  #publicKeyToURL(publicKey: Uint8Array) : string {
     // Encode the public key in base 64
     const publicKeyBase64 =
       btoa(String.fromCodePoint(...publicKey))
@@ -117,11 +133,11 @@ export default class LinkFactory {
     return `${this.serviceURL}/${publicKeyBase64}`
   }
 
-  parse(publicKey, containerSigned, source) {
+  parse(publicKey: Uint8Array, containerSigned: Uint8Array, source: string) : Link {
     return new Link(this, publicKey, containerSigned, source)
   }
 
-  async get(publicKey, source) {
+  async get(publicKey: Uint8Array, source: string) : Promise<Link> {
     const response = await fetch(this.#publicKeyToURL(publicKey))
     if (response.status != 200) {
       throw await response.text()
@@ -134,21 +150,20 @@ export default class LinkFactory {
     }
   }
 
-  async create(source, target, expiration, counter=0, editorNonce=null) {
-    // Make sure that the source and target are strings
-    for (const uri in [source, target]) {
-      if (typeof uri != 'string') {
-        throw `URI must be a string : ${uri}`
-      }
-    }
-
+  async create(
+    source: string,
+    target: string,
+    expiration: number|bigint,
+    counter: number|bigint=0,
+    editorNonce: Uint8Array|null=null
+  ) : Promise<CreatedAndExistingLinks> {
     // Convert expiration to seconds to big int
     expiration = BigInt(expiration)
     counter = BigInt(counter)
 
     // Generate editing nonce
     editorNonce = editorNonce ?? randomBytes(24)
-    if (ArrayBuffer.isView(editorNonce) && editorNonce.byteLength != 24) {
+    if (editorNonce.length != 24) {
       throw "editor nonce is must be 24 random bytes"
     }
 
@@ -207,8 +222,9 @@ export default class LinkFactory {
     if (response.status != 200) {
       throw await response.text()
     } else {
-      const output = {
-        created: this.parse(publicKey, containerSigned, source)
+      const output: CreatedAndExistingLinks = {
+        created: this.parse(publicKey, containerSigned, source),
+        existing: null
       }
 
       // Include existing data if it exists
@@ -216,9 +232,7 @@ export default class LinkFactory {
       if (oldContainerSigned.byteLength) {
         try {
           output.existing = this.parse(publicKey, oldContainerSigned, source)
-        } catch {
-          output.existing = null
-        }
+        } catch {}
       }
 
       return output

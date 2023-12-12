@@ -2,45 +2,65 @@ import { randomBytes, concatBytes } from "@noble/hashes/utils"
 import { sha256 } from "@noble/hashes/sha256"
 import { ed25519 as curve } from '@noble/curves/ed25519'
 import { INFO_HASH_PREFIX, STREAM_REQUEST_CODES, STREAM_RESPONSE_HEADERS, STREAM_VERSION, STREAM_RECONNECT_TIMEOUT } from "./constants"
-let ws
+let ws: any
 
 const decoder = new TextDecoder()
 
+export enum AnnounceType {
+  ANNOUNCE = 'announce',
+  UNANNOUNCE = 'unannounce',
+  BACKLOG_COMPLETE = 'backlog-complete'
+}
+interface ErrorEvent extends Event {
+  error?: string
+}
+interface AnnounceValue {
+  type: AnnounceType,
+  publicKey?: Uint8Array,
+  containerSigned?: Uint8Array
+}
+interface AnnounceEvent extends Event {
+  value?: AnnounceValue
+}
+
 export default class LinkStreamer {
-  constructor(serviceSocket) {
-    this.serviceSocket=serviceSocket
-    this.open = false
-    this.connectionEvents = new EventTarget()
-    this.replyEvents      = new EventTarget()
-    this.announceEvents   = new EventTarget()
-    this.subscriptions      = {}
+  #serviceSocket: string
+  #subscriptions: { [key: string]: Uint8Array } = {}
+  open: boolean = false
+  #connectionEvents = new EventTarget()
+  #replyEvents      = new EventTarget()
+  #announceEvents   = new EventTarget()
+  #ws: any
+
+  constructor(serviceSocket: string) {
+    this.#serviceSocket = serviceSocket
     this.#connect()
   }
 
-  async #connect() {
+  async #connect() : Promise<void> {
     if (!ws) {
       ws = (typeof WebSocket === 'undefined') ? (await import('ws')).default  : WebSocket
     }
-    this.ws = new ws(this.serviceSocket)
-    this.ws.onopen    = this.#onOpen.bind(this)
-    this.ws.onmessage = this.#onMessage.bind(this)
-    this.ws.onclose   = this.#onClose.bind(this)
+    this.#ws = new ws(this.#serviceSocket)
+    this.#ws.onopen    = this.#onOpen.bind(this)
+    this.#ws.onmessage = this.#onMessage.bind(this)
+    this.#ws.onclose   = this.#onClose.bind(this)
   }
 
-  #onOpen() {
+  #onOpen() : void {
     this.open = true
-    this.connectionEvents.dispatchEvent(new Event("open"))
+    this.#connectionEvents.dispatchEvent(new Event("open"))
 
     // Send all the subscriptions!
-    if (Object.keys(this.subscriptions).length) {
-      this.request(true, ...Object.values(this.subscriptions))
+    if (Object.keys(this.#subscriptions).length) {
+      this.request(true, ...Object.values(this.#subscriptions))
     }
   }
 
-  async tilOpen() {
+  async tilOpen() : Promise<void> {
     if (!this.open) {
-      await new Promise(resolve=> 
-        this.connectionEvents.addEventListener(
+      await new Promise<void>(resolve=> 
+        this.#connectionEvents.addEventListener(
           'open',
           ()=> resolve(),
           { once: true, passive: true }
@@ -49,7 +69,7 @@ export default class LinkStreamer {
     }
   }
 
-  async request(subscribe, ...infoHashes) {
+  async request(subscribe: boolean, ...infoHashes: Array<Uint8Array>) : Promise<void> {
     // If not open, don't hang. It will send on connect.
     if (!this.open) return
 
@@ -68,9 +88,9 @@ export default class LinkStreamer {
 
     // Create a listening promise before sending
     const messageIDString = decoder.decode(messageID)
-    const replyPromise = new Promise((resolve, reject)=> {
-      const onMessage = e=> {
-        this.connectionEvents.removeEventListener(
+    const replyPromise = new Promise<void>((resolve, reject)=> {
+      const onMessage = (e: ErrorEvent)=> {
+        this.#connectionEvents.removeEventListener(
           'close',
           onClose
         )
@@ -79,9 +99,9 @@ export default class LinkStreamer {
         e.error? reject(e.error) : resolve()
       }
       const onClose = ()=> {
-        this.replyEvents.removeEventListener(
+        this.#replyEvents.removeEventListener(
           messageIDString,
-          onMessage
+          onMessage as EventListener
         )
 
         // Resolve on close,
@@ -90,24 +110,24 @@ export default class LinkStreamer {
         resolve()
       }
 
-      this.replyEvents.addEventListener(
+      this.#replyEvents.addEventListener(
         messageIDString,
-        onMessage,
+        onMessage as EventListener,
         { once: true, passive: true }
       )
-      this.connectionEvents.addEventListener(
+      this.#connectionEvents.addEventListener(
         'close',
         onClose,
         { once: true, passive: true }
       )
     })
 
-    this.ws.send(packed.buffer)
+    this.#ws.send(packed.buffer)
 
     return await replyPromise
   }
 
-  async #onMessage({data}) {
+  async #onMessage({data}) : Promise<void> {
     const responseHeader = new Uint8Array(data.slice(0,1))[0]
 
     let isError = false
@@ -117,10 +137,10 @@ export default class LinkStreamer {
         isError = true
       case STREAM_RESPONSE_HEADERS.SUCCESS:
         const messageID = data.slice(1, 17)
-        const replyEvent = new Event(decoder.decode(messageID))
+        const replyEvent: ErrorEvent = new Event(decoder.decode(messageID))
         if (isError) replyEvent.error =
           decoder.decode(data.slice(17))
-        this.replyEvents.dispatchEvent(replyEvent)
+        this.#replyEvents.dispatchEvent(replyEvent)
         break
 
       case STREAM_RESPONSE_HEADERS.ANNOUNCE:
@@ -134,27 +154,25 @@ export default class LinkStreamer {
         // Create and dispatch an event
         if (infoHash.length) {
           const infoHashString = decoder.decode(infoHash)
-          const announceEvent = new Event(infoHashString)
+          const announceEvent: AnnounceEvent = new Event(infoHashString)
           announceEvent.value = {
-            type: 'announce',
+            type: AnnounceType.ANNOUNCE,
             publicKey: new Uint8Array(publicKey),
             containerSigned: new Uint8Array(containerSigned)
           }
-          this.announceEvents.dispatchEvent(announceEvent)
+          this.#announceEvents.dispatchEvent(announceEvent)
         }
 
         // Check if previous info hash does not match
-        if (!infoHash.length || !infoHash.every((v,i)=> v==infoHashPrev[i])) {
+        if (!infoHash.length || !infoHash.every((v:number,i:number)=> v==infoHashPrev[i])) {
           // Send an updated announcement
           const infoHashPrevString = decoder.decode(infoHashPrev)
-          const unannounceEvent = new Event(infoHashPrevString)
+          const unannounceEvent: AnnounceEvent = new Event(infoHashPrevString)
           unannounceEvent.value = {
-            type: 'announce',
-            publicKey: new Uint16Array(publicKey),
-            // No container, just like expiration events
-            containerSigned: new Uint8Array()
+            type: AnnounceType.UNANNOUNCE,
+            publicKey: new Uint8Array(publicKey),
           }
-          this.announceEvents.dispatchEvent(unannounceEvent)
+          this.#announceEvents.dispatchEvent(unannounceEvent)
         }
         break
 
@@ -168,37 +186,31 @@ export default class LinkStreamer {
           const infoHash = data.slice(1 + i * 32, ( i + 1 ) * 32 + 1)
           const infoHashString = decoder.decode(infoHash)
 
-          const backlogCompleteEvent = new Event(infoHashString)
+          const backlogCompleteEvent: AnnounceEvent = new Event(infoHashString)
           backlogCompleteEvent.value = {
-            type: 'backlog-complete'
+            type: AnnounceType.BACKLOG_COMPLETE
           }
-          this.announceEvents.dispatchEvent(backlogCompleteEvent)
+          this.#announceEvents.dispatchEvent(backlogCompleteEvent)
         }
         break
 
       default:
-        console.error(`Unknown response from connection to ${this.serviceSocket}`)
+        console.error(`Unknown response from connection to ${this.#serviceSocket}`)
     }
   }
 
-  #onClose() {
+  #onClose() : void {
     this.open = false
 
-    this.connectionEvents.dispatchEvent(new Event("close"))
+    this.#connectionEvents.dispatchEvent(new Event("close"))
 
-    if (!this.closed) {
-      console.log(`Lost connection to ${this.serviceSocket}, reconnecting soon...`)
-      setTimeout(this.#connect.bind(this), STREAM_RECONNECT_TIMEOUT)
-    }
+    console.log(`Lost connection to ${this.#serviceSocket}, reconnecting soon...`)
+    setTimeout(this.#connect.bind(this), STREAM_RECONNECT_TIMEOUT)
   }
 
-  async * subscribe(source, signal) {
-    // Make sure the sourceis a string
-    if (typeof source != 'string')
-      throw "source must be a string"
-
+  async * subscribe(source: string, signal: AbortSignal) : AsyncGenerator<AnnounceValue, never, void> {
     // Make sure the source isn't already subscribed
-    if (source in this.subscriptions)
+    if (source in this.#subscriptions)
       throw "already subscribed"
 
     // Convert to info hash
@@ -207,29 +219,32 @@ export default class LinkStreamer {
     const infoHashString = decoder.decode(infoHash)
 
     // Mark the subscription
-    this.subscriptions[source] = infoHash
+    this.#subscriptions[source] = infoHash
 
     // Create callback functions that
     // reference dynamic resolve and reject.
     // If there is no resolve function,
     // the promise is processing and the
     // output is added to a queue
-    let resolve, reject
-    const waitingAnnouncements = []
-    const onAnnouncement = ({value})=> {
+    let resolve: null|((v: AnnounceValue)=>void) = null
+    let reject:  null|((v: string)=>void) = null
+    const waitingAnnouncements: Array<AnnounceValue> = []
+    const onAnnouncement = (e: AnnounceEvent)=> {
+      if (!e.value) return
+
       if (resolve) {
-        resolve(value)
+        resolve(e.value)
         resolve = null
         reject = null
       } else {
-        waitingAnnouncements.push(value)
+        waitingAnnouncements.push(e.value)
       }
     }
     let alreadyRejected = false
     const onAbort = ()=> {
-      this.announceEvents.removeEventListener(
+      this.#announceEvents.removeEventListener(
         infoHashString,
-        onAnnouncement
+        onAnnouncement as EventListener
       )
       if (reject) {
         reject(signal.reason)
@@ -241,7 +256,7 @@ export default class LinkStreamer {
     }
 
     // Add the listeners
-    this.announceEvents.addEventListener(
+    this.#announceEvents.addEventListener(
       infoHashString,
       onAnnouncement,
       { passive: true })
@@ -258,8 +273,9 @@ export default class LinkStreamer {
         if (alreadyRejected) throw alreadyRejected
         yield await new Promise((_resolve, _reject)=> {
           reject = _reject
-          if (waitingAnnouncements.length) {
-            _resolve(waitingAnnouncements.shift())
+          const announcement = waitingAnnouncements.shift()
+          if (announcement) {
+            _resolve(announcement)
           } else {
             resolve = _resolve
           }
@@ -268,7 +284,7 @@ export default class LinkStreamer {
     } finally {
       // unsubscribe and free the source
       await this.request(false, infoHash)
-      delete this.subscriptions[source]
+      delete this.#subscriptions[source]
     }
   }
 }

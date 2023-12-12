@@ -2,10 +2,11 @@
   "name": "@graffiti-garden/link-service-client",
   "version": "1.0.0",
   "description": "client for the graffiti link service",
-  "main": "./link-service.js",
-  "browser": "./dist/link-service.mjs",
+  "type": "module",
+  "main": "./link-service.ts",
+  "browser": "./dist/link-service.js",
   "files": [
-    "link-service.js",
+    "link-service.ts",
     "src",
     "dist"
   ],
