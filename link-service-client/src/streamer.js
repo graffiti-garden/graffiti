@@ -1,8 +1,9 @@
 import { randomBytes, concatBytes } from "@noble/hashes/utils"
 import { sha256 } from "@noble/hashes/sha256"
 import { ed25519 as curve } from '@noble/curves/ed25519'
-import { WebSocket } from "isomorphic-ws"
-import { INFO_HASH_PREFIX, STREAM_REQUEST_CODES, STREAM_RESPONSE_HEADERS, STREAM_VERSION } from "./constants"
+import { INFO_HASH_PREFIX, STREAM_REQUEST_CODES, STREAM_RESPONSE_HEADERS, STREAM_VERSION, STREAM_RECONNECT_TIMEOUT } from "./constants"
+let ws
+
 const decoder = new TextDecoder()
 
 export default class LinkStreamer {
@@ -16,8 +17,11 @@ export default class LinkStreamer {
     this.#connect()
   }
 
-  #connect() {
-    this.ws = new WebSocket(this.serviceSocket)
+  async #connect() {
+    if (!ws) {
+      ws = (typeof WebSocket === 'undefined') ? (await import('ws')).default  : WebSocket
+    }
+    this.ws = new ws(this.serviceSocket)
     this.ws.onopen    = this.#onOpen.bind(this)
     this.ws.onmessage = this.#onMessage.bind(this)
     this.ws.onclose   = this.#onClose.bind(this)
@@ -184,7 +188,7 @@ export default class LinkStreamer {
 
     if (!this.closed) {
       console.log(`Lost connection to ${this.serviceSocket}, reconnecting soon...`)
-      setTimeout(this.#connect.bind(this), RECONNECT_TIMEOUT)
+      setTimeout(this.#connect.bind(this), STREAM_RECONNECT_TIMEOUT)
     }
   }
 

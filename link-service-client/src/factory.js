@@ -6,8 +6,11 @@ import { PUT_VERSION, INFO_HASH_PREFIX, CIPHER_PREFIX } from './constants'
 const decoder = new TextDecoder()
 
 class Link {
+
+  #linkFactory = null
+
   constructor(linkFactory, publicKey, containerSigned, source) {
-    this.linkFactory = linkFactory
+    this.#linkFactory = linkFactory
     this.publicKey = publicKey
     this.source = source
 
@@ -71,7 +74,7 @@ class Link {
   isMine() {
     // Generate the public key from the nonce
     const privateKey =
-     this.linkFactory.editorNonceToPrivateKey(this.editorNonce)
+     this.#linkFactory.editorNonceToPrivateKey(this.editorNonce)
     const publicKey  = curve.getPublicKey(privateKey)
 
     // And make sure they are equal
@@ -86,7 +89,7 @@ class Link {
     if (expiration < this.expiration)
       throw "expiration cannot decrease"
 
-    return await this.linkFactory.create(
+    return await this.#linkFactory.create(
       source ?? this.source, 
       target ?? this.target,
       expiration ?? this.expiration,
