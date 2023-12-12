@@ -42,6 +42,7 @@ export default class LinkStreamer {
       ws = (typeof WebSocket === 'undefined') ? (await import('ws')).default  : WebSocket
     }
     this.#ws = new ws(this.#serviceSocket)
+    this.#ws.binaryType = "arraybuffer"
     this.#ws.onopen    = this.#onOpen.bind(this)
     this.#ws.onmessage = this.#onMessage.bind(this)
     this.#ws.onclose   = this.#onClose.bind(this)
@@ -127,7 +128,7 @@ export default class LinkStreamer {
     return await replyPromise
   }
 
-  async #onMessage({data}) : Promise<void> {
+  #onMessage({data}: {data: Buffer|ArrayBuffer}) : void {
     const responseHeader = new Uint8Array(data.slice(0,1))[0]
 
     let isError = false
@@ -146,9 +147,9 @@ export default class LinkStreamer {
       case STREAM_RESPONSE_HEADERS.ANNOUNCE:
         // Make sure the info hash is one
         // we're paying attention to
-        const publicKey = data.slice(1, 33)
-        const infoHashPrev = data.slice(33, 33+32)
-        const containerSigned = data.slice(33+32)
+        const publicKey = new Uint8Array(data.slice(1, 33))
+        const infoHashPrev = new Uint8Array(data.slice(33, 33+32))
+        const containerSigned = new Uint8Array(data.slice(33+32))
         const infoHash = containerSigned.slice(1, 33)
 
         // Create and dispatch an event
@@ -157,8 +158,8 @@ export default class LinkStreamer {
           const announceEvent: AnnounceEvent = new Event(infoHashString)
           announceEvent.value = {
             type: AnnounceType.ANNOUNCE,
-            publicKey: new Uint8Array(publicKey),
-            containerSigned: new Uint8Array(containerSigned)
+            publicKey: publicKey,
+            containerSigned: containerSigned
           }
           this.#announceEvents.dispatchEvent(announceEvent)
         }
@@ -177,11 +178,11 @@ export default class LinkStreamer {
         break
 
       case STREAM_RESPONSE_HEADERS.ERROR_WITHOUT_ID:
-        console.error((await data.text()).slice(1))
+        console.error(decoder.decode(data.slice(1)))
         break
 
       case STREAM_RESPONSE_HEADERS.BACKLOG_COMPLETE:
-        const numInfoHashes = (data.length - 1) / 32
+        const numInfoHashes = (data.byteLength - 1) / 32
         for (let i=0; i < numInfoHashes; i++) {
           const infoHash = data.slice(1 + i * 32, ( i + 1 ) * 32 + 1)
           const infoHashString = decoder.decode(infoHash)

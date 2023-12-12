@@ -76,10 +76,10 @@ export class Link {
     this.target = decoder.decode(targetBytes)
   }
 
-  isMine(): boolean {
+  async isMine(): Promise<boolean> {
     // Generate the public key from the nonce
     const privateKey =
-     this.#linkFactory.editorNonceToPrivateKey(this.editorNonce)
+     await this.#linkFactory.editorNonceToPrivateKey(this.editorNonce)
     const publicKey  = curve.getPublicKey(privateKey)
 
     // And make sure they are equal
@@ -92,7 +92,7 @@ export class Link {
   ) : Promise<CreatedAndExistingLinks> {
     // Perform validation (even though server
     // would do this too)
-    if (!this.isMine())
+    if (!(await this.isMine()))
       throw "you cannot modify a link that is not yours"
     if (expiration && expiration < this.expiration)
       throw "expiration cannot decrease"
@@ -107,7 +107,7 @@ export class Link {
   }
 }
 
-export type EditorNonceToPrivateKey = (editorNonce: Uint8Array)=> Uint8Array
+export type EditorNonceToPrivateKey = (editorNonce: Uint8Array)=> (Promise<Uint8Array>|Uint8Array)
 export interface CreatedAndExistingLinks {
   created: Link,
   existing: Link|null
@@ -168,7 +168,7 @@ export default class LinkFactory {
     }
 
     // Derive editor public and private keys from the salt
-    const privateKey = this.editorNonceToPrivateKey(editorNonce)
+    const privateKey = await this.editorNonceToPrivateKey(editorNonce)
     const publicKey  = curve.getPublicKey(privateKey)
 
     // Derive the infohash and proof of knowledge

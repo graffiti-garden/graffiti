@@ -135,10 +135,10 @@ describe(`Link Factory`, ()=> {
 
     const source = randomString()
     const { created } = await lf1.create(source, randomString(), soon())
-    assert(created.isMine())
+    assert(await created.isMine())
 
     const gotten = await lf2.get(created.publicKey, source)
-    assert(gotten.isMine())
+    assert(await gotten.isMine())
 
     const newTarget = randomString()
     await gotten.modify({target: newTarget})
@@ -152,10 +152,10 @@ describe(`Link Factory`, ()=> {
 
     const source = randomString()
     const { created } = await lf1.create(source, randomString(), soon())
-    assert(created.isMine())
+    assert(await created.isMine())
 
     const gotten = await lf2.get(created.publicKey, source)
-    assert(!gotten.isMine())
+    assert(!await gotten.isMine())
     const newTarget = randomString()
     await expect(gotten.modify({target: newTarget}))
       .rejects.toEqual('you cannot modify a link that is not yours')
