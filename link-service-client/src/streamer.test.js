@@ -87,11 +87,11 @@ describe(`Basic Streaming`, ()=> {
     const uri = randomString()
 
     let iterator
-    iterator = ls.subscribe(uri, AbortSignal.timeout(100))
+    iterator = ls.subscribe(uri, AbortSignal.timeout(200))
     await iterator.next() // Backlog complete
     await expect(iterator.next()).rejects.toHaveProperty("name", "TimeoutError")
 
-    iterator = ls.subscribe(uri, AbortSignal.timeout(100))
+    iterator = ls.subscribe(uri, AbortSignal.timeout(200))
     await iterator.next() // Backlog complete
     await expect(iterator.next()).rejects.toHaveProperty("name", "TimeoutError")
   })

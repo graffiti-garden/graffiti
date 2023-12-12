@@ -101,7 +101,7 @@ export class Link {
       source ?? this.source, 
       target ?? this.target,
       expiration ?? this.expiration,
-      this.counter + 1n,
+      this.counter + BigInt(1),
       this.editorNonce
     )
   }
