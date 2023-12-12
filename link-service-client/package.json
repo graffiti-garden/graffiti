@@ -3,10 +3,9 @@
   "version": "1.0.0",
   "description": "client for the graffiti link service",
   "type": "module",
-  "main": "./link-service.ts",
-  "browser": "./dist/link-service.js",
+  "main": "src/link-service.ts",
+  "browser": "dist/link-service.js",
   "files": [
-    "link-service.ts",
     "src",
     "dist"
   ],

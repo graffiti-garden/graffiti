@@ -8,7 +8,7 @@ export default defineConfig({
   },
   build: {
     lib: {
-      entry: resolve(__dirname, 'link-service.ts'),
+      entry: resolve(__dirname, 'src/link-service.ts'),
       name: 'link-service',
       fileName: 'link-service',
       formats: ['es']

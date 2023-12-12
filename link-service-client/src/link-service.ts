@@ -1,7 +1,7 @@
-import LinkFactory from "./src/factory";
-import LinkStreamer from "./src/streamer";
-import type { EditorNonceToPrivateKey, CreatedAndExistingLinks, Link } from './src/factory'
-import { AnnounceType } from "./src/streamer";
+import LinkFactory from "./factory";
+import LinkStreamer from "./streamer";
+import type { EditorNonceToPrivateKey, CreatedAndExistingLinks, Link } from './factory'
+import { AnnounceType } from "./streamer";
 
 export interface AnnounceLink {
   type: AnnounceType,

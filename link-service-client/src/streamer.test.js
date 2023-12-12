@@ -4,6 +4,7 @@ import { randomBytes, concatBytes } from '@noble/hashes/utils'
 import { randomString } from './test-utils'
 
 const link = 'wss://link.graffiti.garden'
+// const link = 'ws://localhost:8000'
 
 describe(`Basic Streaming`, ()=> {
   it('no info hash', async()=> {

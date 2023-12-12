@@ -4,6 +4,7 @@ import { randomBytes } from '@noble/hashes/utils'
 import { mockNonceToPrivateKey, randomString, soon } from './test-utils'
 
 const serviceURL = 'https://link.graffiti.garden'
+// const serviceURL = 'http://localhost:8000'
 
 describe(`Link Factory`, ()=> {
 
