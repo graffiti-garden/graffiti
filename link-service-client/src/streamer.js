@@ -123,18 +123,35 @@ export default class LinkStreamer {
         // Make sure the info hash is one
         // we're paying attention to
         const publicKey = data.slice(1, 33)
-        const containerSigned = data.slice(33)
+        const infoHashPrev = data.slice(33, 33+32)
+        const containerSigned = data.slice(33+32)
         const infoHash = containerSigned.slice(1, 33)
-        const infoHashString = decoder.decode(infoHash)
 
         // Create and dispatch an event
-        const announceEvent = new Event(infoHashString)
-        announceEvent.value = {
-          type: 'announce',
-          publicKey: new Uint8Array(publicKey),
-          containerSigned: new Uint8Array(containerSigned)
+        if (infoHash.length) {
+          const infoHashString = decoder.decode(infoHash)
+          const announceEvent = new Event(infoHashString)
+          announceEvent.value = {
+            type: 'announce',
+            publicKey: new Uint8Array(publicKey),
+            containerSigned: new Uint8Array(containerSigned)
+          }
+          this.announceEvents.dispatchEvent(announceEvent)
         }
-        this.announceEvents.dispatchEvent(announceEvent)
+
+        // Check if previous info hash does not match
+        if (!infoHash.length || !infoHash.every((v,i)=> v==infoHashPrev[i])) {
+          // Send an updated announcement
+          const infoHashPrevString = decoder.decode(infoHashPrev)
+          const unannounceEvent = new Event(infoHashPrevString)
+          unannounceEvent.value = {
+            type: 'announce',
+            publicKey: new Uint16Array(publicKey),
+            // No container, just like expiration events
+            containerSigned: new Uint8Array()
+          }
+          this.announceEvents.dispatchEvent(unannounceEvent)
+        }
         break
 
       case STREAM_RESPONSE_HEADERS.ERROR_WITHOUT_ID:
@@ -238,7 +255,7 @@ export default class LinkStreamer {
         yield await new Promise((_resolve, _reject)=> {
           reject = _reject
           if (waitingAnnouncements.length) {
-            resolve(waitingAnnouncements.shift())
+            _resolve(waitingAnnouncements.shift())
           } else {
             resolve = _resolve
           }
