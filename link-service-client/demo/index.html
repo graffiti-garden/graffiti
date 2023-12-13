@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Graffiti Link Service</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+  <button onclick="generateNewIdentity()">
+    Re-generate Identity
+  </button>
+
+  <br>
+
+  <label for="source">
+    What source do you want to subscribe to and post links to?
+  </label>
+  <input id="source" oninput="onSourceChange(this.value)">
+
+  <br>
+
+  <form onsubmit="post(event)">
+    <label for="target">
+      What do you want your link to target?
+    </label>
+    <input id="target">
+    <br>
+    <label for="expiration">
+      How many seconds until your link expires?
+    </label>
+    <input type="number" min="1" max="1000" id="expiration">
+    <br>
+    <input type="submit" value="Post">
+  </form>
+
+  <ul id="links"></ul>
+
+  <script type="module">
+    //import LinkService from 'https://cdn.jsdelivr.net/npm/@graffiti-garden/link-service-client'
+    import LinkService from '/dist/link-service.js'
+
+    const decoder = new TextDecoder()
+
+    const links = {}
+    async function redraw() {
+      const linksEl = document.getElementById('links')
+
+      // Remove old children
+      const toDelete = []
+      for (const child of linksEl.children) {
+        if (!(child.id in links)) {
+          toDelete.push(child)
+        }
+      }
+      toDelete.forEach(c=>c.remove())
+      
+      // Add new children
+      for (let [pkString, link] of Object.entries(links)) {
+        let el = document.getElementById(pkString)
+        if (!el) {
+          el = document.createElement('li')
+          el.id = pkString
+          el.append(document.createElement('span'))
+          linksEl.append(el)
+          link.isMine().then(m=>{if(m) {
+            const button = document.createElement('button')
+            button.innerText = '‼️'
+            button.onclick=async ()=> {
+              const { created } = await link.modify({target: link.target+'!!'})
+              link = created
+            }
+            el.append(button)
+          }})
+        }
+        el.children[0].innerText = link.target
+      }
+    }
+
+    const secret = new Uint8Array(24);
+    window.generateNewIdentity = function() {
+      crypto.getRandomValues(secret)
+      document.getElementById('links').innerHTML = ''
+      redraw()
+    }
+    generateNewIdentity()
+
+    // Hash the secret with the nonce to get a personal
+    // private key for an individual link
+    async function editorNonceToPrivateKey(editorNonce) {
+      const concated = new Uint8Array([...secret, ...editorNonce])
+      const buffer = await crypto.subtle.digest("SHA-256", concated)
+      return new Uint8Array(buffer)
+    }
+
+    const ls = new LinkService('https://link.graffiti.garden', editorNonceToPrivateKey)
+
+    async function listen(source, signal) {
+      try {
+        for await (const e of ls.subscribe(source, signal)) {
+          if (e.type == "announce") {
+            links[decoder.decode(e.link.publicKey)] = e.link
+          } else if (e.type == "unannounce") {
+            delete links[decoder.decode(e.publicKey)]
+          }
+          redraw()
+        }
+      } catch {}
+    }
+
+    let source
+    let subscribeAborter
+    window.onSourceChange = function() {
+      if (subscribeAborter) subscribeAborter.abort()
+
+      // Clear all keys
+      Object.keys(links).forEach(key => delete links[key]);
+
+      subscribeAborter = new AbortController()
+      source = document.getElementById('source').value
+      listen(source, subscribeAborter.signal)
+      redraw()
+    }
+    onSourceChange()
+
+    window.post = async function(e) {
+      e.preventDefault()
+      const target = document.getElementById('target').value
+      if (!target) return
+      document.getElementById('target').value = ''
+      const expiration = Number(document.getElementById('expiration').value)
+      await ls.create(source, target, Math.ceil(Date.now()/1000) + expiration)
+    }
+  </script>
+</body>
