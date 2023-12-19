@@ -1,77 +1,153 @@
-<script setup>
+<script setup lang="ts">
   import { reactive, ref, nextTick, watch } from 'vue'
-  import ActorManager from './actor-manager';
+  import type { Ref } from 'vue'
+
+  import ActorManager, { base64Decode, base64Encode } from './actor-manager';
+  import type { Actor, ActorAnnouncement } from './actor-manager';
   import DropActor from './DropActor.vue'
 
-  let postMessage = message=> {
-    console.log(message)
+  enum RequestAction {
+    Sign,
+    NoncedSecret,
+    SharedSecret
   }
 
-  const referrer = document.referrer
-  if (referrer) {
-    const origin = new URL(referrer).origin
+  interface RequestMessage {
+    messageID: string,
+    action: RequestAction,
+    data: string
+  }
 
-    postMessage = message=> {
-      window.parent.postMessage(message, origin)
+  interface ReplyMessage {
+    messageID: string,
+    reply?: string
+    error?: string
+  }
+
+  // Post messages either to the
+  // outside-iframe window or the
+  // console, if standalone
+  const postMessage = document.referrer?
+    function(message: object) {
+      window.parent.postMessage(
+        message,
+        new URL(document.referrer).origin
+      )
+    } :
+    function(message: object) {
+      console.log(message)
     }
-  }
+
+  
+  // A place where actor-related are sent
+  const events = new EventTarget()
 
   const initialized = ref(false)
-  const actorManager = new ActorManager(
-    ()=> reactive({}),
-    ()=> {
-      initialized.value=true
-      postMessage({ initialized: "true" })
-    })
+  events.addEventListener(
+    "initialized",
+    ()=> initialized.value=true
+  )
 
-  const menuOpen = ref(null)
+  // Update actors reactively
+  // as they change
+  const actors: { [uri: string]: string }  = reactive({})
+  events.addEventListener(
+    "update",
+    async (e: ActorAnnouncement)=> {
+      if (e.uri) {
+        try {
+          const actor = await actorManager.getActor(e.uri)
+          actors[e.uri] = actor.nickname
+        } catch {
+          return
+        }
+      }
+    }
+  )
+  events.addEventListener(
+    "delete",
+    async (e: ActorAnnouncement)=> {
+      if (e.uri) {
+        delete actors[e.uri]
+      }
+    }
+  )
 
-  const editing = ref(null)
-  const editingNickname = ref('')
-  function rename(actor) {
+  const actorManager = new ActorManager(events)
+
+  // Editing state
+  const editing: Ref<null|string> = ref(null)
+  const editingNickname: Ref<string> = ref('')
+  function rename(uri: string) : void {
     if (!editingNickname.value) return
-    actorManager.renameActor(actor.thumbprint, editingNickname.value)
+    actorManager.renameActor(uri, editingNickname.value)
     editing.value = null
   }
 
-  const selected = ref(null)
+  // Various UI state variables
+  const menuOpen: Ref<null|string> = ref(null)
+  const selected: Ref<null|string> = ref(null)
+  const createNickname: Ref<string> = ref('')
+  const adding: Ref<boolean> = ref(false)
+  const creating: Ref<boolean> = ref(false)
+  const importing: Ref<boolean> = ref(false)
 
-  const createNickname = ref('')
-  const adding = ref(false)
-  const creating = ref(false)
-  const importing = ref(false)
+  // Save file
+  async function download(uri: string) {
+    const actor = await actorManager.getActor(uri)
 
-  window.onmessage = async function({ data }) {
-    // Sign or verify messages
-    const reply = { messageID: data.messageID }
-
-    const action = data.action
-    try {
-      if (action == 'sign') {
-        const { message, actor } = data.message
-        reply.reply = await actorManager.sign(message, actor)
-
-      } else if (action == 'verify') {
-        reply.reply = await actorManager.verify(data.message)
-
-      } else {
-        throw `Invalid action ${action}`
-      }
-    } catch(e) {
-      reply.error = e.toString()
-    }
-
-    postMessage(reply)
+    // Create an element to download it
+    const el = document.createElement('a');
+    el.style.display = 'none'
+    el.setAttribute('href',
+      "data:text/json;charset=utf-8," +
+      encodeURIComponent(JSON.stringify(actor)))
+    el.setAttribute('download', `${actor.nickname}.json`)
+    document.body.appendChild(el)
+    el.click()
+    document.body.removeChild(el)
   }
 
-  function selectActor(thumbprint) {
-    postMessage({selected: thumbprint})
+  window.onmessage = async function({ data } : { data: RequestMessage }) {
+    // Sign or verify messages
+    const reply : ReplyMessage = {
+      messageID: data.messageID
+    }
+
+    if (!selected.value) {
+      reply.error = "No actor selected"
+    } else {
+      switch(data.action) {
+        case RequestAction.Sign:
+          const message = base64Decode(data.data)
+          const signature = await actorManager.sign(selected.value, message)
+          reply.reply = base64Encode(signature)
+          break
+        case RequestAction.NoncedSecret:
+          const nonce = base64Decode(data.data)
+          const noncedSecret = await actorManager.noncedSecret(selected.value, nonce)
+          reply.reply = base64Encode(noncedSecret)
+          break
+        case RequestAction.SharedSecret:
+          const theirURI = data.data
+          const sharedSecret = await actorManager.sharedSecret(selected.value, theirURI)
+          reply.reply = base64Encode(sharedSecret)
+          break
+        default:
+          reply.error = `Invalid action ${data.action}`
+      }
+
+      postMessage(reply)
+    }
+  }
+
+  function selectActor(uri: string|null) {
+    postMessage({selected: uri})
     selected.value = null
     adding.value = false
     creating.value = false
     createNickname.value = ''
     editing.value = null
-    document.activeElement.blur()
   }
 
   window.onbeforeunload = ()=> {
@@ -88,11 +164,13 @@
 
   // Select the submit button
   // whenever a selection is made
-  const selectButton = ref(null)
+  const selectButton: Ref<HTMLInputElement|null> = ref(null)
   watch(selected, s=> { 
     if (s) {
       nextTick(()=> {
-        selectButton.value.focus()
+        if (selectButton.value) {
+          selectButton.value.focus()
+        }
       })
     }
   })
@@ -143,8 +221,8 @@
     </template>
 
     <template v-else-if="importing">
-      <DropActor :onactor="async (actor, pkcs8Pem)=>{
-        await actorManager.updateActor(actor, pkcs8Pem);
+      <DropActor :onactor="async (actor: Actor)=>{
+        await actorManager.storeActor(actor);
         importing=false
       }"/>
 
@@ -155,7 +233,7 @@
 
     <template v-else>
 
-      <template v-if="!initialized || !Object.keys(actorManager.actors).length">
+      <template v-if="!initialized || !Object.keys(actors).length">
 
         <p>
           Welcome to <a target="_blank" href="https://graffiti.garden">Graffiti</a>!
@@ -186,51 +264,49 @@
         <fieldset>
           <legend>Your Actors</legend>
           <ul>
-            <li v-for="actor in Object.values(actorManager.actors)" :key="actor.thumbprint">
-              <label :for="actor.thumbprint">
+            <li v-for="[uri, nickname] of Object.entries(actors)" :key="uri">
+              <label :for="uri">
                 <input type="radio"
-                  :id="actor.thumbprint"
-                  :value="actor.thumbprint"
+                  :id="uri"
+                  :value="uri"
                   v-model="selected"
                   @click="()=> {
                     // Toggle radio button off
-                    if (selected == actor.thumbprint) {
+                    if (selected == uri) {
                       selected=null;
                     }
                   }">
-                <form v-if="editing==actor.thumbprint" @submit.prevent="rename(actor)">
-                  <input type="text" v-model="editingNickname" v-focus @focus="$event.target.select()"/>
+                <form v-if="editing==uri" @submit.prevent="rename(uri)">
+                  <input type="text" v-model="editingNickname" v-focus @focus="($event.target as HTMLInputElement).select()"/>
                 </form>
                 <span v-else>
-                  {{ actor.nickname }}
+                  {{ nickname }}
                 </span>
-                <div :class="menuOpen==actor.thumbprint?['dropdown','open']:'dropdown'">
-                  <button @click.prevent="menuOpen=
-                    menuOpen==actor.thumbprint?
-                    null:actor.thumbprint">
+                <div :class="menuOpen==uri?['dropdown','open']:'dropdown'">
+                  <button @click.prevent="menuOpen=menuOpen==uri?null:uri">
                     ...
                   </button>
                   <menu
-                    v-if="menuOpen==actor.thumbprint"
+                    v-if="menuOpen==uri"
                     v-click-away="()=>menuOpen=null">
                     <li>
                       <button @click.prevent="
                         menuOpen=null;
-                        editing=actor.thumbprint;
-                        editingNickname=actor.nickname;">
+                        editing=uri;
+                        editingNickname=nickname;">
                         ️Rename
                       </button>
                     </li>
                     <li>
-                      <a :href="actorManager.exportActor(actor.thumbprint)" :download="`${actor.nickname}.json`">
+                      <button @click.prevent="download(uri)">
                         Export
-                      </a>
+                      </button>
                     </li>
                     <li>
                       <button @click.prevent="
                         menuOpen=null;
-                        selected=(selected===actor.thumbprint)?null:selected;
-                        actorManager.deleteActor(actor.thumbprint)">
+                        selected=(selected===uri)?null:selected;
+                        actorManager.deleteActor(uri)">
                         Delete
                       </button>
                     </li>
@@ -248,7 +324,7 @@
 
         <button :disabled="!selected" ref="selectButton" @click="selectActor(selected)" :class="selected?'highlight':''">
           <template v-if="selected">
-            Log In With <strong>{{ actorManager.actors[selected].nickname }}</strong>
+            Log In With <strong>{{ actors[selected] }}</strong>
           </template>
           <template v-else>
             Select an Actor to Log In

@@ -83,7 +83,7 @@ main {
   border-radius: 1rem;
   display: flex;
   flex-direction: column;
-  overflow-y: scroll;
+  overflow-y: auto;
   scrollbar-color: var(--emph) rgba(0,0,0,0);
 }
 
@@ -111,7 +111,7 @@ h1 a:hover {
 }
 
 fieldset {
-  overflow-y: scroll;
+  overflow-y: auto;
   scrollbar-color: var(--emph) rgba(0,0,0,0);
   flex-basis: 0;
   flex-grow: 1;

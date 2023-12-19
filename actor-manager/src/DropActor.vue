@@ -13,8 +13,7 @@
         async () => {
           try {
             const json = JSON.parse(reader.result)
-            const { actor, pkcs8Pem } = json
-            await props.onactor(actor, pkcs8Pem)
+            await props.onactor(json)
           } catch(e) {
             alert("Actor file not understood.")
             throw e
