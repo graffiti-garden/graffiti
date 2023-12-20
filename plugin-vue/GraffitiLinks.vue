@@ -2,9 +2,9 @@
 import { inject, computed, toRefs } from 'vue'
 const gf = inject('graffiti')
 
-const props = defineProps({
-  source: String,
-})
+const props = defineProps(
+  ['source']
+)
 
 const { source } = toRefs(props)
 const { links } = gf.useLinks(source)

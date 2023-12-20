@@ -2,6 +2,7 @@ import Graffiti from '@graffiti-garden/graffiti-p2p'
 
 import GraffitiLinks from './GraffitiLinks.vue'
 import { shallowReactive, reactive, unref, isRef, watch, onScopeDispose, computed, watchEffect } from 'vue'
+import { isReactive } from '@vue/reactivity'
 
 const REFRESH_RATE = 100 // milliseconds
 
@@ -36,7 +37,7 @@ export default {
     })
 
     // A composable that returns a collection of objects
-    Object.defineProperty(graffitiPlugin, 'useLinks', { value: source=> {
+    Object.defineProperty(graffitiPlugin, 'useLinks', { value: (sourceOrSources)=> {
       const linkMap =  reactive({})
 
       const batch = {}
@@ -62,24 +63,63 @@ export default {
         }
       }
 
-      graffiti.addLinkListener(unref(source), listener)
+      let sources
+      if (typeof sourceOrSources == 'string' || (
+        isRef(sourceOrSources) && typeof sourceOrSources.value == 'string')){
+        sources = [sourceOrSources]
+      } else {
+        sources = sourceOrSources
+      }
 
-      const unwatch =
-        isRef(source)?
-          watch(source, (newSource, oldSource)=> {
-            // Clear the object map and restart the loop
-            graffiti.removeLinkListener(oldSource, listener)
+      unref(sources).forEach(source=> {
+        graffiti.addLinkListener(unref(source), listener)
+      })
+
+      const unwatchers = []
+      if (isReactive(sources) || isRef(sources)) {
+        const unwatch = 
+          watch(sources, (newSources, oldSources)=> {
+            if (!isReactive(newSources) &&
+              newSources.length == oldSources.length &&
+              newSources.every((v,i)=>unref(v)==unref(oldSources[i]))
+              ) {
+              return
+            }
+            
+            oldSources.forEach(source=>
+              graffiti.removeLinkListener(unref(source), listener)
+            )
             Object.keys(linkMap).forEach(k=> delete linkMap[k])
             clearTimeout(timeoutID)
             timeoutID = null
-            graffiti.addLinkListener(newSource, listener)
-          }) : ()=> {}
+            newSources.forEach(source=>
+              graffiti.addLinkListener(unref(source), listener)
+            )
+          }, {deep: true})
+        unwatchers.push(unwatch)
+      }
+
+      for (const source of unref(sources)) {
+        const unwatch =
+          isRef(source)?
+            watch(source, (newSource, oldSource)=> {
+              // Clear the object map and restart the loop
+              graffiti.removeLinkListener(oldSource, listener)
+              Object.keys(linkMap).forEach(k=> delete linkMap[k])
+              clearTimeout(timeoutID)
+              timeoutID = null
+              graffiti.addLinkListener(newSource, listener)
+            }, {deep: true}) : ()=> {}
+        unwatchers.push(unwatch)
+      }
 
       onScopeDispose(()=> {
         // Stop the loop
-        unwatch()
+        unwatchers.forEach(unwatch=> unwatch())
         clearTimeout(timeoutID)
-        graffiti.removeLinkListener(unref(source), listener)
+        unref(sources).forEach(source=> {
+          graffiti.removeLinkListener(unref(source), listener)
+        })
       })
 
       // Strip IDs without creating a ref

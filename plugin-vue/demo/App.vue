@@ -1,7 +1,9 @@
 <script setup>
-  import { ref } from 'vue'
+  import { reactive, ref } from 'vue'
 
-  const context = ref('something')
+  const contexts = reactive(['something'])
+  const context1 = ref('something')
+  const context2 = ref('something-else')
   const message = ref('')
 </script>
 
@@ -19,9 +21,18 @@
     Your Actor ID is: {{ $gf.me }}
   </p>
 
-  <input v-model="context">
+  <template v-for="(context, index) in contexts" :key="index">
+    <input :value="context" @input="contexts[index]=$event.target.value">
+  </template>
+  <button @click="contexts.push('something')">
+    add context
+  </button>
 
-  <GraffitiLinks v-slot="{ links }" :source="context">
+  <!-- <input v-model="context1">
+  <input v-model="context2"> -->
+
+  <GraffitiLinks v-slot="{ links }" :source="contexts">
+  <!-- <GraffitiLinks v-slot="{ links }" :source="[context1, context2]"> -->
     <ul>
       <li v-for="link in links">
         {{ link.target }}
@@ -35,7 +46,7 @@
   </GraffitiLinks>
 
   <form v-if="$gf.me" @submit.prevent="
-    $gf.postLink(context, message);
+    $gf.postLink(context1, message);
     message='';
   ">
     <input v-model="message">
