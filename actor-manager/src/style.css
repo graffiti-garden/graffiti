@@ -113,7 +113,7 @@ h1 a:hover {
 h2 {
   text-align: center;
   font-weight: 500;
-  background: var(--halfback);
+  background: var(--halfback2);
   padding: 2rem;
   border-radius: 1rem;
   border: 1px solid var(--front);

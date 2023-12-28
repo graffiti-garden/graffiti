@@ -24,20 +24,29 @@
     error?: string
   }
 
+  enum UIState {
+    Nothing,
+    Managing,
+    Adding,
+    Creating,
+    Importing
+  }
+
   // Post messages either to the
   // outside-iframe window or the
   // console, if standalone
-  const postMessage = document.referrer?
+  const referrer = document.referrer.length ?
+   new URL(document.referrer).origin : null
+  const postMessage = referrer?
     function(message: object) {
       window.parent.postMessage(
         message,
-        new URL(document.referrer).origin
+        referrer
       )
     } :
     function(message: object) {
       console.log(message)
     }
-
   
   // A place where actor-related are sent
   const events = new EventTarget()
@@ -73,7 +82,25 @@
     }
   )
 
+  // The chosen one
+  // aka which actor URI is logged in
+  const chosen: Ref<null|string> = ref(null)
+  events.addEventListener(
+    "choose",
+    async (e: ActorAnnouncement)=> {
+      chosen.value = e.uri ?? null
+      postMessage({ chosen: e.uri })
+      resetState()
+    }
+  )
+
   const actorManager = new ActorManager(events)
+
+  // Various UI state variables
+  const selected: Ref<null|string> = ref(null)
+  const uiState: Ref<UIState> = ref(UIState.Nothing)
+  const menuOpen: Ref<null|string> = ref(null)
+  const createNickname: Ref<string> = ref('')
 
   // Editing state
   const editing: Ref<null|string> = ref(null)
@@ -84,13 +111,13 @@
     editing.value = null
   }
 
-  // Various UI state variables
-  const menuOpen: Ref<null|string> = ref(null)
-  const selected: Ref<null|string> = ref(null)
-  const createNickname: Ref<string> = ref('')
-  const adding: Ref<boolean> = ref(false)
-  const creating: Ref<boolean> = ref(false)
-  const importing: Ref<boolean> = ref(false)
+  function resetState() {
+    uiState.value = UIState.Nothing
+    selected.value = null
+    menuOpen.value = null
+    editing.value = null
+    createNickname.value = ''
+  }
 
   // Save file
   async function download(uri: string) {
@@ -114,62 +141,58 @@
       messageID: data.messageID
     }
 
-    if (!selected.value) {
-      reply.error = "No actor selected"
-    } else {
+    try {
       switch(data.action) {
         case RequestAction.Sign:
           const message = base64Decode(data.data)
-          const signature = await actorManager.sign(selected.value, message)
+          const signature = await actorManager.sign(message)
           reply.reply = base64Encode(signature)
           break
         case RequestAction.NoncedSecret:
           const nonce = base64Decode(data.data)
-          const noncedSecret = await actorManager.noncedSecret(selected.value, nonce)
+          const noncedSecret = await actorManager.noncedSecret(nonce)
           reply.reply = base64Encode(noncedSecret)
           break
         case RequestAction.SharedSecret:
           const theirURI = data.data
-          const sharedSecret = await actorManager.sharedSecret(selected.value, theirURI)
+          const sharedSecret = await actorManager.sharedSecret(theirURI)
           reply.reply = base64Encode(sharedSecret)
           break
         default:
           reply.error = `Invalid action ${data.action}`
       }
-
-      postMessage(reply)
+    } catch(e) {
+      reply.error = e.toString()
     }
+
+    postMessage(reply)
   }
 
-  function selectActor(uri: string|null) {
-    postMessage({selected: uri})
-    selected.value = null
-    adding.value = false
-    creating.value = false
-    createNickname.value = ''
-    editing.value = null
+  function cancel() {
+    postMessage({canceled: true})
+    resetState()
   }
 
   window.onbeforeunload = ()=> {
-    selectActor(null)
+    cancel()
   }
 
   // Global escape
   document.onkeydown = e=> {
     if (e.key == "Escape") {
-      selectActor(null)
+      cancel()
       e.preventDefault()
     }
   }
 
   // Select the submit button
   // whenever a selection is made
-  const selectButton: Ref<HTMLInputElement|null> = ref(null)
+  const loginButton: Ref<HTMLInputElement|null> = ref(null)
   watch(selected, s=> { 
     if (s) {
       nextTick(()=> {
-        if (selectButton.value) {
-          selectButton.value.focus()
+        if (loginButton.value) {
+          loginButton.value.focus()
         }
       })
     }
@@ -178,7 +201,7 @@
 
 <template>
   <header>
-    <button @click="selectActor(null)">
+    <button @click="cancel()">
       Close
     </button>
   </header>
@@ -189,23 +212,53 @@
       </a>
     </h1>
 
-    <form v-if="adding">
-      <button @click="adding=false;creating=true" class="highlight">
+    <template v-if="!initialized ||
+                    ((uiState==UIState.Nothing || uiState==UIState.Managing) &&
+                    !Object.keys(actors).length)">
+      <p>
+        Welcome to <a target="_blank" href="https://graffiti.garden">Graffiti</a>!
+        Graffiti is a system that connects different social media applications
+        so that you can seamlessly migrate between them without losing your data or relationships.
+        With a little bit of web programming, you can also modify existing Graffiti applications or create your own.
+      </p>
+
+      <p>
+        This manager let's you add, delete, and select different
+        <em>actors</em> which are your identities within the Graffiti application ecosystem.
+      </p>
+
+      <form @submit.prevent="">
+        <button v-if="!initialized" @click="actorManager.initialize">
+          Enable Graffiti on This Site
+        </button>
+        <template v-else>
+          <button @click="uiState=UIState.Creating" class="highlight">
+            Create a New Actor
+          </button>
+          <button @click="uiState=UIState.Importing" class="highlight">
+            Import an Existing Actor
+          </button>
+        </template>
+      </form>
+    </template>
+
+    <form v-else-if="uiState==UIState.Adding">
+      <button @click="uiState=UIState.Creating" class="highlight">
         Create a New Actor
       </button>
-      <button @click="adding=false;importing=true" class="highlight">
+      <button @click="uiState=UIState.Importing" class="highlight">
         Import an Existing Actor
       </button>
-      <button @click="adding=false">
+      <button @click="uiState=UIState.Managing">
         Cancel
       </button>
     </form>
     
-    <template v-else-if="creating">
+    <template v-else-if="uiState==UIState.Creating">
 
       <form @submit.prevent="
         actorManager.createActor(createNickname);
-        creating=false;
+        uiState=UIState.Managing;
         createNickname=''">
         <label for="nickname">
           Choose a private nickname for your actor.
@@ -213,124 +266,118 @@
         </label>
         <input type="text" id="nickname" placeholder="Choose a nickname......" v-focus v-model="createNickname">
         <input type="submit" value="Create Actor" class="highlight">
-        <button @click="creating=false;createNickname=''">
+        <button @click="uiState=UIState.Managing;createNickname=''">
           Cancel
         </button>
       </form>
 
     </template>
 
-    <template v-else-if="importing">
+    <template v-else-if="uiState==UIState.Importing">
       <DropActor :onactor="async (actor: Actor)=>{
         await actorManager.storeActor(actor);
-        importing=false
+        uiState=UIState.Managing;
       }"/>
 
-      <button @click="importing=false">
+      <button @click="uiState=UIState.Managing">
         Cancel
       </button>
     </template>
 
+    <template v-else-if="uiState==UIState.Managing || !chosen">
+      <fieldset>
+        <legend>Your Actors</legend>
+        <ul>
+          <li v-for="[uri, nickname] of Object.entries(actors)" :key="uri">
+            <label :for="uri">
+              <input type="radio"
+                :id="uri"
+                :value="uri"
+                v-model="selected"
+                @click="()=> {
+                  // Toggle radio button off
+                  if (selected == uri) {
+                    selected=null;
+                  }
+                }">
+              <form v-if="editing==uri" @submit.prevent="rename(uri)">
+                <input type="text" v-model="editingNickname" v-focus @focus="($event.target as HTMLInputElement).select()"/>
+              </form>
+              <span v-else>
+                {{ nickname }}
+              </span>
+              <div :class="menuOpen==uri?['dropdown','open']:'dropdown'">
+                <button @click.prevent="menuOpen=menuOpen==uri?null:uri">
+                  ...
+                </button>
+                <menu
+                  v-if="menuOpen==uri"
+                  v-click-away="()=>menuOpen=null">
+                  <li>
+                    <button @click.prevent="
+                      menuOpen=null;
+                      editing=uri;
+                      editingNickname=nickname;">
+                      ️Rename
+                    </button>
+                  </li>
+                  <li>
+                    <button @click.prevent="download(uri)">
+                      Export
+                    </button>
+                  </li>
+                  <li>
+                    <button @click.prevent="
+                      menuOpen=null;
+                      selected=(selected===uri)?null:selected;
+                      actorManager.deleteActor(uri)">
+                      Delete
+                    </button>
+                  </li>
+                </menu>
+              </div>
+            </label>
+          </li>
+          <li>
+            <button @click="uiState=UIState.Adding">
+              Add Actor...
+            </button>
+          </li>
+        </ul>
+      </fieldset>
+
+      <form>
+        <button v-if="selected" @click="actorManager.chooseActor(selected)" class='highlight' ref="loginButton">
+          Log In With <strong>{{ actors[selected] }}</strong>
+        </button>
+        <button v-else disabled>
+          Select an Actor to Log In
+        </button>
+        <button v-if="chosen" @click="uiState=UIState.Nothing">
+          Cancel
+        </button>
+      </form>
+    </template>
+
     <template v-else>
+      <div>
+        <h3>
+          You are logged in as
+        </h3>
+        <h2>
+          {{ actors[chosen] }}
+        </h2>
+      </div>
 
-      <template v-if="!initialized || !Object.keys(actors).length">
-
-        <p>
-          Welcome to <a target="_blank" href="https://graffiti.garden">Graffiti</a>!
-          Graffiti is a system that connects different social media applications
-          so that you can seamlessly migrate between them without losing your data or relationships.
-          With a little bit of web programming, you can also modify existing Graffiti applications or create your own.
-        </p>
-
-        <p>
-          This manager let's you add, delete, and select different
-          <em>actors</em> which are your identities within the Graffiti application ecosystem.
-        </p>
-
-        <button v-if="!initialized" @click="actorManager.initialize">
-          Enable Graffiti on This Site
+      <form>
+        <button @click="selected=null;uiState=UIState.Managing" class="highlight">
+          Manage Actors
         </button>
-        <form v-else>
-          <button @click="creating=true" class="highlight">
-            Create a New Actor
-          </button>
-          <button @click="importing=true" class="highlight">
-            Import an Existing Actor
-          </button>
-        </form>
-      </template>
 
-      <template v-else>
-        <fieldset>
-          <legend>Your Actors</legend>
-          <ul>
-            <li v-for="[uri, nickname] of Object.entries(actors)" :key="uri">
-              <label :for="uri">
-                <input type="radio"
-                  :id="uri"
-                  :value="uri"
-                  v-model="selected"
-                  @click="()=> {
-                    // Toggle radio button off
-                    if (selected == uri) {
-                      selected=null;
-                    }
-                  }">
-                <form v-if="editing==uri" @submit.prevent="rename(uri)">
-                  <input type="text" v-model="editingNickname" v-focus @focus="($event.target as HTMLInputElement).select()"/>
-                </form>
-                <span v-else>
-                  {{ nickname }}
-                </span>
-                <div :class="menuOpen==uri?['dropdown','open']:'dropdown'">
-                  <button @click.prevent="menuOpen=menuOpen==uri?null:uri">
-                    ...
-                  </button>
-                  <menu
-                    v-if="menuOpen==uri"
-                    v-click-away="()=>menuOpen=null">
-                    <li>
-                      <button @click.prevent="
-                        menuOpen=null;
-                        editing=uri;
-                        editingNickname=nickname;">
-                        ️Rename
-                      </button>
-                    </li>
-                    <li>
-                      <button @click.prevent="download(uri)">
-                        Export
-                      </button>
-                    </li>
-                    <li>
-                      <button @click.prevent="
-                        menuOpen=null;
-                        selected=(selected===uri)?null:selected;
-                        actorManager.deleteActor(uri)">
-                        Delete
-                      </button>
-                    </li>
-                  </menu>
-                </div>
-              </label>
-            </li>
-            <li>
-              <button @click="adding=true">
-                Add Actor...
-              </button>
-            </li>
-          </ul>
-        </fieldset>
-
-        <button :disabled="!selected" ref="selectButton" @click="selectActor(selected)" :class="selected?'highlight':''">
-          <template v-if="selected">
-            Log In With <strong>{{ actors[selected] }}</strong>
-          </template>
-          <template v-else>
-            Select an Actor to Log In
-          </template>
+        <button @click="actorManager.unchooseActor()">
+          Log Out
         </button>
-      </template>
+      </form>
     </template>
   </main>
 </template>
