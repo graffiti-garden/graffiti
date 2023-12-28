@@ -183,10 +183,12 @@ describe('Actor Manager', ()=> {
   it('generate nonced secret', async()=> {
     const am = new ActorManager()
     const uri = await am.createActor(crypto.randomUUID())
+    await am.chooseActor(uri)
+
     const nonce = randomBytes(24)
 
-    const secret1 = await am.noncedSecret(uri, nonce)
-    const secret2 = await am.noncedSecret(uri, nonce)
+    const secret1 = await am.noncedSecret(nonce)
+    const secret2 = await am.noncedSecret(nonce)
 
     // Make sure they're equal
     Object.entries(secret1).forEach(([i, v])=> {
@@ -194,7 +196,7 @@ describe('Actor Manager', ()=> {
     })
 
     // Make sure a secret with a different nonce is different
-    const secret3 = await am.noncedSecret(uri, randomBytes(24))
+    const secret3 = await am.noncedSecret(randomBytes(24))
     let equal = true
     Object.entries(secret1).forEach(([i, v])=> {
       equal &&= secret3[i] == v
@@ -206,7 +208,8 @@ describe('Actor Manager', ()=> {
     const message = randomBytes(32)
     const am = new ActorManager()
     const uri = await am.createActor(crypto.randomUUID())
-    const signature = await am.sign(uri, message)
+    await am.chooseActor(uri)
+    const signature = await am.sign(message)
 
     const publicKey = base64Decode(uri.slice(6))
     // Signature verifies, random bytes do not
@@ -217,12 +220,14 @@ describe('Actor Manager', ()=> {
   it('get shared secret', async()=> {
     const am1 = new ActorManager()
     const uri1 = await am1.createActor(crypto.randomUUID())
+    await am1.chooseActor(uri1)
 
-    const am2 = new ActorManager()
+    const am2 = new ActorManager(new EventTarget(), 'example.com')
     const uri2 = await am2.createActor(crypto.randomUUID())
+    await am2.chooseActor(uri2)
 
-    const secret1 = await am1.sharedSecret(uri1, uri2)
-    const secret2 = await am2.sharedSecret(uri2, uri1)
+    const secret1 = await am1.sharedSecret(uri2)
+    const secret2 = await am2.sharedSecret(uri1)
     for (const [i, byte] of Object.entries(secret1)) {
       expect(byte).toEqual(secret2[i])
     }
@@ -257,5 +262,88 @@ describe('Actor Manager', ()=> {
     await new Promise<void>(r=> setTimeout(()=>r(), 10))
     expect(gotDeletes.length).toEqual(1)
     expect(gotDeletes[0]).toEqual(uri1)
+  })
+
+  it('choose actor initial', async()=> {
+    const referrer = `crypto.randomUUID()}.com`
+
+    // Initially referrer chooses noone
+    const got1: Array<any> = []
+    const ev1 = new EventTarget()
+    ev1.addEventListener("choose", e=> got1.push(e))
+    const am1 = new ActorManager(ev1, referrer)
+    await am1.tilInitialized()
+    expect(got1.length).toEqual(1)
+    expect(got1[0]).toHaveProperty('uri', null)
+
+    const uri = await am1.createActor(crypto.randomUUID())
+    expect(got1.length).toEqual(1)
+    await am1.chooseActor(uri)
+    expect(got1.length).toEqual(2)
+    expect(got1[1].uri).toEqual(uri)
+
+    // Create another manager with the same referrer
+    const got2: Array<any> = []
+    const ev2 = new EventTarget()
+    ev2.addEventListener("choose", e=> got2.push(e))
+    const am2 = new ActorManager(ev2, referrer)
+    await am2.tilInitialized()
+    // It sees the existing URI
+    expect(got2.length).toEqual(1)
+    expect(got2[0]).toHaveProperty('uri', uri)
+
+    // unchoose
+    await am2.unchooseActor()
+    expect(got2.length).toEqual(2)
+    expect(got2[1]).toHaveProperty('uri', null)
+  })
+
+  it('choose actor backchannel shared referrer', async()=> {
+    const referrer = `${crypto.randomUUID()}.com`
+
+    // Create a listener
+    const got: Array<any> = []
+    const ev = new EventTarget()
+    const am1 = new ActorManager(ev, referrer)
+    await am1.tilInitialized()
+    ev.addEventListener("choose", e=> got.push(e))
+    expect(got.length).toEqual(0)
+
+    // Create another sender
+    const am2 = new ActorManager(new EventTarget(), referrer)
+    const uri = await am2.createActor(crypto.randomUUID())
+    expect(got.length).toEqual(0)
+    await am2.chooseActor(uri)
+    expect(got.length).toEqual(0)
+    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    expect(got.length).toEqual(1)
+    expect(got[0]).toHaveProperty('uri', uri)
+    await am2.unchooseActor()
+    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    expect(got.length).toEqual(2)
+    expect(got[1]).toHaveProperty('uri', null)
+  })
+
+  it('choose actor backchannel different referrer', async()=> {
+    const referrer1 = `${crypto.randomUUID()}.com`
+    const referrer2 = `${crypto.randomUUID()}.com`
+
+    // Set up a listener with referrer 1
+    const got: Array<any> = []
+    const ev = new EventTarget()
+    const am1 = new ActorManager(ev, referrer1)
+    await am1.tilInitialized()
+    ev.addEventListener("choose", e=> got.push(e))
+    expect(got.length).toEqual(0)
+
+    // Any changes don't effect the listener
+    const am2 = new ActorManager(new EventTarget(), referrer2)
+    const uri = await am2.createActor(crypto.randomUUID())
+    await am2.chooseActor(uri)
+    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    expect(got.length).toEqual(0)
+    await am2.unchooseActor()
+    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    expect(got.length).toEqual(0)
   })
 })

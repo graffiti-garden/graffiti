@@ -8,12 +8,19 @@ export interface Actor {
 }
 
 export interface ActorAnnouncement extends Event {
-  uri?: string
+  uri?: string|null
+}
+
+enum Action {
+  CHOOSE = "choose",
+  UPDATE = "update",
+  DELETE = "delete"
 }
 
 interface ChannelMessage {
-  action: string,
-  uri: string,
+  action: Action,
+  referrer: string,
+  uri: string|null,
   id: string
 }
 
@@ -45,6 +52,9 @@ export function deriveSigningPrivateKey(rootSecretMaybeBase64: Uint8Array|string
   return sha256(concatBytes(utf8ToBytes('sign'), rootSecret))
 }
 
+const globalReferrer = document.referrer ?
+  new URL(document.referrer).origin : 'localhost'
+
 export default class ActorManager {
 
   isInitialized = false
@@ -54,8 +64,11 @@ export default class ActorManager {
   channel: BroadcastChannel
   channelID = crypto.randomUUID()
 
-  constructor(events?: EventTarget) {
+  referrer: string
+
+  constructor(events?: EventTarget, referrer: string=globalReferrer) {
     this.events = events ?? new EventTarget()
+    this.referrer = referrer
 
     // Initialize
     ;(async ()=> {
@@ -87,7 +100,33 @@ export default class ActorManager {
     this.events.dispatchEvent(new Event("initialized"))
 
     // Load all existing uris
-    Object.keys(localStorage).forEach(uri=> this.announceActor("update", uri))
+    Object.keys(localStorage).forEach((uri: string)=> {
+      if (uri.startsWith('actor')) {
+        this.announceActor(Action.UPDATE, uri)
+      }
+    })
+    // Load the chosen one
+    const chosen = localStorage.getItem(`chosen:${this.referrer}`)
+    await this.announceActor(Action.CHOOSE, chosen)
+  }
+
+  async chooseActor(uri: string) : Promise<void> {
+    localStorage.setItem(`chosen:${this.referrer}`, uri)
+    await this.announceActor(Action.CHOOSE, uri, true)
+  }
+
+  async unchooseActor() : Promise<void> {
+    localStorage.removeItem(`chosen:${this.referrer}`)
+    await this.announceActor(Action.CHOOSE, null, true)
+  }
+
+  async getChosen() : Promise<string> {
+    const chosen = localStorage.getItem(`chosen:${this.referrer}`)
+    if (!chosen) {
+      throw "No actor chosen"
+    } else {
+      return chosen
+    }
   }
 
   async tilInitialized() : Promise<void> {
@@ -121,7 +160,7 @@ export default class ActorManager {
     await this.tilInitialized()
     localStorage.setItem(uri, JSON.stringify(actor))
 
-    await this.announceActor("update", uri, true)
+    await this.announceActor(Action.UPDATE, uri, true)
 
     return uri
   }
@@ -145,7 +184,7 @@ export default class ActorManager {
 
     // Remove and announce the change
     localStorage.removeItem(uri)
-    await this.announceActor("delete", uri, true)
+    await this.announceActor(Action.DELETE, uri, true)
   }
 
   async renameActor(uri: string, newNickname: string) : Promise<void> {
@@ -153,13 +192,13 @@ export default class ActorManager {
     if (actor.nickname != newNickname) {
       actor.nickname = newNickname
       localStorage.setItem(uri, JSON.stringify(actor))
-      await this.announceActor("update", uri, true)
+      await this.announceActor(Action.UPDATE, uri, true)
     }
   }
 
   async announceActor(
-    action: string,
-    uri: string,
+    action: Action,
+    uri: string|null,
     propogate: boolean=false
   ) : Promise<void> {
 
@@ -174,26 +213,30 @@ export default class ActorManager {
       const channelMessage: ChannelMessage = {
         action,
         uri,
+        referrer: this.referrer,
         id: this.channelID
       }
       this.channel.postMessage(channelMessage)
     }
   }
 
-  async noncedSecret(uri: string, nonce: Uint8Array) : Promise<Uint8Array> {
+  async noncedSecret(nonce: Uint8Array) : Promise<Uint8Array> {
     if (nonce.byteLength < 24) {
       throw "Nonce is too short"
     }
+    const uri = await this.getChosen()
     const actor = await this.getActor(uri)
     return sha256(concatBytes(nonce, base64Decode(actor.rootSecretBase64)))
   }
 
-  async sign(uri: string, message: Uint8Array) : Promise<Uint8Array> {
+  async sign(message: Uint8Array) : Promise<Uint8Array> {
+    const uri = await this.getChosen()
     const actor = await this.getActor(uri)
     return curve.sign(message, deriveSigningPrivateKey(actor.rootSecretBase64))
   }
 
-  async sharedSecret(myURI: string, theirURI: string) : Promise<Uint8Array> {
+  async sharedSecret(theirURI: string) : Promise<Uint8Array> {
+    const myURI = await this.getChosen()
     const myActor = await this.getActor(myURI)
     const myPriv = edwardsToMontgomeryPriv(deriveSigningPrivateKey(myActor.rootSecretBase64))
     const theirPub = edwardsToMontgomeryPub(actorURIDecode(theirURI))
@@ -202,6 +245,12 @@ export default class ActorManager {
 
   async onChannelMessage({data} : {data: ChannelMessage}) : Promise<void> {
     if (data.id != this.channelID) {
+
+      // Don't propogate choose actions for a different referrer
+      if (data.action == Action.CHOOSE && data.referrer != this.referrer) {
+        return
+      }
+
       await this.announceActor(data.action, data.uri)
     }
   }
