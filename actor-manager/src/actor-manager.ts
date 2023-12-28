@@ -106,8 +106,13 @@ export default class ActorManager {
       }
     })
     // Load the chosen one
-    const chosen = localStorage.getItem(`chosen:${this.referrer}`)
-    await this.announceActor(Action.CHOOSE, chosen)
+    const chosen = this.getChosen()
+    // Make sure it still exists
+    if (chosen && !(chosen in localStorage)) {
+      this.unchooseActor()
+    } else {
+      await this.announceActor(Action.CHOOSE, chosen)
+    }
   }
 
   async chooseActor(uri: string) : Promise<void> {
@@ -120,13 +125,8 @@ export default class ActorManager {
     await this.announceActor(Action.CHOOSE, null, true)
   }
 
-  async getChosen() : Promise<string> {
-    const chosen = localStorage.getItem(`chosen:${this.referrer}`)
-    if (!chosen) {
-      throw "No actor chosen"
-    } else {
-      return chosen
-    }
+  getChosen() : string|null {
+    return localStorage.getItem(`chosen:${this.referrer}`)
   }
 
   async tilInitialized() : Promise<void> {
@@ -182,6 +182,11 @@ export default class ActorManager {
       throw `User interaction denied deleting actor "${actor.nickname}", ID "${uri}".`
     }
 
+    // Unchoose if deleting chosen
+    if (this.getChosen() == uri) {
+      await this.unchooseActor()
+    }
+
     // Remove and announce the change
     localStorage.removeItem(uri)
     await this.announceActor(Action.DELETE, uri, true)
@@ -220,24 +225,30 @@ export default class ActorManager {
     }
   }
 
+  async getChosenActor() : Promise<Actor> {
+    const uri = this.getChosen()
+    if (!uri) {
+      throw "no actor chosen"
+    } else {
+      return await this.getActor(uri)
+    }
+  }
+
   async noncedSecret(nonce: Uint8Array) : Promise<Uint8Array> {
     if (nonce.byteLength < 24) {
       throw "Nonce is too short"
     }
-    const uri = await this.getChosen()
-    const actor = await this.getActor(uri)
+    const actor = await this.getChosenActor()
     return sha256(concatBytes(nonce, base64Decode(actor.rootSecretBase64)))
   }
 
   async sign(message: Uint8Array) : Promise<Uint8Array> {
-    const uri = await this.getChosen()
-    const actor = await this.getActor(uri)
+    const actor = await this.getChosenActor()
     return curve.sign(message, deriveSigningPrivateKey(actor.rootSecretBase64))
   }
 
   async sharedSecret(theirURI: string) : Promise<Uint8Array> {
-    const myURI = await this.getChosen()
-    const myActor = await this.getActor(myURI)
+    const myActor = await this.getChosenActor()
     const myPriv = edwardsToMontgomeryPriv(deriveSigningPrivateKey(myActor.rootSecretBase64))
     const theirPub = edwardsToMontgomeryPub(actorURIDecode(theirURI))
     return x25519.getSharedSecret(myPriv, theirPub)
@@ -249,6 +260,13 @@ export default class ActorManager {
       // Don't propogate choose actions for a different referrer
       if (data.action == Action.CHOOSE && data.referrer != this.referrer) {
         return
+      }
+
+      // If the deleted is the chosen one,
+      // it may not be unchosen across a different refferer
+      // so do it now.
+      if (data.action == Action.DELETE && data.uri == this.getChosen()) {
+        await this.unchooseActor()
       }
 
       await this.announceActor(data.action, data.uri)

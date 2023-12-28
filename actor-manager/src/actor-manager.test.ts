@@ -346,4 +346,66 @@ describe('Actor Manager', ()=> {
     await new Promise<void>(r=> setTimeout(()=>r(), 10))
     expect(got.length).toEqual(0)
   })
+
+  it('deletes also unchooses', async()=> {
+    const referrer = `${crypto.randomUUID()}.com`
+    const got: Array<any> = []
+    const ev = new EventTarget()
+    const am = new ActorManager(ev, referrer)
+    await am.tilInitialized()
+    ev.addEventListener("choose", e=> got.push(e))
+    const uri = await am.createActor(crypto.randomUUID())
+    expect(got.length).toEqual(0)
+    await am.chooseActor(uri)
+    expect(got.length).toEqual(1)
+    expect(got[0]).toHaveProperty('uri', uri)
+    await am.deleteActor(uri)
+    expect(got.length).toEqual(2)
+    expect(got[1]).toHaveProperty('uri', null)
+  })
+
+  it('delete unchooses across referrers', async()=> {
+    const referrer1 = `${crypto.randomUUID()}.com`
+    const referrer2 = `${crypto.randomUUID()}.com`
+
+    const ev = new EventTarget()
+    const am1 = new ActorManager(ev, referrer1)
+    const uri = await am1.createActor(crypto.randomUUID())
+    await am1.chooseActor(uri)
+
+    const got: Array<any> = []
+    ev.addEventListener("choose", e=> got.push(e))
+
+    expect(got.length).toEqual(0)
+    const am2 = new ActorManager(new EventTarget(), referrer2)
+    await am2.deleteActor(uri)
+    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    expect(got.length).toEqual(1)
+    expect(got[0]).toHaveProperty('uri', null)
+  })
+
+  it('chosen deletion on initialization', async()=> {
+    const referrer1 = `${crypto.randomUUID()}.com`
+    const referrer2 = `${crypto.randomUUID()}.com`
+
+    // Create and choose at one referrer
+    const am1 = new ActorManager(new EventTarget(), referrer1)
+    const uri = await am1.createActor(crypto.randomUUID())
+    await am1.chooseActor(uri)
+    // Hack disable messages (because we can't fully delete it)
+    am1.channel.onmessage = null
+
+    // Delete from another refferer
+    const am2 = new ActorManager(new EventTarget(), referrer2)
+    await am2.deleteActor(uri)
+
+    // Make sure hack worked
+    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    expect(am1.getChosen()).toEqual(uri)
+
+    // Create a new manager from the first referrer
+    const am3 = new ActorManager(new EventTarget(), referrer1)
+    await am3.tilInitialized()
+    expect(am3.getChosen()).toEqual(null)
+  })
 })
