@@ -7,9 +7,9 @@
   import DropActor from './DropActor.vue'
 
   enum RequestAction {
-    Sign,
-    NoncedSecret,
-    SharedSecret
+    Sign = "sign",
+    NoncedSecret = "noncedSecret",
+    SharedSecret = "sharedSecret"
   }
 
   interface RequestMessage {
