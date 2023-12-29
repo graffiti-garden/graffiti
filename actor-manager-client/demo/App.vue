@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import { ref, reactive } from 'vue'
   import type { Ref } from 'vue'
-  import ActorClient, { base64Encode, base64Decode } from '../client';
+  import ActorClient, { base64Encode, base64Decode } from '../actor-client';
 
   const actorID: Ref<null|string> = ref(null)
 
