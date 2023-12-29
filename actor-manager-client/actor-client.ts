@@ -1,7 +1,7 @@
 import { ed25519 as curve } from '@noble/curves/ed25519'
 
-// const defaultOrigin = "https://actor.graffiti.garden"
-const defaultOrigin = "http://localhost:5173"
+const defaultOrigin = "https://actor.graffiti.garden"
+// const defaultOrigin = "http://localhost:5173"
 
 interface ReplyMessage {
   messageID: string,
