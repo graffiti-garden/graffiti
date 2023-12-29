@@ -67,7 +67,8 @@
         let actor: Actor
         try {
           actor = await actorManager.getActor(e.uri)
-        } catch {
+        } catch(e) {
+          console.error(e)
           return
         }
         actors[e.uri] = actor.nickname
@@ -95,8 +96,6 @@
     }
   )
 
-  const actorManager = new ActorManager(events)
-
   // Various UI state variables
   const selected: Ref<null|string> = ref(null)
   const uiState: Ref<UIState> = ref(UIState.Nothing)
@@ -119,6 +118,8 @@
     editing.value = null
     createNickname.value = ''
   }
+
+  const actorManager = new ActorManager(events)
 
   // Save file
   async function download(uri: string) {
@@ -228,15 +229,15 @@
         <em>actors</em> which are your identities within the Graffiti application ecosystem.
       </p>
 
-      <form @submit.prevent="">
-        <button v-if="!initialized" @click="actorManager.initialize">
+      <form>
+        <button v-if="!initialized" @click.prevent="actorManager.initialize">
           Enable Graffiti on This Site
         </button>
         <template v-else>
-          <button @click="uiState=UIState.Creating" class="highlight">
+          <button @click.prevent="uiState=UIState.Creating" class="highlight">
             Create a New Actor
           </button>
-          <button @click="uiState=UIState.Importing" class="highlight">
+          <button @click.prevent="uiState=UIState.Importing" class="highlight">
             Import an Existing Actor
           </button>
         </template>
@@ -244,13 +245,13 @@
     </template>
 
     <form v-else-if="uiState==UIState.Adding">
-      <button @click="uiState=UIState.Creating" class="highlight">
+      <button @click.prevent="uiState=UIState.Creating" class="highlight">
         Create a New Actor
       </button>
-      <button @click="uiState=UIState.Importing" class="highlight">
+      <button @click.prevent="uiState=UIState.Importing" class="highlight">
         Import an Existing Actor
       </button>
-      <button @click="uiState=UIState.Managing">
+      <button @click.prevent="uiState=UIState.Managing">
         Cancel
       </button>
     </form>
@@ -267,7 +268,7 @@
         </label>
         <input type="text" id="nickname" placeholder="Choose a nickname......" v-focus v-model="createNickname">
         <input type="submit" value="Create Actor" class="highlight">
-        <button @click="uiState=UIState.Managing;createNickname=''">
+        <button @click.prevent="uiState=UIState.Managing;createNickname=''">
           Cancel
         </button>
       </form>
@@ -348,13 +349,13 @@
       </fieldset>
 
       <form>
-        <button v-if="selected" @click="actorManager.chooseActor(selected)" class='highlight' ref="loginButton">
+        <button v-if="selected" @click.prevent="actorManager.chooseActor(selected)" class='highlight' ref="loginButton">
           Log In With <strong>{{ actors[selected] }}</strong>
         </button>
         <button v-else disabled>
           Select an Actor to Log In
         </button>
-        <button v-if="chosen" @click="uiState=UIState.Nothing">
+        <button v-if="chosen" @click.prevent="uiState=UIState.Nothing">
           Cancel
         </button>
       </form>
@@ -371,11 +372,11 @@
       </div>
 
       <form>
-        <button @click="selected=null;uiState=UIState.Managing" class="highlight">
+        <button @click.prevent="selected=null;uiState=UIState.Managing" class="highlight">
           Manage Actors
         </button>
 
-        <button @click="actorManager.unchooseActor()">
+        <button @click.prevent="actorManager.unchooseActor()">
           Log Out
         </button>
       </form>

@@ -72,6 +72,7 @@ export default class ActorManager {
 
     // Initialize
     ;(async ()=> {
+      await new Promise<void>(r=> setTimeout(()=>r(), 10))
       if (!document.hasStorageAccess || await document.hasStorageAccess()) {
         this._initialize()
       }
