@@ -253,13 +253,13 @@ describe('Actor Manager', ()=> {
 
     expect(gotUpdates.length).toEqual(0)
     const uri1 = await am1.createActor(crypto.randomUUID())
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(gotUpdates.length).toEqual(1)
     expect(gotUpdates[0]).toEqual(uri1)
 
     expect(gotDeletes.length).toEqual(0)
     await am1.deleteActor(uri1)
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(gotDeletes.length).toEqual(1)
     expect(gotDeletes[0]).toEqual(uri1)
   })
@@ -315,11 +315,11 @@ describe('Actor Manager', ()=> {
     expect(got.length).toEqual(0)
     await am2.chooseActor(uri)
     expect(got.length).toEqual(0)
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(got.length).toEqual(1)
     expect(got[0]).toHaveProperty('uri', uri)
     await am2.unchooseActor()
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(got.length).toEqual(2)
     expect(got[1]).toHaveProperty('uri', null)
   })
@@ -340,10 +340,10 @@ describe('Actor Manager', ()=> {
     const am2 = new ActorManager(new EventTarget(), referrer2)
     const uri = await am2.createActor(crypto.randomUUID())
     await am2.chooseActor(uri)
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(got.length).toEqual(0)
     await am2.unchooseActor()
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(got.length).toEqual(0)
   })
 
@@ -379,7 +379,7 @@ describe('Actor Manager', ()=> {
     expect(got.length).toEqual(0)
     const am2 = new ActorManager(new EventTarget(), referrer2)
     await am2.deleteActor(uri)
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(got.length).toEqual(1)
     expect(got[0]).toHaveProperty('uri', null)
   })
@@ -400,7 +400,7 @@ describe('Actor Manager', ()=> {
     await am2.deleteActor(uri)
 
     // Make sure hack worked
-    await new Promise<void>(r=> setTimeout(()=>r(), 10))
+    await new Promise<void>(r=> setTimeout(()=>r(), 100))
     expect(am1.getChosen()).toEqual(uri)
 
     // Create a new manager from the first referrer

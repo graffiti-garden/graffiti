@@ -262,6 +262,10 @@ export default class ActorManager {
         return
       }
 
+      // Add a little delay fol localStorage
+      // to propogate between tabs
+      await new Promise<void>(r=> setTimeout(()=>r(), 50))
+
       // If the deleted is the chosen one,
       // it may not be unchosen across a different refferer
       // so do it now.

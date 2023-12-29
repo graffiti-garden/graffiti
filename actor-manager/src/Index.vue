@@ -64,12 +64,13 @@
     "update",
     async (e: ActorAnnouncement)=> {
       if (e.uri) {
+        let actor: Actor
         try {
-          const actor = await actorManager.getActor(e.uri)
-          actors[e.uri] = actor.nickname
+          actor = await actorManager.getActor(e.uri)
         } catch {
           return
         }
+        actors[e.uri] = actor.nickname
       }
     }
   )
