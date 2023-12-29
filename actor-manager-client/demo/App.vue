@@ -20,7 +20,7 @@
     Your Actor ID is: "{{ actorID }}"
   </p>
 
-  <form @submit.prevent="ac.sign({message}, actorID).then(s=>{signed=s;message=''})">
+  <form @submit.prevent="ac.sign(message).then(s=>{signed=s;message=''})">
     <input v-model="message">
     <input type="submit" value="Sign Message">
   </form>

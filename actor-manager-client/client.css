@@ -11,9 +11,9 @@
   transition: opacity 0.3s;
   pointer-events: none;
   display: block;
-  min-width: 90dvw;
-  min-height: 90dvh;
-  height: 90dvh;
+  min-width: 95dvw;
+  min-height: 95dvh;
+  height: 95dvh;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -30,7 +30,11 @@
 }
 
 .graffiti-actor-manager iframe {
-  width: 100%;
-  height: 100%;
+  position: relative;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100.1%;
+  height: 100.1%;
   border: none;
 }

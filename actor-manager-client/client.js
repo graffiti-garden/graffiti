@@ -1,11 +1,15 @@
+// const defaultOrigin = "https://actor.graffiti.garden"
+const defaultOrigin = "http://localhost:5173"
+
 export default class ActorClient {
 
-  constructor(origin) {
-    this.origin = origin??"https://actor.graffiti.garden"
-    // this.origin = origin??"http://localhost:5173"
+  constructor(onChoose=new EventTarget(), origin=defaultOrigin) {
+    this.origin = origin
+
     this.messageEvents = new EventTarget()
-    this.selectEvents = new EventTarget()
     this.initializeEvents = new EventTarget()
+
+    this.chooseEvents = onChoose
 
     this.initialized = false
 
@@ -28,11 +32,6 @@ export default class ActorClient {
         e.clientY > rect.top + rect.height ||
         e.clientX > rect.left + rect.width) {
 
-        // Throw a null event
-        const selectEvent = new Event("selected")
-        selectEvent.selected = null
-        this.selectEvents.dispatchEvent(selectEvent)
-
         this.dialog.close()
       }
     })
@@ -40,38 +39,15 @@ export default class ActorClient {
     document.body.prepend(this.dialog)
   }
 
-  async selectActor() {
-    // Make the iframe visible
+  selectActor() {
     this.dialog.showModal()
-
-    // Wait for a message
-    const selected = await new Promise(resolve => {
-      this.selectEvents.addEventListener(
-        "selected",
-        e=> resolve(e.selected),
-        { once: true, passive: true }
-      )
-    })
-
-    // Make the iframe invisible again
-    this.dialog.close()
-
-    if (!selected) {
-      throw "User cancled actor selection."
-    }
-
-    return selected
   }
 
-  async sign(message, actor) {
-    return await this.#sendAndReceive("sign", { message, actor })
+  async sign(message) {
+    return await this.#sendAndReceive("sign", message)
   }
 
-  async verify(signed) {
-    return await this.#sendAndReceive("verify", signed)
-  }
-
-  async #sendAndReceive(action, message) {
+  async #sendAndReceive(action, data) {
     // Make sure the iframe is set up
     if (!this.initialized) {
       await new Promise(resolve => {
@@ -85,16 +61,14 @@ export default class ActorClient {
 
     // Create a random ID for reply
     const messageID = crypto.randomUUID()
-    this.iframe.contentWindow.postMessage(
-      JSON.parse(JSON.stringify({
-        messageID,
-        action,
-        message
-      })),
-      this.origin)
+    this.iframe.contentWindow.postMessage({
+      messageID,
+      action,
+      data
+    }, this.origin)
 
     // Wait for a reply via events or throw an error
-    const data = await new Promise(resolve => {
+    const reply = await new Promise(resolve => {
       this.messageEvents.addEventListener(
         messageID,
         e=> resolve(e.data),
@@ -102,25 +76,33 @@ export default class ActorClient {
       )
     })
 
-    if ('reply' in data) {
-      return data.reply
+    if (reply.error) {
+      throw reply.error
     } else {
-      throw data.error
+      return reply.reply
     }
   }
 
   #onIframeMessage({data}) {
-    if ('messageID' in data) {
+    // Initialize on first message
+    if (!this.initialized) {
+      this.initialized = true
+      this.initializeEvents.dispatchEvent(new Event("initialized"))
+    }
+
+    // Close whenever canceled or non-null chosen actor
+    if (data.canceled || data.chosen) {
+      this.dialog.close()
+    }
+
+    if ('chosen' in data) {
+      const ev = new Event('chosen')
+      ev.uri = data.chosen
+      this.chooseEvents.dispatchEvent(ev)
+    } else if (data.messageID) {
       const messageEvent = new Event(data.messageID)
       messageEvent.data = data
       this.messageEvents.dispatchEvent(messageEvent)
-    } else if ('selected' in data) {
-      const selectEvent = new Event("selected")
-      selectEvent.selected = data.selected
-      this.selectEvents.dispatchEvent(selectEvent)
-    } else if ('initialized' in data) {
-      this.initialized = true
-      this.initializeEvents.dispatchEvent(new Event("initialized"))
     }
   }
 }
