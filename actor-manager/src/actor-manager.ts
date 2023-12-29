@@ -53,7 +53,7 @@ export function deriveSigningPrivateKey(rootSecretMaybeBase64: Uint8Array|string
 }
 
 const globalReferrer = document.referrer ?
-  new URL(document.referrer).origin : 'localhost'
+  new URL(document.referrer).origin : document.location.origin
 
 export default class ActorManager {
 
