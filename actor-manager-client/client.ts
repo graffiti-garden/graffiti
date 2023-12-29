@@ -83,6 +83,22 @@ export default class ActorClient {
     return curve.verify(signature, message, publicKey)
   }
 
+  async noncedSecret(nonce: Uint8Array) : Promise<Uint8Array> {
+    const reply = await this.#sendAndReceive(
+      "noncedSecret",
+      base64Encode(nonce)
+    )
+    return base64Decode(reply)
+  }
+
+  async sharedSecret(theirURI: string) : Promise<Uint8Array> {
+    const reply = await this.#sendAndReceive(
+      "sharedSecret",
+      theirURI
+    )
+    return base64Decode(reply)
+  }
+
   async #sendAndReceive(action: string, data: string) : Promise<string> {
     // Make sure the iframe is set up
     if (!this.#initialized) {
