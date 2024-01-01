@@ -1,7 +1,7 @@
 import * as esbuild from 'esbuild'
 
 await esbuild.build({
-  entryPoints: ['actor-client.ts'],
+  entryPoints: ['index.ts'],
   platform: 'browser',
   bundle: true,
   sourcemap: true,

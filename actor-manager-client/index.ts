@@ -26,7 +26,7 @@ export function base64Decode(str: string) : Uint8Array {
   return new Uint8Array(Array.from(atob(base64), s=> s.codePointAt(0) ?? 0))
 }
 
-export default class ActorClient {
+export default class ActorManagerClient {
 
   origin: string
   onChosenActor: (actorURI: string|null)=>void

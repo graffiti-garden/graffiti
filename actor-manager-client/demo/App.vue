@@ -1,11 +1,11 @@
 <script setup lang="ts">
-  import { ref, reactive } from 'vue'
+  import { ref } from 'vue'
   import type { Ref } from 'vue'
-  import ActorClient, { base64Encode, base64Decode } from '../actor-client';
+  import ActorManagerClient, { base64Encode, base64Decode } from '../index';
 
   const actorID: Ref<null|string> = ref(null)
 
-  const ac = new ActorClient((actorURI: string|null)=> {
+  const amc = new ActorManagerClient((actorURI: string|null)=> {
     actorID.value = actorURI
   })
 
@@ -27,7 +27,7 @@
 </script>
 
 <template>
-  <form @submit.prevent="ac.selectActor()">
+  <form @submit.prevent="amc.selectActor()">
     <input type="submit" value="Select Actor">
   </form>
 
@@ -39,7 +39,7 @@
 
     <hr>
 
-    <form @submit.prevent="ac.sign(encoder.encode(message)).then(s=>{signed=base64Encode(s);result=null})">
+    <form @submit.prevent="amc.sign(encoder.encode(message)).then(s=>{signed=base64Encode(s);result=null})">
       <input v-model="message">
       <input type="submit" value="Sign Message">
     </form>
@@ -49,7 +49,7 @@
     </p>
 
     <form v-if="signed" @submit.prevent="
-      ac.verify(base64Decode(signed), encoder.encode(message), actorID).then(r=>result=r)">
+      amc.verify(base64Decode(signed), encoder.encode(message), actorID).then(r=>result=r)">
       <input type="submit" value="Verify Signed Message">
       <span v-if="result!==null">
         {{ result }}
@@ -58,7 +58,7 @@
 
     <hr>
 
-    <form @submit.prevent="ac.sharedSecret(theirURI).then(s=>sharedSecret=base64Encode(s))">
+    <form @submit.prevent="amc.sharedSecret(theirURI).then(s=>sharedSecret=base64Encode(s))">
       <input v-model="theirURI">
       <input type="submit" value="Get Shared Secret">
     </form>
@@ -77,7 +77,7 @@
     </p>
 
     <p>
-      <button @click="ac.noncedSecret(nonce).then(s=>noncedSecret=base64Encode(s))">
+      <button @click="amc.noncedSecret(nonce).then(s=>noncedSecret=base64Encode(s))">
         Generate Nonced Secret
       </button>
     </p>
