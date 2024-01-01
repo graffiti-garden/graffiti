@@ -13,7 +13,8 @@ async function setCookie(name: string, value: string, shortLived: boolean=false)
     expires: Date.now() +
       (shortLived? oneMonthExpirationMS : oneYearExpirationMS),
     domain: null,
-    secure: true
+    secure: false,
+    sameSite: 'lax'
   })
 }
 
