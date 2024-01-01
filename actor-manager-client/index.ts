@@ -1,8 +1,8 @@
 import { ed25519 as curve } from '@noble/curves/ed25519'
 import defaultStyle from "./style.css?inline"
 
-const defaultOrigin = "https://actor.graffiti.garden"
-// const defaultOrigin = "http://localhost:5173"
+const defaultActorManagerURL = "https://actor.graffiti.garden"
+// const defaultActorManagerURL = "http://localhost:5173"
 
 interface ReplyMessage {
   messageID: string,
@@ -33,7 +33,7 @@ export function base64Decode(str: string) : Uint8Array {
 
 export default class ActorManager {
 
-  origin: string
+  actorManagerURL: string
   onChosenActor?: (actorURI: string|null)=>void
   #messageEvents = new EventTarget()
   #initializeEvents = new EventTarget()
@@ -43,16 +43,16 @@ export default class ActorManager {
 
   constructor(
     onChosenActor?: (actorURI: string|null)=>void,
-    origin: string=defaultOrigin,
-    style: string|null=defaultStyle
+    actorManagerURL: string=defaultActorManagerURL,
+    style: string=defaultStyle
   ) {
     this.onChosenActor = onChosenActor
-    this.origin = origin
+    this.actorManagerURL = actorManagerURL
 
     window.onmessage = this.#onIframeMessage.bind(this)
 
     // Bind the iframe to the right origin
-    this.#iframe.src = this.origin
+    this.#iframe.src = this.actorManagerURL
 
     // ... and put it within a dialog
     this.#dialog.className = "graffiti-actor-manager"
@@ -73,7 +73,7 @@ export default class ActorManager {
     })
 
     // Inject style
-    if (style) {
+    if (style.length) {
       const styleEl = document.createElement('style')
       styleEl.textContent = style
       document.head.append(styleEl)
@@ -136,7 +136,7 @@ export default class ActorManager {
         messageID,
         action,
         data
-      }, this.origin)
+      }, this.actorManagerURL)
 
       // Wait for a reply via events or throw an error
       const reply = await new Promise<ReplyMessage>((resolve, reject) => {
