@@ -32,6 +32,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.3",
     "esbuild": "^0.19.9",
+    "esbuild-plugin-inline-import": "^1.0.2",
     "vite": "^4.4.7"
   }
 }

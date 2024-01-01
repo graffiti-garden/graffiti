@@ -1,4 +1,5 @@
 import { ed25519 as curve } from '@noble/curves/ed25519'
+import defaultStyle from "./style.css?inline"
 
 const defaultOrigin = "https://actor.graffiti.garden"
 // const defaultOrigin = "http://localhost:5173"
@@ -40,7 +41,11 @@ export default class ActorManager {
   #iframe = document.createElement('iframe')
   #dialog = document.createElement('dialog')
 
-  constructor(onChosenActor?: (actorURI: string|null)=>void, origin: string=defaultOrigin) {
+  constructor(
+    onChosenActor?: (actorURI: string|null)=>void,
+    origin: string=defaultOrigin,
+    style: string|null=defaultStyle
+  ) {
     this.onChosenActor = onChosenActor
     this.origin = origin
 
@@ -66,6 +71,13 @@ export default class ActorManager {
         this.#dialog.close()
       }
     })
+
+    // Inject style
+    if (style) {
+      const styleEl = document.createElement('style')
+      styleEl.textContent = style
+      document.head.append(styleEl)
+    }
   }
 
   selectActor() : void {
