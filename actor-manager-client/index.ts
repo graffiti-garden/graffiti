@@ -18,25 +18,29 @@ export function base64Encode(bytes: Uint8Array) : string {
   // Make sure it is url safe
   return base64.replace(/\+/g, '-')
                .replace(/\//g, '_')
+               .replace(/\=+$/, '')
 }
 
 export function base64Decode(str: string) : Uint8Array {
-  const base64 = str.replace(/-/g, '+')
+  let base64 = str.replace(/-/g, '+')
                     .replace(/_/g, '/')
+  while (base64.length % 4 != 0) {
+    base64 += '='
+  }
   return new Uint8Array(Array.from(atob(base64), s=> s.codePointAt(0) ?? 0))
 }
 
-export default class ActorManagerClient {
+export default class ActorManager {
 
   origin: string
-  onChosenActor: (actorURI: string|null)=>void
+  onChosenActor?: (actorURI: string|null)=>void
   #messageEvents = new EventTarget()
   #initializeEvents = new EventTarget()
   #initialized = false
   #iframe = document.createElement('iframe')
   #dialog = document.createElement('dialog')
 
-  constructor(onChosenActor: (actorURI: string|null)=>void, origin: string=defaultOrigin) {
+  constructor(onChosenActor?: (actorURI: string|null)=>void, origin: string=defaultOrigin) {
     this.onChosenActor = onChosenActor
     this.origin = origin
 
@@ -159,7 +163,9 @@ export default class ActorManagerClient {
     }
 
     if (data.chosen !== undefined) {
-      this.onChosenActor(data.chosen)
+      if (this.onChosenActor) {
+        this.onChosenActor(data.chosen)
+      }
     } else if (data.messageID) {
       const messageEvent: ReplyMessageEvent = new Event(data.messageID)
       messageEvent.reply = data
