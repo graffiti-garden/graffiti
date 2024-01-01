@@ -3,6 +3,20 @@ import { randomBytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils'
 import { ed25519 as curve, edwardsToMontgomeryPub, edwardsToMontgomeryPriv, x25519 } from '@noble/curves/ed25519'
 import { cookieStore } from 'cookie-store'
 
+const  oneYearExpirationMS = 365 * 24 * 60 * 60 * 1000
+const oneMonthExpirationMS =  30 * 24 * 60 * 60 * 1000
+
+async function setCookie(name: string, value: string, shortLived: boolean=false) : Promise<void> {
+  await cookieStore.set({
+    name,
+    value,
+    expires: Date.now() +
+      (shortLived? oneMonthExpirationMS : oneYearExpirationMS),
+    domain: null,
+    secure: true
+  })
+}
+
 export interface Actor {
   nickname: string,
   rootSecretBase64: string
@@ -107,17 +121,26 @@ export default class ActorManager {
       (await cookieStore.getAll()).map(async cookie=> {
         const uri = cookie.name
         if (uri.startsWith('actor')) {
+          // Refresh the cookie
+          await setCookie(cookie.name, cookie.value)
+
           await this.announceActor(Action.UPDATE, uri)
         }
       })
     )
     // Load the chosen one
     const chosen = await this.getChosen()
+
     // Make sure it still exists
     if (chosen && !(await cookieStore.get(chosen))) {
+      // If not delete, and propogate
       this.unchooseActor()
     } else {
       await this.announceActor(Action.CHOOSE, chosen)
+      // Otherwise, refresh it
+      if (chosen) {
+        await setCookie(`chosen:${this.referrer}`, chosen, true)
+      }
     }
 
     this.isInitialized = true
@@ -125,7 +148,7 @@ export default class ActorManager {
   }
 
   async chooseActor(uri: string) : Promise<void> {
-    await cookieStore.set(`chosen:${this.referrer}`, uri)
+    await setCookie(`chosen:${this.referrer}`, uri, true)
     await this.announceActor(Action.CHOOSE, uri, true)
   }
 
@@ -168,7 +191,7 @@ export default class ActorManager {
     const uri = actorURIEncode(curve.getPublicKey(privateKey))
 
     await this.tilInitialized()
-    await cookieStore.set(uri, JSON.stringify(actor))
+    await setCookie(uri, JSON.stringify(actor))
 
     await this.announceActor(Action.UPDATE, uri, true)
 
@@ -206,7 +229,7 @@ export default class ActorManager {
     const actor = await this.getActor(uri)
     if (actor.nickname != newNickname) {
       actor.nickname = newNickname
-      await cookieStore.set(uri, JSON.stringify(actor))
+      await setCookie(uri, JSON.stringify(actor))
       await this.announceActor(Action.UPDATE, uri, true)
     }
   }
