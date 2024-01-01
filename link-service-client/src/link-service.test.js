@@ -7,7 +7,7 @@ const serviceURL = 'https://link.graffiti.garden'
 
 describe(`Basic Streaming`, ()=> {
   it('announce existing', async()=> {
-    const ls = new LinkService(serviceURL, mockNonceToPrivateKey())
+    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -25,7 +25,7 @@ describe(`Basic Streaming`, ()=> {
 
   it('announce future', async()=> {
     const source = randomString()
-    const ls = new LinkService(serviceURL, mockNonceToPrivateKey())
+    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
     const iterator = ls.subscribe(source)
     await expect(iterator.next()).resolves.toHaveProperty('value.type', 'backlog-complete')
 
@@ -39,7 +39,7 @@ describe(`Basic Streaming`, ()=> {
   })
 
   it('replace target', async()=> {
-    const ls = new LinkService(serviceURL, mockNonceToPrivateKey())
+    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -61,7 +61,7 @@ describe(`Basic Streaming`, ()=> {
   })
 
   it('replace source', async()=> {
-    const ls = new LinkService(serviceURL, mockNonceToPrivateKey())
+    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -87,7 +87,7 @@ describe(`Basic Streaming`, ()=> {
   it('expire', async ()=> {
     const source = randomString()
 
-    const ls = new LinkService(serviceURL, mockNonceToPrivateKey())
+    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
     const iterator = ls.subscribe(source)
     await expect(iterator.next()).resolves.toHaveProperty('value.type', 'backlog-complete')
 
