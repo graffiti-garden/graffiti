@@ -14,7 +14,7 @@ async function setCookie(name: string, value: string, shortLived: boolean=false)
       (shortLived? oneMonthExpirationMS : oneYearExpirationMS),
     domain: null,
     secure: false,
-    sameSite: 'lax'
+    sameSite: 'none'
   })
 }
 
