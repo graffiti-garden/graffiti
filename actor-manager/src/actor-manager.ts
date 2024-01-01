@@ -13,7 +13,14 @@ async function setCookie(name: string, value: string, shortLived: boolean=false)
     expires: Date.now() +
       (shortLived? oneMonthExpirationMS : oneYearExpirationMS),
     domain: null,
-    secure: false,
+    sameSite: 'none',
+    path: '/; Secure'
+  })
+}
+
+async function deleteCookie(name: string) : Promise<void> {
+  await cookieStore.delete({
+    name,
     sameSite: 'none',
     path: '/; Secure'
   })
@@ -155,7 +162,7 @@ export default class ActorManager {
   }
 
   async unchooseActor() : Promise<void> {
-    await cookieStore.delete(`chosen:${this.referrer}`)
+    await deleteCookie(`chosen:${this.referrer}`)
     await this.announceActor(Action.CHOOSE, null, true)
   }
 
@@ -223,7 +230,7 @@ export default class ActorManager {
     }
 
     // Remove and announce the change
-    await cookieStore.delete(uri)
+    await deleteCookie(uri)
     await this.announceActor(Action.DELETE, uri, true)
   }
 
