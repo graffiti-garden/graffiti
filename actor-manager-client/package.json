@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/actor-manager-client",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "client for the actor manager",
   "main": "index.ts",
   "browser": "dist/index.js",
@@ -14,9 +14,9 @@
   "scripts": {
     "demo": "vite",
     "build-demo": "vite build",
-    "build": "node esbuild.config.js"
+    "build": "node esbuild.config.js",
+    "prepublishOnly": "npm run build"
   },
-  "prepublishOnly": "npm run build",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/actor-manager-client.git"
