@@ -11,9 +11,9 @@
   ],
   "scripts": {
     "test": "vitest",
-    "build": "node esbuild.config.js"
+    "build": "node esbuild.config.js",
+    "prepublishOnly": "npm run build"
   },
-  "prepublishOnly": "npm test && npm run build",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/link-service-client.git"
