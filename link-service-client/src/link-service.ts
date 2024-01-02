@@ -3,7 +3,7 @@ import LinkStreamer from "./streamer";
 import type { EditorNonceToPrivateKey, CreatedAndExistingLinks, Link } from './factory'
 import { AnnounceType } from "./streamer";
 
-const defaultServiceURL = "https://link.graffiti.garden/"
+const defaultServiceURL = "https://link.graffiti.garden"
 
 export interface AnnounceLink {
   type: AnnounceType,

@@ -91,7 +91,7 @@
       return new Uint8Array(buffer)
     }
 
-    const ls = new LinkService('https://link.graffiti.garden', editorNonceToPrivateKey)
+    const ls = new LinkService(editorNonceToPrivateKey)
 
     async function listen(source, signal) {
       try {
