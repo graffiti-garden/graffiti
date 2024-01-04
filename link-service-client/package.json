@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/link-service-client",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "client for the graffiti link service",
   "type": "module",
   "main": "src/link-service.ts",
@@ -11,9 +11,9 @@
   ],
   "scripts": {
     "test": "vitest",
-    "build": "node esbuild.config.js"
+    "build": "node esbuild.config.js",
+    "prepublishOnly": "npm test && npm run build"
   },
-  "prepublishOnly": "npm test && npm run build",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/link-service-client.git"
