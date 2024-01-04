@@ -72,7 +72,7 @@ describe(`Basic Streaming`, ()=> {
 
     const uri = randomString()
 
-    const firstIterator = ls.subscribe(uri, AbortSignal.timeout(300))
+    const firstIterator = ls.subscribe(uri, AbortSignal.timeout(500))
     await firstIterator.next() // backlog complete
 
     await expect(ls.subscribe(uri, AbortSignal.timeout(100)).next())

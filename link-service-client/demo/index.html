@@ -36,8 +36,8 @@
   <ul id="links"></ul>
 
   <script type="module">
-    //import LinkService from 'https://cdn.jsdelivr.net/npm/@graffiti-garden/link-service-client'
     import LinkService from '/dist/link-service.js'
+    import { ed25519 as curve } from 'https://cdn.jsdelivr.net/npm/@noble/curves@1.3.0/esm/ed25519.js/+esm'
 
     const decoder = new TextDecoder()
 
@@ -86,13 +86,19 @@
 
     // Hash the secret with the nonce to get a personal
     // private key for an individual link
-    async function editorNonceToPrivateKey(editorNonce) {
+    async function privateKeyFromNonce(editorNonce) {
       const concated = new Uint8Array([...secret, ...editorNonce])
       const buffer = await crypto.subtle.digest("SHA-256", concated)
       return new Uint8Array(buffer)
     }
+    async function publicKeyFromNonce(editorNonce) {
+      return curve.getPublicKey(await privateKeyFromNonce(editorNonce))
+    }
+    async function signFromNonce(message, nonce) {
+      return curve.sign(message, await privateKeyFromNonce(nonce))
+    }
 
-    const ls = new LinkService('https://link.graffiti.garden', editorNonceToPrivateKey)
+    const ls = new LinkService(publicKeyFromNonce, signFromNonce)
 
     async function listen(source, signal) {
       try {

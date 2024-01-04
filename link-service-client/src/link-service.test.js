@@ -8,7 +8,7 @@ const serviceURL = 'https://link.graffiti.garden'
 describe(`Basic Streaming`, ()=> {
   it('announce existing', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
+    const ls = new LinkService(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -27,7 +27,7 @@ describe(`Basic Streaming`, ()=> {
   it('announce future', async()=> {
     const source = randomString()
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
+    const ls = new LinkService(publicKeyFromNonce, signFromNonce, serviceURL)
     const iterator = ls.subscribe(source)
     await expect(iterator.next()).resolves.toHaveProperty('value.type', 'backlog-complete')
 
@@ -42,7 +42,7 @@ describe(`Basic Streaming`, ()=> {
 
   it('replace target', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
+    const ls = new LinkService(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -65,7 +65,7 @@ describe(`Basic Streaming`, ()=> {
 
   it('replace source', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
+    const ls = new LinkService(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -92,7 +92,7 @@ describe(`Basic Streaming`, ()=> {
     const source = randomString()
 
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
+    const ls = new LinkService(publicKeyFromNonce, signFromNonce, serviceURL)
     const iterator = ls.subscribe(source)
     await expect(iterator.next()).resolves.toHaveProperty('value.type', 'backlog-complete')
 

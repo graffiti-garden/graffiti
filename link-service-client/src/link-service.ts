@@ -3,6 +3,8 @@ import LinkStreamer from "./streamer";
 import type { PublicKeyFromNonce, SignFromNonce, CreatedAndExistingLinks, Link } from './factory'
 import { AnnounceType } from "./streamer";
 
+const defaultServiceURL = "https://link.graffiti.garden"
+
 export interface AnnounceLink {
   type: AnnounceType,
   link?: Link,
@@ -13,7 +15,7 @@ export default class LinkService {
   #factory: LinkFactory
   #streamer: LinkStreamer
 
-  constructor(serviceURL: string, publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce) {
+  constructor(publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce, serviceURL: string=defaultServiceURL) {
     this.#factory  = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
 
     // Convert the to websocket
