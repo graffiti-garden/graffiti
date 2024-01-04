@@ -2,6 +2,30 @@ import { sha256 } from '@noble/hashes/sha256'
 import { randomBytes, concatBytes, utf8ToBytes } from '@noble/hashes/utils'
 import { ed25519 as curve, edwardsToMontgomeryPub, edwardsToMontgomeryPriv, x25519 } from '@noble/curves/ed25519'
 import { xchacha20poly1305 as cipher } from '@noble/ciphers/chacha'
+import { cookieStore } from 'cookie-store'
+
+const  oneYearExpirationMS = 365 * 24 * 60 * 60 * 1000
+const oneMonthExpirationMS =  30 * 24 * 60 * 60 * 1000
+
+async function setCookie(name: string, value: string, shortLived: boolean=false) : Promise<void> {
+  await cookieStore.set({
+    name,
+    value,
+    expires: Date.now() +
+      (shortLived? oneMonthExpirationMS : oneYearExpirationMS),
+    domain: null,
+    sameSite: 'none',
+    path: '/; Secure'
+  })
+}
+
+async function deleteCookie(name: string) : Promise<void> {
+  await cookieStore.delete({
+    name,
+    sameSite: 'none',
+    path: '/; Secure'
+  })
+}
 
 export interface Actor {
   nickname: string,
@@ -30,11 +54,15 @@ export function base64Encode(bytes: Uint8Array) : string {
   // Make sure it is url safe
   return base64.replace(/\+/g, '-')
                .replace(/\//g, '_')
+               .replace(/\=+$/, '')
 }
 
 export function base64Decode(str: string) : Uint8Array {
-  const base64 = str.replace(/-/g, '+')
-                    .replace(/_/g, '/')
+  let base64 = str.replace(/-/g, '+')
+                  .replace(/_/g, '/')
+  while (base64.length % 4 != 0) {
+    base64 += '='
+  }
   return new Uint8Array(Array.from(atob(base64), s=> s.codePointAt(0) ?? 0))
 }
 
@@ -75,7 +103,7 @@ export default class ActorManager {
     ;(async ()=> {
       await new Promise<void>(r=> setTimeout(()=>r(), 10))
       if (!document.hasStorageAccess || await document.hasStorageAccess()) {
-        this._initialize()
+        await this._initialize()
       }
     })()
   }
@@ -91,44 +119,57 @@ export default class ActorManager {
         throw "The actor manager can't work without local storage access!"
       }
     }
-    this._initialize()
+    await this._initialize()
   }
 
   async _initialize() : Promise<void> {
     this.channel = new BroadcastChannel("actors")
     this.channel.onmessage = this.onChannelMessage.bind(this)
 
-    this.isInitialized = true
-    this.events.dispatchEvent(new Event("initialized"))
-
     // Load all existing uris
-    Object.keys(localStorage).forEach((uri: string)=> {
-      if (uri.startsWith('actor')) {
-        this.announceActor(Action.UPDATE, uri)
-      }
-    })
+    await Promise.all(
+      (await cookieStore.getAll()).map(async cookie=> {
+        const uri = cookie.name
+        if (uri.startsWith('actor')) {
+          // Refresh the cookie
+          await setCookie(cookie.name, cookie.value)
+
+          await this.announceActor(Action.UPDATE, uri)
+        }
+      })
+    )
     // Load the chosen one
-    const chosen = this.getChosen()
+    const chosen = await this.getChosen()
+
     // Make sure it still exists
-    if (chosen && !(chosen in localStorage)) {
+    if (chosen && !(await cookieStore.get(chosen))) {
+      // If not delete, and propogate
       this.unchooseActor()
     } else {
       await this.announceActor(Action.CHOOSE, chosen)
+      // Otherwise, refresh it
+      if (chosen) {
+        await setCookie(`chosen:${this.referrer}`, chosen, true)
+      }
     }
+
+    this.isInitialized = true
+    this.events.dispatchEvent(new Event("initialized"))
   }
 
   async chooseActor(uri: string) : Promise<void> {
-    localStorage.setItem(`chosen:${this.referrer}`, uri)
+    await setCookie(`chosen:${this.referrer}`, uri, true)
     await this.announceActor(Action.CHOOSE, uri, true)
   }
 
   async unchooseActor() : Promise<void> {
-    localStorage.removeItem(`chosen:${this.referrer}`)
+    await deleteCookie(`chosen:${this.referrer}`)
     await this.announceActor(Action.CHOOSE, null, true)
   }
 
-  getChosen() : string|null {
-    return localStorage.getItem(`chosen:${this.referrer}`)
+  async getChosen() : Promise<string|null> {
+    const result = await cookieStore.get(`chosen:${this.referrer}`)
+    return result?.value ?? null
   }
 
   async tilInitialized() : Promise<void> {
@@ -160,7 +201,7 @@ export default class ActorManager {
     const uri = actorURIEncode(curve.getPublicKey(privateKey))
 
     await this.tilInitialized()
-    localStorage.setItem(uri, JSON.stringify(actor))
+    await setCookie(uri, JSON.stringify(actor))
 
     await this.announceActor(Action.UPDATE, uri, true)
 
@@ -169,12 +210,12 @@ export default class ActorManager {
 
   async getActor(uri: string) : Promise<Actor> {
     await this.tilInitialized()
-    if (!(uri in localStorage)) {
+    const actorCookie = await cookieStore.get(uri)
+    if (!actorCookie) {
       throw `Actor with ID "${uri}" does not exist`
+    } else {
+      return JSON.parse(actorCookie.value)
     }
-
-    const actorString = localStorage.getItem(uri)
-    return JSON.parse(actorString??'null')
   }
 
   async deleteActor(uri: string) : Promise<void> {
@@ -185,12 +226,12 @@ export default class ActorManager {
     }
 
     // Unchoose if deleting chosen
-    if (this.getChosen() == uri) {
+    if (await this.getChosen() == uri) {
       await this.unchooseActor()
     }
 
     // Remove and announce the change
-    localStorage.removeItem(uri)
+    await deleteCookie(uri)
     await this.announceActor(Action.DELETE, uri, true)
   }
 
@@ -198,7 +239,7 @@ export default class ActorManager {
     const actor = await this.getActor(uri)
     if (actor.nickname != newNickname) {
       actor.nickname = newNickname
-      localStorage.setItem(uri, JSON.stringify(actor))
+      await setCookie(uri, JSON.stringify(actor))
       await this.announceActor(Action.UPDATE, uri, true)
     }
   }
@@ -228,7 +269,7 @@ export default class ActorManager {
   }
 
   async getChosenActor() : Promise<Actor> {
-    const uri = this.getChosen()
+    const uri = await this.getChosen()
     if (!uri) {
       throw "no actor chosen"
     } else {
@@ -291,14 +332,14 @@ export default class ActorManager {
         return
       }
 
-      // Add a little delay fol localStorage
+      // Add a little delay for localStorage
       // to propogate between tabs
       await new Promise<void>(r=> setTimeout(()=>r(), 50))
 
       // If the deleted is the chosen one,
       // it may not be unchosen across a different refferer
       // so do it now.
-      if (data.action == Action.DELETE && data.uri == this.getChosen()) {
+      if (data.action == Action.DELETE && data.uri == await this.getChosen()) {
         await this.unchooseActor()
       }
 

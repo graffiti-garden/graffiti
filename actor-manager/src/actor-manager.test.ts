@@ -3,6 +3,15 @@ import ActorManager, { base64Encode, base64Decode, actorURIEncode, actorURIDecod
 import { randomBytes } from '@noble/hashes/utils'
 import type { ActorAnnouncement } from './actor-manager'
 import { ed25519 as curve } from '@noble/curves/ed25519'
+import { cookieStore } from 'cookie-store'
+
+async function clearCookies() {
+  await Promise.all(
+    (await cookieStore.getAll()).map(
+      async cookie=> await(cookieStore.delete(cookie.name))
+    )
+  )
+}
 
 describe('Actor Manager', ()=> {
 
@@ -100,7 +109,7 @@ describe('Actor Manager', ()=> {
 
   it('initial actor events', async()=> {
     // Clear and generate a bunch of actors
-    localStorage.clear()
+    await clearCookies()
     const am1 = new ActorManager()
     const nicknames: Array<string> = []
     for (let i=0; i < 5; i++) {
@@ -126,7 +135,7 @@ describe('Actor Manager', ()=> {
   })
 
   it('update events', async()=> {
-    localStorage.clear()
+    await clearCookies()
 
     const gotten: Array<string> = []
     const callback = (e: ActorAnnouncement) => {
@@ -299,7 +308,7 @@ describe('Actor Manager', ()=> {
   })
 
   it('Backchannel actor', async ()=> {
-    localStorage.clear()
+    await clearCookies()
 
     const ev = new EventTarget()
     const gotUpdates: Array<string> = []
@@ -466,11 +475,11 @@ describe('Actor Manager', ()=> {
 
     // Make sure hack worked
     await new Promise<void>(r=> setTimeout(()=>r(), 100))
-    expect(am1.getChosen()).toEqual(uri)
+    expect(await am1.getChosen()).toEqual(uri)
 
     // Create a new manager from the first referrer
     const am3 = new ActorManager(new EventTarget(), referrer1)
     await am3.tilInitialized()
-    expect(am3.getChosen()).toEqual(null)
+    expect(await am3.getChosen()).toEqual(null)
   })
 })
