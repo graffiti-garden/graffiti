@@ -92,27 +92,44 @@ export default class ActorManager {
     return base64Decode(reply)
   }
 
-  async verify(signature: Uint8Array, message: Uint8Array, actorURI: string) {
-    const publicKey = base64Decode(actorURI.slice(6))
+  async verify(signature: Uint8Array, message: Uint8Array, actorURIorPublicKey: string|Uint8Array) {
+    const publicKey = typeof actorURIorPublicKey == 'string' ?
+      base64Decode(actorURIorPublicKey.slice(6)) : actorURIorPublicKey
 
     // Signature verifies, random bytes do not
     return curve.verify(signature, message, publicKey)
   }
 
-  async noncedSecret(nonce: Uint8Array) : Promise<Uint8Array> {
-    const reply = await this.#sendAndReceive(
-      "noncedSecret",
+  async oneTimePublicKey(nonce: Uint8Array) : Promise<Uint8Array> {
+    const pkString = await this.#sendAndReceive(
+      "otpk",
       base64Encode(nonce)
     )
-    return base64Decode(reply)
+    return base64Decode(pkString)
   }
 
-  async sharedSecret(theirURI: string) : Promise<Uint8Array> {
-    const reply = await this.#sendAndReceive(
-      "sharedSecret",
-      theirURI
+  async oneTimeSignature(message: Uint8Array, nonce: Uint8Array) : Promise<Uint8Array> {
+    const signatureString = await this.#sendAndReceive(
+      "ots",
+      `${base64Encode(message)},${base64Encode(nonce)}`
     )
-    return base64Decode(reply)
+    return base64Decode(signatureString)
+  }
+
+  async encryptPrivateMessage(plaintext: Uint8Array, theirURI: string) : Promise<Uint8Array> {
+    const ciphertextString = await this.#sendAndReceive(
+      "encrypt",
+      `${base64Encode(plaintext)},${theirURI}`
+    )
+    return base64Decode(ciphertextString)
+  }
+
+  async decryptPrivateMessage(ciphertext: Uint8Array, theirURI: string) : Promise<Uint8Array> {
+    const plaintextString = await this.#sendAndReceive(
+      "decrypt",
+      `${base64Encode(ciphertext)},${theirURI}`
+    )
+    return base64Decode(plaintextString)
   }
 
   async #sendAndReceive(action: string, data: string) : Promise<string> {
