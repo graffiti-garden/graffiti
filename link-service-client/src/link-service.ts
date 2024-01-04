@@ -1,9 +1,7 @@
 import LinkFactory from "./factory";
 import LinkStreamer from "./streamer";
-import type { EditorNonceToPrivateKey, CreatedAndExistingLinks, Link } from './factory'
+import type { PublicKeyFromNonce, SignFromNonce, CreatedAndExistingLinks, Link } from './factory'
 import { AnnounceType } from "./streamer";
-
-const defaultServiceURL = "https://link.graffiti.garden"
 
 export interface AnnounceLink {
   type: AnnounceType,
@@ -15,8 +13,8 @@ export default class LinkService {
   #factory: LinkFactory
   #streamer: LinkStreamer
 
-  constructor(nonceToPrivateKey: EditorNonceToPrivateKey, serviceURL: string=defaultServiceURL)  {
-    this.#factory  = new LinkFactory(serviceURL, nonceToPrivateKey)
+  constructor(serviceURL: string, publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce) {
+    this.#factory  = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
 
     // Convert the to websocket
     const serviceSocket = new URL(serviceURL)
@@ -52,13 +50,21 @@ export default class LinkService {
 
 // TODO:
 // Make offline-first: links are stored in local memory.
-// If the server does not have them (using the signal mentioned above),
+// If the server does not have them (using the backlog-complete signal),
 // they are sent to the server. So even if the server clears or is moved,
 // there is automatic recovery. "self-healing"
+
+// Also peer-to-peer. Users can manually input links (which they may have
+// received from other peers) to circumvent reliance on the server
 
 // Add some sort of resistance to "put" to prevent filling
 // up the server with gunk
 // - proof of work/stake/space/etc.
+//   - do these actually help if clients are on phones vs spammers with mining asics?
 // - host data and fetch from server
-// - voting
-// - web of trust
+//   - this would reveal the url, which may be a personal website
+// - limited expiration
+//   - users regularly "upkeep" links.
+//   - could lead to link rot
+// - voting / web of trust
+//   - do these leak social graph (more than already leaked?)

@@ -1,13 +1,14 @@
 import { describe, expect, it, assert } from 'vitest'
 import LinkService from './link-service'
-import { randomString, soon, mockNonceToPrivateKey } from './test-utils'
+import { randomString, soon, mockPublicKeyAndSignFromNonce } from './test-utils'
 
 const serviceURL = 'https://link.graffiti.garden'
 // const serviceURL = 'http://localhost:8000'
 
 describe(`Basic Streaming`, ()=> {
   it('announce existing', async()=> {
-    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
+    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
+    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -25,7 +26,8 @@ describe(`Basic Streaming`, ()=> {
 
   it('announce future', async()=> {
     const source = randomString()
-    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
+    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
+    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
     const iterator = ls.subscribe(source)
     await expect(iterator.next()).resolves.toHaveProperty('value.type', 'backlog-complete')
 
@@ -39,7 +41,8 @@ describe(`Basic Streaming`, ()=> {
   })
 
   it('replace target', async()=> {
-    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
+    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
+    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -61,7 +64,8 @@ describe(`Basic Streaming`, ()=> {
   })
 
   it('replace source', async()=> {
-    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
+    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
+    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -87,7 +91,8 @@ describe(`Basic Streaming`, ()=> {
   it('expire', async ()=> {
     const source = randomString()
 
-    const ls = new LinkService(mockNonceToPrivateKey(), serviceURL)
+    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
+    const ls = new LinkService(serviceURL, publicKeyFromNonce, signFromNonce)
     const iterator = ls.subscribe(source)
     await expect(iterator.next()).resolves.toHaveProperty('value.type', 'backlog-complete')
 

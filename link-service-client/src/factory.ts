@@ -78,9 +78,7 @@ export class Link {
 
   async isMine(): Promise<boolean> {
     // Generate the public key from the nonce
-    const privateKey =
-     await this.#linkFactory.editorNonceToPrivateKey(this.editorNonce)
-    const publicKey  = curve.getPublicKey(privateKey)
+    const publicKey = await this.#linkFactory.publicKeyFromNonce(this.editorNonce)
 
     // And make sure they are equal
     return publicKey.every((val, i)=> val == this.publicKey[i])
@@ -107,7 +105,8 @@ export class Link {
   }
 }
 
-export type EditorNonceToPrivateKey = (editorNonce: Uint8Array)=> (Promise<Uint8Array>|Uint8Array)
+export type PublicKeyFromNonce = (nonce: Uint8Array)=> (Promise<Uint8Array>|Uint8Array)
+export type SignFromNonce = (message: Uint8Array, nonce: Uint8Array)=> (Promise<Uint8Array>|Uint8Array)
 export interface CreatedAndExistingLinks {
   created: Link,
   existing: Link|null
@@ -115,11 +114,13 @@ export interface CreatedAndExistingLinks {
 
 export default class LinkFactory {
   serviceURL: string
-  editorNonceToPrivateKey: EditorNonceToPrivateKey
+  publicKeyFromNonce: PublicKeyFromNonce
+  signFromNonce: SignFromNonce
 
-  constructor(serviceURL: string, editorNonceToPrivateKey: EditorNonceToPrivateKey) {
+  constructor(serviceURL: string, publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce) {
     this.serviceURL = serviceURL
-    this.editorNonceToPrivateKey = editorNonceToPrivateKey
+    this.publicKeyFromNonce = publicKeyFromNonce
+    this.signFromNonce = signFromNonce
   }
 
   #publicKeyToURL(publicKey: Uint8Array) : string {
@@ -168,8 +169,7 @@ export default class LinkFactory {
     }
 
     // Derive editor public and private keys from the salt
-    const privateKey = await this.editorNonceToPrivateKey(editorNonce)
-    const publicKey  = curve.getPublicKey(privateKey)
+    const publicKey = await this.publicKeyFromNonce(editorNonce)
 
     // Derive the infohash and proof of knowledge
     const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source)
@@ -208,7 +208,7 @@ export default class LinkFactory {
     )
 
     // Sign the container
-    const signature = curve.sign(container, privateKey)
+    const signature = await this.signFromNonce(container, editorNonce)
     const containerSigned = concatBytes(container, signature)
 
     // Send the container on over
