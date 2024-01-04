@@ -8,8 +8,10 @@
 
   enum RequestAction {
     Sign = "sign",
-    NoncedSecret = "noncedSecret",
-    SharedSecret = "sharedSecret"
+    EncryptPrivateMessage = "encrypt",
+    DecryptPrivateMessage = "decrypt",
+    OneTimePublicKey = "otpk",
+    OneTimeSignature = "ots"
   }
 
   interface RequestMessage {
@@ -150,15 +152,34 @@
           const signature = await actorManager.sign(message)
           reply.reply = base64Encode(signature)
           break
-        case RequestAction.NoncedSecret:
+        case RequestAction.OneTimePublicKey:
           const nonce = base64Decode(data.data)
-          const noncedSecret = await actorManager.noncedSecret(nonce)
-          reply.reply = base64Encode(noncedSecret)
+          const oneTimePublicKey = await actorManager.oneTimePublicKey(nonce)
+          reply.reply = base64Encode(oneTimePublicKey)
           break
-        case RequestAction.SharedSecret:
-          const theirURI = data.data
-          const sharedSecret = await actorManager.sharedSecret(theirURI)
-          reply.reply = base64Encode(sharedSecret)
+        case RequestAction.OneTimeSignature:
+          let [messageString, nonceString] = data.data.split(',')
+          const oneTimeSignature = await actorManager.oneTimeSignature(
+            base64Decode(messageString),
+            base64Decode(nonceString)
+          )
+          reply.reply = base64Encode(oneTimeSignature)
+          break
+        case RequestAction.EncryptPrivateMessage:
+          const [plaintextString, theirURI] = data.data.split(',')
+          const ciphertext = await actorManager.encryptPrivateMessage(
+            base64Decode(plaintextString), theirURI
+          )
+          reply.reply = base64Encode(ciphertext)
+          break
+        case RequestAction.DecryptPrivateMessage:
+          const [ciphertextString, theirURi] = data.data.split(',')
+          console.log(ciphertextString)
+          console.log(theirURi)
+          const plaintext = await actorManager.decryptPrivateMessage(
+            base64Decode(ciphertextString), theirURi
+          )
+          reply.reply = base64Encode(plaintext)
           break
         default:
           reply.error = `Invalid action ${data.action}`
