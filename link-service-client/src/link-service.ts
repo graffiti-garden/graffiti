@@ -16,7 +16,7 @@ export default class LinkService {
   #streamer: LinkStreamer
 
   constructor(publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce, serviceURL: string=defaultServiceURL) {
-    this.#factory  = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    this.#factory  = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
 
     // Convert the to websocket
     const serviceSocket = new URL(serviceURL)

@@ -117,7 +117,7 @@ export default class LinkFactory {
   publicKeyFromNonce: PublicKeyFromNonce
   signFromNonce: SignFromNonce
 
-  constructor(serviceURL: string, publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce) {
+  constructor(publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce, serviceURL: string) {
     this.serviceURL = serviceURL
     this.publicKeyFromNonce = publicKeyFromNonce
     this.signFromNonce = signFromNonce

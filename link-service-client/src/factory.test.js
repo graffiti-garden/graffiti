@@ -10,13 +10,13 @@ describe(`Link Factory`, ()=> {
 
   it('get nonexistant', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     await expect(lf.get(randomBytes(32))).rejects.toEqual('link not found')
   })
 
   it('basic put', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -36,7 +36,7 @@ describe(`Link Factory`, ()=> {
 
   it('replace target', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -58,7 +58,7 @@ describe(`Link Factory`, ()=> {
 
   it('put expired data', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const expiration = Math.floor(Math.random() * Date.now()/1000)
     await expect(lf.create(randomString(), randomString(), expiration))
       .rejects.toEqual('data has already expired')
@@ -66,7 +66,7 @@ describe(`Link Factory`, ()=> {
 
   it('replace expiration forwards', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const expiration = BigInt(soon())
 
     // Create and make sure it workd
@@ -87,7 +87,7 @@ describe(`Link Factory`, ()=> {
 
   it('replace expiration backwards', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const expiration = soon()
 
     // Create and make sure it workd
@@ -113,7 +113,7 @@ describe(`Link Factory`, ()=> {
 
   it('replace source', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
 
@@ -138,8 +138,8 @@ describe(`Link Factory`, ()=> {
   it('shared ownership', async()=> {
     const sharedSecret = randomString()
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce(sharedSecret)
-    const lf1 = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
-    const lf2 = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf1 = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
+    const lf2 = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
 
     const source = randomString()
     const { created } = await lf1.create(source, randomString(), soon())
@@ -157,8 +157,8 @@ describe(`Link Factory`, ()=> {
   it('different ownership', async()=> {
     const { publicKeyFromNonce: pkfn1, signFromNonce: sfn1 } = mockPublicKeyAndSignFromNonce()
     const { publicKeyFromNonce: pkfn2, signFromNonce: sfn2 } = mockPublicKeyAndSignFromNonce()
-    const lf1 = new LinkFactory(serviceURL, pkfn1, sfn1)
-    const lf2 = new LinkFactory(serviceURL, pkfn2, sfn2)
+    const lf1 = new LinkFactory(pkfn1, sfn1, serviceURL)
+    const lf2 = new LinkFactory(pkfn2, sfn2, serviceURL)
 
     const source = randomString()
     const { created } = await lf1.create(source, randomString(), soon())
@@ -187,7 +187,7 @@ describe(`Link Factory`, ()=> {
     assert(minCounter < maxCounter)
 
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = soon()
@@ -202,14 +202,14 @@ describe(`Link Factory`, ()=> {
 
   it('big target', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const target = 'x'.repeat(256 - 16 - 24 - 24)
     await lf.create(randomString(), target, soon())
   })
 
   it('too big target', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const target = 'x'.repeat(256 - 16 - 24 - 24 + 1)
     await expect(lf.create(randomString(), target, soon()))
       .rejects.toEqual('target is too big')
@@ -217,7 +217,7 @@ describe(`Link Factory`, ()=> {
 
   it('unicode', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = '👻👩🏿‍❤️‍👩🏼👩‍👩‍👧‍👦👯‍♂️👍🏾🤜🏿𝔤𝔯𝔞𝔣𝔣𝔦𝔱𝔦🤛🏿'
     const target = '👀👨🏽‍❤️‍💋‍👨🏿👨‍👨‍👧‍👧🖖🏻🫸🏼Ｇｒａｆｆｉｔｉ🫷🏼'
     const { created } = await lf.create(source, target, soon())
@@ -232,7 +232,7 @@ describe(`Link Factory`, ()=> {
   it('expire', async ()=> {
     const expirationTime = 3 // seconds
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(serviceURL, publicKeyFromNonce, signFromNonce)
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
     const source = randomString()
     const target = randomString()
     const expiration = Math.ceil(Date.now()/1000) + expirationTime
