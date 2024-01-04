@@ -14,10 +14,15 @@ export enum AnnounceType {
 interface ErrorEvent extends Event {
   error?: string
 }
-interface AnnounceValue {
-  type: AnnounceType,
-  publicKey?: Uint8Array,
-  containerSigned?: Uint8Array
+type AnnounceValue = {
+  type: AnnounceType.ANNOUNCE,
+  publicKey: Uint8Array,
+  containerSigned: Uint8Array
+} | {
+  type: AnnounceType.UNANNOUNCE,
+  publicKey: Uint8Array,
+} | {
+  type: AnnounceType.BACKLOG_COMPLETE
 }
 interface AnnounceEvent extends Event {
   value?: AnnounceValue
@@ -209,7 +214,7 @@ export default class LinkStreamer {
     setTimeout(this.#connect.bind(this), STREAM_RECONNECT_TIMEOUT)
   }
 
-  async * subscribe(source: string, signal: AbortSignal) : AsyncGenerator<AnnounceValue, never, void> {
+  async * subscribe(source: string, signal?: AbortSignal) : AsyncGenerator<AnnounceValue, never, void> {
     // Make sure the source isn't already subscribed
     if (source in this.#subscriptions)
       throw "already subscribed"
@@ -248,11 +253,11 @@ export default class LinkStreamer {
         onAnnouncement as EventListener
       )
       if (reject) {
-        reject(signal.reason)
+        reject(signal?.reason)
         resolve = null
         reject = null
       } else {
-        alreadyRejected = signal.reason
+        alreadyRejected = signal?.reason
       }
     }
 

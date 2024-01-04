@@ -1,6 +1,7 @@
 import { describe, expect, it, assert } from 'vitest'
 import LinkService from './link-service'
 import { randomString, soon, mockPublicKeyAndSignFromNonce } from './test-utils'
+import { AnnounceType } from './streamer'
 
 const serviceURL = 'https://link.graffiti.garden'
 // const serviceURL = 'http://localhost:8000'
@@ -17,9 +18,11 @@ describe(`Basic Streaming`, ()=> {
     const iterator = ls.subscribe(source)
 
     const announce = (await iterator.next()).value
-    expect(announce.type).toEqual('announce')
-    assert(announce.link.publicKey.every((val, i)=> val==created.publicKey[i]))
-    expect(announce.link.target).toEqual(target)
+    expect(announce.type).toEqual(AnnounceType.ANNOUNCE)
+    if (announce.type == AnnounceType.ANNOUNCE) {
+      assert(announce.link.publicKey.every((val, i)=> val==created.publicKey[i]))
+      expect(announce.link.target).toEqual(target)
+    }
 
     await expect(iterator.next()).resolves.toHaveProperty('value.type', 'backlog-complete')
   })
@@ -36,8 +39,10 @@ describe(`Basic Streaming`, ()=> {
     await ls.create(source, target, expiration)
 
     const announce = (await iterator.next()).value
-    expect(announce.type).toEqual('announce')
-    expect(announce.link.target).toEqual(target)
+    expect(announce.type).toEqual(AnnounceType.ANNOUNCE)
+    if (announce.type == AnnounceType.ANNOUNCE) {
+      expect(announce.link.target).toEqual(target)
+    }
   })
 
   it('replace target', async()=> {
@@ -59,8 +64,10 @@ describe(`Basic Streaming`, ()=> {
     created.modify({target: newTarget })
 
     const announce = (await iterator.next()).value
-    expect(announce.type).toEqual('announce')
-    expect(announce.link.target).toEqual(newTarget)
+    expect(announce.type).toEqual(AnnounceType.ANNOUNCE)
+    if (announce.type == AnnounceType.ANNOUNCE) {
+      expect(announce.link.target).toEqual(newTarget)
+    }
   })
 
   it('replace source', async()=> {
@@ -84,8 +91,9 @@ describe(`Basic Streaming`, ()=> {
     // Get an announce with a null container
     const announce = (await iterator.next()).value
     expect(announce.type).toEqual('unannounce')
-    assert(announce.publicKey.every((val, i)=> val==created.publicKey[i]))
-    expect(announce.containerSigned).toBeUndefined()
+    if (announce.type == AnnounceType.UNANNOUNCE) {
+      assert(announce.publicKey.every((val, i)=> val==created.publicKey[i]))
+    }
   })
 
   it('expire', async ()=> {
@@ -103,11 +111,12 @@ describe(`Basic Streaming`, ()=> {
     // Get the value
     const announce = (await iterator.next()).value
     expect(announce.type).toEqual('announce')
-    expect(announce.link.target).toEqual(target)
+    if (announce.type == AnnounceType.ANNOUNCE) {
+      expect(announce.link.target).toEqual(target)
+    }
 
     // Wait again...
     const unannounce = (await iterator.next()).value
     expect(unannounce.type).toEqual('unannounce')
-    expect(unannounce.containerSigned).toBeUndefined()
   }, 10000)
 })

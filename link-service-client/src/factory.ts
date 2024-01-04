@@ -86,7 +86,7 @@ export class Link {
 
   async modify(
     {source, target, expiration}:
-    {source: string, target?: string, expiration?: bigint|number}
+    {source?: string, target?: string, expiration?: bigint|number}
   ) : Promise<CreatedAndExistingLinks> {
     // Perform validation (even though server
     // would do this too)

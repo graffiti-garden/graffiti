@@ -99,7 +99,7 @@ describe(`Basic Streaming`, ()=> {
   it('backlog', async()=> {
     const ls = new LinkStreamer(link)
 
-    const iterators = []
+    const iterators: Array<any> = []
 
     for (let i=0; i < 10; i++) {
       iterators.push(ls.subscribe(randomString()))

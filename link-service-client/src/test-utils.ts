@@ -10,9 +10,9 @@ export function soon() : number {
   return Math.ceil(Date.now()/1000) + 100
 }
 
-export function mockPublicKeyAndSignFromNonce(secret: string) {
-  secret = secret ?? randomString()
-  const privateKeyFromNonce = (nonce: Uint8Array)=> sha256(concatBytes(nonce, utf8ToBytes(secret)))
+export function mockPublicKeyAndSignFromNonce(secret?: string) {
+  const secretString = secret ?? randomString()
+  const privateKeyFromNonce = (nonce: Uint8Array)=> sha256(concatBytes(nonce, utf8ToBytes(secretString)))
   return {
     publicKeyFromNonce(nonce: Uint8Array) {
       const sk = privateKeyFromNonce(nonce)

@@ -11,7 +11,7 @@ describe(`Link Factory`, ()=> {
   it('get nonexistant', async()=> {
     const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
     const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    await expect(lf.get(randomBytes(32))).rejects.toEqual('link not found')
+    await expect(lf.get(randomBytes(32),'')).rejects.toEqual('link not found')
   })
 
   it('basic put', async()=> {
@@ -49,7 +49,10 @@ describe(`Link Factory`, ()=> {
     const { created: replaced, existing } =
       await created.modify({target: newTarget})
     expect(replaced.target).toEqual(newTarget)
-    expect(existing.target).toEqual(target)
+    expect(existing).not.toBeNull()
+    if (existing) {
+      expect(existing.target).toEqual(target)
+    }
 
     // Fetch it
     const gotten = await lf.get(created.publicKey, source)
@@ -78,7 +81,10 @@ describe(`Link Factory`, ()=> {
     const { created: replaced, existing } =
       await created.modify({expiration: newExpiration})
     expect(replaced.expiration).toEqual(newExpiration)
-    expect(existing.expiration).toEqual(expiration)
+    expect(existing).not.toBeNull()
+    if (existing) {
+      expect(existing.expiration).toEqual(expiration)
+    }
 
     // Fetch it
     const gotten = await lf.get(created.publicKey, source)

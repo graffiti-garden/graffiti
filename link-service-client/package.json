@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/link-service-client",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "client for the graffiti link service",
   "type": "module",
   "main": "src/link-service.ts",

@@ -5,10 +5,14 @@ import { AnnounceType } from "./streamer";
 
 const defaultServiceURL = "https://link.graffiti.garden"
 
-export interface AnnounceLink {
-  type: AnnounceType,
-  link?: Link,
-  publicKey?: Uint8Array
+export type AnnounceLink = {
+  type: AnnounceType.ANNOUNCE,
+  link: Link,
+} | {
+  type: AnnounceType.UNANNOUNCE,
+  publicKey: Uint8Array
+} | {
+  type: AnnounceType.BACKLOG_COMPLETE
 }
 
 export default class LinkService {
@@ -28,13 +32,13 @@ export default class LinkService {
     return await this.#factory.create(source, target, expiration)
   }
 
-  async *subscribe(source: string, signal: AbortSignal) : AsyncGenerator<AnnounceLink, never, void> {
+  async *subscribe(source: string, signal?: AbortSignal) : AsyncGenerator<AnnounceLink, never, void> {
     const iterator = this.#streamer.subscribe(source, signal)
     while (true) {
       const announceValue = (await iterator.next()).value
 
       // If it is an announce, parse it
-      if (announceValue.type == AnnounceType.ANNOUNCE && announceValue.publicKey && announceValue.containerSigned) {
+      if (announceValue.type == AnnounceType.ANNOUNCE) {
         yield {
           type: announceValue.type,
           link: this.#factory.parse(
@@ -43,7 +47,7 @@ export default class LinkService {
             source
           )
         }
-      } else if (announceValue.type != AnnounceType.ANNOUNCE) {
+      } else {
         yield announceValue
       }
     }
@@ -70,3 +74,5 @@ export default class LinkService {
 //   - could lead to link rot
 // - voting / web of trust
 //   - do these leak social graph (more than already leaked?)
+// - micropayment
+//   - some small (dynamic?) cost to upkeep/scale the server
