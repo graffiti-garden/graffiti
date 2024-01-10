@@ -7,17 +7,17 @@
   import DropActor from './DropActor.vue'
 
   enum RequestAction {
+    PublicKey = "public-key",
     Sign = "sign",
-    EncryptPrivateMessage = "encrypt",
-    DecryptPrivateMessage = "decrypt",
-    OneTimePublicKey = "otpk",
-    OneTimeSignature = "ots"
+    Encrypt = "encrypt",
+    Decrypt = "decrypt",
   }
 
   interface RequestMessage {
     messageID: string,
     action: RequestAction,
-    data: string
+    data: string,
+    nonce?: string
   }
 
   interface ReplyMessage {
@@ -145,39 +145,30 @@
       messageID: data.messageID
     }
 
+    const nonce = data.nonce !== undefined ? base64Decode(data.nonce) : data.nonce
+
     try {
       switch(data.action) {
         case RequestAction.Sign:
           const message = base64Decode(data.data)
-          const signature = await actorManager.sign(message)
+          const signature = await actorManager.sign(message, nonce)
           reply.reply = base64Encode(signature)
           break
-        case RequestAction.OneTimePublicKey:
-          const nonce = base64Decode(data.data)
-          const oneTimePublicKey = await actorManager.oneTimePublicKey(nonce)
-          reply.reply = base64Encode(oneTimePublicKey)
+        case RequestAction.PublicKey:
+          const publicKey = await actorManager.getPublicKey(nonce)
+          reply.reply = base64Encode(publicKey)
           break
-        case RequestAction.OneTimeSignature:
-          let [messageString, nonceString] = data.data.split(',')
-          const oneTimeSignature = await actorManager.oneTimeSignature(
-            base64Decode(messageString),
-            base64Decode(nonceString)
-          )
-          reply.reply = base64Encode(oneTimeSignature)
-          break
-        case RequestAction.EncryptPrivateMessage:
-          const [plaintextString, theirURI] = data.data.split(',')
+        case RequestAction.Encrypt:
+          const [plaintextString, theirPublicKeyString] = data.data.split(',')
           const ciphertext = await actorManager.encryptPrivateMessage(
-            base64Decode(plaintextString), theirURI
+            base64Decode(plaintextString), base64Decode(theirPublicKeyString), nonce
           )
           reply.reply = base64Encode(ciphertext)
           break
-        case RequestAction.DecryptPrivateMessage:
-          const [ciphertextString, theirURi] = data.data.split(',')
-          console.log(ciphertextString)
-          console.log(theirURi)
+        case RequestAction.Decrypt:
+          const [ciphertextString, theirPublicKeyStringg] = data.data.split(',')
           const plaintext = await actorManager.decryptPrivateMessage(
-            base64Decode(ciphertextString), theirURi
+            base64Decode(ciphertextString), base64Decode(theirPublicKeyStringg), nonce
           )
           reply.reply = base64Encode(plaintext)
           break

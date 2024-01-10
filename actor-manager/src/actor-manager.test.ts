@@ -196,8 +196,8 @@ describe('Actor Manager', ()=> {
 
     const nonce = randomBytes(24)
 
-    const pk1 = await am.oneTimePublicKey(nonce)
-    const pk2 = await am.oneTimePublicKey(nonce)
+    const pk1 = await am.getPublicKey(nonce)
+    const pk2 = await am.getPublicKey(nonce)
 
     // Make sure they're equal
     Object.entries(pk1).forEach(([i, v])=> {
@@ -205,7 +205,7 @@ describe('Actor Manager', ()=> {
     })
 
     // Make sure a secret with a different nonce is different
-    const pk3 = await am.oneTimePublicKey(randomBytes(24))
+    const pk3 = await am.getPublicKey(randomBytes(24))
     let equal = true
     Object.entries(pk1).forEach(([i, v])=> {
       equal &&= pk3[i] == v
@@ -220,9 +220,9 @@ describe('Actor Manager', ()=> {
 
     // Works with the same nonce
     const nonce = randomBytes(24)
-    const pk = await am.oneTimePublicKey(nonce)
+    const pk = await am.getPublicKey(nonce)
     const message = randomBytes(100)
-    const sig = await am.oneTimeSignature(message, nonce)
+    const sig = await am.sign(message, nonce)
     assert(curve.verify(sig, message, pk))
   })
 
@@ -234,9 +234,9 @@ describe('Actor Manager', ()=> {
     // Doesn't work with different nonces
     const nonce1 = randomBytes(24)
     const nonce2 = randomBytes(24)
-    const pk = await am.oneTimePublicKey(nonce1)
+    const pk = await am.getPublicKey(nonce1)
     const message = randomBytes(100)
-    const sig = await am.oneTimeSignature(message, nonce2)
+    const sig = await am.sign(message, nonce2)
     assert(!curve.verify(sig, message, pk))
   })
 
@@ -247,18 +247,18 @@ describe('Actor Manager', ()=> {
     // Generate pk from one user
     const uri1 = await am.createActor(crypto.randomUUID())
     await am.chooseActor(uri1)
-    const pk = await am.oneTimePublicKey(nonce)
+    const pk = await am.getPublicKey(nonce)
 
     // And sig from the other
     const uri2 = await am.createActor(crypto.randomUUID())
     await am.chooseActor(uri2)
     const message = randomBytes(100)
-    const sig = await am.oneTimeSignature(message, nonce)
+    const sig = await am.sign(message, nonce)
 
     assert(!curve.verify(sig, message, pk))
   })
 
-  it('sign', async()=> {
+  it('sign without nonce', async()=> {
     const message = randomBytes(32)
     const am = new ActorManager()
     const uri = await am.createActor(crypto.randomUUID())
@@ -275,13 +275,15 @@ describe('Actor Manager', ()=> {
     const am1 = new ActorManager()
     const uri1 = await am1.createActor(crypto.randomUUID())
     await am1.chooseActor(uri1)
+    const pk1 = actorURIDecode(uri1)
 
     const am2 = new ActorManager(new EventTarget(), 'example.com')
     const uri2 = await am2.createActor(crypto.randomUUID())
     await am2.chooseActor(uri2)
+    const pk2 = actorURIDecode(uri2)
 
-    const secret1 = await am1.sharedSecret(uri2)
-    const secret2 = await am2.sharedSecret(uri1)
+    const secret1 = await am1.sharedSecret(pk2)
+    const secret2 = await am2.sharedSecret(pk1)
     for (const [i, byte] of Object.entries(secret1)) {
       expect(byte).toEqual(secret2[i])
     }
@@ -291,16 +293,18 @@ describe('Actor Manager', ()=> {
     const am1 = new ActorManager()
     const uri1 = await am1.createActor(crypto.randomUUID())
     await am1.chooseActor(uri1)
+    const pk1 = actorURIDecode(uri1)
 
     const am2 = new ActorManager(new EventTarget(), 'example.com')
     const uri2 = await am2.createActor(crypto.randomUUID())
     await am2.chooseActor(uri2)
+    const pk2 = actorURIDecode(uri2)
 
     const message = randomBytes(100)
-    const encrypted = await am1.encryptPrivateMessage(message, uri2)
+    const encrypted = await am1.encryptPrivateMessage(message, pk2)
 
-    const decrypted1 = await am1.decryptPrivateMessage(encrypted, uri2)
-    const decrypted2 = await am2.decryptPrivateMessage(encrypted, uri1)
+    const decrypted1 = await am1.decryptPrivateMessage(encrypted, pk2)
+    const decrypted2 = await am2.decryptPrivateMessage(encrypted, pk1)
 
     // Make sure they are both equal
     expect(base64Encode(message)).toEqual(base64Encode(decrypted1))

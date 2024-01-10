@@ -74,13 +74,6 @@ export function actorURIDecode(uri: string) : Uint8Array {
   return base64Decode(uri.slice(6))
 }
 
-export function deriveSigningPrivateKey(rootSecretMaybeBase64: Uint8Array|string) : Uint8Array {
-  const rootSecret = typeof rootSecretMaybeBase64 == 'string' ?
-    base64Decode(rootSecretMaybeBase64) : rootSecretMaybeBase64
-  
-  return sha256(concatBytes(utf8ToBytes('sign'), rootSecret))
-}
-
 const globalReferrer = document.referrer ?
   new URL(document.referrer).origin : document.location.origin
 
@@ -197,7 +190,7 @@ export default class ActorManager {
   }
 
   async storeActor(actor: Actor) : Promise<string> {
-    const privateKey = deriveSigningPrivateKey(actor.rootSecretBase64)
+    const privateKey = base64Decode(actor.rootSecretBase64)
     const uri = actorURIEncode(curve.getPublicKey(privateKey))
 
     await this.tilInitialized()
@@ -268,60 +261,57 @@ export default class ActorManager {
     }
   }
 
-  async getChosenActor() : Promise<Actor> {
+  async getPrivateKey(nonce?: Uint8Array) {
     const uri = await this.getChosen()
     if (!uri) {
       throw "no actor chosen"
     } else {
-      return await this.getActor(uri)
+      const actor = await this.getActor(uri)
+      const rootSecret = base64Decode(actor.rootSecretBase64)
+
+      if (nonce) {
+        if (nonce.byteLength < 24) {
+          throw "Nonce is too short"
+        }
+        return sha256(concatBytes(nonce, rootSecret))
+      } else {
+        return rootSecret
+      }
     }
   }
 
-  async oneTimePrivateKey(nonce: Uint8Array) : Promise<Uint8Array> {
-    if (nonce.byteLength < 24) {
-      throw "Nonce is too short"
-    }
-    const actor = await this.getChosenActor()
-    return sha256(concatBytes(nonce, base64Decode(actor.rootSecretBase64)))
-  }
-
-  async oneTimePublicKey(nonce: Uint8Array) : Promise<Uint8Array> {
-    const privateKey = await this.oneTimePrivateKey(nonce)
+  async getPublicKey(nonce?: Uint8Array) : Promise<Uint8Array> {
+    const privateKey = await this.getPrivateKey(nonce)
     return curve.getPublicKey(privateKey)
   }
 
-  async oneTimeSignature(message: Uint8Array, nonce: Uint8Array) : Promise<Uint8Array> {
-    const privateKey = await this.oneTimePrivateKey(nonce)
+  async sign(message: Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
+    const privateKey = await this.getPrivateKey(nonce)
     return curve.sign(message, privateKey)
   }
 
-  async sign(message: Uint8Array) : Promise<Uint8Array> {
-    const actor = await this.getChosenActor()
-    return curve.sign(message, deriveSigningPrivateKey(actor.rootSecretBase64))
+  async sharedSecret(theirPublicKey: Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
+    const privateKey = await this.getPrivateKey(nonce)
+    const myMontPriv = edwardsToMontgomeryPriv(privateKey)
+    const theirMontPub = edwardsToMontgomeryPub(theirPublicKey)
+    return x25519.getSharedSecret(myMontPriv, theirMontPub)
   }
 
-  async sharedSecret(theirURI: string) : Promise<Uint8Array> {
-    const myActor = await this.getChosenActor()
-    const myPriv = edwardsToMontgomeryPriv(deriveSigningPrivateKey(myActor.rootSecretBase64))
-    const theirPub = edwardsToMontgomeryPub(actorURIDecode(theirURI))
-    return x25519.getSharedSecret(myPriv, theirPub)
+  async encryptPrivateMessage(plaintext: Uint8Array, theirPublicKey: Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
+    const sharedSecret = await this.sharedSecret(theirPublicKey, nonce)
+    const cipherNonce = randomBytes(24)
+    const encrypted = cipher(sharedSecret, cipherNonce).encrypt(plaintext)
+    return concatBytes(cipherNonce, encrypted)
   }
 
-  async encryptPrivateMessage(plaintext: Uint8Array, theirURI: string) : Promise<Uint8Array> {
-    const sharedSecret = await this.sharedSecret(theirURI)
-    const nonce = randomBytes(24)
-    const encrypted = cipher(sharedSecret, nonce).encrypt(plaintext)
-    return concatBytes(nonce, encrypted)
-  }
-
-  async decryptPrivateMessage(ciphertextWithNonce: Uint8Array, theirURI: string) : Promise<Uint8Array> {
-    const sharedSecret = await this.sharedSecret(theirURI)
+  async decryptPrivateMessage(ciphertextWithNonce: Uint8Array, theirPublicKey: Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
+    const sharedSecret = await this.sharedSecret(theirPublicKey, nonce)
     if (ciphertextWithNonce.length < 24) {
       throw "Ciphertext is too short"
     } 
-    const nonce = ciphertextWithNonce.slice(0, 24)
+    const cipherNonce = ciphertextWithNonce.slice(0, 24)
     const ciphertext = ciphertextWithNonce.slice(24)
-    return cipher(sharedSecret, nonce).decrypt(ciphertext)
+    return cipher(sharedSecret, cipherNonce).decrypt(ciphertext)
   }
 
   async onChannelMessage({data} : {data: ChannelMessage}) : Promise<void> {
