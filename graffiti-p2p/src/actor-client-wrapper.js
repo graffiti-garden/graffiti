@@ -26,7 +26,7 @@ export async function sign(actorClient, message) {
 
     const publicKey = await actorClient.getPublicKey()
     const publicKeyString = base64Encode(publicKey)
-    actor = 'actor:' + publicKeyString
+    const actor = 'actor:' + publicKeyString
 
     const signature = stringify({
       messageString,
