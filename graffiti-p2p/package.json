@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/graffiti-p2p",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "This client library interacts with the [tracker server](https://github.com/graffiti-garden/tracker-server/)",
   "type": "module",
   "main": "./graffiti-p2p.js",
@@ -34,7 +34,7 @@
   },
   "homepage": "https://github.com/graffiti-garden/graffiti-p2p#readme",
   "dependencies": {
-    "@graffiti-garden/actor-client": "^1.0.11",
+    "@graffiti-garden/actor-manager-client": "^1.1.7",
     "@graffiti-garden/tracker-client": "^1.1.0",
     "ajv": "^8.12.0",
     "fast-json-stable-stringify": "^2.1.0",

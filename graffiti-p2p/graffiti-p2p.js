@@ -1,4 +1,4 @@
-import ActorClient from '@graffiti-garden/actor-client'
+import ActorClient from '@graffiti-garden/actor-manager-client'
 import P2PWrapper from "./src/p2p-wrapper"
 import linksFrom from './src/links-from'
 
@@ -6,40 +6,24 @@ export default class Graffiti {
   #actorClient; #wrapper; #LinksFrom; #meCallbacks;
 
   constructor(options={}) {
-    this.#actorClient = new ActorClient(options.actorManager)
+    this.me = null
+    this.#meCallbacks = new Set()
+    this.#actorClient = new ActorClient(actor=> {
+      this.me = actor
+      this.#meCallbacks.forEach(f=> f(this.me))
+    })
     this.#wrapper = new P2PWrapper(options)
     this.#LinksFrom = linksFrom(this.#actorClient)
-
-    this.#meCallbacks = new Set()
-    const fetchMe = ()=> {
-      this.me = localStorage.getItem("graffiti-me")
-      this.#meCallbacks.forEach(f=> f(this.me))
-    }
-    if (this.#actorClient.initialized) {
-      fetchMe()
-    } else {
-      this.#actorClient.initializeEvents.addEventListener(
-        "initialized",
-        fetchMe,
-        { once: true, passive: true }
-      )
-    }
   }
 
-  async logIn() {
-    this.me = await this.#actorClient.selectActor()
-    localStorage.setItem("graffiti-me", this.me)
-    this.#meCallbacks.forEach(f=> f(this.me))
-    return this.me
+  logIn() {
+    this.#actorClient.selectActor()
   }
-  async logOut() {
-    localStorage.removeItem("graffiti-me")
-    this.me = null
-    this.#meCallbacks.forEach(f=> f(this.me))
-    return null
+  logOut() {
+    this.#actorClient.selectActor()
   }
   addMeListener(f) {
-    if (this.me) f(this.me)
+    f(this.me)
     this.#meCallbacks.add(f)
   }
   removeMeListener(f) {

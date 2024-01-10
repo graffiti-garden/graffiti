@@ -2,6 +2,7 @@ import routeMessage, { signaturePayloadValidate } from './links-from-messaging'
 import { sha256Hex } from './util'
 import { createStore as createStoreDB, set as setDB, get as getDB, keys as keysDB } from "idb-keyval"
 import * as stringify from 'fast-json-stable-stringify'
+import { sign, verify } from './actor-client-wrapper'
 
 export default function (actorClient, noStorage=false) {
 
@@ -43,7 +44,7 @@ export default function (actorClient, noStorage=false) {
 
     async useCapability({ link, signature }, verified=false) {
       if (!verified) {
-        const { payload, actor } = await actorClient.verify(signature)
+        const { payload, actor } = await verify(actorClient, signature)
 
         const sourceURI = this.constructor.toURI(link.source)
         if (!signaturePayloadValidate(payload)) {
@@ -211,12 +212,12 @@ export default function (actorClient, noStorage=false) {
     }
 
     async #createCapability(targetHash, salt, actor, deleted, target) {
-      const signature = await actorClient.sign({
+      const signature = await sign(actorClient, {
         sourceHash: await this.#sourceHash(),
         targetHash,
         salt,
         deleted
-      }, actor)
+      })
 
       const link = {
         id: await this.#makeID(targetHash, salt, actor),

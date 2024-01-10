@@ -29,11 +29,10 @@
   <script type="module">
     import Graffiti from '../graffiti-p2p'
     import { fileLink, fileReferenceValidate, fileLinkCallback } from '../extensions/files.js'
-    import '@graffiti-garden/actor-client/client.css'
 
     window.gf = new Graffiti()
 
-    const context = "uri:graffiti.garden:object"
+    const context = "uri:graffiti.garden:objects"
 
     function listener(link) {
       if (link.deleted) {

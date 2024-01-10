@@ -1,6 +1,7 @@
 import Ajv2020 from "ajv/dist/2020"
 import { sha256Hex } from "./util"
 import * as stringify from 'fast-json-stable-stringify'
+import { verify } from "./actor-client-wrapper"
 
 const ajv = new Ajv2020()
 export const messageSchemaValidate = ajv.compile({
@@ -69,7 +70,7 @@ export default async function routeMessage(message, onHave, onWant, onGive, acto
   } else if (message.intent == 'give') {
     const { signature, source, target } = message
 
-    const { payload, actor } = await actorClient.verify(signature)
+    const { payload, actor } = await verify(actorClient, signature)
 
     if (!signaturePayloadValidate(payload)) {
       throw signaturePayloadValidate.errors
