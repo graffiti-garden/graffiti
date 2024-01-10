@@ -84,55 +84,62 @@ export default class ActorManager {
     this.#dialog.showModal()
   }
 
-  async sign(message: Uint8Array) : Promise<Uint8Array> {
+  async sign(message: Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
     const reply = await this.#sendAndReceive(
       "sign",
-      base64Encode(message)
+      base64Encode(message),
+      nonce
     )
     return base64Decode(reply)
   }
 
-  async verify(signature: Uint8Array, message: Uint8Array, actorURIorPublicKey: string|Uint8Array) {
-    const publicKey = typeof actorURIorPublicKey == 'string' ?
-      base64Decode(actorURIorPublicKey.slice(6)) : actorURIorPublicKey
+  #decodeActorURIorPublicKey(actorURIorPublicKey: string|Uint8Array) {
+    let publicKey: Uint8Array
+    if (typeof actorURIorPublicKey == 'string') {
+      if (actorURIorPublicKey.startsWith('actor:')) {
+        actorURIorPublicKey = actorURIorPublicKey.slice(6)
+      }
+      publicKey = base64Decode(actorURIorPublicKey)
+    } else {
+      publicKey = actorURIorPublicKey
+    }
+    return publicKey
+  }
 
+  async verify(signature: Uint8Array, message: Uint8Array, actorURIorPublicKey: string|Uint8Array) {
+    const publicKey = this.#decodeActorURIorPublicKey(actorURIorPublicKey)
     // Signature verifies, random bytes do not
     return curve.verify(signature, message, publicKey)
   }
 
-  async oneTimePublicKey(nonce: Uint8Array) : Promise<Uint8Array> {
+  async getPublicKey(nonce?: Uint8Array) : Promise<Uint8Array> {
     const pkString = await this.#sendAndReceive(
-      "otpk",
-      base64Encode(nonce)
+      "public-key",
+      '',
+      nonce
     )
     return base64Decode(pkString)
   }
 
-  async oneTimeSignature(message: Uint8Array, nonce: Uint8Array) : Promise<Uint8Array> {
-    const signatureString = await this.#sendAndReceive(
-      "ots",
-      `${base64Encode(message)},${base64Encode(nonce)}`
+  async #privateMessageAction(action: string, input: Uint8Array, theirURIorPublicKey: string|Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
+    const theirURIEncoded = this.#decodeActorURIorPublicKey(theirURIorPublicKey)
+    const output = await this.#sendAndReceive(
+      action,
+      `${base64Encode(input)},${base64Encode(theirURIEncoded)}`,
+      nonce
     )
-    return base64Decode(signatureString)
+    return base64Decode(output)
   }
 
-  async encryptPrivateMessage(plaintext: Uint8Array, theirURI: string) : Promise<Uint8Array> {
-    const ciphertextString = await this.#sendAndReceive(
-      "encrypt",
-      `${base64Encode(plaintext)},${theirURI}`
-    )
-    return base64Decode(ciphertextString)
+  async encrypt(plaintext: Uint8Array, theirURIorPublicKey: string|Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
+    return await this.#privateMessageAction("encrypt", plaintext, theirURIorPublicKey, nonce)
   }
 
-  async decryptPrivateMessage(ciphertext: Uint8Array, theirURI: string) : Promise<Uint8Array> {
-    const plaintextString = await this.#sendAndReceive(
-      "decrypt",
-      `${base64Encode(ciphertext)},${theirURI}`
-    )
-    return base64Decode(plaintextString)
+  async decrypt(ciphertext: Uint8Array, theirURIorPublicKey: string|Uint8Array, nonce?: Uint8Array) : Promise<Uint8Array> {
+    return await this.#privateMessageAction("decrypt", ciphertext, theirURIorPublicKey, nonce)
   }
 
-  async #sendAndReceive(action: string, data: string) : Promise<string> {
+  async #sendAndReceive(action: string, data: string, nonce?: Uint8Array) : Promise<string> {
     // Make sure the iframe is set up
     if (!this.#initialized) {
       await new Promise<void>(resolve => {
@@ -152,7 +159,8 @@ export default class ActorManager {
       this.#iframe.contentWindow.postMessage({
         messageID,
         action,
-        data
+        data,
+        nonce: nonce ? base64Encode(nonce) : nonce
       }, this.actorManagerURL)
 
       // Wait for a reply via events or throw an error
