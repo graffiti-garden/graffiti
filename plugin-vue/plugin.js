@@ -80,8 +80,8 @@ export default {
         const unwatch = 
           watch(sources, (newSources, oldSources)=> {
             if (!isReactive(newSources) &&
-              newSources.length == oldSources.length &&
-              newSources.every((v,i)=>unref(v)==unref(oldSources[i]))
+              unref(newSources).length == unref(oldSources).length &&
+              unref(newSources)?.every((v,i)=>unref(v)==unref(oldSources[i]))
               ) {
               return
             }
