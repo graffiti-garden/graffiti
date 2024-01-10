@@ -1,4 +1,4 @@
-import * as stringify from 'fast-json-stable-stringify'
+import stringify from 'fast-json-stable-stringify'
 
 export function base64Encode(bytes) {
   const base64 = btoa(String.fromCodePoint(...bytes))

@@ -1,7 +1,7 @@
 import routeMessage, { signaturePayloadValidate } from './links-from-messaging'
 import { sha256Hex } from './util'
 import { createStore as createStoreDB, set as setDB, get as getDB, keys as keysDB } from "idb-keyval"
-import * as stringify from 'fast-json-stable-stringify'
+import stringify from 'fast-json-stable-stringify'
 import { sign, verify } from './actor-client-wrapper'
 
 export default function (actorClient, noStorage=false) {

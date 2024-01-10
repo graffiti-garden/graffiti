@@ -1,6 +1,6 @@
 import Ajv2020 from "ajv/dist/2020"
 import { sha256Hex } from "./util"
-import * as stringify from 'fast-json-stable-stringify'
+import stringify from 'fast-json-stable-stringify'
 import { verify } from "./actor-client-wrapper"
 
 const ajv = new Ajv2020()
