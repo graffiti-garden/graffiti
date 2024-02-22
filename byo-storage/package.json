@@ -5,7 +5,10 @@
   "main": "src/index.ts",
   "browser": "dist/index.js",
   "type": "module",
-  "files": ["src", "dist"],
+  "files": [
+    "src",
+    "dist"
+  ],
   "scripts": {
     "demo": "npm run build && python3 -m http.server",
     "test": "vitest",
@@ -28,6 +31,7 @@
     "dropbox": "^10.34.0"
   },
   "devDependencies": {
+    "dotenv": "^16.4.5",
     "esbuild-plugin-polyfill-node": "^0.3.0",
     "vitest": "^1.2.1"
   }
