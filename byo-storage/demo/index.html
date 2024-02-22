@@ -7,22 +7,86 @@
     </head>
 
     <body>
-        <form>Channel: <input type="text" /></form>
+        <button
+            id="toggleLogIn"
+            onclick="ds.toggleLogIn().then(()=>setLogInButton())"
+        ></button>
+
+        <div id="stuff">
+            <form onsubmit="postData(event)">
+                Channel:
+                <input
+                    id="channel"
+                    type="text"
+                    value="something"
+                    oninput="channelChange()"
+                />
+                <br />
+                Data:
+                <input id="data" type="text" />
+                <br />
+                <input type="submit" value="Post" />
+            </form>
+            <ul id="posts"></ul>
+        </div>
 
         <script type="module">
             import DataStore from "/dist/index.js";
-            const ds = new DataStore();
+            window.ds = new DataStore({ clientId: "h4bnq16igcef7tg" });
 
-            // Generate a random channel string
-            const channel = Math.random().toString(36).substring(7);
+            window.setLogInButton = () => {
+                const toggleLogInButton =
+                    document.getElementById("toggleLogIn");
+                const stuffEl = document.getElementById("stuff");
+                if (ds.loggedIn) {
+                    toggleLogInButton.innerText = "Log Out";
+                    stuffEl.style.display = "block";
+                } else {
+                    toggleLogInButton.innerText = "Log In";
+                    stuffEl.style.display = "none";
+                }
+            };
+            setLogInButton();
 
-            // Generate random data to post
-            const data = new Uint8Array(100);
-            crypto.getRandomValues(data);
+            let controller;
+            let watching;
+            async function watch(channel, sharedLink) {
+                // If we're already watching this channel, do nothing
+                if (watching == channel) {
+                    return;
+                }
 
-            // Post the data
-            const sharedLink = await ds.post(channel, data);
-            console.log(sharedLink);
+                // Stop the previous watch, if it exists
+                if (controller) {
+                    controller.abort();
+                }
+                controller = new AbortController();
+
+                // Clear the list of posts
+                const posts = document.getElementById("posts");
+                posts.innerHTML = "";
+
+                // Start the new watch
+                watching = channel;
+                for await (const post of ds.watch(
+                    channel,
+                    sharedLink,
+                    controller.signal,
+                )) {
+                    const li = document.createElement("li");
+                    li.innerText = new TextDecoder().decode(post);
+                    posts.appendChild(li);
+                }
+            }
+
+            window.postData = async (e) => {
+                e.preventDefault();
+                const channel = document.getElementById("channel").value;
+                const dataEl = document.getElementById("data");
+                const data = new TextEncoder().encode(dataEl.value);
+                const sharedLink = await ds.post(channel, data);
+                watch(channel, sharedLink);
+            };
         </script>
     </body>
 </html>

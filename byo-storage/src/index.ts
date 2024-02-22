@@ -8,6 +8,7 @@ const ROOT_FOLDER = "/graffiti";
 type Authentication =
   | {
       clientId: string;
+      accessToken?: string;
     }
   | {
       accessToken: string;
@@ -17,7 +18,71 @@ export default class DataStore {
   #dropbox: Dropbox;
 
   constructor(authentication: Authentication) {
+    const storedToken =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("dropbox_access_token")
+        : null;
+    if ("accessToken" in authentication) {
+      // Nothing to do
+    } else if (storedToken) {
+      authentication.accessToken = storedToken;
+    } else if (!!window.location.hash) {
+      const loc = window.location;
+      const urlParams = new URLSearchParams(loc.hash.slice(1));
+      const accessToken = urlParams.get("access_token");
+      if (accessToken) {
+        authentication.accessToken = accessToken;
+        localStorage.setItem("dropbox_access_token", accessToken);
+
+        // Remove the access token from the URL
+        for (const param of [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "scope",
+          "uid",
+          "account_id",
+        ]) {
+          urlParams.delete(param);
+        }
+        const hashString = urlParams.toString();
+        history.replaceState(
+          null,
+          "",
+          loc.pathname +
+            loc.search +
+            (hashString.length ? "#" + hashString : ""),
+        );
+      }
+    }
+
+    // Initialize and refresh the access token if necessary
     this.#dropbox = new Dropbox(authentication);
+    this.#dropbox.auth.checkAndRefreshAccessToken();
+  }
+
+  get loggedIn() {
+    return !!this.#dropbox.auth.getAccessToken();
+  }
+
+  async toggleLogIn() {
+    if (!this.loggedIn) {
+      const myURL = new URL(window.location.href);
+      myURL.search = "";
+      const authURL = await this.#dropbox.auth.getAuthenticationUrl(
+        myURL.toString(),
+      );
+      window.location.href = authURL;
+    } else {
+      localStorage.removeItem("dropbox_access_token");
+      this.#dropbox.auth.setAccessToken(null);
+    }
+  }
+
+  #checkIfLoggedIn() {
+    if (!this.loggedIn) {
+      throw "You are not logged in to dropbox";
+    }
   }
 
   async post(
@@ -25,6 +90,8 @@ export default class DataStore {
     data: Uint8Array,
     uuid?: Uint8Array,
   ): Promise<string> {
+    this.#checkIfLoggedIn();
+
     // Generate a random UUID if one is not provided
     uuid = uuid || randomBytes(16);
 
@@ -45,12 +112,7 @@ export default class DataStore {
       });
     } catch (e) {
       // If not, create it
-      console.log("Error!");
-      console.log(e.error);
-      console.log(e.status);
-      if (e.status === 400) {
-        throw "You are not logged in to dropbox";
-      } else if (
+      if (
         e.error.error_summary &&
         e.error.error_summary.startsWith("path/not_found")
       ) {
@@ -92,6 +154,8 @@ export default class DataStore {
     sharedLink: string,
     signal?: AbortSignal,
   ): AsyncGenerator<Uint8Array> {
+    this.#checkIfLoggedIn();
+
     // Start the process
     const { result: initialResult } = await this.#dropbox.filesListFolder({
       path: "",
@@ -144,7 +208,21 @@ export default class DataStore {
             );
 
             // Decrypt the file and yield the result
-            yield this.#decrypt(channel, file.result.fileBinary);
+            let binary: Uint8Array;
+            if (
+              "fileBinary" in file.result &&
+              file.result.fileBinary instanceof Uint8Array
+            ) {
+              binary = file.result.fileBinary;
+            } else if (
+              "fileBlob" in file.result &&
+              file.result.fileBlob instanceof Blob
+            ) {
+              binary = new Uint8Array(await file.result.fileBlob.arrayBuffer());
+            } else {
+              throw "Unexpected file type returned from Dropbox API.";
+            }
+            yield this.#decrypt(channel, binary);
           }
         }
         entries = [];
