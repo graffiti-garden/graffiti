@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti Data Store</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    </head>
+
+    <body>
+        <form>Channel: <input type="text" /></form>
+
+        <script type="module">
+            import DataStore from "/dist/index.js";
+            const ds = new DataStore();
+
+            // Generate a random channel string
+            const channel = Math.random().toString(36).substring(7);
+
+            // Generate random data to post
+            const data = new Uint8Array(100);
+            crypto.getRandomValues(data);
+
+            // Post the data
+            const sharedLink = await ds.post(channel, data);
+            console.log(sharedLink);
+        </script>
+    </body>
+</html>
