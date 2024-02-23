@@ -25,7 +25,7 @@ const createStore = indexDBExists ? createStoreDB : () => undefined;
 const set = indexDBExists ? setDB : () => null;
 const get = indexDBExists ? getDB : () => undefined;
 
-export default class DataStore {
+export default class BYOStorage {
   #dropbox: Dropbox;
   #sharedLinkCache: UseStore | undefined;
 

@@ -5,14 +5,14 @@
 Install using either npm:
 
 ```bash
-npm install @graffiti-garden/byo-stirage
+npm install @graffiti-garden/byo-storage
 ```
 
 or in the browser, use jsdelivr or another CDN:
 
 ```html
 <script type="module">
-    import { BYOStorage } from 'https://cdn.jsdelivr.net/npm/@graffiti-garden/byo-storage';
+    import BYOStorage from 'https://cdn.jsdelivr.net/npm/@graffiti-garden/byo-storage';
 </script>
 ```
 

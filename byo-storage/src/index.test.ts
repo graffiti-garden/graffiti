@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import DataStore from "./index";
+import BYOStorage from "./index";
 import { randomBytes } from "@noble/hashes/utils";
 import "dotenv/config";
 
@@ -10,7 +10,7 @@ if (!accessToken) {
 
 describe(`Main`, () => {
   it("post and receive data", async () => {
-    const ds = new DataStore({ accessToken });
+    const byos = new BYOStorage({ accessToken });
 
     // Generate a random channel string
     const channel = Math.random().toString(36).substring(7);
@@ -19,10 +19,10 @@ describe(`Main`, () => {
     const data = randomBytes(100);
 
     // Post the data
-    const sharedLink = await ds.post(channel, data);
+    const sharedLink = await byos.post(channel, data);
 
     // Get the data back
-    const iterator = ds.watch(channel, sharedLink);
+    const iterator = byos.watch(channel, sharedLink);
     const dataReceived = (await iterator.next()).value;
 
     // Make sure the data is the same
@@ -32,7 +32,7 @@ describe(`Main`, () => {
 
     // Post more data
     const data2 = randomBytes(100);
-    await ds.post(channel, data2);
+    await byos.post(channel, data2);
 
     // Get the data back
     const dataReceived2 = (await iterator.next()).value;
@@ -42,16 +42,16 @@ describe(`Main`, () => {
   }, 20000);
 
   it("replace data", async () => {
-    const ds = new DataStore({ accessToken });
+    const byos = new BYOStorage({ accessToken });
 
     // Post with a static UUID
     const channel = Math.random().toString(36).substring(7);
     const uuid = randomBytes(16);
     const data = randomBytes(100);
-    const sharedLink = await ds.post(channel, data, uuid);
+    const sharedLink = await byos.post(channel, data, uuid);
 
     // Get the data
-    const iterator = ds.watch(channel, sharedLink);
+    const iterator = byos.watch(channel, sharedLink);
     const dataReceived = (await iterator.next()).value;
     data.forEach((byte, i) => {
       expect(byte).toEqual(dataReceived[i]);
@@ -59,12 +59,12 @@ describe(`Main`, () => {
 
     // Replace the post with the same UUID
     const data2 = randomBytes(100);
-    const sharedLink2 = await ds.post(channel, data2, uuid);
+    const sharedLink2 = await byos.post(channel, data2, uuid);
     expect(sharedLink).toEqual(sharedLink2);
 
     // Make sure we get the new data
     const timeoutSignal = AbortSignal.timeout(2000);
-    const iterator2 = ds.watch(channel, sharedLink2, timeoutSignal);
+    const iterator2 = byos.watch(channel, sharedLink2, timeoutSignal);
     const dataReceived2 = (await iterator2.next()).value;
     data2.forEach((byte, i) => {
       expect(byte).toEqual(dataReceived2[i]);
@@ -77,15 +77,15 @@ describe(`Main`, () => {
   }, 100000);
 
   it("watch with wrong channel", async () => {
-    const ds = new DataStore({ accessToken });
+    const byos = new BYOStorage({ accessToken });
 
     // Post some data
     const channel = Math.random().toString(36).substring(7);
-    const sharedLink = await ds.post(channel, randomBytes(100));
+    const sharedLink = await byos.post(channel, randomBytes(100));
 
     // Listen on the wrong channel
     const wrongChannel = Math.random().toString(36).substring(7);
-    const iterator = ds.watch(wrongChannel, sharedLink);
+    const iterator = byos.watch(wrongChannel, sharedLink);
 
     await expect(iterator.next()).rejects.toThrow(
       "Wrong channel for this encrypted data",
