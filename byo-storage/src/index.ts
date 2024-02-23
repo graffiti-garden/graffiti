@@ -2,6 +2,12 @@ import { Dropbox } from "dropbox";
 import { randomBytes, concatBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { xchacha20poly1305 as cipher } from "@noble/ciphers/chacha";
+import {
+  createStore as createStoreDB,
+  set as setDB,
+  get as getDB,
+} from "idb-keyval";
+import type { UseStore } from "idb-keyval";
 
 const ROOT_FOLDER = "/graffiti";
 
@@ -14,8 +20,14 @@ type Authentication =
       accessToken: string;
     };
 
+const indexDBExists = typeof indexedDB !== "undefined";
+const createStore = indexDBExists ? createStoreDB : () => undefined;
+const set = indexDBExists ? setDB : () => null;
+const get = indexDBExists ? getDB : () => undefined;
+
 export default class DataStore {
   #dropbox: Dropbox;
+  #sharedLinkCache: UseStore | undefined;
 
   constructor(authentication: Authentication) {
     const storedToken =
@@ -59,6 +71,9 @@ export default class DataStore {
     // Initialize and refresh the access token if necessary
     this.#dropbox = new Dropbox(authentication);
     this.#dropbox.auth.checkAndRefreshAccessToken();
+
+    // Initialize the shared link
+    this.#sharedLinkCache = createStore("byo-storage-shared-links", "keyval");
   }
 
   get loggedIn() {
@@ -85,6 +100,58 @@ export default class DataStore {
     }
   }
 
+  async getSharedLink(channel: string): Promise<string> {
+    // First try to get the shared link from the cache
+    let sharedLink: string | undefined = await get(
+      channel,
+      this.#sharedLinkCache,
+    );
+    if (sharedLink) {
+      return sharedLink;
+    }
+
+    const directory = this.#channelToDirectory(channel);
+
+    // Get the shared link to the channel
+    try {
+      // See if the shared link already exists on dropbox
+      const sharedLinkResult =
+        await this.#dropbox.sharingCreateSharedLinkWithSettings({
+          path: directory,
+        });
+      sharedLink = sharedLinkResult.result.url;
+    } catch (e) {
+      if (e.error.error_summary.startsWith("shared_link_already_exists")) {
+        sharedLink = e.error.error.shared_link_already_exists.metadata.url;
+      } else if (e.error.error_summary.startsWith("path/not_found")) {
+        // Create the directory
+        try {
+          await this.#dropbox.filesCreateFolderV2({
+            path: directory,
+          });
+        } catch (e) {
+          if (e.error.error_summary.startsWith("path/conflict")) {
+            // The directory was created simultaneously, no problem
+          } else {
+            throw e;
+          }
+        }
+        // Try again
+        return await this.getSharedLink(channel);
+      } else {
+        throw e;
+      }
+    }
+
+    if (sharedLink) {
+      // Cache the shared link
+      await set(channel, sharedLink, this.#sharedLinkCache);
+      return sharedLink;
+    } else {
+      throw "Shared link could not be created";
+    }
+  }
+
   async post(
     channel: string,
     data: Uint8Array,
@@ -101,30 +168,11 @@ export default class DataStore {
     // Encryt the data with the channel as key
     const encrypted = this.#encrypt(channel, data);
 
-    // Get a unique directory corresponding to the channel,
-    // without revealing it.
-    const directory = this.#channelToDirectory(channel);
-
     // Make sure the directory exists
-    try {
-      await this.#dropbox.filesGetMetadata({
-        path: directory,
-      });
-    } catch (e) {
-      // If not, create it
-      if (
-        e.error.error_summary &&
-        e.error.error_summary.startsWith("path/not_found")
-      ) {
-        await this.#dropbox.filesCreateFolderV2({
-          path: directory,
-        });
-      } else {
-        throw e;
-      }
-    }
+    const sharedLink = await this.getSharedLink(channel);
 
     // Upload the file to the directory
+    const directory = this.#channelToDirectory(channel);
     await this.#dropbox.filesUpload({
       path: `${directory}/${uuidString}`,
       contents: encrypted,
@@ -133,20 +181,7 @@ export default class DataStore {
       },
     });
 
-    // Get the shared link to the channel
-    try {
-      const sharedLinkResult =
-        await this.#dropbox.sharingCreateSharedLinkWithSettings({
-          path: directory,
-        });
-      return sharedLinkResult.result.url;
-    } catch (e) {
-      if (e.error.error_summary.startsWith("shared_link_already_exists")) {
-        return e.error.error.shared_link_already_exists.metadata.url;
-      } else {
-        throw e;
-      }
-    }
+    return sharedLink;
   }
 
   async *watch(

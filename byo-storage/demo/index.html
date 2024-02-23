@@ -13,20 +13,15 @@
         ></button>
 
         <div id="stuff">
-            <form onsubmit="postData(event)">
-                Channel:
-                <input
-                    id="channel"
-                    type="text"
-                    value="something"
-                    oninput="channelChange()"
-                />
-                <br />
-                Data:
-                <input id="data" type="text" />
-                <br />
-                <input type="submit" value="Post" />
-            </form>
+            Channel:
+            <input id="channel" type="text" value="something" />
+            <br />
+            <button onclick="watch()">Watch Channel</button>
+            <br />
+            Data:
+            <input id="data" type="text" />
+            <br />
+            <button onclick="postData()">Post Data to Channel</button>
             <ul id="posts"></ul>
         </div>
 
@@ -50,7 +45,9 @@
 
             let controller;
             let watching;
-            async function watch(channel, sharedLink) {
+            window.watch = async () => {
+                const channel = document.getElementById("channel").value;
+
                 // If we're already watching this channel, do nothing
                 if (watching == channel) {
                     return;
@@ -61,6 +58,9 @@
                     controller.abort();
                 }
                 controller = new AbortController();
+
+                // Get the shared link
+                const sharedLink = await ds.getSharedLink(channel);
 
                 // Clear the list of posts
                 const posts = document.getElementById("posts");
@@ -77,15 +77,13 @@
                     li.innerText = new TextDecoder().decode(post);
                     posts.appendChild(li);
                 }
-            }
+            };
 
-            window.postData = async (e) => {
-                e.preventDefault();
+            window.postData = async () => {
                 const channel = document.getElementById("channel").value;
                 const dataEl = document.getElementById("data");
                 const data = new TextEncoder().encode(dataEl.value);
-                const sharedLink = await ds.post(channel, data);
-                watch(channel, sharedLink);
+                await ds.post(channel, data);
             };
         </script>
     </body>

@@ -28,7 +28,8 @@
   "dependencies": {
     "@noble/ciphers": "^0.4.1",
     "@noble/hashes": "^1.3.3",
-    "dropbox": "^10.34.0"
+    "dropbox": "^10.34.0",
+    "idb-keyval": "^6.2.1"
   },
   "devDependencies": {
     "dotenv": "^16.4.5",
