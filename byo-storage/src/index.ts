@@ -42,9 +42,16 @@ export default class DataStore {
       const loc = window.location;
       const urlParams = new URLSearchParams(loc.hash.slice(1));
       const accessToken = urlParams.get("access_token");
-      if (accessToken) {
-        authentication.accessToken = accessToken;
-        localStorage.setItem("dropbox_access_token", accessToken);
+      const state = urlParams.get("state");
+      if (accessToken && state) {
+        // Make sure the state matches the one we stored
+        const storedState = localStorage.getItem("dropbox_auth_state");
+        if (state === storedState) {
+          authentication.accessToken = accessToken;
+          localStorage.setItem("dropbox_access_token", accessToken);
+          // Drop the state from local storage
+          localStorage.removeItem("dropbox_auth_state");
+        }
 
         // Remove the access token from the URL
         for (const param of [
@@ -54,6 +61,7 @@ export default class DataStore {
           "scope",
           "uid",
           "account_id",
+          "state",
         ]) {
           urlParams.delete(param);
         }
@@ -84,8 +92,19 @@ export default class DataStore {
     if (!this.loggedIn) {
       const myURL = new URL(window.location.href);
       myURL.search = "";
+
+      // Generate a random state string to prevent CSRF attacks
+      const stateBytes = randomBytes(16);
+      const state = this.#base64Encode(stateBytes);
+      // Store the state in local storage
+      localStorage.setItem("dropbox_auth_state", state);
+
+      // generate a random 10-charachter string
       const authURL = await this.#dropbox.auth.getAuthenticationUrl(
         myURL.toString(),
+        state,
+        "token",
+        "legacy",
       );
       window.location.href = authURL;
     } else {
