@@ -2,12 +2,8 @@ import { Dropbox } from "dropbox";
 import { randomBytes, concatBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { xchacha20poly1305 as cipher } from "@noble/ciphers/chacha";
-import {
-  createStore as createStoreDB,
-  set as setDB,
-  get as getDB,
-} from "idb-keyval";
-import type { UseStore } from "idb-keyval";
+import { openDB } from "idb";
+import type { IDBPDatabase } from "idb";
 
 const ROOT_FOLDER = "/graffiti";
 
@@ -20,14 +16,9 @@ type Authentication =
       accessToken: string;
     };
 
-const indexDBExists = typeof indexedDB !== "undefined";
-const createStore = indexDBExists ? createStoreDB : () => undefined;
-const set = indexDBExists ? setDB : () => null;
-const get = indexDBExists ? getDB : () => undefined;
-
 export default class BYOStorage {
   #dropbox: Dropbox;
-  #sharedLinkCache: UseStore | undefined;
+  #db: Promise<IDBPDatabase> | undefined;
 
   constructor(authentication: Authentication) {
     const storedToken =
@@ -80,8 +71,15 @@ export default class BYOStorage {
     this.#dropbox = new Dropbox(authentication);
     this.#dropbox.auth.checkAndRefreshAccessToken();
 
-    // Initialize the shared link
-    this.#sharedLinkCache = createStore("byo-storage-shared-links", "keyval");
+    // Initialize caches for shared links, cursors, and data
+    if (typeof indexedDB !== "undefined") {
+      this.#db = openDB("byo-storage", 1, {
+        upgrade(db) {
+          db.createObjectStore("shared-links");
+          db.createObjectStore("cursors");
+        },
+      });
+    }
   }
 
   get loggedIn() {
@@ -121,10 +119,9 @@ export default class BYOStorage {
 
   async getSharedLink(channel: string): Promise<string> {
     // First try to get the shared link from the cache
-    let sharedLink: string | undefined = await get(
-      channel,
-      this.#sharedLinkCache,
-    );
+    let sharedLink: string | undefined = await (
+      await this.#db
+    )?.get("shared-links", channel);
     if (sharedLink) {
       return sharedLink;
     }
@@ -164,7 +161,7 @@ export default class BYOStorage {
 
     if (sharedLink) {
       // Cache the shared link
-      await set(channel, sharedLink, this.#sharedLinkCache);
+      await (await this.#db)?.put("shared-links", sharedLink, channel);
       return sharedLink;
     } else {
       throw "Shared link could not be created";

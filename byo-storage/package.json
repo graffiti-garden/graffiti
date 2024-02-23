@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/byo-storage",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Encrypted and shareable pub-sub bring-your-own storage",
   "main": "src/index.ts",
   "browser": "dist/index.js",
@@ -29,7 +29,7 @@
     "@noble/ciphers": "^0.4.1",
     "@noble/hashes": "^1.3.3",
     "dropbox": "^10.34.0",
-    "idb-keyval": "^6.2.1"
+    "idb": "^8.0.0"
   },
   "devDependencies": {
     "dotenv": "^16.4.5",
