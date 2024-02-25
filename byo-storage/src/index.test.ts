@@ -26,6 +26,8 @@ describe(`Main`, () => {
     const result = (await iterator.next()).value;
     expect(result.type).toEqual("post");
     if (result.type != "post") return;
+    const result2 = (await iterator.next()).value;
+    expect(result2.type).toEqual("backlog-complete");
 
     // Make sure the data is the same
     data.forEach((byte, i) => {
@@ -37,11 +39,11 @@ describe(`Main`, () => {
     await byos.post(channel, data2);
 
     // Get the data back
-    const result2 = (await iterator.next()).value;
-    expect(result2.type).toEqual("post");
-    if (result2.type != "post") return;
+    const result3 = (await iterator.next()).value;
+    expect(result3.type).toEqual("post");
+    if (result3.type != "post") return;
     data2.forEach((byte, i) => {
-      expect(byte).toEqual(result2.data[i]);
+      expect(byte).toEqual(result3.data[i]);
     });
   }, 20000);
 
@@ -62,6 +64,8 @@ describe(`Main`, () => {
     data.forEach((byte, i) => {
       expect(byte).toEqual(result.data[i]);
     });
+    const result2 = (await iterator.next()).value;
+    expect(result2.type).toEqual("backlog-complete");
 
     // Replace the post with the same UUID
     const data2 = randomBytes(100);
@@ -71,12 +75,14 @@ describe(`Main`, () => {
     // Make sure we get the new data
     const timeoutSignal = AbortSignal.timeout(2000);
     const iterator2 = byos.watch(channel, sharedLink2, timeoutSignal);
-    const result2 = (await iterator2.next()).value;
-    expect(result2.type).toEqual("post");
+    const result3 = (await iterator2.next()).value;
+    expect(result3.type).toEqual("post");
     if (result2.type != "post") return;
     data2.forEach((byte, i) => {
       expect(byte).toEqual(result2.data[i]);
     });
+    const result4 = (await iterator2.next()).value;
+    expect(result4.type).toEqual("backlog-complete");
 
     // Make sure we don't get the old data
     await expect(iterator2.next()).rejects.toThrow(
@@ -112,9 +118,16 @@ describe(`Main`, () => {
 
     // Make sure the data is gone
     const timeoutSignal = AbortSignal.timeout(2000);
-    await expect(
-      byos.watch(channel, sharedLinkandUUID.sharedLink, timeoutSignal).next(),
-    ).rejects.toThrow("The operation was aborted due to timeout");
+    const iterator = byos.watch(
+      channel,
+      sharedLinkandUUID.sharedLink,
+      timeoutSignal,
+    );
+    const result = (await iterator.next()).value;
+    expect(result.type).toEqual("backlog-complete");
+    await expect(iterator.next()).rejects.toThrow(
+      "The operation was aborted due to timeout",
+    );
   });
 
   it("replace and delete while watching", async () => {

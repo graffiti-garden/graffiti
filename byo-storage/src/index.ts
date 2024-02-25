@@ -30,6 +30,9 @@ type WatchResult =
   | {
       type: "remove";
       uuid: Uint8Array;
+    }
+  | {
+      type: "backlog-complete";
     };
 
 export default class BYOStorage {
@@ -241,6 +244,8 @@ export default class BYOStorage {
   ): AsyncGenerator<WatchResult, never, void> {
     this.#checkIfLoggedIn();
 
+    let backlogComplete = false;
+
     // Start the process
     const { result: initialResult } = await this.#dropbox.filesListFolder({
       path: "",
@@ -334,6 +339,15 @@ export default class BYOStorage {
         cursor = result.cursor;
         entries = result.entries;
       } else {
+        // If this is the first time starting a long poll,
+        // send a signal that the backlog is complete
+        if (!backlogComplete) {
+          backlogComplete = true;
+          yield {
+            type: "backlog-complete",
+          };
+        }
+
         // Long poll for more results
         const { result } = await signalPromise(
           this.#dropbox.filesListFolderLongpoll({
