@@ -70,14 +70,51 @@
 
                 // Start the new watch
                 watching = channel;
-                for await (const post of byos.watch(
+                for await (const action of byos.watch(
                     channel,
                     sharedLink,
                     controller.signal,
                 )) {
-                    const li = document.createElement("li");
-                    li.innerText = new TextDecoder().decode(post);
-                    posts.appendChild(li);
+                    // Convert the UUID from Uint8Array to a string
+                    const uuid = new TextDecoder().decode(action.uuid);
+
+                    if (action.type === "post") {
+                        // Check if the UUID already exists...
+                        let li = document.getElementById(uuid);
+
+                        // Otherwise create a new element
+                        if (!li) {
+                            li = document.createElement("li");
+                            li.id = uuid;
+                            posts.appendChild(li);
+                        }
+
+                        // Fill the text with the new text
+                        const text = new TextDecoder().decode(action.data);
+
+                        li.innerText = text;
+
+                        const delButton = document.createElement("button");
+                        delButton.innerText = "␡";
+                        delButton.onclick = () =>
+                            byos.remove(channel, action.uuid);
+                        li.appendChild(delButton);
+
+                        const editButton = document.createElement("button");
+                        editButton.innerText = "‼";
+                        editButton.onclick = () =>
+                            byos.post(
+                                channel,
+                                new TextEncoder().encode(text + "!!"),
+                                action.uuid,
+                            );
+                        li.appendChild(editButton);
+                    } else if (action.type == "remove") {
+                        const li = document.getElementById(uuid);
+                        if (li) {
+                            li.remove();
+                        }
+                    }
                 }
             };
 

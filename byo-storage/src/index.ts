@@ -16,6 +16,22 @@ type Authentication =
       accessToken: string;
     };
 
+interface SharedLinkandUUID {
+  sharedLink: string;
+  uuid: Uint8Array;
+}
+
+type WatchResult =
+  | {
+      type: "post";
+      uuid: Uint8Array;
+      data: Uint8Array;
+    }
+  | {
+      type: "remove";
+      uuid: Uint8Array;
+    };
+
 export default class BYOStorage {
   #dropbox: Dropbox;
   #db: Promise<IDBPDatabase> | undefined;
@@ -172,7 +188,7 @@ export default class BYOStorage {
     channel: string,
     data: Uint8Array,
     uuid?: Uint8Array,
-  ): Promise<string> {
+  ): Promise<SharedLinkandUUID> {
     this.#checkIfLoggedIn();
 
     // Generate a random UUID if one is not provided
@@ -197,14 +213,32 @@ export default class BYOStorage {
       },
     });
 
-    return sharedLink;
+    return {
+      sharedLink,
+      uuid,
+    };
+  }
+
+  async remove(channel: string, uuid: Uint8Array): Promise<void> {
+    this.#checkIfLoggedIn();
+
+    // Base64 encode the UUID to use as a file name
+    const uuidString = this.#base64Encode(uuid);
+
+    // Make sure the directory exists
+    const directory = this.#channelToDirectory(channel);
+
+    // Delete the file from the directory
+    await this.#dropbox.filesDeleteV2({
+      path: `${directory}/${uuidString}`,
+    });
   }
 
   async *watch(
     channel: string,
     sharedLink: string,
     signal?: AbortSignal,
-  ): AsyncGenerator<Uint8Array> {
+  ): AsyncGenerator<WatchResult, never, void> {
     this.#checkIfLoggedIn();
 
     // Start the process
@@ -273,7 +307,19 @@ export default class BYOStorage {
             } else {
               throw "Unexpected file type returned from Dropbox API.";
             }
-            yield this.#decrypt(channel, binary);
+            const data = this.#decrypt(channel, binary);
+            const uuid = this.#base64Decode(entry.name);
+            yield {
+              type: "post",
+              data,
+              uuid,
+            };
+          } else if (entry[".tag"] == "deleted") {
+            const uuid = this.#base64Decode(entry.name);
+            yield {
+              type: "remove",
+              uuid,
+            };
           }
         }
         entries = [];
@@ -312,6 +358,16 @@ export default class BYOStorage {
     const base64 = btoa(String.fromCodePoint(...bytes));
     // Make sure it is url safe
     return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/\=+$/, "");
+  }
+
+  #base64Decode(base64: string): Uint8Array {
+    base64 = base64.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4 != 0) {
+      base64 += "=";
+    }
+    return new Uint8Array(
+      Array.from(atob(base64), (s) => s.codePointAt(0) ?? 0),
+    );
   }
 
   #channelToCipherKey(channel: string): Uint8Array {
