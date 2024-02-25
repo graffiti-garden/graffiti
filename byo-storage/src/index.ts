@@ -3,7 +3,8 @@ import { randomBytes, concatBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
 import { xchacha20poly1305 as cipher } from "@noble/ciphers/chacha";
 import { openDB } from "idb";
-import type { IDBPDatabase } from "idb";
+import type { IDBPDatabase, DBSchema } from "idb";
+import type { files } from "dropbox";
 
 const ROOT_FOLDER = "/graffiti";
 
@@ -35,9 +36,32 @@ type WatchResult =
       type: "backlog-complete";
     };
 
+interface CacheDB extends DBSchema {
+  "shared-links": {
+    key: string; // channel
+    value: string; // shared link
+  };
+  cursors: {
+    key: string; // shared link
+    value: string; // cursor
+  };
+  data: {
+    key: string; // uuid + shared link
+    value: {
+      uuidPlusSharedLink: string;
+      uuid: Uint8Array;
+      sharedLink: string;
+      data: Uint8Array;
+    };
+    indexes: {
+      sharedLink: string;
+    };
+  };
+}
+
 export default class BYOStorage {
   #dropbox: Dropbox;
-  #db: Promise<IDBPDatabase> | undefined;
+  #db: Promise<IDBPDatabase<CacheDB>> | undefined;
 
   constructor(authentication: Authentication) {
     const storedToken =
@@ -92,10 +116,14 @@ export default class BYOStorage {
 
     // Initialize caches for shared links, cursors, and data
     if (typeof indexedDB !== "undefined") {
-      this.#db = openDB("byo-storage", 1, {
+      this.#db = openDB<CacheDB>("byo-storage", 1, {
         upgrade(db) {
           db.createObjectStore("shared-links");
           db.createObjectStore("cursors");
+          const dataStore = db.createObjectStore("data", {
+            keyPath: "uuidPlusSharedLink",
+          });
+          dataStore.createIndex("sharedLink", "sharedLink", { unique: false });
         },
       });
     }
@@ -246,16 +274,46 @@ export default class BYOStorage {
 
     let backlogComplete = false;
 
-    // Start the process
-    const { result: initialResult } = await this.#dropbox.filesListFolder({
-      path: "",
-      shared_link: {
-        url: sharedLink,
-      },
-    });
-    let hasMore = initialResult.has_more;
-    let cursor = initialResult.cursor;
-    let entries = initialResult.entries;
+    // First load data from the cache if it exists
+    const tx = (await this.#db)?.transaction("data", "readonly");
+    if (tx) {
+      const index = tx.store.index("sharedLink");
+      for await (const cursor of index.iterate(sharedLink)) {
+        const { uuid, data } = cursor.value;
+        yield {
+          type: "post",
+          uuid,
+          data,
+        };
+      }
+    }
+
+    // Get the cursor from the cache if it exists
+    const storedCursor = await (await this.#db)?.get("cursors", sharedLink);
+
+    let cursor: string;
+    let hasMore: boolean;
+    let entries: (
+      | files.FileMetadataReference
+      | files.FolderMetadataReference
+      | files.DeletedMetadataReference
+    )[];
+    if (!storedCursor) {
+      // Start the process
+      const { result: initialResult } = await this.#dropbox.filesListFolder({
+        path: "",
+        shared_link: {
+          url: sharedLink,
+        },
+      });
+      cursor = initialResult.cursor;
+      hasMore = initialResult.has_more;
+      entries = initialResult.entries;
+    } else {
+      cursor = storedCursor;
+      entries = [];
+      hasMore = true;
+    }
 
     // Create a function that takes a promise
     // and returns a promise that rejects if the signal event fires
@@ -314,6 +372,17 @@ export default class BYOStorage {
             }
             const data = this.#decrypt(channel, binary);
             const uuid = this.#base64Decode(entry.name);
+
+            // Store the data in the cache
+            await (
+              await this.#db
+            )?.put("data", {
+              data,
+              uuid,
+              sharedLink,
+              uuidPlusSharedLink: entry.name + "@" + sharedLink,
+            });
+
             yield {
               type: "post",
               data,
@@ -321,6 +390,12 @@ export default class BYOStorage {
             };
           } else if (entry[".tag"] == "deleted") {
             const uuid = this.#base64Decode(entry.name);
+
+            // Remove the data from the cache
+            await (
+              await this.#db
+            )?.delete("data", entry.name + "@" + sharedLink);
+
             yield {
               type: "remove",
               uuid,
@@ -328,6 +403,9 @@ export default class BYOStorage {
           }
         }
         entries = [];
+
+        // Once all the entries are processed, store the cursor in the cache
+        await (await this.#db)?.put("cursors", cursor, sharedLink);
       } else if (hasMore) {
         // Get more results if they exist
         const { result } = await signalPromise(
