@@ -1,16 +1,11 @@
 {
   "name": "@graffiti-garden/actor-manager-client",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "client for the actor manager",
   "main": "index.ts",
   "browser": "dist/index.js",
   "type": "module",
-  "files": [
-    "style.css",
-    "index.ts",
-    "dist",
-    "css.d.ts"
-  ],
+  "files": ["style.css", "index.ts", "dist", "css.d.ts"],
   "scripts": {
     "demo": "vite",
     "build-demo": "vite build",
