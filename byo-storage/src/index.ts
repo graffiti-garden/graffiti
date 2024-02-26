@@ -59,26 +59,28 @@ interface CacheDB extends DBSchema {
   };
 }
 
+export interface BYOStorageOptions {
+  authentication: Authentication;
+  onLoginStateChange?: (loginState: boolean) => void;
+}
+
 export default class BYOStorage {
   #dropbox: Dropbox;
   #db: Promise<IDBPDatabase<CacheDB>> | undefined;
   #onLoginStateChange: ((state: boolean) => void) | undefined;
 
-  constructor(
-    authentication: Authentication,
-    onLoginStateChange?: (state: boolean) => void,
-  ) {
-    this.#onLoginStateChange = onLoginStateChange;
+  constructor(options: BYOStorageOptions) {
+    this.#onLoginStateChange = options.onLoginStateChange;
 
     const storedToken =
       typeof localStorage !== "undefined"
         ? localStorage.getItem("dropbox_access_token")
         : null;
 
-    if ("accessToken" in authentication) {
+    if ("accessToken" in options.authentication) {
       // Nothing to do
     } else if (storedToken) {
-      authentication.accessToken = storedToken;
+      options.authentication.accessToken = storedToken;
     } else if (!!window.location.hash) {
       // We are in the middle of an OAuth flow
       const loc = window.location;
@@ -89,7 +91,7 @@ export default class BYOStorage {
         // Make sure the state matches the one we stored
         const storedState = localStorage.getItem("dropbox_auth_state");
         if (state === storedState) {
-          authentication.accessToken = accessToken;
+          options.authentication.accessToken = accessToken;
           localStorage.setItem("dropbox_access_token", accessToken);
           // Drop the state from local storage
           localStorage.removeItem("dropbox_auth_state");
@@ -119,7 +121,7 @@ export default class BYOStorage {
     }
 
     // Initialize and refresh the access token if necessary
-    this.#dropbox = new Dropbox(authentication);
+    this.#dropbox = new Dropbox(options.authentication);
     this.#dropbox.auth.checkAndRefreshAccessToken();
 
     // Update the callback

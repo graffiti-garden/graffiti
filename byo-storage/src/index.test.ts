@@ -10,7 +10,7 @@ if (!accessToken) {
 
 describe(`Main`, () => {
   it("post and receive data", async () => {
-    const byos = new BYOStorage({ accessToken });
+    const byos = new BYOStorage({ authentication: { accessToken } });
 
     // Generate a random channel string
     const channel = Math.random().toString(36).substring(7);
@@ -30,13 +30,16 @@ describe(`Main`, () => {
     expect(result2.type).toEqual("backlog-complete");
 
     // Make sure the data is the same
+    uuid.forEach((byte, i) => {
+      expect(byte).toEqual(result.uuid[i]);
+    });
     data.forEach((byte, i) => {
       expect(byte).toEqual(result.data[i]);
     });
 
     // Post more data
     const data2 = randomBytes(100);
-    await byos.post(channel, data2);
+    const { uuid: uuid2 } = await byos.post(channel, data2);
 
     // Get the data back
     const result3 = (await iterator.next()).value;
@@ -45,10 +48,13 @@ describe(`Main`, () => {
     data2.forEach((byte, i) => {
       expect(byte).toEqual(result3.data[i]);
     });
+    uuid2.forEach((byte, i) => {
+      expect(byte).toEqual(result3.uuid[i]);
+    });
   }, 20000);
 
   it("replace data", async () => {
-    const byos = new BYOStorage({ accessToken });
+    const byos = new BYOStorage({ authentication: { accessToken } });
 
     // Post with a static UUID
     const channel = Math.random().toString(36).substring(7);
@@ -91,7 +97,7 @@ describe(`Main`, () => {
   }, 100000);
 
   it("watch with wrong channel", async () => {
-    const byos = new BYOStorage({ accessToken });
+    const byos = new BYOStorage({ authentication: { accessToken } });
 
     // Post some data
     const channel = Math.random().toString(36).substring(7);
@@ -107,7 +113,7 @@ describe(`Main`, () => {
   }, 100000);
 
   it("delete data", async () => {
-    const byos = new BYOStorage({ accessToken });
+    const byos = new BYOStorage({ authentication: { accessToken } });
 
     // Post some data
     const channel = Math.random().toString(36).substring(7);
@@ -131,7 +137,7 @@ describe(`Main`, () => {
   }, 100000);
 
   it("replace and delete while watching", async () => {
-    const byos = new BYOStorage({ accessToken });
+    const byos = new BYOStorage({ authentication: { accessToken } });
 
     // Start watching
     const channel = Math.random().toString(36).substring(7);

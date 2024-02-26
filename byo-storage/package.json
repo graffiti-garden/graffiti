@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/byo-storage",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Encrypted and shareable pub-sub bring-your-own storage",
   "main": "src/index.ts",
   "browser": "dist/index.js",

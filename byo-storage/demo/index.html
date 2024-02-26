@@ -26,9 +26,11 @@
             import BYOStorage from "/dist/index.js";
             // import BYOStorage from "https://cdn.jsdelivr.net/npm/@graffiti-garden/byo-storage";
 
-            window.byos = new BYOStorage(
-                { clientId: "h4bnq16igcef7tg" },
-                (loginState) => {
+            window.byos = new BYOStorage({
+                authentication: {
+                    clientId: "h4bnq16igcef7tg",
+                },
+                onLoginStateChange(loginState) {
                     const toggleLogInButton =
                         document.getElementById("toggleLogIn");
                     const stuffEl = document.getElementById("stuff");
@@ -40,7 +42,7 @@
                         stuffEl.style.display = "none";
                     }
                 },
-            );
+            });
 
             let controller;
             let watching;
