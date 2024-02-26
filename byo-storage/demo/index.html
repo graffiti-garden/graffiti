@@ -7,10 +7,7 @@
     </head>
 
     <body>
-        <button
-            id="toggleLogIn"
-            onclick="byos.toggleLogIn().then(()=>setLogInButton())"
-        ></button>
+        <button id="toggleLogIn" onclick="byos.toggleLogIn()"></button>
 
         <div id="stuff">
             Channel:
@@ -29,21 +26,21 @@
             import BYOStorage from "/dist/index.js";
             // import BYOStorage from "https://cdn.jsdelivr.net/npm/@graffiti-garden/byo-storage";
 
-            window.byos = new BYOStorage({ clientId: "h4bnq16igcef7tg" });
-
-            window.setLogInButton = () => {
-                const toggleLogInButton =
-                    document.getElementById("toggleLogIn");
-                const stuffEl = document.getElementById("stuff");
-                if (byos.loggedIn) {
-                    toggleLogInButton.innerText = "Log Out";
-                    stuffEl.style.display = "block";
-                } else {
-                    toggleLogInButton.innerText = "Log In";
-                    stuffEl.style.display = "none";
-                }
-            };
-            setLogInButton();
+            window.byos = new BYOStorage(
+                { clientId: "h4bnq16igcef7tg" },
+                (loginState) => {
+                    const toggleLogInButton =
+                        document.getElementById("toggleLogIn");
+                    const stuffEl = document.getElementById("stuff");
+                    if (loginState) {
+                        toggleLogInButton.innerText = "Log Out";
+                        stuffEl.style.display = "block";
+                    } else {
+                        toggleLogInButton.innerText = "Log In";
+                        stuffEl.style.display = "none";
+                    }
+                },
+            );
 
             let controller;
             let watching;

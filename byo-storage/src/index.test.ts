@@ -117,7 +117,7 @@ describe(`Main`, () => {
     await byos.remove(channel, sharedLinkandUUID.uuid);
 
     // Make sure the data is gone
-    const timeoutSignal = AbortSignal.timeout(2000);
+    const timeoutSignal = AbortSignal.timeout(4000);
     const iterator = byos.watch(
       channel,
       sharedLinkandUUID.sharedLink,

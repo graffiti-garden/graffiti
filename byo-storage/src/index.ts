@@ -62,17 +62,25 @@ interface CacheDB extends DBSchema {
 export default class BYOStorage {
   #dropbox: Dropbox;
   #db: Promise<IDBPDatabase<CacheDB>> | undefined;
+  #onLoginStateChange: ((state: boolean) => void) | undefined;
 
-  constructor(authentication: Authentication) {
+  constructor(
+    authentication: Authentication,
+    onLoginStateChange?: (state: boolean) => void,
+  ) {
+    this.#onLoginStateChange = onLoginStateChange;
+
     const storedToken =
       typeof localStorage !== "undefined"
         ? localStorage.getItem("dropbox_access_token")
         : null;
+
     if ("accessToken" in authentication) {
       // Nothing to do
     } else if (storedToken) {
       authentication.accessToken = storedToken;
     } else if (!!window.location.hash) {
+      // We are in the middle of an OAuth flow
       const loc = window.location;
       const urlParams = new URLSearchParams(loc.hash.slice(1));
       const accessToken = urlParams.get("access_token");
@@ -113,6 +121,9 @@ export default class BYOStorage {
     // Initialize and refresh the access token if necessary
     this.#dropbox = new Dropbox(authentication);
     this.#dropbox.auth.checkAndRefreshAccessToken();
+
+    // Update the callback
+    this.#onLoginStateChange?.(this.loggedIn);
 
     // Initialize caches for shared links, cursors, and data
     if (typeof indexedDB !== "undefined") {
@@ -156,6 +167,9 @@ export default class BYOStorage {
       localStorage.removeItem("dropbox_access_token");
       this.#dropbox.auth.setAccessToken(null);
     }
+
+    // Update the callback
+    this.#onLoginStateChange?.(this.loggedIn);
   }
 
   #checkIfLoggedIn() {
