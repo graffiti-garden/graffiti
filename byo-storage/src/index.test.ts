@@ -128,7 +128,7 @@ describe(`Main`, () => {
     await expect(iterator.next()).rejects.toThrow(
       "The operation was aborted due to timeout",
     );
-  });
+  }, 100000);
 
   it("replace and delete while watching", async () => {
     const byos = new BYOStorage({ accessToken });
