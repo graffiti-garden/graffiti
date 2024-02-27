@@ -72,7 +72,8 @@ const plaintextOut: Ref<string> = ref('')
 
         <hr>
 
-        <form @submit.prevent="am.sign(encoder.encode(message), nonce).then(s => { signed = base64Encode(s); result = null })">
+        <form
+            @submit.prevent="am.sign(encoder.encode(message), nonce).then(s => { signed = base64Encode(s); result = null })">
             <input v-model="message">
             <input type="submit" value="Sign Message">
         </form>

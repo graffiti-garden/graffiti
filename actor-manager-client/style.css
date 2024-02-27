@@ -1,40 +1,40 @@
 .graffiti-actor-manager {
-  border-color: #ca7acc;
-  box-sizing: border-box;
-  border-width: 2px;
-  padding: 0;
-  margin: 0;
-  border-radius: 1rem;
-  box-shadow: 0 0 2rem black;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.3s;
-  pointer-events: none;
-  display: block;
-  min-width: 95dvw;
-  min-height: 95dvh;
-  height: 95dvh;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+    border-color: #ca7acc;
+    box-sizing: border-box;
+    border-width: 2px;
+    padding: 0;
+    margin: 0;
+    border-radius: 1rem;
+    box-shadow: 0 0 2rem black;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    display: block;
+    min-width: 95dvw;
+    min-height: 95dvh;
+    height: 95dvh;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .graffiti-actor-manager[open] {
-  pointer-events: inherit;
-  opacity: 1;
+    pointer-events: inherit;
+    opacity: 1;
 }
 
 .graffiti-actor-manager::backdrop {
-  background-color: black;
-  opacity: 0.5;
+    background-color: black;
+    opacity: 0.5;
 }
 
 .graffiti-actor-manager iframe {
-  position: relative;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 100.1%;
-  height: 100.1%;
-  border: none;
+    position: relative;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100.1%;
+    height: 100.1%;
+    border: none;
 }

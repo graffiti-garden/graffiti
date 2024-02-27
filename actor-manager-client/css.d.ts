@@ -1,4 +1,4 @@
-declare module '*.css?inline' {
+declare module "*.css?inline" {
   const value: string;
-  export default value
+  export default value;
 }
