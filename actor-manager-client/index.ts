@@ -43,9 +43,9 @@ export default class ActorManager {
   #iframe = document.createElement("iframe");
   #dialog = document.createElement("dialog");
 
-  constructor(options: ActorManagerOptions) {
-    this.onChosenActor = options.onChosenActor;
-    this.actorManagerURL = options.actorManagerURL ?? defaultActorManagerURL;
+  constructor(options?: ActorManagerOptions) {
+    this.onChosenActor = options?.onChosenActor;
+    this.actorManagerURL = options?.actorManagerURL ?? defaultActorManagerURL;
 
     window.onmessage = this.#onIframeMessage.bind(this);
 
@@ -71,7 +71,7 @@ export default class ActorManager {
     });
 
     // Inject style
-    const style = options.style ?? defaultStyle;
+    const style = options?.style ?? defaultStyle;
     if (style.length) {
       const styleEl = document.createElement("style");
       styleEl.textContent = style;
