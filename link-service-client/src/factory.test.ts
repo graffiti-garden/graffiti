@@ -1,257 +1,290 @@
-import LinkFactory from './factory'
-import { describe, expect, it, assert } from 'vitest'
-import { randomBytes } from '@noble/hashes/utils'
-import { mockPublicKeyAndSignFromNonce, randomString, soon } from './test-utils'
+import LinkFactory from "./factory";
+import { describe, expect, it, assert } from "vitest";
+import { randomBytes } from "@noble/hashes/utils";
+import {
+  mockPublicKeyAndSignFromNonce,
+  randomString,
+  soon,
+} from "./test-utils";
 
-const serviceURL = 'https://link.graffiti.garden'
+const serviceURL = "https://link.graffiti.garden";
 // const serviceURL = 'http://localhost:8000'
 
-describe(`Link Factory`, ()=> {
+describe(`Link Factory`, () => {
+  it("get nonexistant", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    await expect(lf.get(randomBytes(32), "")).rejects.toEqual("link not found");
+  });
 
-  it('get nonexistant', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    await expect(lf.get(randomBytes(32),'')).rejects.toEqual('link not found')
-  })
+  it("basic put", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const source = randomString();
+    const target = randomString();
+    const expiration = soon();
 
-  it('basic put', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const source = randomString()
-    const target = randomString()
-    const expiration = soon()
-
-    const { created, existing } = await lf.create(source, target, expiration)
-    expect(existing).toBeNull()
-    expect(created.source).toEqual(source)
-    expect(created.target).toEqual(target)
-    expect(created.expiration).toEqual(BigInt(expiration))
-    expect(created.counter).toEqual(BigInt(0))
+    const { created, existing } = await lf.create(source, target, expiration);
+    expect(existing).toBeNull();
+    expect(created.source).toEqual(source);
+    expect(created.target).toEqual(target);
+    expect(created.expiration).toEqual(BigInt(expiration));
+    expect(created.counter).toEqual(BigInt(0));
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, source)
-    expect(gotten.source).toEqual(source)
-    expect(gotten.target).toEqual(target)
-  })
+    const gotten = await lf.get(created.publicKey, source);
+    expect(gotten.source).toEqual(source);
+    expect(gotten.target).toEqual(target);
+  });
 
-  it('replace target', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const source = randomString()
-    const target = randomString()
-    const expiration = soon()
+  it("replace target", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const source = randomString();
+    const target = randomString();
+    const expiration = soon();
 
     // Create and make sure it workd
-    const { created } = await lf.create(source, target, expiration)
+    const { created } = await lf.create(source, target, expiration);
 
     // Replace
-    const newTarget = randomString()
-    const { created: replaced, existing } =
-      await created.modify({target: newTarget})
-    expect(replaced.target).toEqual(newTarget)
-    expect(existing).not.toBeNull()
+    const newTarget = randomString();
+    const { created: replaced, existing } = await created.modify({
+      target: newTarget,
+    });
+    expect(replaced.target).toEqual(newTarget);
+    expect(existing).not.toBeNull();
     if (existing) {
-      expect(existing.target).toEqual(target)
+      expect(existing.target).toEqual(target);
     }
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, source)
-    expect(gotten.target).toEqual(newTarget)
-  })
+    const gotten = await lf.get(created.publicKey, source);
+    expect(gotten.target).toEqual(newTarget);
+  });
 
-  it('put expired data', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const expiration = Math.floor(Math.random() * Date.now()/1000)
-    await expect(lf.create(randomString(), randomString(), expiration))
-      .rejects.toEqual('data has already expired')
-  })
+  it("put expired data", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const expiration = Math.floor((Math.random() * Date.now()) / 1000);
+    await expect(
+      lf.create(randomString(), randomString(), expiration),
+    ).rejects.toEqual("data has already expired");
+  });
 
-  it('replace expiration forwards', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const expiration = BigInt(soon())
+  it("replace expiration forwards", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const expiration = BigInt(soon());
 
     // Create and make sure it workd
-    const source = randomString()
-    const { created } = await lf.create(source, randomString(), expiration)
+    const source = randomString();
+    const { created } = await lf.create(source, randomString(), expiration);
 
     // Replace
-    const newExpiration = expiration + 1n
-    const { created: replaced, existing } =
-      await created.modify({expiration: newExpiration})
-    expect(replaced.expiration).toEqual(newExpiration)
-    expect(existing).not.toBeNull()
+    const newExpiration = expiration + 1n;
+    const { created: replaced, existing } = await created.modify({
+      expiration: newExpiration,
+    });
+    expect(replaced.expiration).toEqual(newExpiration);
+    expect(existing).not.toBeNull();
     if (existing) {
-      expect(existing.expiration).toEqual(expiration)
+      expect(existing.expiration).toEqual(expiration);
     }
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, source)
-    expect(gotten.expiration).toEqual(BigInt(newExpiration))
-  })
+    const gotten = await lf.get(created.publicKey, source);
+    expect(gotten.expiration).toEqual(BigInt(newExpiration));
+  });
 
-  it('replace expiration backwards', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const expiration = soon()
+  it("replace expiration backwards", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const expiration = soon();
 
     // Create and make sure it workd
-    const source = randomString()
-    const target = randomString()
-    const { created } = await lf.create(source, target, BigInt(expiration))
+    const source = randomString();
+    const target = randomString();
+    const { created } = await lf.create(source, target, BigInt(expiration));
 
     // Replace
-    const newExpiration = expiration - Math.floor(Math.random()* 100)
+    const newExpiration = expiration - Math.floor(Math.random() * 100);
     // Modify protects
-    await expect(created.modify({expiration: newExpiration}))
-      .rejects.toEqual("expiration cannot decrease")
+    await expect(created.modify({ expiration: newExpiration })).rejects.toEqual(
+      "expiration cannot decrease",
+    );
 
     // Manually try to force it
-    await expect(lf.create(source, target, newExpiration, 1, created.editorNonce))
-      .rejects.toEqual("expiration cannot decrease")
+    await expect(
+      lf.create(source, target, newExpiration, 1, created.editorNonce),
+    ).rejects.toEqual("expiration cannot decrease");
 
     // Fetch it
-    const gotten = await lf.get(created.publicKey, source)
+    const gotten = await lf.get(created.publicKey, source);
     // Expiration does not update backwards!!
-    expect(gotten.expiration).toEqual(BigInt(expiration))
-  })
+    expect(gotten.expiration).toEqual(BigInt(expiration));
+  });
 
-  it('replace source', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const source = randomString()
-    const target = randomString()
+  it("replace source", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const source = randomString();
+    const target = randomString();
 
     // Create and make sure it workd
-    const { created } = await lf.create(source, target, soon())
+    const { created } = await lf.create(source, target, soon());
 
     // Replace
-    const newSource = randomString()
-    const { created: replaced, existing } =
-      await created.modify({source: newSource})
-    expect(replaced.source).toEqual(newSource)
-    expect(existing).toBeNull()
+    const newSource = randomString();
+    const { created: replaced, existing } = await created.modify({
+      source: newSource,
+    });
+    expect(replaced.source).toEqual(newSource);
+    expect(existing).toBeNull();
 
     // Fetch it
-    const gotten1 = await lf.get(created.publicKey, newSource)
-    expect(gotten1.source).toEqual(newSource)
-    expect(gotten1.target).toEqual(target)
-    await expect(lf.get(created.publicKey, source))
-      .rejects.toEqual('info hash and source mismatch')
-  })
+    const gotten1 = await lf.get(created.publicKey, newSource);
+    expect(gotten1.source).toEqual(newSource);
+    expect(gotten1.target).toEqual(target);
+    await expect(lf.get(created.publicKey, source)).rejects.toEqual(
+      "info hash and source mismatch",
+    );
+  });
 
-  it('shared ownership', async()=> {
-    const sharedSecret = randomString()
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce(sharedSecret)
-    const lf1 = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const lf2 = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
+  it("shared ownership", async () => {
+    const sharedSecret = randomString();
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce(sharedSecret);
+    const lf1 = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const lf2 = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
 
-    const source = randomString()
-    const { created } = await lf1.create(source, randomString(), soon())
-    assert(await created.isMine())
+    const source = randomString();
+    const { created } = await lf1.create(source, randomString(), soon());
+    assert(await created.isMine());
 
-    const gotten = await lf2.get(created.publicKey, source)
-    assert(await gotten.isMine())
+    const gotten = await lf2.get(created.publicKey, source);
+    assert(await gotten.isMine());
 
-    const newTarget = randomString()
-    await gotten.modify({target: newTarget})
-    const gotten2 = await lf1.get(created.publicKey, source)
-    expect(gotten2.target).toEqual(newTarget)
-  })
+    const newTarget = randomString();
+    await gotten.modify({ target: newTarget });
+    const gotten2 = await lf1.get(created.publicKey, source);
+    expect(gotten2.target).toEqual(newTarget);
+  });
 
-  it('different ownership', async()=> {
-    const { publicKeyFromNonce: pkfn1, signFromNonce: sfn1 } = mockPublicKeyAndSignFromNonce()
-    const { publicKeyFromNonce: pkfn2, signFromNonce: sfn2 } = mockPublicKeyAndSignFromNonce()
-    const lf1 = new LinkFactory(pkfn1, sfn1, serviceURL)
-    const lf2 = new LinkFactory(pkfn2, sfn2, serviceURL)
+  it("different ownership", async () => {
+    const { publicKeyFromNonce: pkfn1, signFromNonce: sfn1 } =
+      mockPublicKeyAndSignFromNonce();
+    const { publicKeyFromNonce: pkfn2, signFromNonce: sfn2 } =
+      mockPublicKeyAndSignFromNonce();
+    const lf1 = new LinkFactory(pkfn1, sfn1, serviceURL);
+    const lf2 = new LinkFactory(pkfn2, sfn2, serviceURL);
 
-    const source = randomString()
-    const { created } = await lf1.create(source, randomString(), soon())
-    assert(await created.isMine())
+    const source = randomString();
+    const { created } = await lf1.create(source, randomString(), soon());
+    assert(await created.isMine());
 
-    const gotten = await lf2.get(created.publicKey, source)
-    assert(!await gotten.isMine())
-    const newTarget = randomString()
-    await expect(gotten.modify({target: newTarget}))
-      .rejects.toEqual('you cannot modify a link that is not yours')
+    const gotten = await lf2.get(created.publicKey, source);
+    assert(!(await gotten.isMine()));
+    const newTarget = randomString();
+    await expect(gotten.modify({ target: newTarget })).rejects.toEqual(
+      "you cannot modify a link that is not yours",
+    );
 
     // Manually try it
-    const { created: replaced, existing } = await lf2.create(source, newTarget, soon(), 1, created.editorNonce)
-    expect(existing).toBeNull()
+    const { created: replaced, existing } = await lf2.create(
+      source,
+      newTarget,
+      soon(),
+      1,
+      created.editorNonce,
+    );
+    expect(existing).toBeNull();
     // It ends up with a different public key
-    assert(!replaced.publicKey.every((val, i)=> val==created.publicKey[i]))
-  })
+    assert(!replaced.publicKey.every((val, i) => val == created.publicKey[i]));
+  });
 
-  it('counter backwards', async()=> {
+  it("counter backwards", async () => {
     // Generate a big and small counter
-    const counterBytes = randomBytes(16)
-    const counter1 = new DataView(counterBytes.buffer).getBigInt64(0)
-    const counter2 = new DataView(counterBytes.buffer).getBigInt64(8)
-    const minCounter = counter1 < counter2 ? counter1 : counter2
-    const maxCounter = counter1 > counter2 ? counter1 : counter2
-    assert(minCounter < maxCounter)
+    const counterBytes = randomBytes(16);
+    const counter1 = new DataView(counterBytes.buffer).getBigInt64(0);
+    const counter2 = new DataView(counterBytes.buffer).getBigInt64(8);
+    const minCounter = counter1 < counter2 ? counter1 : counter2;
+    const maxCounter = counter1 > counter2 ? counter1 : counter2;
+    assert(minCounter < maxCounter);
 
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const source = randomString()
-    const target = randomString()
-    const expiration = soon()
-    const { created } = await lf.create(
-      source, target, expiration, maxCounter)
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const source = randomString();
+    const target = randomString();
+    const expiration = soon();
+    const { created } = await lf.create(source, target, expiration, maxCounter);
 
     // // Manually move counter backwards
-    expect(lf.create(
-      source, target, expiration, minCounter, created.editorNonce)
-    ).rejects.toEqual("counter must increase")
-  })
+    expect(
+      lf.create(source, target, expiration, minCounter, created.editorNonce),
+    ).rejects.toEqual("counter must increase");
+  });
 
-  it('big target', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const target = 'x'.repeat(256 - 16 - 24 - 24)
-    await lf.create(randomString(), target, soon())
-  })
+  it("big target", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const target = "x".repeat(256 - 16 - 24 - 24);
+    await lf.create(randomString(), target, soon());
+  });
 
-  it('too big target', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const target = 'x'.repeat(256 - 16 - 24 - 24 + 1)
-    await expect(lf.create(randomString(), target, soon()))
-      .rejects.toEqual('target is too big')
-  })
+  it("too big target", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const target = "x".repeat(256 - 16 - 24 - 24 + 1);
+    await expect(lf.create(randomString(), target, soon())).rejects.toEqual(
+      "target is too big",
+    );
+  });
 
-  it('unicode', async()=> {
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const source = '👻👩🏿‍❤️‍👩🏼👩‍👩‍👧‍👦👯‍♂️👍🏾🤜🏿𝔤𝔯𝔞𝔣𝔣𝔦𝔱𝔦🤛🏿'
-    const target = '👀👨🏽‍❤️‍💋‍👨🏿👨‍👨‍👧‍👧🖖🏻🫸🏼Ｇｒａｆｆｉｔｉ🫷🏼'
-    const { created } = await lf.create(source, target, soon())
-    expect(created.source).toEqual(source)
-    expect(created.target).toEqual(target)
+  it("unicode", async () => {
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const source = "👻👩🏿‍❤️‍👩🏼👩‍👩‍👧‍👦👯‍♂️👍🏾🤜🏿𝔤𝔯𝔞𝔣𝔣𝔦𝔱𝔦🤛🏿";
+    const target = "👀👨🏽‍❤️‍💋‍👨🏿👨‍👨‍👧‍👧🖖🏻🫸🏼Ｇｒａｆｆｉｔｉ🫷🏼";
+    const { created } = await lf.create(source, target, soon());
+    expect(created.source).toEqual(source);
+    expect(created.target).toEqual(target);
 
-    const gotten = await lf.get(created.publicKey, source)
-    expect(gotten.source).toEqual(source)
-    expect(gotten.target).toEqual(target)
-  })
+    const gotten = await lf.get(created.publicKey, source);
+    expect(gotten.source).toEqual(source);
+    expect(gotten.target).toEqual(target);
+  });
 
-  it('expire', async ()=> {
-    const expirationTime = 3 // seconds
-    const { publicKeyFromNonce, signFromNonce } = mockPublicKeyAndSignFromNonce()
-    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
-    const source = randomString()
-    const target = randomString()
-    const expiration = Math.ceil(Date.now()/1000) + expirationTime
+  it("expire", async () => {
+    const expirationTime = 3; // seconds
+    const { publicKeyFromNonce, signFromNonce } =
+      mockPublicKeyAndSignFromNonce();
+    const lf = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL);
+    const source = randomString();
+    const target = randomString();
+    const expiration = Math.ceil(Date.now() / 1000) + expirationTime;
 
     // Create and fetch
-    const { created } = await lf.create(source, target, expiration)
-    const gotten = await lf.get(created.publicKey, source)
-    expect(gotten.source).toEqual(source)
-    expect(gotten.target).toEqual(target)
+    const { created } = await lf.create(source, target, expiration);
+    const gotten = await lf.get(created.publicKey, source);
+    expect(gotten.source).toEqual(source);
+    expect(gotten.target).toEqual(target);
 
     // Wait the expiration time
-    await new Promise(r => setTimeout(r, (expirationTime + 1)*1000))
-    await expect(lf.get(created.publicKey, source))
-      .rejects.toEqual('link not found')
-  })
-})
+    await new Promise((r) => setTimeout(r, (expirationTime + 1) * 1000));
+    await expect(lf.get(created.publicKey, source)).rejects.toEqual(
+      "link not found",
+    );
+  });
+});

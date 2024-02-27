@@ -1,41 +1,64 @@
 import LinkFactory from "./factory";
 import LinkStreamer from "./streamer";
-import type { PublicKeyFromNonce, SignFromNonce, CreatedAndExistingLinks, Link } from './factory'
+import type {
+  PublicKeyFromNonce,
+  SignFromNonce,
+  CreatedAndExistingLinks,
+  Link,
+} from "./factory";
 import { AnnounceType } from "./streamer";
 
-const defaultServiceURL = "https://link.graffiti.garden"
+const defaultServiceURL = "https://link.graffiti.garden";
 
-export type AnnounceLink = {
-  type: AnnounceType.ANNOUNCE,
-  link: Link,
-} | {
-  type: AnnounceType.UNANNOUNCE,
-  publicKey: Uint8Array
-} | {
-  type: AnnounceType.BACKLOG_COMPLETE
-}
+export type AnnounceLink =
+  | {
+      type: AnnounceType.ANNOUNCE;
+      link: Link;
+    }
+  | {
+      type: AnnounceType.UNANNOUNCE;
+      publicKey: Uint8Array;
+    }
+  | {
+      type: AnnounceType.BACKLOG_COMPLETE;
+    };
 
 export default class LinkService {
-  #factory: LinkFactory
-  #streamer: LinkStreamer
+  #factory: LinkFactory;
+  #streamer: LinkStreamer;
 
-  constructor(publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce, serviceURL: string=defaultServiceURL) {
-    this.#factory  = new LinkFactory(publicKeyFromNonce, signFromNonce, serviceURL)
+  constructor(
+    publicKeyFromNonce: PublicKeyFromNonce,
+    signFromNonce: SignFromNonce,
+    serviceURL: string = defaultServiceURL,
+  ) {
+    this.#factory = new LinkFactory(
+      publicKeyFromNonce,
+      signFromNonce,
+      serviceURL,
+    );
 
     // Convert the to websocket
-    const serviceSocket = new URL(serviceURL)
-    serviceSocket.protocol = serviceSocket.protocol == 'https:' ? 'wss' : 'ws:'
-    this.#streamer = new LinkStreamer(serviceSocket.toString())
+    const serviceSocket = new URL(serviceURL);
+    serviceSocket.protocol = serviceSocket.protocol == "https:" ? "wss" : "ws:";
+    this.#streamer = new LinkStreamer(serviceSocket.toString());
   }
 
-  async create(source: string, target: string, expiration: bigint|number) : Promise<CreatedAndExistingLinks> {
-    return await this.#factory.create(source, target, expiration)
+  async create(
+    source: string,
+    target: string,
+    expiration: bigint | number,
+  ): Promise<CreatedAndExistingLinks> {
+    return await this.#factory.create(source, target, expiration);
   }
 
-  async *subscribe(source: string, signal?: AbortSignal) : AsyncGenerator<AnnounceLink, never, void> {
-    const iterator = this.#streamer.subscribe(source, signal)
+  async *subscribe(
+    source: string,
+    signal?: AbortSignal,
+  ): AsyncGenerator<AnnounceLink, never, void> {
+    const iterator = this.#streamer.subscribe(source, signal);
     while (true) {
-      const announceValue = (await iterator.next()).value
+      const announceValue = (await iterator.next()).value;
 
       // If it is an announce, parse it
       if (announceValue.type == AnnounceType.ANNOUNCE) {
@@ -44,11 +67,11 @@ export default class LinkService {
           link: this.#factory.parse(
             announceValue.publicKey,
             announceValue.containerSigned,
-            source
-          )
-        }
+            source,
+          ),
+        };
       } else {
-        yield announceValue
+        yield announceValue;
       }
     }
   }

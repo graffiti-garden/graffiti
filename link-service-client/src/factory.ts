@@ -1,199 +1,222 @@
 import { randomBytes, concatBytes, utf8ToBytes } from "@noble/hashes/utils";
 import { sha256 } from "@noble/hashes/sha256";
-import { ed25519 as curve } from '@noble/curves/ed25519';
-import { xchacha20poly1305 as cipher } from '@noble/ciphers/chacha';
-import { PUT_VERSION, INFO_HASH_PREFIX, CIPHER_PREFIX } from './constants'
-const decoder = new TextDecoder()
+import { ed25519 as curve } from "@noble/curves/ed25519";
+import { xchacha20poly1305 as cipher } from "@noble/ciphers/chacha";
+import { PUT_VERSION, INFO_HASH_PREFIX, CIPHER_PREFIX } from "./constants";
+const decoder = new TextDecoder();
 
 export class Link {
-  #linkFactory: LinkFactory
-  publicKey: Uint8Array
-  source: string
-  target: string
-  counter: bigint
-  expiration: bigint
-  editorNonce: Uint8Array
+  #linkFactory: LinkFactory;
+  publicKey: Uint8Array;
+  source: string;
+  target: string;
+  counter: bigint;
+  expiration: bigint;
+  editorNonce: Uint8Array;
 
-  constructor(linkFactory: LinkFactory, publicKey: Uint8Array, containerSigned: Uint8Array, source: string) {
-    this.#linkFactory = linkFactory
-    this.publicKey = publicKey
-    this.source = source
+  constructor(
+    linkFactory: LinkFactory,
+    publicKey: Uint8Array,
+    containerSigned: Uint8Array,
+    source: string,
+  ) {
+    this.#linkFactory = linkFactory;
+    this.publicKey = publicKey;
+    this.source = source;
 
     // Verify the signature
-    const container = containerSigned.slice(0, containerSigned.byteLength-64)
-    const signature = containerSigned.slice(containerSigned.byteLength-64)
+    const container = containerSigned.slice(0, containerSigned.byteLength - 64);
+    const signature = containerSigned.slice(containerSigned.byteLength - 64);
     if (!curve.verify(signature, container, publicKey)) {
-      throw "invalid signature"
+      throw "invalid signature";
     }
 
-    const view = new DataView(container.buffer)
-    let byteOffset = 0
+    const view = new DataView(container.buffer);
+    let byteOffset = 0;
 
     // Make sure we understand the data
-    const version = view.getUint8(byteOffset)
+    const version = view.getUint8(byteOffset);
     if (version != 0) {
-      throw "i only understand version zero"
+      throw "i only understand version zero";
     }
-    byteOffset += 1
+    byteOffset += 1;
 
     // Verify the info hash
-    const infoHash = container.slice(byteOffset, byteOffset+32)
-    byteOffset += 32
-    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source)
-    const infoHashDerived = curve.getPublicKey(infoHashPrivateKey)
-    if (!infoHash.every((val, i)=> val == infoHashDerived[i])) {
-      throw "info hash and source mismatch"
+    const infoHash = container.slice(byteOffset, byteOffset + 32);
+    byteOffset += 32;
+    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source);
+    const infoHashDerived = curve.getPublicKey(infoHashPrivateKey);
+    if (!infoHash.every((val, i) => val == infoHashDerived[i])) {
+      throw "info hash and source mismatch";
     }
 
     // Verify the pok
-    const pok = container.slice(byteOffset, byteOffset+64)
-    byteOffset += 64
+    const pok = container.slice(byteOffset, byteOffset + 64);
+    byteOffset += 64;
     if (!curve.verify(pok, publicKey, infoHash)) {
-      throw "invalid proof of knowledge"
+      throw "invalid proof of knowledge";
     }
 
     // Unpack the integers
-    this.counter    = view.getBigInt64(byteOffset)
-    byteOffset += 8
-    this.expiration = view.getBigInt64(byteOffset)
-    byteOffset += 8
+    this.counter = view.getBigInt64(byteOffset);
+    byteOffset += 8;
+    this.expiration = view.getBigInt64(byteOffset);
+    byteOffset += 8;
 
     // Unpack the nonce
-    this.editorNonce = container.slice(byteOffset, byteOffset+24)
-    byteOffset += 24
+    this.editorNonce = container.slice(byteOffset, byteOffset + 24);
+    byteOffset += 24;
 
     // Decrypt the target
-    const cipherKey = sha256(CIPHER_PREFIX + source)
-    const cipherNonce = container.slice(byteOffset, byteOffset+24)
-    byteOffset += 24
-    const targetEncrypted = container.slice(byteOffset)
-    let targetBytes: Uint8Array
+    const cipherKey = sha256(CIPHER_PREFIX + source);
+    const cipherNonce = container.slice(byteOffset, byteOffset + 24);
+    byteOffset += 24;
+    const targetEncrypted = container.slice(byteOffset);
+    let targetBytes: Uint8Array;
     try {
-      targetBytes = cipher(cipherKey, cipherNonce).decrypt(targetEncrypted)
+      targetBytes = cipher(cipherKey, cipherNonce).decrypt(targetEncrypted);
     } catch {
-      throw "source does not decode the target"
+      throw "source does not decode the target";
     }
-    this.target = decoder.decode(targetBytes)
+    this.target = decoder.decode(targetBytes);
   }
 
   async isMine(): Promise<boolean> {
     // Generate the public key from the nonce
-    const publicKey = await this.#linkFactory.publicKeyFromNonce(this.editorNonce)
+    const publicKey = await this.#linkFactory.publicKeyFromNonce(
+      this.editorNonce,
+    );
 
     // And make sure they are equal
-    return publicKey.every((val, i)=> val == this.publicKey[i])
+    return publicKey.every((val, i) => val == this.publicKey[i]);
   }
 
-  async modify(
-    {source, target, expiration}:
-    {source?: string, target?: string, expiration?: bigint|number}
-  ) : Promise<CreatedAndExistingLinks> {
+  async modify({
+    source,
+    target,
+    expiration,
+  }: {
+    source?: string;
+    target?: string;
+    expiration?: bigint | number;
+  }): Promise<CreatedAndExistingLinks> {
     // Perform validation (even though server
     // would do this too)
     if (!(await this.isMine()))
-      throw "you cannot modify a link that is not yours"
+      throw "you cannot modify a link that is not yours";
     if (expiration && expiration < this.expiration)
-      throw "expiration cannot decrease"
+      throw "expiration cannot decrease";
 
     return await this.#linkFactory.create(
-      source ?? this.source, 
+      source ?? this.source,
       target ?? this.target,
       expiration ?? this.expiration,
       this.counter + BigInt(1),
-      this.editorNonce
-    )
+      this.editorNonce,
+    );
   }
 }
 
-export type PublicKeyFromNonce = (nonce: Uint8Array)=> (Promise<Uint8Array>|Uint8Array)
-export type SignFromNonce = (message: Uint8Array, nonce: Uint8Array)=> (Promise<Uint8Array>|Uint8Array)
+export type PublicKeyFromNonce = (
+  nonce: Uint8Array,
+) => Promise<Uint8Array> | Uint8Array;
+export type SignFromNonce = (
+  message: Uint8Array,
+  nonce: Uint8Array,
+) => Promise<Uint8Array> | Uint8Array;
 export interface CreatedAndExistingLinks {
-  created: Link,
-  existing: Link|null
+  created: Link;
+  existing: Link | null;
 }
 
 export default class LinkFactory {
-  serviceURL: string
-  publicKeyFromNonce: PublicKeyFromNonce
-  signFromNonce: SignFromNonce
+  serviceURL: string;
+  publicKeyFromNonce: PublicKeyFromNonce;
+  signFromNonce: SignFromNonce;
 
-  constructor(publicKeyFromNonce: PublicKeyFromNonce, signFromNonce: SignFromNonce, serviceURL: string) {
-    this.serviceURL = serviceURL
-    this.publicKeyFromNonce = publicKeyFromNonce
-    this.signFromNonce = signFromNonce
+  constructor(
+    publicKeyFromNonce: PublicKeyFromNonce,
+    signFromNonce: SignFromNonce,
+    serviceURL: string,
+  ) {
+    this.serviceURL = serviceURL;
+    this.publicKeyFromNonce = publicKeyFromNonce;
+    this.signFromNonce = signFromNonce;
   }
 
-  #publicKeyToURL(publicKey: Uint8Array) : string {
+  #publicKeyToURL(publicKey: Uint8Array): string {
     // Encode the public key in base 64
-    const publicKeyBase64 =
-      btoa(String.fromCodePoint(...publicKey))
+    const publicKeyBase64 = btoa(String.fromCodePoint(...publicKey))
       // Make sure it is url safe
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
 
-    return `${this.serviceURL}/${publicKeyBase64}`
+    return `${this.serviceURL}/${publicKeyBase64}`;
   }
 
-  parse(publicKey: Uint8Array, containerSigned: Uint8Array, source: string) : Link {
-    return new Link(this, publicKey, containerSigned, source)
+  parse(
+    publicKey: Uint8Array,
+    containerSigned: Uint8Array,
+    source: string,
+  ): Link {
+    return new Link(this, publicKey, containerSigned, source);
   }
 
-  async get(publicKey: Uint8Array, source: string) : Promise<Link> {
-    const response = await fetch(this.#publicKeyToURL(publicKey))
+  async get(publicKey: Uint8Array, source: string): Promise<Link> {
+    const response = await fetch(this.#publicKeyToURL(publicKey));
     if (response.status != 200) {
-      throw await response.text()
+      throw await response.text();
     } else {
       return this.parse(
         publicKey,
         new Uint8Array(await response.arrayBuffer()),
-        source
-      )
+        source,
+      );
     }
   }
 
   async create(
     source: string,
     target: string,
-    expiration: number|bigint,
-    counter: number|bigint=0,
-    editorNonce: Uint8Array|null=null
-  ) : Promise<CreatedAndExistingLinks> {
+    expiration: number | bigint,
+    counter: number | bigint = 0,
+    editorNonce: Uint8Array | null = null,
+  ): Promise<CreatedAndExistingLinks> {
     // Convert expiration to seconds to big int
-    expiration = BigInt(expiration)
-    counter = BigInt(counter)
+    expiration = BigInt(expiration);
+    counter = BigInt(counter);
 
     // Generate editing nonce
-    editorNonce = editorNonce ?? randomBytes(24)
+    editorNonce = editorNonce ?? randomBytes(24);
     if (editorNonce.length != 24) {
-      throw "editor nonce is must be 24 random bytes"
+      throw "editor nonce is must be 24 random bytes";
     }
 
     // Derive editor public and private keys from the salt
-    const publicKey = await this.publicKeyFromNonce(editorNonce)
+    const publicKey = await this.publicKeyFromNonce(editorNonce);
 
     // Derive the infohash and proof of knowledge
-    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source)
-    const infoHash = curve.getPublicKey(infoHashPrivateKey)
-    const pok = curve.sign(publicKey, infoHashPrivateKey)
+    const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source);
+    const infoHash = curve.getPublicKey(infoHashPrivateKey);
+    const pok = curve.sign(publicKey, infoHashPrivateKey);
 
     // Turn the counter and expiration into
     // unsigned long long bytes (big-endian)
-    const intBuffer = new ArrayBuffer(16)
-    const intView = new DataView(intBuffer)
-    intView.setBigInt64(0, counter)
-    intView.setBigInt64(8, expiration)
-    const intBytes = new Uint8Array(intBuffer)
+    const intBuffer = new ArrayBuffer(16);
+    const intView = new DataView(intBuffer);
+    intView.setBigInt64(0, counter);
+    intView.setBigInt64(8, expiration);
+    const intBytes = new Uint8Array(intBuffer);
 
     // Encrypt the payload using the uri
-    const cipherKey = sha256(CIPHER_PREFIX + source)
-    const cipherNonce = randomBytes(24)
-    const targetEncrypted =
-      cipher(cipherKey, cipherNonce).encrypt(
-        utf8ToBytes(target)
-      )
+    const cipherKey = sha256(CIPHER_PREFIX + source);
+    const cipherNonce = randomBytes(24);
+    const targetEncrypted = cipher(cipherKey, cipherNonce).encrypt(
+      utf8ToBytes(target),
+    );
     // 256 minus two 24-byte nonces
     if (targetEncrypted.length > 208) {
-      throw "target is too big"
+      throw "target is too big";
     }
 
     // Pack it all together
@@ -204,38 +227,37 @@ export default class LinkFactory {
       intBytes,
       editorNonce,
       cipherNonce,
-      targetEncrypted
-    )
+      targetEncrypted,
+    );
 
     // Sign the container
-    const signature = await this.signFromNonce(container, editorNonce)
-    const containerSigned = concatBytes(container, signature)
+    const signature = await this.signFromNonce(container, editorNonce);
+    const containerSigned = concatBytes(container, signature);
 
     // Send the container on over
-    const response = await fetch(
-      this.#publicKeyToURL(publicKey), {
-      method: 'PUT',
-      body: containerSigned
-    })
+    const response = await fetch(this.#publicKeyToURL(publicKey), {
+      method: "PUT",
+      body: containerSigned,
+    });
 
     // If it's an error throw it
     if (response.status != 200) {
-      throw await response.text()
+      throw await response.text();
     } else {
       const output: CreatedAndExistingLinks = {
         created: this.parse(publicKey, containerSigned, source),
-        existing: null
-      }
+        existing: null,
+      };
 
       // Include existing data if it exists
-      const oldContainerSigned = new Uint8Array(await response.arrayBuffer())
+      const oldContainerSigned = new Uint8Array(await response.arrayBuffer());
       if (oldContainerSigned.byteLength) {
         try {
-          output.existing = this.parse(publicKey, oldContainerSigned, source)
+          output.existing = this.parse(publicKey, oldContainerSigned, source);
         } catch {}
       }
 
-      return output
+      return output;
     }
   }
 }
