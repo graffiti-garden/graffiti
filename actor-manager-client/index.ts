@@ -42,6 +42,7 @@ export default class ActorManager {
   #initialized = false;
   #iframe = document.createElement("iframe");
   #dialog = document.createElement("dialog");
+  #chosenActor: string | null = null;
 
   constructor(options?: ActorManagerOptions) {
     this.onChosenActor = options?.onChosenActor;
@@ -81,6 +82,14 @@ export default class ActorManager {
 
   selectActor(): void {
     this.#dialog.showModal();
+  }
+
+  get chosenActor(): string | null {
+    return this.#chosenActor;
+  }
+
+  get chosenActorPublicKey(): Uint8Array | null {
+    return this.#chosenActor ? base64Decode(this.#chosenActor.slice(6)) : null;
   }
 
   async sign(message: Uint8Array, nonce?: Uint8Array): Promise<Uint8Array> {
@@ -231,6 +240,7 @@ export default class ActorManager {
     }
 
     if (data.chosen !== undefined) {
+      this.#chosenActor = data.chosen;
       this.onChosenActor?.(data.chosen);
     } else if (data.messageID) {
       const messageEvent: ReplyMessageEvent = new Event(data.messageID);

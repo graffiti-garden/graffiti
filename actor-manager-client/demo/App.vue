@@ -8,7 +8,7 @@ const actorID: Ref<null | string> = ref(null)
 const nonce: Ref<Uint8Array | undefined> = ref(undefined)
 const publicKey: Ref<string> = ref('')
 async function getPublicKey() {
-    publicKey.value = base64Encode(await am.getPublicKey(nonce.value))
+    publicKey.value = base64Encode(nonce.value ? await am.getPublicKey(nonce.value) : am.chosenActorPublicKey)
 }
 
 async function noNoncense() {
@@ -28,7 +28,6 @@ const am = new ActorManager({
         await noNoncense()
     }
 })
-
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
