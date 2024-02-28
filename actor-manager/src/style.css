@@ -1,388 +1,406 @@
 :root {
-  --back: rgb(26, 26, 26, 0.7);
-  --halfback:  rgba(80, 80, 80, 0.7);
-  --halfback2: rgba(26, 26, 26, 0.7);
-  --hover: rgba(202, 122, 204, 0.5);
-  --frontfaded: rgba(255, 255, 255, 0.7);
-  --front: rgba(230, 230, 230);
-  --emph: rgb(202, 122, 204);
-  --blurpix: 4px;
+    --back: rgb(26, 26, 26, 0.7);
+    --halfback: rgba(80, 80, 80, 0.7);
+    --halfback2: rgba(26, 26, 26, 0.7);
+    --hover: rgba(202, 122, 204, 0.5);
+    --frontfaded: rgba(255, 255, 255, 0.7);
+    --front: rgba(230, 230, 230);
+    --emph: rgb(202, 122, 204);
+    --blurpix: 4px;
 }
 
 * {
-  padding: 0;
-  margin: 0;
-  box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
 }
 
 html::before {
-  content: "";
-  position: fixed;
-  left: 0;
-  right: 0;
-  z-index: -1;
-  background-image: url(/graffiti.jpg);
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: 50% 50%;
-  height: calc(100dvh + 2*var(--blurpix));
-  width: calc(100dvw + 2*var(--blurpix));
-  filter: blur(var(--blurpix));
-  margin: calc(-1*var(--blurpix));
+    content: "";
+    position: fixed;
+    left: 0;
+    right: 0;
+    z-index: -1;
+    background-image: url(/graffiti.jpg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    height: calc(100dvh + 2 * var(--blurpix));
+    width: calc(100dvw + 2 * var(--blurpix));
+    filter: blur(var(--blurpix));
+    margin: calc(-1 * var(--blurpix));
 }
 
 html {
-  width: 100dvw;
-  height: 100dvh;
-  overflow: hidden;
-  position: absolute;
-  top: 0;
-  left: 0;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-  font-size: 120%;
-  line-height: 1.7;
-  word-break: break-word;
-  color: var(--frontfaded);
-  background-color: var(--back);
+    width: 100dvw;
+    height: 100dvh;
+    overflow: hidden;
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        "Fira Sans",
+        "Droid Sans",
+        "Helvetica Neue",
+        sans-serif;
+    font-size: 120%;
+    line-height: 1.7;
+    word-break: break-word;
+    color: var(--frontfaded);
+    background-color: var(--back);
 }
 
 #app {
-  display: contents;
+    display: contents;
 }
 
 @font-face {
-  font-family: 'Rock Salt';
-  font-style: normal;
-  font-weight: 400;
-  src: url(/rock-salt.woff2) format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    font-family: "Rock Salt";
+    font-style: normal;
+    font-weight: 400;
+    src: url(/rock-salt.woff2) format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+        U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212,
+        U+2215, U+FEFF, U+FFFD;
 }
 
 body {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
 }
 
 main {
-  flex: 1;
-  max-width: 600px;
-  width: 100%;
-  gap: 4dvh;
-  padding-top: 4dvh;
-  padding-bottom: 4dvh;
-  margin-top: 4dvh;
-  margin-bottom: 4dvh;
-  margin-left: 4dvw;
-  margin-right: 4dvw;
-  padding-left: 4dvw;
-  padding-right: 4dvw;
-  background: var(--back);
-  border-radius: 1rem;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  scrollbar-color: var(--emph) rgba(0,0,0,0);
+    flex: 1;
+    max-width: 600px;
+    width: 100%;
+    gap: 4dvh;
+    padding-top: 4dvh;
+    padding-bottom: 4dvh;
+    margin-top: 4dvh;
+    margin-bottom: 4dvh;
+    margin-left: 4dvw;
+    margin-right: 4dvw;
+    padding-left: 4dvw;
+    padding-right: 4dvw;
+    background: var(--back);
+    border-radius: 1rem;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    scrollbar-color: var(--emph) rgba(0, 0, 0, 0);
 }
 
 header {
-  width: 100%;
-  display: flex;
-  justify-content: flex-end;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
 }
 
 h1 {
-  font-size: 1rem;
-  font-family: Rock Salt;
-  letter-spacing: 0.2em;
-  text-align: center;
-  color: var(--front);
+    font-size: 1rem;
+    font-family: Rock Salt;
+    letter-spacing: 0.2em;
+    text-align: center;
+    color: var(--front);
 }
 
 h1 a {
-  color: var(--front);
+    color: var(--front);
 }
 
 h1 a:hover {
-  background: none;
-  color: var(--emph);
+    background: none;
+    color: var(--emph);
 }
 
 h2 {
-  text-align: center;
-  font-weight: 500;
-  background: var(--halfback2);
-  padding: 2rem;
-  border-radius: 1rem;
-  border: 1px solid var(--front);
+    text-align: center;
+    font-weight: 500;
+    background: var(--halfback2);
+    padding: 2rem;
+    border-radius: 1rem;
+    border: 1px solid var(--front);
 }
 
 fieldset {
-  overflow-y: auto;
-  scrollbar-color: var(--emph) rgba(0,0,0,0);
-  flex-basis: 0;
-  flex-grow: 1;
-  border-radius: 1rem;
-  position: relative;
-  min-width: 0;
+    overflow-y: auto;
+    scrollbar-color: var(--emph) rgba(0, 0, 0, 0);
+    flex-basis: 0;
+    flex-grow: 1;
+    border-radius: 1rem;
+    position: relative;
+    min-width: 0;
 }
 
 fieldset > ul {
-  border-radius: 1rem;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
+    border-radius: 1rem;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
 }
 
 fieldset > ul > :nth-child(even) > * {
-  background: var(--halfback);
+    background: var(--halfback);
 }
 
 fieldset > ul > :nth-child(odd) > * {
-  background: var(--halfback2);
+    background: var(--halfback2);
 }
 
 fieldset > ul > * > *:hover {
-  cursor: pointer;
-  background: var(--hover);
+    cursor: pointer;
+    background: var(--hover);
 }
 
 legend {
-  float: left;
-  width: 100%;
-  padding: 0.2rem;
-  border-radius: 1rem;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  padding-left: 1rem;
-  border-bottom: 1px solid var(--front);
+    float: left;
+    width: 100%;
+    padding: 0.2rem;
+    border-radius: 1rem;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding-left: 1rem;
+    border-bottom: 1px solid var(--front);
 }
 
 fieldset > ul > li > * {
-  display: flex;
-  height: 3rem;
-  padding: 1rem;
-  gap: 0.5rem;
-  width: 100%;
-  border: none;
-  border-bottom: 1px solid var(--front);
-  align-items: center;
-  justify-content: center;
+    display: flex;
+    height: 3rem;
+    padding: 1rem;
+    gap: 0.5rem;
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid var(--front);
+    align-items: center;
+    justify-content: center;
 }
 
 fieldset ul > li > button {
-  text-align: center;
-  border-radius: 0;
+    text-align: center;
+    border-radius: 0;
 }
 
-label > :is(form,span) {
-  flex: 1;
-  color: white;
-  font-weight: bold;
+label > :is(form, span) {
+    flex: 1;
+    color: white;
+    font-weight: bold;
 }
 
 label > span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 a {
-  text-decoration: none;
+    text-decoration: none;
 }
 
-button, :is(p,ul) a, input[type=submit] {
-  color: var(--emph);
+button,
+:is(p, ul) a,
+input[type="submit"] {
+    color: var(--emph);
 }
 
-button, input[type=submit], menu a {
-  font-size: 1rem;
-  text-align: center;
-  display: block;
-  border-radius: 1rem;
-  border: 2px solid var(--emph);
-  padding: 1rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  transition: 0.1s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  background: none;
-  line-height: 1.2rem;
+button,
+input[type="submit"],
+menu a {
+    font-size: 1rem;
+    text-align: center;
+    display: block;
+    border-radius: 1rem;
+    border: 2px solid var(--emph);
+    padding: 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    transition: 0.1s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: none;
+    line-height: 1.2rem;
 }
 
 header button {
-  border-radius: 0 0 0 1rem;
-  border-right: none;
-  border-top: none;
-  background-color: var(--halfback2);
-  width: fit-content;
-  position: relative;
-  overflow: hidden;
+    border-radius: 0 0 0 1rem;
+    border-right: none;
+    border-top: none;
+    background-color: var(--halfback2);
+    width: fit-content;
+    position: relative;
+    overflow: hidden;
 }
 
 header button::before {
-  z-index: -1;
-  top: 0;
-  left: 0;
-  height: 100%;
-  position: absolute;
-  width: 100%;
-  content: "";
-  background-color: var(--back)
+    z-index: -1;
+    top: 0;
+    left: 0;
+    height: 100%;
+    position: absolute;
+    width: 100%;
+    content: "";
+    background-color: var(--back);
 }
 
 .dropdown {
-  position: relative;
+    position: relative;
 }
 
-.dropdown.open > button{
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  border-bottom: 0;
+.dropdown.open > button {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: 0;
 }
 
 @media (max-width: 600px) {
-  main {
-    border-radius: 0;
-    margin: auto; 
-    overflow: auto;
-  }
+    main {
+        border-radius: 0;
+        margin: auto;
+        overflow: auto;
+    }
 
-  header button {
-    border-radius: 0;
-    border-left: none;
-    width: 100%;
-  }
+    header button {
+        border-radius: 0;
+        border-left: none;
+        width: 100%;
+    }
 
-  html {
-    justify-content: safe center;
-  }
+    html {
+        justify-content: safe center;
+    }
 }
 
-:is(button,ul a,input[type=submit]):hover {
-  cursor: pointer;
-  background: var(--hover);
+:is(button, ul a, input[type="submit"]):hover {
+    cursor: pointer;
+    background: var(--hover);
 }
 
 p a:hover {
-  text-decoration: underline;
+    text-decoration: underline;
 }
 
-:is(button,input[type=submit]).highlight {
-  background: var(--hover);
-  color: var(--front);
+:is(button, input[type="submit"]).highlight {
+    background: var(--hover);
+    color: var(--front);
 }
 
-:is(button,input[type=submit]).highlight:hover {
-  background: var(--emph);
+:is(button, input[type="submit"]).highlight:hover {
+    background: var(--emph);
 }
 
-:is(button,input[type=submit]):focus {
-  outline: 2px solid var(--front);
+:is(button, input[type="submit"]):focus {
+    outline: 2px solid var(--front);
 }
 
 button:disabled {
-  border: 2px solid grey;
-  color: grey;
+    border: 2px solid grey;
+    color: grey;
 }
 
 button:disabled:hover {
-  cursor: auto;
-  background: none;
+    cursor: auto;
+    background: none;
 }
 
 input::selection {
-  color: inherit;
-  background-color: var(--hover)
+    color: inherit;
+    background-color: var(--hover);
 }
 
 input[type="text"] {
-  color: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  background: none;
-  width: 100%;
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    background: none;
+    width: 100%;
 }
 
 main > form > input[type="text"] {
-  padding: 1rem;
-  border: 2px solid var(--frontfaded);
-  border-radius: 1rem;
-  font-weight: bold;
+    padding: 1rem;
+    border: 2px solid var(--frontfaded);
+    border-radius: 1rem;
+    font-weight: bold;
 }
 
 main > form > input[type="text"]:focus {
-  outline: 2px solid var(--emph);
+    outline: 2px solid var(--emph);
 }
 
 ul input[type="text"] {
-  color: inherit;
-  border: none;
-  outline: 2px dotted var(--frontfaded);
-  outline-offset: 0.1rem;
+    color: inherit;
+    border: none;
+    outline: 2px dotted var(--frontfaded);
+    outline-offset: 0.1rem;
 }
 
 input[type="radio"] {
-  appearance: none;
-  margin: 0;
-  font: inherit;
-  color: currentColor;
-  width: 1.15rem;
-  height: 1.15rem;
-  border: 0.15rem solid var(--emph);
-  border-radius: 50%;
-  transform: translateY(-0.075rem);
-  display: grid;
-  place-content: center;
+    appearance: none;
+    margin: 0;
+    font: inherit;
+    color: currentColor;
+    width: 1.15rem;
+    height: 1.15rem;
+    border: 0.15rem solid var(--emph);
+    border-radius: 50%;
+    transform: translateY(-0.075rem);
+    display: grid;
+    place-content: center;
 }
 
 input[type="radio"]::before {
-  content: "";
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  transform: scale(0);
-  transition: 120ms transform ease-in-out;
-  background-color: var(--emph);
+    content: "";
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    transform: scale(0);
+    transition: 120ms transform ease-in-out;
+    background-color: var(--emph);
 }
 
 input[type="radio"]:checked::before {
-  transform: scale(1);
+    transform: scale(1);
 }
 
 li {
-  list-style: none;
-  width: 100%;
+    list-style: none;
+    width: 100%;
 }
 
 menu {
-  border-radius: 1rem;
-  border: 2px solid var(--emph);
-  border-top-right-radius: 0;
-  overflow: hidden;
-  background-color: black;;
-  position: absolute;
-  right: 0;
-  z-index: 1;
+    border-radius: 1rem;
+    border: 2px solid var(--emph);
+    border-top-right-radius: 0;
+    overflow: hidden;
+    background-color: black;
+    position: absolute;
+    right: 0;
+    z-index: 1;
 }
 
-menu li :is(button,a) {
-  width: 100%;
-  border: none;
-  border-radius: 0;
+menu li :is(button, a) {
+    width: 100%;
+    border: none;
+    border-radius: 0;
 }
 
-menu li + li :is(button,a) {
-  border-top: 2px solid var(--emph);
+menu li + li :is(button, a) {
+    border-top: 2px solid var(--emph);
 }
 
 form {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-  gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 1rem;
 }
