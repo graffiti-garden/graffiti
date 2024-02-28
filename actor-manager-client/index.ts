@@ -2,7 +2,7 @@ import { ed25519 as curve } from "@noble/curves/ed25519";
 import defaultStyle from "./style.css?inline";
 
 const defaultActorManagerURL = "https://actor.graffiti.garden";
-// const defaultActorManagerURL = "http://localhost:5173"
+// const defaultActorManagerURL = "http://localhost:5173";
 
 interface ReplyMessage {
   messageID: string;
@@ -132,22 +132,22 @@ export default class ActorManager {
   async #privateMessageAction(
     action: string,
     input: Uint8Array,
-    theirURIorPublicKey: string | Uint8Array,
+    theirURIorPublicKey?: string | Uint8Array,
     nonce?: Uint8Array,
   ): Promise<Uint8Array> {
-    const theirURIEncoded =
-      this.#decodeActorURIorPublicKey(theirURIorPublicKey);
-    const output = await this.#sendAndReceive(
-      action,
-      `${base64Encode(input)},${base64Encode(theirURIEncoded)}`,
-      nonce,
-    );
+    let dataString = base64Encode(input);
+    if (theirURIorPublicKey !== undefined) {
+      const theirURIEncoded =
+        this.#decodeActorURIorPublicKey(theirURIorPublicKey);
+      dataString += `,${base64Encode(theirURIEncoded)}`;
+    }
+    const output = await this.#sendAndReceive(action, dataString, nonce);
     return base64Decode(output);
   }
 
   async encrypt(
     plaintext: Uint8Array,
-    theirURIorPublicKey: string | Uint8Array,
+    theirURIorPublicKey?: string | Uint8Array,
     nonce?: Uint8Array,
   ): Promise<Uint8Array> {
     return await this.#privateMessageAction(
@@ -160,7 +160,7 @@ export default class ActorManager {
 
   async decrypt(
     ciphertext: Uint8Array,
-    theirURIorPublicKey: string | Uint8Array,
+    theirURIorPublicKey?: string | Uint8Array,
     nonce?: Uint8Array,
   ): Promise<Uint8Array> {
     return await this.#privateMessageAction(

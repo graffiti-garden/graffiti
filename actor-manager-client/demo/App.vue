@@ -41,6 +41,10 @@ const plaintextIn: Ref<string> = ref('')
 const ciphertextOut: Ref<string> = ref('')
 const ciphertextIn: Ref<string> = ref('')
 const plaintextOut: Ref<string> = ref('')
+const plaintextInSelf: Ref<string> = ref('')
+const ciphertextOutSelf: Ref<string> = ref('')
+const ciphertextInSelf: Ref<string> = ref('')
+const plaintextOutSelf: Ref<string> = ref('')
 </script>
 
 <template>
@@ -113,6 +117,28 @@ const plaintextOut: Ref<string> = ref('')
 
         <p v-if="plaintextOut">
             Plaintext: {{ plaintextOut }}
+        </p>
+
+        <hr>
+        Encrypt and decrypt a message to yourself:
+        <form
+            @submit.prevent="am.encrypt(encoder.encode(plaintextInSelf), undefined, nonce).then(c => ciphertextOutSelf = base64Encode(c))">
+            <input v-model="plaintextInSelf">
+            <input type="submit" value="Encrypt Message to Self">
+        </form>
+
+        <p v-if="ciphertextOutSelf">
+            Ciphertext: {{ ciphertextOutSelf }}
+        </p>
+
+        <form
+            @submit.prevent="am.decrypt(base64Decode(ciphertextInSelf), undefined, nonce).then(p => plaintextOutSelf = decoder.decode(p)).catch(() => plaintextOutSelf = 'error decoding message')">
+            <input v-model="ciphertextInSelf">
+            <input type="submit" value="Decrypt Message from Self">
+        </form>
+
+        <p v-if="plaintextOutSelf">
+            Plaintext: {{ plaintextOutSelf }}
         </p>
 
     </template>
