@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import BYOStorage from "./index";
-import { randomBytes } from "@noble/hashes/utils";
+import { concatBytes, randomBytes } from "@noble/hashes/utils";
+import { sha256 } from "@noble/hashes/sha256";
 import "dotenv/config";
 
 const accessToken = process.env.DROPBOX_ACCESS_TOKEN;
@@ -8,7 +9,43 @@ if (!accessToken) {
   throw "You haven't defined a dropbox access token! See the Readme for more information.";
 }
 
+function mockSignatures() {
+  const publicKey = randomBytes(32);
+
+  const sign = async (data: Uint8Array) => {
+    const hash = sha256(data);
+    return concatBytes(hash, publicKey);
+  };
+
+  const verify = async (
+    signature: Uint8Array,
+    data: Uint8Array,
+    publicKey: Uint8Array,
+  ) => {
+    const hash = sha256(data);
+    const expectedSignature = concatBytes(hash, publicKey);
+    return expectedSignature.every((byte, i) => byte === signature[i]);
+  };
+
+  return { publicKey, sign, verify };
+}
+
 describe(`Main`, () => {
+  it("mock signatures", async () => {
+    const { publicKey, sign, verify } = mockSignatures();
+    const data = randomBytes(100);
+    const signature = await sign(data);
+    expect(await verify(signature, data, publicKey)).toBe(true);
+  });
+
+  it("mock signatures invalid", async () => {
+    const { sign, verify } = mockSignatures();
+    const data = randomBytes(100);
+    const signature = await sign(data);
+    const { publicKey: publicKey2 } = mockSignatures();
+    expect(await verify(signature, data, publicKey2)).toBe(false);
+  });
+
   it("post and receive data", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
 
@@ -19,7 +56,13 @@ describe(`Main`, () => {
     const data = randomBytes(100);
 
     // Post the data
-    const { sharedLink, uuid } = await byos.post(channel, data);
+    const { publicKey, sign } = mockSignatures();
+    const { sharedLink, uuid } = await byos.post(
+      channel,
+      data,
+      publicKey,
+      sign,
+    );
 
     // Get the data back
     const iterator = byos.watch(channel, sharedLink);
@@ -39,7 +82,7 @@ describe(`Main`, () => {
 
     // Post more data
     const data2 = randomBytes(100);
-    const { uuid: uuid2 } = await byos.post(channel, data2);
+    const { uuid: uuid2 } = await byos.post(channel, data2, publicKey, sign);
 
     // Get the data back
     const result3 = (await iterator.next()).value;
@@ -51,7 +94,7 @@ describe(`Main`, () => {
     uuid2.forEach((byte, i) => {
       expect(byte).toEqual(result3.uuid[i]);
     });
-  }, 20000);
+  }, 100000);
 
   it("replace data", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
@@ -60,7 +103,14 @@ describe(`Main`, () => {
     const channel = Math.random().toString(36).substring(7);
     const uuid = randomBytes(16);
     const data = randomBytes(100);
-    const { sharedLink } = await byos.post(channel, data, uuid);
+    const { publicKey, sign } = mockSignatures();
+    const { sharedLink } = await byos.post(
+      channel,
+      data,
+      publicKey,
+      sign,
+      uuid,
+    );
 
     // Get the data
     const iterator = byos.watch(channel, sharedLink);
@@ -75,11 +125,17 @@ describe(`Main`, () => {
 
     // Replace the post with the same UUID
     const data2 = randomBytes(100);
-    const { sharedLink: sharedLink2 } = await byos.post(channel, data2, uuid);
+    const { sharedLink: sharedLink2 } = await byos.post(
+      channel,
+      data2,
+      publicKey,
+      sign,
+      uuid,
+    );
     expect(sharedLink).toEqual(sharedLink2);
 
     // Make sure we get the new data
-    const timeoutSignal = AbortSignal.timeout(2000);
+    const timeoutSignal = AbortSignal.timeout(4000);
     const iterator2 = byos.watch(channel, sharedLink2, timeoutSignal);
     const result3 = (await iterator2.next()).value;
     expect(result3.type).toEqual("post");
@@ -98,10 +154,16 @@ describe(`Main`, () => {
 
   it("watch with wrong channel", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
+    const { publicKey, sign } = mockSignatures();
 
     // Post some data
     const channel = Math.random().toString(36).substring(7);
-    const { sharedLink } = await byos.post(channel, randomBytes(100));
+    const { sharedLink } = await byos.post(
+      channel,
+      randomBytes(100),
+      publicKey,
+      sign,
+    );
 
     // Listen on the wrong channel
     const wrongChannel = Math.random().toString(36).substring(7);
@@ -114,13 +176,19 @@ describe(`Main`, () => {
 
   it("delete data", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
+    const { publicKey, sign } = mockSignatures();
 
     // Post some data
     const channel = Math.random().toString(36).substring(7);
-    const sharedLinkandUUID = await byos.post(channel, randomBytes(100));
+    const sharedLinkandUUID = await byos.post(
+      channel,
+      randomBytes(100),
+      publicKey,
+      sign,
+    );
 
     // Delete the data
-    await byos.remove(channel, sharedLinkandUUID.uuid);
+    await byos.remove(channel, publicKey, sharedLinkandUUID.uuid);
 
     // Make sure the data is gone
     const timeoutSignal = AbortSignal.timeout(4000);
@@ -138,15 +206,20 @@ describe(`Main`, () => {
 
   it("replace and delete while watching", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
+    const { publicKey, sign } = mockSignatures();
 
     // Start watching
     const channel = Math.random().toString(36).substring(7);
-    const sharedLink = await byos.getSharedLink(channel);
+    const [sharedLink, path] = await byos.getSharedLinkAndPath(
+      channel,
+      publicKey,
+      sign,
+    );
     const iterator = byos.watch(channel, sharedLink);
 
     // Post some data
     const data = randomBytes(100);
-    const { uuid } = await byos.post(channel, data);
+    const { uuid } = await byos.post(channel, data, publicKey, sign);
 
     // Get the data
     const result = (await iterator.next()).value;
@@ -162,7 +235,7 @@ describe(`Main`, () => {
 
     // Replace the data
     const data2 = randomBytes(100);
-    await byos.post(channel, data2, uuid);
+    await byos.post(channel, data2, publicKey, sign, uuid);
     const result2 = (await iterator.next()).value;
     if (result2.type == "post") {
       data2.forEach((byte, i) => {
@@ -171,7 +244,7 @@ describe(`Main`, () => {
     }
 
     // Delete the data
-    await byos.remove(channel, uuid);
+    await byos.remove(channel, publicKey, uuid);
     const result3 = (await iterator.next()).value;
     expect(result3.type).toEqual("remove");
     if (result3.type == "remove") {

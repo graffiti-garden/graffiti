@@ -34,11 +34,19 @@ type WatchResult =
     }
   | {
       type: "backlog-complete";
+    }
+  | {
+      type: "public-key";
+      publicKey: Uint8Array;
     };
 
 interface CacheDB extends DBSchema {
+  "public-keys": {
+    key: string; // shared link
+    value: Uint8Array; // the public key
+  };
   "shared-links": {
-    key: string; // channel
+    key: string; // hidden path
     value: string; // shared link
   };
   cursors: {
@@ -58,6 +66,10 @@ interface CacheDB extends DBSchema {
     };
   };
 }
+
+type SigningFunction = (
+  message: Uint8Array,
+) => Promise<Uint8Array> | Uint8Array;
 
 export interface BYOStorageOptions {
   authentication: Authentication;
@@ -180,23 +192,47 @@ export default class BYOStorage {
     }
   }
 
-  async getSharedLink(channel: string): Promise<string> {
+  async getSharedLinkAndPath(
+    channel: string,
+    publicKey: Uint8Array,
+    sign: SigningFunction,
+  ): Promise<[string, string]> {
+    const hiddenPath = await this.#getHiddenPath(channel, publicKey);
+    const sharedLink = await this.#getSharedLinkFromHiddenPath(hiddenPath);
+    await this.#signDirectory(channel, publicKey, hiddenPath, sharedLink, sign);
+    return [sharedLink, hiddenPath];
+  }
+
+  async #getHiddenPath(
+    channel: string,
+    publicKey: Uint8Array,
+  ): Promise<string> {
+    // Combine the public key and channel
+    const publicKeyBase64 = this.#base64Encode(publicKey);
+    const plaintextPath = `byo/${publicKeyBase64}/${channel}`;
+
+    // Generate a hidden path so no information is
+    // leaked about the channel to Dropbox
+    const infoHash = sha256(plaintextPath);
+    const infoHashString = this.#base64Encode(infoHash);
+    return `${ROOT_FOLDER}/${infoHashString}`;
+  }
+
+  async #getSharedLinkFromHiddenPath(hiddenPath: string): Promise<string> {
     // First try to get the shared link from the cache
     let sharedLink: string | undefined = await (
       await this.#db
-    )?.get("shared-links", channel);
+    )?.get("shared-links", hiddenPath);
     if (sharedLink) {
       return sharedLink;
     }
-
-    const directory = this.#channelToDirectory(channel);
 
     // Get the shared link to the channel
     try {
       // See if the shared link already exists on dropbox
       const sharedLinkResult =
         await this.#dropbox.sharingCreateSharedLinkWithSettings({
-          path: directory,
+          path: hiddenPath,
         });
       sharedLink = sharedLinkResult.result.url;
     } catch (e) {
@@ -206,7 +242,7 @@ export default class BYOStorage {
         // Create the directory
         try {
           await this.#dropbox.filesCreateFolderV2({
-            path: directory,
+            path: hiddenPath,
           });
         } catch (e) {
           if (e.error.error_summary.startsWith("path/conflict")) {
@@ -216,7 +252,7 @@ export default class BYOStorage {
           }
         }
         // Try again
-        return await this.getSharedLink(channel);
+        return await this.#getSharedLinkFromHiddenPath(hiddenPath);
       } else {
         throw e;
       }
@@ -224,16 +260,53 @@ export default class BYOStorage {
 
     if (sharedLink) {
       // Cache the shared link
-      await (await this.#db)?.put("shared-links", sharedLink, channel);
+      await (await this.#db)?.put("shared-links", sharedLink, hiddenPath);
       return sharedLink;
     } else {
       throw "Shared link could not be created";
     }
   }
 
+  async #signDirectory(
+    channel: string,
+    publicKey: Uint8Array,
+    hiddenPath: string,
+    sharedLink: string,
+    sign: SigningFunction,
+  ): Promise<void> {
+    // Check in the cache if we have already created a signature
+    const hasSignature = await (await this.#db)?.get("public-keys", sharedLink);
+    if (hasSignature) return;
+
+    // Generate a signature
+    const signature = await sign(new TextEncoder().encode(sharedLink));
+
+    // Concatenate with the public key
+    const signatureWithPublicKey = concatBytes(publicKey, signature);
+
+    // Encrypt the signature with the channel as key
+    const encrypted = this.#encrypt(channel, signatureWithPublicKey);
+
+    // Place the signature in the directory
+    await this.#dropbox.filesUpload({
+      path: `${hiddenPath}/signature`,
+      contents: encrypted,
+      mode: {
+        ".tag": "overwrite",
+      },
+    });
+
+    // Cache that we've created a signature
+    await (await this.#db)?.put("public-keys", publicKey, sharedLink);
+
+    return;
+  }
+
   async post(
     channel: string,
     data: Uint8Array,
+    publicKey: Uint8Array,
+    sign: SigningFunction,
     uuid?: Uint8Array,
   ): Promise<SharedLinkandUUID> {
     this.#checkIfLoggedIn();
@@ -248,12 +321,15 @@ export default class BYOStorage {
     const encrypted = this.#encrypt(channel, data);
 
     // Make sure the directory exists
-    const sharedLink = await this.getSharedLink(channel);
+    const [sharedLink, path] = await this.getSharedLinkAndPath(
+      channel,
+      publicKey,
+      sign,
+    );
 
     // Upload the file to the directory
-    const directory = this.#channelToDirectory(channel);
     await this.#dropbox.filesUpload({
-      path: `${directory}/${uuidString}`,
+      path: `${path}/${uuidString}`,
       contents: encrypted,
       mode: {
         ".tag": "overwrite",
@@ -266,19 +342,41 @@ export default class BYOStorage {
     };
   }
 
-  async remove(channel: string, uuid: Uint8Array): Promise<void> {
+  async remove(
+    channel: string,
+    publicKey: Uint8Array,
+    uuid: Uint8Array,
+  ): Promise<void> {
     this.#checkIfLoggedIn();
 
     // Base64 encode the UUID to use as a file name
     const uuidString = this.#base64Encode(uuid);
 
     // Make sure the directory exists
-    const directory = this.#channelToDirectory(channel);
+    const directory = await this.#getHiddenPath(channel, publicKey);
 
     // Delete the file from the directory
     await this.#dropbox.filesDeleteV2({
       path: `${directory}/${uuidString}`,
     });
+  }
+
+  async #downloadSharedLinkFile(
+    sharedLink: string,
+    path: string,
+  ): Promise<Uint8Array> {
+    const { result } = await this.#dropbox.sharingGetSharedLinkFile({
+      url: sharedLink,
+      path: path,
+    });
+
+    if ("fileBinary" in result && result.fileBinary instanceof Uint8Array) {
+      return result.fileBinary;
+    } else if ("fileBlob" in result && result.fileBlob instanceof Blob) {
+      return new Uint8Array(await result.fileBlob.arrayBuffer());
+    } else {
+      throw "Unexpected file type returned from Dropbox API.";
+    }
   }
 
   async *watch(
@@ -289,6 +387,34 @@ export default class BYOStorage {
     this.#checkIfLoggedIn();
 
     let backlogComplete = false;
+
+    // Lookup the public key in the cache
+    const publicKey = await (await this.#db)?.get("public-keys", sharedLink);
+    if (publicKey) {
+      yield {
+        type: "public-key",
+        publicKey,
+      };
+    } else {
+      // If not in the cache,
+      // download the public key + signature from the shared link
+      const encrypted = await this.#downloadSharedLinkFile(
+        sharedLink,
+        "/signature",
+      );
+
+      // Decrypt the signature with the channel as key
+      const decrypted = this.#decrypt(channel, encrypted);
+
+      // Split apart the public key and signature
+      const publicKey = decrypted.slice(0, 32);
+      const signature = decrypted.slice(32);
+
+      // Verify the signature
+
+      // Store the public key in the cache
+      await (await this.#db)?.put("public-keys", publicKey, sharedLink);
+    }
 
     // First load data from the cache if it exists
     const tx = (await this.#db)?.transaction("data", "readonly");
@@ -362,31 +488,15 @@ export default class BYOStorage {
         for (const entry of entries) {
           if (
             entry[".tag"] === "file" &&
+            entry.name != "signature" &&
             entry.is_downloadable &&
             entry.path_display
           ) {
-            const file = await signalPromise(
-              this.#dropbox.filesDownload({
-                path: entry.path_display,
-              }),
+            const encrypted = await signalPromise(
+              this.#downloadSharedLinkFile(sharedLink, `/${entry.name}`),
             );
 
-            // Decrypt the file and yield the result
-            let binary: Uint8Array;
-            if (
-              "fileBinary" in file.result &&
-              file.result.fileBinary instanceof Uint8Array
-            ) {
-              binary = file.result.fileBinary;
-            } else if (
-              "fileBlob" in file.result &&
-              file.result.fileBlob instanceof Blob
-            ) {
-              binary = new Uint8Array(await file.result.fileBlob.arrayBuffer());
-            } else {
-              throw "Unexpected file type returned from Dropbox API.";
-            }
-            const data = this.#decrypt(channel, binary);
+            const data = this.#decrypt(channel, encrypted);
             const uuid = this.#base64Decode(entry.name);
 
             // Store the data in the cache
@@ -480,12 +590,6 @@ export default class BYOStorage {
 
   #channelToCipherKey(channel: string): Uint8Array {
     return sha256("c" + channel);
-  }
-
-  #channelToDirectory(channel: string): string {
-    const infoHash = sha256("x" + channel);
-    const infoHashString = this.#base64Encode(infoHash);
-    return `${ROOT_FOLDER}/${infoHashString}`;
   }
 
   #encrypt(channel: string, data: Uint8Array): Uint8Array {
