@@ -2,7 +2,7 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <title>Graffiti Data Store</title>
+        <title>BYO Storage</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     </head>
 
@@ -25,6 +25,9 @@
         <script type="module">
             import BYOStorage from "/dist/index.js";
             // import BYOStorage from "https://cdn.jsdelivr.net/npm/@graffiti-garden/byo-storage";
+
+            // Static public key in this demo
+            const publicKey = new Uint8Array(32);
 
             window.byos = new BYOStorage({
                 authentication: {
@@ -61,7 +64,10 @@
                 controller = new AbortController();
 
                 // Get the shared link
-                const sharedLink = await byos.getSharedLink(channel);
+                const { sharedLink } = await byos.createDirectory(
+                    channel,
+                    publicKey,
+                );
 
                 // Clear the list of posts
                 const posts = document.getElementById("posts");
@@ -77,7 +83,7 @@
                     // Convert the UUID from Uint8Array to a string
                     const uuid = new TextDecoder().decode(action.uuid);
 
-                    if (action.type === "post") {
+                    if (action.type === "update") {
                         // Check if the UUID already exists...
                         let li = document.getElementById(uuid);
 
@@ -96,19 +102,20 @@
                         const delButton = document.createElement("button");
                         delButton.innerText = "␡";
                         delButton.onclick = () =>
-                            byos.remove(channel, action.uuid);
+                            byos.delete(channel, publicKey, action.uuid);
                         li.appendChild(delButton);
 
                         const editButton = document.createElement("button");
                         editButton.innerText = "‼";
                         editButton.onclick = () =>
-                            byos.post(
+                            byos.update(
                                 channel,
-                                new TextEncoder().encode(text + "!!"),
+                                publicKey,
                                 action.uuid,
+                                new TextEncoder().encode(text + "!!"),
                             );
                         li.appendChild(editButton);
-                    } else if (action.type == "remove") {
+                    } else if (action.type == "delete") {
                         const li = document.getElementById(uuid);
                         if (li) {
                             li.remove();
@@ -123,7 +130,9 @@
                 const channel = document.getElementById("channel").value;
                 const dataEl = document.getElementById("data");
                 const data = new TextEncoder().encode(dataEl.value);
-                await byos.post(channel, data);
+                const uuid = new Uint8Array(16);
+                crypto.getRandomValues(uuid);
+                await byos.update(channel, publicKey, uuid, data);
             };
         </script>
     </body>
