@@ -63,15 +63,15 @@
                 }
                 controller = new AbortController();
 
+                // Clear the list of posts
+                const posts = document.getElementById("posts");
+                posts.innerHTML = "";
+
                 // Get the shared link
                 const { sharedLink } = await byos.createDirectory(
                     channel,
                     publicKey,
                 );
-
-                // Clear the list of posts
-                const posts = document.getElementById("posts");
-                posts.innerHTML = "";
 
                 // Start the new watch
                 watching = channel;

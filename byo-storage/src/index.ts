@@ -220,8 +220,15 @@ export default class BYOStorage {
       // Send the original data in case of failure
       if (existing) {
         event.value.data = existing.data;
-        this.#optimisticEvents.dispatchEvent(event);
+      } else {
+        // Or a deletion
+        event.value = {
+          optimistic: true,
+          type: "delete",
+          name: uuidString,
+        };
       }
+      this.#optimisticEvents.dispatchEvent(event);
       throw e;
     }
 
@@ -404,17 +411,20 @@ export default class BYOStorage {
           const uuid = base64Decode(result.name);
 
           // Store the data in the cache
-          await (
-            await this.#db
-          )?.put("data", {
-            data,
-            uuid,
-            sharedLink,
-            uuidPlusSharedLink: this.#uuidPlusSharedLink(
-              result.name,
+          // but avoid optimistic updates, they're not reliable
+          if (!("optimistic" in result)) {
+            await (
+              await this.#db
+            )?.put("data", {
+              data,
+              uuid,
               sharedLink,
-            ),
-          });
+              uuidPlusSharedLink: this.#uuidPlusSharedLink(
+                result.name,
+                sharedLink,
+              ),
+            });
+          }
 
           yield {
             type: "update",
@@ -426,9 +436,11 @@ export default class BYOStorage {
         const uuid = base64Decode(result.name);
 
         // Remove the data from the cache
-        await (
-          await this.#db
-        )?.delete("data", this.#uuidPlusSharedLink(result.name, sharedLink));
+        if (!("optimistic" in result)) {
+          await (
+            await this.#db
+          )?.delete("data", this.#uuidPlusSharedLink(result.name, sharedLink));
+        }
 
         yield {
           type: "delete",
