@@ -46,3 +46,4 @@ npm test
 - [ ] Add support for other storage providers
 - [ ] Bundle posts together for faster loading
 - [ ] Frequency based watching. When a lot of channels are being watched, poll active channels more frequently than inactive ones
+- [ ] When multiple channels are being watched, batch the requests to the same channel together
