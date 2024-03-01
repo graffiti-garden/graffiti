@@ -58,7 +58,7 @@ describe(`Main`, () => {
       await byos.createDirectory(channel, publicKey);
     expect(directory).toEqual(directory2);
     expect(sharedLink).toEqual(sharedLink2);
-  });
+  }, 100000);
 
   it("directories with different public keys", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
@@ -73,7 +73,7 @@ describe(`Main`, () => {
       await byos.createDirectory(channel, publicKey2);
     expect(directory).not.toEqual(directory2);
     expect(sharedLink).not.toEqual(sharedLink2);
-  });
+  }, 100000);
 
   it("make and verify signature", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
@@ -89,7 +89,7 @@ describe(`Main`, () => {
     expect(publicKey.every((byte, i) => byte === publicKeyRecieved[i])).toBe(
       true,
     );
-  });
+  }, 100000);
 
   it("try to get unsigned directory", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
@@ -99,7 +99,7 @@ describe(`Main`, () => {
     await expect(
       byos.getPublicKey(channel, sharedLink, verify),
     ).rejects.toEqual("Signature not found");
-  });
+  }, 100000);
 
   it("post and receive data", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });

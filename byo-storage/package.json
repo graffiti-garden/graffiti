@@ -8,7 +8,7 @@
   "files": ["src", "dist"],
   "scripts": {
     "demo": "npm run build && python3 -m http.server",
-    "test": "vitest",
+    "test": "vitest --no-file-parallelism",
     "build": "node esbuild.config.js",
     "prepublishOnly": "npm test && npm run build"
   },
