@@ -81,16 +81,14 @@ export interface BYOStorageOptions {
 export default class BYOStorage {
   #dropbox: Dropbox;
   #db: Promise<IDBPDatabase<CacheDB>> | undefined;
-  #onLoginStateChange: ((state: boolean) => void) | undefined;
   #optimisticEvents: EventTarget = new EventTarget();
 
   constructor(options: BYOStorageOptions) {
     // Initialize the Dropbox client
-    this.#dropbox = new Dropbox(options.authentication);
-
-    // Update the callback
-    this.#onLoginStateChange = options.onLoginStateChange;
-    this.#onLoginStateChange?.(this.#dropbox.loggedIn);
+    this.#dropbox = new Dropbox(
+      options.authentication,
+      options.onLoginStateChange,
+    );
 
     // Initialize caches for shared links, cursors, and data
     if (typeof indexedDB !== "undefined") {
@@ -113,7 +111,6 @@ export default class BYOStorage {
 
   async toggleLogIn() {
     await this.#dropbox.toggleLogIn();
-    this.#onLoginStateChange?.(this.#dropbox.loggedIn);
   }
 
   async createDirectory(channel: string, publicKey: Uint8Array) {

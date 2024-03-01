@@ -1,14 +1,12 @@
-import { Dropbox } from "dropbox";
+import { Dropbox, DropboxAuth, files, sharing } from "dropbox";
 import { base64Encode } from "./util";
 import { randomBytes } from "@noble/hashes/utils";
-import type { files, sharing } from "dropbox";
 
 const ROOT_FOLDER = "/byo-storage";
 
 export type Authentication =
   | {
       clientId: string;
-      accessToken?: string;
     }
   | {
       accessToken: string;
@@ -33,69 +31,121 @@ export type FileListResult =
     };
 
 export default class DropboxSimplified {
+  #dropboxAuth: DropboxAuth;
   #dropbox: Dropbox;
+  #onLoginStateChange?: (loginState: boolean) => void;
 
-  constructor(authentication: Authentication) {
-    const storedToken =
+  constructor(
+    authentication: Authentication,
+    onLoginStateChange?: (loginState: boolean) => void,
+  ) {
+    this.#onLoginStateChange = onLoginStateChange;
+    const storedAccessToken =
       typeof localStorage !== "undefined"
-        ? localStorage.getItem("dropbox_access_token")
+        ? localStorage.getItem("byo_storage_dropbox_access_token")
+        : null;
+    const storedRefreshToken =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("byo_storage_dropbox_refresh_token")
+        : null;
+    const storedExpiresAt =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("byo_storage_dropbox_expires_at")
         : null;
 
-    if ("accessToken" in authentication) {
-      // Nothing to do
-    } else if (storedToken) {
-      authentication.accessToken = storedToken;
-    } else if (!!window.location.hash) {
-      // We are in the middle of an OAuth flow
-      const loc = window.location;
-      const urlParams = new URLSearchParams(loc.hash.slice(1));
-      const accessToken = urlParams.get("access_token");
-      const state = urlParams.get("state");
-      if (accessToken && state) {
-        // Make sure the state matches the one we stored
-        const storedState = localStorage.getItem("dropbox_auth_state");
-        if (state === storedState) {
-          authentication.accessToken = accessToken;
-          localStorage.setItem("dropbox_access_token", accessToken);
-          // Drop the state from local storage
-          localStorage.removeItem("dropbox_auth_state");
-        }
+    this.#dropboxAuth = new DropboxAuth(authentication);
+    this.#dropbox = new Dropbox({ auth: this.#dropboxAuth });
 
-        // Remove the access token from the URL
-        for (const param of [
-          "access_token",
-          "token_type",
-          "expires_in",
-          "scope",
-          "uid",
-          "account_id",
-          "state",
-        ]) {
-          urlParams.delete(param);
-        }
-        const hashString = urlParams.toString();
-        history.replaceState(
-          null,
-          "",
-          loc.pathname +
-            loc.search +
-            (hashString.length ? "#" + hashString : ""),
+    if ("accessToken" in authentication) {
+      this.#onLoginStateChange?.(this.loggedIn);
+    } else if (storedAccessToken && storedRefreshToken && storedExpiresAt) {
+      this.#dropboxAuth.setAccessToken(storedAccessToken);
+      this.#dropboxAuth.setRefreshToken(storedRefreshToken);
+      this.#dropboxAuth.setAccessTokenExpiresAt(new Date(storedExpiresAt));
+      this.#onLoginStateChange?.(this.loggedIn);
+    } else if (!!location.search) {
+      // We are in the middle of an OAuth flow
+      const myURL = new URL(location.href);
+      const code = myURL.searchParams.get("code");
+      const state = myURL.searchParams.get("state");
+      if (code && state) {
+        // Clear search params
+        myURL.search = "";
+        history.replaceState(null, "", myURL.pathname);
+
+        // Recover stored state and code
+        const storedState = sessionStorage.getItem(
+          "byo_storage_dropbox_auth_state",
         );
+        const verifier = sessionStorage.getItem(
+          "byo_storage_dropbox_code_verifier",
+        );
+        sessionStorage.removeItem("byo_storage_dropbox_auth_state");
+        sessionStorage.removeItem("byo_storage_dropbox_code_verifier");
+
+        if (verifier && state === storedState) {
+          this.#dropboxAuth.setCodeVerifier(verifier);
+          this.#dropboxAuth
+            .getAccessTokenFromCode(myURL.toString(), code)
+            .then(({ result }) => {
+              if (
+                "access_token" in result &&
+                typeof result.access_token == "string" &&
+                "refresh_token" in result &&
+                typeof result.refresh_token == "string" &&
+                "expires_in" in result &&
+                typeof result.expires_in == "number"
+              ) {
+                // Set and store the tokens
+                this.#dropboxAuth.setAccessToken(result.access_token);
+                this.#dropboxAuth.setRefreshToken(result.refresh_token);
+                const expiresAt = new Date(
+                  Date.now() + result.expires_in * 1000,
+                );
+                this.#dropboxAuth.setAccessTokenExpiresAt(expiresAt);
+                localStorage.setItem(
+                  "byo_storage_dropbox_access_token",
+                  result.access_token,
+                );
+                localStorage.setItem(
+                  "byo_storage_dropbox_refresh_token",
+                  result.refresh_token,
+                );
+                localStorage.setItem(
+                  "byo_storage_dropbox_expires_at",
+                  expiresAt.toISOString(),
+                );
+                this.#onLoginStateChange?.(this.loggedIn);
+              }
+            });
+        }
       }
     }
-
-    // Initialize and refresh the access token if necessary
-    this.#dropbox = new Dropbox(authentication);
-    this.#dropbox.auth.checkAndRefreshAccessToken();
   }
 
   get loggedIn() {
-    return !!this.#dropbox.auth.getAccessToken();
+    return !!this.#dropboxAuth.getAccessToken();
   }
 
-  checkIfLoggedIn() {
+  async checkLogIn() {
     if (!this.loggedIn) {
       throw "You are not logged in to dropbox";
+    }
+
+    const accessTokenBefore = this.#dropboxAuth.getAccessToken();
+    await this.#dropboxAuth.checkAndRefreshAccessToken();
+    const accessTokenAfter = this.#dropboxAuth.getAccessToken();
+
+    if (accessTokenBefore !== accessTokenAfter) {
+      const expiresAt = this.#dropboxAuth.getAccessTokenExpiresAt();
+      localStorage.setItem(
+        "byo_storage_dropbox_access_token",
+        accessTokenAfter,
+      );
+      localStorage.setItem(
+        "byo_storage_dropbox_expires_at",
+        expiresAt.toISOString(),
+      );
     }
   }
 
@@ -107,21 +157,32 @@ export default class DropboxSimplified {
       // Generate a random state string to prevent CSRF attacks
       const stateBytes = randomBytes(16);
       const state = base64Encode(stateBytes);
-      // Store the state in local storage
-      localStorage.setItem("dropbox_auth_state", state);
 
       // generate a random 10-charachter string
-      const authURL = await this.#dropbox.auth.getAuthenticationUrl(
+      const authURL = await this.#dropboxAuth.getAuthenticationUrl(
         myURL.toString(),
         state,
-        "token",
-        "legacy",
+        "code",
+        "offline",
+        undefined,
+        undefined,
+        true,
       );
-      window.location.href = authURL;
+      // Store the state in local storage
+      const verifier = this.#dropboxAuth.getCodeVerifier();
+      sessionStorage.setItem("byo_storage_dropbox_auth_state", state);
+      sessionStorage.setItem("byo_storage_dropbox_code_verifier", verifier);
+
+      window.location.href = authURL.toString();
     } else {
-      localStorage.removeItem("dropbox_access_token");
-      this.#dropbox.auth.setAccessToken(null);
+      localStorage.removeItem("byo_storage_dropbox_access_token");
+      localStorage.removeItem("byo_storage_dropbox_refresh_token");
+      localStorage.removeItem("byo_storage_dropbox_expires_at");
+      this.#dropboxAuth.setAccessToken("");
+      this.#dropboxAuth.setRefreshToken("");
+      this.#dropboxAuth.setAccessTokenExpiresAt(new Date(0));
     }
+    this.#onLoginStateChange?.(this.loggedIn);
   }
 
   async updateFile(
@@ -129,6 +190,7 @@ export default class DropboxSimplified {
     name: string,
     data: Uint8Array,
   ): Promise<void> {
+    await this.checkLogIn();
     await this.#dropbox.filesUpload({
       path: `${ROOT_FOLDER}/${directory}/${name}`,
       contents: data,
@@ -139,13 +201,14 @@ export default class DropboxSimplified {
   }
 
   async deleteFile(directory: string, name: string): Promise<void> {
-    this.checkIfLoggedIn();
+    await this.checkLogIn();
     await this.#dropbox.filesDeleteV2({
       path: `${ROOT_FOLDER}/${directory}/${name}`,
     });
   }
 
   async downloadFile(sharedLink: string, name: string): Promise<Uint8Array> {
+    await this.checkLogIn();
     let result:
       | sharing.FileLinkMetadataReference
       | sharing.FolderLinkMetadataReference
@@ -181,6 +244,7 @@ export default class DropboxSimplified {
   }
 
   async createDirectory(directory: string): Promise<string> {
+    await this.checkLogIn();
     // Get the shared link to the channel
     try {
       // See if the shared link already exists on dropbox
@@ -220,7 +284,7 @@ export default class DropboxSimplified {
       signal?: AbortSignal;
     },
   ): AsyncGenerator<FileListResult, never, void> {
-    this.checkIfLoggedIn();
+    await this.checkLogIn();
 
     let backlogComplete = false;
     let cursor: string;
