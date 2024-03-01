@@ -83,6 +83,8 @@
                     // Convert the UUID from Uint8Array to a string
                     const uuid = new TextDecoder().decode(action.uuid);
 
+                    console.log(action);
+
                     if (action.type === "update") {
                         // Check if the UUID already exists...
                         let li = document.getElementById(uuid);

@@ -47,6 +47,23 @@ interface CacheDB extends DBSchema {
   };
 }
 
+type OptimisticValue =
+  | {
+      optimistic: true;
+      type: "update";
+      data: Uint8Array;
+      name: string;
+    }
+  | {
+      optimistic: true;
+      type: "delete";
+      name: string;
+    };
+
+interface OptimisticEvent extends Event {
+  value?: OptimisticValue;
+}
+
 export type SignFunction = (
   message: Uint8Array,
 ) => Promise<Uint8Array> | Uint8Array;
@@ -65,6 +82,7 @@ export default class BYOStorage {
   #dropbox: Dropbox;
   #db: Promise<IDBPDatabase<CacheDB>> | undefined;
   #onLoginStateChange: ((state: boolean) => void) | undefined;
+  #optimisticEvents: EventTarget = new EventTarget();
 
   constructor(options: BYOStorageOptions) {
     // Initialize the Dropbox client
@@ -175,14 +193,37 @@ export default class BYOStorage {
       publicKey,
     );
 
-    // Base64 encode the UUID to use as a file name
+    // Fetch the existing data if it exists
     const uuidString = base64Encode(uuid);
+    const existing = await (
+      await this.#db
+    )?.get("data", this.#uuidPlusSharedLink(uuidString, sharedLink));
+
+    // Immediately send a notification, via events,
+    // to any watchers of the shared link of the data update
+    const event: OptimisticEvent = new Event(sharedLink);
+    event.value = {
+      optimistic: true,
+      type: "update",
+      name: uuidString,
+      data,
+    };
+    this.#optimisticEvents.dispatchEvent(event);
 
     // Encryt the data with the channel as key
     const encrypted = encrypt(channel, data);
 
     // Upload the file to the directory
-    await this.#dropbox.updateFile(directory, uuidString, encrypted);
+    try {
+      await this.#dropbox.updateFile(directory, uuidString, encrypted);
+    } catch (e) {
+      // Send the original data in case of failure
+      if (existing) {
+        event.value.data = existing.data;
+        this.#optimisticEvents.dispatchEvent(event);
+      }
+      throw e;
+    }
 
     return sharedLink;
   }
@@ -196,10 +237,42 @@ export default class BYOStorage {
     const uuidString = base64Encode(uuid);
 
     // Make sure the directory exists
-    const { directory } = await this.createDirectory(channel, publicKey);
+    const { directory, sharedLink } = await this.createDirectory(
+      channel,
+      publicKey,
+    );
+
+    // Get the existing data if it exists
+    const existing = await (
+      await this.#db
+    )?.get("data", this.#uuidPlusSharedLink(uuidString, sharedLink));
+
+    // Immediately send a notification, via events,
+    // to any watchers of the shared link of the data deletion
+    const event: OptimisticEvent = new Event(sharedLink);
+    event.value = {
+      optimistic: true,
+      type: "delete",
+      name: uuidString,
+    };
+    this.#optimisticEvents.dispatchEvent(event);
 
     // Delete the file from the directory
-    await this.#dropbox.deleteFile(directory, uuidString);
+    try {
+      await this.#dropbox.deleteFile(directory, uuidString);
+    } catch (e) {
+      // Send the original data in case of failure
+      if (existing) {
+        event.value = {
+          optimistic: true,
+          type: "update",
+          name: uuidString,
+          data: existing.data,
+        };
+        this.#optimisticEvents.dispatchEvent(event);
+      }
+      throw e;
+    }
   }
 
   async getPublicKey(
@@ -272,12 +345,62 @@ export default class BYOStorage {
       signal,
     });
 
+    // Create a listener for optimistic events
+    let resolve: ((value: OptimisticValue) => void) | null = null;
+    const waitingResults: Array<OptimisticValue> = [];
+    this.#optimisticEvents.addEventListener(
+      sharedLink,
+      (event: OptimisticEvent) => {
+        const value = event.value;
+        if (!value) {
+          return;
+        } else {
+          if (resolve) {
+            resolve(value);
+            resolve = null;
+          } else {
+            waitingResults.push(value);
+          }
+        }
+      },
+      {
+        passive: true,
+      },
+    );
+    function optimisticResult() {
+      return new Promise<OptimisticValue>((_resolve) => {
+        const shifted = waitingResults.shift();
+        if (shifted) {
+          _resolve(shifted);
+        } else {
+          resolve = _resolve;
+        }
+      });
+    }
+    async function nextResult() {
+      return (await iterator.next()).value;
+    }
+
+    let optimistic = optimisticResult();
+    let next = nextResult();
     while (true) {
-      const result = (await iterator.next()).value;
+      // Get an event from either the optimistic events or the iterator
+      const result = await Promise.race([optimistic, next]);
+      // Whichever event we get, we need to get the next one
+      if ("optimistic" in result) {
+        optimistic = optimisticResult();
+      } else {
+        next = nextResult();
+      }
 
       if (result.type == "update") {
         if (result.name != "signature") {
-          const data = decrypt(channel, result.data);
+          // Don't decrypt data routed internally
+          const data =
+            "optimistic" in result
+              ? result.data
+              : decrypt(channel, result.data);
+
           const uuid = base64Decode(result.name);
 
           // Store the data in the cache
@@ -287,7 +410,10 @@ export default class BYOStorage {
             data,
             uuid,
             sharedLink,
-            uuidPlusSharedLink: result.name + "@" + sharedLink,
+            uuidPlusSharedLink: this.#uuidPlusSharedLink(
+              result.name,
+              sharedLink,
+            ),
           });
 
           yield {
@@ -300,7 +426,9 @@ export default class BYOStorage {
         const uuid = base64Decode(result.name);
 
         // Remove the data from the cache
-        await (await this.#db)?.delete("data", result.name + "@" + sharedLink);
+        await (
+          await this.#db
+        )?.delete("data", this.#uuidPlusSharedLink(result.name, sharedLink));
 
         yield {
           type: "delete",
@@ -314,5 +442,9 @@ export default class BYOStorage {
         };
       }
     }
+  }
+
+  #uuidPlusSharedLink(uuidString: string, sharedLink: string) {
+    return uuidString + "@" + sharedLink;
   }
 }

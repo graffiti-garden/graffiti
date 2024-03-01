@@ -41,8 +41,8 @@ npm test
 
 ## TODO
 
-- [ ] Have directories specific to a particular public key, and sign the shared links to those directories to prove that the data is from the correct source
+- [x] Have directories specific to a particular public key, and sign the shared links to those directories to prove that the data is from the correct source
+- [x] Make posts immediately available without waiting for roundtrip
 - [ ] Add support for other storage providers
-- [ ] Make posts immediately available without waiting for roundtrip
 - [ ] Bundle posts together for faster loading
 - [ ] Frequency based watching. When a lot of channels are being watched, poll active channels more frequently than inactive ones
