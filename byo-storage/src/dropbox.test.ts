@@ -51,6 +51,18 @@ describe("dropbox", () => {
     );
   }, 100000);
 
+  it("create and delete directory", async () => {
+    const dropbox = new Dropbox({ accessToken });
+    const directory = Math.random().toString(36).substring(7);
+    const sharedLink = await dropbox.createDirectory(directory);
+    await dropbox.deleteDirectory(directory);
+
+    // Make sure we can't get the directory anymore
+    await expect(dropbox.listFiles(sharedLink).next()).rejects.toThrow(
+      "Path not found",
+    );
+  });
+
   it("post and watch data", async () => {
     const dropbox = new Dropbox({ accessToken });
     const directory = Math.random().toString(36).substring(7);

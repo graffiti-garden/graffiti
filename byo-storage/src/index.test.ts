@@ -60,6 +60,26 @@ describe(`Main`, () => {
     expect(sharedLink).toEqual(sharedLink2);
   }, 100000);
 
+  it("delete directory", async () => {
+    const byos = new BYOStorage({ authentication: { accessToken } });
+    const channel = Math.random().toString(36).substring(7);
+    const { publicKey, sign, verify } = mockSignatures();
+    const { directory, sharedLink } = await byos.createDirectory(
+      channel,
+      publicKey,
+    );
+    await byos.signDirectory(channel, publicKey, sign);
+    await byos.deleteDirectory(channel, publicKey);
+
+    await expect(
+      byos.getPublicKey(channel, sharedLink, verify),
+    ).rejects.toEqual("Signature not found");
+
+    await expect(byos.watch(channel, sharedLink).next()).rejects.toEqual(
+      "Path not found",
+    );
+  }, 100000);
+
   it("directories with different public keys", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
     const channel = Math.random().toString(36).substring(7);

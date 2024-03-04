@@ -192,7 +192,7 @@ export default class DropboxSimplified {
   ): Promise<void> {
     await this.checkLogIn();
     await this.#dropbox.filesUpload({
-      path: `${ROOT_FOLDER}/${directory}/${name}`,
+      path: this.directoryToPath(`${directory}/${name}`),
       contents: data,
       mode: {
         ".tag": "overwrite",
@@ -203,7 +203,15 @@ export default class DropboxSimplified {
   async deleteFile(directory: string, name: string): Promise<void> {
     await this.checkLogIn();
     await this.#dropbox.filesDeleteV2({
-      path: `${ROOT_FOLDER}/${directory}/${name}`,
+      path: this.directoryToPath(`${directory}/${name}`),
+    });
+  }
+
+  async deleteDirectory(directory: string): Promise<void> {
+    await this.checkLogIn();
+    console.log(this.directoryToPath(directory));
+    await this.#dropbox.filesDeleteV2({
+      path: this.directoryToPath(directory),
     });
   }
 
@@ -298,12 +306,22 @@ export default class DropboxSimplified {
     const optionsCursor = options?.cursor;
     if (!optionsCursor) {
       // Start the process
-      const { result: initialResult } = await this.#dropbox.filesListFolder({
-        path: "",
-        shared_link: {
-          url: sharedLink,
-        },
-      });
+      let initialResult: files.ListFolderResult;
+      try {
+        const out = await this.#dropbox.filesListFolder({
+          path: "",
+          shared_link: {
+            url: sharedLink,
+          },
+        });
+        initialResult = out.result;
+      } catch (e) {
+        if (e.error.error_summary.startsWith("path/not_found")) {
+          throw "Path not found";
+        } else {
+          throw e;
+        }
+      }
       cursor = initialResult.cursor;
       hasMore = initialResult.has_more;
       entries = initialResult.entries;

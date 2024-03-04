@@ -113,7 +113,7 @@ export default class BYOStorage {
     await this.#dropbox.toggleLogIn();
   }
 
-  async createDirectory(channel: string, publicKey: Uint8Array) {
+  #channelAndPublicKeyToDirectory(channel: string, publicKey: Uint8Array) {
     if (publicKey.length != 32) throw "Public key must be 32 bytes";
 
     // Combine the public key and channel
@@ -123,7 +123,11 @@ export default class BYOStorage {
     // Generate an obscured directory name so no information is
     // leaked about the channel or public key to Dropbox
     const infoHash = sha256(plaintextPath);
-    const directory = base64Encode(infoHash);
+    return base64Encode(infoHash);
+  }
+
+  async createDirectory(channel: string, publicKey: Uint8Array) {
+    const directory = this.#channelAndPublicKeyToDirectory(channel, publicKey);
 
     // First try to get the shared link from the cache
     const storedSharedLink = await (
@@ -139,6 +143,13 @@ export default class BYOStorage {
     }
 
     return { directory, sharedLink };
+  }
+
+  async deleteDirectory(channel: string, publicKey: Uint8Array) {
+    const directory = this.#channelAndPublicKeyToDirectory(channel, publicKey);
+
+    await (await this.#db)?.delete("shared-links", directory);
+    await this.#dropbox.deleteDirectory(directory);
   }
 
   async signDirectory(
@@ -236,7 +247,7 @@ export default class BYOStorage {
     channel: string,
     publicKey: Uint8Array,
     uuid: Uint8Array,
-  ): Promise<void> {
+  ): Promise<string> {
     // Base64 encode the UUID to use as a file name
     const uuidString = base64Encode(uuid);
 
@@ -277,6 +288,8 @@ export default class BYOStorage {
       }
       throw e;
     }
+
+    return sharedLink;
   }
 
   async getPublicKey(
