@@ -57,12 +57,11 @@ export default class DropboxSimplified {
     this.#dropbox = new Dropbox({ auth: this.#dropboxAuth });
 
     if ("accessToken" in authentication) {
-      this.#onLoginStateChange?.(this.loggedIn);
+      // Nothing to do
     } else if (storedAccessToken && storedRefreshToken && storedExpiresAt) {
       this.#dropboxAuth.setAccessToken(storedAccessToken);
       this.#dropboxAuth.setRefreshToken(storedRefreshToken);
       this.#dropboxAuth.setAccessTokenExpiresAt(new Date(storedExpiresAt));
-      this.#onLoginStateChange?.(this.loggedIn);
     } else if (!!location.search) {
       // We are in the middle of an OAuth flow
       const myURL = new URL(location.href);
@@ -121,6 +120,7 @@ export default class DropboxSimplified {
         }
       }
     }
+    this.#onLoginStateChange?.(this.loggedIn);
   }
 
   get loggedIn() {
