@@ -14,6 +14,7 @@
             <input id="channel" type="text" value="something" />
             <br />
             <button onclick="subscribe()">Subscribe Channel</button>
+            <button onclick="signChannel()">Sign Channel</button>
             <br />
             Data:
             <input id="data" type="text" />
@@ -71,6 +72,13 @@
                 const { sharedLink } = await byos.createDirectory(
                     channel,
                     publicKey,
+                );
+
+                // Get the public key
+                const receivedPublicKey = await byos.getPublicKey(
+                    channel,
+                    sharedLink,
+                    () => true,
                 );
 
                 // Start the new subscribe
@@ -135,6 +143,14 @@
                 const uuid = new Uint8Array(16);
                 crypto.getRandomValues(uuid);
                 await byos.update(channel, publicKey, uuid, data);
+            };
+
+            window.signChannel = async () => {
+                const channel = document.getElementById("channel").value;
+                await byos.signDirectory(channel, publicKey, (data) => {
+                    // Dumb signature
+                    return publicKey;
+                });
             };
         </script>
     </body>

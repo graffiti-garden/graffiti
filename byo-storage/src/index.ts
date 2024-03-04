@@ -96,6 +96,7 @@ export default class BYOStorage {
         upgrade(db) {
           db.createObjectStore("shared-links");
           db.createObjectStore("cursors");
+          db.createObjectStore("public-keys");
           const dataStore = db.createObjectStore("data", {
             keyPath: "uuidPlusSharedLink",
           });
