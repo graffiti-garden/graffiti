@@ -75,7 +75,7 @@ describe(`Main`, () => {
       byos.getPublicKey(channel, sharedLink, verify),
     ).rejects.toEqual("Signature not found");
 
-    await expect(byos.watch(channel, sharedLink).next()).rejects.toEqual(
+    await expect(byos.subscribe(channel, sharedLink).next()).rejects.toEqual(
       "Path not found",
     );
   }, 100000);
@@ -136,7 +136,7 @@ describe(`Main`, () => {
     const sharedLink = await byos.update(channel, publicKey, uuid, data);
 
     // Get the data back
-    const iterator = byos.watch(channel, sharedLink);
+    const iterator = byos.subscribe(channel, sharedLink);
     const result = (await iterator.next()).value;
     expect(result.type).toEqual("update");
     if (result.type != "update") return;
@@ -180,7 +180,7 @@ describe(`Main`, () => {
     const sharedLink = await byos.update(channel, publicKey, uuid, data);
 
     // Get the data
-    const iterator = byos.watch(channel, sharedLink);
+    const iterator = byos.subscribe(channel, sharedLink);
     const result = (await iterator.next()).value;
     expect(result.type).toEqual("update");
     if (result.type != "update") return;
@@ -197,7 +197,7 @@ describe(`Main`, () => {
 
     // Make sure we get the new data
     const timeoutSignal = AbortSignal.timeout(4000);
-    const iterator2 = byos.watch(channel, sharedLink2, timeoutSignal);
+    const iterator2 = byos.subscribe(channel, sharedLink2, timeoutSignal);
     const result3 = (await iterator2.next()).value;
     expect(result3.type).toEqual("update");
     if (result2.type != "update") return;
@@ -213,7 +213,7 @@ describe(`Main`, () => {
     );
   }, 100000);
 
-  it("watch with wrong channel", async () => {
+  it("subscribe with wrong channel", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
     const { publicKey, sign } = mockSignatures();
 
@@ -229,7 +229,7 @@ describe(`Main`, () => {
 
     // Listen on the wrong channel
     const wrongChannel = Math.random().toString(36).substring(7);
-    const iterator = byos.watch(wrongChannel, sharedLink);
+    const iterator = byos.subscribe(wrongChannel, sharedLink);
 
     await expect(iterator.next()).rejects.toThrow(
       "Wrong password for this encrypted data",
@@ -255,7 +255,7 @@ describe(`Main`, () => {
 
     // Make sure the data is gone
     const timeoutSignal = AbortSignal.timeout(4000);
-    const iterator = byos.watch(channel, sharedLink, timeoutSignal);
+    const iterator = byos.subscribe(channel, sharedLink, timeoutSignal);
     const result = (await iterator.next()).value;
     expect(result.type).toEqual("backlog-complete");
     await expect(iterator.next()).rejects.toThrow(
@@ -263,17 +263,17 @@ describe(`Main`, () => {
     );
   }, 100000);
 
-  it("replace and delete while watching", async () => {
+  it("replace and delete while subscribing", async () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
     const publicKey = randomBytes(32);
 
-    // Start watching
+    // Start subscribing
     const channel = Math.random().toString(36).substring(7);
     const { directory, sharedLink } = await byos.createDirectory(
       channel,
       publicKey,
     );
-    const iterator = byos.watch(channel, sharedLink);
+    const iterator = byos.subscribe(channel, sharedLink);
 
     // Post some data
     const data = randomBytes(100);

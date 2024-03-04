@@ -13,7 +13,7 @@
             Channel:
             <input id="channel" type="text" value="something" />
             <br />
-            <button onclick="watch()">Watch Channel</button>
+            <button onclick="subscribe()">Subscribe Channel</button>
             <br />
             Data:
             <input id="data" type="text" />
@@ -48,16 +48,16 @@
             });
 
             let controller;
-            let watching;
-            window.watch = async () => {
+            let subscribing;
+            window.subscribe = async () => {
                 const channel = document.getElementById("channel").value;
 
-                // If we're already watching this channel, do nothing
-                if (watching == channel) {
+                // If we're already subscribing to this channel, do nothing
+                if (subscribing == channel) {
                     return;
                 }
 
-                // Stop the previous watch, if it exists
+                // Stop the previous subscribe, if it exists
                 if (controller) {
                     controller.abort();
                 }
@@ -73,9 +73,9 @@
                     publicKey,
                 );
 
-                // Start the new watch
-                watching = channel;
-                for await (const action of byos.watch(
+                // Start the new subscribe
+                subscribing = channel;
+                for await (const action of byos.subscribe(
                     channel,
                     sharedLink,
                     controller.signal,

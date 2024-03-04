@@ -6,7 +6,7 @@ import { openDB } from "idb";
 import type { IDBPDatabase, DBSchema } from "idb";
 import type { Authentication } from "./dropbox";
 
-export type WatchResult =
+export type SubscribeResult =
   | {
       type: "update";
       uuid: Uint8Array;
@@ -335,11 +335,11 @@ export default class BYOStorage {
     return publicKey;
   }
 
-  async *watch(
+  async *subscribe(
     channel: string,
     sharedLink: string,
     signal?: AbortSignal,
-  ): AsyncGenerator<WatchResult, never, void> {
+  ): AsyncGenerator<SubscribeResult, never, void> {
     // First load data from the cache if it exists
     const tx = (await this.#db)?.transaction("data", "readonly");
     if (tx) {
