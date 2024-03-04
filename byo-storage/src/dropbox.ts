@@ -341,11 +341,9 @@ export default class DropboxSimplified {
         promise.then(resolve, reject);
       });
     }
-    let aborted = false;
     options?.signal?.addEventListener(
       "abort",
       () => {
-        aborted = true;
         reject(options?.signal?.reason);
       },
       {
@@ -355,7 +353,7 @@ export default class DropboxSimplified {
     );
 
     while (true) {
-      if (aborted) {
+      if (options?.signal?.aborted) {
         throw options?.signal?.reason;
       } else if (entries.length) {
         // Yield the entries if they exist
