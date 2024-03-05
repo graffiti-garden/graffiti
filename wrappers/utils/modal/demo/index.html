@@ -1,9 +1,11 @@
 <!doctype html>
+
 <head>
     <meta charset="utf-8" />
     <title>Graffiti</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
+
 <body>
     <h1>Welcome to Graffiti!</h1>
 
@@ -15,5 +17,20 @@
     <p>
         <button id="storage-login" onclick="gf.toggleStorageLogIn()"></button>
     </p>
+
+    <p>
+        Context:
+        <input id="context" type="text" value="something" />
+        <br />
+        <button onclick="subscribe()">Subscribe to context</button>
+        <br />
+        Post Data to Channel:
+        <input id="message" type="text" />
+        <br />
+        <button onclick="post()">Post Data to Channel</button>
+    </p>
+
+    <ul id="posts"></ul>
+
     <script type="module" src="main.ts"></script>
 </body>

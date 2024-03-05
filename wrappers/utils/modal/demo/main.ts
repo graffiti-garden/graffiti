@@ -3,6 +3,8 @@ import Graffiti from "../src/index";
 declare global {
   interface Window {
     gf: Graffiti;
+    post: () => void;
+    subscribe: () => void;
   }
 }
 
@@ -29,3 +31,43 @@ window.gf = new Graffiti({
     },
   },
 });
+
+window.post = async () => {
+  const contextEl = document.getElementById("context") as HTMLInputElement;
+  const messageEl = document.getElementById("message") as HTMLInputElement;
+  const data = new TextEncoder().encode(messageEl.value);
+  await window.gf.update(contextEl.value, data);
+};
+
+let abortController: AbortController | null = null;
+window.subscribe = async () => {
+  const contextEl = document.getElementById("context") as HTMLInputElement;
+
+  // Stop the existing subscription
+  if (abortController) abortController.abort();
+
+  const postsEl = document.getElementById("posts");
+  if (postsEl) {
+    postsEl.innerHTML = "";
+  }
+
+  // Start a new subscription
+  abortController = new AbortController();
+  for await (const result of window.gf.subscribe(
+    contextEl.value,
+    abortController.signal,
+  )) {
+    if (result.type === "update") {
+      const postEl =
+        document.getElementById(result.uuid) ?? document.createElement("li");
+      const text = new TextDecoder().decode(result.data);
+      postEl.textContent = `"${text}" - ${result.actor}`;
+      postEl.id = result.uuid;
+      // If not already in the post list, add it
+      if (!document.getElementById(result.uuid)) postsEl?.appendChild(postEl);
+    } else if (result.type === "delete") {
+      const postEl = document.getElementById(result.uuid);
+      postEl?.remove();
+    }
+  }
+};
