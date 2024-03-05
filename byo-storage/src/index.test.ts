@@ -64,10 +64,7 @@ describe(`Main`, () => {
     const byos = new BYOStorage({ authentication: { accessToken } });
     const channel = Math.random().toString(36).substring(7);
     const { publicKey, sign, verify } = mockSignatures();
-    const { directory, sharedLink } = await byos.createDirectory(
-      channel,
-      publicKey,
-    );
+    const { sharedLink } = await byos.createDirectory(channel, publicKey);
     await byos.signDirectory(channel, publicKey, sign);
     await byos.deleteDirectory(channel, publicKey);
 
@@ -138,10 +135,10 @@ describe(`Main`, () => {
     // Get the data back
     const iterator = byos.subscribe(channel, sharedLink);
     const result = (await iterator.next()).value;
-    expect(result.type).toEqual("update");
-    if (result.type != "update") return;
+    expect(result?.type).toEqual("update");
+    if (result?.type != "update") return;
     const result2 = (await iterator.next()).value;
-    expect(result2.type).toEqual("backlog-complete");
+    expect(result2?.type).toEqual("backlog-complete");
 
     // Make sure the data is the same
     uuid.forEach((byte, i) => {
@@ -159,8 +156,8 @@ describe(`Main`, () => {
 
     // Get the data back
     const result3 = (await iterator.next()).value;
-    expect(result3.type).toEqual("update");
-    if (result3.type != "update") return;
+    expect(result3?.type).toEqual("update");
+    if (result3?.type != "update") return;
     data2.forEach((byte, i) => {
       expect(byte).toEqual(result3.data[i]);
     });
@@ -176,19 +173,19 @@ describe(`Main`, () => {
     const channel = Math.random().toString(36).substring(7);
     const uuid = randomBytes(16);
     const data = randomBytes(100);
-    const { publicKey, sign } = mockSignatures();
+    const publicKey = randomBytes(32);
     const sharedLink = await byos.update(channel, publicKey, uuid, data);
 
     // Get the data
     const iterator = byos.subscribe(channel, sharedLink);
     const result = (await iterator.next()).value;
-    expect(result.type).toEqual("update");
-    if (result.type != "update") return;
+    expect(result?.type).toEqual("update");
+    if (result?.type != "update") return;
     data.forEach((byte, i) => {
       expect(byte).toEqual(result.data[i]);
     });
     const result2 = (await iterator.next()).value;
-    expect(result2.type).toEqual("backlog-complete");
+    expect(result2?.type).toEqual("backlog-complete");
 
     // Replace the post with the same UUID
     const data2 = randomBytes(100);
@@ -199,18 +196,16 @@ describe(`Main`, () => {
     const timeoutSignal = AbortSignal.timeout(4000);
     const iterator2 = byos.subscribe(channel, sharedLink2, timeoutSignal);
     const result3 = (await iterator2.next()).value;
-    expect(result3.type).toEqual("update");
-    if (result2.type != "update") return;
+    expect(result3?.type).toEqual("update");
+    if (result3?.type != "update") return;
     data2.forEach((byte, i) => {
-      expect(byte).toEqual(result2.data[i]);
+      expect(byte).toEqual(result3.data[i]);
     });
     const result4 = (await iterator2.next()).value;
-    expect(result4.type).toEqual("backlog-complete");
+    expect(result4?.type).toEqual("backlog-complete");
 
     // Make sure we don't get the old data
-    await expect(iterator2.next()).rejects.toThrow(
-      "The operation was aborted due to timeout",
-    );
+    await expect(iterator2.next()).resolves.toHaveProperty("done", true);
   }, 100000);
 
   it("subscribe with wrong channel", async () => {
@@ -257,10 +252,8 @@ describe(`Main`, () => {
     const timeoutSignal = AbortSignal.timeout(4000);
     const iterator = byos.subscribe(channel, sharedLink, timeoutSignal);
     const result = (await iterator.next()).value;
-    expect(result.type).toEqual("backlog-complete");
-    await expect(iterator.next()).rejects.toThrow(
-      "The operation was aborted due to timeout",
-    );
+    expect(result?.type).toEqual("backlog-complete");
+    await expect(iterator.next()).resolves.toHaveProperty("done", true);
   }, 100000);
 
   it("replace and delete while subscribing", async () => {
@@ -269,10 +262,7 @@ describe(`Main`, () => {
 
     // Start subscribing
     const channel = Math.random().toString(36).substring(7);
-    const { directory, sharedLink } = await byos.createDirectory(
-      channel,
-      publicKey,
-    );
+    const { sharedLink } = await byos.createDirectory(channel, publicKey);
     const iterator = byos.subscribe(channel, sharedLink);
 
     // Post some data
@@ -282,8 +272,8 @@ describe(`Main`, () => {
 
     // Get the data
     const result = (await iterator.next()).value;
-    expect(result.type).toEqual("update");
-    if (result.type == "update") {
+    expect(result?.type).toEqual("update");
+    if (result?.type == "update") {
       data.forEach((byte, i) => {
         expect(byte).toEqual(result.data[i]);
       });
@@ -296,7 +286,7 @@ describe(`Main`, () => {
     const data2 = randomBytes(100);
     await byos.update(channel, publicKey, uuid, data2);
     const result2 = (await iterator.next()).value;
-    if (result2.type == "update") {
+    if (result2?.type == "update") {
       data2.forEach((byte, i) => {
         expect(byte).toEqual(result2.data[i]);
       });
@@ -305,8 +295,8 @@ describe(`Main`, () => {
     // Delete the data
     await byos.delete(channel, publicKey, uuid);
     const result3 = (await iterator.next()).value;
-    expect(result3.type).toEqual("delete");
-    if (result3.type == "delete") {
+    expect(result3?.type).toEqual("delete");
+    if (result3?.type == "delete") {
       uuid.forEach((byte, i) => {
         expect(byte).toEqual(result3.uuid[i]);
       });

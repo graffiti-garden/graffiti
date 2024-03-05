@@ -73,10 +73,13 @@ describe("dropbox", () => {
 
     const sharedLink = await dropbox.createDirectory(directory);
 
-    const iterator = dropbox.listFiles(sharedLink);
+    const abortController = new AbortController();
+    const iterator = dropbox.listFiles(sharedLink, {
+      signal: abortController.signal,
+    });
     const iteratorResult = (await iterator.next()).value;
     expect(iteratorResult).toHaveProperty("type", "update");
-    if (iteratorResult.type === "update") {
+    if (iteratorResult?.type === "update") {
       expect(iteratorResult).toHaveProperty("name", name);
       expect(data.every((byte, i) => byte === iteratorResult.data[i])).toBe(
         true,
@@ -93,7 +96,7 @@ describe("dropbox", () => {
     await dropbox.updateFile(directory, name2, data2);
     const iteratorResult4 = (await iterator.next()).value;
     expect(iteratorResult4).toHaveProperty("type", "update");
-    if (iteratorResult4.type === "update") {
+    if (iteratorResult4?.type === "update") {
       expect(iteratorResult4).toHaveProperty("name", name2);
       expect(data2.every((byte, i) => byte === iteratorResult4.data[i])).toBe(
         true,
@@ -104,15 +107,21 @@ describe("dropbox", () => {
 
     // Delete data
     await dropbox.deleteFile(directory, name);
-    const iteratorResult6 = (await iterator.next()).value;
+    const iteratorOut6 = await iterator.next();
+    expect(iteratorOut6).toHaveProperty("done", false);
+    const iteratorResult6 = iteratorOut6.value;
     expect(iteratorResult6).toHaveProperty("type", "delete");
-    if (iteratorResult6.type === "delete") {
+    if (iteratorResult6?.type === "delete") {
       expect(iteratorResult6).toHaveProperty("name", name);
     }
     await expect(iterator.next()).resolves.toHaveProperty(
       "value.type",
       "cursor",
     );
+
+    // Stop the iterator
+    abortController.abort();
+    await expect(iterator.next()).resolves.toHaveProperty("done", true);
   }, 100000);
 
   it("resume cursor", async () => {
@@ -134,7 +143,7 @@ describe("dropbox", () => {
     );
     const cursorResult = (await iterator.next()).value;
     expect(cursorResult).toHaveProperty("type", "cursor");
-    const cursor = cursorResult.type == "cursor" ? cursorResult.cursor : "";
+    const cursor = cursorResult?.type == "cursor" ? cursorResult.cursor : "";
     await expect(iterator.next()).resolves.toHaveProperty(
       "value.type",
       "backlog-complete",
@@ -142,6 +151,7 @@ describe("dropbox", () => {
 
     // Stop the first iterator
     controller.abort();
+    await expect(iterator.next()).resolves.toHaveProperty("done", true);
 
     // Resume the iterator
     const iterator2 = dropbox.listFiles(sharedLink, { cursor });
@@ -155,8 +165,8 @@ describe("dropbox", () => {
     const data2 = randomBytes(100);
     await dropbox.updateFile(directory, name2, data2);
     const iteratorResult = (await iterator2.next()).value;
-    expect(iteratorResult.type).toEqual("update");
-    if (iteratorResult.type == "update") {
+    expect(iteratorResult?.type).toEqual("update");
+    if (iteratorResult?.type == "update") {
       expect(iteratorResult).toHaveProperty("name", name2);
       expect(data2.every((byte, i) => byte === iteratorResult.data[i])).toBe(
         true,

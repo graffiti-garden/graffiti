@@ -209,7 +209,6 @@ export default class DropboxSimplified {
 
   async deleteDirectory(directory: string): Promise<void> {
     await this.checkLogIn();
-    console.log(this.directoryToPath(directory));
     await this.#dropbox.filesDeleteV2({
       path: this.directoryToPath(directory),
     });
@@ -291,7 +290,7 @@ export default class DropboxSimplified {
       cursor?: string;
       signal?: AbortSignal;
     },
-  ): AsyncGenerator<FileListResult, never, void> {
+  ): AsyncGenerator<FileListResult, void, void> {
     await this.checkLogIn();
 
     let backlogComplete = false;
@@ -331,37 +330,31 @@ export default class DropboxSimplified {
       hasMore = true;
     }
 
-    // Create a function that takes a promise
-    // and returns a promise that rejects if the signal event fires
-    // and otherwise resolves with the input function
-    let reject: (reason: any) => void;
-    function signalPromise<T>(promise: Promise<T>): Promise<T> {
-      return new Promise((resolve, _reject) => {
-        reject = _reject;
-        promise.then(resolve, reject);
-      });
-    }
-    options?.signal?.addEventListener(
-      "abort",
-      () => {
-        reject(options?.signal?.reason);
-      },
-      {
-        once: true,
-        passive: true,
-      },
-    );
+    const signalPromise = new Promise<"aborted">((resolve) => {
+      options?.signal?.addEventListener(
+        "abort",
+        () => {
+          resolve("aborted");
+        },
+        {
+          once: true,
+          passive: true,
+        },
+      );
+    });
 
     while (true) {
       if (options?.signal?.aborted) {
-        throw options?.signal?.reason;
+        return;
       } else if (entries.length) {
         // Yield the entries if they exist
         for (const entry of entries) {
           if (entry[".tag"] === "file" && entry.is_downloadable) {
-            const data = await signalPromise(
+            const data = await Promise.race([
+              signalPromise,
               this.downloadFile(sharedLink, entry.name),
-            );
+            ]);
+            if (data === "aborted") return;
 
             yield {
               type: "update",
@@ -383,11 +376,14 @@ export default class DropboxSimplified {
         };
       } else if (hasMore) {
         // Get more results if they exist
-        const { result } = await signalPromise(
+        const out = await Promise.race([
+          signalPromise,
           this.#dropbox.filesListFolderContinue({
             cursor,
           }),
-        );
+        ]);
+        if (out === "aborted") return;
+        const { result } = out;
         hasMore = result.has_more;
         cursor = result.cursor;
         entries = result.entries;
@@ -402,20 +398,25 @@ export default class DropboxSimplified {
         }
 
         // Long poll for more results
-        const { result } = await signalPromise(
+        const out = await Promise.race([
+          signalPromise,
           this.#dropbox.filesListFolderLongpoll({
             cursor,
             timeout: 90,
           }),
-        );
+        ]);
+        if (out === "aborted") return;
+        const { result } = out;
         hasMore = result.changes;
         const backoff = result.backoff;
 
         if (backoff) {
           // Sleep for the given time
-          await signalPromise(
-            new Promise((r) => setTimeout(r, backoff * 1000)),
-          );
+          const out = await Promise.race([
+            signalPromise,
+            new Promise<void>((r) => setTimeout(r, backoff * 1000)),
+          ]);
+          if (out === "aborted") return;
         }
       }
     }

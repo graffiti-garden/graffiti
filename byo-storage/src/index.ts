@@ -340,7 +340,7 @@ export default class BYOStorage {
     channel: string,
     sharedLink: string,
     signal?: AbortSignal,
-  ): AsyncGenerator<SubscribeResult, never, void> {
+  ): AsyncGenerator<SubscribeResult, void, void> {
     // First load data from the cache if it exists
     const tx = (await this.#db)?.transaction("data", "readonly");
     if (tx) {
@@ -405,7 +405,9 @@ export default class BYOStorage {
       // Get an event from either the optimistic events or the iterator
       const result = await Promise.race([optimistic, next]);
       // Whichever event we get, we need to get the next one
-      if ("optimistic" in result) {
+      if (!result) {
+        return;
+      } else if ("optimistic" in result) {
         optimistic = optimisticResult();
       } else {
         next = nextResult();
