@@ -89,20 +89,15 @@ describe(`Basic Streaming`, () => {
 
     const uri = randomString();
 
-    let iterator;
-    iterator = ls.subscribe(uri, AbortSignal.timeout(300));
-    await iterator.next(); // Backlog complete
-    await expect(iterator.next()).rejects.toHaveProperty(
-      "name",
-      "TimeoutError",
-    );
+    let iterator = ls.subscribe(uri, AbortSignal.timeout(300));
+    const first = await iterator.next(); // Backlog complete
+    expect(first).toHaveProperty("value.type", "backlog-complete");
+    expect(first).toHaveProperty("done", false);
+    await expect(iterator.next()).resolves.toHaveProperty("done", true);
 
     iterator = ls.subscribe(uri, AbortSignal.timeout(300));
     await iterator.next(); // Backlog complete
-    await expect(iterator.next()).rejects.toHaveProperty(
-      "name",
-      "TimeoutError",
-    );
+    await expect(iterator.next()).resolves.toHaveProperty("done", true);
   });
 
   it("backlog", async () => {

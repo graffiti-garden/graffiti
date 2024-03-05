@@ -256,7 +256,7 @@ export default class LinkStreamer {
   async *subscribe(
     source: string,
     signal?: AbortSignal,
-  ): AsyncGenerator<AnnounceValue, never, void> {
+  ): AsyncGenerator<AnnounceValue, void, void> {
     // Convert to info hash
     const infoHashPrivateKey = sha256(INFO_HASH_PREFIX + source);
     const infoHash = curve.getPublicKey(infoHashPrivateKey);
@@ -268,31 +268,16 @@ export default class LinkStreamer {
     // the promise is processing and the
     // output is added to a queue
     let resolve: null | ((v: AnnounceValue) => void) = null;
-    let reject: null | ((v: string) => void) = null;
     const waitingAnnouncements: Array<AnnounceValue> = [];
     const onAnnouncement = (e: AnnounceEvent) => {
-      if (!e.value) return;
+      const value = e.value;
+      if (!value) return;
 
       if (resolve) {
-        resolve(e.value);
+        resolve(value);
         resolve = null;
-        reject = null;
       } else {
-        waitingAnnouncements.push(e.value);
-      }
-    };
-    let alreadyRejected = false;
-    const onAbort = () => {
-      this.#announceEvents.removeEventListener(
-        infoHashString,
-        onAnnouncement as EventListener,
-      );
-      if (reject) {
-        reject(signal?.reason);
-        resolve = null;
-        reject = null;
-      } else {
-        alreadyRejected = signal?.reason;
+        waitingAnnouncements.push(value);
       }
     };
 
@@ -300,7 +285,19 @@ export default class LinkStreamer {
     this.#announceEvents.addEventListener(infoHashString, onAnnouncement, {
       passive: true,
     });
-    signal?.addEventListener("abort", onAbort, { once: true, passive: true });
+    const signalPromise = new Promise<"aborted">((resolve) => {
+      signal?.addEventListener(
+        "abort",
+        () => {
+          this.#announceEvents.removeEventListener(
+            infoHashString,
+            onAnnouncement as EventListener,
+          );
+          resolve("aborted");
+        },
+        { once: true, passive: true },
+      );
+    });
 
     // If not already subscribed, subscribe
     const subscriptionObject = this.#subscriptions.get(infoHashString) ?? {
@@ -327,16 +324,24 @@ export default class LinkStreamer {
     // Try the request and return announcements
     try {
       while (true) {
-        if (alreadyRejected) throw alreadyRejected;
-        yield await new Promise((_resolve, _reject) => {
-          reject = _reject;
-          const announcement = waitingAnnouncements.shift();
-          if (announcement) {
-            _resolve(announcement);
+        if (signal?.aborted) return;
+
+        const announcement = waitingAnnouncements.shift();
+        if (announcement) {
+          yield announcement;
+        } else {
+          const promiseResult = await Promise.race([
+            signalPromise,
+            new Promise<AnnounceValue>((_resolve) => {
+              resolve = _resolve;
+            }),
+          ]);
+          if (promiseResult === "aborted") {
+            return;
           } else {
-            resolve = _resolve;
+            yield promiseResult;
           }
-        });
+        }
       }
     } finally {
       // unsubscribe and free the source

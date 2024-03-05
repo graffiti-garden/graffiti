@@ -20,11 +20,12 @@ describe(`Basic Streaming`, () => {
     const expiration = soon();
     const { created } = await ls.create(source, target, expiration);
 
-    const iterator = ls.subscribe(source);
+    const controller = new AbortController();
+    const iterator = ls.subscribe(source, controller.signal);
 
     const announce = (await iterator.next()).value;
-    expect(announce.type).toEqual(AnnounceType.ANNOUNCE);
-    if (announce.type == AnnounceType.ANNOUNCE) {
+    expect(announce?.type).toEqual(AnnounceType.ANNOUNCE);
+    if (announce?.type == AnnounceType.ANNOUNCE) {
       assert(
         announce.link.publicKey.every((val, i) => val == created.publicKey[i]),
       );
@@ -35,6 +36,9 @@ describe(`Basic Streaming`, () => {
       "value.type",
       "backlog-complete",
     );
+
+    controller.abort();
+    await expect(iterator.next()).resolves.toHaveProperty("done", true);
   });
 
   it("announce future", async () => {
@@ -53,8 +57,8 @@ describe(`Basic Streaming`, () => {
     await ls.create(source, target, expiration);
 
     const announce = (await iterator.next()).value;
-    expect(announce.type).toEqual(AnnounceType.ANNOUNCE);
-    if (announce.type == AnnounceType.ANNOUNCE) {
+    expect(announce?.type).toEqual(AnnounceType.ANNOUNCE);
+    if (announce?.type == AnnounceType.ANNOUNCE) {
       expect(announce.link.target).toEqual(target);
     }
   });
@@ -85,8 +89,8 @@ describe(`Basic Streaming`, () => {
     created.modify({ target: newTarget });
 
     const announce = (await iterator.next()).value;
-    expect(announce.type).toEqual(AnnounceType.ANNOUNCE);
-    if (announce.type == AnnounceType.ANNOUNCE) {
+    expect(announce?.type).toEqual(AnnounceType.ANNOUNCE);
+    if (announce?.type == AnnounceType.ANNOUNCE) {
       expect(announce.link.target).toEqual(newTarget);
     }
   });
@@ -118,8 +122,8 @@ describe(`Basic Streaming`, () => {
 
     // Get an announce with a null container
     const announce = (await iterator.next()).value;
-    expect(announce.type).toEqual("unannounce");
-    if (announce.type == AnnounceType.UNANNOUNCE) {
+    expect(announce?.type).toEqual("unannounce");
+    if (announce?.type == AnnounceType.UNANNOUNCE) {
       assert(announce.publicKey.every((val, i) => val == created.publicKey[i]));
     }
   });
@@ -142,14 +146,14 @@ describe(`Basic Streaming`, () => {
 
     // Get the value
     const announce = (await iterator.next()).value;
-    expect(announce.type).toEqual("announce");
-    if (announce.type == AnnounceType.ANNOUNCE) {
+    expect(announce?.type).toEqual("announce");
+    if (announce?.type == AnnounceType.ANNOUNCE) {
       expect(announce.link.target).toEqual(target);
     }
 
     // Wait again...
     const unannounce = (await iterator.next()).value;
-    expect(unannounce.type).toEqual("unannounce");
+    expect(unannounce?.type).toEqual("unannounce");
   }, 10000);
 
   it("triple subscribe", async () => {
@@ -170,8 +174,8 @@ describe(`Basic Streaming`, () => {
     const target = randomString();
     const { created } = await ls.create(source, target, soon());
     const announce = (await firstIterator.next()).value;
-    expect(announce.type).toEqual("announce");
-    if (announce.type == AnnounceType.ANNOUNCE) {
+    expect(announce?.type).toEqual("announce");
+    if (announce?.type == AnnounceType.ANNOUNCE) {
       expect(announce.link.target).toEqual(target);
     }
 
@@ -179,16 +183,16 @@ describe(`Basic Streaming`, () => {
     const newTarget = randomString();
     const { created: created2 } = await created.modify({ target: newTarget });
     const announce2 = (await firstIterator.next()).value;
-    expect(announce2.type).toEqual("announce");
-    if (announce2.type == AnnounceType.ANNOUNCE) {
+    expect(announce2?.type).toEqual("announce");
+    if (announce2?.type == AnnounceType.ANNOUNCE) {
       expect(announce2.link.target).toEqual(newTarget);
     }
 
     // Start subscribing with the second iterator
     const secondIterator = ls.subscribe(source, abortController.signal);
     const announce3 = (await secondIterator.next()).value;
-    expect(announce3.type).toEqual("announce");
-    if (announce3.type == AnnounceType.ANNOUNCE) {
+    expect(announce3?.type).toEqual("announce");
+    if (announce3?.type == AnnounceType.ANNOUNCE) {
       expect(announce3.link.target).toEqual(newTarget);
     }
     await expect(secondIterator.next()).resolves.toHaveProperty(
@@ -201,12 +205,12 @@ describe(`Basic Streaming`, () => {
     await created2.modify({ source: newSource });
     const announce4 = (await firstIterator.next()).value;
     const announce5 = (await secondIterator.next()).value;
-    expect(announce4.type).toEqual("unannounce");
-    expect(announce5.type).toEqual("unannounce");
+    expect(announce4?.type).toEqual("unannounce");
+    expect(announce5?.type).toEqual("unannounce");
 
     // Create another iterator
     const thirdIterator = ls.subscribe(source, abortController.signal);
     const announce6 = (await thirdIterator.next()).value;
-    expect(announce6.type).toEqual("backlog-complete");
+    expect(announce6?.type).toEqual("backlog-complete");
   });
 });

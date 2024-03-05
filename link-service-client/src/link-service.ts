@@ -55,11 +55,11 @@ export default class LinkService {
   async *subscribe(
     source: string,
     signal?: AbortSignal,
-  ): AsyncGenerator<AnnounceLink, never, void> {
-    const iterator = this.#streamer.subscribe(source, signal);
-    while (true) {
-      const announceValue = (await iterator.next()).value;
-
+  ): AsyncGenerator<AnnounceLink, void, void> {
+    for await (const announceValue of this.#streamer.subscribe(
+      source,
+      signal,
+    )) {
       // If it is an announce, parse it
       if (announceValue.type == AnnounceType.ANNOUNCE) {
         yield {
