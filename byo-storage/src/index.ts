@@ -218,7 +218,7 @@ export default class BYOStorage {
     channel: string,
     sharedLink: string,
     verify: VerifyFunction,
-  ) {
+  ): Promise<Uint8Array | null> {
     // Lookup the public key in the cache
     const storedPublicKey = await (
       await this.#db
@@ -232,7 +232,7 @@ export default class BYOStorage {
       encrypted = await this.#dropbox.downloadFile(sharedLink, "signature");
     } catch (e) {
       if (e.toString() === "File not found") {
-        throw "Signature not found";
+        return null;
       } else {
         throw e;
       }
@@ -248,7 +248,8 @@ export default class BYOStorage {
     // Verify the signature
     const sharedLinkBytes = new TextEncoder().encode(sharedLink);
     if (!verify(signature, sharedLinkBytes, publicKey)) {
-      throw "Signature is invalid!";
+      // Invalid signature
+      return null;
     }
 
     // Store the public key in the cache

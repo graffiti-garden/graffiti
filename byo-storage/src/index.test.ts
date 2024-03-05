@@ -68,9 +68,12 @@ describe(`Main`, () => {
     await byos.signDirectory(channel, publicKey, sign);
     await byos.deleteDirectory(channel, publicKey);
 
-    await expect(
-      byos.getPublicKey(channel, sharedLink, verify),
-    ).rejects.toEqual("Signature not found");
+    const publicKeyRecieved = await byos.getPublicKey(
+      channel,
+      sharedLink,
+      verify,
+    );
+    expect(publicKeyRecieved).toEqual(null);
 
     await expect(byos.subscribe(channel, sharedLink).next()).rejects.toEqual(
       "Path not found",
@@ -113,9 +116,12 @@ describe(`Main`, () => {
     const { publicKey, sign, verify } = mockSignatures();
     const channel = Math.random().toString(36).substring(7);
     const { sharedLink } = await byos.createDirectory(channel, publicKey);
-    await expect(
-      byos.getPublicKey(channel, sharedLink, verify),
-    ).rejects.toEqual("Signature not found");
+    const publicKeyRecieved = await byos.getPublicKey(
+      channel,
+      sharedLink,
+      verify,
+    );
+    expect(publicKeyRecieved).toEqual(null);
   }, 100000);
 
   it("post and receive data", async () => {

@@ -11,10 +11,17 @@
 
         <div id="stuff">
             Channel:
-            <input id="channel" type="text" value="something" />
+            <input
+                oninput="channelChange()"
+                id="channel"
+                type="text"
+                value="something"
+            />
             <br />
-            <button onclick="subscribe()">Subscribe Channel</button>
             <button onclick="signChannel()">Sign Channel</button>
+            <div id="sign-result"></div>
+            <button onclick="subscribe()">Subscribe Channel</button>
+            <div id="subscribe-result"></div>
             <br />
             Data:
             <input id="data" type="text" />
@@ -80,6 +87,13 @@
                     sharedLink,
                     () => true,
                 );
+                const subscribeResult =
+                    document.getElementById("subscribe-result");
+                if (!receivedPublicKey) {
+                    subscribeResult.innerText = "Failed to get public key";
+                } else {
+                    subscribeResult.innerText = `Public key: ${receivedPublicKey}`;
+                }
 
                 // Start the new subscribe
                 subscribing = channel;
@@ -151,6 +165,16 @@
                     // Dumb signature
                     return publicKey;
                 });
+                const signResult = document.getElementById("sign-result");
+                signResult.innerText = "Signed!";
+            };
+
+            window.channelChange = () => {
+                const subscribeResult =
+                    document.getElementById("subscribe-result");
+                subscribeResult.innerText = "";
+                const signResult = document.getElementById("sign-result");
+                signResult.innerText = "";
             };
         </script>
     </body>
