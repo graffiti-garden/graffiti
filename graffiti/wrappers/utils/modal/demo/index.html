@@ -9,30 +9,30 @@
 <body>
     <h1>Welcome to Graffiti!</h1>
 
-    <p>
-        <button onclick="graffiti.selectActor()">Choose an Actor</button>
-        Your Actor ID is: <span id="actor-id"></span>
-    </p>
+    <p>To use Graffiti you must</p>
 
-    <p>
-        <button
-            id="storage-login"
-            onclick="graffiti.toggleStorageLogIn()"
-        ></button>
-    </p>
+    <ol>
+        <li>
+            <button onclick="graffiti.selectActor()">Choose an Actor</button>
+            <span id="actor-selected"></span>
+        </li>
+        <li>
+            <button id="storage-login" onclick="graffiti.toggleStorageLogIn()">Connect a Storage Provider</button>
+            <span id="storage-logged-in">
+        </li>
+    </ol>
+
+    <p></p>
 
     <div id="stuff">
-        <p>
-            Context:
-            <input id="context" type="text" value="my-cool-context" />
-            <br />
-            <button onclick="subscribe()">Subscribe to context</button>
-            <br />
-            Post Data to Channel:
+        <form onsubmit="subscribe(event)">
+            <input id="context" type="text" />
+            <button type="submit">Change Context</button>
+        </form>
+        <form onsubmit="post(event)">
             <input id="message" type="text" />
-            <br />
-            <button onclick="post()">Post Data to Channel</button>
-        </p>
+            <button type="submit">Post</button>
+        </form>
 
         <ul id="posts"></ul>
     </div>

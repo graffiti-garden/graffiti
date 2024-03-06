@@ -1,10 +1,11 @@
 import Graffiti from "../src/index";
+import "./style.css";
 
 declare global {
   interface Window {
     graffiti: Graffiti;
-    post: () => void;
-    subscribe: () => void;
+    post: (event: Event) => void;
+    subscribe: (event: Event) => void;
   }
 }
 
@@ -14,20 +15,24 @@ window.graffiti = new Graffiti({
       clientId: "6hy9svekk1qo41w",
     },
     onLoginStateChange(loginState) {
-      const loginEl = document.getElementById("storage-login");
-      if (loginEl) {
-        loginEl.textContent = loginState
-          ? "Log out of storage"
-          : "Log in to storage";
+      const loginEl = document.getElementById("storage-logged-in");
+      if (!loginEl) return;
+      if (loginState) {
+        loginEl.textContent = "✅";
+      } else {
+        loginEl.textContent = "";
       }
       showOrHideStuff();
     },
   },
   actorManager: {
     onChosenActor(actorURI) {
-      const actorEl = document.getElementById("actor-id");
-      if (actorEl) {
-        actorEl.textContent = actorURI;
+      const actorEl = document.getElementById("actor-selected");
+      if (!actorEl) return;
+      if (actorURI) {
+        actorEl.textContent = "✅";
+      } else {
+        actorEl.textContent = "";
       }
       showOrHideStuff();
     },
@@ -44,15 +49,18 @@ const showOrHideStuff = () => {
   }
 };
 
-window.post = async () => {
+window.post = async (event) => {
+  event.preventDefault();
   const contextEl = document.getElementById("context") as HTMLInputElement;
   const messageEl = document.getElementById("message") as HTMLInputElement;
   const data = new TextEncoder().encode(messageEl.value);
+  messageEl.value = "";
   await window.graffiti.update(contextEl.value, data);
 };
 
 let abortController: AbortController | null = null;
-window.subscribe = async () => {
+window.subscribe = async (event) => {
+  event.preventDefault();
   const contextEl = document.getElementById("context") as HTMLInputElement;
   const context = contextEl.value;
 
@@ -75,7 +83,9 @@ window.subscribe = async () => {
         document.getElementById(result.uuid + result.actor) ??
         document.createElement("li");
       const text = new TextDecoder().decode(result.data);
-      postEl.textContent = `"${text}" - ${result.actor}`;
+      postEl.innerHTML = `
+        <h2>${result.actor}</h2>
+        <p>${text}</p>`;
       postEl.id = result.uuid + result.actor;
 
       if (result.actor === window.graffiti.chosenActor) {
@@ -106,3 +116,4 @@ window.subscribe = async () => {
     }
   }
 };
+window.subscribe();
