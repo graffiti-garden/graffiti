@@ -38,6 +38,7 @@ export default class Graffiti {
   #actorManager: ActorManager;
   #byoStorage: BYOStorage;
   #linkService: LinkService;
+  #eventTarget = new EventTarget();
 
   constructor(options: GraffitiOptions) {
     this.#actorManager = new ActorManager(options.actorManager);
@@ -66,8 +67,7 @@ export default class Graffiti {
   async *subscribe(
     context: string,
     signal?: AbortSignal,
-  ): AsyncGenerator<GraffitiSubscriptionResult, never, undefined> {
-    const eventTarget = new EventTarget();
+  ): AsyncGenerator<GraffitiSubscriptionResult, void, void> {
     let linkServiceBacklogComplete = false;
     let backlogComplete = false;
     const links: Map<
@@ -108,15 +108,17 @@ export default class Graffiti {
           const localSignal = mergeSignals(signal, abortController.signal);
           links.set(linkID, { link, abortController, backlogComplete: false });
 
-          // Get the actor from the storage
-          // and listen in the background
-          this.#byoStorage
-            .getPublicKey(
-              context,
-              link,
-              this.#actorManager.verify.bind(this.#actorManager),
-            )
-            .then(async (actorPublicKey) => {
+          // Listen in the background
+          (async () => {
+            try {
+              const actorPublicKey = await this.#byoStorage.getPublicKey(
+                context,
+                link,
+                this.#actorManager.verify.bind(this.#actorManager),
+              );
+
+              if (!actorPublicKey) return;
+
               const actor = "actor:" + base64Encode(actorPublicKey);
               for await (const result of this.#byoStorage.subscribe(
                 context,
@@ -125,23 +127,23 @@ export default class Graffiti {
               )) {
                 if (result.type == "update") {
                   // Emit an event back to the root
-                  const event: GraffitiSubscriptionEvent = new Event("result");
+                  const event: GraffitiSubscriptionEvent = new Event(context);
                   event.value = {
                     type: "update",
                     uuid: base64Encode(result.uuid),
                     data: result.data,
                     actor,
                   };
-                  eventTarget.dispatchEvent(event);
+                  this.#eventTarget.dispatchEvent(event);
                 } else if (result.type === "delete") {
                   // Emit an event back to the root
-                  const event: GraffitiSubscriptionEvent = new Event("result");
+                  const event: GraffitiSubscriptionEvent = new Event(context);
                   event.value = {
                     type: "delete",
                     uuid: base64Encode(result.uuid),
                     actor,
                   };
-                  eventTarget.dispatchEvent(event);
+                  this.#eventTarget.dispatchEvent(event);
                 } else {
                   // Backlog has fired and we haven't already marked it
                   if (
@@ -161,17 +163,20 @@ export default class Graffiti {
                     if (finished) {
                       backlogComplete = true;
                       const event: GraffitiSubscriptionEvent = new Event(
-                        "result",
+                        context,
                       );
                       event.value = {
                         type: "backlog-complete",
                       };
-                      eventTarget.dispatchEvent(event);
+                      this.#eventTarget.dispatchEvent(event);
                     }
                   }
                 }
               }
-            });
+            } finally {
+              links.delete(linkID);
+            }
+          })();
         } else if (result.type == "unannounce") {
           // Get the abort controller and kill it
           const linkID = base64Encode(result.publicKey);
@@ -186,8 +191,8 @@ export default class Graffiti {
     // Listen for the events
     const waitingEvents: GraffitiSubscriptionResult[] = [];
     let resolve: ((value: GraffitiSubscriptionResult) => void) | null = null;
-    eventTarget.addEventListener(
-      "result",
+    this.#eventTarget.addEventListener(
+      context,
       (event: GraffitiSubscriptionEvent) => {
         const value = event.value;
         if (!value) {
@@ -203,22 +208,35 @@ export default class Graffiti {
       },
     );
 
-    let reject: ((reason: any) => void) | null = null;
-    signal?.addEventListener("abort", () => {
-      if (reject) reject(signal?.reason);
+    const signalPromise = new Promise<"aborted">((resolve) => {
+      signal?.addEventListener(
+        "abort",
+        () => {
+          resolve("aborted");
+        },
+        {
+          once: true,
+          passive: true,
+        },
+      );
     });
 
     while (true) {
-      if (signal?.aborted) throw signal?.reason;
+      if (signal?.aborted) return;
 
       const waitingEvent = waitingEvents.shift();
       if (waitingEvent) {
         yield waitingEvent;
       } else {
-        yield await new Promise((_resolve, _reject) => {
-          resolve = _resolve;
-          reject = _reject;
-        });
+        const out = await Promise.race([
+          signalPromise,
+          new Promise<GraffitiSubscriptionResult>((r) => (resolve = r)),
+        ]);
+        if (out === "aborted") {
+          return;
+        } else {
+          yield out;
+        }
       }
     }
   }
@@ -228,18 +246,13 @@ export default class Graffiti {
     data: Uint8Array,
     uuid?: string,
   ): Promise<void> {
+    const actor = this.#actorManager.chosenActor;
     const actorPublicKey = this.#actorManager.chosenActorPublicKey;
-    if (!actorPublicKey) {
+    if (!actor || !actorPublicKey) {
       throw "No actor chosen! Please select an actor first.";
     }
 
-    // Sign the context directory
-    await this.#byoStorage.signDirectory(
-      context,
-      actorPublicKey,
-      this.#actorManager.sign.bind(this.#actorManager),
-    );
-
+    // Generate a UUID if one isn't provided
     let uuidBytes: Uint8Array;
     if (!uuid) {
       const randomBytes = new Uint8Array(16);
@@ -248,6 +261,25 @@ export default class Graffiti {
     } else {
       uuidBytes = base64Decode(uuid);
     }
+
+    // Get existing data if it exists (TODO)
+
+    // Immediately send an event
+    const event: GraffitiSubscriptionEvent = new Event(context);
+    event.value = {
+      type: "update",
+      data,
+      uuid: base64Encode(uuidBytes),
+      actor,
+    };
+    this.#eventTarget.dispatchEvent(event);
+
+    // Sign the context directory
+    await this.#byoStorage.signDirectory(
+      context,
+      actorPublicKey,
+      this.#actorManager.sign.bind(this.#actorManager),
+    );
 
     // Add the data to the context directory
     const sharedLink = await this.#byoStorage.update(
@@ -275,13 +307,24 @@ export default class Graffiti {
       const expiration = Date.now() + 100000;
       await this.#linkService.create(context, sharedLink, expiration);
     }
+
+    // TODO: if things fail, put the previous data back
   }
 
   async delete(context: string, uuid: string): Promise<void> {
+    const actor = this.#actorManager.chosenActor;
     const actorPublicKey = this.#actorManager.chosenActorPublicKey;
-    if (!actorPublicKey) {
+    if (!actor || !actorPublicKey) {
       throw "No actor chosen! Please select an actor first.";
     }
+
+    const event: GraffitiSubscriptionEvent = new Event(context);
+    event.value = {
+      type: "delete",
+      uuid,
+      actor,
+    };
+    this.#eventTarget.dispatchEvent(event);
 
     // Delete it from the shared storage
     const sharedLink = await this.#byoStorage.delete(
