@@ -42,6 +42,7 @@ window.post = async () => {
 let abortController: AbortController | null = null;
 window.subscribe = async () => {
   const contextEl = document.getElementById("context") as HTMLInputElement;
+  const context = contextEl.value;
 
   // Stop the existing subscription
   if (abortController) abortController.abort();
@@ -54,19 +55,39 @@ window.subscribe = async () => {
   // Start a new subscription
   abortController = new AbortController();
   for await (const result of window.graffiti.subscribe(
-    contextEl.value,
+    context,
     abortController.signal,
   )) {
     if (result.type === "update") {
       const postEl =
-        document.getElementById(result.uuid) ?? document.createElement("li");
+        document.getElementById(result.uuid + result.actor) ??
+        document.createElement("li");
       const text = new TextDecoder().decode(result.data);
       postEl.textContent = `"${text}" - ${result.actor}`;
-      postEl.id = result.uuid;
+      postEl.id = result.uuid + result.actor;
+
+      const delButton = document.createElement("button");
+      delButton.textContent = "Delete";
+      delButton.onclick = async () => {
+        await window.graffiti.delete(context, result.uuid);
+      };
+      postEl.appendChild(delButton);
+
+      const editButton = document.createElement("button");
+      editButton.textContent = "Edit";
+      editButton.onclick = async () => {
+        const newText = prompt("Enter new text", text);
+        if (newText) {
+          const newData = new TextEncoder().encode(newText);
+          await window.graffiti.update(context, newData, result.uuid);
+        }
+      };
+      postEl.appendChild(editButton);
+
       // If not already in the post list, add it
       if (!document.getElementById(result.uuid)) postsEl?.appendChild(postEl);
     } else if (result.type === "delete") {
-      const postEl = document.getElementById(result.uuid);
+      const postEl = document.getElementById(result.uuid + result.actor);
       postEl?.remove();
     }
   }

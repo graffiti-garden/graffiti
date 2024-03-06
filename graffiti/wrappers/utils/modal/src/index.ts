@@ -6,6 +6,8 @@ import ActorManager, {
 import LinkService from "@graffiti-garden/link-service-client";
 import type { BYOStorageOptions } from "@graffiti-garden/byo-storage";
 import type { ActorManagerOptions } from "@graffiti-garden/actor-manager-client";
+import { openDB } from "idb";
+import type { IDBPDatabase, DBSchema } from "idb";
 import { mergeSignals } from "abort-utils";
 
 export interface GraffitiOptions {
@@ -30,6 +32,30 @@ export type GraffitiSubscriptionResult =
       type: "backlog-complete";
     };
 
+interface CacheDB extends DBSchema {
+  "link-actors": {
+    key: string; // shared link
+    value: string; // actor ID
+  };
+  "link-cursors": {
+    key: string; // shared link
+    value: string; // cursor
+  };
+  data: {
+    key: string; // uuid + actor
+    value: {
+      uuid: string;
+      link: string;
+      actor: string;
+      context: string;
+      data: Uint8Array;
+    };
+    indexes: {
+      context: string;
+    };
+  };
+}
+
 interface GraffitiSubscriptionEvent extends Event {
   value?: GraffitiSubscriptionResult;
 }
@@ -38,7 +64,8 @@ export default class Graffiti {
   #actorManager: ActorManager;
   #byoStorage: BYOStorage;
   #linkService: LinkService;
-  #eventTarget = new EventTarget();
+  #optimisticEvents = new EventTarget();
+  #db: Promise<IDBPDatabase<CacheDB>> | undefined;
 
   constructor(options: GraffitiOptions) {
     this.#actorManager = new ActorManager(options.actorManager);
@@ -48,6 +75,17 @@ export default class Graffiti {
       this.#actorManager.sign.bind(this.#actorManager),
       options.linkServiceURL,
     );
+
+    if (typeof indexedDB !== "undefined") {
+      this.#db = openDB<CacheDB>("graffiti", 1, {
+        upgrade(db) {
+          db.createObjectStore("link-actors");
+          db.createObjectStore("link-cursors");
+          const dataStore = db.createObjectStore("data");
+          dataStore.createIndex("context", "context", { unique: false });
+        },
+      });
+    }
   }
 
   // Expose sub-library functions
@@ -68,6 +106,21 @@ export default class Graffiti {
     context: string,
     signal?: AbortSignal,
   ): AsyncGenerator<GraffitiSubscriptionResult, void, void> {
+    // First, check the cache for any existing data
+    const tx = (await this.#db)?.transaction("data", "readonly");
+    if (tx) {
+      const index = tx.store.index("context");
+      for await (const cursor of index.iterate(context)) {
+        const { uuid, data, actor } = cursor.value;
+        yield {
+          type: "update",
+          uuid,
+          data,
+          actor,
+        };
+      }
+    }
+
     let linkServiceBacklogComplete = false;
     let backlogComplete = false;
     const links: Map<
@@ -78,6 +131,7 @@ export default class Graffiti {
         backlogComplete: boolean;
       }
     > = new Map();
+    const eventTarget = new EventTarget();
 
     // Listen for links in the background
     (async () => {
@@ -111,31 +165,71 @@ export default class Graffiti {
           // Listen in the background
           (async () => {
             try {
-              const actorPublicKey = await this.#byoStorage.getPublicKey(
-                context,
-                link,
-                this.#actorManager.verify.bind(this.#actorManager),
-              );
+              // See if there is an existing actor in the cache
+              const storedActor = await (
+                await this.#db
+              )?.get("link-actors", link);
 
-              if (!actorPublicKey) return;
+              let actor: string;
+              if (storedActor) {
+                actor = storedActor;
+              } else {
+                const actorPublicKey = await this.#byoStorage.getPublicKey(
+                  context,
+                  link,
+                  this.#actorManager.verify.bind(this.#actorManager),
+                );
+                if (!actorPublicKey) return;
+                actor = "actor:" + base64Encode(actorPublicKey);
 
-              const actor = "actor:" + base64Encode(actorPublicKey);
+                // Store in the cache
+                await (await this.#db)?.put("link-actors", actor, link);
+              }
+
+              // Check for a stored cursor
+              const storedCursor = await (
+                await this.#db
+              )?.get("link-cursors", link);
+
               for await (const result of this.#byoStorage.subscribe(
                 context,
                 link,
-                localSignal,
+                {
+                  signal: localSignal,
+                  cursor: storedCursor,
+                },
               )) {
                 if (result.type == "update") {
+                  // Store the data in the cache
+                  const uuid = base64Encode(result.uuid);
+                  const data = result.data;
+                  await (
+                    await this.#db
+                  )?.put(
+                    "data",
+                    {
+                      data,
+                      uuid,
+                      context,
+                      link,
+                      actor,
+                    },
+                    uuid + actor,
+                  );
+
                   // Emit an event back to the root
                   const event: GraffitiSubscriptionEvent = new Event(context);
                   event.value = {
                     type: "update",
-                    uuid: base64Encode(result.uuid),
-                    data: result.data,
+                    uuid,
+                    data,
                     actor,
                   };
-                  this.#eventTarget.dispatchEvent(event);
+                  eventTarget.dispatchEvent(event);
                 } else if (result.type === "delete") {
+                  // Remove data from the cache
+                  await (await this.#db)?.delete("data", result.uuid + actor);
+
                   // Emit an event back to the root
                   const event: GraffitiSubscriptionEvent = new Event(context);
                   event.value = {
@@ -143,7 +237,12 @@ export default class Graffiti {
                     uuid: base64Encode(result.uuid),
                     actor,
                   };
-                  this.#eventTarget.dispatchEvent(event);
+                  eventTarget.dispatchEvent(event);
+                } else if (result.type === "cursor") {
+                  // Store the cursor
+                  await (
+                    await this.#db
+                  )?.put("link-cursors", result.cursor, link);
                 } else {
                   // Backlog has fired and we haven't already marked it
                   if (
@@ -168,7 +267,7 @@ export default class Graffiti {
                       event.value = {
                         type: "backlog-complete",
                       };
-                      this.#eventTarget.dispatchEvent(event);
+                      eventTarget.dispatchEvent(event);
                     }
                   }
                 }
@@ -191,22 +290,22 @@ export default class Graffiti {
     // Listen for the events
     const waitingEvents: GraffitiSubscriptionResult[] = [];
     let resolve: ((value: GraffitiSubscriptionResult) => void) | null = null;
-    this.#eventTarget.addEventListener(
-      context,
-      (event: GraffitiSubscriptionEvent) => {
-        const value = event.value;
-        if (!value) {
-          return;
+
+    const onEvent = (event: GraffitiSubscriptionEvent) => {
+      const value = event.value;
+      if (!value) {
+        return;
+      } else {
+        if (resolve) {
+          resolve(value);
+          resolve = null;
         } else {
-          if (resolve) {
-            resolve(value);
-            resolve = null;
-          } else {
-            waitingEvents.push(value);
-          }
+          waitingEvents.push(value);
         }
-      },
-    );
+      }
+    };
+    this.#optimisticEvents.addEventListener(context, onEvent);
+    eventTarget.addEventListener(context, onEvent);
 
     const signalPromise = new Promise<"aborted">((resolve) => {
       signal?.addEventListener(
@@ -261,54 +360,75 @@ export default class Graffiti {
     } else {
       uuidBytes = base64Decode(uuid);
     }
+    const uuidString = base64Encode(uuidBytes);
 
-    // Get existing data if it exists (TODO)
+    // Get existing data if it exists in case of failure
+    const existing = await (await this.#db)?.get("data", uuidString + actor);
 
     // Immediately send an event
     const event: GraffitiSubscriptionEvent = new Event(context);
     event.value = {
       type: "update",
       data,
-      uuid: base64Encode(uuidBytes),
+      uuid: uuidString,
       actor,
     };
-    this.#eventTarget.dispatchEvent(event);
+    this.#optimisticEvents.dispatchEvent(event);
 
-    // Sign the context directory
-    await this.#byoStorage.signDirectory(
-      context,
-      actorPublicKey,
-      this.#actorManager.sign.bind(this.#actorManager),
-    );
+    try {
+      // Add the data to the context directory
+      const sharedLink = await this.#byoStorage.update(
+        context,
+        actorPublicKey,
+        uuidBytes,
+        data,
+      );
 
-    // Add the data to the context directory
-    const sharedLink = await this.#byoStorage.update(
-      context,
-      actorPublicKey,
-      uuidBytes,
-      data,
-    );
+      // Sign the directory if not already signed
+      const storedActor = await (
+        await this.#db
+      )?.get("link-actors", sharedLink);
+      if (!storedActor) {
+        await this.#byoStorage.signDirectory(
+          context,
+          actorPublicKey,
+          this.#actorManager.sign.bind(this.#actorManager),
+        );
+        await (await this.#db)?.put("link-actors", actor, sharedLink);
+      }
 
-    // Check if the shared link is already in the link service
-    let needsLink = true;
-    for await (const link of this.#linkService.subscribe(context)) {
-      if (link.type == "announce") {
-        if (link.link.target === sharedLink) {
-          needsLink = false;
+      // Check if the shared link is already in the link service
+      let needsLink = true;
+      for await (const link of this.#linkService.subscribe(context)) {
+        if (link.type == "announce") {
+          if (link.link.target === sharedLink) {
+            needsLink = false;
+            break;
+          }
+        } else if (link.type === "backlog-complete") {
           break;
         }
-      } else if (link.type === "backlog-complete") {
-        break;
       }
-    }
 
-    // Add the link to the link service if needed
-    if (needsLink) {
-      const expiration = Date.now() + 100000;
-      await this.#linkService.create(context, sharedLink, expiration);
+      // Add the link to the link service if needed
+      if (needsLink) {
+        const expiration = Date.now() + 100000;
+        await this.#linkService.create(context, sharedLink, expiration);
+      }
+    } catch (e) {
+      // If things fail, put the previous data back
+      if (existing) {
+        event.value.data = existing.data;
+      } else {
+        event.value = {
+          type: "delete",
+          uuid: uuidString,
+          actor,
+        };
+      }
+      this.#optimisticEvents.dispatchEvent(event);
+      throw e;
     }
-
-    // TODO: if things fail, put the previous data back
   }
 
   async delete(context: string, uuid: string): Promise<void> {
@@ -318,42 +438,61 @@ export default class Graffiti {
       throw "No actor chosen! Please select an actor first.";
     }
 
+    // Get the data in case of failure
+    const existing = await (await this.#db)?.get("data", uuid + actor);
+
+    // Optimistically send an event
     const event: GraffitiSubscriptionEvent = new Event(context);
     event.value = {
       type: "delete",
       uuid,
       actor,
     };
-    this.#eventTarget.dispatchEvent(event);
+    this.#optimisticEvents.dispatchEvent(event);
 
-    // Delete it from the shared storage
-    const sharedLink = await this.#byoStorage.delete(
-      context,
-      actorPublicKey,
-      base64Decode(uuid),
-    );
+    try {
+      // Delete it from the storage
+      const sharedLink = await this.#byoStorage.delete(
+        context,
+        actorPublicKey,
+        base64Decode(uuid),
+      );
 
-    // Subscribe to the link to check if the storage is empty
-    const abortController = new AbortController();
-    const iterator = this.#byoStorage.subscribe(context, sharedLink);
-    // Get a single result and kill the iterator
-    const nextType = (await iterator.next()).value.type;
-    abortController.abort();
+      // Subscribe to the link to check if the storage is empty
+      const abortController = new AbortController();
+      const iterator = this.#byoStorage.subscribe(context, sharedLink, {
+        signal: abortController.signal,
+      });
+      // Get a single result and kill the iterator
+      const next = (await iterator.next()).value;
+      abortController.abort();
 
-    // If the storage is empty, delete the directory at the shared link
-    if (nextType === "backlog-complete") {
-      await this.#byoStorage.deleteDirectory(context, actorPublicKey);
-      // Remove it from the link service too
-      for await (const link of this.#linkService.subscribe(context)) {
-        if (link.type == "announce") {
-          if (link.link.target === sharedLink) {
-            link.link.modify({ target: "" });
+      // If the storage is empty, delete the directory at the shared link
+      if (next?.type === "backlog-complete") {
+        await this.#byoStorage.deleteDirectory(context, actorPublicKey);
+        // Remove it from the link service too
+        for await (const link of this.#linkService.subscribe(context)) {
+          if (link.type == "announce") {
+            if (link.link.target === sharedLink) {
+              link.link.modify({ target: "" });
+              break;
+            }
+          } else if (link.type === "backlog-complete") {
             break;
           }
-        } else if (link.type === "backlog-complete") {
-          break;
         }
       }
+    } catch (e) {
+      if (existing) {
+        event.value = {
+          type: "update",
+          data: existing.data,
+          uuid,
+          actor,
+        };
+        this.#optimisticEvents.dispatchEvent(event);
+      }
+      throw e;
     }
   }
 }
