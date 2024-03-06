@@ -10,27 +10,32 @@
     <h1>Welcome to Graffiti!</h1>
 
     <p>
-        <button onclick="gf.selectActor()">Choose an Actor</button>
+        <button onclick="graffiti.selectActor()">Choose an Actor</button>
         Your Actor ID is: <span id="actor-id"></span>
     </p>
 
     <p>
-        <button id="storage-login" onclick="gf.toggleStorageLogIn()"></button>
+        <button
+            id="storage-login"
+            onclick="graffiti.toggleStorageLogIn()"
+        ></button>
     </p>
 
-    <p>
-        Context:
-        <input id="context" type="text" value="something" />
-        <br />
-        <button onclick="subscribe()">Subscribe to context</button>
-        <br />
-        Post Data to Channel:
-        <input id="message" type="text" />
-        <br />
-        <button onclick="post()">Post Data to Channel</button>
-    </p>
+    <div id="stuff">
+        <p>
+            Context:
+            <input id="context" type="text" value="my-cool-context" />
+            <br />
+            <button onclick="subscribe()">Subscribe to context</button>
+            <br />
+            Post Data to Channel:
+            <input id="message" type="text" />
+            <br />
+            <button onclick="post()">Post Data to Channel</button>
+        </p>
 
-    <ul id="posts"></ul>
+        <ul id="posts"></ul>
+    </div>
 
     <script type="module" src="main.ts"></script>
 </body>

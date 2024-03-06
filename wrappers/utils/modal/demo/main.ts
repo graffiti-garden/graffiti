@@ -2,13 +2,13 @@ import Graffiti from "../src/index";
 
 declare global {
   interface Window {
-    gf: Graffiti;
+    graffiti: Graffiti;
     post: () => void;
     subscribe: () => void;
   }
 }
 
-window.gf = new Graffiti({
+window.graffiti = new Graffiti({
   byoStorage: {
     authentication: {
       clientId: "h4bnq16igcef7tg",
@@ -36,7 +36,7 @@ window.post = async () => {
   const contextEl = document.getElementById("context") as HTMLInputElement;
   const messageEl = document.getElementById("message") as HTMLInputElement;
   const data = new TextEncoder().encode(messageEl.value);
-  await window.gf.update(contextEl.value, data);
+  await window.graffiti.update(contextEl.value, data);
 };
 
 let abortController: AbortController | null = null;
@@ -53,7 +53,7 @@ window.subscribe = async () => {
 
   // Start a new subscription
   abortController = new AbortController();
-  for await (const result of window.gf.subscribe(
+  for await (const result of window.graffiti.subscribe(
     contextEl.value,
     abortController.signal,
   )) {
