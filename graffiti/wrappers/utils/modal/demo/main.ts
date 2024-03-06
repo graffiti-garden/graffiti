@@ -11,7 +11,7 @@ declare global {
 window.graffiti = new Graffiti({
   byoStorage: {
     authentication: {
-      clientId: "h4bnq16igcef7tg",
+      clientId: "6hy9svekk1qo41w",
     },
     onLoginStateChange(loginState) {
       const loginEl = document.getElementById("storage-login");
@@ -20,6 +20,7 @@ window.graffiti = new Graffiti({
           ? "Log out of storage"
           : "Log in to storage";
       }
+      showOrHideStuff();
     },
   },
   actorManager: {
@@ -28,9 +29,20 @@ window.graffiti = new Graffiti({
       if (actorEl) {
         actorEl.textContent = actorURI;
       }
+      showOrHideStuff();
     },
   },
 });
+
+const showOrHideStuff = () => {
+  const stuffEl = document.getElementById("stuff");
+  if (!stuffEl) return;
+  if (window.graffiti.chosenActor && window.graffiti.loggedInToStorage) {
+    stuffEl.style.display = "block";
+  } else {
+    stuffEl.style.display = "none";
+  }
+};
 
 window.post = async () => {
   const contextEl = document.getElementById("context") as HTMLInputElement;
@@ -66,23 +78,25 @@ window.subscribe = async () => {
       postEl.textContent = `"${text}" - ${result.actor}`;
       postEl.id = result.uuid + result.actor;
 
-      const delButton = document.createElement("button");
-      delButton.textContent = "Delete";
-      delButton.onclick = async () => {
-        await window.graffiti.delete(context, result.uuid);
-      };
-      postEl.appendChild(delButton);
+      if (result.actor === window.graffiti.chosenActor) {
+        const delButton = document.createElement("button");
+        delButton.textContent = "Delete";
+        delButton.onclick = async () => {
+          await window.graffiti.delete(context, result.uuid);
+        };
+        postEl.appendChild(delButton);
 
-      const editButton = document.createElement("button");
-      editButton.textContent = "Edit";
-      editButton.onclick = async () => {
-        const newText = prompt("Enter new text", text);
-        if (newText) {
-          const newData = new TextEncoder().encode(newText);
-          await window.graffiti.update(context, newData, result.uuid);
-        }
-      };
-      postEl.appendChild(editButton);
+        const editButton = document.createElement("button");
+        editButton.textContent = "Edit";
+        editButton.onclick = async () => {
+          const newText = prompt("Enter new text", text);
+          if (newText) {
+            const newData = new TextEncoder().encode(newText);
+            await window.graffiti.update(context, newData, result.uuid);
+          }
+        };
+        postEl.appendChild(editButton);
+      }
 
       // If not already in the post list, add it
       if (!document.getElementById(result.uuid)) postsEl?.appendChild(postEl);
