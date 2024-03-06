@@ -18,7 +18,11 @@ or in the browser, use jsdelivr or another CDN:
 
 Then go to the [Dropbox developer console](https://www.dropbox.com/developers/apps) and create an app.
 Select "Full Dropbox" rather than "App Folder" - while this library only uses one folder, full access is necessary to enable link sharing.
-Once created, add your app's domain to the "OAuth 2: Redirect URIs" section, as well as any local development URIs you may use.
+
+In "Permissions" enable "files.content.write", "files.content.read" and "sharing.write".
+In "Settings" under "Development Users" select "Enable Additional Users" to allow other users to user the app.
+In "Settings" under "OAuth 2" add your app's domain to the "OAuth 2: Redirect URIs" section, as well as any local development URIs you may use.
+
 Finally, copy the App key and use it to create a new BYOStorage instance:
 
 ```javascript
