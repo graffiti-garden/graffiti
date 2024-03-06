@@ -120,7 +120,10 @@ export default class DropboxSimplified {
         }
       }
     }
-    this.#onLoginStateChange?.(this.loggedIn);
+
+    // Run the callback after the current stack
+    // so that it can refer to the contructed variable
+    setTimeout(() => this.#onLoginStateChange?.(this.loggedIn), 0);
   }
 
   get loggedIn() {

@@ -39,13 +39,13 @@
 
             window.byos = new BYOStorage({
                 authentication: {
-                    clientId: "h4bnq16igcef7tg",
+                    clientId: "6hy9svekk1qo41w",
                 },
-                onLoginStateChange(loginState) {
+                onLoginStateChange: () => {
                     const toggleLogInButton =
                         document.getElementById("toggleLogIn");
                     const stuffEl = document.getElementById("stuff");
-                    if (loginState) {
+                    if (window.byos.loggedIn) {
                         toggleLogInButton.innerText = "Log Out";
                         stuffEl.style.display = "block";
                     } else {
