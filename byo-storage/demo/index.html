@@ -97,11 +97,9 @@
 
                 // Start the new subscribe
                 subscribing = channel;
-                for await (const action of byos.subscribe(
-                    channel,
-                    sharedLink,
-                    controller.signal,
-                )) {
+                for await (const action of byos.subscribe(channel, sharedLink, {
+                    signal: controller.signal,
+                })) {
                     // Convert the UUID from Uint8Array to a string
                     const uuid = new TextDecoder().decode(action.uuid);
 

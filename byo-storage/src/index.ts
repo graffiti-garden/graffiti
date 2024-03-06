@@ -17,33 +17,17 @@ export type SubscribeResult =
       uuid: Uint8Array;
     }
   | {
+      type: "cursor";
+      cursor: string;
+    }
+  | {
       type: "backlog-complete";
     };
 
 interface CacheDB extends DBSchema {
-  "public-keys": {
-    key: string; // shared link
-    value: Uint8Array; // the public key
-  };
   "shared-links": {
-    key: string; // hidden path
-    value: string; // shared link
-  };
-  cursors: {
-    key: string; // shared link
-    value: string; // cursor
-  };
-  data: {
-    key: string; // uuid + shared link
-    value: {
-      uuidPlusSharedLink: string;
-      uuid: Uint8Array;
-      sharedLink: string;
-      data: Uint8Array;
-    };
-    indexes: {
-      sharedLink: string;
-    };
+    key: string; // directory
+    value: string; // string
   };
 }
 
@@ -77,12 +61,6 @@ export default class BYOStorage {
       this.#db = openDB<CacheDB>("byo-storage", 1, {
         upgrade(db) {
           db.createObjectStore("shared-links");
-          db.createObjectStore("cursors");
-          db.createObjectStore("public-keys");
-          const dataStore = db.createObjectStore("data", {
-            keyPath: "uuidPlusSharedLink",
-          });
-          dataStore.createIndex("sharedLink", "sharedLink", { unique: false });
         },
       });
     }
@@ -145,12 +123,6 @@ export default class BYOStorage {
       publicKey,
     );
 
-    // Check in the cache if we have already created a signature
-    const storedPublicKey = await (
-      await this.#db
-    )?.get("public-keys", sharedLink);
-    if (storedPublicKey) return { directory, sharedLink };
-
     // Generate a signature
     const signature = await sign(new TextEncoder().encode(sharedLink));
 
@@ -162,9 +134,6 @@ export default class BYOStorage {
 
     // Place the signature in the directory
     await this.#dropbox.updateFile(directory, "signature", encrypted);
-
-    // Cache that we've created a signature
-    await (await this.#db)?.put("public-keys", publicKey, sharedLink);
 
     return { directory, sharedLink };
   }
@@ -219,14 +188,7 @@ export default class BYOStorage {
     sharedLink: string,
     verify: VerifyFunction,
   ): Promise<Uint8Array | null> {
-    // Lookup the public key in the cache
-    const storedPublicKey = await (
-      await this.#db
-    )?.get("public-keys", sharedLink);
-    if (storedPublicKey) return storedPublicKey;
-
-    // If not in the cache,
-    // download the public key + signature from the shared link
+    // Download the public key + signature from the shared link
     let encrypted: Uint8Array;
     try {
       encrypted = await this.#dropbox.downloadFile(sharedLink, "signature");
@@ -252,55 +214,22 @@ export default class BYOStorage {
       return null;
     }
 
-    // Store the public key in the cache
-    await (await this.#db)?.put("public-keys", publicKey, sharedLink);
-
     return publicKey;
   }
 
   async *subscribe(
     channel: string,
     sharedLink: string,
-    signal?: AbortSignal,
+    options?: {
+      signal?: AbortSignal;
+      cursor?: string;
+    },
   ): AsyncGenerator<SubscribeResult, void, void> {
-    // First load data from the cache if it exists
-    const tx = (await this.#db)?.transaction("data", "readonly");
-    if (tx) {
-      const index = tx.store.index("sharedLink");
-      for await (const cursor of index.iterate(sharedLink)) {
-        const { uuid, data } = cursor.value;
-        yield {
-          type: "update",
-          uuid,
-          data,
-        };
-      }
-    }
-
-    // Get the cursor from the cache if it exists
-    const storedCursor = await (await this.#db)?.get("cursors", sharedLink);
-
-    for await (const result of this.#dropbox.listFiles(sharedLink, {
-      cursor: storedCursor,
-      signal,
-    })) {
+    for await (const result of this.#dropbox.listFiles(sharedLink, options)) {
       if (result.type == "update") {
         if (result.name != "signature") {
           const data = decrypt(channel, result.data);
           const uuid = base64Decode(result.name);
-
-          // Store the data in the cache
-          await (
-            await this.#db
-          )?.put("data", {
-            data,
-            uuid,
-            sharedLink,
-            uuidPlusSharedLink: this.#uuidPlusSharedLink(
-              result.name,
-              sharedLink,
-            ),
-          });
 
           yield {
             type: "update",
@@ -311,26 +240,20 @@ export default class BYOStorage {
       } else if (result.type == "delete") {
         const uuid = base64Decode(result.name);
 
-        // Remove the data from the cache
-        await (
-          await this.#db
-        )?.delete("data", this.#uuidPlusSharedLink(result.name, sharedLink));
-
         yield {
           type: "delete",
           uuid,
         };
       } else if (result.type == "cursor") {
-        await (await this.#db)?.put("cursors", result.cursor, sharedLink);
+        yield {
+          type: "cursor",
+          cursor: result.cursor,
+        };
       } else if (result.type == "backlog-complete") {
         yield {
           type: "backlog-complete",
         };
       }
     }
-  }
-
-  #uuidPlusSharedLink(uuidString: string, sharedLink: string) {
-    return uuidString + "@" + sharedLink;
   }
 }

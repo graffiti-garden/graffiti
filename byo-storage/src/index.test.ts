@@ -105,6 +105,8 @@ describe(`Main`, () => {
       sharedLink,
       verify,
     );
+    expect(publicKeyRecieved).not.toEqual(null);
+    if (publicKeyRecieved === null) return;
     expect(publicKey.length).toEqual(publicKeyRecieved.length);
     expect(publicKey.every((byte, i) => byte === publicKeyRecieved[i])).toBe(
       true,
@@ -143,6 +145,8 @@ describe(`Main`, () => {
     const result = (await iterator.next()).value;
     expect(result?.type).toEqual("update");
     if (result?.type != "update") return;
+    const result25 = (await iterator.next()).value;
+    expect(result25?.type).toEqual("cursor");
     const result2 = (await iterator.next()).value;
     expect(result2?.type).toEqual("backlog-complete");
 
@@ -190,6 +194,8 @@ describe(`Main`, () => {
     data.forEach((byte, i) => {
       expect(byte).toEqual(result.data[i]);
     });
+    const result25 = (await iterator.next()).value;
+    expect(result25?.type).toEqual("cursor");
     const result2 = (await iterator.next()).value;
     expect(result2?.type).toEqual("backlog-complete");
 
@@ -200,13 +206,17 @@ describe(`Main`, () => {
 
     // Make sure we get the new data
     const timeoutSignal = AbortSignal.timeout(4000);
-    const iterator2 = byos.subscribe(channel, sharedLink2, timeoutSignal);
+    const iterator2 = byos.subscribe(channel, sharedLink2, {
+      signal: timeoutSignal,
+    });
     const result3 = (await iterator2.next()).value;
     expect(result3?.type).toEqual("update");
     if (result3?.type != "update") return;
     data2.forEach((byte, i) => {
       expect(byte).toEqual(result3.data[i]);
     });
+    const result35 = (await iterator2.next()).value;
+    expect(result35?.type).toEqual("cursor");
     const result4 = (await iterator2.next()).value;
     expect(result4?.type).toEqual("backlog-complete");
 
@@ -256,7 +266,9 @@ describe(`Main`, () => {
 
     // Make sure the data is gone
     const timeoutSignal = AbortSignal.timeout(4000);
-    const iterator = byos.subscribe(channel, sharedLink, timeoutSignal);
+    const iterator = byos.subscribe(channel, sharedLink, {
+      signal: timeoutSignal,
+    });
     const result = (await iterator.next()).value;
     expect(result?.type).toEqual("backlog-complete");
     await expect(iterator.next()).resolves.toHaveProperty("done", true);
@@ -270,6 +282,8 @@ describe(`Main`, () => {
     const channel = Math.random().toString(36).substring(7);
     const { sharedLink } = await byos.createDirectory(channel, publicKey);
     const iterator = byos.subscribe(channel, sharedLink);
+    const result0 = (await iterator.next()).value;
+    expect(result0?.type).toEqual("backlog-complete");
 
     // Post some data
     const data = randomBytes(100);
@@ -287,16 +301,21 @@ describe(`Main`, () => {
         expect(byte).toEqual(result.uuid[i]);
       });
     }
+    const result1 = (await iterator.next()).value;
+    expect(result1?.type).toEqual("cursor");
 
     // Replace the data
     const data2 = randomBytes(100);
     await byos.update(channel, publicKey, uuid, data2);
     const result2 = (await iterator.next()).value;
+    expect(result2?.type).toEqual("update");
     if (result2?.type == "update") {
       data2.forEach((byte, i) => {
         expect(byte).toEqual(result2.data[i]);
       });
     }
+    const result25 = (await iterator.next()).value;
+    expect(result25?.type).toEqual("cursor");
 
     // Delete the data
     await byos.delete(channel, publicKey, uuid);
@@ -307,5 +326,7 @@ describe(`Main`, () => {
         expect(byte).toEqual(result3.uuid[i]);
       });
     }
+    const result35 = (await iterator.next()).value;
+    expect(result35?.type).toEqual("cursor");
   }, 100000);
 });
