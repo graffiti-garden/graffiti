@@ -464,7 +464,8 @@ export default class Graffiti {
         signal: abortController.signal,
       });
       // Get a single result and kill the iterator
-      const next = (await iterator.next()).value;
+      (await iterator.next()).value; // cursor
+      const next = (await iterator.next()).value; // backlog complete?
       abortController.abort();
 
       // If the storage is empty, delete the directory at the shared link
