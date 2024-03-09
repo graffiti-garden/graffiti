@@ -226,7 +226,7 @@ watch(selected, s => {
             ((uiState == UIState.Managing) &&
                 !Object.keys(actors).length)">
             <form>
-                <button v-if="!initialized" @click.prevent="actorManager.initialize">
+                <button v-if="!initialized" @click.prevent="actorManager.initialize" class="highlight">
                     Enable Graffiti on This Site
                 </button>
                 <template v-else>
