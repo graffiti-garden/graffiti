@@ -225,18 +225,6 @@ watch(selected, s => {
         <template v-if="!initialized ||
             ((uiState == UIState.Managing) &&
                 !Object.keys(actors).length)">
-            <p>
-                Welcome to <a target="_blank" href="https://graffiti.garden">Graffiti</a>!
-                Graffiti is a system that connects different social media applications
-                so that you can seamlessly migrate between them without losing your data or relationships.
-                With a little bit of web programming, you can also modify existing Graffiti applications or create your own.
-            </p>
-
-            <p>
-                This manager let's you add, delete, and select different
-                <em>actors</em> which are your identities within the Graffiti application ecosystem.
-            </p>
-
             <form>
                 <button v-if="!initialized" @click.prevent="actorManager.initialize">
                     Enable Graffiti on This Site
@@ -248,10 +236,10 @@ watch(selected, s => {
                     <button @click.prevent="uiState = UIState.Importing" class="highlight">
                         Import an Existing Actor
                     </button>
-                    <button @click="cancel()">
-                        Cancel
-                    </button>
                 </template>
+                <button @click="cancel()">
+                    Cancel
+                </button>
             </form>
         </template>
 
