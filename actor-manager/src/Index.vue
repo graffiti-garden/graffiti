@@ -237,7 +237,7 @@ watch(selected, s => {
                         Import an Existing Actor
                     </button>
                 </template>
-                <button @click="cancel()">
+                <button @click.prevent="cancel()">
                     Cancel
                 </button>
             </form>
