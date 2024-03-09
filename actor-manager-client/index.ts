@@ -1,5 +1,4 @@
 import { ed25519 as curve } from "@noble/curves/ed25519";
-import defaultStyle from "./style.css?inline";
 
 const defaultActorManagerURL = "https://actor.graffiti.garden";
 // const defaultActorManagerURL = "http://localhost:5173";
@@ -30,58 +29,36 @@ export function base64Decode(str: string): Uint8Array {
 
 export interface ActorManagerOptions {
   onChosenActor?: (actorURI: string | null) => void;
+  onUICancel?: () => void;
   actorManagerURL?: string;
   style?: string;
 }
 
 export default class ActorManager {
   actorManagerURL: string;
-  onChosenActor: ActorManagerOptions["onChosenActor"] | undefined;
+  #onChosenActor: ActorManagerOptions["onChosenActor"] | undefined;
+  #onUICancel: ActorManagerOptions["onUICancel"] | undefined;
   #messageEvents = new EventTarget();
   #initializeEvents = new EventTarget();
   #initialized = false;
   #iframe = document.createElement("iframe");
-  #dialog = document.createElement("dialog");
   #chosenActor: string | null = null;
 
   constructor(options?: ActorManagerOptions) {
-    this.onChosenActor = options?.onChosenActor;
     this.actorManagerURL = options?.actorManagerURL ?? defaultActorManagerURL;
+    this.#onChosenActor = options?.onChosenActor;
+    this.#onUICancel = options?.onUICancel;
 
-    window.onmessage = this.#onIframeMessage.bind(this);
+    window.addEventListener("message", (event) => {
+      this.#onIframeMessage(event);
+    });
 
     // Bind the iframe to the right origin
     this.#iframe.src = this.actorManagerURL;
-
-    // ... and put it within a dialog
-    this.#dialog.className = "graffiti-actor-manager";
-    this.#dialog.prepend(this.#iframe);
-    document.body.prepend(this.#dialog);
-
-    // Click outside of dialog to close
-    this.#dialog.addEventListener("click", (e) => {
-      const rect = this.#dialog.getBoundingClientRect();
-      if (
-        rect.top > e.clientY ||
-        rect.left > e.clientX ||
-        e.clientY > rect.top + rect.height ||
-        e.clientX > rect.left + rect.width
-      ) {
-        this.#dialog.close();
-      }
-    });
-
-    // Inject style
-    const style = options?.style ?? defaultStyle;
-    if (style.length) {
-      const styleEl = document.createElement("style");
-      styleEl.textContent = style;
-      document.head.append(styleEl);
-    }
   }
 
-  selectActor(): void {
-    this.#dialog.showModal();
+  get iframe() {
+    return this.#iframe;
   }
 
   get chosenActor(): string | null {
@@ -235,13 +212,13 @@ export default class ActorManager {
     }
 
     // Close whenever canceled or non-null chosen actor
-    if (data.canceled || data.chosen) {
-      this.#dialog.close();
+    if (data.canceled) {
+      this.#onUICancel?.();
     }
 
     if (data.chosen !== undefined) {
       this.#chosenActor = data.chosen;
-      this.onChosenActor?.(data.chosen);
+      this.#onChosenActor?.(data.chosen);
     } else if (data.messageID) {
       const messageEvent: ReplyMessageEvent = new Event(data.messageID);
       messageEvent.reply = data;

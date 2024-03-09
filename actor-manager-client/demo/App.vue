@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import type { Ref } from 'vue'
 import ActorManager, { base64Encode, base64Decode } from '../index';
 
@@ -8,7 +8,12 @@ const actorID: Ref<null | string> = ref(null)
 const nonce: Ref<Uint8Array | undefined> = ref(undefined)
 const publicKey: Ref<string> = ref('')
 async function getPublicKey() {
-    publicKey.value = base64Encode(nonce.value ? await am.getPublicKey(nonce.value) : am.chosenActorPublicKey)
+    const publicKeyBytes = nonce.value ? await am.getPublicKey(nonce.value) : am.chosenActorPublicKey
+    if (publicKeyBytes) {
+        publicKey.value = base64Encode(publicKeyBytes)
+    } else {
+        publicKey.value = ''
+    }
 }
 
 async function noNoncense() {
@@ -22,11 +27,24 @@ async function generateNonce() {
     await getPublicKey()
 }
 
+const iframecontainer = ref(null)
+function openIframe() {
+    iframecontainer.value.style.display = 'block'
+}
+
 const am = new ActorManager({
     async onChosenActor(actorURI: string | null) {
         actorID.value = actorURI
         await noNoncense()
+    },
+    onUICancel() {
+        iframecontainer.value.style.display = 'none'
     }
+})
+
+onMounted(() => {
+    iframecontainer.value.appendChild(am.iframe)
+    iframecontainer.value.style.display = 'none'
 })
 
 const encoder = new TextEncoder()
@@ -48,9 +66,10 @@ const plaintextOutSelf: Ref<string> = ref('')
 </script>
 
 <template>
-    <form @submit.prevent="am.selectActor()">
-        <input type="submit" value="Select Actor">
-    </form>
+    <button @click="openIframe">
+        Open Actor Manager
+    </button>
+    <div ref="iframecontainer"></div>
 
     <p>
         Your Actor ID is: "{{ actorID }}"
@@ -143,3 +162,10 @@ const plaintextOutSelf: Ref<string> = ref('')
 
     </template>
 </template>
+
+<style>
+iframe {
+    width: 100%;
+    height: 500px;
+}
+</style>

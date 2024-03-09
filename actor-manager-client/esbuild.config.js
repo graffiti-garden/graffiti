@@ -1,5 +1,4 @@
 import * as esbuild from "esbuild";
-import inlineImportPlugin from "esbuild-plugin-inline-import";
 
 await esbuild.build({
   entryPoints: ["index.ts"],
@@ -10,9 +9,4 @@ await esbuild.build({
   format: "esm",
   target: "es2018",
   outdir: "dist",
-  plugins: [
-    inlineImportPlugin({
-      filter: /\?inline$/,
-    }),
-  ],
 });
