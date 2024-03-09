@@ -236,9 +236,6 @@ watch(selected, s => {
                     <button @click.prevent="uiState = UIState.Importing" class="highlight">
                         Import an Existing Actor
                     </button>
-                    <button @click="cancel()">
-                        Cancel
-                    </button>
                 </template>
                 <button @click="cancel()">
                     Cancel
