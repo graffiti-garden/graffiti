@@ -27,7 +27,6 @@ interface ReplyMessage {
 }
 
 enum UIState {
-    Nothing,
     Managing,
     Adding,
     Creating,
@@ -100,7 +99,7 @@ events.addEventListener(
 
 // Various UI state variables
 const selected: Ref<null | string> = ref(null)
-const uiState: Ref<UIState> = ref(UIState.Nothing)
+const uiState: Ref<UIState> = ref(UIState.Managing)
 const menuOpen: Ref<null | string> = ref(null)
 const createNickname: Ref<string> = ref('')
 
@@ -114,7 +113,7 @@ function rename(uri: string): void {
 }
 
 function resetState() {
-    uiState.value = UIState.Nothing
+    uiState.value = UIState.Managing
     selected.value = null
     menuOpen.value = null
     editing.value = null
@@ -185,8 +184,8 @@ window.onmessage = async function ({ data }: { data: RequestMessage }) {
 }
 
 function cancel() {
-    postMessage({ canceled: true })
     resetState()
+    postMessage({ canceled: true })
 }
 
 window.onbeforeunload = () => {
@@ -216,11 +215,6 @@ watch(selected, s => {
 </script>
 
 <template>
-    <header>
-        <button @click="cancel()">
-            Close
-        </button>
-    </header>
     <main>
         <h1>
             <a target="_blank" href="https://graffiti.garden">
@@ -229,7 +223,7 @@ watch(selected, s => {
         </h1>
 
         <template v-if="!initialized ||
-            ((uiState == UIState.Nothing || uiState == UIState.Managing) &&
+            ((uiState == UIState.Managing) &&
                 !Object.keys(actors).length)">
             <p>
                 Welcome to <a target="_blank" href="https://graffiti.garden">Graffiti</a>!
@@ -253,6 +247,9 @@ watch(selected, s => {
                     </button>
                     <button @click.prevent="uiState = UIState.Importing" class="highlight">
                         Import an Existing Actor
+                    </button>
+                    <button @click="cancel()">
+                        Cancel
                     </button>
                 </template>
             </form>
@@ -365,29 +362,11 @@ watch(selected, s => {
                 <button v-else disabled>
                     Select an Actor to Log In
                 </button>
-                <button v-if="chosen" @click.prevent="uiState = UIState.Nothing">
-                    Cancel
-                </button>
-            </form>
-        </template>
-
-        <template v-else>
-            <div>
-                <h3>
-                    You are logged in as
-                </h3>
-                <h2>
-                    {{ actors[chosen] }}
-                </h2>
-            </div>
-
-            <form>
-                <button @click.prevent="selected = null; uiState = UIState.Managing" class="highlight">
-                    Manage Actors
-                </button>
-
-                <button @click.prevent="actorManager.unchooseActor()">
+                <button v-if="chosen" @click.prevent="actorManager.unchooseActor()">
                     Log Out
+                </button>
+                <button @click.prevent="cancel()">
+                    Cancel
                 </button>
             </form>
         </template>

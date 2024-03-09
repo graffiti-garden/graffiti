@@ -15,22 +15,6 @@
     box-sizing: border-box;
 }
 
-html::before {
-    content: "";
-    position: fixed;
-    left: 0;
-    right: 0;
-    z-index: -1;
-    background-image: url(/graffiti.jpg);
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: 50% 50%;
-    height: calc(100dvh + 2 * var(--blurpix));
-    width: calc(100dvw + 2 * var(--blurpix));
-    filter: blur(var(--blurpix));
-    margin: calc(-1 * var(--blurpix));
-}
-
 html {
     width: 100dvw;
     height: 100dvh;
@@ -55,7 +39,7 @@ html {
     line-height: 1.7;
     word-break: break-word;
     color: var(--frontfaded);
-    background-color: var(--back);
+    background-color: transparent;
 }
 
 #app {
@@ -82,29 +66,12 @@ body {
 
 main {
     flex: 1;
-    max-width: 600px;
     width: 100%;
     gap: 4dvh;
-    padding-top: 4dvh;
-    padding-bottom: 4dvh;
-    margin-top: 4dvh;
-    margin-bottom: 4dvh;
-    margin-left: 4dvw;
-    margin-right: 4dvw;
-    padding-left: 4dvw;
-    padding-right: 4dvw;
-    background: var(--back);
-    border-radius: 1rem;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     scrollbar-color: var(--emph) rgba(0, 0, 0, 0);
-}
-
-header {
-    width: 100%;
-    display: flex;
-    justify-content: flex-end;
 }
 
 h1 {
@@ -231,27 +198,6 @@ menu a {
     line-height: 1.2rem;
 }
 
-header button {
-    border-radius: 0 0 0 1rem;
-    border-right: none;
-    border-top: none;
-    background-color: var(--halfback2);
-    width: fit-content;
-    position: relative;
-    overflow: hidden;
-}
-
-header button::before {
-    z-index: -1;
-    top: 0;
-    left: 0;
-    height: 100%;
-    position: absolute;
-    width: 100%;
-    content: "";
-    background-color: var(--back);
-}
-
 .dropdown {
     position: relative;
 }
@@ -260,24 +206,6 @@ header button::before {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
     border-bottom: 0;
-}
-
-@media (max-width: 600px) {
-    main {
-        border-radius: 0;
-        margin: auto;
-        overflow: auto;
-    }
-
-    header button {
-        border-radius: 0;
-        border-left: none;
-        width: 100%;
-    }
-
-    html {
-        justify-content: safe center;
-    }
 }
 
 :is(button, ul a, input[type="submit"]):hover {
