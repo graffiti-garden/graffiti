@@ -42,7 +42,14 @@ export interface Actor {
 }
 
 export interface ActorAnnouncement extends Event {
-  uri?: string | null;
+  value?:
+    | {
+        uri: string;
+        nickname: string;
+      }
+    | {
+        uri: null;
+      };
 }
 
 enum Action {
@@ -51,12 +58,22 @@ enum Action {
   DELETE = "delete",
 }
 
-interface ChannelMessage {
+interface BaseChannelMessage {
   action: Action;
   referrer: string;
-  uri: string | null;
   id: string;
 }
+
+type ChannelMessage = BaseChannelMessage &
+  (
+    | {
+        uri: string;
+        nickname: string;
+      }
+    | {
+        uri: null;
+      }
+  );
 
 export function base64Encode(bytes: Uint8Array): string {
   const base64 = btoa(String.fromCodePoint(...bytes));
@@ -86,6 +103,7 @@ const globalReferrer = document.referrer
 
 export default class ActorManager {
   isInitialized = false;
+  hasStorageAccess = false;
 
   events: EventTarget;
 
@@ -102,6 +120,8 @@ export default class ActorManager {
     (async () => {
       await new Promise<void>((r) => setTimeout(() => r(), 10));
       if (!document.hasStorageAccess || (await document.hasStorageAccess())) {
+        this.hasStorageAccess = true;
+        this.events.dispatchEvent(new Event("storageaccess"));
         await this._initialize();
       }
     })();
@@ -118,6 +138,10 @@ export default class ActorManager {
         throw "The actor manager can't work without local storage access!";
       }
     }
+
+    // Set that we have storage access
+    this.hasStorageAccess = true;
+    this.events.dispatchEvent(new Event("storageaccess"));
     await this._initialize();
   }
 
@@ -131,24 +155,30 @@ export default class ActorManager {
         const uri = cookie.name;
         if (uri.startsWith("actor")) {
           // Refresh the cookie
-          await setCookie(cookie.name, cookie.value);
+          await this.setCookie(uri, cookie.value);
 
-          await this.announceActor(Action.UPDATE, uri);
+          // Announce the actor
+          const actor = JSON.parse(cookie.value);
+          await this.announceActor(Action.UPDATE, uri, actor.nickname);
         }
       }),
     );
+
     // Load the chosen one
     const chosen = await this.getChosen();
 
     // Make sure it still exists
-    if (chosen && !(await cookieStore.get(chosen))) {
-      // If not delete, and propogate
-      this.unchooseActor();
+    if (!chosen) {
+      await this.announceActor(Action.CHOOSE, null, "");
     } else {
-      await this.announceActor(Action.CHOOSE, chosen);
-      // Otherwise, refresh it
-      if (chosen) {
-        await setCookie(`chosen:${this.referrer}`, chosen, true);
+      let actor: Actor;
+      try {
+        actor = await this.getActor(chosen);
+        // If it does, announce and refresh the cookie
+        await this.announceActor(Action.CHOOSE, chosen, actor.nickname);
+        await this.setCookie(`chosen:${this.referrer}`, chosen, true);
+      } catch {
+        await this._unchooseActor();
       }
     }
 
@@ -157,18 +187,24 @@ export default class ActorManager {
   }
 
   async chooseActor(uri: string): Promise<void> {
-    await setCookie(`chosen:${this.referrer}`, uri, true);
-    await this.announceActor(Action.CHOOSE, uri, true);
+    await this.tilInitialized();
+    const actor = await this.getActor(uri);
+    await this.setCookie(`chosen:${this.referrer}`, uri, true);
+    await this.announceActor(Action.CHOOSE, uri, actor.nickname, true);
+  }
+
+  async _unchooseActor(): Promise<void> {
+    await this.deleteCookie(`chosen:${this.referrer}`);
+    await this.announceActor(Action.CHOOSE, null, "", true);
   }
 
   async unchooseActor(): Promise<void> {
-    await deleteCookie(`chosen:${this.referrer}`);
-    await this.announceActor(Action.CHOOSE, null, true);
+    await this.tilInitialized();
+    await this._unchooseActor();
   }
 
   async getChosen(): Promise<string | null> {
-    const result = await cookieStore.get(`chosen:${this.referrer}`);
-    return result?.value ?? null;
+    return await this.getCookie(`chosen:${this.referrer}`);
   }
 
   async tilInitialized(): Promise<void> {
@@ -182,7 +218,40 @@ export default class ActorManager {
     }
   }
 
+  async tilStorageAccess(): Promise<void> {
+    if (!this.hasStorageAccess) {
+      await new Promise<void>((resolve) =>
+        this.events.addEventListener("storageaccess", () => resolve(), {
+          passive: true,
+          once: true,
+        }),
+      );
+    }
+  }
+
+  async setCookie(
+    name: string,
+    value: string,
+    shortLived: boolean = false,
+  ): Promise<void> {
+    await this.tilStorageAccess();
+    await setCookie(name, value, shortLived);
+  }
+
+  async getCookie(name: string): Promise<string | null> {
+    await this.tilStorageAccess();
+    const result = await cookieStore.get(name);
+    return result?.value ?? null;
+  }
+
+  async deleteCookie(name: string): Promise<void> {
+    await this.tilStorageAccess();
+    await deleteCookie(name);
+  }
+
   async createActor(nickname: string): Promise<string> {
+    await this.tilInitialized();
+
     // Generate root secret
     const rootSecret = randomBytes(32);
 
@@ -191,32 +260,29 @@ export default class ActorManager {
       nickname,
       rootSecretBase64: base64Encode(rootSecret),
     };
-    return this.storeActor(actor);
-  }
 
-  async storeActor(actor: Actor): Promise<string> {
     const privateKey = base64Decode(actor.rootSecretBase64);
     const uri = actorURIEncode(curve.getPublicKey(privateKey));
 
-    await this.tilInitialized();
-    await setCookie(uri, JSON.stringify(actor));
+    await this.tilStorageAccess();
+    await this.setCookie(uri, JSON.stringify(actor));
 
-    await this.announceActor(Action.UPDATE, uri, true);
+    await this.announceActor(Action.UPDATE, uri, actor.nickname, true);
 
     return uri;
   }
 
   async getActor(uri: string): Promise<Actor> {
-    await this.tilInitialized();
-    const actorCookie = await cookieStore.get(uri);
+    const actorCookie = await this.getCookie(uri);
     if (!actorCookie) {
       throw `Actor with ID "${uri}" does not exist`;
     } else {
-      return JSON.parse(actorCookie.value);
+      return JSON.parse(actorCookie);
     }
   }
 
   async deleteActor(uri: string): Promise<void> {
+    await this.tilInitialized();
     const actor = await this.getActor(uri);
 
     if (
@@ -233,38 +299,59 @@ export default class ActorManager {
     }
 
     // Remove and announce the change
-    await deleteCookie(uri);
-    await this.announceActor(Action.DELETE, uri, true);
+    await this.deleteCookie(uri);
+    await this.announceActor(Action.DELETE, uri, actor.nickname, true);
   }
 
   async renameActor(uri: string, newNickname: string): Promise<void> {
+    await this.tilInitialized();
     const actor = await this.getActor(uri);
     if (actor.nickname != newNickname) {
       actor.nickname = newNickname;
-      await setCookie(uri, JSON.stringify(actor));
-      await this.announceActor(Action.UPDATE, uri, true);
+      await this.setCookie(uri, JSON.stringify(actor));
+      await this.announceActor(Action.UPDATE, uri, actor.nickname, true);
     }
   }
 
   async announceActor(
     action: Action,
     uri: string | null,
+    nickname: string,
     propogate: boolean = false,
   ): Promise<void> {
     // Announce the event locally
     const actorEvent: ActorAnnouncement = new Event(action);
-    actorEvent.uri = uri;
+    if (uri !== null) {
+      actorEvent.value = {
+        uri,
+        nickname,
+      };
+    } else {
+      actorEvent.value = { uri };
+    }
     this.events.dispatchEvent(actorEvent);
 
     if (propogate) {
-      await this.tilInitialized();
+      await this.tilStorageAccess();
 
-      const channelMessage: ChannelMessage = {
+      const baseMessage: BaseChannelMessage = {
         action,
-        uri,
         referrer: this.referrer,
         id: this.channelID,
       };
+
+      const channelMessage: ChannelMessage =
+        uri !== null
+          ? {
+              uri,
+              nickname,
+              ...baseMessage,
+            }
+          : {
+              uri,
+              ...baseMessage,
+            };
+
       this.channel.postMessage(channelMessage);
     }
   }
@@ -358,7 +445,11 @@ export default class ActorManager {
         await this.unchooseActor();
       }
 
-      await this.announceActor(data.action, data.uri);
+      await this.announceActor(
+        data.action,
+        data.uri,
+        data.uri ? data.nickname : "",
+      );
     }
   }
 }

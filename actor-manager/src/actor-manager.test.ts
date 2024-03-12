@@ -128,27 +128,28 @@ describe("Actor Manager", () => {
     }
 
     const et = new EventTarget();
-    const gotten = new Set<string>();
+    const gotten = new Set<[string, string]>();
     const callback = (e: ActorAnnouncement) => {
-      if (e.uri) gotten.add(e.uri);
+      if (e.value?.uri) gotten.add([e.value.uri, e.value.nickname]);
     };
     et.addEventListener("update", callback as EventListener);
     const am2 = new ActorManager(et);
     await am2.tilInitialized();
 
     expect(gotten.size).toEqual(5);
-    for (const got of gotten) {
-      const actor = await am2.getActor(got);
-      expect(nicknames).toContain(actor.nickname);
+    for (const [uri, nickname] of gotten) {
+      expect(nicknames).toContain(nickname);
+      const actor = await am2.getActor(uri);
+      expect(nickname).toEqual(actor.nickname);
     }
   });
 
   it("update events", async () => {
     await clearCookies();
 
-    const gotten: Array<string> = [];
+    const gotten: Array<[string, string]> = [];
     const callback = (e: ActorAnnouncement) => {
-      if (e.uri) gotten.push(e.uri);
+      if (e.value?.uri) gotten.push([e.value.uri, e.value.nickname]);
     };
 
     const et = new EventTarget();
@@ -157,23 +158,26 @@ describe("Actor Manager", () => {
     const am = new ActorManager(et);
     await am.tilInitialized();
     expect(gotten.length).toEqual(0);
-    const uri = await am.createActor(crypto.randomUUID());
+    const nickname = crypto.randomUUID();
+    const uri = await am.createActor(nickname);
     expect(gotten.length).toEqual(1);
-    expect(gotten[0]).toEqual(uri);
+    expect(gotten[0][0]).toEqual(uri);
+    expect(gotten[0][1]).toEqual(nickname);
 
     // rename
     gotten.pop();
     expect(gotten.length).toEqual(0);
-    const nickname = crypto.randomUUID();
-    await am.renameActor(uri, nickname);
+    const nickname2 = crypto.randomUUID();
+    await am.renameActor(uri, nickname2);
     expect(gotten.length).toEqual(1);
-    expect(gotten[0]).toEqual(uri);
+    expect(gotten[0][0]).toEqual(uri);
+    expect(gotten[0][1]).toEqual(nickname2);
   });
 
   it("delete events", async () => {
     const gotten: Array<string> = [];
     const callback = (e: ActorAnnouncement) => {
-      if (e.uri) gotten.push(e.uri);
+      if (e.value?.uri) gotten.push(e.value.uri);
     };
 
     const et = new EventTarget();
@@ -195,6 +199,14 @@ describe("Actor Manager", () => {
       `Actor with ID "${uri}" does not exist`,
     );
     expect(gotten.length).toEqual(0);
+  });
+
+  it("choose actor", async () => {
+    const am = new ActorManager();
+    const uri = await am.createActor(crypto.randomUUID());
+    await am.chooseActor(uri);
+    const chosen = await am.getChosen();
+    expect(chosen).toEqual(uri);
   });
 
   it("generate one time public keys", async () => {
@@ -294,9 +306,7 @@ describe("Actor Manager", () => {
 
     const secret1 = await am1.sharedSecret(pk2);
     const secret2 = await am2.sharedSecret(pk1);
-    for (const [i, byte] of Object.entries(secret1)) {
-      expect(byte).toEqual(secret2[i]);
-    }
+    expect(base64Encode(secret1)).toEqual(base64Encode(secret2));
   });
 
   it("encrypt and decrypt private messages", async () => {
@@ -339,11 +349,11 @@ describe("Actor Manager", () => {
     const ev = new EventTarget();
     const gotUpdates: Array<string> = [];
     const updateCallback = (e: ActorAnnouncement) => {
-      if (e.uri) gotUpdates.push(e.uri);
+      if (e.value?.uri) gotUpdates.push(e.value.uri);
     };
     const gotDeletes: Array<string> = [];
     const deleteCallback = (e: ActorAnnouncement) => {
-      if (e.uri) gotDeletes.push(e.uri);
+      if (e.value?.uri) gotDeletes.push(e.value.uri);
     };
     ev.addEventListener("update", updateCallback as EventListener);
     ev.addEventListener("delete", deleteCallback as EventListener);
@@ -365,6 +375,7 @@ describe("Actor Manager", () => {
   });
 
   it("choose actor initial", async () => {
+    await clearCookies();
     const referrer = `crypto.randomUUID()}.com`;
 
     // Initially referrer chooses noone
@@ -374,13 +385,13 @@ describe("Actor Manager", () => {
     const am1 = new ActorManager(ev1, referrer);
     await am1.tilInitialized();
     expect(got1.length).toEqual(1);
-    expect(got1[0]).toHaveProperty("uri", null);
+    expect(got1[0].value).toHaveProperty("uri", null);
 
     const uri = await am1.createActor(crypto.randomUUID());
     expect(got1.length).toEqual(1);
     await am1.chooseActor(uri);
     expect(got1.length).toEqual(2);
-    expect(got1[1].uri).toEqual(uri);
+    expect(got1[1].value.uri).toEqual(uri);
 
     // Create another manager with the same referrer
     const got2: Array<any> = [];
@@ -390,12 +401,12 @@ describe("Actor Manager", () => {
     await am2.tilInitialized();
     // It sees the existing URI
     expect(got2.length).toEqual(1);
-    expect(got2[0]).toHaveProperty("uri", uri);
+    expect(got2[0].value).toHaveProperty("uri", uri);
 
     // unchoose
     await am2.unchooseActor();
     expect(got2.length).toEqual(2);
-    expect(got2[1]).toHaveProperty("uri", null);
+    expect(got2[1].value).toHaveProperty("uri", null);
   });
 
   it("choose actor backchannel shared referrer", async () => {
@@ -417,11 +428,11 @@ describe("Actor Manager", () => {
     expect(got.length).toEqual(0);
     await new Promise<void>((r) => setTimeout(() => r(), 100));
     expect(got.length).toEqual(1);
-    expect(got[0]).toHaveProperty("uri", uri);
+    expect(got[0].value).toHaveProperty("uri", uri);
     await am2.unchooseActor();
     await new Promise<void>((r) => setTimeout(() => r(), 100));
     expect(got.length).toEqual(2);
-    expect(got[1]).toHaveProperty("uri", null);
+    expect(got[1].value).toHaveProperty("uri", null);
   });
 
   it("choose actor backchannel different referrer", async () => {
@@ -458,10 +469,11 @@ describe("Actor Manager", () => {
     expect(got.length).toEqual(0);
     await am.chooseActor(uri);
     expect(got.length).toEqual(1);
-    expect(got[0]).toHaveProperty("uri", uri);
+    expect(got[0].value).toHaveProperty("uri", uri);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     await am.deleteActor(uri);
     expect(got.length).toEqual(2);
-    expect(got[1]).toHaveProperty("uri", null);
+    expect(got[1].value).toHaveProperty("uri", null);
   });
 
   it("delete unchooses across referrers", async () => {
@@ -478,10 +490,11 @@ describe("Actor Manager", () => {
 
     expect(got.length).toEqual(0);
     const am2 = new ActorManager(new EventTarget(), referrer2);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     await am2.deleteActor(uri);
     await new Promise<void>((r) => setTimeout(() => r(), 100));
     expect(got.length).toEqual(1);
-    expect(got[0]).toHaveProperty("uri", null);
+    expect(got[0].value).toHaveProperty("uri", null);
   });
 
   it("chosen deletion on initialization", async () => {
@@ -497,6 +510,7 @@ describe("Actor Manager", () => {
 
     // Delete from another refferer
     const am2 = new ActorManager(new EventTarget(), referrer2);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     await am2.deleteActor(uri);
 
     // Make sure hack worked
