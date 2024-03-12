@@ -28,7 +28,16 @@ export function base64Decode(str: string): Uint8Array {
 }
 
 export interface ActorManagerOptions {
-  onChosenActor?: (actorURI: string | null) => void;
+  onChosenActor?: (
+    actor:
+      | {
+          uri: string;
+          nickname: string;
+        }
+      | {
+          uri: null;
+        },
+  ) => void;
   onUICancel?: () => void;
   actorManagerURL?: string;
   style?: string;
@@ -216,8 +225,8 @@ export default class ActorManager {
       this.#onUICancel?.();
     }
 
-    if (data.chosen !== undefined) {
-      this.#chosenActor = data.chosen;
+    if ("chosen" in data) {
+      this.#chosenActor = data.chosen.uri;
       this.#onChosenActor?.(data.chosen);
     } else if (data.messageID) {
       const messageEvent: ReplyMessageEvent = new Event(data.messageID);

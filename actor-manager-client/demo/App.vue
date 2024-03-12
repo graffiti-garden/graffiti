@@ -1,165 +1,197 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import type { Ref } from 'vue'
-import ActorManager, { base64Encode, base64Decode } from '../index';
+import { ref, onMounted } from "vue";
+import type { Ref } from "vue";
+import ActorManager, { base64Encode, base64Decode } from "../index";
 
-const actorID: Ref<null | string> = ref(null)
+const actorID: Ref<null | string> = ref(null);
+const nickname: Ref<null | string> = ref(null);
 
-const nonce: Ref<Uint8Array | undefined> = ref(undefined)
-const publicKey: Ref<string> = ref('')
+const nonce: Ref<Uint8Array | undefined> = ref(undefined);
+const publicKey: Ref<string> = ref("");
 async function getPublicKey() {
-    const publicKeyBytes = nonce.value ? await am.getPublicKey(nonce.value) : am.chosenActorPublicKey
+    const publicKeyBytes = nonce.value
+        ? await am.getPublicKey(nonce.value)
+        : am.chosenActorPublicKey;
     if (publicKeyBytes) {
-        publicKey.value = base64Encode(publicKeyBytes)
+        publicKey.value = base64Encode(publicKeyBytes);
     } else {
-        publicKey.value = ''
+        publicKey.value = "";
     }
 }
 
 async function noNoncense() {
-    nonce.value = undefined
-    await getPublicKey()
+    nonce.value = undefined;
+    await getPublicKey();
 }
 async function generateNonce() {
-    const value = new Uint8Array(24)
-    crypto.getRandomValues(value)
-    nonce.value = value
-    await getPublicKey()
+    const value = new Uint8Array(24);
+    crypto.getRandomValues(value);
+    nonce.value = value;
+    await getPublicKey();
 }
 
-const iframecontainer = ref(null)
+const iframecontainer = ref(null);
 function openIframe() {
-    iframecontainer.value.style.display = 'block'
+    iframecontainer.value.style.display = "block";
 }
 
 const am = new ActorManager({
-    async onChosenActor(actorURI: string | null) {
-        actorID.value = actorURI
-        await noNoncense()
+    async onChosenActor(
+        actor:
+            | {
+                  uri: string;
+                  nickname: string;
+              }
+            | {
+                  uri: null;
+              },
+    ) {
+        actorID.value = actor.uri;
+        if ("nickname" in actor) {
+            nickname.value = actor.nickname;
+        } else {
+            nickname.value = null;
+        }
+        await noNoncense();
     },
     onUICancel() {
-        iframecontainer.value.style.display = 'none'
-    }
-})
+        iframecontainer.value.style.display = "none";
+    },
+});
 
 onMounted(() => {
-    iframecontainer.value.appendChild(am.iframe)
-    iframecontainer.value.style.display = 'none'
-})
+    iframecontainer.value.appendChild(am.iframe);
+    iframecontainer.value.style.display = "none";
+});
 
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
-const message: Ref<string> = ref('')
-const signed: Ref<string> = ref('')
-const result: Ref<null | boolean> = ref(null)
+const message: Ref<string> = ref("");
+const signed: Ref<string> = ref("");
+const result: Ref<null | boolean> = ref(null);
 
-const theirURI: Ref<string> = ref('')
-const plaintextIn: Ref<string> = ref('')
-const ciphertextOut: Ref<string> = ref('')
-const ciphertextIn: Ref<string> = ref('')
-const plaintextOut: Ref<string> = ref('')
-const plaintextInSelf: Ref<string> = ref('')
-const ciphertextOutSelf: Ref<string> = ref('')
-const ciphertextInSelf: Ref<string> = ref('')
-const plaintextOutSelf: Ref<string> = ref('')
+const theirURI: Ref<string> = ref("");
+const plaintextIn: Ref<string> = ref("");
+const ciphertextOut: Ref<string> = ref("");
+const ciphertextIn: Ref<string> = ref("");
+const plaintextOut: Ref<string> = ref("");
+const plaintextInSelf: Ref<string> = ref("");
+const ciphertextOutSelf: Ref<string> = ref("");
+const ciphertextInSelf: Ref<string> = ref("");
+const plaintextOutSelf: Ref<string> = ref("");
 </script>
 
 <template>
-    <button @click="openIframe">
-        Open Actor Manager
-    </button>
+    <button @click="openIframe">Open Actor Manager</button>
     <div ref="iframecontainer"></div>
 
-    <p>
-        Your Actor ID is: "{{ actorID }}"
-    </p>
+    <p>Your Actor ID is: "{{ actorID }}"</p>
+    <p>Your Actor Nickname is: "{{ nickname }}"</p>
 
     <template v-if="actorID">
-
-        <hr>
+        <hr />
 
         Would you like to use your root identity or a one-time identity?
 
-        <button @click="noNoncense">
-            Use root identity
-        </button>
-        <button @click="generateNonce">
-            Derive one-time identity
-        </button>
+        <button @click="noNoncense">Use root identity</button>
+        <button @click="generateNonce">Derive one-time identity</button>
 
-        <p>
-            Your public key is: {{ publicKey }}
-        </p>
+        <p>Your public key is: {{ publicKey }}</p>
 
-        <hr>
+        <hr />
 
         <form
-            @submit.prevent="am.sign(encoder.encode(message), nonce).then(s => { signed = base64Encode(s); result = null })">
-            <input v-model="message">
-            <input type="submit" value="Sign Message">
+            @submit.prevent="
+                am.sign(encoder.encode(message), nonce).then((s) => {
+                    signed = base64Encode(s);
+                    result = null;
+                })
+            "
+        >
+            <input v-model="message" />
+            <input type="submit" value="Sign Message" />
         </form>
 
-        <p v-if="signed">
-            Your signature: {{ signed }}
-        </p>
+        <p v-if="signed">Your signature: {{ signed }}</p>
 
-        <form v-if="signed" @submit.prevent="
-            am.verify(base64Decode(signed), encoder.encode(message), base64Decode(publicKey)).then(r => result = r)">
-            <input type="submit" value="Verify Signed Message">
+        <form
+            v-if="signed"
+            @submit.prevent="
+                am.verify(
+                    base64Decode(signed),
+                    encoder.encode(message),
+                    base64Decode(publicKey),
+                ).then((r) => (result = r))
+            "
+        >
+            <input type="submit" value="Verify Signed Message" />
             <span v-if="result !== null">
                 {{ result }}
             </span>
         </form>
 
-        <hr>
+        <hr />
 
-
-        <hr>
-        Who do you want to send and receive private messages from? <input v-model="theirURI">
-
-        <form
-            @submit.prevent="am.encrypt(encoder.encode(plaintextIn), theirURI, nonce).then(c => ciphertextOut = base64Encode(c))">
-            <input v-model="plaintextIn">
-            <input type="submit" value="Encrypt Message to Recipient">
-        </form>
-
-        <p v-if="ciphertextOut">
-            Ciphertext: {{ ciphertextOut }}
-        </p>
+        <hr />
+        Who do you want to send and receive private messages from?
+        <input v-model="theirURI" />
 
         <form
-            @submit.prevent="am.decrypt(base64Decode(ciphertextIn), theirURI, nonce).then(p => plaintextOut = decoder.decode(p)).catch(() => plaintextOut = 'error decoding message')">
-            <input v-model="ciphertextIn">
-            <input type="submit" value="Decrypt Message from Recipient">
+            @submit.prevent="
+                am.encrypt(encoder.encode(plaintextIn), theirURI, nonce).then(
+                    (c) => (ciphertextOut = base64Encode(c)),
+                )
+            "
+        >
+            <input v-model="plaintextIn" />
+            <input type="submit" value="Encrypt Message to Recipient" />
         </form>
 
-        <p v-if="plaintextOut">
-            Plaintext: {{ plaintextOut }}
-        </p>
+        <p v-if="ciphertextOut">Ciphertext: {{ ciphertextOut }}</p>
 
-        <hr>
+        <form
+            @submit.prevent="
+                am.decrypt(base64Decode(ciphertextIn), theirURI, nonce)
+                    .then((p) => (plaintextOut = decoder.decode(p)))
+                    .catch(() => (plaintextOut = 'error decoding message'))
+            "
+        >
+            <input v-model="ciphertextIn" />
+            <input type="submit" value="Decrypt Message from Recipient" />
+        </form>
+
+        <p v-if="plaintextOut">Plaintext: {{ plaintextOut }}</p>
+
+        <hr />
         Encrypt and decrypt a message to yourself:
         <form
-            @submit.prevent="am.encrypt(encoder.encode(plaintextInSelf), undefined, nonce).then(c => ciphertextOutSelf = base64Encode(c))">
-            <input v-model="plaintextInSelf">
-            <input type="submit" value="Encrypt Message to Self">
+            @submit.prevent="
+                am.encrypt(
+                    encoder.encode(plaintextInSelf),
+                    undefined,
+                    nonce,
+                ).then((c) => (ciphertextOutSelf = base64Encode(c)))
+            "
+        >
+            <input v-model="plaintextInSelf" />
+            <input type="submit" value="Encrypt Message to Self" />
         </form>
 
-        <p v-if="ciphertextOutSelf">
-            Ciphertext: {{ ciphertextOutSelf }}
-        </p>
+        <p v-if="ciphertextOutSelf">Ciphertext: {{ ciphertextOutSelf }}</p>
 
         <form
-            @submit.prevent="am.decrypt(base64Decode(ciphertextInSelf), undefined, nonce).then(p => plaintextOutSelf = decoder.decode(p)).catch(() => plaintextOutSelf = 'error decoding message')">
-            <input v-model="ciphertextInSelf">
-            <input type="submit" value="Decrypt Message from Self">
+            @submit.prevent="
+                am.decrypt(base64Decode(ciphertextInSelf), undefined, nonce)
+                    .then((p) => (plaintextOutSelf = decoder.decode(p)))
+                    .catch(() => (plaintextOutSelf = 'error decoding message'))
+            "
+        >
+            <input v-model="ciphertextInSelf" />
+            <input type="submit" value="Decrypt Message from Self" />
         </form>
 
-        <p v-if="plaintextOutSelf">
-            Plaintext: {{ plaintextOutSelf }}
-        </p>
-
+        <p v-if="plaintextOutSelf">Plaintext: {{ plaintextOutSelf }}</p>
     </template>
 </template>
 
