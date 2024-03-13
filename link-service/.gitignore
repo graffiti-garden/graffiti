@@ -1,6 +1,0 @@
-__pycache__
-*.log
-*.DS_Store
-*.sw*
-db
-.env
