@@ -10,39 +10,21 @@ declare global {
 }
 
 window.graffiti = new Graffiti({
-  byoStorage: {
-    authentication: {
-      clientId: "6hy9svekk1qo41w",
-    },
-    onLoginStateChange(loginState) {
-      const loginEl = document.getElementById("storage-logged-in");
-      if (!loginEl) return;
-      if (loginState) {
-        loginEl.textContent = "✅";
-      } else {
-        loginEl.textContent = "";
-      }
-      showOrHideStuff();
-    },
+  storageAuthentication: {
+    clientId: "6hy9svekk1qo41w",
   },
-  actorManager: {
-    onChosenActor(actorURI) {
-      const actorEl = document.getElementById("actor-selected");
-      if (!actorEl) return;
-      if (actorURI) {
-        actorEl.textContent = "✅";
-      } else {
-        actorEl.textContent = "";
-      }
-      showOrHideStuff();
-    },
+  onStorageStateChange() {
+    showOrHideStuff();
+  },
+  onChosenActor() {
+    showOrHideStuff();
   },
 });
 
 const showOrHideStuff = () => {
   const stuffEl = document.getElementById("stuff");
   if (!stuffEl) return;
-  if (window.graffiti.chosenActor && window.graffiti.loggedInToStorage) {
+  if (window.graffiti.loggedIn) {
     stuffEl.style.display = "block";
   } else {
     stuffEl.style.display = "none";
@@ -88,7 +70,7 @@ window.subscribe = async (event) => {
         <p>${text}</p>`;
       postEl.id = result.uuid + result.actor;
 
-      if (result.actor === window.graffiti.chosenActor) {
+      if (result.actor === window.graffiti.myActor) {
         const delButton = document.createElement("button");
         delButton.textContent = "Delete";
         delButton.onclick = async () => {
@@ -116,4 +98,3 @@ window.subscribe = async (event) => {
     }
   }
 };
-window.subscribe();

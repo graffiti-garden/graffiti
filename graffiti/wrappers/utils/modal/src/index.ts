@@ -1,19 +1,18 @@
-import BYOStorage from "@graffiti-garden/byo-storage";
-import ActorManager, {
+import {
   base64Decode,
   base64Encode,
 } from "@graffiti-garden/actor-manager-client";
+import type BYOStorage from "@graffiti-garden/byo-storage";
+import type ActorManager from "@graffiti-garden/actor-manager-client";
 import LinkService from "@graffiti-garden/link-service-client";
-import type { BYOStorageOptions } from "@graffiti-garden/byo-storage";
-import type { ActorManagerOptions } from "@graffiti-garden/actor-manager-client";
+import LoginManager from "./login";
+import type { LoginOptions } from "./login";
 import { openDB } from "idb";
 import type { IDBPDatabase, DBSchema } from "idb";
 import { mergeSignals } from "abort-utils";
 
-export interface GraffitiOptions {
+export interface GraffitiOptions extends LoginOptions {
   linkServiceURL?: string;
-  byoStorage: BYOStorageOptions;
-  actorManager?: ActorManagerOptions;
 }
 
 export type GraffitiSubscriptionResult =
@@ -61,15 +60,20 @@ interface GraffitiSubscriptionEvent extends Event {
 }
 
 export default class Graffiti {
-  #actorManager: ActorManager;
-  #byoStorage: BYOStorage;
   #linkService: LinkService;
+  #byoStorage: BYOStorage;
+  #actorManager: ActorManager;
+  #loginManager: LoginManager;
   #optimisticEvents = new EventTarget();
   #db: Promise<IDBPDatabase<CacheDB>> | undefined;
 
   constructor(options: GraffitiOptions) {
-    this.#actorManager = new ActorManager(options.actorManager);
-    this.#byoStorage = new BYOStorage(options.byoStorage);
+    // Actors and storage require logins,
+    // which are handled by the login manager
+    this.#loginManager = new LoginManager(options);
+    this.#actorManager = this.#loginManager.actorManager;
+    this.#byoStorage = this.#loginManager.byoStorage;
+
     this.#linkService = new LinkService(
       this.#actorManager.getPublicKey.bind(this.#actorManager),
       this.#actorManager.sign.bind(this.#actorManager),
@@ -89,16 +93,13 @@ export default class Graffiti {
   }
 
   // Expose sub-library functions
-  selectActor() {
-    this.#actorManager.selectActor();
+  openLoginManager() {
+    this.#loginManager.open();
   }
-  async toggleStorageLogIn() {
-    await this.#byoStorage.toggleLogIn();
+  get loggedIn() {
+    return this.#loginManager.loggedIn;
   }
-  get loggedInToStorage() {
-    return this.#byoStorage.loggedIn;
-  }
-  get chosenActor() {
+  get myActor() {
     return this.#actorManager.chosenActor;
   }
 
