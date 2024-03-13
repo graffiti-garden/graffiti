@@ -1,0 +1,96 @@
+<header>
+    <button id="graffiti-login-close">Close</button>
+</header>
+
+<main id="graffiti-login-main"></main>
+
+<template id="graffiti-login-welcome-1">
+    <h1>
+        <a target="_blank" href="https://graffiti.garden">
+            Welcome to Graffiti!
+        </a>
+    </h1>
+
+    <p>
+        <a target="_blank" href="https://graffiti.garden"> Graffiti</a> is a
+        system that connects different social media applications so that you can
+        seamlessly migrate between them without losing your data or
+        relationships. With a little bit of web programming, you can also modify
+        existing Graffiti applications or create your own.
+    </p>
+
+    <p>
+        Data on Graffiti is not hosted on a central server, so to get started
+        you need to connect a storage provider. At the momment, Graffiti only
+        supports Dropbox, however we are working on adding support for other
+        storage providers like Google Drive and protocols like Solid.
+    </p>
+
+    <p>
+        Note that all your data is encrypted so that regardless of which storage
+        provider you choose, they won't be able to read your data.
+    </p>
+
+    <form>
+        <button
+            id="graffiti-login-byo-storage"
+            class="graffiti-login-highlight"
+        >
+            Connect Storage Provider
+        </button>
+    </form>
+</template>
+
+<template id="graffiti-login-welcome-2">
+    <h1>Graffiti Actors</h1>
+    <p>
+        Now that you have connected a storage provider, you need to select an
+        "actor". An actor is a unique identity kind of like an "account" on
+        other social platforms. However, an actor is not tied to any one
+        platform.
+    </p>
+    <p>
+        You can create as many actors as you like. Your actors are stored
+        locally in your browser for your privacy. You can use them across
+        different Graffiti apps within your browser, or you can export them to
+        use in other browsers or on other devices.
+    </p>
+    <button id="graffiti-login-actor-manager" class="graffiti-login-highlight">
+        Enter Actor Manager
+    </button>
+</template>
+
+<template id="graffiti-login-setup-complete">
+    <h1>Graffiti</h1>
+    <p>You are now ready to use Graffiti!</p>
+    <button id="graffiti-login-setup-close" class="graffiti-login-highlight">
+        Continue to App
+    </button>
+</template>
+
+<template id="graffiti-login-regular">
+    <h1>Graffiti</h1>
+    <div>
+        <div id="graffiti-login-actor-info"></div>
+        <button
+            id="graffiti-login-actor-manager"
+            class="graffiti-login-highlight"
+        >
+            Manage Actors
+        </button>
+    </div>
+    <hr />
+    <div>
+        <div id="graffiti-login-storage-info"></div>
+        <button
+            id="graffiti-login-byo-storage"
+            class="graffiti-login-highlight"
+        >
+            Disconnect Storage Provider
+        </button>
+    </div>
+    <hr />
+    <form>
+        <button id="graffiti-login-forget">Forget Graffiti on This Site</button>
+    </form>
+</template>
