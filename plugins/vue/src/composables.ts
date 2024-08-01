@@ -5,7 +5,7 @@ import { type GraffitiObject } from "@graffiti-garden/client-core";
 import { useGraffitiClient } from "./session";
 
 export function useQuery(
-  channels: MaybeRefOrGetter<string[]>,
+  channels: MaybeRefOrGetter<MaybeRefOrGetter<string>[]>,
   options?: MaybeRefOrGetter<{
     pods?: MaybeRefOrGetter<string[]>;
     query?: MaybeRefOrGetter<JSONSchema4>;
@@ -20,19 +20,15 @@ export function useQuery(
   let lastModified: Date | undefined = undefined;
   const resultsRaw = new Map<string, GraffitiObject>();
 
-  const watchSources = [
-    () => toValue(channels),
-    () => toValue(options) ?? {},
-    ...Object.values(toValue(options) ?? {}).map((v) => () => toValue(v)),
-  ];
-
-  watch(watchSources, () => poll(true), {
+  watch([() => toValue(channels), () => toValue(options)], () => poll(true), {
     immediate: true,
+    deep: true,
   });
 
   async function poll(clear = false) {
     isPolling.value = true;
-    const channelsValue = toValue(channels);
+    const channelsPartial = toValue(channels);
+    const channelsValue = channelsPartial.map((c) => toValue(c));
     const optionsPartial = toValue(options) ?? {};
     const optionsValue: Parameters<GraffitiClient["query"]>[1] = {};
     Object.keys(optionsPartial).forEach(
