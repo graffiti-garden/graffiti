@@ -45,7 +45,7 @@ function focusInput(event: MouseEvent) {
 <template>
     <div class="graffiti-session-manager">
         <template v-if="sessionInfo.initializing">
-            <span>Loading...</span>
+            <span>Loading Graffiti...</span>
         </template>
         <template v-else>
             <form
