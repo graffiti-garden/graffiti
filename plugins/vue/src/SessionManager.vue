@@ -31,6 +31,9 @@ defineProps({
         type: String,
         required: true,
     },
+    redirectPath: {
+        type: String,
+    },
 });
 
 const sessionInfo = useSessionInfo();
@@ -50,7 +53,9 @@ function focusInput(event: MouseEvent) {
         <template v-else>
             <form
                 v-if="!sessionInfo.webId"
-                @submit.prevent="webIdLogin(selectedIssuer, clientName)"
+                @submit.prevent="
+                    webIdLogin(selectedIssuer, clientName, redirectPath)
+                "
             >
                 <label for="oidc-choice">Choose an Identity Provider:</label>
                 <input
