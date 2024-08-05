@@ -74,11 +74,20 @@ export function useGraffitiClient() {
   return graffitiClient;
 }
 
-export async function webIdLogin(oidcIssuer: string, clientName: string) {
+export async function webIdLogin(
+  oidcIssuer: string,
+  clientName: string,
+  redirectPath?: string,
+) {
   const session = getDefaultSession();
+  let redirectUrl = window.origin;
+  if (redirectPath) {
+    redirectUrl += redirectPath.startsWith("/") ? "" : "/";
+    redirectUrl += redirectPath;
+  }
   await session.login({
     oidcIssuer,
-    redirectUrl: window.origin,
+    redirectUrl,
     clientName,
   });
 }

@@ -52,7 +52,10 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
 </script>
 
 <template>
-    <GraffitiSessionManager :clientName="clientName" />
+    <GraffitiSessionManager
+        :clientName="clientName"
+        redirectPath="/client-vue/"
+    />
     <GraffitiQuery
         :channels="channels"
         :pods="pods"
