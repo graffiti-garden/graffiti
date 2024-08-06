@@ -1,77 +1,79 @@
 import { reactive, type Reactive } from "vue";
 import {
-  getDefaultSession,
+  getDefaultSession as getSolidSession,
   handleIncomingRedirect,
 } from "@inrupt/solid-client-authn-browser";
 import GraffitiClient from "@graffiti-garden/client-core";
 
-let sessionInfo:
+let graffitiSession:
   | Reactive<{
       webId?: string;
       homePod?: string;
       fetch: typeof window.fetch;
-      isSessionReady: boolean;
-      initializing: boolean;
+      isReady: boolean;
+      isInitializing: boolean;
     }>
   | undefined = undefined;
-let graffitiClient: GraffitiClient | undefined = undefined;
+let graffiti: GraffitiClient | undefined = undefined;
 let registered = false;
 
-function setIsSessionReady() {
-  const sessionInfo = useSessionInfo();
-  sessionInfo.isSessionReady =
-    !!sessionInfo.webId && !!sessionInfo.homePod && !sessionInfo.initializing;
+function setGraffitiSessionIsReady() {
+  const graffitiSession = useGraffitiSession();
+  graffitiSession.isReady =
+    !!graffitiSession.webId &&
+    !!graffitiSession.homePod &&
+    !graffitiSession.isInitializing;
 }
 
-async function registerSession() {
+async function registerGraffitiSession() {
   if (!registered) {
     registered = true;
-    const session = getDefaultSession();
-    const sessionInfo = useSessionInfo();
-    const graffitiClient = useGraffitiClient();
+    const solidSession = getSolidSession();
+    const graffitiSession = useGraffitiSession();
+    const graffiti = useGraffiti();
 
-    const homePod = localStorage.getItem("graffitiClient:homePod") ?? undefined;
+    const homePod = localStorage.getItem("graffiti:homePod") ?? undefined;
     setHomePod(homePod);
 
     function handleWebIdLogInOrOut() {
-      sessionInfo.webId = session.info.isLoggedIn
-        ? session.info.webId
+      graffitiSession.webId = solidSession.info.isLoggedIn
+        ? solidSession.info.webId
         : undefined;
-      sessionInfo.fetch = session.fetch;
-      setIsSessionReady();
-      graffitiClient?.setFetch(sessionInfo.fetch);
-      graffitiClient?.setWebId(sessionInfo.webId);
+      graffitiSession.fetch = solidSession.fetch;
+      setGraffitiSessionIsReady();
+      graffiti?.setFetch(graffitiSession.fetch);
+      graffiti?.setWebId(graffitiSession.webId);
     }
 
-    session.events.on("login", handleWebIdLogInOrOut);
-    session.events.on("logout", handleWebIdLogInOrOut);
+    solidSession.events.on("login", handleWebIdLogInOrOut);
+    solidSession.events.on("logout", handleWebIdLogInOrOut);
 
     await handleIncomingRedirect({ restorePreviousSession: true });
-    sessionInfo.initializing = false;
+    graffitiSession.isInitializing = false;
     handleWebIdLogInOrOut();
   }
 }
 
-export function useSessionInfo() {
-  if (!sessionInfo) {
-    sessionInfo = reactive({
+export function useGraffitiSession() {
+  if (!graffitiSession) {
+    graffitiSession = reactive({
       webId: undefined,
       homePod: undefined,
       fetch: window.fetch,
-      isSessionReady: false,
-      initializing: true,
+      isReady: false,
+      isInitializing: true,
     });
-    registerSession();
+    registerGraffitiSession();
   }
-  return sessionInfo;
+  return graffitiSession;
 }
 
-export function useGraffitiClient() {
-  if (!graffitiClient) {
-    graffitiClient = new GraffitiClient();
-    registerSession();
+export function useGraffiti() {
+  if (!graffiti) {
+    graffiti = new GraffitiClient();
+    registerGraffitiSession();
   }
-  return graffitiClient;
+  return graffiti;
 }
 
 export async function webIdLogin(
@@ -79,13 +81,13 @@ export async function webIdLogin(
   clientName: string,
   redirectPath?: string,
 ) {
-  const session = getDefaultSession();
+  const solidSession = getSolidSession();
   let redirectUrl = window.origin;
   if (redirectPath) {
     redirectUrl += redirectPath.startsWith("/") ? "" : "/";
     redirectUrl += redirectPath;
   }
-  await session.login({
+  await solidSession.login({
     oidcIssuer,
     redirectUrl,
     clientName,
@@ -93,19 +95,19 @@ export async function webIdLogin(
 }
 
 export async function webIdLogout() {
-  await getDefaultSession().logout();
+  await getSolidSession().logout();
 }
 
 export async function setHomePod(homePod?: string) {
   homePod = homePod && homePod.length ? homePod : undefined;
   if (homePod) {
-    localStorage.setItem("graffitiClient:homePod", homePod);
+    localStorage.setItem("graffiti:homePod", homePod);
   } else {
-    localStorage.removeItem("graffitiClient:homePod");
+    localStorage.removeItem("graffiti:homePod");
   }
-  useGraffitiClient().setHomePod(homePod);
-  useSessionInfo().homePod = homePod;
-  setIsSessionReady();
+  useGraffiti().setHomePod(homePod);
+  useGraffitiSession().homePod = homePod;
+  setGraffitiSessionIsReady();
 }
 
 export async function unsetHomePod() {

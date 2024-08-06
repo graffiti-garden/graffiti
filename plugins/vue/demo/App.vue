@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import {
-    useGraffitiClient,
+    useGraffiti,
     GraffitiSessionManager,
     GraffitiQuery,
 } from "../src/plugin";
@@ -23,7 +23,7 @@ async function postNote(poll: () => void) {
         content: myNote.value,
     };
     myNote.value = "";
-    await useGraffitiClient().put({
+    await useGraffiti().put({
         channels: [channel.value],
         value: note,
     });
@@ -33,7 +33,7 @@ async function postNote(poll: () => void) {
 const editing = ref<string>("");
 const editText = ref<string>("");
 function startEditing(result: GraffitiObject) {
-    editing.value = useGraffitiClient().locationToUrl(result);
+    editing.value = useGraffiti().locationToUrl(result);
     editText.value = result.value.content;
 }
 
@@ -41,7 +41,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
     const newText = editText.value;
     editText.value = "";
     editing.value = "";
-    await useGraffitiClient().patch(
+    await useGraffiti().patch(
         {
             value: [{ op: "replace", path: "/content", value: newText }],
         },
@@ -79,7 +79,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
     >
         <div class="controls">
             <form
-                v-if="$graffitiSessionInfo.isSessionReady"
+                v-if="$graffitiSession.isReady"
                 @submit.prevent="postNote(poll)"
             >
                 <label for="my-note">Note:</label>
@@ -140,7 +140,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
                             🌐
                         </a>
                     </li>
-                    <li v-if="result.webId === $graffitiSessionInfo.webId">
+                    <li v-if="result.webId === $graffitiSession.webId">
                         <button
                             @click="
                                 async () => {
@@ -152,7 +152,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
                             Delete
                         </button>
                     </li>
-                    <li v-if="result.webId === $graffitiSessionInfo.webId">
+                    <li v-if="result.webId === $graffitiSession.webId">
                         <button @click="startEditing(result)">Edit</button>
                     </li>
                 </menu>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, type PropType } from "vue";
 import {
-    useSessionInfo,
+    useGraffitiSession,
     webIdLogin,
     webIdLogout,
     setHomePod,
@@ -36,7 +36,7 @@ defineProps({
     },
 });
 
-const sessionInfo = useSessionInfo();
+const session = useGraffitiSession();
 const selectedIssuer = ref("");
 const selectedHomePod = ref("");
 
@@ -47,12 +47,12 @@ function focusInput(event: MouseEvent) {
 </script>
 <template>
     <div class="graffiti-session-manager">
-        <template v-if="sessionInfo.initializing">
+        <template v-if="session.isInitializing">
             <span>Loading Graffiti...</span>
         </template>
         <template v-else>
             <form
-                v-if="!sessionInfo.webId"
+                v-if="!session.webId"
                 @submit.prevent="
                     webIdLogin(selectedIssuer, clientName, redirectPath)
                 "
@@ -78,16 +78,11 @@ function focusInput(event: MouseEvent) {
             </form>
             <form v-else @submit.prevent="webIdLogout">
                 <label for="webid">Your WebId is:</label>
-                <input
-                    id="webid"
-                    type="text"
-                    readonly
-                    :value="sessionInfo.webId"
-                />
+                <input id="webid" type="text" readonly :value="session.webId" />
                 <input type="submit" value="Log Out of Identity Provider" />
             </form>
             <form
-                v-if="!sessionInfo.homePod"
+                v-if="!session.homePod"
                 @submit.prevent="setHomePod(selectedHomePod)"
             >
                 <label for="home-pod-choice">Choose a Home Pod:</label>
@@ -111,7 +106,7 @@ function focusInput(event: MouseEvent) {
                     id="home-pod"
                     type="text"
                     readonly
-                    :value="sessionInfo.homePod"
+                    :value="session.homePod"
                 />
                 <input type="submit" value="Unset Home Pod" />
             </form>
