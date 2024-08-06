@@ -2,7 +2,7 @@ import { ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 import { type JSONSchema4 } from "json-schema";
 import type GraffitiClient from "@graffiti-garden/client-core";
 import { type GraffitiObject } from "@graffiti-garden/client-core";
-import { useGraffitiClient } from "./session";
+import { useGraffiti } from "./session";
 
 export function useQuery(
   channels: MaybeRefOrGetter<MaybeRefOrGetter<string>[]>,
@@ -44,7 +44,7 @@ export function useQuery(
       }
     }
 
-    const iterator = useGraffitiClient().query(channelsValue, optionsValue);
+    const iterator = useGraffiti().query(channelsValue, optionsValue);
 
     for await (const result of iterator) {
       if (result.error == true) {
@@ -58,7 +58,7 @@ export function useQuery(
           ? value.lastModified
           : lastModified;
 
-      const url = useGraffitiClient().locationToUrl(value);
+      const url = useGraffiti().locationToUrl(value);
       if (value.tombstone) {
         resultsRaw.delete(url);
       } else {

@@ -1,5 +1,5 @@
 import type { App } from "vue";
-import { useGraffitiClient, useSessionInfo } from "./session";
+import { useGraffiti, useGraffitiSession } from "./session";
 import SessionManager from "./SessionManager.vue";
 import Query from "./Query.vue";
 import type GraffitiClient from "@graffiti-garden/client-core";
@@ -7,7 +7,7 @@ import type GraffitiClient from "@graffiti-garden/client-core";
 declare module "vue" {
   export interface ComponentCustomProperties {
     $graffiti: GraffitiClient;
-    $graffitiSessionInfo: ReturnType<typeof useSessionInfo>;
+    $graffitiSession: ReturnType<typeof useGraffitiSession>;
   }
 
   export interface GlobalComponents {
@@ -20,8 +20,8 @@ const GraffitiPlugin = {
   install(app: App) {
     app.component("GraffitiSessionManager", SessionManager);
     app.component("GraffitiQuery", Query);
-    app.config.globalProperties.$graffiti = useGraffitiClient();
-    app.config.globalProperties.$graffitiSessionInfo = useSessionInfo();
+    app.config.globalProperties.$graffiti = useGraffiti();
+    app.config.globalProperties.$graffitiSession = useGraffitiSession();
   },
 };
 export default GraffitiPlugin;
