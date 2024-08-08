@@ -13,9 +13,6 @@ const myNote = ref("");
 const channel = ref("graffiti-client-demo");
 const channels = [channel];
 
-const pod = ref("https://pod.graffiti.garden");
-const pods = computed(() => [pod.value]);
-
 async function postNote(poll: () => void) {
     if (!myNote.value.length) return;
     const note = {
@@ -58,7 +55,6 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
     />
     <GraffitiQuery
         :channels="channels"
-        :pods="pods"
         :query="{
             properties: {
                 value: {
@@ -96,10 +92,6 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
 
             Change the channel:
             <input type="text" v-model="channel" />
-
-            <br />
-            Change the pod:
-            <input type="text" v-model="pod" />
         </div>
         <ul>
             <li
