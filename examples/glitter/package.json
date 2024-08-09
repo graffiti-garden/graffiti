@@ -1,0 +1,24 @@
+{
+  "name": "@graffiti-garden/namebook",
+  "version": "0.0.0",
+  "description": "a book of names",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "@graffiti-garden/client-vue": "^0.0.3",
+    "@vitejs/plugin-vue": "^5.1.1",
+    "vue": "^3.4.34",
+    "vue-router": "^4.4.2",
+    "vue3-click-away": "^1.2.4"
+  },
+  "devDependencies": {
+    "@vue/language-server": "^2.0.29",
+    "@vue/typescript-plugin": "^2.0.29",
+    "typescript": "^5.5.4",
+    "vite": "^5.3.5"
+  }
+}
