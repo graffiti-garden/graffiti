@@ -26,6 +26,7 @@ const GraffitiPlugin = {
 };
 export default GraffitiPlugin;
 
+export * from "@graffiti-garden/client-core";
 export * from "./composables";
 export * from "./session";
 export { SessionManager as GraffitiSessionManager, Query as GraffitiQuery };
