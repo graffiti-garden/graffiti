@@ -60,7 +60,7 @@ async function setName() {
 </script>
 
 <template>
-    <span v-if="isPolling || isSettingName">Loading...</span>
+    <span v-if="isPolling">Loading...</span>
     <template v-else>
         <template v-if="props.editable && webId === $graffitiSession.webId">
             <form v-if="editing" @submit.prevent="setName">
@@ -68,6 +68,7 @@ async function setName() {
                     v-model="editingName"
                     v-click-away="setName"
                     @focus="$event.target.select()"
+                    :disabled="isSettingName"
                     v-focus
                 />
             </form>
