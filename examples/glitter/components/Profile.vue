@@ -2,6 +2,7 @@
 import { ref, computed, defineProps } from "vue";
 import Name from "./Name.vue";
 import Follow from "./Follow.vue";
+import Notes from "./Notes.vue";
 
 const props = defineProps({
     webIdEncoded: {
@@ -10,36 +11,6 @@ const props = defineProps({
 });
 
 const webId = computed(() => decodeURIComponent(props.webIdEncoded));
-
-// const follows = useQuery(()=> [props.webId], {
-//   query:
-// })
-
-//   {
-//   "follow.by": { $type: 'string' },
-//   _by: myID
-// });
-
-// const followAuthors = computed(() => follows.map((f: any) => f.follow.by));
-
-// const queryMod = computed(() => ({
-//   $or: [
-//     { _by: props.ID },
-//     { at: props.ID }
-//   ]
-// }));
-
-// const postMod = computed(() => props.ID === myID ? {} : {
-//   at: [props.ID],
-//   _inContextIf: [{
-//     _queryFailsWithout: ['at.0']
-//   }]
-// });
-
-// const prompt = computed(() => props.ID === myID ?
-//   "what's on your mind?" :
-//   "to my dear friend..."
-// );
 </script>
 
 <template>
@@ -49,13 +20,16 @@ const webId = computed(() => decodeURIComponent(props.webIdEncoded));
     <h2>
         <a :href="webId">{{ webId }}</a>
     </h2>
-    <p v-if="webId !== $graffitiSession.webId">
+    <p>
         <Follow :object="webId" />
     </p>
-    <!-- <Posts
-    :queryMod="queryMod"
-    :postMod="postMod"
-    :prompt="prompt"
-    :follows="followAuthors"
-  /> -->
+    <Notes
+        :webIds="[webId]"
+        :at="webId !== $graffitiSession.webId ? webId : null"
+        :prompt="
+            webId === $graffitiSession.webId
+                ? 'what\'s on your mind?'
+                : 'to my dear friend...'
+        "
+    />
 </template>
