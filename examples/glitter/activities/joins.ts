@@ -10,7 +10,7 @@ export interface Join extends GraffitiObject {
   value: {
     type: "Join";
     object: string;
-    actor: string;
+    actor?: string;
   };
 }
 
@@ -35,14 +35,18 @@ export function useJoins(object: MaybeRefOrGetter<string>) {
             object: { enum: [object] },
             actor: { type: "string" },
           },
+          required: ["type", "object"],
         },
       },
     }),
   });
 
-  const results = computed(() =>
-    values.results.value.filter((v) => v.webId === v.value.actor),
-  );
+  const results = computed(() => {
+    const results = values.results.value as Join[];
+    return results.filter((v) =>
+      v.value.actor ? v.webId === v.value.actor : true,
+    );
+  });
 
   return {
     ...values,
