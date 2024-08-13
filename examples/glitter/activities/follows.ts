@@ -10,7 +10,7 @@ export interface Follow extends GraffitiObject {
   value: {
     type: "Follow";
     object: string;
-    actor: string;
+    actor?: string;
   };
 }
 
@@ -27,10 +27,10 @@ export async function putFollow(object: string) {
 }
 
 export function useFollows(
-  webId: MaybeRefOrGetter<string>,
+  actor: MaybeRefOrGetter<string>,
   object?: MaybeRefOrGetter<string>,
 ) {
-  const values = useQuery([webId], {
+  const values = useQuery([actor], {
     query: () => ({
       properties: {
         value: {
@@ -39,10 +39,11 @@ export function useFollows(
             object: toValue(object)
               ? { enum: [toValue(object)] }
               : { type: "string" },
-            actor: { enum: [toValue(webId)] },
+            actor: { enum: [toValue(actor)] },
           },
+          required: ["type", "object"],
         },
-        webId: { enum: [toValue(webId)] },
+        webId: { enum: [toValue(actor)] },
       },
     }),
   });

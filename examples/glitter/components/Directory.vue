@@ -2,7 +2,8 @@
 import { computed, ref } from "vue";
 import { useGraffiti, useGraffitiSession } from "@graffiti-garden/client-vue";
 import { useJoins, putJoin } from "../activities/joins";
-import Follow from "../components/Follow.vue";
+import Follow from "./Follow.vue";
+import Name from "./Name.vue";
 
 const graffiti = useGraffiti();
 const session = useGraffitiSession();
@@ -39,7 +40,7 @@ async function toggleJoin() {
         <ul class="directory">
             <li>
                 <h1>
-                    {{ session.webId }}
+                    <Name :webId="session.webId" />
                 </h1>
                 <div class="modifiers">
                     <input
@@ -63,7 +64,7 @@ async function toggleJoin() {
         <ul>
             <li v-for="join in joins" :key="join.webId">
                 <h1>
-                    {{ join.webId }}
+                    <Name :webId="join.webId" />
                 </h1>
                 <div class="modifiers">
                     <Follow :object="join.webId" />
