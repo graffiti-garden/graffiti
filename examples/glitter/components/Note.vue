@@ -108,11 +108,12 @@ const likes = [];
                     <button @click="$graffiti.delete(note)">delete</button>
                 </li>
             </template>
-            <template v-else>
-                <li>
-                    <!-- <Annotation name="block" :ID="post.id" :collection="blocks" checked="blocked" unchecked="block" /> -->
-                </li>
-            </template>
+            <li>
+                <a target="_blank" class="button" :href="$graffiti.locationToUrl(note)">link</a>
+            </li>
+            <li>
+                <!-- <Annotation name="block" :ID="post.id" :collection="blocks" checked="blocked" unchecked="block" /> -->
+            </li>
         </menu>
     </div>
 
@@ -136,7 +137,10 @@ const likes = [];
         }, note).then(()=> editing=false)">
           <textarea v-model="editText" v-focus>
           </textarea>
-          <input type="submit" value="save">
+          <div class="edit-buttons">
+            <input type="button" value="cancel" @click="editing=false">
+            <input type="submit" value="save" />
+            </div>
         </form>
         <span v-else v-html="sanitizedContent"></span>
       </p>

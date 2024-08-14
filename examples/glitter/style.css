@@ -1,307 +1,335 @@
 :root {
-  --blue: #4267B2;
-  --light-blue: #e6eaf2;
-  --dark-blue: #193b80;
-  --grey: #898F9C;
-  --between-posts: 2rem;
-  --red: #E11B1B;
+    --blue: #4267b2;
+    --light-blue: #e6eaf2;
+    --dark-blue: #193b80;
+    --grey: #898f9c;
+    --between-posts: 2rem;
+    --red: #e11b1b;
 }
 
 * {
-  font-family: Helvetica, sans-serif;
-  font-size: large;
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+    font-family: Helvetica, sans-serif;
+    font-size: large;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
 header {
-  background: var(--blue);
-  color: white;
-  display: flex;
-  margin: 0;
-  justify-content: space-evenly;
-  align-items: stretch;
-  position: relative;
-  z-index: 1;
+    background: var(--blue);
+    color: white;
+    display: flex;
+    margin: 0;
+    justify-content: space-evenly;
+    align-items: stretch;
+    position: relative;
+    z-index: 1;
 }
 
 header a {
-  display: block;
+    display: block;
 }
 
-input[type="submit"], header a {
-  background: var(--blue);
-  color: white;
-  font-size: inherit;
-  padding: 0.5em;
+input[type="submit"],
+header a {
+    background: var(--blue);
+    color: white;
+    font-size: inherit;
+    padding: 0.5em;
 }
 
 :is(input[type="submit"], header a):hover {
-  cursor: pointer;
-  background: var(--dark-blue);
+    cursor: pointer;
+    background: var(--dark-blue);
+}
+
+input[type="button"] {
+    cursor: pointer;
 }
 
 header .router-link-active {
-  background: var(--dark-blue);
+    background: var(--dark-blue);
 }
 
-menu, ol, ul {
-  display: contents;
+menu,
+ol,
+ul {
+    display: contents;
 }
 
 li {
-  list-style-type: none;
+    list-style-type: none;
 }
 
 a {
-  color: inherit;
-  font: inherit;
-  text-decoration: none;
+    color: inherit;
+    font: inherit;
+    text-decoration: none;
 }
 
-main, dialog {
-  border: 1px solid var(--grey);
-  box-shadow: 0em 0em 50vw var(--grey);
+main,
+dialog {
+    border: 1px solid var(--grey);
+    box-shadow: 0em 0em 50vw var(--grey);
 }
 
 dialog {
-  position: absolute;
-  background: var(--blue);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%,-50%);
-  min-width: 20rem;
-  min-height: 20rem;
-  text-align: center;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-evenly;
-  align-items: center;
+    position: absolute;
+    background: var(--blue);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 20rem;
+    min-height: 20rem;
+    text-align: center;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    align-items: center;
 }
 
 dialog h1 {
-  font-size: 200%;
-  color: white;
+    font-size: 200%;
+    color: white;
 }
 
 dialog button {
-  background: var(--light-blue);
-  font-size: 150%;
-  color: black;
-  width: auto;
+    background: var(--light-blue);
+    font-size: 150%;
+    color: black;
+    width: auto;
 }
 
 main {
-  background: var(--light-blue);
-  border-top: 0;
-  border-bottom: 0;
-  padding: var(--between-posts);
-  max-width: 35em;
-  min-height: 100vh;
-  margin-left: auto;
-  margin-right: auto;
+    background: var(--light-blue);
+    border-top: 0;
+    border-bottom: 0;
+    padding: var(--between-posts);
+    max-width: 35em;
+    min-height: 100vh;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 textarea {
-  width: 100%;
-  font-size: inherit;
-  padding: 1em;
-  resize: none;
-  box-sizing: border-box;
-  margin-bottom: 0;
-  border: 1px solid var(--grey);
-  vertical-align: top;
+    width: 100%;
+    /* font-size: inherit; */
+    padding: 0.5em;
+    resize: none;
+    box-sizing: border-box;
+    margin-bottom: 0;
+    border: 1px solid var(--grey);
+    vertical-align: top;
 }
 
 textarea:focus {
-  outline: none;
-  border: 1px solid var(--blue);
+    outline: none;
+    border: 1px solid var(--blue);
+}
+
+.edit-buttons {
+    display: flex;
+    width: 100%;
+    justify-content: stretch;
+}
+
+.edit-buttons input {
+    border: 0;
+    width: 100%;
 }
 
 textarea + input[type="submit"] {
-  width: 100%;
-  border: 0;
-  display: block;
+    width: 100%;
+    border: 0;
+    display: block;
+}
+
+p textarea {
+    height: 6rem;
 }
 
 main > p {
-  text-align: center;
+    text-align: center;
 }
 
-main > *, main li {
-  margin-bottom: var(--between-posts);
+main > *,
+main li {
+    margin-bottom: var(--between-posts);
 }
 
 main li {
-  padding: calc(0.5*var(--between-posts));
+    padding: calc(0.5 * var(--between-posts));
 }
 
-main li :is(li, form) {
-  margin-bottom: 0;
-  margin-top: calc(0.5*var(--between-posts));
+main :is(li li, li > form) {
+    margin-bottom: 0;
+    margin-top: calc(0.5 * var(--between-posts));
 }
 
 main li {
-  position: relative;
-  background: white;
-  border: 1px solid var(--grey);
+    position: relative;
+    background: white;
+    border: 1px solid var(--grey);
 }
 
 main li h1 {
-  color: var(--blue);
+    color: var(--blue);
 }
 
 main li h2 {
-  color: var(--grey);
-  font-weight: normal;
-  font-size: 80%;
+    color: var(--grey);
+    font-weight: normal;
+    font-size: 80%;
 }
 
 main li p {
-  word-break: break-word;
-  white-space: pre-wrap;
-  font-size: 130%;
-  padding: 1rem;
+    word-break: break-word;
+    white-space: pre-wrap;
+    font-size: 130%;
+    padding: 1rem;
 }
 
 form {
-  font-size: inherit;
-  font-weight: inherit;
+    font-size: inherit;
+    font-weight: inherit;
 }
 
 input {
-  text-align: center;
-  font-size: inherit;
-  font-weight: inherit;
+    text-align: center;
+    font-size: inherit;
+    font-weight: inherit;
 }
 
 input[type="checkbox"] {
-  display: none;
+    display: none;
 }
 
 input[type="checkbox"]:checked + label {
-  background: var(--blue);
-  color: white;
+    background: var(--blue);
+    color: white;
 }
 
 input[type="checkbox"]:checked + label:hover {
-  background: var(--dark-blue);
+    background: var(--dark-blue);
 }
 
-label, button {
-  padding-left: 0.5em;
-  padding-right: 0.5em;
-  padding-top: 0.2em;
-  padding-bottom: 0.2em;
-  font-size: inherit;
-  user-select: none;
-  border: 1px solid var(--grey);
-  background: none;
-  color: var(--grey);
+label,
+button,
+a.button {
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+    font-size: inherit;
+    user-select: none;
+    border: 1px solid var(--grey);
+    background: none;
+    color: var(--grey);
+    display: block;
+    text-align: center;
 }
 
-:is(label, button):not([disabled]):hover {
-  cursor: pointer;
-  background: var(--grey);
-  color: white;
+:is(label, button, a.button):not([disabled]):hover {
+    cursor: pointer;
+    background: var(--grey);
+    color: white;
 }
 
 .modifiers {
-  position: absolute;
-  right: 0;
-  top: 0;
-  padding: inherit;
-  font-size: inherit;
-  text-align: right;
+    position: absolute;
+    right: 0;
+    top: 0;
+    padding: inherit;
+    font-size: inherit;
+    text-align: right;
 }
 
 .modifiers > * {
-  display: block;
-  float: right;
-  clear: right;
+    display: block;
+    float: right;
+    clear: right;
 }
 
 .modifiers li {
-  display: contents;
+    display: contents;
 }
 
-.modifiers button {
-  width: 100%;
-  background: white;
+.modifiers :is(button, a.button) {
+    width: 100%;
+    background: white;
 }
 
 .post-annotators {
-  border-top: 1px solid grey;
-  padding-top: inherit;
-  display: flex;
-  font-size: 120%;
-  justify-content: space-between;
-  color: var(--grey);
-  align-items: center;
+    border-top: 1px solid grey;
+    padding-top: inherit;
+    display: flex;
+    font-size: 120%;
+    justify-content: space-between;
+    color: var(--grey);
+    align-items: center;
 }
 
 main > h1 {
-  text-align: center;
-  font-size: 150%;
+    text-align: center;
+    font-size: 150%;
 }
 
 main > h1 button {
-  padding: 0;
-  color: black;
-  border: none;
-  font-weight: bold;
+    padding: 0;
+    color: black;
+    border: none;
+    font-weight: bold;
 }
 
 input[type="text"] {
-  font-size: inherit;
-  font-weight: inherit;
-  text-align: inherit;
-  color: inherit;
-  border: none;
-  padding: 0;
-  border: 0;
-  outline-color: var(--blue);
-  width: 80%;
+    font-size: inherit;
+    font-weight: inherit;
+    text-align: inherit;
+    color: inherit;
+    border: none;
+    padding: 0;
+    border: 0;
+    outline-color: var(--blue);
+    width: 80%;
 }
 
-:is(p,footer) a {
-  color: var(--blue);
+:is(p, footer) a {
+    color: var(--blue);
 }
 
 .directory {
-  font-size: 120%;
+    font-size: 120%;
 }
 
 footer {
-  position: sticky;
-  width: 100%;
-  background: var(--light-blue);
-  bottom: 0;
-  text-align: center;
-  padding: 0.5rem;
-  border-top: 1px solid var(--grey);
+    position: sticky;
+    width: 100%;
+    background: var(--light-blue);
+    bottom: 0;
+    text-align: center;
+    padding: 0.5rem;
+    border-top: 1px solid var(--grey);
 }
 
 .warning {
-  color: var(--red);
-  font: inherit;
+    color: var(--red);
+    font: inherit;
 }
 
 .warning :is(ul, li) {
-  display: inline;
-  margin: 0;
-  padding: 0;
-  border: 0;
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
 }
 
-.warning li ~ li::before{
-  content: " and ";
+.warning li ~ li::before {
+    content: " and ";
 }
 
 .warning label {
-  display: block;
-  text-align: center;
-  margin-top: calc(0.5*var(--between-posts));
+    display: block;
+    text-align: center;
+    margin-top: calc(0.5 * var(--between-posts));
 }
