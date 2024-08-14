@@ -13,7 +13,7 @@ const myNote = ref("");
 const channel = ref("graffiti-client-demo");
 const channels = [channel];
 
-async function postNote(poll: () => void) {
+async function postNote() {
     if (!myNote.value.length) return;
     const note = {
         type: "Note",
@@ -24,7 +24,6 @@ async function postNote(poll: () => void) {
         channels: [channel.value],
         value: note,
     });
-    poll();
 }
 
 const editing = ref<string>("");
@@ -34,7 +33,7 @@ function startEditing(result: GraffitiObject) {
     editText.value = result.value.content;
 }
 
-async function saveEdits(result: GraffitiObject, poll: () => void) {
+async function saveEdits(result: GraffitiObject) {
     const newText = editText.value;
     editText.value = "";
     editing.value = "";
@@ -44,7 +43,6 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
         },
         result,
     );
-    poll();
 }
 </script>
 
@@ -56,8 +54,10 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
     <GraffitiQuery
         :channels="channels"
         :query="{
+            type: 'object',
             properties: {
                 value: {
+                    type: 'object',
                     properties: {
                         type: {
                             type: 'string',
@@ -74,10 +74,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
         v-slot="{ results, poll, isPolling }"
     >
         <div class="controls">
-            <form
-                v-if="$graffitiSession.isReady"
-                @submit.prevent="postNote(poll)"
-            >
+            <form v-if="$graffitiSession.isReady" @submit.prevent="postNote">
                 <label for="my-note">Note:</label>
                 <input
                     type="text"
@@ -88,7 +85,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
                 <input type="submit" value="Post" />
             </form>
 
-            <button @click="() => poll()">Refresh</button>
+            <button @click="poll">Refresh</button>
 
             Change the channel:
             <input type="text" v-model="channel" />
@@ -116,7 +113,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
                 </div>
                 <form
                     v-else
-                    @submit.prevent="saveEdits(result, poll)"
+                    @submit.prevent="saveEdits(result)"
                     class="content"
                 >
                     <input type="text" v-model="editText" />
@@ -133,14 +130,7 @@ async function saveEdits(result: GraffitiObject, poll: () => void) {
                         </a>
                     </li>
                     <li v-if="result.webId === $graffitiSession.webId">
-                        <button
-                            @click="
-                                async () => {
-                                    await $graffiti.delete(result);
-                                    poll();
-                                }
-                            "
-                        >
+                        <button @click="$graffiti.delete(result)">
                             Delete
                         </button>
                     </li>
