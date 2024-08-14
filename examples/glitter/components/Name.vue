@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, toRef, computed, defineProps } from "vue";
+import { ref, computed } from "vue";
 import { useGraffiti } from "@graffiti-garden/client-vue";
 import { useProfiles, putProfile } from "../activities/profiles";
 
@@ -67,7 +67,7 @@ async function setName() {
                 <input
                     v-model="editingName"
                     v-click-away="setName"
-                    @focus="$event.target.select()"
+                    @focus="($event.target as HTMLInputElement).select()"
                     :disabled="isSettingName"
                     v-focus
                 />
@@ -80,6 +80,7 @@ async function setName() {
                 "
             >
                 {{ currentName }}
+                ✏️
             </button>
         </template>
         <template v-else>

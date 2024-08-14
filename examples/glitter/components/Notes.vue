@@ -106,7 +106,7 @@ async function submitNote() {
         <input type="submit" value="post" />
     </form>
 
-    <button @click="() => pollNotes(true)">refresh</button>
+    <button @click="() => pollNotes(true)">🔄</button>
 
     <ul>
         <li v-for="note in notesSorted" :key="$graffiti.locationToUrl(note)">

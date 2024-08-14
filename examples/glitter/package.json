@@ -9,7 +9,7 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/client-vue": "^0.0.3",
+    "@graffiti-garden/client-vue": "^0.0.4",
     "@vitejs/plugin-vue": "^5.1.1",
     "vue": "^3.4.34",
     "vue-router": "^4.4.2",

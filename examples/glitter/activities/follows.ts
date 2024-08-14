@@ -30,7 +30,7 @@ export function useFollows(
   actor: MaybeRefOrGetter<string>,
   object?: MaybeRefOrGetter<string>,
 ) {
-  const values = useQuery([actor], {
+  const values = useQuery(() => [toValue(actor)], {
     query: () => ({
       properties: {
         value: {
