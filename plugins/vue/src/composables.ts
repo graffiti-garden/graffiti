@@ -20,10 +20,19 @@ export function useQuery(
   let lastModified: Date | undefined = undefined;
   const resultsRaw = new Map<string, GraffitiObject>();
 
-  watch([() => toValue(channels), () => toValue(options)], () => poll(true), {
-    immediate: true,
-    deep: true,
-  });
+  const channelsGetter = () => toValue(channels);
+  const optionsGetter = () => toValue(options);
+  const channelGetters = toValue(channels).map((c) => () => toValue(c));
+  const optionKeyGetters = !options
+    ? []
+    : Object.keys(toValue(options) ?? {}).map((k) => () => toValue(options[k]));
+  watch(
+    [channelsGetter, optionsGetter, ...channelGetters, ...optionKeyGetters],
+    () => poll(true),
+    {
+      immediate: true,
+    },
+  );
 
   async function poll(clear = false) {
     isPolling.value = true;
