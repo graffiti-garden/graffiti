@@ -13,11 +13,7 @@ const props = defineProps({
 const session = useGraffitiSession();
 const graffiti = useGraffiti();
 
-const {
-    results: follows,
-    poll: pollFollows,
-    isPolling: isPollingFollows,
-} = useFollows(
+const { results: follows, isPolling: isPollingFollows } = useFollows(
     () => session.webId,
     () => props.object,
 );
@@ -33,7 +29,6 @@ async function toggleFollow() {
         await putFollow(props.object);
     }
     isToggling.value = false;
-    pollFollows();
 }
 </script>
 

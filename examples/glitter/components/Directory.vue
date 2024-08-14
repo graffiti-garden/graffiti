@@ -8,11 +8,7 @@ import Name from "./Name.vue";
 const graffiti = useGraffiti();
 const session = useGraffitiSession();
 
-const {
-    results: joins,
-    poll: pollJoins,
-    isPolling: isPollingJoins,
-} = useJoins("Namebook");
+const { results: joins, isPolling: isPollingJoins } = useJoins("Namebook");
 
 const myJoins = computed(() =>
     joins.value.filter((join) => join.webId === session.webId),
@@ -28,7 +24,6 @@ async function toggleJoin() {
         await putJoin("Namebook");
     }
     isTogglingJoin.value = false;
-    pollJoins();
 }
 </script>
 
