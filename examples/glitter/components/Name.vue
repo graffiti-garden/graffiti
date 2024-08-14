@@ -14,7 +14,7 @@ const props = defineProps({
     },
 });
 
-const { results, poll, isPolling } = useProfiles(() => props.webId);
+const { results, isPolling } = useProfiles(() => props.webId);
 
 const editing = ref(false);
 
@@ -55,7 +55,6 @@ async function setName() {
     }
     isSettingName.value = false;
     editing.value = false;
-    poll();
 }
 </script>
 

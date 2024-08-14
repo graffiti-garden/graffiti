@@ -91,7 +91,6 @@ async function submitNote() {
 
     isSubmitting.value = false;
     noteContent.value = "";
-    pollNotes();
 }
 </script>
 
@@ -106,7 +105,7 @@ async function submitNote() {
         <input type="submit" value="post" />
     </form>
 
-    <button @click="() => pollNotes(true)">🔄</button>
+    <button @click="pollNotes">🔄</button>
 
     <ul>
         <li v-for="note in notesSorted" :key="$graffiti.locationToUrl(note)">
