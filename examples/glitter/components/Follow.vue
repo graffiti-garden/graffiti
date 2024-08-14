@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, toRef } from "vue";
 import { useGraffiti, useGraffitiSession } from "@graffiti-garden/client-vue";
 import { useFollows, putFollow } from "../activities/follows";
 
@@ -17,7 +17,10 @@ const {
     results: follows,
     poll: pollFollows,
     isPolling: isPollingFollows,
-} = useFollows(session.webId, () => props.object);
+} = useFollows(
+    () => session.webId,
+    () => props.object,
+);
 
 const isToggling = ref(false);
 async function toggleFollow() {
