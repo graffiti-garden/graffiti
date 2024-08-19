@@ -25,7 +25,9 @@ function setGraffitiSessionIsReady() {
     !graffitiSession.isInitializing;
 }
 
-async function registerGraffitiSession() {
+function registerGraffitiSession(options?: {
+  onSessionRestore?: (url: string) => void;
+}) {
   if (!registered) {
     registered = true;
     const solidSession = getSolidSession();
@@ -47,14 +49,20 @@ async function registerGraffitiSession() {
 
     solidSession.events.on("login", handleWebIdLogInOrOut);
     solidSession.events.on("logout", handleWebIdLogInOrOut);
+    if (options?.onSessionRestore) {
+      solidSession.events.on("sessionRestore", options?.onSessionRestore);
+    }
 
-    await handleIncomingRedirect({ restorePreviousSession: true });
-    graffitiSession.isInitializing = false;
-    handleWebIdLogInOrOut();
+    handleIncomingRedirect({ restorePreviousSession: true }).then(() => {
+      graffitiSession.isInitializing = false;
+      handleWebIdLogInOrOut();
+    });
   }
 }
 
-export function useGraffitiSession() {
+export function useGraffitiSession(
+  ...args: Parameters<typeof registerGraffitiSession>
+) {
   if (!graffitiSession) {
     graffitiSession = reactive({
       webId: undefined,
@@ -63,15 +71,17 @@ export function useGraffitiSession() {
       isReady: false,
       isInitializing: true,
     });
-    registerGraffitiSession();
+    registerGraffitiSession(...args);
   }
   return graffitiSession;
 }
 
-export function useGraffiti() {
+export function useGraffiti(
+  ...args: Parameters<typeof registerGraffitiSession>
+) {
   if (!graffiti) {
     graffiti = new GraffitiClient();
-    registerGraffitiSession();
+    registerGraffitiSession(...args);
   }
   return graffiti;
 }
