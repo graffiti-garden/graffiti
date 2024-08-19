@@ -17,10 +17,10 @@ declare module "vue" {
 }
 
 const GraffitiPlugin = {
-  install(app: App) {
+  install(app: App, options?: Parameters<typeof useGraffiti>[0]) {
     app.component("GraffitiSessionManager", SessionManager);
     app.component("GraffitiQuery", Query);
-    app.config.globalProperties.$graffiti = useGraffiti();
+    app.config.globalProperties.$graffiti = useGraffiti(options);
     app.config.globalProperties.$graffitiSession = useGraffitiSession();
   },
 };
