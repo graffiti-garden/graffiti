@@ -1,4 +1,4 @@
-import type { App } from "vue";
+import type { App, Plugin } from "vue";
 import { useGraffiti, useGraffitiSession } from "./session";
 import SessionManager from "./SessionManager.vue";
 import Query from "./Query.vue";
@@ -16,11 +16,11 @@ declare module "vue" {
   }
 }
 
-const GraffitiPlugin = {
-  install(app: App, options?: Parameters<typeof useGraffiti>[0]) {
+const GraffitiPlugin: Plugin<Parameters<typeof useGraffiti>> = {
+  install(app: App, ...args: Parameters<typeof useGraffiti>) {
     app.component("GraffitiSessionManager", SessionManager);
     app.component("GraffitiQuery", Query);
-    app.config.globalProperties.$graffiti = useGraffiti(options);
+    app.config.globalProperties.$graffiti = useGraffiti(...args);
     app.config.globalProperties.$graffitiSession = useGraffitiSession();
   },
 };

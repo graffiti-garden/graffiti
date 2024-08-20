@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toRef, toRefs, type PropType, type MaybeRefOrGetter } from "vue";
 import { useQuery } from "./composables";
-import type { JSONSchema4 } from "json-schema";
+import { type JSONSchema4 } from "json-schema";
 
 const props = defineProps({
     channels: {

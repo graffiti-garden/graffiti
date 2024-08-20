@@ -13,12 +13,12 @@ import { useGraffiti } from "./session";
 export function useQuery(
   channels: MaybeRefOrGetter<MaybeRefOrGetter<string>[]>,
   options?: MaybeRefOrGetter<{
-    pods?: MaybeRefOrGetter<string[]>;
-    query?: MaybeRefOrGetter<JSONSchema4>;
-    ifModifiedSince?: MaybeRefOrGetter<Date>;
-    limit?: MaybeRefOrGetter<number>;
-    skip?: MaybeRefOrGetter<number>;
-    fetch?: MaybeRefOrGetter<typeof fetch>;
+    pods?: MaybeRefOrGetter<string[] | undefined>;
+    query?: MaybeRefOrGetter<JSONSchema4 | undefined>;
+    ifModifiedSince?: MaybeRefOrGetter<Date | undefined>;
+    limit?: MaybeRefOrGetter<number | undefined>;
+    skip?: MaybeRefOrGetter<number | undefined>;
+    fetch?: MaybeRefOrGetter<typeof fetch | undefined>;
   }>,
 ) {
   const results = ref<GraffitiObject[]>([]);
@@ -48,10 +48,14 @@ export function useQuery(
   const channelsGetter = () => toValue(channels).map((c) => toValue(c));
   const optionsGetter = () => {
     const optionsPartial = toValue(options) ?? {};
-    const optionsValue: Parameters<GraffitiClient["query"]>[1] = {};
-    Object.keys(optionsPartial).forEach(
-      (k) => (optionsValue[k] = toValue(optionsPartial[k])),
-    );
+    const optionsValue: Parameters<GraffitiClient["query"]>[1] = {
+      pods: toValue(optionsPartial.pods),
+      query: toValue(optionsPartial.query),
+      ifModifiedSince: toValue(optionsPartial.ifModifiedSince),
+      limit: toValue(optionsPartial.limit),
+      skip: toValue(optionsPartial.skip),
+      fetch: toValue(optionsPartial.fetch),
+    };
     return optionsValue;
   };
 
