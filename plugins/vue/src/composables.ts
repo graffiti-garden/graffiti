@@ -11,7 +11,7 @@ import { type GraffitiObject } from "@graffiti-garden/client-core";
 import { useGraffiti } from "./session";
 
 export function useQuery(
-  channels: MaybeRefOrGetter<MaybeRefOrGetter<string>[]>,
+  channels: MaybeRefOrGetter<MaybeRefOrGetter<string | undefined>[]>,
   options?: MaybeRefOrGetter<{
     pods?: MaybeRefOrGetter<string[] | undefined>;
     query?: MaybeRefOrGetter<JSONSchema4 | undefined>;
@@ -45,7 +45,13 @@ export function useQuery(
     }
   }
 
-  const channelsGetter = () => toValue(channels).map((c) => toValue(c));
+  const channelsGetter = () =>
+    toValue(channels)
+      .map((c) => toValue(c))
+      .reduce<string[]>((acc, c) => {
+        if (c) acc.push(c);
+        return acc;
+      }, []);
   const optionsGetter = () => {
     const optionsPartial = toValue(options) ?? {};
     const optionsValue: Parameters<GraffitiClient["query"]>[1] = {
@@ -82,7 +88,10 @@ export function useQuery(
       options.ifModifiedSince = lastModified;
     }
 
-    const iterator = useGraffiti().query(channelsGetter(), options);
+    const channels = channelsGetter();
+    if (!channels.length) return;
+
+    const iterator = useGraffiti().query(channels, options);
     for await (const result of iterator) {
       if (result.error == true) {
         console.error(result.message);
