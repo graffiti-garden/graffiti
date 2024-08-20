@@ -6,7 +6,6 @@ import { useFollows, putFollow } from "../activities/follows";
 const props = defineProps({
     object: {
         type: String,
-        required: true,
     },
 });
 

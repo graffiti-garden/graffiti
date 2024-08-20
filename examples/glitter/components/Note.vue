@@ -48,7 +48,7 @@ const formattedTimestamp = computed(() =>
         : "",
 );
 
-const lookup = {
+const lookup : { [key: string]: string } = {
     "&": "&amp;",
     '"': "&quot;",
     "'": "&apos;",
@@ -72,7 +72,7 @@ const editMenuOpen = ref(false);
 const editing = ref(false);
 const editText = ref("");
 
-const blocks = [];
+const blocks: any[] = [];
 const likes = [];
 </script>
 

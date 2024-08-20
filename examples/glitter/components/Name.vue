@@ -6,7 +6,6 @@ import { useProfiles, putProfile } from "../activities/profiles";
 const props = defineProps({
     webId: {
         type: String,
-        required: true,
     },
     editable: {
         type: Boolean,
@@ -83,7 +82,7 @@ async function setName() {
             </button>
         </template>
         <template v-else>
-            <RouterLink :to="'/profile/' + encodeURIComponent(webId)">
+            <RouterLink :to="'/profile/' + encodeURIComponent(webId ?? '')">
                 {{ currentName }}
             </RouterLink>
         </template>

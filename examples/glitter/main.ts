@@ -5,13 +5,14 @@ import Profile from "./components/Profile.vue";
 import Navigation from "./components/Navigation.vue";
 import GraffitiPlugin from "@graffiti-garden/client-vue";
 import VueClickAway from "vue3-click-away";
-import {
-  createRouter,
-  createWebHashHistory,
-  createWebHistory,
-} from "vue-router";
+import { createRouter, createWebHistory } from "vue-router";
 import "./style.css";
-// import "https://use.typekit.net/ovj6wxu.css";
+
+const redirect = sessionStorage.redirect;
+delete sessionStorage.redirect;
+if (redirect && redirect !== location.href) {
+  history.replaceState(null, "", redirect);
+}
 
 const routes = [
   {
@@ -30,15 +31,18 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: ["localhost", "127.0.0.1"].includes(window.location.hostname)
-    ? createWebHashHistory()
-    : createWebHistory(),
+  history: createWebHistory(),
   routes,
 });
 
 createApp(Navigation)
   .use(router)
-  .use(GraffitiPlugin)
+  .use(GraffitiPlugin, {
+    onSessionRestore: (href: string) => {
+      const url = new URL(href);
+      router.replace(url.pathname + url.search + url.hash);
+    },
+  })
   .use(VueClickAway)
   .directive("focus", { mounted: (el: HTMLElement) => el.focus() })
   .mount("#app");

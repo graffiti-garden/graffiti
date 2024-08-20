@@ -14,7 +14,7 @@ export interface Follow extends GraffitiObject {
   };
 }
 
-export async function putFollow(object: string) {
+export async function putFollow(object?: string) {
   const myWebId = useGraffitiSession().webId;
   return useGraffiti().put({
     value: {
@@ -27,8 +27,8 @@ export async function putFollow(object: string) {
 }
 
 export function useFollows(
-  actor: MaybeRefOrGetter<string>,
-  object?: MaybeRefOrGetter<string>,
+  actor: MaybeRefOrGetter<string | undefined>,
+  object?: MaybeRefOrGetter<string | undefined>,
 ) {
   const values = useQuery(() => [toValue(actor)], {
     query: () => ({

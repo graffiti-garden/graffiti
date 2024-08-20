@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, type PropType } from "vue";
-import { useNotes, Note as NoteType } from "../activities/notes";
+import { Note as NoteType } from "../activities/notes";
 import Note from "./Note.vue";
 import {
     useGraffiti,
@@ -12,9 +12,9 @@ const graffiti = useGraffiti();
 const graffitiSession = useGraffitiSession();
 
 const props = defineProps({
-    webIds: { type: Array as PropType<string[]>, default: [] },
-    inReplyTo: { type: String, default: null },
-    at: { type: String, default: null },
+    webIds: { type: Array as PropType<(string | undefined)[]>, default: [] },
+    inReplyTo: { type: String, default: undefined },
+    at: { type: String, default: undefined },
     prompt: { type: String, default: "what's on your mind?" },
 });
 
@@ -25,7 +25,11 @@ function channels() {
     return channels;
 }
 
-const { results: notes, poll: pollNotes } = useQuery(channels, {
+const {
+    results: notes,
+    poll: pollNotes,
+    isPolling,
+} = useQuery(channels, {
     query() {
         const q = {
             properties: {
@@ -85,7 +89,7 @@ async function submitNote() {
     } else {
         await graffiti.put({
             value: note,
-            channels: [graffitiSession.webId],
+            channels: [graffitiSession.webId!],
         });
     }
 
@@ -108,6 +112,7 @@ async function submitNote() {
     <button @click="pollNotes">🔄</button>
 
     <ul>
+        <li v-if="isPolling">loading...</li>
         <li v-for="note in notesSorted" :key="$graffiti.locationToUrl(note)">
             <Note :note="note" />
         </li>
