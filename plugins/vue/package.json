@@ -1,14 +1,10 @@
 {
   "name": "@graffiti-garden/client-vue",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "vue.js client for the graffiti pod",
   "type": "module",
   "main": "src/plugin.ts",
   "browser": "dist/plugin.js",
-  "files": [
-    "src",
-    "dist"
-  ],
   "scripts": {
     "demo": "vite --config vite-demo.config.js",
     "build-demo": "vite build --config vite-demo.config.js",
