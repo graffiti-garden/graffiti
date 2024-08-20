@@ -25,7 +25,7 @@ export async function putProfile(name: string) {
   });
 }
 
-export function useProfiles(webId: MaybeRefOrGetter<string>) {
+export function useProfiles(webId: MaybeRefOrGetter<string | undefined>) {
   const values = useQuery(() => [toValue(webId)], {
     query: () => ({
       properties: {

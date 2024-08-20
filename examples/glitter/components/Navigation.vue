@@ -21,7 +21,7 @@ const variationsOpen = ref(false);
                 </li>
                 <li>
                     <RouterLink
-                        :to="`/profile/${encodeURIComponent($graffitiSession.webId)}`"
+                        :to="`/profile/${encodeURIComponent($graffitiSession.webId ?? '')}`"
                     >
                         my profile
                     </RouterLink>
