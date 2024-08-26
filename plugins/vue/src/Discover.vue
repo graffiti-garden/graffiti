@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toRef, toRefs, type PropType, type MaybeRefOrGetter } from "vue";
-import { useQuery } from "./composables";
+import { useDiscover } from "./composables";
 import { type JSONSchema4 } from "json-schema";
 
 const props = defineProps({
@@ -8,20 +8,12 @@ const props = defineProps({
         type: Array as PropType<MaybeRefOrGetter<string>[]>,
         required: true,
     },
-    query: {
+    schema: {
         type: Object as PropType<JSONSchema4>,
         default: undefined,
     },
     fetch: {
         type: Function as PropType<typeof window.fetch>,
-        default: undefined,
-    },
-    skip: {
-        type: Number,
-        default: undefined,
-    },
-    limit: {
-        type: Number,
         default: undefined,
     },
     ifModifiedSince: {
@@ -34,7 +26,7 @@ const props = defineProps({
     },
 });
 
-const { results, poll, isPolling } = useQuery(
+const { results, poll, isPolling } = useDiscover(
     toRef(props, "channels"),
     toRefs(props),
 );
