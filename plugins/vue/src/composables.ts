@@ -8,7 +8,7 @@ import {
 import { type JSONSchema4 } from "json-schema";
 import type GraffitiClient from "@graffiti-garden/client-core";
 import { type GraffitiObject } from "@graffiti-garden/client-core";
-import { useGraffiti } from "./session";
+import { useGraffiti, useGraffitiSession } from "./session";
 
 export function useDiscover(
   channels: MaybeRefOrGetter<MaybeRefOrGetter<string | undefined>[]>,
@@ -74,7 +74,16 @@ export function useDiscover(
     const channels = channelsGetter();
     if (!channels.length) return;
 
-    const iterator = useGraffiti().discover(channels, options);
+    let iterator: ReturnType<GraffitiClient["discover"]>;
+    try {
+      iterator = useGraffiti().discover(channels, options);
+    } catch (e) {
+      console.error(e);
+      flattenResults();
+      isPolling.value = false;
+      return;
+    }
+
     for await (const result of iterator) {
       if (result.error) {
         console.error(result.message);
@@ -87,13 +96,20 @@ export function useDiscover(
     isPolling.value = false;
   }
 
+  const session = useGraffitiSession();
   watch(
-    [channelsGetter, optionsGetter],
+    [
+      channelsGetter,
+      optionsGetter,
+      () => session.webId,
+      () => session.defaultPod,
+    ],
     () => {
       resultsRaw.clear();
       poll();
       pollLocalModifications();
     },
+
     {
       immediate: true,
     },
