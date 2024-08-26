@@ -4,12 +4,12 @@ import {
     useGraffitiSession,
     webIdLogin,
     webIdLogout,
-    setHomePod,
-    unsetHomePod,
+    setDefaultPod,
+    unsetDefaultPod,
 } from "./session";
 
 defineProps({
-    oidcIssuers: {
+    oidcIssuerOptions: {
         type: Array as PropType<string[]>,
         default: [
             "https://solid.theias.place",
@@ -23,7 +23,7 @@ defineProps({
             "https://inrupt.net",
         ],
     },
-    homePods: {
+    podOptions: {
         type: Array as PropType<string[]>,
         default: ["https://pod.graffiti.garden"],
     },
@@ -38,7 +38,7 @@ defineProps({
 
 const session = useGraffitiSession();
 const selectedIssuer = ref("");
-const selectedHomePod = ref("");
+const selectedDefaultPod = ref("");
 
 function focusInput(event: MouseEvent) {
     const input = event.target as HTMLInputElement;
@@ -69,7 +69,7 @@ function focusInput(event: MouseEvent) {
 
                 <datalist id="oidc-issuers">
                     <option
-                        v-for="issuer in oidcIssuers"
+                        v-for="issuer in oidcIssuerOptions"
                         :value="issuer"
                     ></option>
                 </datalist>
@@ -82,33 +82,33 @@ function focusInput(event: MouseEvent) {
                 <input type="submit" value="Log Out of Identity Provider" />
             </form>
             <form
-                v-if="!session.homePod"
-                @submit.prevent="setHomePod(selectedHomePod)"
+                v-if="!session.defaultPod"
+                @submit.prevent="setDefaultPod(selectedDefaultPod)"
             >
-                <label for="home-pod-choice">Choose a Home Pod:</label>
+                <label for="default-pod-choice">Choose a Default Pod:</label>
                 <input
-                    list="home-pods"
-                    id="home-pod-choice"
-                    name="home-pod-choice"
-                    v-model="selectedHomePod"
+                    list="default-pods"
+                    id="default-pod-choice"
+                    name="default-pod-choice"
+                    v-model="selectedDefaultPod"
                     @mouseover="focusInput"
                     placeholder="https://example.com"
                 />
 
-                <datalist id="home-pods">
-                    <option v-for="pod in homePods" :value="pod"></option>
+                <datalist id="default-pods">
+                    <option v-for="pod in podOptions" :value="pod"></option>
                 </datalist>
-                <input type="submit" value="Set Home Pod" />
+                <input type="submit" value="Set Default Pod" />
             </form>
-            <form v-else @submit.prevent="unsetHomePod">
-                <label for="home-pod">Your Home Pod is:</label>
+            <form v-else @submit.prevent="unsetDefaultPod">
+                <label for="default-pod">Your Default Pod is:</label>
                 <input
-                    id="home-pod"
+                    id="default-pod"
                     type="text"
                     readonly
-                    :value="session.homePod"
+                    :value="session.defaultPod"
                 />
-                <input type="submit" value="Unset Home Pod" />
+                <input type="submit" value="Unset Default Pod" />
             </form>
         </template>
     </div>

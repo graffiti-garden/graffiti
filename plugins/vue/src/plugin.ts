@@ -1,7 +1,7 @@
 import type { App, Plugin } from "vue";
 import { useGraffiti, useGraffitiSession } from "./session";
 import SessionManager from "./SessionManager.vue";
-import Query from "./Query.vue";
+import Discover from "./Discover.vue";
 import type GraffitiClient from "@graffiti-garden/client-core";
 
 declare module "vue" {
@@ -12,14 +12,14 @@ declare module "vue" {
 
   export interface GlobalComponents {
     GraffitiSessionManager: typeof SessionManager;
-    GraffitiQuery: typeof Query;
+    GraffitiDiscover: typeof Discover;
   }
 }
 
 const GraffitiPlugin: Plugin<Parameters<typeof useGraffiti>> = {
   install(app: App, ...args: Parameters<typeof useGraffiti>) {
     app.component("GraffitiSessionManager", SessionManager);
-    app.component("GraffitiQuery", Query);
+    app.component("GraffitiDiscover", Discover);
     app.config.globalProperties.$graffiti = useGraffiti(...args);
     app.config.globalProperties.$graffitiSession = useGraffitiSession();
   },
@@ -29,4 +29,7 @@ export default GraffitiPlugin;
 export * from "@graffiti-garden/client-core";
 export * from "./composables";
 export * from "./session";
-export { SessionManager as GraffitiSessionManager, Query as GraffitiQuery };
+export {
+  SessionManager as GraffitiSessionManager,
+  Discover as GraffitiDiscover,
+};

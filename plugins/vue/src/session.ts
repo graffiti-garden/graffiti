@@ -8,7 +8,7 @@ import GraffitiClient from "@graffiti-garden/client-core";
 let graffitiSession:
   | Reactive<{
       webId?: string;
-      homePod?: string;
+      defaultPod?: string;
       fetch: typeof window.fetch;
       isReady: boolean;
       isInitializing: boolean;
@@ -21,7 +21,7 @@ function setGraffitiSessionIsReady() {
   const graffitiSession = useGraffitiSession();
   graffitiSession.isReady =
     !!graffitiSession.webId &&
-    !!graffitiSession.homePod &&
+    !!graffitiSession.defaultPod &&
     !graffitiSession.isInitializing;
 }
 
@@ -32,10 +32,9 @@ function registerGraffitiSession(options?: {
     registered = true;
     const solidSession = getSolidSession();
     const graffitiSession = useGraffitiSession();
-    const graffiti = useGraffiti();
 
-    const homePod = localStorage.getItem("graffiti:homePod") ?? undefined;
-    setHomePod(homePod);
+    const defaultPod = localStorage.getItem("graffiti:defaultPod") ?? undefined;
+    setDefaultPod(defaultPod);
 
     function handleWebIdLogInOrOut() {
       graffitiSession.webId = solidSession.info.isLoggedIn
@@ -43,8 +42,6 @@ function registerGraffitiSession(options?: {
         : undefined;
       graffitiSession.fetch = solidSession.fetch;
       setGraffitiSessionIsReady();
-      graffiti?.setFetch(graffitiSession.fetch);
-      graffiti?.setWebId(graffitiSession.webId);
     }
 
     solidSession.events.on("login", handleWebIdLogInOrOut);
@@ -66,7 +63,7 @@ export function useGraffitiSession(
   if (!graffitiSession) {
     graffitiSession = reactive({
       webId: undefined,
-      homePod: undefined,
+      defaultPod: undefined,
       fetch: window.fetch,
       isReady: false,
       isInitializing: true,
@@ -79,8 +76,80 @@ export function useGraffitiSession(
 export function useGraffiti(
   ...args: Parameters<typeof registerGraffitiSession>
 ) {
+  const graffitiSession = useGraffitiSession();
   if (!graffiti) {
-    graffiti = new GraffitiClient();
+    graffiti = new Proxy(new GraffitiClient(), {
+      get(target, prop, receiver) {
+        let value = Reflect.get(target, prop, receiver);
+        if (typeof value === "function") {
+          value = value.bind(target);
+        }
+
+        if (prop === "get") {
+          return (...args: Parameters<typeof target.get>) => {
+            const options = args[1] ?? {};
+            options.fetch = options.fetch ?? graffitiSession.fetch;
+            return value(args[0], options);
+          };
+        } else if (prop === "put") {
+          return (...args: Parameters<typeof target.put>) => {
+            const options = args[2] ?? {};
+            options.fetch = options.fetch ?? graffitiSession.fetch;
+            options.webId = options.webId ?? graffitiSession.webId;
+            options.pod = options.pod ?? graffitiSession.defaultPod;
+            return value(args[0], args[1], options);
+          };
+        } else if (prop === "patch") {
+          return (...args: Parameters<typeof target.patch>) => {
+            const options = args[2] ?? {};
+            options.fetch = options.fetch ?? graffitiSession.fetch;
+            return value(args[0], args[1], options);
+          };
+        } else if (prop === "delete") {
+          return (...args: Parameters<typeof target.delete>) => {
+            const options = args[1] ?? {};
+            options.fetch = options.fetch ?? graffitiSession.fetch;
+            return value(args[0], options);
+          };
+        } else if (prop === "discover") {
+          return (...args: Parameters<typeof target.discover>) => {
+            const options = args[1] ?? {};
+            options.fetch = options.fetch ?? graffitiSession.fetch;
+            options.pods =
+              options.pods ??
+              (graffitiSession.defaultPod
+                ? [graffitiSession.defaultPod]
+                : undefined);
+            return value(args[0], options);
+          };
+        } else if (prop === "listOrphans") {
+          return (...args: Parameters<typeof target.listOrphans>) => {
+            const options = args[0] ?? {};
+            options.fetch = options.fetch ?? graffitiSession?.fetch;
+            options.pods =
+              options.pods ??
+              (graffitiSession.defaultPod
+                ? [graffitiSession.defaultPod]
+                : undefined);
+            return value(options);
+          };
+        } else if (prop === "listChannels") {
+          return (...args: Parameters<typeof target.listChannels>) => {
+            const options = args[0] ?? {};
+            options.fetch = options.fetch ?? graffitiSession?.fetch;
+            options.pods =
+              options.pods ??
+              (graffitiSession.defaultPod
+                ? [graffitiSession.defaultPod]
+                : undefined);
+            return value(options);
+          };
+        } else {
+          return value;
+        }
+      },
+    });
+
     registerGraffitiSession(...args);
   }
   return graffiti;
@@ -108,18 +177,17 @@ export async function webIdLogout() {
   await getSolidSession().logout();
 }
 
-export async function setHomePod(homePod?: string) {
-  homePod = homePod && homePod.length ? homePod : undefined;
-  if (homePod) {
-    localStorage.setItem("graffiti:homePod", homePod);
+export async function setDefaultPod(defaultPod?: string) {
+  defaultPod = defaultPod && defaultPod.length ? defaultPod : undefined;
+  if (defaultPod) {
+    localStorage.setItem("graffiti:defaultPod", defaultPod);
   } else {
-    localStorage.removeItem("graffiti:homePod");
+    localStorage.removeItem("graffiti:defaultPod");
   }
-  useGraffiti().setHomePod(homePod);
-  useGraffitiSession().homePod = homePod;
+  useGraffitiSession().defaultPod = defaultPod;
   setGraffitiSessionIsReady();
 }
 
-export async function unsetHomePod() {
-  setHomePod(undefined);
+export async function unsetDefaultPod() {
+  setDefaultPod(undefined);
 }

@@ -3,7 +3,7 @@ import { ref } from "vue";
 import {
     useGraffiti,
     GraffitiSessionManager,
-    GraffitiQuery,
+    GraffitiDiscover,
 } from "../src/plugin";
 import { type GraffitiObject } from "@graffiti-garden/client-core";
 
@@ -51,9 +51,9 @@ async function saveEdits(result: GraffitiObject) {
         :clientName="clientName"
         redirectPath="/client-vue/"
     />
-    <GraffitiQuery
+    <GraffitiDiscover
         :channels="channels"
-        :query="{
+        :schema="{
             type: 'object',
             properties: {
                 value: {
@@ -141,7 +141,7 @@ async function saveEdits(result: GraffitiObject) {
             </li>
             <li v-if="isPolling">Loading...</li>
         </ul>
-    </GraffitiQuery>
+    </GraffitiDiscover>
 </template>
 
 <style>
