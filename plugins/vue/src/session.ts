@@ -8,8 +8,8 @@ import GraffitiClient from "@graffiti-garden/client-core";
 let graffitiSession:
   | Reactive<{
       webId?: string;
+      fetch?: typeof window.fetch;
       defaultPod?: string;
-      fetch: typeof window.fetch;
       isReady: boolean;
       isInitializing: boolean;
     }>
@@ -37,10 +37,13 @@ function registerGraffitiSession(options?: {
     setDefaultPod(defaultPod);
 
     function handleWebIdLogInOrOut() {
-      graffitiSession.webId = solidSession.info.isLoggedIn
-        ? solidSession.info.webId
-        : undefined;
-      graffitiSession.fetch = solidSession.fetch;
+      if (solidSession.info.isLoggedIn) {
+        graffitiSession.webId = solidSession.info.webId;
+        graffitiSession.fetch = solidSession.fetch;
+      } else {
+        graffitiSession.webId = undefined;
+        graffitiSession.fetch = undefined;
+      }
       setGraffitiSessionIsReady();
     }
 
@@ -63,8 +66,8 @@ export function useGraffitiSession(
   if (!graffitiSession) {
     graffitiSession = reactive({
       webId: undefined,
+      fetch: undefined,
       defaultPod: undefined,
-      fetch: window.fetch,
       isReady: false,
       isInitializing: true,
     });
@@ -115,6 +118,7 @@ export function useGraffiti(
           return (...args: Parameters<typeof target.discover>) => {
             const options = args[1] ?? {};
             options.fetch = options.fetch ?? graffitiSession.fetch;
+            options.webId = options.webId ?? graffitiSession.webId;
             options.pods =
               options.pods ??
               (graffitiSession.defaultPod
@@ -125,7 +129,8 @@ export function useGraffiti(
         } else if (prop === "listOrphans") {
           return (...args: Parameters<typeof target.listOrphans>) => {
             const options = args[0] ?? {};
-            options.fetch = options.fetch ?? graffitiSession?.fetch;
+            options.fetch = options.fetch ?? graffitiSession.fetch;
+            options.webId = options.webId ?? graffitiSession.webId;
             options.pods =
               options.pods ??
               (graffitiSession.defaultPod
@@ -136,7 +141,8 @@ export function useGraffiti(
         } else if (prop === "listChannels") {
           return (...args: Parameters<typeof target.listChannels>) => {
             const options = args[0] ?? {};
-            options.fetch = options.fetch ?? graffitiSession?.fetch;
+            options.fetch = options.fetch ?? graffitiSession.fetch;
+            options.webId = options.webId ?? graffitiSession.webId;
             options.pods =
               options.pods ??
               (graffitiSession.defaultPod

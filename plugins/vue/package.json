@@ -14,7 +14,7 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/client-core": "^0.2.1",
+    "@graffiti-garden/client-core": "^0.2.2",
     "@inrupt/solid-client-authn-browser": "^2.2.4",
     "@vitejs/plugin-vue": "^5.1.1",
     "vue": "^3.4.34"
