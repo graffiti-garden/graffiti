@@ -2,79 +2,163 @@
 import { ref } from "vue";
 import {
     useGraffiti,
-    GraffitiSessionManager,
     GraffitiDiscover,
+    type JSONSchema4,
+    type GraffitiObjectTyped,
+    type GraffitiSession,
 } from "../src/plugin";
-import { type GraffitiObject } from "@graffiti-garden/client-core";
+import {
+    getDefaultSession as getDefaultSession,
+    handleIncomingRedirect,
+} from "@inrupt/solid-client-authn-browser";
 
-const clientName = "Graffiti Vue Client Demo";
+const session = ref<GraffitiSession>({
+    pods: ["http://localhost:3000"],
+});
+const solidSession = getDefaultSession();
+function handleSolidSession() {
+    if (solidSession.info.isLoggedIn && solidSession.info.webId) {
+        session.value = {
+            ...session.value,
+            webId: solidSession.info.webId,
+            fetch: solidSession.fetch,
+            pod: "http://localhost:3000",
+        };
+    } else {
+        session.value = {
+            pods: session.value.pods,
+        };
+    }
+}
+solidSession.events.on("login", handleSolidSession);
+solidSession.events.on("logout", handleSolidSession);
+async function logIn(oidcIssuer: string) {
+    await solidSession.login({
+        oidcIssuer,
+        redirectUrl: window.origin,
+        clientName: "graffiti vue demo",
+    });
+}
+async function logOut() {
+    await solidSession.logout();
+}
+handleIncomingRedirect({ restorePreviousSession: true });
+const oidcIssuerOptions = [
+    "https://solid.theias.place",
+    "https://login.inrupt.com",
+    "https://solidcommunity.net",
+    "https://solidweb.org",
+    "https://solidweb.me",
+    "https://teamid.live",
+    "https://solid.redpencil.io",
+    "https://idp.use.id",
+    "https://inrupt.net",
+];
+const selectedIssuer = ref("");
+
+const channels = ref(["graffiti-client-demo"]);
+
+const noteSchema = {
+    properties: {
+        value: {
+            properties: {
+                type: {
+                    enum: ["Note"],
+                    type: "string",
+                },
+                content: {
+                    type: "string",
+                },
+            },
+            required: ["type", "content"],
+        },
+    },
+} satisfies JSONSchema4;
+
+const posting = ref(false);
 const myNote = ref("");
-
-const channel = ref("graffiti-client-demo");
-const channels = [channel];
-
 async function postNote() {
     if (!myNote.value.length) return;
-    const note = {
-        type: "Note",
-        content: myNote.value,
-    };
+    if (!session.value.webId) {
+        alert("You are not logged in!");
+        return;
+    }
+    posting.value = true;
+    await useGraffiti().put<typeof noteSchema>(
+        {
+            channels: channels.value,
+            value: {
+                type: "Note",
+                content: myNote.value,
+            },
+        },
+        session.value,
+    );
     myNote.value = "";
-    await useGraffiti().put({
-        channels: [channel.value],
-        value: note,
-    });
+    posting.value = false;
 }
 
 const editing = ref<string>("");
 const editText = ref<string>("");
-function startEditing(result: GraffitiObject) {
+function startEditing(result: GraffitiObjectTyped<typeof noteSchema>) {
     editing.value = useGraffiti().locationToUrl(result);
     editText.value = result.value.content;
 }
 
-async function saveEdits(result: GraffitiObject) {
-    const newText = editText.value;
-    editText.value = "";
-    editing.value = "";
+const savingEdits = ref(false);
+async function saveEdits(result: GraffitiObjectTyped<typeof noteSchema>) {
+    if (!session.value.webId) {
+        alert("You are not logged in!");
+        return;
+    }
+    savingEdits.value = true;
     await useGraffiti().patch(
         {
-            value: [{ op: "replace", path: "/content", value: newText }],
+            value: [{ op: "replace", path: "/content", value: editText.value }],
         },
         result,
+        session.value,
     );
+    editText.value = "";
+    editing.value = "";
+    savingEdits.value = false;
 }
 </script>
 
 <template>
-    <GraffitiSessionManager
-        :clientName="clientName"
-        redirectPath="/client-vue/"
-    />
+    <div>
+        <div v-if="session.webId">
+            Logged in as {{ session.webId }}
+            <button @click="logOut">Log out</button>
+        </div>
+        <form v-else @submit.prevent="logIn(selectedIssuer)">
+            <label for="oidc-choice">Choose an Identity Provider:</label>
+            <input
+                list="oidc-issuers"
+                id="oidc-choice"
+                name="oidc-choice"
+                v-model="selectedIssuer"
+                placeholder="https://example.com"
+            />
+
+            <datalist id="oidc-issuers">
+                <option
+                    v-for="issuer in oidcIssuerOptions"
+                    :value="issuer"
+                ></option>
+            </datalist>
+
+            <input type="submit" value="Log In to Identity Provider" />
+        </form>
+    </div>
     <GraffitiDiscover
         :channels="channels"
-        :schema="{
-            type: 'object',
-            properties: {
-                value: {
-                    type: 'object',
-                    properties: {
-                        type: {
-                            type: 'string',
-                            enum: ['Note'],
-                        },
-                        content: {
-                            type: 'string',
-                        },
-                    },
-                    required: ['type', 'content'],
-                },
-            },
-        }"
+        :schema="noteSchema"
+        :session="session"
         v-slot="{ results, poll, isPolling }"
     >
         <div class="controls">
-            <form v-if="$graffitiSession.isReady" @submit.prevent="postNote">
+            <form @submit.prevent="postNote">
                 <label for="my-note">Note:</label>
                 <input
                     type="text"
@@ -83,14 +167,20 @@ async function saveEdits(result: GraffitiObject) {
                     v-model="myNote"
                 />
                 <input type="submit" value="Post" />
+                <span v-if="posting">Posting...</span>
             </form>
 
             <button @click="poll">Refresh</button>
 
             Change the channel:
-            <input type="text" v-model="channel" />
+            <input
+                type="text"
+                :value="channels[0]"
+                @input="(event) => (channels = [event.target.value])"
+            />
         </div>
         <ul>
+            <li v-if="isPolling">Loading...</li>
             <li
                 v-for="result in results.sort(
                     (a, b) =>
@@ -118,6 +208,7 @@ async function saveEdits(result: GraffitiObject) {
                 >
                     <input type="text" v-model="editText" />
                     <input type="submit" value="Save" />
+                    <span v-if="savingEdits">Saving...</span>
                 </form>
 
                 <menu>
@@ -129,17 +220,16 @@ async function saveEdits(result: GraffitiObject) {
                             🌐
                         </a>
                     </li>
-                    <li v-if="result.webId === $graffitiSession.webId">
-                        <button @click="$graffiti.delete(result)">
+                    <li v-if="result.webId === session?.webId">
+                        <button @click="$graffiti.delete(result, session)">
                             Delete
                         </button>
                     </li>
-                    <li v-if="result.webId === $graffitiSession.webId">
+                    <li v-if="result.webId === session?.webId">
                         <button @click="startEditing(result)">Edit</button>
                     </li>
                 </menu>
             </li>
-            <li v-if="isPolling">Loading...</li>
         </ul>
     </GraffitiDiscover>
 </template>

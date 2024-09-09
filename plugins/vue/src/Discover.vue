@@ -1,34 +1,33 @@
-<script setup lang="ts">
-import { toRef, toRefs, type PropType, type MaybeRefOrGetter } from "vue";
-import { useDiscover } from "./composables";
+<script setup lang="ts" generic="Schema extends JSONSchema4">
+import { toRef } from "vue";
 import { type JSONSchema4 } from "json-schema";
+import { useDiscover } from "./composables";
 
-const props = defineProps({
-    channels: {
-        type: Array as PropType<MaybeRefOrGetter<string>[]>,
-        required: true,
-    },
-    schema: {
-        type: Object as PropType<JSONSchema4>,
-        default: undefined,
-    },
-    fetch: {
-        type: Function as PropType<typeof window.fetch>,
-        default: undefined,
-    },
-    ifModifiedSince: {
-        type: Date,
-        default: undefined,
-    },
-    pods: {
-        type: Array as PropType<string[]>,
-        default: undefined,
-    },
-});
+const props = defineProps<{
+    channels: string[];
+    schema: Schema;
+    session: {
+        pods: string[];
+    } & (
+        | {
+              fetch: typeof window.fetch;
+              webId: string;
+          }
+        | {
+              fetch?: undefined;
+              webId?: undefined;
+          }
+    );
+    ifModifiedSince?: Date;
+}>();
 
-const { results, poll, isPolling } = useDiscover(
+const { results, poll, isPolling } = useDiscover<Schema>(
     toRef(props, "channels"),
-    toRefs(props),
+    toRef(props, "schema"),
+    toRef(props, "session"),
+    () => ({
+        ifModifiedSince: props.ifModifiedSince,
+    }),
 );
 </script>
 
