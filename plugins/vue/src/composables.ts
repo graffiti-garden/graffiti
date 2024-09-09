@@ -2,62 +2,77 @@ import {
   onScopeDispose,
   ref,
   toValue,
+  unref,
   watch,
   type MaybeRefOrGetter,
+  type MaybeRef,
 } from "vue";
 import { type JSONSchema4 } from "json-schema";
-import type GraffitiClient from "@graffiti-garden/client-core";
-import { type GraffitiObject } from "@graffiti-garden/client-core";
-import { useGraffiti, useGraffitiSession } from "./session";
+import type { GraffitiObjectTyped } from "@graffiti-garden/client-core";
+import useGraffiti from "./use-graffiti";
 
-export function useDiscover(
-  channels: MaybeRefOrGetter<MaybeRefOrGetter<string | undefined>[]>,
-  options?: MaybeRefOrGetter<{
-    pods?: MaybeRefOrGetter<string[] | undefined>;
-    schema?: MaybeRefOrGetter<JSONSchema4 | undefined>;
-    ifModifiedSince?: MaybeRefOrGetter<Date | undefined>;
-    fetch?: MaybeRefOrGetter<typeof fetch | undefined>;
-  }>,
+export function useDiscover<Schema extends JSONSchema4>(
+  channels: MaybeRefOrGetter<string[]>,
+  schema: MaybeRefOrGetter<Schema>,
+  session: MaybeRefOrGetter<
+    {
+      pods: string[];
+    } & (
+      | {
+          fetch: typeof fetch;
+          webId: string;
+        }
+      | {
+          fetch?: undefined;
+          webId?: undefined;
+        }
+    )
+  >,
+  options?: MaybeRefOrGetter<
+    | {
+        ifModifiedSince?: Date;
+      }
+    | undefined
+  >,
 ) {
-  const results = ref<GraffitiObject[]>([]);
-  const resultsRaw = new Map<string, GraffitiObject>();
+  const graffiti = useGraffiti();
+
+  const results = ref<(GraffitiObjectTyped<Schema> & { tombstone: false })[]>(
+    [],
+  );
+  const resultsRaw = new Map<string, GraffitiObjectTyped<Schema>>();
   function flattenResults() {
-    results.value = Array.from(resultsRaw.values()).filter(
-      (o) => !o.tombstone && o.value,
-    );
+    results.value = Array.from(resultsRaw.values()).reduce<
+      (GraffitiObjectTyped<Schema> & { tombstone: false })[]
+    >((acc, o) => {
+      const { tombstone, value } = o;
+      if (!tombstone) {
+        acc.push({ ...o, tombstone, value });
+      }
+      return acc;
+    }, []);
   }
 
-  function onValue(value: GraffitiObject) {
-    const url = useGraffiti().objectToUrl(value);
+  function onValue(value: GraffitiObjectTyped<Schema>) {
+    const url = graffiti.objectToUrl(value);
     const existing = resultsRaw.get(url);
     if (existing && existing.lastModified >= value.lastModified) return;
     resultsRaw.set(url, value);
   }
 
-  const channelsGetter = () =>
-    toValue(channels)
-      .map((c) => toValue(c))
-      .reduce<string[]>((acc, c) => {
-        if (c) acc.push(c);
-        return acc;
-      }, []);
-  const optionsGetter = () => {
-    const optionsPartial = toValue(options) ?? {};
-    const optionsValue: Parameters<GraffitiClient["discover"]>[1] = {
-      pods: toValue(optionsPartial.pods),
-      schema: toValue(optionsPartial.schema),
-      ifModifiedSince: toValue(optionsPartial.ifModifiedSince),
-      fetch: toValue(optionsPartial.fetch),
-    };
-    return optionsValue;
-  };
+  const channelsGetter = () => toValue(channels);
+  const schemaGetter = () => toValue(schema);
+  const sessionGetter = () => toValue(session);
+  const optionsGetter = () => toValue(options);
 
-  let localIterator: AsyncGenerator<GraffitiObject, void, void> | undefined =
-    undefined;
+  let localIterator:
+    | ReturnType<typeof graffiti.discoverLocalChanges<Schema>>
+    | undefined = undefined;
   async function pollLocalModifications() {
     localIterator?.return();
-    localIterator = useGraffiti().discoverLocalChanges(
+    localIterator = graffiti.discoverLocalChanges(
       channelsGetter(),
+      schemaGetter(),
       optionsGetter(),
     );
     for await (const value of localIterator) {
@@ -70,13 +85,15 @@ export function useDiscover(
   async function poll() {
     isPolling.value = true;
 
-    const options = optionsGetter();
-    const channels = channelsGetter();
-    if (!channels.length) return;
-
-    let iterator: ReturnType<GraffitiClient["discover"]>;
+    let iterator: ReturnType<typeof graffiti.discover<Schema>> | undefined =
+      undefined;
     try {
-      iterator = useGraffiti().discover(channels, options);
+      iterator = useGraffiti().discover(
+        channelsGetter(),
+        schemaGetter(),
+        sessionGetter(),
+        optionsGetter(),
+      );
     } catch (e) {
       console.error(e);
       flattenResults();
@@ -96,14 +113,8 @@ export function useDiscover(
     isPolling.value = false;
   }
 
-  const session = useGraffitiSession();
   watch(
-    [
-      channelsGetter,
-      optionsGetter,
-      () => session.webId,
-      () => session.defaultPod,
-    ],
+    [channelsGetter, schemaGetter, sessionGetter, optionsGetter],
     () => {
       resultsRaw.clear();
       poll();
