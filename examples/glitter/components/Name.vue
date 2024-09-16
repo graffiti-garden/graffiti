@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import { useGraffiti } from "@graffiti-garden/client-vue";
-import { useProfiles, putProfile } from "../activities/profiles";
+import { ref, computed, inject, type Ref } from "vue";
+import {
+    useDiscover,
+    useGraffiti,
+    type GraffitiSession,
+} from "@graffiti-garden/client-vue";
+
+const session = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
 const props = defineProps({
     webId: {
         type: String,
+        required: true,
     },
     editable: {
         type: Boolean,
@@ -13,31 +19,48 @@ const props = defineProps({
     },
 });
 
-const { results, isPolling } = useProfiles(() => props.webId);
+const profileSchema = () =>
+    ({
+        properties: {
+            value: {
+                properties: {
+                    type: { enum: ["Profile"] },
+                    name: { type: "string" },
+                    describes: { type: "string", enum: [props.webId] },
+                },
+                required: ["type", "name"],
+            },
+        },
+    }) as const;
 
-const editing = ref(false);
-
+const { results, isPolling } = useDiscover(
+    () => [props.webId],
+    profileSchema,
+    session,
+);
 const currentProfile = computed(() => {
     if (!results.value.length) return null;
     return results.value.sort(
         (a, b) => b.lastModified.getTime() - a.lastModified.getTime(),
     )[0];
 });
-
 const currentName = computed(() => {
     return currentProfile.value ? currentProfile.value.value.name : "Anonymous";
 });
 
-const graffiti = useGraffiti();
-
+const editing = ref(false);
 const editingName = ref("");
 const isSettingName = ref(false);
 async function setName() {
     if (!editingName.value) return;
+    if (!session.value.webId) {
+        alert("You are not logged in!");
+        return;
+    }
 
     isSettingName.value = true;
     if (currentProfile.value) {
-        await graffiti.patch(
+        await useGraffiti().patch(
             {
                 value: [
                     {
@@ -48,9 +71,20 @@ async function setName() {
                 ],
             },
             currentProfile.value,
+            session.value,
         );
     } else {
-        await putProfile(editingName.value);
+        await useGraffiti().put<ReturnType<typeof profileSchema>>(
+            {
+                value: {
+                    type: "Profile",
+                    name: editingName.value,
+                    describes: props.webId,
+                },
+                channels: [session.value.webId],
+            },
+            session.value,
+        );
     }
     isSettingName.value = false;
     editing.value = false;
@@ -60,7 +94,7 @@ async function setName() {
 <template>
     <span v-if="isPolling">Loading...</span>
     <template v-else>
-        <template v-if="props.editable && webId === $graffitiSession.webId">
+        <template v-if="props.editable && webId === session.webId">
             <form v-if="editing" @submit.prevent="setName">
                 <input
                     v-model="editingName"

@@ -1,27 +1,70 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { useGraffiti, useGraffitiSession } from "@graffiti-garden/client-vue";
-import { useJoins, putJoin } from "../activities/joins";
+import { computed, ref, inject, type Ref } from "vue";
+import {
+    useDiscover,
+    useGraffiti,
+    type GraffitiSession,
+} from "@graffiti-garden/client-vue";
 import Follow from "./Follow.vue";
 import Name from "./Name.vue";
 
-const graffiti = useGraffiti();
-const session = useGraffitiSession();
+const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
-const { results: joins, isPolling: isPollingJoins } = useJoins("Namebook");
+const joinChannel = "Namebook";
+const joinSchema = {
+    properties: {
+        value: {
+            properties: {
+                type: { enum: ["Join"] },
+                object: { enum: [joinChannel] },
+                actor: { type: "string" },
+            },
+            required: ["type", "object"],
+        },
+    },
+} as const;
+
+const { results: joinsUnfiltered, isPolling: isPollingJoins } = useDiscover(
+    [joinChannel],
+    joinSchema,
+    () => sessionRef.value,
+);
+
+const joins = computed(() => {
+    const results = joinsUnfiltered.value;
+    return results.filter((v) =>
+        v.value.actor ? v.webId === v.value.actor : true,
+    );
+});
 
 const myJoins = computed(() =>
-    joins.value.filter((join) => join.webId === session.webId),
+    joins.value.filter((join) => join.webId === sessionRef.value.webId),
 );
 
 const isTogglingJoin = ref(false);
 async function toggleJoin() {
+    const session = sessionRef.value;
+    if (!session.webId) {
+        alert("You are not logged in!");
+        return;
+    }
     isTogglingJoin.value = true;
     if (myJoins.value.length) {
-        const deletes = myJoins.value.map((join) => graffiti.delete(join));
-        await Promise.allSettled(deletes);
+        await Promise.all(
+            myJoins.value.map((join) => useGraffiti().delete(join, session)),
+        );
     } else {
-        await putJoin("Namebook");
+        await useGraffiti().put<typeof joinSchema>(
+            {
+                value: {
+                    type: "Join",
+                    object: joinChannel,
+                    actor: session.webId,
+                },
+                channels: ["Namebook"],
+            },
+            session,
+        );
     }
     isTogglingJoin.value = false;
 }
@@ -35,7 +78,7 @@ async function toggleJoin() {
         <ul class="directory">
             <li>
                 <h1>
-                    <Name :webId="session.webId" />
+                    <Name v-if="sessionRef.webId" :webId="sessionRef.webId" />
                 </h1>
                 <div class="modifiers">
                     <input
