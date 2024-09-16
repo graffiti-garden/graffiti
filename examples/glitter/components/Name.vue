@@ -5,6 +5,7 @@ import {
     useGraffiti,
     type GraffitiSession,
 } from "@graffiti-garden/client-vue";
+import { profileSchema } from "./schemas";
 
 const session = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
@@ -19,23 +20,9 @@ const props = defineProps({
     },
 });
 
-const profileSchema = () =>
-    ({
-        properties: {
-            value: {
-                properties: {
-                    type: { enum: ["Profile"] },
-                    name: { type: "string" },
-                    describes: { type: "string", enum: [props.webId] },
-                },
-                required: ["type", "name"],
-            },
-        },
-    }) as const;
-
 const { results, isPolling } = useDiscover(
     () => [props.webId],
-    profileSchema,
+    profileSchema(() => props.webId),
     session,
 );
 const currentProfile = computed(() => {

@@ -5,6 +5,7 @@ import {
     useDiscover,
     type GraffitiSession,
 } from "@graffiti-garden/client-vue";
+import { followSchema } from "./schemas";
 
 const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
@@ -14,27 +15,12 @@ const props = defineProps({
     },
 });
 
-const followSchema = () =>
-    ({
-        properties: {
-            value: {
-                properties: {
-                    type: { enum: ["Follow"] },
-                    object: {
-                        type: "string",
-                        ...(props.object ? { enum: [props.object] } : {}),
-                    },
-                    actor: { type: "string", enum: [sessionRef.value.webId] },
-                },
-                required: ["type", "object"],
-            },
-            webId: { type: "string", enum: [sessionRef.value.webId] },
-        },
-    }) as const;
-
 const { results: follows, isPolling: isPollingFollows } = useDiscover(
     () => (sessionRef.value.webId ? [sessionRef.value.webId] : []),
-    followSchema,
+    followSchema(
+        () => sessionRef.value.webId ?? "",
+        () => props.object,
+    ),
     () => sessionRef.value,
 );
 
