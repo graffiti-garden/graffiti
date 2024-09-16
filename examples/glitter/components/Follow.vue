@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { ref, toRef } from "vue";
-import { useGraffiti, useGraffitiSession } from "@graffiti-garden/client-vue";
-import { useFollows, putFollow } from "../activities/follows";
+import { ref, inject, type Ref } from "vue";
+import {
+    useGraffiti,
+    useDiscover,
+    type GraffitiSession,
+} from "@graffiti-garden/client-vue";
+
+const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
 const props = defineProps({
     object: {
@@ -9,23 +14,57 @@ const props = defineProps({
     },
 });
 
-const session = useGraffitiSession();
-const graffiti = useGraffiti();
+const followSchema = () =>
+    ({
+        properties: {
+            value: {
+                properties: {
+                    type: { enum: ["Follow"] },
+                    object: {
+                        type: "string",
+                        ...(props.object ? { enum: [props.object] } : {}),
+                    },
+                    actor: { type: "string", enum: [sessionRef.value.webId] },
+                },
+                required: ["type", "object"],
+            },
+            webId: { type: "string", enum: [sessionRef.value.webId] },
+        },
+    }) as const;
 
-const { results: follows, isPolling: isPollingFollows } = useFollows(
-    () => session.webId,
-    () => props.object,
+const { results: follows, isPolling: isPollingFollows } = useDiscover(
+    () => (sessionRef.value.webId ? [sessionRef.value.webId] : []),
+    followSchema,
+    () => sessionRef.value,
 );
 
 const isToggling = ref(false);
 async function toggleFollow() {
+    const session = sessionRef.value;
+    if (!session.webId) {
+        alert("You are not logged in!");
+        return;
+    }
     isToggling.value = true;
     if (follows.value.length) {
         await Promise.all(
-            follows.value.map((follow) => graffiti.delete(follow)),
+            follows.value.map((follow) =>
+                useGraffiti().delete(follow, session),
+            ),
         );
-    } else {
-        await putFollow(props.object);
+    } else if (props.object) {
+        await useGraffiti().put<ReturnType<typeof followSchema>>(
+            {
+                value: {
+                    type: "Follow",
+                    object: props.object,
+                    actor: session.webId,
+                },
+                channels: [session.webId],
+                webId: session.webId,
+            },
+            session,
+        );
     }
     isToggling.value = false;
 }
