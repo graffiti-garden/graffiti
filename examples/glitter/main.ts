@@ -22,7 +22,7 @@ if (redirect && redirect !== location.href) {
 
 const solidSession = getDefaultSession();
 const session = ref<GraffitiSession>({
-  pods: ["http://localhost:3000"],
+  pods: ["https://pod.graffiti.garden"],
 });
 function handleSolidSession() {
   if (solidSession.info.isLoggedIn && solidSession.info.webId) {
@@ -30,7 +30,7 @@ function handleSolidSession() {
       ...session.value,
       webId: solidSession.info.webId,
       fetch: solidSession.fetch,
-      pod: "http://localhost:3000",
+      pod: "https://pod.graffiti.garden",
     };
   } else {
     session.value = {
