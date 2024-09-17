@@ -14,7 +14,6 @@ function login() {
 </script>
 
 <template>
-    {{ session }}
     <template v-if="!session.webId">
         <dialog>
             <h1>

@@ -1,13 +1,13 @@
 import { toValue, type MaybeRefOrGetter } from "vue";
 import { type JSONSchema4 } from "@graffiti-garden/client-vue";
 
-export function joinSchema(object: MaybeRefOrGetter<string>) {
+export function joinSchema(object: string) {
   return {
     properties: {
       value: {
         properties: {
           type: { enum: ["Join"] },
-          object: { type: "string", enum: [toValue(object)] },
+          object: { type: "string", enum: [object] },
           actor: { type: "string" },
         },
         required: ["type", "object"],
@@ -16,10 +16,7 @@ export function joinSchema(object: MaybeRefOrGetter<string>) {
   } as const;
 }
 
-export function followSchema(
-  webId: MaybeRefOrGetter<string>,
-  object?: MaybeRefOrGetter<string | undefined>,
-) {
+export function followSchema(webId: string, object?: string) {
   const objectValue = toValue(object);
   const webIdValue = toValue(webId);
   return {
@@ -40,16 +37,36 @@ export function followSchema(
   } as const;
 }
 
-export function profileSchema(webId: MaybeRefOrGetter<string>) {
+export function profileSchema(webId: string) {
   return {
     properties: {
       value: {
         properties: {
           type: { enum: ["Profile"] },
           name: { type: "string" },
-          describes: { type: "string", enum: [toValue(webId)] },
+          describes: { type: "string", enum: [webId] },
         },
         required: ["type", "name"],
+      },
+    },
+  } as const;
+}
+
+export function noteSchema(inReplyTo?: string) {
+  return {
+    properties: {
+      value: {
+        properties: {
+          type: { enum: ["Note"] },
+          content: { type: "string" },
+          createdAt: { type: "string" },
+          at: {
+            type: "array",
+            items: { type: "string" },
+          },
+          inReplyTo: inReplyTo ? { enum: [inReplyTo] } : { type: "string" },
+        },
+        required: ["type", "content", "createdAt"],
       },
     },
   } as const;

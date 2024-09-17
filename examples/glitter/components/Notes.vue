@@ -1,22 +1,30 @@
 <script setup lang="ts">
-import { ref, computed, type PropType } from "vue";
-import { Note as NoteType } from "../activities/notes";
+import { ref, computed, inject, type Ref } from "vue";
 import Note from "./Note.vue";
+import { noteSchema } from "./schemas";
 import {
     useGraffiti,
-    useGraffitiSession,
-    useQuery,
+    useDiscover,
+    type GraffitiSession,
 } from "@graffiti-garden/client-vue";
 
 const graffiti = useGraffiti();
-const graffitiSession = useGraffitiSession();
+const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
-const props = defineProps({
-    webIds: { type: Array as PropType<(string | undefined)[]>, default: [] },
-    inReplyTo: { type: String, default: undefined },
-    at: { type: String, default: undefined },
-    prompt: { type: String, default: "what's on your mind?" },
-});
+const props = withDefaults(
+    defineProps<{
+        webIds: string[];
+        inReplyTo: string | undefined;
+        at: string | undefined;
+        prompt: string;
+    }>(),
+    {
+        webIds: () => [],
+        inReplyTo: undefined,
+        at: undefined,
+        prompt: "what's on your mind?",
+    },
+);
 
 function channels() {
     const channels = [...props.webIds];
@@ -29,33 +37,10 @@ const {
     results: notes,
     poll: pollNotes,
     isPolling,
-} = useQuery(channels, {
-    query() {
-        const q = {
-            properties: {
-                value: {
-                    properties: {
-                        type: { enum: ["Note"] },
-                        content: { type: "string" },
-                        createdAt: { type: "string" },
-                        at: {
-                            type: "array",
-                            items: { type: "string" },
-                        },
-                        inReplyTo: props.inReplyTo
-                            ? { enum: [props.inReplyTo] }
-                            : { type: "string" },
-                    },
-                    required: ["type", "content", "createdAt"],
-                },
-            },
-        };
-        return q;
-    },
-});
+} = useDiscover(channels, () => noteSchema(props.inReplyTo), sessionRef);
 
 const notesSorted = computed(() =>
-    (notes.value as NoteType[]).sort(
+    notes.value.sort(
         (a, b) =>
             new Date(b.value.createdAt).getTime() -
             new Date(a.value.createdAt).getTime(),
@@ -66,31 +51,51 @@ const isSubmitting = ref(false);
 const noteContent = ref("");
 async function submitNote() {
     if (!noteContent.value) return;
+    const session = sessionRef.value;
+    if (!session.webId) {
+        alert("You are not logged in!");
+        return;
+    }
     isSubmitting.value = true;
 
-    const note: NoteType["value"] = {
+    const note = {
         type: "Note",
         content: noteContent.value,
         createdAt: new Date().toISOString(),
-    };
+        at: undefined,
+        inReplyTo: undefined,
+    } as const;
 
     if (props.inReplyTo) {
-        note.inReplyTo = props.inReplyTo;
-        await graffiti.put({
-            value: note,
-            channels: [props.inReplyTo],
-        });
+        await graffiti.put<ReturnType<typeof noteSchema>>(
+            {
+                value: {
+                    ...note,
+                    inReplyTo: props.inReplyTo,
+                },
+                channels: [props.inReplyTo],
+            },
+            session,
+        );
     } else if (props.at) {
-        note.at = [props.at];
-        await graffiti.put({
-            value: note,
-            channels: [props.at],
-        });
+        await graffiti.put<ReturnType<typeof noteSchema>>(
+            {
+                value: {
+                    ...note,
+                    at: props.at,
+                },
+                channels: [props.at],
+            },
+            session,
+        );
     } else {
-        await graffiti.put({
-            value: note,
-            channels: [graffitiSession.webId!],
-        });
+        await graffiti.put<ReturnType<typeof noteSchema>>(
+            {
+                value: note,
+                channels: [session.webId],
+            },
+            session,
+        );
     }
 
     isSubmitting.value = false;

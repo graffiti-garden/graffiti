@@ -7,23 +7,22 @@ import {
 } from "@graffiti-garden/client-vue";
 import { profileSchema } from "./schemas";
 
-const session = inject<Ref<GraffitiSession>>("graffitiSession")!;
+const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
-const props = defineProps({
-    webId: {
-        type: String,
-        required: true,
+const props = withDefaults(
+    defineProps<{
+        webId: string;
+        editable: boolean;
+    }>(),
+    {
+        editable: false,
     },
-    editable: {
-        type: Boolean,
-        default: false,
-    },
-});
+);
 
 const { results, isPolling } = useDiscover(
     () => [props.webId],
-    profileSchema(() => props.webId),
-    session,
+    () => profileSchema(props.webId),
+    sessionRef,
 );
 const currentProfile = computed(() => {
     if (!results.value.length) return null;
@@ -40,7 +39,8 @@ const editingName = ref("");
 const isSettingName = ref(false);
 async function setName() {
     if (!editingName.value) return;
-    if (!session.value.webId) {
+    const session = sessionRef.value;
+    if (!session.webId) {
         alert("You are not logged in!");
         return;
     }
@@ -58,7 +58,7 @@ async function setName() {
                 ],
             },
             currentProfile.value,
-            session.value,
+            session,
         );
     } else {
         await useGraffiti().put<ReturnType<typeof profileSchema>>(
@@ -68,9 +68,9 @@ async function setName() {
                     name: editingName.value,
                     describes: props.webId,
                 },
-                channels: [session.value.webId],
+                channels: [session.webId],
             },
-            session.value,
+            session,
         );
     }
     isSettingName.value = false;
@@ -81,7 +81,7 @@ async function setName() {
 <template>
     <span v-if="isPolling">Loading...</span>
     <template v-else>
-        <template v-if="props.editable && webId === session.webId">
+        <template v-if="props.editable && webId === sessionRef.webId">
             <form v-if="editing" @submit.prevent="setName">
                 <input
                     v-model="editingName"
