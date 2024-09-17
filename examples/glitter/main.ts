@@ -1,6 +1,6 @@
 import { createApp, provide, reactive, ref } from "vue";
 import Directory from "./components/Directory.vue";
-// import Feed from "./components/Feed.vue";
+import Feed from "./components/Feed.vue";
 import Profile from "./components/Profile.vue";
 import Navigation from "./components/Navigation.vue";
 import GraffitiPlugin, {
@@ -48,13 +48,12 @@ solidSession.events.on("sessionRestore", (href: string) => {
 handleIncomingRedirect({ restorePreviousSession: true });
 
 const routes = [
-  // {
-  //   path: "/",
-  //   component: Feed,
-  // },
   {
-    // path: "/directory",
     path: "/",
+    component: Feed,
+  },
+  {
+    path: "/directory",
     component: Directory,
   },
   {

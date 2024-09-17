@@ -11,12 +11,10 @@ const props = withDefaults(defineProps<{
   note: GraffitiObjectTyped<ReturnType<typeof noteSchema>>,
   follows: string[],
   showComments: boolean,
-  showLikeCount: boolean,
   inReplyToContentAddress: string,
 }>(), {
   follows: ()=>[],
   showComments: true,
-  showLikeCount: true,
   inReplyToContentAddress: "",
 });
 
@@ -55,9 +53,6 @@ const commentsOpen = ref(false);
 const editMenuOpen = ref(false);
 const editing = ref(false);
 const editText = ref("");
-
-const blocks: any[] = [];
-const likes = [];
 </script>
 
 <template>
@@ -95,26 +90,10 @@ const likes = [];
             <li>
                 <a target="_blank" class="button" :href="$graffiti.locationToUrl(note)">link</a>
             </li>
-            <li>
-                <!-- <Annotation name="block" :ID="post.id" :collection="blocks" checked="blocked" unchecked="block" /> -->
-            </li>
         </menu>
     </div>
 
-    <p v-if="blocks.length" class="warning">this post is blocked by
-      <ul>
-        <li v-if="blocks.map(b=> b.webId).includes(session.webId)">you</li>
-        <li v-for="author in blocks.map(b=> b.webId).filter(x=>x!==session.webId)">
-          <Name :webId="author" />
-        </li>
-      </ul>.
-      <input type="checkbox"
-        :id="'spoiler' + $graffiti.locationToUrl(note)"
-        :checked="spoilerOpen"
-        @click="spoilerOpen=!spoilerOpen">
-      <label :for="'spoiler' + $graffiti.locationToUrl(note)">show it anyways?</label>
-    </p>
-    <template v-if="spoilerOpen || !blocks.length">
+    <template v-if="spoilerOpen">
       <p>
         <form v-if="editing&&session.webId" @submit.prevent="$graffiti.patch({
           value: [ { op: 'replace', path: '/content', value: editText } ],
@@ -130,12 +109,6 @@ const likes = [];
       </p>
 
       <div class="post-annotators">
-        <!-- <Annotation name="like" :ID="post.id" :collection="likes" checked="👍 liked" unchecked="👍 like"/> -->
-
-        <!-- <label v-if="showLikeCount" disabled>
-          likes: {{ likes.authors.length }}
-        </label> -->
-
         <template v-if="showComments">
           <input type="checkbox"
             :id="'comments' + $graffiti.locationToUrl(note)"
