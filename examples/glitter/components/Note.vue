@@ -1,40 +1,24 @@
 <script setup lang="ts">
-// import Annotation from './annotation.js'
+import { type GraffitiSession, type GraffitiObjectTyped } from "@graffiti-garden/client-vue"
 import Name from './Name.vue'
 import Notes from "./Notes.vue";
-import { Note as NoteType } from "../activities/notes";
-import { ref, computed, type PropType } from "vue";
+import { noteSchema } from "./schemas"
+import { ref, computed, inject, type Ref } from "vue";
 
-const props = defineProps({
-    note: {
-        type: Object as PropType<NoteType>,
-        required: true,
-    },
-    follows: {
-        type: Array,
-        default: [],
-    },
-    showComments: {
-        type: Boolean,
-        default: true,
-    },
-    showLikeCount: {
-        type: Boolean,
-        default: true,
-    },
-    inReplyToContentAddress: {
-        type: String,
-        default: "",
-    },
+const session = inject<Ref<GraffitiSession>>("graffitiSession")!;
+
+const props = withDefaults(defineProps<{
+  note: GraffitiObjectTyped<ReturnType<typeof noteSchema>>,
+  follows: string[],
+  showComments: boolean,
+  showLikeCount: boolean,
+  inReplyToContentAddress: string,
+}>(), {
+  follows: ()=>[],
+  showComments: true,
+  showLikeCount: true,
+  inReplyToContentAddress: "",
 });
-
-// likes: useCollection(()=>({
-//   'like.id': props.post.id
-// })),
-// blocks: useCollection(()=>({
-//   'block.id': props.post.id,
-//   _by: { $in: [myID, ...props.follows] }
-// })),
 
 const formattedTimestamp = computed(() =>
     props.note
@@ -100,12 +84,12 @@ const likes = [];
         <label :for="'menu' + $graffiti.locationToUrl(note)">⚙️</label>
 
         <menu v-if="editMenuOpen" @click="editMenuOpen = false">
-            <template v-if="note.webId === $graffitiSession.webId">
+            <template v-if="note.webId === session.webId">
                 <li v-if="!editing">
                     <button @click="editing = true; editText = note.value.content">edit</button>
                 </li>
                 <li>
-                    <button @click="$graffiti.delete(note)">delete</button>
+                    <button @click="$graffiti.delete(note, session)">delete</button>
                 </li>
             </template>
             <li>
@@ -119,8 +103,8 @@ const likes = [];
 
     <p v-if="blocks.length" class="warning">this post is blocked by
       <ul>
-        <li v-if="blocks.map(b=> b.webId).includes($graffitiSession.webId)">you</li>
-        <li v-for="author in blocks.map(b=> b.webId).filter(x=>x!==$graffitiSession.webId)">
+        <li v-if="blocks.map(b=> b.webId).includes(session.webId)">you</li>
+        <li v-for="author in blocks.map(b=> b.webId).filter(x=>x!==session.webId)">
           <Name :webId="author" />
         </li>
       </ul>.
@@ -132,9 +116,9 @@ const likes = [];
     </p>
     <template v-if="spoilerOpen || !blocks.length">
       <p>
-        <form v-if="editing" @submit.prevent="$graffiti.patch({
+        <form v-if="editing&&session.webId" @submit.prevent="$graffiti.patch({
           value: [ { op: 'replace', path: '/content', value: editText } ],
-        }, note).then(()=> editing=false)">
+        }, note, session).then(()=> editing=false)">
           <textarea v-model="editText" v-focus>
           </textarea>
           <div class="edit-buttons">

@@ -9,19 +9,14 @@ import { followSchema } from "./schemas";
 
 const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
-const props = defineProps({
-    object: {
-        type: String,
-    },
-});
+const props = defineProps<{
+    object: string;
+}>();
 
 const { results: follows, isPolling: isPollingFollows } = useDiscover(
     () => (sessionRef.value.webId ? [sessionRef.value.webId] : []),
-    followSchema(
-        () => sessionRef.value.webId ?? "",
-        () => props.object,
-    ),
-    () => sessionRef.value,
+    () => followSchema(sessionRef.value.webId ?? "", props.object),
+    sessionRef,
 );
 
 const isToggling = ref(false);

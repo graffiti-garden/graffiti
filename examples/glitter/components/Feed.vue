@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, toRef } from "vue";
-import { useGraffitiSession } from "@graffiti-garden/client-vue";
-import { useFollows } from "../activities/follows";
+import { computed, inject, type Ref } from "vue";
+import { useDiscover, type GraffitiSession } from "@graffiti-garden/client-vue";
+import { followSchema } from "./schemas";
 import Notes from "./Notes.vue";
 
-const session = useGraffitiSession();
-const { results: follows } = useFollows(() => session.webId);
+const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
+
+const { results: follows } = useDiscover(
+    () => (sessionRef.value.webId ? [sessionRef.value.webId] : []),
+    () => followSchema(sessionRef.value.webId ?? ""),
+    sessionRef,
+);
 
 const webIds = computed(() => [
     ...new Set([...follows.value.map((f) => f.value.object)]),

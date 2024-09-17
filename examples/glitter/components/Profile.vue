@@ -3,14 +3,11 @@ import { computed, inject, type Ref } from "vue";
 import { type GraffitiSession } from "@graffiti-garden/client-vue";
 import Name from "./Name.vue";
 import Follow from "./Follow.vue";
-// import Notes from "./Notes.vue";
+import Notes from "./Notes.vue";
 
-const props = defineProps({
-    webIdEncoded: {
-        type: String,
-        required: true,
-    },
-});
+const props = defineProps<{
+    webIdEncoded: string;
+}>();
 
 const session = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
@@ -29,7 +26,7 @@ const webId = computed(() =>
     <p>
         <Follow :object="webId" />
     </p>
-    <!-- <Notes
+    <Notes
         :webIds="[webId]"
         :at="webId !== session.webId ? webId : undefined"
         :prompt="
@@ -37,5 +34,5 @@ const webId = computed(() =>
                 ? 'what\'s on your mind?'
                 : 'to my dear friend...'
         "
-    /> -->
+    />
 </template>
