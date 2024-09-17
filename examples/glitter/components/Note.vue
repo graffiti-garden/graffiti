@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { type GraffitiSession, type GraffitiObjectTyped } from "@graffiti-garden/client-vue"
-import Name from './Name.vue'
+import {
+    type GraffitiSession,
+    type GraffitiObjectTyped,
+} from "@graffiti-garden/client-vue";
+import Name from "./Name.vue";
 import Notes from "./Notes.vue";
-import { noteSchema } from "./schemas"
+import { noteSchema } from "./schemas";
 import { ref, computed, inject, type Ref } from "vue";
 
 const session = inject<Ref<GraffitiSession>>("graffitiSession")!;
 
-const props = withDefaults(defineProps<{
-  note: GraffitiObjectTyped<ReturnType<typeof noteSchema>>,
-  follows: string[],
-  showComments: boolean,
-  inReplyToContentAddress: string,
-}>(), {
-  follows: ()=>[],
-  showComments: true,
-  inReplyToContentAddress: "",
-});
+const props = withDefaults(
+    defineProps<{
+        note: GraffitiObjectTyped<ReturnType<typeof noteSchema>>;
+        follows: string[];
+        inReplyToContentAddress: string;
+    }>(),
+    {
+        follows: () => [],
+        inReplyToContentAddress: "",
+    },
+);
 
 const formattedTimestamp = computed(() =>
     props.note
@@ -30,7 +34,7 @@ const formattedTimestamp = computed(() =>
         : "",
 );
 
-const lookup : { [key: string]: string } = {
+const lookup: { [key: string]: string } = {
     "&": "&amp;",
     '"': "&quot;",
     "'": "&apos;",
@@ -48,7 +52,6 @@ const sanitizedContent = computed(() =>
         ),
 );
 
-const spoilerOpen = ref(false);
 const commentsOpen = ref(false);
 const editMenuOpen = ref(false);
 const editing = ref(false);
@@ -81,47 +84,75 @@ const editText = ref("");
         <menu v-if="editMenuOpen" @click="editMenuOpen = false">
             <template v-if="note.webId === session.webId">
                 <li v-if="!editing">
-                    <button @click="editing = true; editText = note.value.content">edit</button>
+                    <button
+                        @click="
+                            editing = true;
+                            editText = note.value.content;
+                        "
+                    >
+                        edit
+                    </button>
                 </li>
                 <li>
-                    <button @click="$graffiti.delete(note, session)">delete</button>
+                    <button @click="$graffiti.delete(note, session)">
+                        delete
+                    </button>
                 </li>
             </template>
             <li>
-                <a target="_blank" class="button" :href="$graffiti.locationToUrl(note)">link</a>
+                <a
+                    target="_blank"
+                    class="button"
+                    :href="$graffiti.locationToUrl(note)"
+                    >link</a
+                >
             </li>
         </menu>
     </div>
 
-    <template v-if="spoilerOpen">
-      <p>
-        <form v-if="editing&&session.webId" @submit.prevent="$graffiti.patch({
-          value: [ { op: 'replace', path: '/content', value: editText } ],
-        }, note, session).then(()=> editing=false)">
-          <textarea v-model="editText" v-focus>
-          </textarea>
-          <div class="edit-buttons">
-            <input type="button" value="cancel" @click="editing=false">
+    <form
+        v-if="editing && session.webId"
+        @submit.prevent="
+            $graffiti
+                .patch(
+                    {
+                        value: [
+                            {
+                                op: 'replace',
+                                path: '/content',
+                                value: editText,
+                            },
+                        ],
+                    },
+                    note,
+                    session,
+                )
+                .then(() => (editing = false))
+        "
+    >
+        <textarea v-model="editText" v-focus> </textarea>
+        <div class="edit-buttons">
+            <input type="button" value="cancel" @click="editing = false" />
             <input type="submit" value="save" />
-            </div>
-        </form>
-        <span v-else v-html="sanitizedContent"></span>
-      </p>
+        </div>
+    </form>
+    <p v-else v-html="sanitizedContent"></p>
 
-      <div class="post-annotators">
-        <template v-if="showComments">
-          <input type="checkbox"
+    <div class="post-annotators">
+        <input
+            type="checkbox"
             :id="'comments' + $graffiti.locationToUrl(note)"
             :checked="commentsOpen"
-            @click="commentsOpen=!commentsOpen">
-          <label :for="'comments' + $graffiti.locationToUrl(note)">
+            @click="commentsOpen = !commentsOpen"
+        />
+        <label :for="'comments' + $graffiti.locationToUrl(note)">
             comments
-          </label>
-        </template>
-      </div>
+        </label>
+    </div>
 
-      <Notes v-if="commentsOpen"
+    <Notes
+        v-if="commentsOpen"
         :inReplyTo="$graffiti.locationToUrl(note)"
-        prompt="write a comment..."/>
-    </template>
+        prompt="write a comment..."
+    />
 </template>

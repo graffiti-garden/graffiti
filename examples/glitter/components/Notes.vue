@@ -114,10 +114,11 @@ async function submitNote() {
         <input type="submit" value="post" />
     </form>
 
-    <button @click="pollNotes">🔄</button>
-
+    <div>
+        <button v-if="!isPolling" @click="pollNotes">🔄 refresh posts</button>
+        <button v-else disabled>🔄 refreshing...</button>
+    </div>
     <ul>
-        <li v-if="isPolling">loading...</li>
         <li v-for="note in notesSorted" :key="$graffiti.locationToUrl(note)">
             <Note :note="note" />
         </li>
