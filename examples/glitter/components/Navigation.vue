@@ -38,28 +38,6 @@ function login() {
                 <li>
                     <RouterLink to="/directory"> directory </RouterLink>
                 </li>
-                <!-- <li>
-            <a href="" @click.prevent="variationsOpen=true">
-              variations
-            </a>
-            <menu v-if="variationsOpen" v-click-away="()=> variationsOpen=false">
-              <li>
-                <a href="./minimal.html">
-                  minimal
-                </a>
-              </li>
-              <li>
-                <a href="./thewall.html">
-                  the wall
-                </a>
-              </li>
-            </menu>
-          </li>
-          <li>
-            <a href="" @click.prevent="toggleLogIn">
-              log out
-            </a>
-          </li> -->
             </menu>
         </header>
 
