@@ -1,23 +1,15 @@
 <script setup lang="ts" generic="Schema extends JSONSchema4">
 import { toRef } from "vue";
-import { type JSONSchema4 } from "json-schema";
+import type {
+    GraffitiSession,
+    JSONSchema4,
+} from "@graffiti-garden/client-core";
 import { useDiscover } from "./composables";
 
 const props = defineProps<{
     channels: string[];
     schema: Schema;
-    session: {
-        pods: string[];
-    } & (
-        | {
-              fetch: typeof window.fetch;
-              webId: string;
-          }
-        | {
-              fetch?: undefined;
-              webId?: undefined;
-          }
-    );
+    session?: GraffitiSession;
     ifModifiedSince?: Date;
 }>();
 

@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/client-vue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "vue.js client for the graffiti pod",
   "type": "module",
   "main": "src/plugin.ts",
@@ -14,19 +14,17 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/client-core": "^0.3.8",
-    "@inrupt/solid-client-authn-browser": "^2.2.4",
-    "@vitejs/plugin-vue": "^5.1.1",
-    "vue": "^3.4.34"
+    "@graffiti-garden/client-core": "^0.3.10",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "vue": "^3.5.7"
   },
   "devDependencies": {
-    "@types/json-schema": "^7.0.15",
-    "@vue/language-server": "^2.0.29",
-    "@vue/typescript-plugin": "^2.0.29",
-    "json-schema": "^0.4.0",
+    "@inrupt/solid-client-authn-browser": "^2.2.6",
+    "@vue/language-server": "^2.1.6",
+    "@vue/typescript-plugin": "^2.1.6",
     "rollup-plugin-visualizer": "^5.12.0",
-    "tslib": "^2.6.3",
-    "typescript": "^5.5.4",
-    "vite": "^5.3.5"
+    "tslib": "^2.7.0",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.7"
   }
 }

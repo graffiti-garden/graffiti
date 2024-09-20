@@ -2,32 +2,21 @@ import {
   onScopeDispose,
   ref,
   toValue,
-  unref,
   watch,
   type MaybeRefOrGetter,
-  type MaybeRef,
 } from "vue";
-import { type JSONSchema4 } from "json-schema";
-import type { GraffitiObjectTyped } from "@graffiti-garden/client-core";
-import useGraffiti from "./use-graffiti";
+import type {
+  GraffitiObjectTyped,
+  GraffitiSession,
+  JSONSchema4,
+} from "@graffiti-garden/client-core";
+import { useGraffiti } from "@graffiti-garden/client-core";
+import { useGraffitiSession } from "./session";
 
 export function useDiscover<Schema extends JSONSchema4>(
   channels: MaybeRefOrGetter<string[]>,
   schema: MaybeRefOrGetter<Schema>,
-  session: MaybeRefOrGetter<
-    {
-      pods: string[];
-    } & (
-      | {
-          fetch: typeof fetch;
-          webId: string;
-        }
-      | {
-          fetch?: undefined;
-          webId?: undefined;
-        }
-    )
-  >,
+  session?: MaybeRefOrGetter<GraffitiSession>,
   options?: MaybeRefOrGetter<
     | {
         ifModifiedSince?: Date;
@@ -62,7 +51,7 @@ export function useDiscover<Schema extends JSONSchema4>(
 
   const channelsGetter = () => toValue(channels);
   const schemaGetter = () => toValue(schema);
-  const sessionGetter = () => toValue(session);
+  const sessionGetter = () => toValue(session) ?? useGraffitiSession().value;
   const optionsGetter = () => toValue(options);
 
   let localIterator:
