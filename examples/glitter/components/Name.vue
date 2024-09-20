@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, inject, type Ref } from "vue";
+import { ref, computed } from "vue";
 import {
     useDiscover,
     useGraffiti,
-    type GraffitiSession,
+    useGraffitiSession,
 } from "@graffiti-garden/client-vue";
 import { profileSchema } from "./schemas";
 
-const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
+const sessionRef = useGraffitiSession();
 
 const props = withDefaults(
     defineProps<{

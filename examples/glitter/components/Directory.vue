@@ -3,13 +3,13 @@ import { computed, ref, inject, type Ref } from "vue";
 import {
     useDiscover,
     useGraffiti,
-    type GraffitiSession,
+    useGraffitiSession,
 } from "@graffiti-garden/client-vue";
 import Follow from "./Follow.vue";
 import Name from "./Name.vue";
 import { joinSchema } from "./schemas";
 
-const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
+const sessionRef = useGraffitiSession();
 
 const joinChannel = "Namebook";
 
