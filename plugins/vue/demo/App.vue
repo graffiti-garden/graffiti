@@ -1,60 +1,16 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import {
+    GraffitiIdentityProviderLogin,
     useGraffiti,
     GraffitiDiscover,
-    type JSONSchema4,
     type GraffitiObjectTyped,
-    type GraffitiSession,
+    useGraffitiSession,
 } from "../src/plugin";
-import {
-    getDefaultSession as getDefaultSession,
-    handleIncomingRedirect,
-} from "@inrupt/solid-client-authn-browser";
 
-const session = ref<GraffitiSession>({
-    pods: ["http://localhost:3000"],
-});
-const solidSession = getDefaultSession();
-function handleSolidSession() {
-    if (solidSession.info.isLoggedIn && solidSession.info.webId) {
-        session.value = {
-            ...session.value,
-            webId: solidSession.info.webId,
-            fetch: solidSession.fetch,
-            pod: "http://localhost:3000",
-        };
-    } else {
-        session.value = {
-            pods: session.value.pods,
-        };
-    }
-}
-solidSession.events.on("login", handleSolidSession);
-solidSession.events.on("logout", handleSolidSession);
-async function logIn(oidcIssuer: string) {
-    await solidSession.login({
-        oidcIssuer,
-        redirectUrl: window.origin,
-        clientName: "graffiti vue demo",
-    });
-}
-async function logOut() {
-    await solidSession.logout();
-}
-handleIncomingRedirect({ restorePreviousSession: true });
-const oidcIssuerOptions = [
-    "https://solid.theias.place",
-    "https://login.inrupt.com",
-    "https://solidcommunity.net",
-    "https://solidweb.org",
-    "https://solidweb.me",
-    "https://teamid.live",
-    "https://solid.redpencil.io",
-    "https://idp.use.id",
-    "https://inrupt.net",
-];
-const selectedIssuer = ref("");
+// Initialize the pods used in the session
+const session = useGraffitiSession();
+session.value.pods = ["https://pod.graffiti.garden"];
 
 const channels = ref(["graffiti-client-demo"]);
 
@@ -73,7 +29,7 @@ const noteSchema = {
             required: ["type", "content"],
         },
     },
-} satisfies JSONSchema4;
+} as const;
 
 const posting = ref(false);
 const myNote = ref("");
@@ -126,35 +82,10 @@ async function saveEdits(result: GraffitiObjectTyped<typeof noteSchema>) {
 </script>
 
 <template>
-    <div>
-        <div v-if="session.webId">
-            Logged in as {{ session.webId }}
-            <button @click="logOut">Log out</button>
-        </div>
-        <form v-else @submit.prevent="logIn(selectedIssuer)">
-            <label for="oidc-choice">Choose an Identity Provider:</label>
-            <input
-                list="oidc-issuers"
-                id="oidc-choice"
-                name="oidc-choice"
-                v-model="selectedIssuer"
-                placeholder="https://example.com"
-            />
-
-            <datalist id="oidc-issuers">
-                <option
-                    v-for="issuer in oidcIssuerOptions"
-                    :value="issuer"
-                ></option>
-            </datalist>
-
-            <input type="submit" value="Log In to Identity Provider" />
-        </form>
-    </div>
+    <GraffitiIdentityProviderLogin client-name="vue client demo" />
     <GraffitiDiscover
         :channels="channels"
         :schema="noteSchema"
-        :session="session"
         v-slot="{ results, poll, isPolling }"
     >
         <div class="controls">
