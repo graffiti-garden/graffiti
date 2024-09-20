@@ -2,6 +2,7 @@ import type { App, Plugin, Ref } from "vue";
 import Discover from "./Discover.vue";
 import GraffitiClient, {
   useGraffiti,
+  type GraffitiPatch,
   type GraffitiSession,
 } from "@graffiti-garden/client-core";
 import { useGraffitiSession, registerSolidSession } from "./session";
@@ -18,15 +19,12 @@ declare module "vue" {
   }
 }
 
-const GraffitiPlugin: Plugin<Parameters<typeof useGraffiti>> = {
-  install(
-    app: App,
-    options?: {
-      registerSolidSession?:
-        | boolean
-        | Parameters<typeof registerSolidSession>[0];
-    },
-  ) {
+interface GraffitiPluginOptions {
+  registerSolidSession?: boolean | Parameters<typeof registerSolidSession>[0];
+}
+
+const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
+  install(app: App, options?: GraffitiPluginOptions) {
     if (options?.registerSolidSession !== false) {
       const registerOptions =
         typeof options?.registerSolidSession === "object"
