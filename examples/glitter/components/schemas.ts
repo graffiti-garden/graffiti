@@ -1,6 +1,3 @@
-import { toValue, type MaybeRefOrGetter } from "vue";
-import { type JSONSchema4 } from "@graffiti-garden/client-vue";
-
 export function joinSchema(object: string) {
   return {
     properties: {
@@ -17,8 +14,6 @@ export function joinSchema(object: string) {
 }
 
 export function followSchema(webId: string, object?: string) {
-  const objectValue = toValue(object);
-  const webIdValue = toValue(webId);
   return {
     properties: {
       value: {
@@ -26,13 +21,13 @@ export function followSchema(webId: string, object?: string) {
           type: { enum: ["Follow"] },
           object: {
             type: "string",
-            ...(objectValue ? { enum: [objectValue] } : {}),
+            ...(object ? { enum: [object] } : {}),
           },
-          actor: { type: "string", enum: [webIdValue] },
+          actor: { type: "string", enum: [webId] },
         },
         required: ["type", "object"],
       },
-      webId: { type: "string", enum: [webIdValue] },
+      webId: { type: "string", enum: [webId] },
     },
   } as const;
 }

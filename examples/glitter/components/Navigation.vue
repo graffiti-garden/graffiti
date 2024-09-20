@@ -1,25 +1,14 @@
 <script setup lang="ts">
-import { inject, type Ref } from "vue";
-import { type GraffitiSession } from "@graffiti-garden/client-vue";
-import { getDefaultSession } from "@inrupt/solid-client-authn-browser";
-const session = inject<Ref<GraffitiSession>>("graffitiSession")!;
-
-function login() {
-    getDefaultSession().login({
-        oidcIssuer: "https://solid.theias.place",
-        redirectUrl: window.origin,
-        clientName: "graffiti vue demo",
-    });
-}
+import { GraffitiIdentityProviderLogin } from "@graffiti-garden/client-vue";
 </script>
 
 <template>
-    <template v-if="!session.webId">
+    <template v-if="!$graffitiSession.value.webId">
         <dialog>
             <h1>
                 <RouterLink to="/"> namebook </RouterLink>
             </h1>
-            <button @click="login">Login</button>
+            <GraffitiIdentityProviderLogin client-name="namebook" />
         </dialog>
     </template>
     <template v-else>
@@ -30,7 +19,7 @@ function login() {
                 </li>
                 <li>
                     <RouterLink
-                        :to="`/profile/${encodeURIComponent(session.webId)}`"
+                        :to="`/profile/${encodeURIComponent($graffitiSession.value.webId)}`"
                     >
                         my profile
                     </RouterLink>

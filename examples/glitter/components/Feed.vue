@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, inject, type Ref } from "vue";
-import { useDiscover, type GraffitiSession } from "@graffiti-garden/client-vue";
+import { computed } from "vue";
+import { useDiscover, useGraffitiSession } from "@graffiti-garden/client-vue";
 import { followSchema } from "./schemas";
 import Notes from "./Notes.vue";
 
-const sessionRef = inject<Ref<GraffitiSession>>("graffitiSession")!;
+const sessionRef = useGraffitiSession();
 
-const { results: follows } = useDiscover(
+const { results: follows, isPolling } = useDiscover(
     () => (sessionRef.value.webId ? [sessionRef.value.webId] : []),
     () => followSchema(sessionRef.value.webId ?? ""),
     sessionRef,
@@ -18,7 +18,10 @@ const webIds = computed(() => [
 </script>
 
 <template>
-    <template v-if="!follows.length">
+    <template v-if="isPolling">
+        <h1>Loading...</h1>
+    </template>
+    <template v-else-if="!follows.length">
         <h1>You're not following anyone!</h1>
         <p>
             Browse the <RouterLink to="/directory">directory</RouterLink> for

@@ -4,48 +4,18 @@ import Feed from "./components/Feed.vue";
 import Profile from "./components/Profile.vue";
 import Navigation from "./components/Navigation.vue";
 import GraffitiPlugin, {
-  type GraffitiSession,
+  useGraffitiSession,
 } from "@graffiti-garden/client-vue";
 import VueClickAway from "vue3-click-away";
 import { createRouter, createWebHistory } from "vue-router";
-import {
-  getDefaultSession,
-  handleIncomingRedirect,
-} from "@inrupt/solid-client-authn-browser";
 import "./style.css";
+import "@graffiti-garden/client-vue/dist/style.css";
 
 const redirect = sessionStorage.redirect;
 delete sessionStorage.redirect;
 if (redirect && redirect !== location.href) {
   history.replaceState(null, "", redirect);
 }
-
-const solidSession = getDefaultSession();
-const session = ref<GraffitiSession>({
-  pods: ["https://pod.graffiti.garden"],
-});
-function handleSolidSession() {
-  if (solidSession.info.isLoggedIn && solidSession.info.webId) {
-    session.value = {
-      ...session.value,
-      webId: solidSession.info.webId,
-      fetch: solidSession.fetch,
-      pod: "https://pod.graffiti.garden",
-    };
-  } else {
-    session.value = {
-      pods: session.value.pods,
-    };
-  }
-}
-solidSession.events.on("login", handleSolidSession);
-solidSession.events.on("logout", handleSolidSession);
-solidSession.events.on("sessionRestore", (href: string) => {
-  handleSolidSession();
-  const url = new URL(href);
-  router.replace(url.pathname + url.search + url.hash);
-});
-handleIncomingRedirect({ restorePreviousSession: true });
 
 const routes = [
   {
@@ -68,10 +38,19 @@ const router = createRouter({
   routes,
 });
 
+const session = useGraffitiSession();
+session.value.pods = ["https://pod.graffiti.garden", "http://localhost:3000"];
+
 createApp(Navigation)
-  .provide("graffitiSession", session)
   .use(router)
-  .use(GraffitiPlugin)
+  .use(GraffitiPlugin, {
+    registerSolidSession: {
+      onSessionRestore: (href: string) => {
+        const url = new URL(href);
+        router.replace(url.pathname + url.search + url.hash);
+      },
+    },
+  })
   .use(VueClickAway)
   .directive("focus", { mounted: (el: HTMLElement) => el.focus() })
   .mount("#app");
