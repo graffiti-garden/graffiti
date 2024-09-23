@@ -171,9 +171,7 @@ async function saveEdits(result: GraffitiObjectTyped<typeof noteSchema>) {
 }
 
 .graffiti-session-manager {
-    border: 1px solid #ccc;
     border-radius: 0.5rem;
-    padding: 1rem;
 }
 
 ul {

@@ -114,6 +114,16 @@ async function logout() {
     flex-direction: column;
     gap: 0.3rem;
     justify-content: stretch;
+    align-items: start;
+    text-align: left;
+    padding: 1rem;
+    border: 1px solid grey;
+    width: 100%;
+
+    > * {
+        width: 100%;
+        font: inherit;
+    }
 
     label {
         display: block;
