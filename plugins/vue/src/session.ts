@@ -5,7 +5,7 @@ import { type GraffitiSession } from "@graffiti-garden/client-core";
 let graffitiSession: Ref<GraffitiSession> | undefined = undefined;
 export function useGraffitiSession() {
   if (!graffitiSession) {
-    graffitiSession = ref({ pods: [] });
+    graffitiSession = ref({ pods: ["https://pod.graffiti.garden"] });
   }
   return graffitiSession;
 }

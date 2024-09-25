@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/client-vue",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "vue.js client for the graffiti pod",
   "type": "module",
   "main": "src/plugin.ts",
