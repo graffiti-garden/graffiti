@@ -52,7 +52,7 @@ const noteContent = ref("");
 async function submitNote() {
     if (!noteContent.value) return;
     const session = sessionRef.value;
-    if (!session.webId) {
+    if (!session) {
         alert("You are not logged in!");
         return;
     }

@@ -7,8 +7,8 @@ import Notes from "./Notes.vue";
 const sessionRef = useGraffitiSession();
 
 const { results: follows, isPolling } = useDiscover(
-    () => (sessionRef.value.webId ? [sessionRef.value.webId] : []),
-    () => followSchema(sessionRef.value.webId ?? ""),
+    () => (sessionRef.value ? [sessionRef.value.webId] : []),
+    () => followSchema(sessionRef.value?.webId ?? ""),
     sessionRef,
 );
 

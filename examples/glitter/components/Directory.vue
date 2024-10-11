@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, inject, type Ref } from "vue";
+import { computed, ref } from "vue";
 import {
     useDiscover,
     useGraffiti,
@@ -27,13 +27,13 @@ const joins = computed(() => {
 });
 
 const myJoins = computed(() =>
-    joins.value.filter((join) => join.webId === sessionRef.value.webId),
+    joins.value.filter((join) => join.webId === sessionRef.value?.webId),
 );
 
 const isTogglingJoin = ref(false);
 async function toggleJoin() {
     const session = sessionRef.value;
-    if (!session.webId) {
+    if (!session) {
         alert("You are not logged in!");
         return;
     }
@@ -67,7 +67,7 @@ async function toggleJoin() {
         <ul class="directory">
             <li>
                 <h1>
-                    <Name v-if="sessionRef.webId" :webId="sessionRef.webId" />
+                    <Name v-if="sessionRef" :webId="sessionRef.webId" />
                 </h1>
                 <div class="modifiers">
                     <input

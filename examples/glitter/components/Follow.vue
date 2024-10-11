@@ -14,15 +14,15 @@ const props = defineProps<{
 }>();
 
 const { results: follows, isPolling: isPollingFollows } = useDiscover(
-    () => (sessionRef.value.webId ? [sessionRef.value.webId] : []),
-    () => followSchema(sessionRef.value.webId ?? "", props.object),
+    () => (sessionRef.value ? [sessionRef.value.webId] : []),
+    () => followSchema(sessionRef.value?.webId ?? "", props.object),
     sessionRef,
 );
 
 const isToggling = ref(false);
 async function toggleFollow() {
     const session = sessionRef.value;
-    if (!session.webId) {
+    if (!session) {
         alert("You are not logged in!");
         return;
     }
