@@ -13,7 +13,6 @@ export function useGraffitiSession() {
 export async function registerSolidSession(options?: {
   solidSession?: SolidSession;
   onSessionRestore?: (href: string) => void;
-  whichPod?: (solidSession: SolidSession) => string;
 }) {
   const solidSession =
     options?.solidSession ??
