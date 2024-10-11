@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {
-    type GraffitiObjectTyped,
+import GraffitiPlugin, {
+    type GraffitiObject,
     useGraffitiSession,
 } from "@graffiti-garden/client-vue";
 import Name from "./Name.vue";
@@ -12,7 +12,7 @@ const session = useGraffitiSession();
 
 const props = withDefaults(
     defineProps<{
-        note: GraffitiObjectTyped<ReturnType<typeof noteSchema>>;
+        note: GraffitiObject<ReturnType<typeof noteSchema>>;
         follows: string[];
         inReplyToContentAddress: string;
     }>(),
@@ -82,7 +82,7 @@ const editText = ref("");
         <label :for="'menu' + $graffiti.locationToUrl(note)">⚙️</label>
 
         <menu v-if="editMenuOpen" @click="editMenuOpen = false">
-            <template v-if="note.webId === session.webId">
+            <template v-if="note.webId === session?.webId">
                 <li v-if="!editing">
                     <button
                         @click="
@@ -111,7 +111,7 @@ const editText = ref("");
     </div>
 
     <form
-        v-if="editing && session.webId"
+        v-if="editing && session"
         @submit.prevent="
             $graffiti
                 .patch(

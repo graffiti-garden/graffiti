@@ -3,9 +3,7 @@ import Directory from "./components/Directory.vue";
 import Feed from "./components/Feed.vue";
 import Profile from "./components/Profile.vue";
 import Navigation from "./components/Navigation.vue";
-import GraffitiPlugin, {
-  useGraffitiSession,
-} from "@graffiti-garden/client-vue";
+import GraffitiPlugin from "@graffiti-garden/client-vue";
 import VueClickAway from "vue3-click-away";
 import { createRouter, createWebHistory } from "vue-router";
 import "./style.css";
@@ -37,9 +35,6 @@ const router = createRouter({
   history: createWebHistory(),
   routes,
 });
-
-const session = useGraffitiSession();
-session.value.pods = ["https://pod.graffiti.garden", "http://localhost:3000"];
 
 createApp(Navigation)
   .use(router)
