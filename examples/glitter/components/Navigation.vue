@@ -3,7 +3,7 @@ import { GraffitiIdentityProviderLogin } from "@graffiti-garden/client-vue";
 </script>
 
 <template>
-    <template v-if="!$graffitiSession.value.webId">
+    <template v-if="!$graffitiSession.value">
         <dialog>
             <h1>
                 <RouterLink to="/"> namebook </RouterLink>
