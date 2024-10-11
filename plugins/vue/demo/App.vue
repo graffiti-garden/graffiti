@@ -4,14 +4,12 @@ import {
     GraffitiIdentityProviderLogin,
     useGraffiti,
     GraffitiDiscover,
-    type GraffitiObjectTyped,
+    type GraffitiObject,
     useGraffitiSession,
 } from "../src/plugin";
 
 // Initialize the pods used in the session
 const session = useGraffitiSession();
-session.value.pods = ["https://pod.graffiti.garden"];
-
 const channels = ref(["graffiti-client-demo"]);
 
 const noteSchema = {
@@ -35,7 +33,7 @@ const posting = ref(false);
 const myNote = ref("");
 async function postNote() {
     if (!myNote.value.length) return;
-    if (!session.value.webId) {
+    if (!session.value) {
         alert("You are not logged in!");
         return;
     }
@@ -56,14 +54,14 @@ async function postNote() {
 
 const editing = ref<string>("");
 const editText = ref<string>("");
-function startEditing(result: GraffitiObjectTyped<typeof noteSchema>) {
+function startEditing(result: GraffitiObject<typeof noteSchema>) {
     editing.value = useGraffiti().locationToUrl(result);
     editText.value = result.value.content;
 }
 
 const savingEdits = ref(false);
-async function saveEdits(result: GraffitiObjectTyped<typeof noteSchema>) {
-    if (!session.value.webId) {
+async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
+    if (!session.value) {
         alert("You are not logged in!");
         return;
     }
@@ -107,7 +105,7 @@ async function saveEdits(result: GraffitiObjectTyped<typeof noteSchema>) {
             <input
                 type="text"
                 :value="channels[0]"
-                @input="(event) => (channels = [event.target.value])"
+                @input="(event) => (channels = [event.target?.value])"
             />
         </div>
         <ul>

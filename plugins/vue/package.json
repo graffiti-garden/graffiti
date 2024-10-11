@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/client-vue",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "vue.js client for the graffiti pod",
   "type": "module",
   "main": "src/plugin.ts",
@@ -14,7 +14,7 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/client-core": "^0.3.10",
+    "@graffiti-garden/client-core": "^0.4.1",
     "@vitejs/plugin-vue": "^5.1.4",
     "vue": "^3.5.7"
   },
