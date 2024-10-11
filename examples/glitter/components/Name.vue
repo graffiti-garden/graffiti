@@ -40,7 +40,7 @@ const isSettingName = ref(false);
 async function setName() {
     if (!editingName.value) return;
     const session = sessionRef.value;
-    if (!session.webId) {
+    if (!session) {
         alert("You are not logged in!");
         return;
     }
@@ -81,7 +81,7 @@ async function setName() {
 <template>
     <span v-if="isPolling">Loading...</span>
     <template v-else>
-        <template v-if="props.editable && webId === sessionRef.webId">
+        <template v-if="props.editable && webId === sessionRef?.webId">
             <form v-if="editing" @submit.prevent="setName">
                 <input
                     v-model="editingName"

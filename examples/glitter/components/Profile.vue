@@ -18,7 +18,7 @@ const webId = computed(() =>
     <h1>
         <Name :webId="webId" :editable="true" />
     </h1>
-    <h2 v-if="webId !== $graffitiSession.value.webId">
+    <h2 v-if="webId !== $graffitiSession.value?.webId">
         <a :href="webId">{{ webId }}</a>
     </h2>
     <GraffitiIdentityProviderLogin v-else client-name="namebook" />
@@ -27,9 +27,9 @@ const webId = computed(() =>
     </p>
     <Notes
         :webIds="[webId]"
-        :at="webId !== $graffitiSession.value.webId ? webId : undefined"
+        :at="webId !== $graffitiSession.value?.webId ? webId : undefined"
         :prompt="
-            webId === $graffitiSession.value.webId
+            webId === $graffitiSession.value?.webId
                 ? 'what\'s on your mind?'
                 : 'to my dear friend...'
         "
