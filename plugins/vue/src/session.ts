@@ -5,7 +5,7 @@ import { type GraffitiSession } from "@graffiti-garden/client-core";
 let graffitiSession: Ref<GraffitiSession> | undefined = undefined;
 export function useGraffitiSession() {
   if (!graffitiSession) {
-    graffitiSession = ref({ pods: ["https://pod.graffiti.garden"] });
+    graffitiSession = ref(undefined);
   }
   return graffitiSession;
 }
@@ -22,20 +22,11 @@ export async function registerSolidSession(options?: {
   function onStateChange() {
     if (solidSession.info.isLoggedIn && solidSession.info.webId) {
       session.value = {
-        ...session.value,
         webId: solidSession.info.webId,
         fetch: solidSession.fetch,
-        // TODO: the pod (or multiple pods)
-        // to use should be apparent in the user's
-        // webId profile. But this works for now.
-        pod: options?.whichPod
-          ? options.whichPod(solidSession)
-          : "https://pod.graffiti.garden",
       };
     } else {
-      session.value = {
-        pods: session.value.pods,
-      };
+      session.value = undefined;
     }
   }
   solidSession.events.on("login", onStateChange);

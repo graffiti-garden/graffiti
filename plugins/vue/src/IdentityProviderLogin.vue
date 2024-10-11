@@ -68,9 +68,9 @@ async function logout() {
 <template>
     <form
         class="graffiti-session-manager"
-        @submit.prevent="session.webId ? logout() : login()"
+        @submit.prevent="session?.webId ? logout() : login()"
     >
-        <template v-if="!session.webId">
+        <template v-if="!session?.webId">
             <label for="oidc-choice">Choose an Identity Provider:</label>
             <input
                 list="oidc-issuers"

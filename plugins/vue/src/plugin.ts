@@ -2,7 +2,6 @@ import type { App, Plugin, Ref } from "vue";
 import Discover from "./Discover.vue";
 import GraffitiClient, {
   useGraffiti,
-  type GraffitiPatch,
   type GraffitiSession,
 } from "@graffiti-garden/client-core";
 import { useGraffitiSession, registerSolidSession } from "./session";

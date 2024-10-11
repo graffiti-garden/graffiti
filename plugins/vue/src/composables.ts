@@ -6,7 +6,7 @@ import {
   type MaybeRefOrGetter,
 } from "vue";
 import type {
-  GraffitiObjectTyped,
+  GraffitiObject,
   GraffitiSession,
   JSONSchema4,
 } from "@graffiti-garden/client-core";
@@ -26,13 +26,11 @@ export function useDiscover<Schema extends JSONSchema4>(
 ) {
   const graffiti = useGraffiti();
 
-  const results = ref<(GraffitiObjectTyped<Schema> & { tombstone: false })[]>(
-    [],
-  );
-  const resultsRaw = new Map<string, GraffitiObjectTyped<Schema>>();
+  const results = ref<(GraffitiObject<Schema> & { tombstone: false })[]>([]);
+  const resultsRaw = new Map<string, GraffitiObject<Schema>>();
   function flattenResults() {
     results.value = Array.from(resultsRaw.values()).reduce<
-      (GraffitiObjectTyped<Schema> & { tombstone: false })[]
+      (GraffitiObject<Schema> & { tombstone: false })[]
     >((acc, o) => {
       const { tombstone, value } = o;
       if (!tombstone) {
@@ -42,7 +40,7 @@ export function useDiscover<Schema extends JSONSchema4>(
     }, []);
   }
 
-  function onValue(value: GraffitiObjectTyped<Schema>) {
+  function onValue(value: GraffitiObject<Schema>) {
     const url = graffiti.objectToUrl(value);
     const existing = resultsRaw.get(url);
     if (existing && existing.lastModified >= value.lastModified) return;
