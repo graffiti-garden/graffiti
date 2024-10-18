@@ -14,7 +14,7 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/client-core": "^0.4.1",
+    "@graffiti-garden/client-core": "^0.4.3",
     "@vitejs/plugin-vue": "^5.1.4",
     "vue": "^3.5.7"
   },

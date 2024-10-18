@@ -69,11 +69,12 @@ export function useDiscover<Schema extends JSONSchema4>(
   }
 
   const isPolling = ref(false);
+  let iterator: ReturnType<typeof graffiti.discover<Schema>> | undefined =
+    undefined;
   async function poll() {
+    iterator?.return();
     isPolling.value = true;
 
-    let iterator: ReturnType<typeof graffiti.discover<Schema>> | undefined =
-      undefined;
     try {
       iterator = useGraffiti().discover(
         channelsGetter(),
@@ -94,9 +95,9 @@ export function useDiscover<Schema extends JSONSchema4>(
         continue;
       }
       onValue(result.value);
+      flattenResults();
     }
 
-    flattenResults();
     isPolling.value = false;
   }
 
@@ -104,6 +105,7 @@ export function useDiscover<Schema extends JSONSchema4>(
     [channelsGetter, schemaGetter, sessionGetter, optionsGetter],
     () => {
       resultsRaw.clear();
+      flattenResults();
       poll();
       pollLocalModifications();
     },
