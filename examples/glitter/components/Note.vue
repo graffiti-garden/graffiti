@@ -138,6 +138,11 @@ const editText = ref("");
     </form>
     <p v-else v-html="sanitizedContent"></p>
 
+    <p v-if="note.value.inReplyTo" class="inReplyTo">
+        In reply to:
+        <a :href="note.value.inReplyTo">{{ note.value.inReplyTo }}</a>
+    </p>
+
     <div class="post-annotators">
         <input
             type="checkbox"
@@ -156,3 +161,10 @@ const editText = ref("");
         prompt="write a comment..."
     />
 </template>
+
+<style>
+.inReplyTo {
+    font-size: 70%;
+    color: var(--grey);
+}
+</style>

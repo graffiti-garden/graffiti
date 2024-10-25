@@ -60,43 +60,39 @@ async function toggleJoin() {
 </script>
 
 <template>
-    <template v-if="isPollingJoins || isTogglingJoin">
-        <div>loading...</div>
-    </template>
-    <template v-else>
-        <ul class="directory">
-            <li>
-                <h1>
-                    <Name v-if="sessionRef" :webId="sessionRef.webId" />
-                </h1>
-                <div class="modifiers">
-                    <input
-                        type="checkbox"
-                        :checked="!myJoins.length"
-                        id="directorycheck"
-                        @change="toggleJoin"
-                    />
-                    <label for="directorycheck">
-                        <template v-if="!myJoins.length">
-                            add me to the directory!
-                        </template>
-                        <template v-else> remove me </template>
-                    </label>
-                </div>
-            </li>
-        </ul>
+    <div v-if="isPollingJoins || isTogglingJoin">loading...</div>
+    <ul class="directory">
+        <li>
+            <h1>
+                <Name v-if="sessionRef" :webId="sessionRef.webId" />
+            </h1>
+            <div class="modifiers">
+                <input
+                    type="checkbox"
+                    :checked="!myJoins.length"
+                    id="directorycheck"
+                    @change="toggleJoin"
+                />
+                <label for="directorycheck">
+                    <template v-if="!myJoins.length">
+                        add me to the directory!
+                    </template>
+                    <template v-else> remove me </template>
+                </label>
+            </div>
+        </li>
+    </ul>
 
-        <h1>namebook entries:</h1>
+    <h1>namebook entries:</h1>
 
-        <ul>
-            <li v-for="join in joins" :key="join.webId">
-                <h1>
-                    <Name :webId="join.webId" />
-                </h1>
-                <div class="modifiers">
-                    <Follow :object="join.webId" />
-                </div>
-            </li>
-        </ul>
-    </template>
+    <ul>
+        <li v-for="join in joins" :key="join.webId">
+            <h1>
+                <Name :webId="join.webId" />
+            </h1>
+            <div class="modifiers">
+                <Follow :object="join.webId" />
+            </div>
+        </li>
+    </ul>
 </template>
