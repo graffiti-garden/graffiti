@@ -79,7 +79,7 @@ async function setName() {
 </script>
 
 <template>
-    <span v-if="isPolling">Loading...</span>
+    <span v-if="!currentProfile && isPolling">Loading...</span>
     <template v-else>
         <template v-if="props.editable && webId === sessionRef?.webId">
             <form v-if="editing" @submit.prevent="setName">

@@ -52,16 +52,18 @@ export function noteSchema(inReplyTo?: string) {
     properties: {
       value: {
         properties: {
-          type: { enum: ["Note"] },
           content: { type: "string" },
           createdAt: { type: "string" },
           at: {
             type: "array",
             items: { type: "string" },
           },
-          inReplyTo: inReplyTo ? { enum: [inReplyTo] } : { type: "string" },
+          inReplyTo: {
+            type: "string",
+            ...(inReplyTo ? { enum: [inReplyTo] } : {}),
+          },
         },
-        required: ["type", "content", "createdAt"],
+        required: ["content", "createdAt"],
       },
     },
   } as const;
