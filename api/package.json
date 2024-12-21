@@ -1,0 +1,41 @@
+{
+  "name": "@graffiti-garden/api",
+  "version": "0.0.1",
+  "description": "The heart of Graffiti",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tests": "./tests/index.ts"
+  },
+  "files": [
+    "src",
+    "tests",
+    "package.json",
+    "tsconfig.json",
+    "README.md"
+  ],
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "docs": "typedoc --options typedoc.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/api/issues"
+  },
+  "homepage": "https://github.com/graffiti-garden/api#readme",
+  "devDependencies": {
+    "@types/json-schema": "^7.0.15",
+    "ajv": "^8.17.1",
+    "fast-json-patch": "^3.1.1",
+    "tslib": "^2.8.1",
+    "typedoc": "^0.26.11",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "level": "^9.0.0"
+  }
+}
