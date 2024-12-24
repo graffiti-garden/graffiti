@@ -162,17 +162,20 @@ export type GraffitiPutObject<Schema> = Pick<
  * {@link GraffitiObjectBase.source | `source`}s can
  * use to verify that a user has permission to operate a
  * particular {@link GraffitiObjectBase.actor | `actor`}.
- * The object is required of most {@link Graffiti} methods.
+ * This object is required of most {@link Graffiti} methods.
  *
  *
  * At a minimum the `session` object must contain the
  * {@link GraffitiSessionBase.actor | `actor`} URI the user wants to authenticate with.
- * However it is likely that the `session` object will contain other
+ * However it is likely that the `session` object must contain other
  * implementation-specific properties.
  * For example, a Solid implementation might include a
  * [`fetch`](https://docs.inrupt.com/developer-tools/api/javascript/solid-client-authn-browser/functions.html#fetch)
  * function. A distributed implementation may include
  * a cryptographic signature.
+ *
+ * It may also include other implementation specific properties
+ * that provide hints for performance or security.
  */
 export interface GraffitiSessionBase {
   /**
@@ -186,21 +189,14 @@ export interface GraffitiSessionBase {
 }
 
 /**
- * Implementation-specific options that can be passed to
- *
- */
-export interface GraffitiOptionsBase {
-  [key: string]: any;
-}
-
-/**
  * This is the format for patches that modify {@link GraffitiObjectBase} objects
  * using the {@link Graffiti.patch} method. The patches must
- * be a series of [JSON Patch](https://jsonpatch.com) operations.
+ * be an array of [JSON Patch](https://jsonpatch.com) operations.
  * Patches can only be applied to the
  * {@link GraffitiObjectBase.value | `value`}, {@link GraffitiObjectBase.channels | `channels`},
  * and {@link GraffitiObjectBase.allowed | `allowed`} properties since the other
  * properties either describe the object's location or are automatically generated.
+ * This is similar to {@link GraffitiPutObject}.
  */
 export interface GraffitiPatch {
   /**
@@ -225,7 +221,23 @@ export interface GraffitiPatch {
   allowed?: JSONPatchOperation[];
 }
 
-export type GraffitiFeed<T> = AsyncGenerator<
+/**
+ * This type represents a stream of data that are
+ * returned by Graffiti's query-like operations such as
+ * {@link Graffiti.discover} and {@link Graffiti.listChannels}.
+ *
+ * Errors are returned within the stream rather than as
+ * exceptions that would halt the entire stream. This is because
+ * some implementations may pull data from multiple
+ * {@link GraffitiObjectBase.source | `source`}s
+ * including some that may be unreliable. In many cases,
+ * these errors can be safely ignored.
+ *
+ * The stream is an [`AsyncGenerator`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function)
+ * that can be iterated over using `for await` loops or calling `next` on the generator.
+ * The stream can be terminated by breaking out of a loop calling `return` on the generator.
+ */
+export type GraffitiStream<T> = AsyncGenerator<
   | {
       error: false;
       value: T;

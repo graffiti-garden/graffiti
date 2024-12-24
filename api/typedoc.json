@@ -1,5 +1,4 @@
 {
   "entryPoints": ["src/index.ts"],
-  "out": "docs",
-  "readme": "README.md"
+  "sort": ["source-order"]
 }

@@ -5,18 +5,50 @@ import type {
   GraffitiPatch,
   GraffitiSessionBase,
   GraffitiPutObject,
-  GraffitiOptionsBase,
-  GraffitiFeed,
+  GraffitiStream,
 } from "./types";
 import type { JSONSchema4 } from "json-schema";
 
 /**
- * Graffiti is...
- * blah blah
+ * This API describes a small but mighty set of methods that
+ * can be used to create many different kinds of social media applications,
+ * all of which can interoperate.
+ * These methods should satisfy all of an application's needs for
+ * the communication, storage, and access management of social data.
+ * The rest of the application can be built with standard client-side
+ * user interface tools to present and interact with the data.
  *
- * @groupDescription Utilities - Utility functions for converting between Graffiti objects and URIs.
- * @groupDescription CRUD Operations - Functions for creating, reading, updating, and deleting Graffiti objects.
- *  @showGroups
+ * The first group of methods are like standard CRUD operations that
+ * allow applications to {@link put}, {@link get}, {@link patch}, and {@link delete}
+ * {@link GraffitiObjectBase} objects. The main difference between these
+ * methods and standard database operations is that an {@link GraffitiObjectBase.actor | `actor`}
+ * (essentially a user) can only modify objects that they created.
+ * Applications may also specify an an array of actors that are {@link GraffitiObjectBase.allowed | `allowed`}
+ * to access the object and an array of {@link GraffitiObjectBase.channels | `channels`}
+ * that the object is associated with.
+ *
+ * The "social" part of the API is the {@link discover} method, which allows
+ * an application to query for objects made by other users.
+ * This function only returns objects that are associated with one or more
+ * of the {@link GraffitiObjectBase.channels | `channels`}
+ * provided by a querying application. This helps to prevent
+ * [context collapse](https://en.wikipedia.org/wiki/Context_collapse) and
+ * allows users to express their intended audience, even in an interoperable
+ * environment.
+ *
+ * Additionally, {@link synchronize} keeps track of data that a user modifies
+ * as well as data received from {@link get} and {@link discover} and routes
+ * these changes internally to provide a consistent user experience.
+ *
+ * Finally, other utility functions provide simple type conversions and
+ * allow users to find objects "lost" to forgotten or misspelled channels.
+ *
+ * @groupDescription CRUD Operations
+ * Functions for creating, reading, updating, and deleting Graffiti objects.
+ * @groupDescription Query Operations
+ * Functions for querying Graffiti objects.
+ * @groupDescription Utilities
+ * Utility functions for converting between Graffiti objects and URIs.
  */
 export abstract class Graffiti {
   /**
@@ -192,7 +224,7 @@ export abstract class Graffiti {
    *
    * These objects are fetched from the `pods` specified in the `session`,
    * and a `webId` and `fetch` function may also be provided to retrieve
-   * access-controlled objects. See {@link GraffitiSession} for more information.
+   * access-controlled objects. See {@link GraffitiSessionBase} for more information.
    *
    * Error messages are returned in the stream rather than thrown
    * to prevent one unstable pod from breaking the entire stream.
@@ -203,8 +235,7 @@ export abstract class Graffiti {
     channels: string[],
     schema: Schema,
     session?: GraffitiSessionBase,
-    options?: GraffitiOptionsBase,
-  ): GraffitiFeed<GraffitiObject<Schema>>;
+  ): GraffitiStream<GraffitiObject<Schema>>;
 
   /**
    * Whenever the user makes changes or retrieves data, that data is streamed
@@ -214,6 +245,15 @@ export abstract class Graffiti {
    * iterator.
    */
   /**
+   * Takes the same inputs as {@link discover} however, this listens for
+   * updates made locally or fetched from other functions to provide a consistent
+   * user experience. For example,
+   * if a user creates a new object, the object will be streamed to this function
+   * and then to the user's UI.
+   * If a user refreshes one part of the UI, the object will be streamed to this
+   * function and then to the user's UI.
+   * It is intended to be used in conjunction with {@link discover}.
+   *
    * Returns a stream of objects that match the given [JSON Schema](https://json-schema.org)
    * and are contained in at least one of the given `channels`.
    *
@@ -225,10 +265,10 @@ export abstract class Graffiti {
    *
    * @group Query Operations
    */
-  abstract discoverLocalChanges<Schema extends JSONSchema4>(
+  abstract synchronize<Schema extends JSONSchema4>(
     channels: string[],
     schema: Schema,
-    options?: GraffitiOptionsBase,
+    session?: GraffitiSessionBase,
   ): AsyncGenerator<GraffitiObject<Schema>>;
 
   /**
@@ -242,10 +282,7 @@ export abstract class Graffiti {
    *
    * @group Utilities
    */
-  abstract listChannels(
-    session: GraffitiSessionBase,
-    options?: GraffitiOptionsBase,
-  ): GraffitiFeed<{
+  abstract listChannels(session: GraffitiSessionBase): GraffitiStream<{
     channel: string;
     source: string;
     lastModified: Date;
@@ -264,10 +301,7 @@ export abstract class Graffiti {
    *
    * @group Utilities
    */
-  abstract listOrphans(
-    session: GraffitiSessionBase,
-    options?: GraffitiOptionsBase,
-  ): GraffitiFeed<{
+  abstract listOrphans(session: GraffitiSessionBase): GraffitiStream<{
     name: string;
     source: string;
     lastModified: Date;
@@ -275,4 +309,10 @@ export abstract class Graffiti {
   }>;
 }
 
+/**
+ * This is a factory function that produces an instance of
+ * the {@link Graffiti} class. Since the Graffiti class is
+ * abstract, factory functions provide an easy way to
+ * swap out different implementations.
+ */
 export type UseGraffiti = () => Graffiti;
