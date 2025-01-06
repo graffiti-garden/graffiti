@@ -3,5 +3,7 @@
   "sort": ["source-order"],
   "cname": "api.graffiti.garden",
   "titleLink": "/classes/Graffiti.html",
-  "readme": "none"
+  "readme": "none",
+  "searchInDocuments": true,
+  "searchInComments": true
 }
