@@ -11,8 +11,7 @@
     "src",
     "tests",
     "package.json",
-    "tsconfig.json",
-    "README.md"
+    "tsconfig.json"
   ],
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
@@ -26,7 +25,7 @@
   "bugs": {
     "url": "https://github.com/graffiti-garden/api/issues"
   },
-  "homepage": "https://github.com/graffiti-garden/api#readme",
+  "homepage": "https://api.graffiti.garden/classes/Graffiti.html",
   "devDependencies": {
     "@types/json-schema": "^7.0.15",
     "ajv": "^8.17.1",
@@ -34,8 +33,5 @@
     "tslib": "^2.8.1",
     "typedoc": "^0.26.11",
     "vitest": "^2.1.8"
-  },
-  "dependencies": {
-    "level": "^9.0.0"
   }
 }
