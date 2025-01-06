@@ -1,4 +1,7 @@
 {
   "entryPoints": ["src/index.ts"],
-  "sort": ["source-order"]
+  "sort": ["source-order"],
+  "cname": "api.graffiti.garden",
+  "titleLink": "/classes/Graffiti.html",
+  "readme": "none"
 }

@@ -18,6 +18,14 @@ import type { JSONSchema4 } from "json-schema";
  * The rest of the application can be built with standard client-side
  * user interface tools to present and interact with the data.
  *
+ * There are several different implementations of this Graffiti API available,
+ * including a decentralized implementation and a local implementation
+ * that can be used for testing. In the design of Graffiti we prioritized
+ * the design of this API first as it is the layer that shapes the experience
+ * of developing applications. While different implementations provide tradeoffs between
+ * other important properties (e.g. privacy, security, scalability), those properties
+ * are useless if the system as a whole is unusable. Build APIs before protocols!
+ *
  * The first group of methods are like standard CRUD operations that
  * allow applications to {@link put}, {@link get}, {@link patch}, and {@link delete}
  * {@link GraffitiObjectBase} objects. The main difference between these
@@ -36,19 +44,21 @@ import type { JSONSchema4 } from "json-schema";
  * allows users to express their intended audience, even in an interoperable
  * environment.
  *
- * Additionally, {@link synchronize} keeps track of data that a user modifies
- * as well as data received from {@link get} and {@link discover} and routes
- * these changes internally to provide a consistent user experience.
+ * Additionally, {@link synchronize} keeps track of changes to data
+ * from any of the aforementioned methods and routes these changes internally
+ * to provide a consistent user experience.
  *
  * Finally, other utility functions provide simple type conversions and
  * allow users to find objects "lost" to forgotten or misspelled channels.
  *
  * @groupDescription CRUD Operations
- * Functions for creating, reading, updating, and deleting Graffiti objects.
+ * Methods for {@link put | creating}, {@link get | reading}, {@link patch | updating},
+ * and {@link delete | deleting} {@link GraffitiObjectBase | Graffiti objects}.
  * @groupDescription Query Operations
- * Functions for querying Graffiti objects.
+ * Methods for retrieving multiple {@link GraffitiObjectBase | Graffiti objects} at a time.
  * @groupDescription Utilities
- * Utility functions for converting between Graffiti objects and URIs.
+ * Methods for for converting Graffiti objects to and from URIs
+ * and for finding lost objects.
  */
 export abstract class Graffiti {
   /**
@@ -84,9 +94,42 @@ export abstract class Graffiti {
   }
 
   /**
+   * Creates a new {@link GraffitiObjectBase | object} or replaces an existing object.
+   * An object can only be replaced by the same {@link GraffitiObjectBase.actor | `actor`}
+   * that created it.
+   *
+   * Replacement occurs when the {@link GraffitiLocation} properties of the supplied object
+   * ({@link GraffitiObjectBase.name | `name`}, {@link GraffitiObjectBase.actor | `actor`},
+   * and {@link GraffitiObjectBase.source | `source`}) exactly match the location of an existing object.
+   *
+   * @returns The object that was replaced if one exists or an object with
+   * with a `null` {@link GraffitiObjectBase.value | `value`} if this operation
+   * created a new object.
+   * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
+   * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
+   * field updated to the time of replacement/creation.
+   *
+   * @group CRUD Operations
+   */
+  abstract put<Schema>(
+    /**
+     * The object to be put. This object is statically type-checked against the [JSON schema](https://json-schema.org/) that can be optionally provided
+     * as the generic type parameter. We highly recommend providing a schema to
+     * ensure that the PUT object matches subsequent {@link get} or {@link discover}
+     * operations.
+     */
+    object: GraffitiPutObject<Schema>,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSessionBase,
+  ): Promise<GraffitiObjectBase>;
+
+  /**
    * Retrieves an object from a given location.
    * If no object exists at that location or if the retrieving
-   * {@link GraffitiObjectBase.actor | `actor`} is not included in
+   * {@link GraffitiObjectBase.actor | `actor`} is not the creator or included in
    * the object's {@link GraffitiObjectBase.allowed | `allowed`} property,
    * an error is thrown.
    *
@@ -114,44 +157,28 @@ export abstract class Graffiti {
   ): Promise<GraffitiObject<Schema>>;
 
   /**
-   * Creates a new object or replaces an existing object.
-   * To replace an object the {@link GraffitiObjectBase.actor | `actor`} must be the same as the
+   * Patches an existing object at a given location.
+   * The patching {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
-   * The supplied object must contain the following fields:
-   * - `value`: contains the object's JSON content. We recommend using the
-   *   [Activity Vocabulary](https://www.w3.org/TR/activitystreams-vocabulary/)
-   *   to describe the object.
-   * - `channels`: an array of URIs that the object is associated with.
-   *
-   * The object may also contain the following optional fields:
-   * - `allowed`: an optional array of actor URIs that are allowed to access the object.
-   *   If not provided, the object is public. If empty, the object can only be accessed
-   *   by the owner.
-   * - `name`: a unique name for the object. If not provided, a random one will be generated.
-   * - `actor`: the URI of the actor that created the object. If not provided, the actor
-   *   from the `session` object will be used.
-   * - `source`: the URI of the source that created the object. If not provided, a source
-   *   may be inferred depending on the implementation.
-   *
-   *
-   * @returns The object that was replaced if one exists or an object with
-   * with a `null` {@link GraffitiObjectBase.value | `value`} if this operation
-   * created a new object.
+   * @returns The object that was deleted if one exists or an object with
+   * with a `null` {@link GraffitiObjectBase.value | `value`} otherwise.
    * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
    * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * field updated to the time of replacement/creation.
+   * field updated to the time of deletion.
    *
    * @group CRUD Operations
    */
-  abstract put<Schema>(
+  abstract patch(
     /**
-     * The object to be put. This object is statically type-checked against the [JSON schema](https://json-schema.org/) that can be optionally provided
-     * as the generic type parameter. We highly recommend providing a schema to
-     * ensure that the PUT object matches subsequent {@link get} or {@link discover}
-     * operations.
+     * A collection of [JSON Patch](https://jsonpatch.com) operations
+     * to apply to the object. See {@link GraffitiPatch} for more information.
      */
-    object: GraffitiPutObject<Schema>,
+    patch: GraffitiPatch,
+    /**
+     * The location of the object to patch.
+     */
+    locationOrUri: GraffitiLocation | string,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
@@ -185,104 +212,101 @@ export abstract class Graffiti {
   ): Promise<GraffitiObjectBase>;
 
   /**
-   * Patches an existing object at a given location.
-   * The patching {@link GraffitiObjectBase.actor | `actor`} must be the same as the
-   * `actor` that created the object.
+   * Returns a stream of {@link GraffitiObjectBase | objects}
+   * that are contained in at least one of the given {@link GraffitiObjectBase.channels | `channels`}
+   * and match the given [JSON Schema](https://json-schema.org)
    *
-   * @returns The object that was deleted if one exists or an object with
-   * with a `null` {@link GraffitiObjectBase.value | `value`} otherwise.
-   * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
-   * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * field updated to the time of deletion.
+   * Objects are returned asynchronously as they are discovered but the stream
+   * will end once all leads have been exhausted.
+   * The method must be polled again for new objects.
    *
-   * @group CRUD Operations
+   * {@link discover} can be used in conjunction with {@link synchronize}
+   * to provide a responsive and consistent user experience.
+   *
+   * @group Query Operations
    */
-  abstract patch(
+  abstract discover<Schema extends JSONSchema4>(
     /**
-     * A collection of [JSON Patch](https://jsonpatch.com) operations
-     * to apply to the object. See {@link GraffitiPatch} for more information.
+     * The {@link GraffitiObjectBase.channels | `channels`} that objects must be associated with.
      */
-    patch: GraffitiPatch,
+    channels: string[],
     /**
-     * The location of the object to patch.
+     * A [JSON Schema](https://json-schema.org) that objects must satisfy.
      */
-    locationOrUri: GraffitiLocation | string,
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
+     * property will be returned.
+     */
+    session?: GraffitiSessionBase,
+  ): GraffitiStream<GraffitiObject<Schema>>;
+
+  /**
+   * This method has the same signature as {@link discover} but listens for
+   * changes made via {@link put}, {@link patch}, and {@link delete} or
+   * fetched from {@link get} or {@link discover} and then streams appropriate
+   * changes to provide a responsive and consistent user experience.
+   *
+   * Unlike {@link discover}, this method continuously listens for changes
+   * and will not terminate unless the user calls the `return` method on the iterator
+   * or `break`s out of the loop.
+   *
+   * Example 1: Suppose a user publishes a post using {@link put}. If the feed
+   * displaying that user's posts is using {@link synchronize} to listen for changes,
+   * then the user's new post will instantly appear in their feed, giving the UI a
+   * responsive feel.
+   *
+   * Example 2: Suppose one of a user's friends changes their name. As soon as the
+   * user's application receives one notice of that change (using {@link get}
+   * or {@link discover}), then {@link synchronize} listeners can be used to update
+   * all instance's of that friend's name in the user's application instantly,
+   * providing a consistent user experience.
+   *
+   * @group Query Operations
+   */
+  abstract synchronize<Schema extends JSONSchema4>(
+    /**
+     * The {@link GraffitiObjectBase.channels | `channels`} that the objects must be associated with.
+     */
+    channels: string[],
+    /**
+     * A [JSON Schema](https://json-schema.org) that objects must satisfy.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
+     * property will be returned.
+     */
+    session?: GraffitiSessionBase,
+  ): GraffitiStream<GraffitiObject<Schema>>;
+
+  /**
+   * Returns a list of all {@link GraffitiObjectBase.channels | `channels`}
+   * that an {@link GraffitiObjectBase.actor | `actor`} has posted to.
+   * This is not very useful for most applications, but
+   * necessary for certain applications where a user wants a
+   * global view of all their Graffiti data or to debug
+   * channel usage.
+   *
+   * @group Utilities
+   *
+   * @returns A stream the {@link GraffitiObjectBase.channels | `channel`}s
+   * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
+   * The `lastModified` field is the time that the user last modified an
+   * object in that channel. The `count` field is the number of objects
+   * that the user has posted to that channel.
+   */
+  abstract listChannels(
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSessionBase,
-  ): Promise<GraffitiObjectBase>;
-
-  /**
-   * Returns a stream of objects that match the given [JSON Schema](https://json-schema.org)
-   * and are contained in at least one of the given `channels`.
-   *
-   * Objects are returned asynchronously as they are discovered but the stream
-   * will end once all objects that currently exist have been discovered.
-   * The functions must be polled again for new objects.
-   *
-   * These objects are fetched from the `pods` specified in the `session`,
-   * and a `webId` and `fetch` function may also be provided to retrieve
-   * access-controlled objects. See {@link GraffitiSessionBase} for more information.
-   *
-   * Error messages are returned in the stream rather than thrown
-   * to prevent one unstable pod from breaking the entire stream.
-   *
-   * @group Query Operations
-   */
-  abstract discover<Schema extends JSONSchema4>(
-    channels: string[],
-    schema: Schema,
-    session?: GraffitiSessionBase,
-  ): GraffitiStream<GraffitiObject<Schema>>;
-
-  /**
-   * Whenever the user makes changes or retrieves data, that data is streamed
-   * to "discoverLocalChanges". This makes apps reactive and prevents there from
-   * being any inconsistencies in the data.
-   * This discovery remains active until the user calls the "return" method on the
-   * iterator.
-   */
-  /**
-   * Takes the same inputs as {@link discover} however, this listens for
-   * updates made locally or fetched from other functions to provide a consistent
-   * user experience. For example,
-   * if a user creates a new object, the object will be streamed to this function
-   * and then to the user's UI.
-   * If a user refreshes one part of the UI, the object will be streamed to this
-   * function and then to the user's UI.
-   * It is intended to be used in conjunction with {@link discover}.
-   *
-   * Returns a stream of objects that match the given [JSON Schema](https://json-schema.org)
-   * and are contained in at least one of the given `channels`.
-   *
-   * Unlike {@link discover}, which queries external pods, this function listens
-   * for changes made locally via {@link put}, {@link patch}, and {@link delete}.
-   * Additionally, unlike {@link discover}, it does not return a one-time snapshot
-   * of objects, but rather streams object changes as they occur. This is useful
-   * for updating a UI in real-time without unnecessary polling.
-   *
-   * @group Query Operations
-   */
-  abstract synchronize<Schema extends JSONSchema4>(
-    channels: string[],
-    schema: Schema,
-    session?: GraffitiSessionBase,
-  ): AsyncGenerator<GraffitiObject<Schema>>;
-
-  /**
-   * Returns a list of all channels a user has posted to.
-   * This is likely not very useful for most applications, but
-   * necessary for certain applications where a user wants a
-   * global view of all their Graffiti data.
-   *
-   * Error messages are returned in the stream rather than thrown
-   * to prevent one unstable pod from breaking the entire stream.
-   *
-   * @group Utilities
-   */
-  abstract listChannels(session: GraffitiSessionBase): GraffitiStream<{
+  ): GraffitiStream<{
     channel: string;
     source: string;
     lastModified: Date;
@@ -290,16 +314,22 @@ export abstract class Graffiti {
   }>;
 
   /**
-   * Returns a list of all objects a user has posted that are
-   * not associated with any channel, i.e. orphaned objects.
-   * This is likely not very useful for most applications, but
+   * Returns a list of all {@link GraffitiObjectBase | objects} a user has posted that are
+   * not associated with any {@link GraffitiObjectBase.channels | `channel`}, i.e. orphaned objects.
+   * This is not very useful for most applications, but
    * necessary for certain applications where a user wants a
-   * global view of all their Graffiti data.
-   *
-   * Error messages are returned in the stream rather than thrown
-   * to prevent one unstable pod from breaking the entire stream.
+   * global view of all their Graffiti data or to debug
+   * channel usage.
    *
    * @group Utilities
+   *
+   * @returns A stream of the {@link GraffitiObjectBase.name | `name`}
+   * and {@link GraffitiObjectBase.source | `source`} of the orphaned objects
+   * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
+   * The {@link GraffitiObjectBase.lastModified | lastModified} field is the
+   * time that the user last modified the orphan and the
+   * {@link GraffitiObjectBase.tombstone | `tombstone`} field is `true`
+   * if the object has been deleted.
    */
   abstract listOrphans(session: GraffitiSessionBase): GraffitiStream<{
     name: string;
