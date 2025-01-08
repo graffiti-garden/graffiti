@@ -1,7 +1,7 @@
 import { it, expect } from "vitest";
-import type { UseGraffiti } from "../src/index";
+import type { GraffitiFactory } from "../src/index";
 
-export const locationTests = (useGraffiti: UseGraffiti) => {
+export const graffitiLocationTests = (useGraffiti: GraffitiFactory) => {
   it("url and location", async () => {
     const graffiti = useGraffiti();
     const location = {
