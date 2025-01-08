@@ -6,7 +6,7 @@ import type {
   GraffitiSessionBase,
   GraffitiPutObject,
   GraffitiStream,
-} from "./types";
+} from "./2-types";
 import type { JSONSchema4 } from "json-schema";
 
 /**
