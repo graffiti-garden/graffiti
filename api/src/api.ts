@@ -345,4 +345,4 @@ export abstract class Graffiti {
  * abstract, factory functions provide an easy way to
  * swap out different implementations.
  */
-export type UseGraffiti = () => Graffiti;
+export type GraffitiFactory = () => Graffiti;
