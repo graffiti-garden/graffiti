@@ -212,16 +212,35 @@ export abstract class Graffiti {
   ): Promise<GraffitiObjectBase>;
 
   /**
-   * Returns a stream of {@link GraffitiObjectBase | objects}
-   * that are contained in at least one of the given {@link GraffitiObjectBase.channels | `channels`}
-   * and match the given [JSON Schema](https://json-schema.org)
+   * Discovers objects created by any user that are contained
+   * in at least one of the given {@link GraffitiObjectBase.channels | `channels`}
+   * and match the given [JSON Schema](https://json-schema.org).
    *
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
    * The method must be polled again for new objects.
    *
+   * `discover` will not return objects that the {@link GraffitiObjectBase.actor | `actor`}
+   * is not {@link GraffitiObjectBase.allowed | `allowed`} to access.
+   * If the actor is not the creator of a discovered object,
+   * the allowed list will be masked to only contain the querying actor if the
+   * allowed list is not `undefined` (public). Additionally, if the actor is not the
+   * creator of a discovered object, any {@link GraffitiObjectBase.channels | `channels`}
+   * not specified by the `discover` operation will not be revealed. This masking happens
+   * before the supplied schema is applied.
+   *
+   * Since different implementations may fetch data from multiple sources there is
+   * no guarentee on the order that objects are returned in. Additionally, the operation
+   * may return objects that have been deleted but with a
+   * {@link GraffitiObjectBase.tombstone | `tombstone`} field set to `true` for
+   * cache invalidation purposes. Implementations must make aware when, if ever,
+   * tombstoned objects are removed.
+   *
    * {@link discover} can be used in conjunction with {@link synchronize}
    * to provide a responsive and consistent user experience.
+   *
+   * @returns A stream of objects that match the given {@link GraffitiObjectBase.channels | `channels`}
+   * and [JSON Schema](https://json-schema.org).
    *
    * @group Query Operations
    */
