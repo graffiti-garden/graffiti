@@ -7,6 +7,37 @@ export const graffitiSynchronizeTests = (
   useSession2: () => GraffitiSessionBase,
 ) => {
   describe("synchronize", () => {
+    it("get", async () => {
+      const graffiti1 = useGraffiti();
+      const session = useSession1();
+
+      const allChannels = ["channel", "other"];
+      const channels = [allChannels[0]];
+      const value = { hello: "world" };
+      const putted = await graffiti1.put(
+        {
+          value,
+          channels: allChannels,
+        },
+        session,
+      );
+
+      const graffiti2 = useGraffiti();
+      const next = graffiti2.synchronize(channels, {}).next();
+      const gotten = await graffiti2.get(putted, {}, session);
+
+      const result = (await next).value;
+      if (!result || result.error) {
+        throw new Error("Error in synchronize");
+      }
+      expect(result.value.value).toEqual(value);
+      expect(result.value.channels).toEqual(channels);
+      expect(result.value.tombstone).toBe(false);
+      expect(result.value.lastModified.getTime()).toEqual(
+        gotten.lastModified.getTime(),
+      );
+    });
+
     it("put", async () => {
       const graffiti = useGraffiti();
       const session = useSession1();
@@ -57,13 +88,13 @@ export const graffitiSynchronizeTests = (
       }
 
       expect(beforeResult.value.value).toEqual(oldValue);
-      expect(beforeResult.value.channels).toEqual(oldChannels);
+      expect(beforeResult.value.channels).toEqual([beforeChannel]);
       expect(beforeResult.value.tombstone).toBe(true);
       expect(afterResult.value.value).toEqual(newValue);
-      expect(afterResult.value.channels).toEqual(newChannels);
+      expect(afterResult.value.channels).toEqual([afterChannel]);
       expect(afterResult.value.tombstone).toBe(false);
       expect(sharedResult.value.value).toEqual(newValue);
-      expect(sharedResult.value.channels).toEqual(newChannels);
+      expect(sharedResult.value.channels).toEqual([sharedChannel]);
       expect(sharedResult.value.tombstone).toBe(false);
       expect(beforeResult.value.lastModified.getTime()).toEqual(
         afterResult.value.lastModified.getTime(),
@@ -135,18 +166,16 @@ export const graffitiSynchronizeTests = (
         throw new Error("Error in synchronize");
       }
 
-      console.log(afterResult);
-
       const newValue = { ...oldValue, something: "new value" };
       const newChannels = [sharedChannel, afterChannel];
       expect(beforeResult.value.value).toEqual(oldValue);
-      expect(beforeResult.value.channels).toEqual(oldChannels);
+      expect(beforeResult.value.channels).toEqual([beforeChannel]);
       expect(beforeResult.value.tombstone).toBe(true);
       expect(afterResult.value.value).toEqual(newValue);
-      expect(afterResult.value.channels).toEqual(newChannels);
+      expect(afterResult.value.channels).toEqual([afterChannel]);
       expect(afterResult.value.tombstone).toBe(false);
       expect(sharedResult.value.value).toEqual(newValue);
-      expect(sharedResult.value.channels).toEqual(newChannels);
+      expect(sharedResult.value.channels).toEqual([sharedChannel]);
       expect(sharedResult.value.tombstone).toBe(false);
       expect(beforeResult.value.lastModified.getTime()).toEqual(
         afterResult.value.lastModified.getTime(),
@@ -182,7 +211,57 @@ export const graffitiSynchronizeTests = (
       }
       expect(result.value.tombstone).toBe(true);
       expect(result.value.value).toEqual(oldValue);
-      expect(result.value.channels).toEqual(oldChannels);
+      expect(result.value.channels).toEqual(
+        channels.filter((c) => oldChannels.includes(c)),
+      );
+    });
+
+    it("not allowed", async () => {
+      const graffiti = useGraffiti();
+      const session1 = useSession1();
+      const session2 = useSession2();
+
+      const allChannels = ["channel", "other"];
+      const channels = [allChannels[0]];
+
+      const creatorNext = graffiti.synchronize(channels, {}, session1).next();
+      const allowedNext = graffiti.synchronize(channels, {}, session2).next();
+      const noSession = graffiti.synchronize(channels, {}).next();
+
+      const value = {
+        hello: "world",
+      };
+      const allowed = ["asdf", session2.actor];
+      await graffiti.put({ value, channels: allChannels, allowed }, session1);
+
+      // Expect no session to time out!
+      await expect(
+        Promise.race([
+          noSession,
+          new Promise((resolve, rejects) =>
+            setTimeout(rejects, 100, "Timeout"),
+          ),
+        ]),
+      ).rejects.toThrow("Timeout");
+
+      const creatorResult = (await creatorNext).value;
+      const allowedResult = (await allowedNext).value;
+
+      if (
+        !creatorResult ||
+        creatorResult.error ||
+        !allowedResult ||
+        allowedResult.error
+      ) {
+        throw new Error("Error in synchronize");
+      }
+
+      expect(creatorResult.value.value).toEqual(value);
+      expect(creatorResult.value.allowed).toEqual(allowed);
+      expect(creatorResult.value.channels).toEqual(allChannels);
+      expect(allowedResult.value.value).toEqual(value);
+      expect(allowedResult.value.allowed).toEqual([session2.actor]);
+      expect(allowedResult.value.channels).toEqual(channels);
     });
   });
 };
