@@ -10,6 +10,7 @@ import {
   GraffitiErrorPatchTestFailed,
   GraffitiErrorPatchError,
 } from "../src/index";
+import { randomPutObject, randomString } from "./utils";
 
 export const graffitiCRUDTests = (
   useGraffiti: GraffitiFactory,
@@ -23,7 +24,7 @@ export const graffitiCRUDTests = (
       const value = {
         something: "hello, world~ c:",
       };
-      const channels = ["world"];
+      const channels = [randomString(), randomString()];
 
       // Put the object
       const previous = await graffiti.put({ value, channels }, session);
@@ -210,8 +211,8 @@ export const graffitiCRUDTests = (
       const value = {
         um: "hi",
       };
-      const allowed = ["asdf"];
-      const channels = ["helloooo"];
+      const allowed = [randomString()];
+      const channels = [randomString()];
       const putted = await graffiti.put({ value, allowed, channels }, session1);
 
       // Get it with authenticated session
@@ -235,8 +236,8 @@ export const graffitiCRUDTests = (
       const value = {
         um: "hi",
       };
-      const allowed = ["asdf", session2.actor, "1234"];
-      const channels = ["helloooo"];
+      const allowed = [randomString(), session2.actor, randomString()];
+      const channels = [randomString()];
       const putted = await graffiti.put(
         {
           value,
@@ -337,17 +338,21 @@ export const graffitiCRUDTests = (
       const graffiti = useGraffiti();
       const session = useSession1();
 
+      const channelsBefore = [randomString()];
+      const channelsAfter = [randomString()];
+
       const putted = await graffiti.put(
-        { value: {}, channels: ["helloooo"] },
+        { value: {}, channels: channelsBefore },
         session,
       );
 
       const patch: GraffitiPatch = {
-        channels: [{ op: "replace", path: "/0", value: "goodbye" }],
+        channels: [{ op: "replace", path: "/0", value: channelsAfter[0] }],
       };
-      await graffiti.patch(patch, putted, session);
+      const patched = await graffiti.patch(patch, putted, session);
+      expect(patched.channels).toEqual(channelsBefore);
       const gotten = await graffiti.get(putted, {}, session);
-      expect(gotten.channels).toEqual(["goodbye"]);
+      expect(gotten.channels).toEqual(channelsAfter);
       await graffiti.delete(putted, session);
     });
 
@@ -406,13 +411,8 @@ export const graffitiCRUDTests = (
     it("invalid patch", async () => {
       const graffiti = useGraffiti();
       const session = useSession1();
-      const putted = await graffiti.put(
-        {
-          value: {},
-          channels: [],
-        },
-        session,
-      );
+      const object = randomPutObject();
+      const putted = await graffiti.put(object, session);
 
       await expect(
         graffiti.patch(
@@ -431,12 +431,9 @@ export const graffitiCRUDTests = (
     it("patch channels to be wrong", async () => {
       const graffiti = useGraffiti();
       const session = useSession1();
-      const value = {
-        original: "value",
-      };
-      const channels = ["original-channel"];
-      const allowed = ["original-allowed"];
-      const putted = await graffiti.put({ value, channels, allowed }, session);
+      const object = randomPutObject();
+      object.allowed = [randomString()];
+      const putted = await graffiti.put(object, session);
 
       const patches: GraffitiPatch[] = [
         {
@@ -475,9 +472,9 @@ export const graffitiCRUDTests = (
       }
 
       const gotten = await graffiti.get(putted, {}, session);
-      expect(gotten.value).toEqual(value);
-      expect(gotten.channels).toEqual(channels);
-      expect(gotten.allowed).toEqual(allowed);
+      expect(gotten.value).toEqual(object.value);
+      expect(gotten.channels).toEqual(object.channels);
+      expect(gotten.allowed).toEqual(object.allowed);
       expect(gotten.lastModified.getTime()).toEqual(
         putted.lastModified.getTime(),
       );
