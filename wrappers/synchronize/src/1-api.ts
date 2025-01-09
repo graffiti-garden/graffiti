@@ -131,10 +131,10 @@ export abstract class Graffiti {
    * If no object exists at that location or if the retrieving
    * {@link GraffitiObjectBase.actor | `actor`} is not the creator or included in
    * the object's {@link GraffitiObjectBase.allowed | `allowed`} property,
-   * an error is thrown.
+   * a {@link GraffitiErrorNotFound} is thrown.
    *
    * The retrieved object is also type-checked against the provided [JSON schema](https://json-schema.org/)
-   * otherwise an error is thrown.
+   * otherwise a {@link GraffitiErrorSchemaMismatch} is thrown.
    *
    * @group CRUD Operations
    */
@@ -190,6 +190,9 @@ export abstract class Graffiti {
    * Deletes an object from a given location.
    * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
+   *
+   * If the object does not exist or has already been deleted,
+   * {@link GraffitiErrorNotFound} is thrown.
    *
    * @returns The object that was deleted if one exists or an object with
    * with a `null` {@link GraffitiObjectBase.value | `value`} otherwise.
