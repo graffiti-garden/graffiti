@@ -1,5 +1,7 @@
 import { it, expect, describe } from "vitest";
 import { type GraffitiFactory, type GraffitiSessionBase } from "../src/index";
+import { randomPutObject, randomString } from "./utils";
+import { randomInt } from "crypto";
 
 export const graffitiSynchronizeTests = (
   useGraffiti: GraffitiFactory,
@@ -11,16 +13,9 @@ export const graffitiSynchronizeTests = (
       const graffiti1 = useGraffiti();
       const session = useSession1();
 
-      const allChannels = ["channel", "other"];
-      const channels = [allChannels[0]];
-      const value = { hello: "world" };
-      const putted = await graffiti1.put(
-        {
-          value,
-          channels: allChannels,
-        },
-        session,
-      );
+      const object = randomPutObject();
+      const channels = object.channels.slice(1);
+      const putted = await graffiti1.put(object, session);
 
       const graffiti2 = useGraffiti();
       const next = graffiti2.synchronize(channels, {}).next();
@@ -30,7 +25,7 @@ export const graffitiSynchronizeTests = (
       if (!result || result.error) {
         throw new Error("Error in synchronize");
       }
-      expect(result.value.value).toEqual(value);
+      expect(result.value.value).toEqual(object.value);
       expect(result.value.channels).toEqual(channels);
       expect(result.value.tombstone).toBe(false);
       expect(result.value.lastModified.getTime()).toEqual(
@@ -42,9 +37,9 @@ export const graffitiSynchronizeTests = (
       const graffiti = useGraffiti();
       const session = useSession1();
 
-      const beforeChannel = "before";
-      const afterChannel = "after";
-      const sharedChannel = "shared";
+      const beforeChannel = randomString();
+      const afterChannel = randomString();
+      const sharedChannel = randomString();
 
       const oldValue = { hello: "world" };
       const oldChannels = [beforeChannel, sharedChannel];
@@ -108,9 +103,9 @@ export const graffitiSynchronizeTests = (
       const graffiti = useGraffiti();
       const session = useSession1();
 
-      const beforeChannel = "before";
-      const afterChannel = "after";
-      const sharedChannel = "shared";
+      const beforeChannel = randomString();
+      const afterChannel = randomString();
+      const sharedChannel = randomString();
 
       const oldValue = { hello: "world" };
       const oldChannels = [beforeChannel, sharedChannel];
@@ -189,10 +184,10 @@ export const graffitiSynchronizeTests = (
       const graffiti = useGraffiti();
       const session = useSession1();
 
-      const channels = ["a", "b", "c"];
+      const channels = [randomString(), randomString(), randomString()];
 
       const oldValue = { hello: "world" };
-      const oldChannels = ["d", ...channels.slice(1)];
+      const oldChannels = [randomString(), ...channels.slice(1)];
       const putted = await graffiti.put(
         {
           value: oldValue,
@@ -221,8 +216,8 @@ export const graffitiSynchronizeTests = (
       const session1 = useSession1();
       const session2 = useSession2();
 
-      const allChannels = ["channel", "other"];
-      const channels = [allChannels[0]];
+      const allChannels = [randomString(), randomString(), randomString()];
+      const channels = allChannels.slice(1);
 
       const creatorNext = graffiti.synchronize(channels, {}, session1).next();
       const allowedNext = graffiti.synchronize(channels, {}, session2).next();
@@ -231,7 +226,7 @@ export const graffitiSynchronizeTests = (
       const value = {
         hello: "world",
       };
-      const allowed = ["asdf", session2.actor];
+      const allowed = [randomString(), session2.actor];
       await graffiti.put({ value, channels: allChannels, allowed }, session1);
 
       // Expect no session to time out!
