@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "The heart of Graffiti",
   "type": "module",
   "main": "src/index.ts",
@@ -17,7 +17,8 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "docs": "typedoc --options typedoc.json"
+    "docs": "typedoc --options typedoc.json",
+    "prepublishOnly": "npm install"
   },
   "repository": {
     "type": "git",
