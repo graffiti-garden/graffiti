@@ -249,6 +249,5 @@ export type GraffitiStream<T> = AsyncGenerator<
       value: Error;
       source: string;
     },
-  void,
   void
 >;
