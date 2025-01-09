@@ -7,6 +7,8 @@ import {
   GraffitiErrorSchemaMismatch,
   GraffitiErrorInvalidSchema,
   GraffitiErrorForbidden,
+  GraffitiErrorPatchTestFailed,
+  GraffitiErrorPatchError,
 } from "../src/index";
 
 export const graffitiCRUDTests = (
@@ -305,5 +307,137 @@ export const graffitiCRUDTests = (
     const gotten = await graffiti.get(putted, {}, session);
     expect(gotten.channels).toEqual(["goodbye"]);
     await graffiti.delete(putted, session);
+  });
+
+  it("patch 'increment' with test", async () => {
+    const graffiti = useGraffiti();
+    const session = useSession1();
+
+    const putted = await graffiti.put(
+      {
+        value: {
+          counter: 1,
+        },
+        channels: [],
+      },
+      session,
+    );
+
+    const previous = await graffiti.patch(
+      {
+        value: [
+          { op: "test", path: "/counter", value: 1 },
+          { op: "replace", path: "/counter", value: 2 },
+        ],
+      },
+      putted,
+      session,
+    );
+    expect(previous.value).toEqual({ counter: 1 });
+    const result = await graffiti.get(previous, {
+      properties: {
+        value: {
+          properties: {
+            counter: {
+              type: "integer",
+            },
+          },
+        },
+      },
+    });
+    expect(result.value.counter).toEqual(2);
+
+    await expect(
+      graffiti.patch(
+        {
+          value: [
+            { op: "test", path: "/counter", value: 1 },
+            { op: "replace", path: "/counter", value: 3 },
+          ],
+        },
+        putted,
+        session,
+      ),
+    ).rejects.toThrow(GraffitiErrorPatchTestFailed);
+  });
+
+  it("invalid patch", async () => {
+    const graffiti = useGraffiti();
+    const session = useSession1();
+    const putted = await graffiti.put(
+      {
+        value: {},
+        channels: [],
+      },
+      session,
+    );
+
+    await expect(
+      graffiti.patch(
+        {
+          value: [
+            { op: "add", path: "/root", value: [] },
+            { op: "add", path: "/root/2", value: 2 }, // out of bounds
+          ],
+        },
+        putted,
+        session,
+      ),
+    ).rejects.toThrow(GraffitiErrorPatchError);
+  });
+
+  it("patch channels to be wrong", async () => {
+    const graffiti = useGraffiti();
+    const session = useSession1();
+    const value = {
+      original: "value",
+    };
+    const channels = ["original-channel"];
+    const allowed = ["original-allowed"];
+    const putted = await graffiti.put({ value, channels, allowed }, session);
+
+    const patches: GraffitiPatch[] = [
+      {
+        channels: [{ op: "replace", path: "", value: null }],
+      },
+      {
+        channels: [{ op: "replace", path: "", value: {} }],
+      },
+      {
+        channels: [{ op: "replace", path: "", value: ["hello", ["hi"]] }],
+      },
+      {
+        channels: [{ op: "add", path: "/0", value: 1 }],
+      },
+      {
+        value: [{ op: "replace", path: "", value: "not an object" }],
+      },
+      {
+        value: [{ op: "replace", path: "", value: null }],
+      },
+      {
+        value: [{ op: "replace", path: "", value: [] }],
+      },
+      {
+        allowed: [{ op: "replace", path: "", value: {} }],
+      },
+      {
+        allowed: [{ op: "replace", path: "", value: ["hello", ["hi"]] }],
+      },
+    ];
+
+    for (const patch of patches) {
+      await expect(graffiti.patch(patch, putted, session)).rejects.toThrow(
+        GraffitiErrorPatchError,
+      );
+    }
+
+    const gotten = await graffiti.get(putted, {}, session);
+    expect(gotten.value).toEqual(value);
+    expect(gotten.channels).toEqual(channels);
+    expect(gotten.allowed).toEqual(allowed);
+    expect(gotten.lastModified.getTime()).toEqual(
+      putted.lastModified.getTime(),
+    );
   });
 };
