@@ -1,8 +1,12 @@
 import { it, expect } from "vitest";
-import type {
-  GraffitiFactory,
-  GraffitiSessionBase,
-  GraffitiPatch,
+import {
+  type GraffitiFactory,
+  type GraffitiSessionBase,
+  type GraffitiPatch,
+  GraffitiErrorNotFound,
+  GraffitiErrorSchemaMismatch,
+  GraffitiErrorInvalidSchema,
+  GraffitiErrorForbidden,
 } from "../src/index";
 
 export const graffitiCRUDTests = (
@@ -71,7 +75,45 @@ export const graffitiCRUDTests = (
     );
 
     // Try to get it and fail
-    await expect(graffiti.get(afterReplaced, {})).rejects.toThrow();
+    await expect(graffiti.get(afterReplaced, {})).rejects.toThrow(
+      GraffitiErrorNotFound,
+    );
+  });
+
+  it("put, get, delete with wrong actor", async () => {
+    const graffiti = useGraffiti();
+    const session1 = useSession1();
+    const session2 = useSession2();
+
+    await expect(
+      graffiti.put(
+        { value: {}, channels: [], actor: session2.actor },
+        session1,
+      ),
+    ).rejects.toThrow(GraffitiErrorForbidden);
+
+    await expect(
+      graffiti.delete(
+        {
+          name: "asdf",
+          source: "asdf",
+          actor: session2.actor,
+        },
+        session1,
+      ),
+    ).rejects.toThrow(GraffitiErrorForbidden);
+
+    await expect(
+      graffiti.patch(
+        {},
+        {
+          name: "asdf",
+          source: "asdf",
+          actor: session2.actor,
+        },
+        session1,
+      ),
+    ).rejects.toThrow(GraffitiErrorForbidden);
   });
 
   it("put and get with schema", async () => {
@@ -111,7 +153,24 @@ export const graffitiCRUDTests = (
     expect(gotten.value.another).toEqual(goodValue.another);
   });
 
-  it("put and get with bad schema", async () => {
+  it("put and get with invalid schema", async () => {
+    const graffiti = useGraffiti();
+    const session = useSession1();
+
+    const putted = await graffiti.put({ value: {}, channels: [] }, session);
+    await expect(
+      graffiti.get(putted, {
+        properties: {
+          value: {
+            //@ts-ignore
+            type: "asdf",
+          },
+        },
+      }),
+    ).rejects.toThrow(GraffitiErrorInvalidSchema);
+  });
+
+  it("put and get with wrong schema", async () => {
     const graffiti = useGraffiti();
     const session = useSession1();
 
@@ -137,7 +196,7 @@ export const graffitiCRUDTests = (
           },
         },
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(GraffitiErrorSchemaMismatch);
   });
 
   it("put and get with empty access control", async () => {
