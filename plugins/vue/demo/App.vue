@@ -79,6 +79,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
 </script>
 
 <template>
+    <h1>Graffiti Vue Wrapper Demo</h1>
     <div v-if="session">
         Logged in as: {{ session.actor }}
         <button @click="graffiti.logout(session)">Log out</button>
