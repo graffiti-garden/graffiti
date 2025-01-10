@@ -4,9 +4,9 @@ import {
   graffitiSynchronizeTests,
   graffitiDiscoverTests,
 } from "@graffiti-garden/api/tests";
-import { GraffitiPouchDb } from "./index";
+import { GraffitiPouchDB } from "./index";
 
-const useGraffiti = () => new GraffitiPouchDb();
+const useGraffiti = () => new GraffitiPouchDB();
 const useSession1 = () => ({ actor: "someone" });
 const useSession2 = () => ({ actor: "someoneelse" });
 
