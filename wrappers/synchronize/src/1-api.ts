@@ -26,10 +26,10 @@ import type { JSONSchema4 } from "json-schema";
  * other important properties (e.g. privacy, security, scalability), those properties
  * are useless if the system as a whole is unusable. Build APIs before protocols!
  *
- * The first group of methods are like standard CRUD operations that
+ * The first group of methods are like standard CRUD methods that
  * allow applications to {@link put}, {@link get}, {@link patch}, and {@link delete}
  * {@link GraffitiObjectBase} objects. The main difference between these
- * methods and standard database operations is that an {@link GraffitiObjectBase.actor | `actor`}
+ * methods and standard database methods is that an {@link GraffitiObjectBase.actor | `actor`}
  * (essentially a user) can only modify objects that they created.
  * Applications may also specify an an array of actors that are {@link GraffitiObjectBase.allowed | `allowed`}
  * to access the object and an array of {@link GraffitiObjectBase.channels | `channels`}
@@ -51,10 +51,10 @@ import type { JSONSchema4 } from "json-schema";
  * Finally, other utility functions provide simple type conversions and
  * allow users to find objects "lost" to forgotten or misspelled channels.
  *
- * @groupDescription CRUD Operations
+ * @groupDescription CRUD Methods
  * Methods for {@link put | creating}, {@link get | reading}, {@link patch | updating},
  * and {@link delete | deleting} {@link GraffitiObjectBase | Graffiti objects}.
- * @groupDescription Query Operations
+ * @groupDescription Query Methods
  * Methods for retrieving multiple {@link GraffitiObjectBase | Graffiti objects} at a time.
  * @groupDescription Utilities
  * Methods for for converting Graffiti objects to and from URIs
@@ -103,20 +103,20 @@ export abstract class Graffiti {
    * and {@link GraffitiObjectBase.source | `source`}) exactly match the location of an existing object.
    *
    * @returns The object that was replaced if one exists or an object with
-   * with a `null` {@link GraffitiObjectBase.value | `value`} if this operation
+   * with a `null` {@link GraffitiObjectBase.value | `value`} if this method
    * created a new object.
    * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
    * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
    * field updated to the time of replacement/creation.
    *
-   * @group CRUD Operations
+   * @group CRUD Methods
    */
   abstract put<Schema>(
     /**
      * The object to be put. This object is statically type-checked against the [JSON schema](https://json-schema.org/) that can be optionally provided
      * as the generic type parameter. We highly recommend providing a schema to
      * ensure that the PUT object matches subsequent {@link get} or {@link discover}
-     * operations.
+     * methods.
      */
     object: GraffitiPutObject<Schema>,
     /**
@@ -136,7 +136,7 @@ export abstract class Graffiti {
    * The retrieved object is also type-checked against the provided [JSON schema](https://json-schema.org/)
    * otherwise a {@link GraffitiErrorSchemaMismatch} is thrown.
    *
-   * @group CRUD Operations
+   * @group CRUD Methods
    */
   abstract get<Schema extends JSONSchema4>(
     /**
@@ -167,7 +167,7 @@ export abstract class Graffiti {
    * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
    * field updated to the time of deletion.
    *
-   * @group CRUD Operations
+   * @group CRUD Methods
    */
   abstract patch(
     /**
@@ -200,7 +200,7 @@ export abstract class Graffiti {
    * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
    * field updated to the time of deletion.
    *
-   * @group CRUD Operations
+   * @group CRUD Methods
    */
   abstract delete(
     /**
@@ -229,11 +229,11 @@ export abstract class Graffiti {
    * the allowed list will be masked to only contain the querying actor if the
    * allowed list is not `undefined` (public). Additionally, if the actor is not the
    * creator of a discovered object, any {@link GraffitiObjectBase.channels | `channels`}
-   * not specified by the `discover` operation will not be revealed. This masking happens
+   * not specified by the `discover` method will not be revealed. This masking happens
    * before the supplied schema is applied.
    *
    * Since different implementations may fetch data from multiple sources there is
-   * no guarentee on the order that objects are returned in. Additionally, the operation
+   * no guarentee on the order that objects are returned in. Additionally, the method
    * may return objects that have been deleted but with a
    * {@link GraffitiObjectBase.tombstone | `tombstone`} field set to `true` for
    * cache invalidation purposes. Implementations must make aware when, if ever,
@@ -245,7 +245,7 @@ export abstract class Graffiti {
    * @returns A stream of objects that match the given {@link GraffitiObjectBase.channels | `channels`}
    * and [JSON Schema](https://json-schema.org).
    *
-   * @group Query Operations
+   * @group Query Methods
    */
   abstract discover<Schema extends JSONSchema4>(
     /**
@@ -286,7 +286,7 @@ export abstract class Graffiti {
    * all instance's of that friend's name in the user's application instantly,
    * providing a consistent user experience.
    *
-   * @group Query Operations
+   * @group Query Methods
    */
   abstract synchronize<Schema extends JSONSchema4>(
     /**

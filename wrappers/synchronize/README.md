@@ -24,7 +24,7 @@ npx http-server
 ## Testing
 
 We have written a number of unit tests to verify implementations of the API with [vitest](https://vitest.dev/).
-Use them as follows:
+To use them, create a test file in that ends in `*.spec.ts` and format it as follows:
 
 ```typescript
 import { graffitiCRUDTests } from "@graffiti-garden/api/tests";
@@ -40,7 +40,7 @@ const useSession2 = () => ({ actor: "someoneelse" });
 graffitiCRUDTests(useGraffiti, useSession1, useSession2);
 ```
 
-Then run the tests with:
+Then run the tests in the root of your directory with:
 
 ```bash
 npx vitest
