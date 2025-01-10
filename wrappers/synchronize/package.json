@@ -1,7 +1,7 @@
 {
   "name": "@graffiti-garden/implementation-pouchdb",
   "version": "0.0.1",
-  "description": "A local implementation of the Graffiti API",
+  "description": "An implementation of the Graffiti API using PouchDB",
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -16,8 +16,9 @@
   },
   "files": [
     "src",
+    "dist",
     "package.json",
-    "tsconfig.json"
+    "README.md"
   ],
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
