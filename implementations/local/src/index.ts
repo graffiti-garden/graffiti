@@ -34,6 +34,15 @@ export interface GraffitiPouchDBOptions {
   pouchDBOptions?: PouchDB.Configuration.DatabaseConfiguration;
 }
 
+function locationMap(doc: GraffitiLocation & { tombstone: boolean }) {
+  const uri = `${doc.source}/${encodeURIComponent(doc.actor)}/${encodeURIComponent(doc.name)}/${doc.tombstone ? "0" : "1"}`;
+  if (typeof emit === "function") {
+    emit(uri);
+  } else {
+    return uri;
+  }
+}
+
 export class GraffitiPouchDB extends GraffitiSynchronized {
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
   protected readonly sessionDb: PouchDB.Database<GraffitiSession>;
@@ -52,16 +61,18 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       pouchDbOptions.name,
       pouchDbOptions,
     );
-    this.db.createIndex({
-      index: {
-        fields: ["lastModified"],
-      },
-    });
-    const sessionDbName = pouchDbOptions.name + "Session";
-    this.sessionDb = new PouchDB<GraffitiSession>(sessionDbName, {
-      ...pouchDbOptions,
-      name: sessionDbName,
-    });
+
+    // @ts-ignore
+    // this.db.put({
+    //   _id: "_design/my-index8",
+    //   views: {
+    //     byLocation: {
+    //       map: locationMap.toString(),
+    //     },
+    //   },
+    // });
+
+    this.sessionDb = new PouchDB<GraffitiSession>("graffitiSession");
 
     // Look for any existing sessions
     const sessionRestorer = async () => {
@@ -85,31 +96,53 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     sessionRestorer();
   }
 
+  protected async queryByLocation(location: GraffitiLocation) {
+    const results = await this.db.query<GraffitiObjectBase>(
+      "my-index8/byLocation",
+      {
+        key: locationMap({ ...location, tombstone: false }),
+        include_docs: true,
+      },
+    );
+    const docs = results.rows
+      .map((row) => row.doc)
+      // Remove undefined docs
+      .reduce<
+        PouchDB.Core.ExistingDocument<
+          GraffitiObjectBase & PouchDB.Core.AllDocsMeta
+        >[]
+      >((acc, doc) => {
+        if (doc) acc.push(doc);
+        return acc;
+      }, []);
+    // Correct the date
+    docs.forEach((doc) => (doc.lastModified = new Date(doc.lastModified)));
+    return docs;
+  }
+
   protected _get: Graffiti["get"] = async (...args) => {
     const [locationOrUri, schema, session] = args;
     const { location } = unpackLocationOrUri(locationOrUri);
-    const result = await this.db.find({
-      selector: {
-        lastModified: { $exists: true },
-        tombstone: false,
-        name: location.name,
-        actor: location.actor,
-        source: location.source,
-        ...allowedSelector(session),
-      },
-      sort: [
-        {
-          lastModified: "desc", // TODO: direction
-        },
-      ],
-      limit: 1,
-    });
-    if (result.docs.length === 0) {
+
+    const docs = await this.queryByLocation(location);
+    if (!docs.length) throw new GraffitiErrorNotFound();
+
+    // Get the most recent document
+    const doc = docs.reduce((a, b) =>
+      a.lastModified > b.lastModified ? a : b,
+    );
+
+    // Check if it is allowed
+    if (
+      doc.allowed !== undefined &&
+      (!session?.actor ||
+        (doc.actor !== session.actor && !doc.allowed.includes(session.actor)))
+    ) {
       throw new GraffitiErrorNotFound();
     }
-    const { _id, _rev, ...object } = result.docs[0];
-    // Correct the date
-    object.lastModified = new Date(object.lastModified);
+
+    // Strip out the _id and _rev
+    const { _id, _rev, ...object } = doc;
 
     // Mask out the allowed list and channels
     // if the user is not the owner
@@ -126,25 +159,15 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     location: GraffitiLocation,
     modifiedBefore?: Date,
   ) {
-    const existingDocResult = await this.db.find({
-      selector: {
-        lastModified: modifiedBefore
-          ? { $lt: modifiedBefore }
-          : { $exists: true },
-        tombstone: false,
-        name: location.name,
-        actor: location.actor,
-        source: location.source,
-      },
-      sort: [
-        {
-          lastModified: "desc", // TODO: direction
-        },
-      ],
-      limit: 1,
-    });
-    if (existingDocResult.docs.length === 0) return;
-    const existingDoc = existingDocResult.docs[0];
+    const docs = (await this.queryByLocation(location)).filter(
+      (doc) => !modifiedBefore || doc.lastModified < modifiedBefore,
+    );
+    if (!docs.length) return;
+
+    // Get the oldest one
+    const existingDoc = docs.reduce((a, b) =>
+      a.lastModified < b.lastModified ? a : b,
+    );
 
     // Change it's tombstone to true
     // and update it's timestamp
@@ -153,7 +176,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       tombstone: true,
       lastModified: modifiedBefore ?? new Date(),
     };
-    await this.db.post(deletedDoc);
+    await this.db.put(deletedDoc);
     const { _id, _rev, ...deletedObject } = deletedDoc;
     return deletedObject;
   }
