@@ -146,7 +146,7 @@ export type GraffitiLocation = Pick<
  * {@link GraffitiObjectBase.name | `name`}, and {@link GraffitiObjectBase.source | `source`}.
  * If the location provided exactly matches an existing object, the existing object will be replaced.
  * If no `name` is provided, one will be randomly generated.
- * If no `actor` is provided, the `actor` from the supplied {@link GraffitiSessionBase | `session` } will be used.
+ * If no `actor` is provided, the `actor` from the supplied {@link GraffitiSession | `session` } will be used.
  * If no `source` is provided, one may be inferred by the depending on implementation.
  *
  * This object does not need a {@link GraffitiObjectBase.lastModified | `lastModified`} or {@link GraffitiObjectBase.tombstone | `tombstone`}
@@ -168,7 +168,7 @@ export type GraffitiPutObject<Schema> = Pick<
  * that modify objects and optional for methods that read objects.
  *
  * At a minimum the `session` object must contain the
- * {@link GraffitiSessionBase.actor | `actor`} URI the user wants to authenticate with.
+ * {@link GraffitiSession.actor | `actor`} URI the user wants to authenticate with.
  * However it is likely that the `session` object must contain other
  * implementation-specific properties.
  * For example, a Solid implementation might include a
@@ -179,7 +179,7 @@ export type GraffitiPutObject<Schema> = Pick<
  * It may also include other implementation specific properties
  * that provide hints for performance or security.
  */
-export interface GraffitiSessionBase {
+export interface GraffitiSession {
   /**
    * The {@link GraffitiObjectBase.actor | `actor`} a user wants to authenticate with.
    */
@@ -241,13 +241,45 @@ export interface GraffitiPatch {
  */
 export type GraffitiStream<T> = AsyncGenerator<
   | {
-      error: false;
+      error?: undefined;
       value: T;
     }
   | {
-      error: true;
-      value: Error;
+      error: Error;
       source: string;
     },
   void
 >;
+
+/**
+ * The event type produced in {@link Graffiti.sessionEvents}
+ * when a user logs in manually from {@link Graffiti.login}
+ * or when their session is restored from a previous login.
+ * The event name to listen for is `login`.
+ */
+export type GraffitiLoginEvent = CustomEvent<
+  {
+    state?: string;
+  } & (
+    | {
+        error: Error;
+        session?: undefined;
+      }
+    | {
+        error?: undefined;
+        session: GraffitiSession;
+      }
+  )
+>;
+
+/**
+ * The event type produced in {@link Graffiti.sessionEvents}
+ * when a user logs out either manually with {@link Graffiti.logout}
+ * or when their session times out or otherwise becomes invalid.
+ * The event name to listen for is `logout`.
+ */
+export type GraffitiLogoutEvent = CustomEvent<{
+  actor: string;
+  state?: string;
+  error?: Error;
+}>;

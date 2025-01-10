@@ -1,7 +1,7 @@
 import { it, expect, describe } from "vitest";
 import {
   type GraffitiFactory,
-  type GraffitiSessionBase,
+  type GraffitiSession,
   type GraffitiPatch,
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
@@ -14,8 +14,8 @@ import { randomPutObject, randomString } from "./utils";
 
 export const graffitiCRUDTests = (
   useGraffiti: GraffitiFactory,
-  useSession1: () => GraffitiSessionBase,
-  useSession2: () => GraffitiSessionBase,
+  useSession1: () => GraffitiSession,
+  useSession2: () => GraffitiSession,
 ) => {
   describe("CRUD", () => {
     it("put, get, delete", async () => {

@@ -1,12 +1,12 @@
 import { it, expect, describe } from "vitest";
-import { type GraffitiFactory, type GraffitiSessionBase } from "../src/index";
+import { type GraffitiFactory, type GraffitiSession } from "../src/index";
 import { randomPutObject, randomString } from "./utils";
 import { randomInt } from "crypto";
 
 export const graffitiSynchronizeTests = (
   useGraffiti: GraffitiFactory,
-  useSession1: () => GraffitiSessionBase,
-  useSession2: () => GraffitiSessionBase,
+  useSession1: () => GraffitiSession,
+  useSession2: () => GraffitiSession,
 ) => {
   describe("synchronize", () => {
     it("get", async () => {
