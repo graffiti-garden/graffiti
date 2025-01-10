@@ -56,6 +56,8 @@ import type { JSONSchema4 } from "json-schema";
  * and {@link delete | deleting} {@link GraffitiObjectBase | Graffiti objects}.
  * @groupDescription Query Methods
  * Methods for retrieving multiple {@link GraffitiObjectBase | Graffiti objects} at a time.
+ * @groupDescription Session Management
+ * Methods and properties for logging in and out of a Graffiti implementation.
  * @groupDescription Utilities
  * Methods for for converting Graffiti objects to and from URIs
  * and for finding lost objects.
@@ -366,14 +368,16 @@ export abstract class Graffiti {
    * so it should always be called in response to a user action.
    *
    * The {@link GraffitiSession | session} object is returned
-   * asynchronously via the {@link Graffiti.sessionEvents | sessionEvents}
-   * event target as a {@link GraffitiLoginEvent}.
+   * asynchronously via {@link Graffiti.sessionEvents | sessionEvents}
+   * as a {@link GraffitiLoginEvent}.
+   *
+   * @group Session Management
    */
   abstract login(
     /**
      * An optional actor to prompt the user to login as. For example,
      * if a session expired and the user is trying to reauthenticate,
-     * or if the user entered their username in a login form.
+     * or if the user entered their username in an application-side login form.
      *
      * If not provided, the implementation should prompt the user to
      * supply an actor ID along with their other login information
@@ -394,9 +398,11 @@ export abstract class Graffiti {
    * involve redirecting the user to a logout page or opening a popup,
    * so it should always be called in response to a user action.
    *
-   * A confirmation will be returned asynchronously via the
-   * {@link Graffiti.sessionEvents | sessionEvents} event target
+   * A confirmation will be returned asynchronously via
+   * {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLogoutEvent}.
+   *
+   * @group Session Management
    */
   abstract logout(
     /**
@@ -416,6 +422,8 @@ export abstract class Graffiti {
    * and `logout` events. They are custom events of types
    * {@link GraffitiLoginEvent`} and {@link GraffitiLogoutEvent }
    * respectively.
+   *
+   * @group Session Management
    */
   abstract readonly sessionEvents: EventTarget;
 }
