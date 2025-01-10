@@ -1,9 +1,0 @@
-{
-  "entryPoints": ["src/index.ts"],
-  "sort": ["source-order"],
-  "cname": "api.graffiti.garden",
-  "titleLink": "/classes/Graffiti.html",
-  "readme": "none",
-  "searchInDocuments": true,
-  "searchInComments": true
-}
