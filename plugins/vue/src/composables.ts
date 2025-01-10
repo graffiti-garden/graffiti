@@ -1,4 +1,5 @@
 import {
+  inject,
   onScopeDispose,
   ref,
   toValue,
@@ -9,22 +10,38 @@ import type {
   GraffitiObject,
   GraffitiSession,
   JSONSchema4,
-} from "@graffiti-garden/client-core";
-import { useGraffiti } from "@graffiti-garden/client-core";
-import { useGraffitiSession } from "./session";
+} from "@graffiti-garden/api";
+import { useGraffiti, useGraffitiSession } from "./injections";
 
-export function useDiscover<Schema extends JSONSchema4>(
+/**
+ * A reactive version of the [`Graffiti.discover`](https://api.graffiti.garden/classes/Graffiti.html#discover)
+ * method.
+ *
+ * @returns An object containing
+ * - `results`: a reactive array of Graffiti objects
+ * - `poll`: a method to poll for new results
+ * - `isPolling`: a boolean ref indicating if the poll is currently running
+ */
+export function useGraffitiDiscover<Schema extends JSONSchema4>(
+  /**
+   * A list of channels to discover objects from.
+   * It may be a Vue ref or getter.
+   */
   channels: MaybeRefOrGetter<string[]>,
+  /**
+   * A [JSON Schema](https://json-schema.org/) object describing the schema
+   * of the objects to discover. All other objects will be filtered out
+   * and the output will be typed as `GraffitiObject<Schema>`.
+   */
   schema: MaybeRefOrGetter<Schema>,
+  /**
+   * A Graffiti session object. If not provided, the
+   * global plugin session will be used.
+   */
   session?: MaybeRefOrGetter<GraffitiSession>,
-  options?: MaybeRefOrGetter<
-    | {
-        ifModifiedSince?: Date;
-      }
-    | undefined
-  >,
 ) {
   const graffiti = useGraffiti();
+  const sessionInjected = useGraffitiSession();
 
   const results = ref<(GraffitiObject<Schema> & { tombstone: false })[]>([]);
   const resultsRaw = new Map<string, GraffitiObject<Schema>>();
@@ -41,29 +58,39 @@ export function useDiscover<Schema extends JSONSchema4>(
   }
 
   function onValue(value: GraffitiObject<Schema>) {
-    const url = graffiti.objectToUrl(value);
+    const url = graffiti.objectToUri(value);
     const existing = resultsRaw.get(url);
-    if (existing && existing.lastModified >= value.lastModified) return;
+    if (
+      existing &&
+      (existing.lastModified > value.lastModified ||
+        (existing.lastModified.getTime() === value.lastModified.getTime() &&
+          !existing.tombstone))
+    ) {
+      return;
+    }
     resultsRaw.set(url, value);
   }
 
   const channelsGetter = () => toValue(channels);
   const schemaGetter = () => toValue(schema);
-  const sessionGetter = () => toValue(session) ?? useGraffitiSession().value;
-  const optionsGetter = () => toValue(options);
+  const sessionGetter = () => toValue(session) ?? sessionInjected?.value;
 
   let localIterator:
-    | ReturnType<typeof graffiti.discoverLocalChanges<Schema>>
+    | ReturnType<typeof graffiti.synchronize<Schema>>
     | undefined = undefined;
   async function pollLocalModifications() {
     localIterator?.return();
-    localIterator = graffiti.discoverLocalChanges(
+    localIterator = graffiti.synchronize(
       channelsGetter(),
       schemaGetter(),
-      optionsGetter(),
+      sessionGetter(),
     );
     for await (const value of localIterator) {
-      onValue(value);
+      if (value.error) {
+        console.error(value.error);
+        continue;
+      }
+      onValue(value.value);
       flattenResults();
     }
   }
@@ -76,11 +103,10 @@ export function useDiscover<Schema extends JSONSchema4>(
     isPolling.value = true;
 
     try {
-      iterator = useGraffiti().discover(
+      iterator = graffiti.discover(
         channelsGetter(),
         schemaGetter(),
         sessionGetter(),
-        optionsGetter(),
       );
     } catch (e) {
       console.error(e);
@@ -91,7 +117,7 @@ export function useDiscover<Schema extends JSONSchema4>(
 
     for await (const result of iterator) {
       if (result.error) {
-        console.error(result.message);
+        console.error(result.error);
         continue;
       }
       onValue(result.value);
@@ -102,7 +128,7 @@ export function useDiscover<Schema extends JSONSchema4>(
   }
 
   watch(
-    [channelsGetter, schemaGetter, sessionGetter, optionsGetter],
+    [channelsGetter, schemaGetter, sessionGetter],
     () => {
       resultsRaw.clear();
       flattenResults();

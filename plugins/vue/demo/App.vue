@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import {
-    GraffitiIdentityProviderLogin,
     useGraffiti,
-    GraffitiDiscover,
-    type GraffitiObject,
     useGraffitiSession,
+    type GraffitiObject,
 } from "../src/plugin";
 
-// Initialize the pods used in the session
+const graffiti = useGraffiti();
 const session = useGraffitiSession();
+
 const channels = ref(["graffiti-client-demo"]);
 
 const noteSchema = {
@@ -38,7 +37,7 @@ async function postNote() {
         return;
     }
     posting.value = true;
-    await useGraffiti().put<typeof noteSchema>(
+    await graffiti.put<typeof noteSchema>(
         {
             channels: channels.value,
             value: {
@@ -55,7 +54,7 @@ async function postNote() {
 const editing = ref<string>("");
 const editText = ref<string>("");
 function startEditing(result: GraffitiObject<typeof noteSchema>) {
-    editing.value = useGraffiti().locationToUrl(result);
+    editing.value = graffiti.locationToUri(result);
     editText.value = result.value.content;
 }
 
@@ -66,7 +65,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         return;
     }
     savingEdits.value = true;
-    await useGraffiti().patch(
+    await graffiti.patch(
         {
             value: [{ op: "replace", path: "/content", value: editText.value }],
         },
@@ -80,7 +79,13 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
 </script>
 
 <template>
-    <GraffitiIdentityProviderLogin client-name="vue client demo" />
+    <div v-if="session">
+        Logged in as: {{ session.actor }}
+        <button @click="graffiti.logout(session)">Log out</button>
+    </div>
+    <div v-else>
+        <button @click="graffiti.login()">Log in</button>
+    </div>
     <GraffitiDiscover
         :channels="channels"
         :schema="noteSchema"
@@ -105,7 +110,13 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
             <input
                 type="text"
                 :value="channels[0]"
-                @input="(event) => (channels = [event.target?.value])"
+                @input="
+                    (event) =>
+                        event.target &&
+                        'value' in event.target &&
+                        typeof event.target.value === 'string' &&
+                        (channels = [event.target.value])
+                "
             />
         </div>
         <ul>
@@ -117,8 +128,8 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                 )"
                 class="post"
             >
-                <div class="webId">
-                    {{ result.webId }}
+                <div class="actor">
+                    {{ result.actor }}
                 </div>
                 <div class="timestamp">
                     {{ result.lastModified.toLocaleString() }}
@@ -126,7 +137,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
 
                 <div
                     class="content"
-                    v-if="editing !== $graffiti.locationToUrl(result)"
+                    v-if="editing !== $graffiti.locationToUri(result)"
                 >
                     {{ result.value.content }}
                 </div>
@@ -144,17 +155,17 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                     <li>
                         <a
                             target="_blank"
-                            :href="$graffiti.locationToUrl(result)"
+                            :href="$graffiti.locationToUri(result)"
                         >
                             🌐
                         </a>
                     </li>
-                    <li v-if="result.webId === session?.webId">
+                    <li v-if="result.actor === session?.actor">
                         <button @click="$graffiti.delete(result, session)">
                             Delete
                         </button>
                     </li>
-                    <li v-if="result.webId === session?.webId">
+                    <li v-if="result.actor === session?.actor">
                         <button @click="startEditing(result)">Edit</button>
                     </li>
                 </menu>
@@ -186,7 +197,7 @@ ul {
     margin: 0;
     padding: 1rem;
 
-    .webId {
+    .actor {
         font-size: 1rem;
         font-weight: bold;
     }

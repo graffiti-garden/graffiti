@@ -1,16 +1,19 @@
 import type { App, Plugin, Ref } from "vue";
+import { ref } from "vue";
 import Discover from "./Discover.vue";
-import GraffitiClient, {
-  useGraffiti,
-  type GraffitiSession,
-} from "@graffiti-garden/client-core";
-import { useGraffitiSession, registerSolidSession } from "./session";
-import IdentityProviderLogin from "./IdentityProviderLogin.vue";
+import type {
+  GraffitiFactory,
+  Graffiti,
+  GraffitiSession,
+  GraffitiLoginEvent,
+  GraffitiLogoutEvent,
+} from "@graffiti-garden/api";
+import { graffitiInjectKey, graffitiSessionInjectKey } from "./injections";
 
 declare module "vue" {
   export interface ComponentCustomProperties {
-    $graffiti: GraffitiClient;
-    $graffitiSession: Ref<GraffitiSession>;
+    $graffiti: Graffiti;
+    $graffitiSession: Ref<GraffitiSession | undefined>;
   }
 
   export interface GlobalComponents {
@@ -19,27 +22,43 @@ declare module "vue" {
 }
 
 interface GraffitiPluginOptions {
-  registerSolidSession?: boolean | Parameters<typeof registerSolidSession>[0];
+  useGraffiti: GraffitiFactory;
 }
 
-const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
-  install(app: App, options?: GraffitiPluginOptions) {
-    if (options?.registerSolidSession !== false) {
-      const registerOptions =
-        typeof options?.registerSolidSession === "object"
-          ? options?.registerSolidSession
-          : {};
-      registerSolidSession(registerOptions);
-    }
+export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
+  install(app: App, options: GraffitiPluginOptions) {
+    const graffiti = options.useGraffiti();
+    const graffitiSession = ref<GraffitiSession | undefined>(undefined);
+    graffiti.sessionEvents.addEventListener("login", (evt) => {
+      const detail = (evt as GraffitiLoginEvent).detail;
+      if (detail.error) {
+        console.error("Error logging in:");
+        console.error(detail.error);
+        return;
+      } else {
+        graffitiSession.value = detail.session;
+      }
+    });
+    graffiti.sessionEvents.addEventListener("logout", (evt) => {
+      const detail = (evt as GraffitiLogoutEvent).detail;
+      if (detail.error) {
+        console.error("Error logging out:");
+        console.error(detail.error);
+      } else {
+        graffitiSession.value = undefined;
+      }
+    });
+
+    app.provide(graffitiInjectKey, graffiti);
+    app.provide(graffitiSessionInjectKey, graffitiSession);
+
     app.component("GraffitiDiscover", Discover);
-    app.config.globalProperties.$graffiti = useGraffiti();
-    app.config.globalProperties.$graffitiSession = useGraffitiSession();
+    app.config.globalProperties.$graffiti = graffiti;
+    app.config.globalProperties.$graffitiSession = graffitiSession;
   },
 };
-export default GraffitiPlugin;
 
-export * from "@graffiti-garden/client-core";
+export * from "@graffiti-garden/api";
 export * from "./composables";
-export * from "./session";
+export * from "./injections";
 export { Discover as GraffitiDiscover };
-export { IdentityProviderLogin as GraffitiIdentityProviderLogin };
