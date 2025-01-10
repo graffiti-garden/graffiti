@@ -3,7 +3,7 @@ import type {
   GraffitiObject,
   GraffitiObjectBase,
   GraffitiPatch,
-  GraffitiSessionBase,
+  GraffitiSession,
   GraffitiPutObject,
   GraffitiStream,
 } from "./2-types";
@@ -123,7 +123,7 @@ export abstract class Graffiti {
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
-    session: GraffitiSessionBase,
+    session: GraffitiSession,
   ): Promise<GraffitiObjectBase>;
 
   /**
@@ -153,7 +153,7 @@ export abstract class Graffiti {
      * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
      * property must be `undefined`.
      */
-    session?: GraffitiSessionBase,
+    session?: GraffitiSession,
   ): Promise<GraffitiObject<Schema>>;
 
   /**
@@ -183,7 +183,7 @@ export abstract class Graffiti {
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
-    session: GraffitiSessionBase,
+    session: GraffitiSession,
   ): Promise<GraffitiObjectBase>;
 
   /**
@@ -211,7 +211,7 @@ export abstract class Graffiti {
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
-    session: GraffitiSessionBase,
+    session: GraffitiSession,
   ): Promise<GraffitiObjectBase>;
 
   /**
@@ -262,7 +262,7 @@ export abstract class Graffiti {
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
      */
-    session?: GraffitiSessionBase,
+    session?: GraffitiSession,
   ): GraffitiStream<GraffitiObject<Schema>>;
 
   /**
@@ -303,7 +303,7 @@ export abstract class Graffiti {
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
      */
-    session?: GraffitiSessionBase,
+    session?: GraffitiSession,
   ): GraffitiStream<GraffitiObject<Schema>>;
 
   /**
@@ -327,7 +327,7 @@ export abstract class Graffiti {
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
-    session: GraffitiSessionBase,
+    session: GraffitiSession,
   ): GraffitiStream<{
     channel: string;
     source: string;
@@ -353,12 +353,71 @@ export abstract class Graffiti {
    * {@link GraffitiObjectBase.tombstone | `tombstone`} field is `true`
    * if the object has been deleted.
    */
-  abstract listOrphans(session: GraffitiSessionBase): GraffitiStream<{
+  abstract listOrphans(session: GraffitiSession): GraffitiStream<{
     name: string;
     source: string;
     lastModified: Date;
     tombstone: boolean;
   }>;
+
+  /**
+   * Begins the login process. Depending on the implementation, this may
+   * involve redirecting the user to a login page or opening a popup,
+   * so it should always be called in response to a user action.
+   *
+   * The {@link GraffitiSession | session} object is returned
+   * asynchronously via the {@link Graffiti.sessionEvents | sessionEvents}
+   * event target as a {@link GraffitiLoginEvent}.
+   */
+  abstract login(
+    /**
+     * An optional actor to prompt the user to login as. For example,
+     * if a session expired and the user is trying to reauthenticate,
+     * or if the user entered their username in a login form.
+     *
+     * If not provided, the implementation should prompt the user to
+     * supply an actor ID along with their other login information
+     * (e.g. password).
+     */
+    actor?: string,
+    /**
+     * An arbitrary string that will be returned with the
+     * {@link GraffitiSession | session} object
+     * when the login process is complete.
+     * See {@link GraffitiLoginEvent}.
+     */
+    state?: string,
+  ): Promise<void>;
+
+  /**
+   * Begins the logout process. Depending on the implementation, this may
+   * involve redirecting the user to a logout page or opening a popup,
+   * so it should always be called in response to a user action.
+   *
+   * A confirmation will be returned asynchronously via the
+   * {@link Graffiti.sessionEvents | sessionEvents} event target
+   * as a {@link GraffitiLogoutEvent}.
+   */
+  abstract logout(
+    /**
+     * The {@link GraffitiSession | session} object to logout.
+     */
+    session: GraffitiSession,
+    /**
+     * An arbitrary string that will be returned with the
+     * when the logout process is complete.
+     * See {@link GraffitiLogoutEvent}.
+     */
+    state?: string,
+  ): Promise<void>;
+
+  /**
+   * An event target that can be used to listen for `login`
+   * and `logout` events. They are custom events of types
+   * {@link GraffitiLoginEvent`} and {@link GraffitiLogoutEvent }
+   * respectively.
+   */
+  abstract readonly sessionEvents: EventTarget;
 }
 
 /**
