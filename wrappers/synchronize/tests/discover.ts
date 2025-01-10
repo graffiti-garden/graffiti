@@ -1,11 +1,11 @@
 import { it, expect, describe } from "vitest";
-import { type GraffitiFactory, type GraffitiSessionBase } from "../src/index";
+import { type GraffitiFactory, type GraffitiSession } from "../src/index";
 import { randomString, randomValue, randomPutObject } from "./utils";
 
 export const graffitiDiscoverTests = (
   useGraffiti: GraffitiFactory,
-  useSession1: () => GraffitiSessionBase,
-  useSession2: () => GraffitiSessionBase,
+  useSession1: () => GraffitiSession,
+  useSession2: () => GraffitiSession,
 ) => {
   describe("discover", () => {
     it("discover single", async () => {
