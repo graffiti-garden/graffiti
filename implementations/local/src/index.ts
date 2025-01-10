@@ -29,19 +29,19 @@ import { Repeater } from "@repeaterjs/repeater";
 
 PouchDB.plugin(PouchDBFind);
 
-export interface GraffitiPouchDbOptions {
+export interface GraffitiPouchDBOptions {
   sourceName?: string;
   pouchDBOptions?: PouchDB.Configuration.DatabaseConfiguration;
 }
 
-export class GraffitiPouchDb extends GraffitiSynchronized {
+export class GraffitiPouchDB extends GraffitiSynchronized {
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
   protected readonly sessionDb: PouchDB.Database<GraffitiSession>;
   protected readonly source: string;
   locationToUri = locationToUri;
   uriToLocation = uriToLocation;
 
-  constructor(options?: GraffitiPouchDbOptions) {
+  constructor(options?: GraffitiPouchDBOptions) {
     super();
     this.source = options?.sourceName ?? "local";
     const pouchDbOptions = {
@@ -71,7 +71,10 @@ export class GraffitiPouchDb extends GraffitiSynchronized {
       const docs = await this.sessionDb.allDocs({
         include_docs: true,
       });
-      const actor = docs.rows[0]?.doc?.actor;
+      let actor: string | undefined;
+      if (docs.rows.length) {
+        actor = docs.rows[docs.rows.length - 1].doc?.actor;
+      }
       if (actor) {
         const event: GraffitiLoginEvent = new CustomEvent("login", {
           detail: { session: { actor } },
@@ -342,8 +345,9 @@ export class GraffitiPouchDb extends GraffitiSynchronized {
         error: new Error("Not logged in with that actor"),
       };
     } else {
-      const doc = result.docs[0];
-      await this.sessionDb.remove(doc);
+      for (const doc of result.docs) {
+        await this.sessionDb.remove(doc);
+      }
       detail = {
         state,
         actor: session.actor,

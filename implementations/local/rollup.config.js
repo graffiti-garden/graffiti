@@ -1,9 +1,10 @@
 import typescript from "rollup-plugin-typescript2";
 import terser from "@rollup/plugin-terser";
-import { nodeResolve } from "@rollup/plugin-node-resolve";
 import json from "@rollup/plugin-json";
+import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import { visualizer } from "rollup-plugin-visualizer";
+import nodePolyfills from "rollup-plugin-node-polyfills";
 
 export default {
   input: "src/index.ts",
@@ -13,12 +14,15 @@ export default {
     sourcemap: true,
   },
   plugins: [
-    typescript(),
-    json(),
-    commonjs({}),
-    nodeResolve({
-      preferBuiltins: true,
+    typescript({
+      tsconfig: "tsconfig.json",
     }),
+    json(),
+    resolve({
+      browser: true,
+    }),
+    commonjs(),
+    nodePolyfills(),
     terser(),
     visualizer({ filename: "dist/stats.html" }),
   ],
