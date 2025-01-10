@@ -34,15 +34,6 @@ export interface GraffitiPouchDBOptions {
   pouchDBOptions?: PouchDB.Configuration.DatabaseConfiguration;
 }
 
-function locationMap(doc: GraffitiLocation & { tombstone: boolean }) {
-  const uri = `${doc.source}/${encodeURIComponent(doc.actor)}/${encodeURIComponent(doc.name)}/${doc.tombstone ? "0" : "1"}`;
-  if (typeof emit === "function") {
-    emit(uri);
-  } else {
-    return uri;
-  }
-}
-
 export class GraffitiPouchDB extends GraffitiSynchronized {
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
   protected readonly sessionDb: PouchDB.Database<GraffitiSession>;
@@ -62,17 +53,9 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       pouchDbOptions,
     );
 
-    // @ts-ignore
-    // this.db.put({
-    //   _id: "_design/my-index8",
-    //   views: {
-    //     byLocation: {
-    //       map: locationMap.toString(),
-    //     },
-    //   },
-    // });
-
-    this.sessionDb = new PouchDB<GraffitiSession>("graffitiSession");
+    // This is only ever meant for local storage
+    // so it doesn't need special options
+    this.sessionDb = new PouchDB<GraffitiSession>("graffitiDbSession");
 
     // Look for any existing sessions
     const sessionRestorer = async () => {
@@ -97,13 +80,12 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
   }
 
   protected async queryByLocation(location: GraffitiLocation) {
-    const results = await this.db.query<GraffitiObjectBase>(
-      "my-index8/byLocation",
-      {
-        key: locationMap({ ...location, tombstone: false }),
-        include_docs: true,
-      },
-    );
+    const uri = locationToUri(location);
+    const results = await this.db.allDocs({
+      startkey: uri,
+      endkey: uri + "\uffff", // \uffff is the last unicode character
+      include_docs: true,
+    });
     const docs = results.rows
       .map((row) => row.doc)
       // Remove undefined docs
@@ -114,10 +96,16 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       >((acc, doc) => {
         if (doc) acc.push(doc);
         return acc;
-      }, []);
+      }, [])
+      // Remove tombstones
+      .filter((doc) => !doc.tombstone);
     // Correct the date
     docs.forEach((doc) => (doc.lastModified = new Date(doc.lastModified)));
     return docs;
+  }
+
+  protected docId(location: GraffitiLocation) {
+    return locationToUri(location) + "/" + randomBase64();
   }
 
   protected _get: Graffiti["get"] = async (...args) => {
@@ -212,7 +200,10 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       lastModified: new Date(),
     };
 
-    await this.db.post(object);
+    await this.db.put({
+      _id: this.docId(object),
+      ...object,
+    });
 
     // Delete the old object
     const previousObject = await this.deleteBefore(object, object.lastModified);
@@ -274,7 +265,10 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     }
 
     patchObject.lastModified = new Date();
-    await this.db.post(patchObject);
+    await this.db.put({
+      ...patchObject,
+      _id: this.docId(patchObject),
+    });
 
     // Delete the old object
     await this.deleteBefore(patchObject, patchObject.lastModified);
