@@ -21,7 +21,7 @@ declare module "vue" {
   }
 }
 
-interface GraffitiPluginOptions {
+export interface GraffitiPluginOptions {
   useGraffiti: GraffitiFactory;
 }
 

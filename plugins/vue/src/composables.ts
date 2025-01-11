@@ -63,8 +63,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
     if (
       existing &&
       (existing.lastModified > value.lastModified ||
-        (existing.lastModified.getTime() === value.lastModified.getTime() &&
-          !existing.tombstone))
+        (existing.lastModified === value.lastModified && !existing.tombstone))
     ) {
       return;
     }

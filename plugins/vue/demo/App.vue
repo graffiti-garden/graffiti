@@ -125,7 +125,10 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
             <li
                 v-for="result in results.sort(
                     (a, b) =>
-                        b.lastModified.getTime() - a.lastModified.getTime(),
+                        // Sort by lastModified, most recent first
+                        // lastModified are ISO strings
+                        new Date(b.lastModified).getTime() -
+                        new Date(a.lastModified).getTime(),
                 )"
                 class="post"
             >
