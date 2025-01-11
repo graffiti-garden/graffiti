@@ -23,7 +23,7 @@ import {
   applyPropPatch,
   attemptAjvCompile,
   maskObject,
-  allowedSelector,
+  isAllowed,
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
 
@@ -52,6 +52,36 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       pouchDbOptions.name,
       pouchDbOptions,
     );
+
+    this.db
+      //@ts-ignore
+      .put({
+        _id: "_design/index",
+        views: {
+          byChannel: {
+            map: function (object: GraffitiObjectBase) {
+              object.channels.forEach(function (channel) {
+                //@ts-ignore
+                emit(channel);
+              });
+            }.toString(),
+          },
+        },
+      })
+      //@ts-ignore
+      .catch((error) => {
+        if (
+          error &&
+          typeof error === "object" &&
+          "name" in error &&
+          error.name === "conflict"
+        ) {
+          // Design document already exists
+          return;
+        } else {
+          throw error;
+        }
+      });
 
     // This is only ever meant for local storage
     // so it doesn't need special options
@@ -120,17 +150,11 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       a.lastModified > b.lastModified ? a : b,
     );
 
-    // Check if it is allowed
-    if (
-      doc.allowed !== undefined &&
-      (!session?.actor ||
-        (doc.actor !== session.actor && !doc.allowed.includes(session.actor)))
-    ) {
-      throw new GraffitiErrorNotFound();
-    }
-
     // Strip out the _id and _rev
     const { _id, _rev, ...object } = doc;
+
+    // Make sure the user is allowed to see it
+    if (!isAllowed(doc, session)) throw new GraffitiErrorNotFound();
 
     // Mask out the allowed list and channels
     // if the user is not the owner
@@ -152,7 +176,9 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     );
     if (!docs.length) return;
 
-    // Get the oldest one
+    // Get the oldest one (although
+    // there should only be one unless
+    // something bad happens)
     const existingDoc = docs.reduce((a, b) =>
       a.lastModified < b.lastModified ? a : b,
     );
@@ -287,15 +313,22 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
     const repeater: GraffitiStream<GraffitiObject<typeof schema>> =
       new Repeater(async (push, stop) => {
-        const result = await this.db.find({
-          selector: {
-            channels: { $elemMatch: { $in: channels } },
-            ...allowedSelector(session),
+        const result = await this.db.query<GraffitiObjectBase>(
+          "index/byChannel",
+          {
+            keys: channels,
+            include_docs: true,
           },
-        });
+        );
 
-        for (const doc of result.docs) {
+        for (const row of result.rows) {
+          const doc = row.doc;
+          if (!doc) continue;
+
           const { _id, _rev, ...object } = doc;
+
+          // Make sure the user is allowed to see it
+          if (!isAllowed(doc, session)) continue;
 
           // Mask out the allowed list and channels
           // if the user is not the owner

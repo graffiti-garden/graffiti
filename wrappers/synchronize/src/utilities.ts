@@ -107,13 +107,14 @@ export function maskObject(
     );
   }
 }
-
-export function allowedSelector(session?: GraffitiSession) {
-  return {
-    $or: [
-      { allowed: { $exists: false } },
-      ...(session ? [{ actor: session.actor }] : []),
-      ...(session ? [{ allowed: { $elemMatch: { $eq: session.actor } } }] : []),
-    ],
-  };
+export function isAllowed(
+  object: GraffitiObjectBase,
+  session?: GraffitiSession,
+) {
+  return (
+    object.allowed === undefined ||
+    (!!session?.actor &&
+      (object.actor === session.actor ||
+        object.allowed.includes(session.actor)))
+  );
 }
