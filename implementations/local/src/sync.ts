@@ -7,7 +7,12 @@ import type {
   GraffitiStream,
 } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
-import { applyPropPatch, attemptAjvCompile, maskObject } from "./utilities";
+import {
+  applyPropPatch,
+  attemptAjvCompile,
+  isAllowed,
+  maskObject,
+} from "./utilities";
 
 type SynchronizeEvent = CustomEvent<{
   oldObject: GraffitiObjectBase;
@@ -21,10 +26,7 @@ function matchChannelsAllowed(
 ): boolean {
   return (
     object.channels.some((channel) => channels.includes(channel)) &&
-    (object.allowed === undefined ||
-      (!!session?.actor &&
-        (object.actor === session.actor ||
-          object.allowed.includes(session.actor))))
+    isAllowed(object, session)
   );
 }
 
