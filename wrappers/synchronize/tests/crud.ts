@@ -41,9 +41,7 @@ export const graffitiCRUDTests = (
       expect(gotten.name).toEqual(previous.name);
       expect(gotten.actor).toEqual(previous.actor);
       expect(gotten.source).toEqual(previous.source);
-      expect(gotten.lastModified.getTime()).toEqual(
-        previous.lastModified.getTime(),
-      );
+      expect(gotten.lastModified).toEqual(previous.lastModified);
 
       // Replace it
       const newValue = {
@@ -58,24 +56,22 @@ export const graffitiCRUDTests = (
       expect(beforeReplaced.name).toEqual(previous.name);
       expect(beforeReplaced.actor).toEqual(previous.actor);
       expect(beforeReplaced.source).toEqual(previous.source);
-      expect(beforeReplaced.lastModified.getTime()).toBeGreaterThan(
-        gotten.lastModified.getTime(),
+      expect(new Date(beforeReplaced.lastModified).getTime()).toBeGreaterThan(
+        new Date(gotten.lastModified).getTime(),
       );
 
       // Get it again
       const afterReplaced = await graffiti.get(previous, {});
       expect(afterReplaced.value).toEqual(newValue);
-      expect(afterReplaced.lastModified.getTime()).toEqual(
-        beforeReplaced.lastModified.getTime(),
-      );
+      expect(afterReplaced.lastModified).toEqual(beforeReplaced.lastModified);
       expect(afterReplaced.tombstone).toEqual(false);
 
       // Delete it
       const beforeDeleted = await graffiti.delete(afterReplaced, session);
       expect(beforeDeleted.tombstone).toEqual(true);
       expect(beforeDeleted.value).toEqual(newValue);
-      expect(beforeDeleted.lastModified.getTime()).toBeGreaterThan(
-        beforeReplaced.lastModified.getTime(),
+      expect(new Date(beforeDeleted.lastModified).getTime()).toBeGreaterThan(
+        new Date(beforeReplaced.lastModified).getTime(),
       );
 
       // Try to get it and fail
@@ -286,9 +282,7 @@ export const graffitiCRUDTests = (
       expect(gotten.value).toEqual({
         something: "goodbye, world~ :c",
       });
-      expect(beforePatched.lastModified.getTime()).toBe(
-        gotten.lastModified.getTime(),
-      );
+      expect(beforePatched.lastModified).toBe(gotten.lastModified);
 
       await graffiti.delete(putted, session);
     });
@@ -475,9 +469,7 @@ export const graffitiCRUDTests = (
       expect(gotten.value).toEqual(object.value);
       expect(gotten.channels).toEqual(object.channels);
       expect(gotten.allowed).toEqual(object.allowed);
-      expect(gotten.lastModified.getTime()).toEqual(
-        putted.lastModified.getTime(),
-      );
+      expect(gotten.lastModified).toEqual(putted.lastModified);
     });
   });
 };
