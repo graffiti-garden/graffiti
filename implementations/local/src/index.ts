@@ -129,8 +129,6 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       }, [])
       // Remove tombstones
       .filter((doc) => !doc.tombstone);
-    // Correct the date
-    docs.forEach((doc) => (doc.lastModified = new Date(doc.lastModified)));
     return docs;
   }
 
@@ -169,7 +167,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
   protected async deleteBefore(
     location: GraffitiLocation,
-    modifiedBefore?: Date,
+    modifiedBefore?: string,
   ) {
     const docs = (await this.queryByLocation(location)).filter(
       (doc) => !modifiedBefore || doc.lastModified < modifiedBefore,
@@ -188,7 +186,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     const deletedDoc = {
       ...existingDoc,
       tombstone: true,
-      lastModified: modifiedBefore ?? new Date(),
+      lastModified: modifiedBefore ?? new Date().toISOString(),
     };
     await this.db.put(deletedDoc);
     const { _id, _rev, ...deletedObject } = deletedDoc;
@@ -223,7 +221,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       source: "local",
       actor: session.actor,
       tombstone: false,
-      lastModified: new Date(),
+      lastModified: new Date().toISOString(),
     };
 
     await this.db.put({
@@ -290,7 +288,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       );
     }
 
-    patchObject.lastModified = new Date();
+    patchObject.lastModified = new Date().toISOString();
     await this.db.put({
       ...patchObject,
       _id: this.docId(patchObject),
@@ -333,9 +331,6 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
           // Mask out the allowed list and channels
           // if the user is not the owner
           maskObject(object, channels, session);
-
-          // Correct the date
-          object.lastModified = new Date(object.lastModified);
 
           // Check that it matches the schema
           if (validate(object)) {
