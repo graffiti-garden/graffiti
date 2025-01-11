@@ -95,12 +95,12 @@ export interface GraffitiObjectBase {
   source: string;
 
   /**
-   * The time the object was last modified. This is used for caching and synchronization.
+   * The time the object was last modified in [ISO format](https://fits.gsfc.nasa.gov/iso-time.html). This is used for caching and synchronization.
    * It can also be used to sort objects in a user interface but in many cases it would be better to
    * use a `createdAt` property in the object's {@link value | `value`} to indicate when the object was created
    * rather than when it was modified.
    */
-  lastModified: Date;
+  lastModified: string;
 
   /**
    * A boolean indicating whether the object has been deleted.
