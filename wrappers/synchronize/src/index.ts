@@ -33,7 +33,6 @@ export interface GraffitiPouchDBOptions {
 
 export class GraffitiPouchDB extends GraffitiSynchronized {
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
-  protected readonly sessionDb: PouchDB.Database<GraffitiSession>;
   protected readonly source: string;
   locationToUri = locationToUri;
   uriToLocation = uriToLocation;
@@ -80,22 +79,13 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
         }
       });
 
-    // This is only ever meant for local storage
-    // so it doesn't need special options
-    this.sessionDb = new PouchDB<GraffitiSession>("graffitiDbSession");
-
     // Look for any existing sessions
     const sessionRestorer = async () => {
       // Allow listeners to be added first
       await Promise.resolve();
 
-      const docs = await this.sessionDb.allDocs({
-        include_docs: true,
-      });
-      let actor: string | undefined;
-      if (docs.rows.length) {
-        actor = docs.rows[docs.rows.length - 1].doc?.actor;
-      }
+      if (typeof window === "undefined") return;
+      const actor = window.localStorage.getItem("graffitiActor");
       if (actor) {
         const event: GraffitiLoginEvent = new CustomEvent("login", {
           detail: { session: { actor } },
@@ -107,7 +97,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
   }
 
   protected async queryByLocation(location: GraffitiLocation) {
-    const uri = locationToUri(location);
+    const uri = locationToUri(location) + "/";
     const results = await this.db.allDocs({
       startkey: uri,
       endkey: uri + "\uffff", // \uffff is the last unicode character
@@ -349,19 +339,18 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     }
 
     let detail: GraffitiLoginEvent["detail"];
-
     if (!actor) {
       detail = {
         state,
         error: new Error("No actor ID provided to login"),
       };
     } else {
-      // store it in the database
+      // try to store it in the database
       const session = { actor };
-      await this.sessionDb.put({
-        _id: new Date().toISOString(),
-        ...session,
-      });
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("graffitiActor", actor);
+      }
 
       detail = {
         state,
@@ -374,27 +363,24 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
   }
 
   async logout(session: GraffitiSession, state?: string) {
-    let detail: GraffitiLogoutEvent["detail"];
-
-    // remove the session from the database
-    const result = await this.sessionDb.find({
-      selector: { actor: session.actor },
-    });
-    if (result.docs.length === 0) {
-      detail = {
-        state,
-        actor: session.actor,
-        error: new Error("Not logged in with that actor"),
-      };
-    } else {
-      for (const doc of result.docs) {
-        await this.sessionDb.remove(doc);
+    let exists = true;
+    if (typeof window !== "undefined") {
+      exists = !!window.localStorage.getItem("graffitiActor");
+      if (exists) {
+        window.localStorage.removeItem("graffitiActor");
       }
-      detail = {
-        state,
-        actor: session.actor,
-      };
     }
+
+    const detail: GraffitiLogoutEvent["detail"] = exists
+      ? {
+          state,
+          actor: session.actor,
+        }
+      : {
+          state,
+          actor: session.actor,
+          error: new Error("Not logged in with that actor"),
+        };
 
     const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
     this.sessionEvents.dispatchEvent(event);
