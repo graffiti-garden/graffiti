@@ -28,9 +28,7 @@ export const graffitiSynchronizeTests = (
       expect(result.value.value).toEqual(object.value);
       expect(result.value.channels).toEqual(channels);
       expect(result.value.tombstone).toBe(false);
-      expect(result.value.lastModified.getTime()).toEqual(
-        gotten.lastModified.getTime(),
-      );
+      expect(result.value.lastModified).toEqual(gotten.lastModified);
     });
 
     it("put", async () => {
@@ -91,11 +89,11 @@ export const graffitiSynchronizeTests = (
       expect(sharedResult.value.value).toEqual(newValue);
       expect(sharedResult.value.channels).toEqual([sharedChannel]);
       expect(sharedResult.value.tombstone).toBe(false);
-      expect(beforeResult.value.lastModified.getTime()).toEqual(
-        afterResult.value.lastModified.getTime(),
+      expect(beforeResult.value.lastModified).toEqual(
+        afterResult.value.lastModified,
       );
-      expect(sharedResult.value.lastModified.getTime()).toEqual(
-        afterResult.value.lastModified.getTime(),
+      expect(sharedResult.value.lastModified).toEqual(
+        afterResult.value.lastModified,
       );
     });
 
@@ -172,11 +170,11 @@ export const graffitiSynchronizeTests = (
       expect(sharedResult.value.value).toEqual(newValue);
       expect(sharedResult.value.channels).toEqual([sharedChannel]);
       expect(sharedResult.value.tombstone).toBe(false);
-      expect(beforeResult.value.lastModified.getTime()).toEqual(
-        afterResult.value.lastModified.getTime(),
+      expect(beforeResult.value.lastModified).toEqual(
+        afterResult.value.lastModified,
       );
-      expect(sharedResult.value.lastModified.getTime()).toEqual(
-        afterResult.value.lastModified.getTime(),
+      expect(sharedResult.value.lastModified).toEqual(
+        afterResult.value.lastModified,
       );
     });
 
