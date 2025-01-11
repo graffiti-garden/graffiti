@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/implementation-pouchdb",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "An implementation of the Graffiti API using PouchDB",
   "type": "module",
   "main": "dist/index.js",
@@ -40,7 +40,6 @@
     "@rollup/plugin-terser": "^0.4.4",
     "@types/json-schema": "^7.0.15",
     "@types/pouchdb": "^6.4.2",
-    "@types/pouchdb-find": "^7.3.3",
     "rollup": "^4.30.1",
     "rollup-plugin-node-polyfills": "^0.2.1",
     "rollup-plugin-typescript2": "^0.36.0",
@@ -49,11 +48,10 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.0.5",
+    "@graffiti-garden/api": "^0.0.6",
     "@repeaterjs/repeater": "^3.0.6",
     "ajv": "^8.17.1",
     "fast-json-patch": "^3.1.1",
-    "pouchdb": "^9.0.0",
-    "pouchdb-find": "^9.0.0"
+    "pouchdb": "^9.0.0"
   }
 }
