@@ -19,13 +19,20 @@
   },
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/wrapper-vue.git"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/wrapper-vue/issues"
+  },
   "dependencies": {
-    "@graffiti-garden/api": "^0.0.5",
-    "@graffiti-garden/implementation-pouchdb": "^0.0.2",
+    "@graffiti-garden/api": "^0.0.6",
     "@vitejs/plugin-vue": "^5.1.4",
     "vue": "^3.5.7"
   },
   "devDependencies": {
+    "@graffiti-garden/implementation-pouchdb": "^0.0.3",
     "@vue/language-server": "^2.1.6",
     "@vue/typescript-plugin": "^2.1.6",
     "rollup-plugin-visualizer": "^5.12.0",
