@@ -14,7 +14,6 @@ import {
 } from "@graffiti-garden/api";
 import { GraffitiSynchronized } from "./sync";
 import PouchDB from "pouchdb";
-import PouchDBFind from "pouchdb-find";
 import {
   locationToUri,
   uriToLocation,
@@ -26,8 +25,6 @@ import {
   isAllowed,
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
-
-PouchDB.plugin(PouchDBFind);
 
 export interface GraffitiPouchDBOptions {
   sourceName?: string;
