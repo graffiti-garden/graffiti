@@ -4,7 +4,6 @@ import {
   type GraffitiObjectBase,
   type GraffitiLocation,
   type GraffitiStream,
-  type GraffitiSession,
   type GraffitiLoginEvent,
   type GraffitiLogoutEvent,
   GraffitiErrorNotFound,
@@ -332,7 +331,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     return repeater;
   };
 
-  async login(actor?: string, state?: string) {
+  login: Graffiti["login"] = async (actor, state) => {
     if (!actor && typeof window !== "undefined") {
       const response = window.prompt("Choose an actor ID");
       if (response) actor = response;
@@ -360,9 +359,9 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
     const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
     this.sessionEvents.dispatchEvent(event);
-  }
+  };
 
-  async logout(session: GraffitiSession, state?: string) {
+  logout: Graffiti["logout"] = async (session, state) => {
     let exists = true;
     if (typeof window !== "undefined") {
       exists = !!window.localStorage.getItem("graffitiActor");
@@ -384,9 +383,9 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
     const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
     this.sessionEvents.dispatchEvent(event);
-  }
+  };
 
-  sessionEvents = new EventTarget();
+  sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
 
   listChannels: Graffiti["listChannels"] = (...args) => {
     // TODO
