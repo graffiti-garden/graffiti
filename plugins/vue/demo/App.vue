@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import {
-    useGraffiti,
-    useGraffitiSession,
-    type GraffitiObject,
-} from "../src/plugin";
+import { useGraffiti, useGraffitiSession } from "../src/plugin";
+import { type GraffitiObject, type JSONSchema4 } from "@graffiti-garden/api";
 
 const graffiti = useGraffiti();
 const session = useGraffitiSession();
@@ -26,7 +23,7 @@ const noteSchema = {
             required: ["type", "content"],
         },
     },
-} as const;
+} as const satisfies JSONSchema4;
 
 const posting = ref(false);
 const myNote = ref("");

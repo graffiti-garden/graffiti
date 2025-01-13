@@ -58,7 +58,6 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
   },
 };
 
-export * from "@graffiti-garden/api";
 export * from "./composables";
 export * from "./injections";
 export { Discover as GraffitiDiscover };
