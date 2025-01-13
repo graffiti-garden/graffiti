@@ -333,7 +333,7 @@ export abstract class Graffiti {
   ): GraffitiStream<{
     channel: string;
     source: string;
-    lastModified: Date;
+    lastModified: string;
     count: number;
   }>;
 
@@ -358,9 +358,14 @@ export abstract class Graffiti {
   abstract listOrphans(session: GraffitiSession): GraffitiStream<{
     name: string;
     source: string;
-    lastModified: Date;
+    lastModified: string;
     tombstone: boolean;
   }>;
+
+  /**
+   * The age at which a query for a session will be considered expired.
+   */
+  // abstract readonly maxAge: number;
 
   /**
    * Begins the login process. Depending on the implementation, this may
