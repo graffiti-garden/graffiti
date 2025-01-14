@@ -153,14 +153,6 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                 </form>
 
                 <menu>
-                    <!-- <li>
-                        <a
-                            target="_blank"
-                            :href="$graffiti.locationToUri(result)"
-                        >
-                            🌐
-                        </a>
-                    </li> -->
                     <li v-if="result.actor === session?.actor">
                         <button @click="$graffiti.delete(result, session)">
                             Delete
@@ -168,6 +160,14 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                     </li>
                     <li v-if="result.actor === session?.actor">
                         <button @click="startEditing(result)">Edit</button>
+                    </li>
+                    <li>
+                        <a
+                            target="_blank"
+                            :href="$graffiti.locationToUri(result)"
+                        >
+                            🔗
+                        </a>
                     </li>
                 </menu>
             </li>
