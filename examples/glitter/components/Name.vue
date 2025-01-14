@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import {
-    useDiscover,
+    useGraffitiDiscover,
     useGraffiti,
     useGraffitiSession,
-} from "@graffiti-garden/client-vue";
+} from "@graffiti-garden/wrapper-vue";
 import { profileSchema } from "./schemas";
 
+const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
 
 const props = withDefaults(
     defineProps<{
-        webId: string;
+        actor: string;
         editable: boolean;
     }>(),
     {
@@ -19,15 +20,17 @@ const props = withDefaults(
     },
 );
 
-const { results, isPolling } = useDiscover(
-    () => [props.webId],
-    () => profileSchema(props.webId),
+const { results, isPolling } = useGraffitiDiscover(
+    () => [props.actor],
+    () => profileSchema(props.actor),
     sessionRef,
 );
 const currentProfile = computed(() => {
     if (!results.value.length) return null;
     return results.value.sort(
-        (a, b) => b.lastModified.getTime() - a.lastModified.getTime(),
+        (a, b) =>
+            new Date(b.lastModified).getTime() -
+            new Date(a.lastModified).getTime(),
     )[0];
 });
 const currentName = computed(() => {
@@ -47,7 +50,7 @@ async function setName() {
 
     isSettingName.value = true;
     if (currentProfile.value) {
-        await useGraffiti().patch(
+        await graffiti.patch(
             {
                 value: [
                     {
@@ -61,14 +64,14 @@ async function setName() {
             session,
         );
     } else {
-        await useGraffiti().put<ReturnType<typeof profileSchema>>(
+        await graffiti.put<ReturnType<typeof profileSchema>>(
             {
                 value: {
                     type: "Profile",
                     name: editingName.value,
-                    describes: props.webId,
+                    describes: props.actor,
                 },
-                channels: [session.webId],
+                channels: [session.actor],
             },
             session,
         );
@@ -81,7 +84,7 @@ async function setName() {
 <template>
     <span v-if="!currentProfile && isPolling">Loading...</span>
     <template v-else>
-        <template v-if="props.editable && webId === sessionRef?.webId">
+        <template v-if="props.editable && actor === sessionRef?.actor">
             <form v-if="editing" @submit.prevent="setName">
                 <input
                     v-model="editingName"
@@ -103,7 +106,7 @@ async function setName() {
             </button>
         </template>
         <template v-else>
-            <RouterLink :to="'/profile/' + encodeURIComponent(webId ?? '')">
+            <RouterLink :to="'/profile/' + encodeURIComponent(actor ?? '')">
                 {{ currentName }}
             </RouterLink>
         </template>

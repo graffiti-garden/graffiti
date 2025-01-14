@@ -2,20 +2,21 @@
 import { ref } from "vue";
 import {
     useGraffiti,
-    useDiscover,
+    useGraffitiDiscover,
     useGraffitiSession,
-} from "@graffiti-garden/client-vue";
+} from "@graffiti-garden/wrapper-vue";
 import { followSchema } from "./schemas";
 
+const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
 
 const props = defineProps<{
     object: string;
 }>();
 
-const { results: follows, isPolling: isPollingFollows } = useDiscover(
-    () => (sessionRef.value ? [sessionRef.value.webId] : []),
-    () => followSchema(sessionRef.value?.webId ?? "", props.object),
+const { results: follows, isPolling: isPollingFollows } = useGraffitiDiscover(
+    () => (sessionRef.value ? [sessionRef.value.actor] : []),
+    () => followSchema(sessionRef.value?.actor ?? "", props.object),
     sessionRef,
 );
 
@@ -29,20 +30,18 @@ async function toggleFollow() {
     isToggling.value = true;
     if (follows.value.length) {
         await Promise.all(
-            follows.value.map((follow) =>
-                useGraffiti().delete(follow, session),
-            ),
+            follows.value.map((follow) => graffiti.delete(follow, session)),
         );
     } else if (props.object) {
-        await useGraffiti().put<ReturnType<typeof followSchema>>(
+        await graffiti.put<ReturnType<typeof followSchema>>(
             {
                 value: {
                     type: "Follow",
                     object: props.object,
-                    actor: session.webId,
+                    actor: session.actor,
                 },
-                channels: [session.webId],
-                webId: session.webId,
+                channels: [session.actor],
+                actor: session.actor,
             },
             session,
         );

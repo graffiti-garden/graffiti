@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useDiscover, useGraffitiSession } from "@graffiti-garden/client-vue";
+import {
+    useGraffitiDiscover,
+    useGraffitiSession,
+} from "@graffiti-garden/wrapper-vue";
 import { followSchema } from "./schemas";
 import Notes from "./Notes.vue";
 
 const sessionRef = useGraffitiSession();
 
-const { results: follows, isPolling } = useDiscover(
-    () => (sessionRef.value ? [sessionRef.value.webId] : []),
-    () => followSchema(sessionRef.value?.webId ?? ""),
+const { results: follows, isPolling } = useGraffitiDiscover(
+    () => (sessionRef.value ? [sessionRef.value.actor] : []),
+    () => followSchema(sessionRef.value?.actor ?? ""),
     sessionRef,
 );
 
-const webIds = computed(() => [
+const actors = computed(() => [
     ...new Set([...follows.value.map((f) => f.value.object)]),
 ]);
 </script>
@@ -28,5 +31,5 @@ const webIds = computed(() => [
             people to follow.
         </p>
     </template>
-    <Notes v-else :webIds="webIds" prompt="what's on your mind?" />
+    <Notes v-else :actors="actors" prompt="what's on your mind?" />
 </template>

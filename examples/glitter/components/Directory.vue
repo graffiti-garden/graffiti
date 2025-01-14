@@ -1,33 +1,35 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import {
-    useDiscover,
+    useGraffitiDiscover,
     useGraffiti,
     useGraffitiSession,
-} from "@graffiti-garden/client-vue";
+} from "@graffiti-garden/wrapper-vue";
 import Follow from "./Follow.vue";
 import Name from "./Name.vue";
 import { joinSchema } from "./schemas";
 
+const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
 
 const joinChannel = "Namebook";
 
-const { results: joinsUnfiltered, isPolling: isPollingJoins } = useDiscover(
-    [joinChannel],
-    joinSchema(joinChannel),
-    () => sessionRef.value,
-);
+const { results: joinsUnfiltered, isPolling: isPollingJoins } =
+    useGraffitiDiscover(
+        [joinChannel],
+        joinSchema(joinChannel),
+        () => sessionRef.value,
+    );
 
 const joins = computed(() => {
     const results = joinsUnfiltered.value;
     return results.filter((v) =>
-        v.value.actor ? v.webId === v.value.actor : true,
+        v.value.actor ? v.actor === v.value.actor : true,
     );
 });
 
 const myJoins = computed(() =>
-    joins.value.filter((join) => join.webId === sessionRef.value?.webId),
+    joins.value.filter((join) => join.actor === sessionRef.value?.actor),
 );
 
 const isTogglingJoin = ref(false);
@@ -40,15 +42,15 @@ async function toggleJoin() {
     isTogglingJoin.value = true;
     if (myJoins.value.length) {
         await Promise.all(
-            myJoins.value.map((join) => useGraffiti().delete(join, session)),
+            myJoins.value.map((join) => graffiti.delete(join, session)),
         );
     } else {
-        await useGraffiti().put<typeof joinSchema>(
+        await graffiti.put<typeof joinSchema>(
             {
                 value: {
                     type: "Join",
                     object: joinChannel,
-                    actor: session.webId,
+                    actor: session.actor,
                 },
                 channels: ["Namebook"],
             },
@@ -64,7 +66,7 @@ async function toggleJoin() {
     <ul class="directory">
         <li>
             <h1>
-                <Name v-if="sessionRef" :webId="sessionRef.webId" />
+                <Name v-if="sessionRef" :actor="sessionRef.actor" />
             </h1>
             <div class="modifiers">
                 <input
@@ -86,12 +88,12 @@ async function toggleJoin() {
     <h1>namebook entries:</h1>
 
     <ul>
-        <li v-for="join in joins" :key="join.webId">
+        <li v-for="join in joins" :key="join.actor">
             <h1>
-                <Name :webId="join.webId" />
+                <Name :actor="join.actor" />
             </h1>
             <div class="modifiers">
-                <Follow :object="join.webId" />
+                <Follow :object="join.actor" />
             </div>
         </li>
     </ul>

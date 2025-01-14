@@ -1,14 +1,10 @@
-<script setup lang="ts">
-import { GraffitiIdentityProviderLogin } from "@graffiti-garden/client-vue";
-</script>
-
 <template>
     <template v-if="!$graffitiSession.value">
         <dialog>
             <h1>
                 <RouterLink to="/"> namebook </RouterLink>
             </h1>
-            <GraffitiIdentityProviderLogin client-name="namebook" />
+            <button @click="$graffiti.login()">log in</button>
         </dialog>
     </template>
     <template v-else>
@@ -19,7 +15,7 @@ import { GraffitiIdentityProviderLogin } from "@graffiti-garden/client-vue";
                 </li>
                 <li>
                     <RouterLink
-                        :to="`/profile/${encodeURIComponent($graffitiSession.value.webId)}`"
+                        :to="`/profile/${encodeURIComponent($graffitiSession.value.actor)}`"
                     >
                         my profile
                     </RouterLink>
