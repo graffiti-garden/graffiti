@@ -333,7 +333,13 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
   login: Graffiti["login"] = async (actor, state) => {
     if (!actor && typeof window !== "undefined") {
-      const response = window.prompt("Choose an actor ID");
+      const response = window.prompt(
+        `This is an insecure implementation of the Graffiti API \
+for *demo purposes only*. Do not store any sensitive information \
+here.\
+\n\n\
+Simply choose a username to log in.`,
+      );
       if (response) actor = response;
     }
 
