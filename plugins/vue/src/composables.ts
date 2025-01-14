@@ -37,7 +37,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
    * A Graffiti session object. If not provided, the
    * global plugin session will be used.
    */
-  session?: MaybeRefOrGetter<GraffitiSession>,
+  session?: MaybeRefOrGetter<GraffitiSession | undefined>,
 ) {
   const graffiti = useGraffiti();
   const sessionInjected = useGraffitiSession();
