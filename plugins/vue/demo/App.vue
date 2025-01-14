@@ -12,15 +12,15 @@ const noteSchema = {
     properties: {
         value: {
             properties: {
-                type: {
-                    enum: ["Note"],
-                    type: "string",
-                },
                 content: {
                     type: "string",
                 },
+                createdAt: {
+                    type: "string",
+                    format: "date-time",
+                },
             },
-            required: ["type", "content"],
+            required: ["content", "createdAt"],
         },
     },
 } as const satisfies JSONSchema4;
@@ -38,8 +38,8 @@ async function postNote() {
         {
             channels: channels.value,
             value: {
-                type: "Note",
                 content: myNote.value,
+                createdAt: new Date().toISOString(),
             },
         },
         session.value,
@@ -153,14 +153,14 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                 </form>
 
                 <menu>
-                    <li>
+                    <!-- <li>
                         <a
                             target="_blank"
                             :href="$graffiti.locationToUri(result)"
                         >
                             🌐
                         </a>
-                    </li>
+                    </li> -->
                     <li v-if="result.actor === session?.actor">
                         <button @click="$graffiti.delete(result, session)">
                             Delete
