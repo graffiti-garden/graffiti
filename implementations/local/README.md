@@ -4,3 +4,7 @@ This is an implementation of the [Graffiti API](https://api.graffiti.garden/clas
 using [PouchDB](https://pouchdb.com/).
 It uses local storage either in the browser or in Node.js but can be configured
 to use a remote CouchDB instance.
+
+## TODO
+
+- Index queries involving `lastModified` for performance.
