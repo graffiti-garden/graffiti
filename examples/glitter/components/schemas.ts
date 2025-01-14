@@ -1,3 +1,5 @@
+import type { JSONSchema4 } from "@graffiti-garden/api";
+
 export function joinSchema(object: string) {
   return {
     properties: {
@@ -10,10 +12,10 @@ export function joinSchema(object: string) {
         required: ["type", "object"],
       },
     },
-  } as const;
+  } as const satisfies JSONSchema4;
 }
 
-export function followSchema(webId: string, object?: string) {
+export function followSchema(actor: string, object?: string) {
   return {
     properties: {
       value: {
@@ -23,28 +25,28 @@ export function followSchema(webId: string, object?: string) {
             type: "string",
             ...(object ? { enum: [object] } : {}),
           },
-          actor: { type: "string", enum: [webId] },
+          actor: { type: "string", enum: [actor] },
         },
         required: ["type", "object"],
       },
-      webId: { type: "string", enum: [webId] },
+      actor: { type: "string", enum: [actor] },
     },
-  } as const;
+  } as const satisfies JSONSchema4;
 }
 
-export function profileSchema(webId: string) {
+export function profileSchema(actor: string) {
   return {
     properties: {
       value: {
         properties: {
           type: { enum: ["Profile"] },
           name: { type: "string" },
-          describes: { type: "string", enum: [webId] },
+          describes: { type: "string", enum: [actor] },
         },
         required: ["type", "name"],
       },
     },
-  } as const;
+  } as const satisfies JSONSchema4;
 }
 
 export function noteSchema(inReplyTo?: string) {
@@ -66,5 +68,5 @@ export function noteSchema(inReplyTo?: string) {
         required: ["content", "createdAt"],
       },
     },
-  } as const;
+  } as const satisfies JSONSchema4;
 }

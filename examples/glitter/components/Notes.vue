@@ -4,22 +4,22 @@ import Note from "./Note.vue";
 import { noteSchema } from "./schemas";
 import {
     useGraffiti,
-    useDiscover,
+    useGraffitiDiscover,
     useGraffitiSession,
-} from "@graffiti-garden/client-vue";
+} from "@graffiti-garden/wrapper-vue";
 
 const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
 
 const props = withDefaults(
     defineProps<{
-        webIds: string[];
+        actors: string[];
         inReplyTo: string | undefined;
         at: string | undefined;
         prompt: string;
     }>(),
     {
-        webIds: () => [],
+        actors: () => [],
         inReplyTo: undefined,
         at: undefined,
         prompt: "what's on your mind?",
@@ -27,7 +27,7 @@ const props = withDefaults(
 );
 
 function channels() {
-    const channels = [...props.webIds];
+    const channels = [...props.actors];
     if (props.inReplyTo) channels.push(props.inReplyTo);
     if (props.at) channels.push(props.at);
     return channels;
@@ -37,7 +37,11 @@ const {
     results: notes,
     poll: pollNotes,
     isPolling,
-} = useDiscover(channels, () => noteSchema(props.inReplyTo), sessionRef);
+} = useGraffitiDiscover(
+    channels,
+    () => noteSchema(props.inReplyTo),
+    sessionRef,
+);
 
 const notesSorted = computed(() =>
     notes.value.sort(
@@ -59,7 +63,6 @@ async function submitNote() {
     isSubmitting.value = true;
 
     const note = {
-        type: "Note",
         content: noteContent.value,
         createdAt: new Date().toISOString(),
         at: undefined,
@@ -92,7 +95,7 @@ async function submitNote() {
         await graffiti.put<ReturnType<typeof noteSchema>>(
             {
                 value: note,
-                channels: [session.webId],
+                channels: [session.actor],
             },
             session,
         );
@@ -119,7 +122,7 @@ async function submitNote() {
         <button v-else disabled>🔄 refreshing...</button>
     </div>
     <ul>
-        <li v-for="note in notesSorted" :key="$graffiti.locationToUrl(note)">
+        <li v-for="note in notesSorted" :key="$graffiti.locationToUri(note)">
             <Note :note="note" />
         </li>
     </ul>

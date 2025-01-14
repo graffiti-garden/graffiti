@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import GraffitiPlugin, {
-    type GraffitiObject,
-    useGraffitiSession,
-} from "@graffiti-garden/client-vue";
+import type { GraffitiObject } from "@graffiti-garden/api";
+import { useGraffitiSession } from "@graffiti-garden/wrapper-vue";
 import Name from "./Name.vue";
 import Notes from "./Notes.vue";
 import { noteSchema } from "./schemas";
@@ -60,10 +58,10 @@ const editText = ref("");
 
 <template>
     <h1>
-        <Name :webId="note.webId" />
+        <Name :actor="note.actor" />
         <template v-if="note.value.at">
-            <template v-for="webId in note.value.at" :key="webId">
-                @<Name :webId="webId" />
+            <template v-for="actor in note.value.at" :key="actor">
+                @<Name :actor="actor" />
             </template>
         </template>
     </h1>
@@ -75,14 +73,14 @@ const editText = ref("");
     <div class="modifiers" v-click-away="() => (editMenuOpen = false)">
         <input
             type="checkbox"
-            :id="'menu' + $graffiti.locationToUrl(note)"
+            :id="'menu' + $graffiti.locationToUri(note)"
             :checked="editMenuOpen"
             @click="editMenuOpen = !editMenuOpen"
         />
-        <label :for="'menu' + $graffiti.locationToUrl(note)">⚙️</label>
+        <label :for="'menu' + $graffiti.locationToUri(note)">⚙️</label>
 
         <menu v-if="editMenuOpen" @click="editMenuOpen = false">
-            <template v-if="note.webId === session?.webId">
+            <template v-if="note.actor === session?.actor">
                 <li v-if="!editing">
                     <button
                         @click="
@@ -103,7 +101,7 @@ const editText = ref("");
                 <a
                     target="_blank"
                     class="button"
-                    :href="$graffiti.locationToUrl(note)"
+                    :href="$graffiti.locationToUri(note)"
                     >link</a
                 >
             </li>
@@ -146,18 +144,18 @@ const editText = ref("");
     <div class="post-annotators">
         <input
             type="checkbox"
-            :id="'comments' + $graffiti.locationToUrl(note)"
+            :id="'comments' + $graffiti.locationToUri(note)"
             :checked="commentsOpen"
             @click="commentsOpen = !commentsOpen"
         />
-        <label :for="'comments' + $graffiti.locationToUrl(note)">
+        <label :for="'comments' + $graffiti.locationToUri(note)">
             comments
         </label>
     </div>
 
     <Notes
         v-if="commentsOpen"
-        :inReplyTo="$graffiti.locationToUrl(note)"
+        :inReplyTo="$graffiti.locationToUri(note)"
         prompt="write a comment..."
     />
 </template>

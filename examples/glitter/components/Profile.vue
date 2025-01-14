@@ -1,35 +1,41 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { GraffitiIdentityProviderLogin } from "@graffiti-garden/client-vue";
 import Name from "./Name.vue";
 import Follow from "./Follow.vue";
 import Notes from "./Notes.vue";
 
 const props = defineProps<{
-    webIdEncoded: string;
+    actorEncoded: string;
 }>();
 
-const webId = computed(() =>
-    props.webIdEncoded ? decodeURIComponent(props.webIdEncoded) : "",
+const actor = computed(() =>
+    props.actorEncoded ? decodeURIComponent(props.actorEncoded) : "",
 );
 </script>
 
 <template>
     <h1>
-        <Name :webId="webId" :editable="true" />
+        <Name :actor="actor" :editable="true" />
     </h1>
-    <h2 v-if="webId !== $graffitiSession.value?.webId">
-        <a :href="webId">{{ webId }}</a>
+    <h2>
+        <a :href="actor">{{ actor }}</a>
     </h2>
-    <GraffitiIdentityProviderLogin v-else client-name="namebook" />
     <p>
-        <Follow :object="webId" />
+        <button
+            v-if="actor === $graffitiSession.value?.actor"
+            @click="$graffiti.logout($graffitiSession.value)"
+        >
+            Log out
+        </button>
+    </p>
+    <p>
+        <Follow :object="actor" />
     </p>
     <Notes
-        :webIds="[webId]"
-        :at="webId !== $graffitiSession.value?.webId ? webId : undefined"
+        :actors="[actor]"
+        :at="actor !== $graffitiSession.value?.actor ? actor : undefined"
         :prompt="
-            webId === $graffitiSession.value?.webId
+            actor === $graffitiSession.value?.actor
                 ? 'what\'s on your mind?'
                 : 'to my dear friend...'
         "
