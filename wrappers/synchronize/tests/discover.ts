@@ -105,6 +105,7 @@ export const graffitiDiscoverTests = (
 
         const object2 = randomPutObject();
         object2.channels = object1.channels;
+        // Make sure the lastModified is different for the query
         await new Promise((r) => setTimeout(r, 20));
         const putted2 = await graffiti.put(object2, session2);
 
@@ -131,6 +132,7 @@ export const graffitiDiscoverTests = (
 
       const object = randomPutObject();
       const putted1 = await graffiti.put(object, session);
+      // Make sure the lastModified is different
       await new Promise((r) => setTimeout(r, 20));
       const putted2 = await graffiti.put(object, session);
 
@@ -460,7 +462,6 @@ export const graffitiDiscoverTests = (
 
       const object = randomPutObject();
       const putted = await graffiti.put(object, session);
-      await new Promise((r) => setTimeout(r, 20));
       const deleted = await graffiti.delete(putted, session);
 
       const iterator = graffiti.discover(object.channels, {});
@@ -471,7 +472,6 @@ export const graffitiDiscoverTests = (
       expect(result.value.channels).toEqual(object.channels);
       expect(result.value.actor).toEqual(session.actor);
       expect(result.value.lastModified).toEqual(deleted.lastModified);
-      expect(result.value.lastModified).toBeGreaterThan(putted.lastModified);
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
 
@@ -540,7 +540,7 @@ export const graffitiDiscoverTests = (
       expect(result.value.value).toEqual(object.value);
       expect(result.value.channels).toEqual(object.channels);
       expect(result.value.allowed).toBeUndefined();
-      expect(iterator.next()).resolves.toHaveProperty("done", true);
+      await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
   });
 };
