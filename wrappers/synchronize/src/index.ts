@@ -24,6 +24,7 @@ import {
   isAllowed,
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
+import { env } from "node:process";
 
 export interface GraffitiPouchDBOptions {
   sourceName?: string;
@@ -51,13 +52,18 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     this.db
       //@ts-ignore
       .put({
-        _id: "_design/index",
+        _id: "_design/index2",
         views: {
           byChannel: {
             map: function (object: GraffitiObjectBase) {
+              const paddedLastModified = object.lastModified
+                .toString()
+                .padStart(15, "0");
               object.channels.forEach(function (channel) {
+                const id =
+                  encodeURIComponent(channel) + "/" + paddedLastModified;
                 //@ts-ignore
-                emit(channel);
+                emit(id);
               });
             }.toString(),
           },
@@ -295,34 +301,59 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
     const validate = attemptAjvCompile(this.ajv, schema);
 
+    // Use the index for queries over ranges of lastModified
+    let startKeyAppend = "";
+    let endKeyAppend = "\uffff";
+    const lastModifiedSchema = schema.properties?.lastModified;
+    if (lastModifiedSchema?.minimum) {
+      let minimum = lastModifiedSchema.minimum;
+      if (lastModifiedSchema.exclusiveMinimum) minimum += 1;
+      startKeyAppend = minimum.toString().padStart(15, "0");
+    }
+    if (lastModifiedSchema?.maximum) {
+      let maximum = lastModifiedSchema.maximum;
+      if (lastModifiedSchema.exclusiveMaximum) maximum -= 1;
+      endKeyAppend = maximum.toString().padStart(15, "0");
+    }
+
     const repeater: GraffitiStream<GraffitiObject<typeof schema>> =
       new Repeater(async (push, stop) => {
-        const result = await this.db.query<GraffitiObjectBase>(
-          "index/byChannel",
-          {
-            keys: channels,
-            include_docs: true,
-          },
-        );
+        const processedIds = new Set<string>();
 
-        for (const row of result.rows) {
-          const doc = row.doc;
-          if (!doc) continue;
+        for (const channel of channels) {
+          const encodedChannel = encodeURIComponent(channel);
+          const startkey = encodedChannel + "/" + startKeyAppend;
+          const endkey = encodedChannel + "/" + endKeyAppend;
 
-          const { _id, _rev, ...object } = doc;
+          const result = await this.db.query<GraffitiObjectBase>(
+            "index2/byChannel",
+            { startkey, endkey, include_docs: true },
+          );
 
-          // Make sure the user is allowed to see it
-          if (!isAllowed(doc, session)) continue;
+          for (const row of result.rows) {
+            const doc = row.doc;
+            if (!doc) continue;
 
-          // Mask out the allowed list and channels
-          // if the user is not the owner
-          maskObject(object, channels, session);
+            const { _id, _rev, ...object } = doc;
 
-          // Check that it matches the schema
-          if (validate(object)) {
-            push({
-              value: object,
-            });
+            // Don't double return the same object
+            // (which can happen if it's in multiple channels)
+            if (processedIds.has(_id)) continue;
+            processedIds.add(_id);
+
+            // Make sure the user is allowed to see it
+            if (!isAllowed(doc, session)) continue;
+
+            // Mask out the allowed list and channels
+            // if the user is not the owner
+            maskObject(object, channels, session);
+
+            // Check that it matches the schema
+            if (validate(object)) {
+              push({
+                value: object,
+              });
+            }
           }
         }
         stop();
