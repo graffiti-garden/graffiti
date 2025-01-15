@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "description": "The heart of Graffiti",
   "type": "module",
   "main": "src/index.ts",
