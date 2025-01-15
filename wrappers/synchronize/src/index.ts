@@ -153,7 +153,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
   protected async deleteBefore(
     location: GraffitiLocation,
-    modifiedBefore?: string,
+    modifiedBefore?: number,
   ) {
     const docs = (await this.queryByLocation(location)).filter(
       (doc) => !modifiedBefore || doc.lastModified < modifiedBefore,
@@ -172,7 +172,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     const deletedDoc = {
       ...existingDoc,
       tombstone: true,
-      lastModified: modifiedBefore ?? new Date().toISOString(),
+      lastModified: modifiedBefore ?? new Date().getTime(),
     };
     await this.db.put(deletedDoc);
     const { _id, _rev, ...deletedObject } = deletedDoc;
@@ -207,7 +207,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       source: "local",
       actor: session.actor,
       tombstone: false,
-      lastModified: new Date().toISOString(),
+      lastModified: new Date().getTime(),
     };
 
     await this.db.put({
@@ -274,11 +274,11 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       );
     }
 
-    patchObject.lastModified = new Date().toISOString();
-    await this.db.put({
-      ...patchObject,
-      _id: this.docId(patchObject),
-    });
+    (patchObject.lastModified = new Date().getTime()),
+      await this.db.put({
+        ...patchObject,
+        _id: this.docId(patchObject),
+      });
 
     // Delete the old object
     await this.deleteBefore(patchObject, patchObject.lastModified);
