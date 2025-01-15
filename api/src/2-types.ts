@@ -95,12 +95,16 @@ export interface GraffitiObjectBase {
   source: string;
 
   /**
-   * The time the object was last modified in [ISO format](https://fits.gsfc.nasa.gov/iso-time.html). This is used for caching and synchronization.
-   * It can also be used to sort objects in a user interface but in many cases it would be better to
+   * The time the object was last modified, measured in milliseconds since January 1, 1970.
+   * This is used for caching and synchronization.
+   * A number, rather than an ISO string or Date object, is used for easy comparison, sorting,
+   * and JSON Schema [range queries](https://json-schema.org/understanding-json-schema/reference/numeric#range).
+   *
+   * It is possible to use this value to sort objects in a user's interface but in many cases it would be better to
    * use a `createdAt` property in the object's {@link value | `value`} to indicate when the object was created
    * rather than when it was modified.
    */
-  lastModified: string;
+  lastModified: number;
 
   /**
    * A boolean indicating whether the object has been deleted.

@@ -19,12 +19,16 @@ import type { JSONSchema4 } from "json-schema";
  * user interface tools to present and interact with the data.
  *
  * There are several different implementations of this Graffiti API available,
- * including a decentralized implementation and a local implementation
+ * including a [decentralized implementation](https://github.com/graffiti-garden/client-core),
+ * and a [local implementation](https://github.com/graffiti-garden/implementation-pouchdb)
  * that can be used for testing. In the design of Graffiti we prioritized
  * the design of this API first as it is the layer that shapes the experience
  * of developing applications. While different implementations provide tradeoffs between
  * other important properties (e.g. privacy, security, scalability), those properties
  * are useless if the system as a whole is unusable. Build APIs before protocols!
+ *
+ * There is also a wrapper around this API that provides a [Vue plugin](https://github.com/graffiti-garden/wrapper-vue/)
+ * that enables reactivity. Other front-end frameworks can be supported in the future.
  *
  * The first group of methods are like standard CRUD methods that
  * allow applications to {@link put}, {@link get}, {@link patch}, and {@link delete}
@@ -333,7 +337,7 @@ export abstract class Graffiti {
   ): GraffitiStream<{
     channel: string;
     source: string;
-    lastModified: string;
+    lastModified: number;
     count: number;
   }>;
 
