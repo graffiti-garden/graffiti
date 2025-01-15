@@ -495,20 +495,29 @@ export const graffitiDiscoverTests = (
         const iterator1 = graffiti.discover(object1.channels, {});
         const result = (await iterator1.next()).value;
         assert(result && !result.error, "result has no value");
-        expect(result.value.tombstone).toBe(true);
-        expect(result.value.value).toEqual(object1.value);
-        expect(result.value.channels).toEqual(object1.channels);
-        expect(result.value.lastModified).toEqual(replaced.lastModified);
         await expect(iterator1.next()).resolves.toHaveProperty("done", true);
 
         const iterator2 = graffiti.discover(object2.channels, {});
         const result2 = (await iterator2.next()).value;
         assert(result2 && !result2.error, "result has no value");
-        expect(result2.value.tombstone).toBe(false);
-        expect(result2.value.value).toEqual(object2.value);
-        expect(result2.value.channels).toEqual(object2.channels);
-        expect(result2.value.lastModified).toEqual(replaced.lastModified);
         await expect(iterator2.next()).resolves.toHaveProperty("done", true);
+
+        // If they have the same timestamp, except
+        // only one to have a tombstone
+        if (putted.lastModified === replaced.lastModified) {
+          expect(result.value.tombstone || result2.value.tombstone).toBe(true);
+          expect(result.value.tombstone && result2.value.tombstone).toBe(false);
+        } else {
+          expect(result.value.tombstone).toBe(true);
+          expect(result.value.value).toEqual(object1.value);
+          expect(result.value.channels).toEqual(object1.channels);
+          expect(result.value.lastModified).toEqual(replaced.lastModified);
+
+          expect(result2.value.tombstone).toBe(false);
+          expect(result2.value.value).toEqual(object2.value);
+          expect(result2.value.channels).toEqual(object2.channels);
+          expect(result2.value.lastModified).toEqual(replaced.lastModified);
+        }
       }
     });
 
