@@ -1,4 +1,4 @@
-import Ajv from "ajv";
+import Ajv from "ajv-draft-04";
 import { Graffiti } from "@graffiti-garden/api";
 import type {
   GraffitiObjectBase,
