@@ -542,5 +542,33 @@ export const graffitiDiscoverTests = (
       expect(result.value.allowed).toBeUndefined();
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
+
+    it("put concurrently and discover one", async () => {
+      const graffiti = useGraffiti();
+      const session = useSession1();
+
+      const object = randomPutObject();
+      object.name = randomString();
+
+      const putPromises = Array(100)
+        .fill(0)
+        .map(() => graffiti.put(object, session));
+      await Promise.all(putPromises);
+
+      const iterator = graffiti.discover(object.channels, {});
+      let tombstoneCount = 0;
+      let valueCount = 0;
+      for await (const result of iterator) {
+        assert(!result.error, "result has error");
+        console.log(result);
+        if (result.value.tombstone) {
+          tombstoneCount++;
+        } else {
+          valueCount++;
+        }
+      }
+      expect(tombstoneCount).toBe(99);
+      expect(valueCount).toBe(1);
+    });
   });
 };
