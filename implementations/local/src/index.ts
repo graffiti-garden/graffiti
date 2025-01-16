@@ -24,7 +24,6 @@ import {
   isAllowed,
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
-import { env } from "node:process";
 
 export interface GraffitiPouchDBOptions {
   sourceName?: string;
@@ -52,9 +51,9 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     this.db
       //@ts-ignore
       .put({
-        _id: "_design/index2",
+        _id: "_design/index3",
         views: {
-          byChannel: {
+          byChannelAndLastModified: {
             map: function (object: GraffitiObjectBase) {
               const paddedLastModified = object.lastModified
                 .toString()
@@ -161,27 +160,56 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     location: GraffitiLocation,
     modifiedBefore?: number,
   ) {
-    const docs = (await this.queryByLocation(location)).filter(
+    const docsAtLocation = await this.queryByLocation(location);
+
+    // Delete all old docs
+    const docs = docsAtLocation.filter(
       (doc) => !modifiedBefore || doc.lastModified < modifiedBefore,
     );
-    if (!docs.length) return;
 
-    // Get the oldest one (although
-    // there should only be one unless
-    // something bad happens)
-    const existingDoc = docs.reduce((a, b) =>
-      a.lastModified < b.lastModified ? a : b,
+    // For docs with the same timestamp,
+    // keep the one with the highest _id
+    // to break concurrency ties
+    const concurrentDocsAll = docsAtLocation.filter(
+      (doc) => modifiedBefore && doc.lastModified === modifiedBefore,
     );
+    if (concurrentDocsAll.length) {
+      const keepDoc = concurrentDocsAll.reduce((a, b) =>
+        a._id > b._id ? a : b,
+      );
+      const concurrentDocsToDelete = concurrentDocsAll.filter(
+        (doc) => doc._id !== keepDoc._id,
+      );
+      docs.push(...concurrentDocsToDelete);
+    }
 
-    // Change it's tombstone to true
-    // and update it's timestamp
-    const deletedDoc = {
-      ...existingDoc,
-      tombstone: true,
-      lastModified: modifiedBefore ?? new Date().getTime(),
-    };
-    await this.db.put(deletedDoc);
-    const { _id, _rev, ...deletedObject } = deletedDoc;
+    let deletedObject: GraffitiObjectBase | undefined = undefined;
+    // Go through documents oldest to newest
+    for (const doc of docs.sort((a, b) => a.lastModified - b.lastModified)) {
+      // Change it's tombstone to true
+      // and update it's timestamp
+      const deletedDoc = {
+        ...doc,
+        tombstone: true,
+        lastModified: modifiedBefore ?? new Date().getTime(),
+      };
+      try {
+        await this.db.put(deletedDoc);
+      } catch (error) {
+        if (
+          error &&
+          typeof error === "object" &&
+          "name" in error &&
+          error.name === "conflict"
+        ) {
+          // Document was already deleted
+          continue;
+        }
+      }
+      const { _id, _rev, ...object } = deletedDoc;
+      deletedObject = object;
+    }
+
     return deletedObject;
   }
 
@@ -280,11 +308,11 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       );
     }
 
-    (patchObject.lastModified = new Date().getTime()),
-      await this.db.put({
-        ...patchObject,
-        _id: this.docId(patchObject),
-      });
+    patchObject.lastModified = new Date().getTime();
+    await this.db.put({
+      ...patchObject,
+      _id: this.docId(patchObject),
+    });
 
     // Delete the old object
     await this.deleteBefore(patchObject, patchObject.lastModified);
@@ -306,13 +334,17 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
     let endKeyAppend = "\uffff";
     const lastModifiedSchema = schema.properties?.lastModified;
     if (lastModifiedSchema?.minimum) {
-      let minimum = lastModifiedSchema.minimum;
-      if (lastModifiedSchema.exclusiveMinimum) minimum += 1;
+      let minimum = Math.ceil(lastModifiedSchema.minimum);
+      minimum === lastModifiedSchema.minimum &&
+        lastModifiedSchema.exclusiveMinimum &&
+        minimum++;
       startKeyAppend = minimum.toString().padStart(15, "0");
     }
     if (lastModifiedSchema?.maximum) {
-      let maximum = lastModifiedSchema.maximum;
-      if (lastModifiedSchema.exclusiveMaximum) maximum -= 1;
+      let maximum = Math.floor(lastModifiedSchema.maximum);
+      maximum === lastModifiedSchema.maximum &&
+        lastModifiedSchema.exclusiveMaximum &&
+        maximum--;
       endKeyAppend = maximum.toString().padStart(15, "0");
     }
 
@@ -326,7 +358,7 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
           const endkey = encodedChannel + "/" + endKeyAppend;
 
           const result = await this.db.query<GraffitiObjectBase>(
-            "index2/byChannel",
+            "index3/byChannelAndLastModified",
             { startkey, endkey, include_docs: true },
           );
 
