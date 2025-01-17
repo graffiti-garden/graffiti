@@ -19,20 +19,28 @@ type SynchronizeEvent = CustomEvent<{
   newObject?: GraffitiObjectBase;
 }>;
 
-function matchChannelsAllowed(
-  object: GraffitiObjectBase,
-  channels: string[],
-  session?: GraffitiSession,
-): boolean {
-  return (
-    object.channels.some((channel) => channels.includes(channel)) &&
-    isAllowed(object, session)
-  );
-}
+type GraffitiDatabaseMethods = Pick<
+  Graffiti,
+  "get" | "put" | "patch" | "delete" | "discover"
+>;
 
-export abstract class GraffitiSynchronized extends Graffiti {
-  protected readonly ajv = new Ajv({ strict: false });
+/**
+ * Wraps a partial implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+ * to provide the [`synchronize`](https://api.graffiti.garden/classes/Graffiti.html#synchronize) method.
+ * The partial implementation must include the primary database methods:
+ * `get`, `put`, `patch`, `delete`, and `discover`.
+ */
+export class GraffitiSynchronize {
   protected readonly synchronizeEvents = new EventTarget();
+  protected readonly ajv: Ajv;
+  protected readonly graffiti: GraffitiDatabaseMethods;
+
+  // Pass in the ajv instance
+  // and database methods to wrap
+  constructor(ajv: Ajv, graffiti: GraffitiDatabaseMethods) {
+    this.ajv = ajv;
+    this.graffiti = graffiti;
+  }
 
   protected synchronizeDispatch(
     oldObject: GraffitiObjectBase,
@@ -47,16 +55,14 @@ export abstract class GraffitiSynchronized extends Graffiti {
     this.synchronizeEvents.dispatchEvent(event);
   }
 
-  protected abstract _get: Graffiti["get"];
   get: Graffiti["get"] = async (...args) => {
-    const object = await this._get(...args);
+    const object = await this.graffiti.get(...args);
     this.synchronizeDispatch(object);
     return object;
   };
 
-  protected abstract _put: Graffiti["put"];
   put: Graffiti["put"] = async (...args) => {
-    const oldObject = await this._put(...args);
+    const oldObject = await this.graffiti.put(...args);
     const partialObject = args[0];
     const newObject: GraffitiObjectBase = {
       ...oldObject,
@@ -69,9 +75,8 @@ export abstract class GraffitiSynchronized extends Graffiti {
     return oldObject;
   };
 
-  protected abstract _patch: Graffiti["patch"];
   patch: Graffiti["patch"] = async (...args) => {
-    const oldObject = await this._patch(...args);
+    const oldObject = await this.graffiti.patch(...args);
     const newObject: GraffitiObjectBase = { ...oldObject };
     newObject.tombstone = false;
     for (const prop of ["value", "channels", "allowed"] as const) {
@@ -81,16 +86,14 @@ export abstract class GraffitiSynchronized extends Graffiti {
     return oldObject;
   };
 
-  protected abstract _delete: Graffiti["delete"];
   delete: Graffiti["delete"] = async (...args) => {
-    const oldObject = await this._delete(...args);
+    const oldObject = await this.graffiti.delete(...args);
     this.synchronizeDispatch(oldObject);
     return oldObject;
   };
 
-  protected abstract _discover: Graffiti["discover"];
   discover: Graffiti["discover"] = (...args) => {
-    const iterator = this._discover(...args);
+    const iterator = this.graffiti.discover(...args);
     const dispatch = this.synchronizeDispatch.bind(this);
     const wrapper = async function* () {
       let result = await iterator.next();
@@ -116,27 +119,22 @@ export abstract class GraffitiSynchronized extends Graffiti {
           const { oldObject: oldObjectRaw, newObject: newObjectRaw } =
             event.detail;
 
-          if (
-            newObjectRaw &&
-            matchChannelsAllowed(newObjectRaw, channels, session)
-          ) {
-            const newObject = { ...newObjectRaw };
-            maskObject(newObject, channels, session);
-            if (validate(newObject)) {
-              push({
-                value: newObject,
-              });
-            }
-          } else if (
-            oldObjectRaw &&
-            matchChannelsAllowed(oldObjectRaw, channels, session)
-          ) {
-            const oldObject = { ...oldObjectRaw };
-            maskObject(oldObject, channels, session);
-            if (validate(oldObject)) {
-              push({
-                value: oldObject,
-              });
+          for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
+            if (
+              objectRaw &&
+              objectRaw.channels.some((channel) =>
+                channels.includes(channel),
+              ) &&
+              isAllowed(objectRaw, session)
+            ) {
+              const object = { ...objectRaw };
+              maskObject(object, channels, session);
+              if (validate(object)) {
+                push({
+                  value: object,
+                });
+                break;
+              }
             }
           }
         };
