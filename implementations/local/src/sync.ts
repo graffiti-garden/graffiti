@@ -93,12 +93,15 @@ export abstract class GraffitiSynchronized extends Graffiti {
     const iterator = this._discover(...args);
     const dispatch = this.synchronizeDispatch.bind(this);
     const wrapper = async function* () {
-      for await (const result of iterator) {
-        if (!result.error) {
-          dispatch(result.value);
+      let result = await iterator.next();
+      while (!result.done) {
+        if (!result.value.error) {
+          dispatch(result.value.value);
         }
-        yield result;
+        yield result.value;
+        result = await iterator.next();
       }
+      return result.value;
     };
     return wrapper();
   };

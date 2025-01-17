@@ -25,20 +25,50 @@ import {
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
 
+/**
+ * Constructor options for the {@link GraffitiPouchDB} class.
+ */
 export interface GraffitiPouchDBOptions {
-  sourceName?: string;
+  /**
+   * Options to pass to the PouchDB constructor.
+   * Defaults to `{ name: "graffitiDb" }`.
+   *
+   * See the [PouchDB documentation](https://pouchdb.com/api.html#create_database)
+   * for available options.
+   */
   pouchDBOptions?: PouchDB.Configuration.DatabaseConfiguration;
+  /**
+   * Defines the name of the {@link https://api.graffiti.garden/interfaces/GraffitiObjectBase.html#source | `source` }
+   * under which to store objects.
+   * Defaults to `"local"`.
+   */
+  sourceName?: string;
+  /**
+   * The time in milliseconds to keep tombstones before deleting them.
+   * See the {@link https://api.graffiti.garden/classes/Graffiti.html#discover | `discover` }
+   * documentation for more information.
+   */
+  tombstoneRetention?: number;
 }
 
+/**
+ * An implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+ * based on [PouchDB](https://pouchdb.com/). By PouchDb stores data in a local
+ * database, either in the browser or in Node.js, but it can be configured to
+ * use a remote database instead.
+ */
 export class GraffitiPouchDB extends GraffitiSynchronized {
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
-  protected readonly source: string;
+  protected readonly source: string = "local";
+  protected readonly tombstoneRetention: number = 86400000; // 1 day in ms
   locationToUri = locationToUri;
   uriToLocation = uriToLocation;
 
   constructor(options?: GraffitiPouchDBOptions) {
     super();
-    this.source = options?.sourceName ?? "local";
+    this.source = options?.sourceName ?? this.source;
+    this.tombstoneRetention =
+      options?.tombstoneRetention ?? this.tombstoneRetention;
     const pouchDbOptions = {
       name: "graffitiDb",
       ...options?.pouchDBOptions,
@@ -348,53 +378,61 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
       endKeyAppend = maximum.toString().padStart(15, "0");
     }
 
-    const repeater: GraffitiStream<GraffitiObject<typeof schema>> =
-      new Repeater(async (push, stop) => {
-        const processedIds = new Set<string>();
+    const repeater: GraffitiStream<
+      GraffitiObject<typeof schema>,
+      {
+        tombstoneRetention: number;
+      }
+    > = new Repeater(async (push, stop) => {
+      const processedIds = new Set<string>();
 
-        for (const channel of channels) {
-          const encodedChannel = encodeURIComponent(channel);
-          const startkey = encodedChannel + "/" + startKeyAppend;
-          const endkey = encodedChannel + "/" + endKeyAppend;
+      for (const channel of channels) {
+        const encodedChannel = encodeURIComponent(channel);
+        const startkey = encodedChannel + "/" + startKeyAppend;
+        const endkey = encodedChannel + "/" + endKeyAppend;
 
-          const result = await this.db.query<GraffitiObjectBase>(
-            "index3/byChannelAndLastModified",
-            { startkey, endkey, include_docs: true },
-          );
+        const result = await this.db.query<GraffitiObjectBase>(
+          "index3/byChannelAndLastModified",
+          { startkey, endkey, include_docs: true },
+        );
 
-          for (const row of result.rows) {
-            const doc = row.doc;
-            if (!doc) continue;
+        for (const row of result.rows) {
+          const doc = row.doc;
+          if (!doc) continue;
 
-            const { _id, _rev, ...object } = doc;
+          const { _id, _rev, ...object } = doc;
 
-            // Don't double return the same object
-            // (which can happen if it's in multiple channels)
-            if (processedIds.has(_id)) continue;
-            processedIds.add(_id);
+          // Don't double return the same object
+          // (which can happen if it's in multiple channels)
+          if (processedIds.has(_id)) continue;
+          processedIds.add(_id);
 
-            // Make sure the user is allowed to see it
-            if (!isAllowed(doc, session)) continue;
+          // Make sure the user is allowed to see it
+          if (!isAllowed(doc, session)) continue;
 
-            // Mask out the allowed list and channels
-            // if the user is not the owner
-            maskObject(object, channels, session);
+          // Mask out the allowed list and channels
+          // if the user is not the owner
+          maskObject(object, channels, session);
 
-            // Check that it matches the schema
-            if (validate(object)) {
-              push({
-                value: object,
-              });
-            }
+          // Check that it matches the schema
+          if (validate(object)) {
+            push({
+              value: object,
+            });
           }
         }
-        stop();
-      });
+      }
+      stop();
+      return {
+        tombstoneRetention: this.tombstoneRetention,
+      };
+    });
 
     return repeater;
   };
 
-  login: Graffiti["login"] = async (actor, state) => {
+  login: Graffiti["login"] = async (proposal, state) => {
+    let actor = proposal?.actor;
     if (!actor && typeof window !== "undefined") {
       const response = window.prompt(
         `This is an insecure implementation of the Graffiti API \
