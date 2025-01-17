@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Graffiti Local Demo</title>
+        <link rel="stylesheet" href="style.css" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "@graffiti-garden/implementation-pouchdb": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-pouchdb/dist/index.js"
+                }
+            }
+        </script>
+    </head>
+
+    <body>
+        <button onclick="graffiti.login()">Login</button>
+        <button onclick="session && graffiti.logout(session)">Logout</button>
+
+        <script type="module">
+            import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
+            window.graffiti = new GraffitiPouchDB();
+            window.session = undefined;
+            window.graffiti.sessionEvents.addEventListener("login", (event) => {
+                const detail = event.detail;
+                if (detail.error) {
+                    console.error(detail.error);
+                } else {
+                    console.log(JSON.stringify(detail, null, 2));
+                    session = detail.session;
+                }
+            });
+            window.graffiti.sessionEvents.addEventListener(
+                "logout",
+                (event) => {
+                    const detail = event.detail;
+                    if (detail.error) {
+                        console.error(detail.error);
+                    } else {
+                        console.log("Log out");
+                        console.log(JSON.stringify(event.detail, null, 2));
+                    }
+                },
+            );
+        </script>
+    </body>
+</html>
