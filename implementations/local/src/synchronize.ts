@@ -3,7 +3,6 @@ import { Graffiti } from "@graffiti-garden/api";
 import type {
   GraffitiObjectBase,
   GraffitiObject,
-  GraffitiSession,
   GraffitiStream,
 } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
@@ -130,9 +129,7 @@ export class GraffitiSynchronize {
               const object = { ...objectRaw };
               maskObject(object, channels, session);
               if (validate(object)) {
-                push({
-                  value: object,
-                });
+                push({ value: object });
                 break;
               }
             }

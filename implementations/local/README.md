@@ -2,7 +2,7 @@
 
 This is an implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
 using [PouchDB](https://pouchdb.com/).
-It uses local storage either in the browser or in Node.js but can be configured
+By default, it uses local storage either in the browser or in Node.js but can be configured
 to use a remote CouchDB instance.
 
 ## Installation
@@ -10,7 +10,7 @@ to use a remote CouchDB instance.
 In node.js, simply install the package with npm:
 
 ```bash
-npm install @graffiti/implementation-pouchdb
+npm install @graffiti-garden/implementation-pouchdb
 ```
 
 In the browser, you can use a CDN like jsDelivr. Add an import map the the `<head>` of your HTML file:
