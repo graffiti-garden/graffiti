@@ -2,9 +2,10 @@ import { it, expect, describe, assert } from "vitest";
 import {
   type GraffitiFactory,
   type GraffitiSession,
+  type GraffitiStream,
   type JSONSchema4,
 } from "../src/index";
-import { randomString, randomValue, randomPutObject } from "./utils";
+import { randomString, nextStreamValue, randomPutObject } from "./utils";
 
 export const graffitiDiscoverTests = (
   useGraffiti: GraffitiFactory,
@@ -27,14 +28,13 @@ export const graffitiDiscoverTests = (
 
       const queryChannels = [randomString(), object.channels[0]];
       const iterator = graffiti.discover(queryChannels, {});
-      const result = (await iterator.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.value).toEqual(object.value);
-      expect(result.value.channels).toEqual([object.channels[0]]);
-      expect(result.value.allowed).toBeUndefined();
-      expect(result.value.actor).toEqual(session.actor);
-      expect(result.value.tombstone).toBe(false);
-      expect(result.value.lastModified).toEqual(putted.lastModified);
+      const value = await nextStreamValue(iterator);
+      expect(value.value).toEqual(object.value);
+      expect(value.channels).toEqual([object.channels[0]]);
+      expect(value.allowed).toBeUndefined();
+      expect(value.actor).toEqual(session.actor);
+      expect(value.tombstone).toBe(false);
+      expect(value.lastModified).toEqual(putted.lastModified);
       const result2 = await iterator.next();
       expect(result2.done).toBe(true);
     });
@@ -58,14 +58,13 @@ export const graffitiDiscoverTests = (
       const putted = await graffiti.put(object, session1);
 
       const iteratorSession1 = graffiti.discover(object.channels, {}, session1);
-      const result = (await iteratorSession1.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.value).toEqual(object.value);
-      expect(result.value.channels).toEqual(object.channels);
-      expect(result.value.allowed).toEqual(object.allowed);
-      expect(result.value.actor).toEqual(session1.actor);
-      expect(result.value.tombstone).toBe(false);
-      expect(result.value.lastModified).toEqual(putted.lastModified);
+      const value = await nextStreamValue(iteratorSession1);
+      expect(value.value).toEqual(object.value);
+      expect(value.channels).toEqual(object.channels);
+      expect(value.allowed).toEqual(object.allowed);
+      expect(value.actor).toEqual(session1.actor);
+      expect(value.tombstone).toBe(false);
+      expect(value.lastModified).toEqual(putted.lastModified);
 
       const iteratorSession2 = graffiti.discover(object.channels, {}, session2);
       expect(await iteratorSession2.next()).toHaveProperty("done", true);
@@ -84,14 +83,13 @@ export const graffitiDiscoverTests = (
       const putted = await graffiti.put(object, session1);
 
       const iteratorSession2 = graffiti.discover(object.channels, {}, session2);
-      const result = (await iteratorSession2.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.value).toEqual(object.value);
-      expect(result.value.allowed).toEqual([session2.actor]);
-      expect(result.value.channels).toEqual(object.channels);
-      expect(result.value.actor).toEqual(session1.actor);
-      expect(result.value.tombstone).toBe(false);
-      expect(result.value.lastModified).toEqual(putted.lastModified);
+      const value = await nextStreamValue(iteratorSession2);
+      expect(value.value).toEqual(object.value);
+      expect(value.allowed).toEqual([session2.actor]);
+      expect(value.channels).toEqual(object.channels);
+      expect(value.actor).toEqual(session1.actor);
+      expect(value.tombstone).toBe(false);
+      expect(value.lastModified).toEqual(putted.lastModified);
     });
 
     for (const prop of ["name", "actor", "lastModified"] as const) {
@@ -117,11 +115,10 @@ export const graffitiDiscoverTests = (
           },
         });
 
-        const result = (await iterator.next()).value;
-        assert(result && !result.error, "result has no value");
-        expect(result.value.name).toEqual(putted1.name);
-        expect(result.value.name).not.toEqual(putted2.name);
-        expect(result.value.value).toEqual(object1.value);
+        const value = await nextStreamValue(iterator);
+        expect(value.name).toEqual(putted1.name);
+        expect(value.name).not.toEqual(putted2.name);
+        expect(value.value).toEqual(object1.value);
         await expect(iterator.next()).resolves.toHaveProperty("done", true);
       });
     }
@@ -156,9 +153,8 @@ export const graffitiDiscoverTests = (
           },
         },
       });
-      const result1 = (await gtIteratorEpsilon.next()).value;
-      assert(result1 && !result1.error, "result has no value");
-      expect(result1.value.name).toEqual(putted2.name);
+      const value1 = await nextStreamValue(gtIteratorEpsilon);
+      expect(value1.name).toEqual(putted2.name);
       expect(await gtIteratorEpsilon.next()).toHaveProperty("done", true);
       const gteIterator = graffiti.discover(object.channels, {
         properties: {
@@ -168,9 +164,8 @@ export const graffitiDiscoverTests = (
           },
         },
       });
-      const result = (await gteIterator.next()).value;
-      assert(result && !result.error);
-      expect(result.value.name).toEqual(putted2.name);
+      const value = await nextStreamValue(gteIterator);
+      expect(value.name).toEqual(putted2.name);
       expect(await gteIterator.next()).toHaveProperty("done", true);
       const gteIteratorEpsilon = graffiti.discover(object.channels, {
         properties: {
@@ -199,9 +194,8 @@ export const graffitiDiscoverTests = (
           },
         },
       });
-      const result3 = (await ltIteratorEpsilon.next()).value;
-      assert(result3 && !result3.error, "result has no value");
-      expect(result3.value.name).toEqual(putted1.name);
+      const value3 = await nextStreamValue(ltIteratorEpsilon);
+      expect(value3.name).toEqual(putted1.name);
       expect(await ltIteratorEpsilon.next()).toHaveProperty("done", true);
 
       const lteIterator = graffiti.discover(object.channels, {
@@ -211,9 +205,8 @@ export const graffitiDiscoverTests = (
           },
         },
       });
-      const result2 = (await lteIterator.next()).value;
-      assert(result2 && !result2.error);
-      expect(result2.value.name).toEqual(putted1.name);
+      const value2 = await nextStreamValue(lteIterator);
+      expect(value2.name).toEqual(putted1.name);
       expect(await lteIterator.next()).toHaveProperty("done", true);
 
       const lteIteratorEpsilon = graffiti.discover(object.channels, {
@@ -254,9 +247,8 @@ export const graffitiDiscoverTests = (
         },
         session1,
       );
-      const result = (await iteratorSession1.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.value).toEqual(object.value);
+      const value = await nextStreamValue(iteratorSession1);
+      expect(value.value).toEqual(object.value);
       await expect(iteratorSession1.next()).resolves.toHaveProperty(
         "done",
         true,
@@ -316,9 +308,8 @@ export const graffitiDiscoverTests = (
         },
         session2,
       );
-      const result2 = (await iteratorSession2SmallAllowPeekSelf.next()).value;
-      assert(result2 && !result2.error);
-      expect(result2.value.value).toEqual(object.value);
+      const value2 = await nextStreamValue(iteratorSession2SmallAllowPeekSelf);
+      expect(value2.value).toEqual(object.value);
       await expect(
         iteratorSession2SmallAllowPeekSelf.next(),
       ).resolves.toHaveProperty("done", true);
@@ -352,9 +343,8 @@ export const graffitiDiscoverTests = (
         },
         session1,
       );
-      const result = (await iteratorSession1.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.value).toEqual(object.value);
+      const value = await nextStreamValue(iteratorSession1);
+      expect(value.value).toEqual(object.value);
       await expect(iteratorSession1.next()).resolves.toHaveProperty(
         "done",
         true,
@@ -414,9 +404,8 @@ export const graffitiDiscoverTests = (
         },
         session2,
       );
-      const result2 = (await iteratorSession2SmallAllowPeekSelf.next()).value;
-      assert(result2 && !result2.error);
-      expect(result2.value.value).toEqual(object.value);
+      const value2 = await nextStreamValue(iteratorSession2SmallAllowPeekSelf);
+      expect(value2.value).toEqual(object.value);
       await expect(
         iteratorSession2SmallAllowPeekSelf.next(),
       ).resolves.toHaveProperty("done", true);
@@ -440,10 +429,9 @@ export const graffitiDiscoverTests = (
         publicSchema,
         session1,
       );
-      const result = (await iterator.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.value).toEqual(publicO.value);
-      expect(result.value.allowed).toBeUndefined();
+      const value = await nextStreamValue(iterator);
+      expect(value.value).toEqual(publicO.value);
+      expect(value.allowed).toBeUndefined();
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
 
       const restricted = randomPutObject();
@@ -507,13 +495,12 @@ export const graffitiDiscoverTests = (
       const deleted = await graffiti.delete(putted, session);
 
       const iterator = graffiti.discover(object.channels, {});
-      const result = (await iterator.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.tombstone).toBe(true);
-      expect(result.value.value).toEqual(object.value);
-      expect(result.value.channels).toEqual(object.channels);
-      expect(result.value.actor).toEqual(session.actor);
-      expect(result.value.lastModified).toEqual(deleted.lastModified);
+      const value = await nextStreamValue(iterator);
+      expect(value.tombstone).toBe(true);
+      expect(value.value).toEqual(object.value);
+      expect(value.channels).toEqual(object.channels);
+      expect(value.actor).toEqual(session.actor);
+      expect(value.lastModified).toEqual(deleted.lastModified);
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
 
@@ -535,30 +522,28 @@ export const graffitiDiscoverTests = (
         );
 
         const iterator1 = graffiti.discover(object1.channels, {});
-        const result = (await iterator1.next()).value;
-        assert(result && !result.error, "result has no value");
+        const value1 = await nextStreamValue(iterator1);
         await expect(iterator1.next()).resolves.toHaveProperty("done", true);
 
         const iterator2 = graffiti.discover(object2.channels, {});
-        const result2 = (await iterator2.next()).value;
-        assert(result2 && !result2.error, "result has no value");
+        const value2 = await nextStreamValue(iterator2);
         await expect(iterator2.next()).resolves.toHaveProperty("done", true);
 
         // If they have the same timestamp, except
         // only one to have a tombstone
         if (putted.lastModified === replaced.lastModified) {
-          expect(result.value.tombstone || result2.value.tombstone).toBe(true);
-          expect(result.value.tombstone && result2.value.tombstone).toBe(false);
+          expect(value1.tombstone || value2.tombstone).toBe(true);
+          expect(value1.tombstone && value2.tombstone).toBe(false);
         } else {
-          expect(result.value.tombstone).toBe(true);
-          expect(result.value.value).toEqual(object1.value);
-          expect(result.value.channels).toEqual(object1.channels);
-          expect(result.value.lastModified).toEqual(replaced.lastModified);
+          expect(value1.tombstone).toBe(true);
+          expect(value1.value).toEqual(object1.value);
+          expect(value1.channels).toEqual(object1.channels);
+          expect(value1.lastModified).toEqual(replaced.lastModified);
 
-          expect(result2.value.tombstone).toBe(false);
-          expect(result2.value.value).toEqual(object2.value);
-          expect(result2.value.channels).toEqual(object2.channels);
-          expect(result2.value.lastModified).toEqual(replaced.lastModified);
+          expect(value2.tombstone).toBe(false);
+          expect(value2.value).toEqual(object2.value);
+          expect(value2.channels).toEqual(object2.channels);
+          expect(value2.lastModified).toEqual(replaced.lastModified);
         }
       }
     });
@@ -576,12 +561,11 @@ export const graffitiDiscoverTests = (
         session,
       );
       const iterator = graffiti.discover(object.channels, {});
-      const result = (await iterator.next()).value;
-      assert(result && !result.error, "result has no value");
-      expect(result.value.tombstone).toBe(true);
-      expect(result.value.value).toEqual(object.value);
-      expect(result.value.channels).toEqual(object.channels);
-      expect(result.value.allowed).toBeUndefined();
+      const value = await nextStreamValue(iterator);
+      expect(value.tombstone).toBe(true);
+      expect(value.value).toEqual(object.value);
+      expect(value.channels).toEqual(object.channels);
+      expect(value.allowed).toBeUndefined();
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
 
