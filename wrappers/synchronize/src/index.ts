@@ -4,14 +4,13 @@ import {
   type GraffitiObjectBase,
   type GraffitiLocation,
   type GraffitiStream,
-  type GraffitiLoginEvent,
-  type GraffitiLogoutEvent,
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorForbidden,
   GraffitiErrorPatchError,
 } from "@graffiti-garden/api";
 import { GraffitiSynchronized } from "./sync";
+import { SessionManagerLocal } from "./session-manager-local";
 import PouchDB from "pouchdb";
 import {
   locationToUri,
@@ -61,8 +60,12 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
   protected readonly source: string = "local";
   protected readonly tombstoneRetention: number = 86400000; // 1 day in ms
+  protected readonly SessionManagerLocal = new SessionManagerLocal();
   locationToUri = locationToUri;
   uriToLocation = uriToLocation;
+  login = this.SessionManagerLocal.login.bind(this.SessionManagerLocal);
+  logout = this.SessionManagerLocal.logout.bind(this.SessionManagerLocal);
+  sessionEvents = this.SessionManagerLocal.sessionEvents;
 
   constructor(options?: GraffitiPouchDBOptions) {
     super();
@@ -112,22 +115,6 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
           throw error;
         }
       });
-
-    // Look for any existing sessions
-    const sessionRestorer = async () => {
-      // Allow listeners to be added first
-      await Promise.resolve();
-
-      if (typeof window === "undefined") return;
-      const actor = window.localStorage.getItem("graffitiActor");
-      if (actor) {
-        const event: GraffitiLoginEvent = new CustomEvent("login", {
-          detail: { session: { actor } },
-        });
-        this.sessionEvents.dispatchEvent(event);
-      }
-    };
-    sessionRestorer();
   }
 
   protected async queryByLocation(location: GraffitiLocation) {
@@ -430,69 +417,6 @@ export class GraffitiPouchDB extends GraffitiSynchronized {
 
     return repeater;
   };
-
-  login: Graffiti["login"] = async (proposal, state) => {
-    let actor = proposal?.actor;
-    if (!actor && typeof window !== "undefined") {
-      const response = window.prompt(
-        `This is an insecure implementation of the Graffiti API \
-for *demo purposes only*. Do not store any sensitive information \
-here.\
-\n\n\
-Simply choose a username to log in.`,
-      );
-      if (response) actor = response;
-    }
-
-    let detail: GraffitiLoginEvent["detail"];
-    if (!actor) {
-      detail = {
-        state,
-        error: new Error("No actor ID provided to login"),
-      };
-    } else {
-      // try to store it in the database
-      const session = { actor };
-
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("graffitiActor", actor);
-      }
-
-      detail = {
-        state,
-        session,
-      };
-    }
-
-    const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
-    this.sessionEvents.dispatchEvent(event);
-  };
-
-  logout: Graffiti["logout"] = async (session, state) => {
-    let exists = true;
-    if (typeof window !== "undefined") {
-      exists = !!window.localStorage.getItem("graffitiActor");
-      if (exists) {
-        window.localStorage.removeItem("graffitiActor");
-      }
-    }
-
-    const detail: GraffitiLogoutEvent["detail"] = exists
-      ? {
-          state,
-          actor: session.actor,
-        }
-      : {
-          state,
-          actor: session.actor,
-          error: new Error("Not logged in with that actor"),
-        };
-
-    const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
-    this.sessionEvents.dispatchEvent(event);
-  };
-
-  sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
 
   listChannels: Graffiti["listChannels"] = (...args) => {
     // TODO
