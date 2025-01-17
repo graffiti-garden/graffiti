@@ -15,7 +15,7 @@ import {
  * It can be used in node.js but will not persist
  * login state and a proposed username must be provided.
  */
-export class SessionManagerLocal {
+export class GraffitiSessionManagerLocal {
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
 
   constructor() {
