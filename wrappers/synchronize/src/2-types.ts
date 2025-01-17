@@ -200,6 +200,13 @@ export interface GraffitiSession {
    * The {@link GraffitiObjectBase.actor | `actor`} a user wants to authenticate with.
    */
   actor: string;
+  /**
+   * A yet undefined property detailing what operations the session
+   * grants the user to perform. For example, to allow a user to
+   * read private messages from a particular set of channels or
+   * to allow the user to write object matching a particular schema.
+   */
+  scope?: {};
 }
 
 /**
@@ -251,16 +258,16 @@ export interface GraffitiPatch {
  * that can be iterated over using `for await` loops or calling `next` on the generator.
  * The stream can be terminated by breaking out of a loop calling `return` on the generator.
  */
-export type GraffitiStream<T> = AsyncGenerator<
+export type GraffitiStream<TValue, TReturn = void> = AsyncGenerator<
   | {
       error?: undefined;
-      value: T;
+      value: TValue;
     }
   | {
       error: Error;
       source: string;
     },
-  void
+  TReturn
 >;
 
 /**
