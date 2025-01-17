@@ -1,6 +1,6 @@
 import { Graffiti } from "@graffiti-garden/api";
 import Ajv from "ajv-draft-04";
-import { SessionManagerLocal } from "./session-manager-local";
+import { GraffitiSessionManagerLocal } from "./session-manager-local";
 import { GraffitiPouchDBBase, type GraffitiPouchDBOptions } from "./database";
 import { GraffitiSynchronize } from "./synchronize";
 import { locationToUri, uriToLocation } from "./utilities";
@@ -16,7 +16,7 @@ export type { GraffitiPouchDBOptions };
 export class GraffitiPouchDB extends Graffiti {
   protected readonly ajv = new Ajv({ strict: false });
 
-  protected readonly sessionManagerLocal = new SessionManagerLocal();
+  protected readonly sessionManagerLocal = new GraffitiSessionManagerLocal();
   login = this.sessionManagerLocal.login;
   logout = this.sessionManagerLocal.logout;
   sessionEvents = this.sessionManagerLocal.sessionEvents;

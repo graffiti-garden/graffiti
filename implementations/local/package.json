@@ -10,7 +10,9 @@
       "types": "./src/index.ts",
       "default": "./dist/index.js"
     },
-    "./sync": "./src/sync.ts",
+    "./database": "./src/database.ts",
+    "./synchronize": "./src/synchronize.ts",
+    "./session-manager-local": "./src/session-local.ts",
     "./utilities": "./src/utilities.ts"
   },
   "scripts": {
