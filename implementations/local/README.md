@@ -28,7 +28,7 @@ In the browser, you can use a CDN like jsDelivr. Add an import map the the `<hea
 
 In either case, you can then import the package like so:
 
-```javascript
+```typescript
 import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
 const graffiti = new GraffitiPouchDB()
 ```
@@ -44,7 +44,7 @@ The PouchDB instance will create a local database by default,
 in either the browser or Node.js.
 However, you could configure it to use a remote CouchDB instance as follows:
 
-```javascript
+```typescript
 import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
 const graffiti = new GraffitiPouchDB({
   pouchDBOptions: {
@@ -55,8 +55,22 @@ const graffiti = new GraffitiPouchDB({
 
 See the [PouchDB documentation](https://pouchdb.com/api.html#create_database) for more options.
 
+## Extending
+
+Pieces of this implementation can be pulled out to use in other implementations.
+
+```typescript
+// The basic database interface based on PouchDB
+import { GraffitiPouchDBBase } from "@graffiti-garden/implementation-pouchdb/database";
+// A wrapper around any implementation of the database methods that provides synchronize
+import { GraffitiSynchronize } from "@graffiti-garden/implementation-pouchdb/synchronize";
+// The log in and out methods and events - insecure but useful for testing
+import { GraffitiSessionManagerLocal } from "@graffiti-garden/implementation-pouchdb/session-manager-local";
+// Various utilities for implementing the Graffiti API
+import * as GraffitiUtilities from "@graffiti-garden/implementation-pouchdb/utilities";
+```
+
 ## TODO
 
 - Remove tombstones according to the `tombstoneRetention` setting.
 - Implement `listOrphans` and `listChannels`.
-- Seperate out login logic for usage as a backend for decentralized pods.
