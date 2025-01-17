@@ -3,4 +3,4 @@ dist
 docs
 *.sw*
 .DS_Store
-graffitiDB*
+graffitiDb*
