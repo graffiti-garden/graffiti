@@ -169,7 +169,7 @@ export type GraffitiPutObject<Schema> = Pick<
  * use to verify that a user has permission to operate a
  * particular {@link GraffitiObjectBase.actor | `actor`}.
  * This object is required of all {@link Graffiti} methods
- * that modify objects and optional for methods that read objects.
+ * that modify objects and is optional for methods that read objects.
  *
  * At a minimum the `session` object must contain the
  * {@link GraffitiSession.actor | `actor`} URI the user wants to authenticate with.
@@ -180,18 +180,26 @@ export type GraffitiPutObject<Schema> = Pick<
  * function. A distributed implementation may include
  * a cryptographic signature.
  *
- * It may also include other implementation specific properties
- * that provide hints for performance or security.
+ * As to why the `session` object is passed as an argument to every method
+ * rather than being an internal property of the {@link Graffiti} instance,
+ * this is primarily for type-checking to catch bugs related to login state.
+ * Graffiti applications can expose some functionality to users who are not logged in
+ * with {@link Graffiti.get} and {@link Graffiti.discover} but without type-checking
+ * the `session` it can be easy to forget to hide buttons that trigger
+ * other methods that require login.
+ * In the future, `session` object may be updated to include scope information
+ * and passing the `session` to each method can type-check whether the session provides the
+ * necessary permissions.
+ *
+ * Passing the `session` object per-method also allows for multiple sessions
+ * to be used within the same application, like an Email client fetching from
+ * multiple accounts.
  */
 export interface GraffitiSession {
   /**
    * The {@link GraffitiObjectBase.actor | `actor`} a user wants to authenticate with.
    */
   actor: string;
-  /**
-   * Other implementation-specific properties go here.
-   */
-  [key: string]: any;
 }
 
 /**
