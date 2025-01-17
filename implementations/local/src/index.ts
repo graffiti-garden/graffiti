@@ -2,7 +2,7 @@ import { Graffiti } from "@graffiti-garden/api";
 import Ajv from "ajv-draft-04";
 import { SessionManagerLocal } from "./session-manager-local";
 import { GraffitiPouchDBBase, type GraffitiPouchDBOptions } from "./database";
-import { GraffitiSynchronize } from "./sync";
+import { GraffitiSynchronize } from "./synchronize";
 import { locationToUri, uriToLocation } from "./utilities";
 
 export type { GraffitiPouchDBOptions };
