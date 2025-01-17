@@ -412,19 +412,25 @@ export abstract class Graffiti {
    * not specified by the `discover` method will not be revealed. This masking happens
    * before the supplied schema is applied.
    *
-   * Since different implementations may fetch data from multiple sources there is
-   * no guarentee on the order that objects are returned in. Additionally, the method
-   * may return objects that have been deleted but with a
-   * {@link GraffitiObjectBase.tombstone | `tombstone`} field set to `true` for
-   * cache invalidation purposes. Implementations must make aware when, if ever,
-   * tombstoned objects are removed.
-   *
    * {@link discover} can be used in conjunction with {@link synchronize}
    * to provide a responsive and consistent user experience.
    *
+   * Since different implementations may fetch data from multiple sources there is
+   * no guarentee on the order that objects are returned in. Additionally, the method
+   * will return objects that have been deleted but with a
+   * {@link GraffitiObjectBase.tombstone | `tombstone`} field set to `true` for
+   * cache invalidation purposes.
+   * The final `return()` value of the stream includes a `tombstoneRetention`
+   * property that represents the minimum amount of time,
+   * in milliseconds, that an application will retain and return tombstones for objects that
+   * have been deleted.
+   *
    * When repolling, the {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * field can be queried in the schema to
+   * field can be queried via the schema to
    * only fetch objects that have been modified since the last poll.
+   * Such queries should only be done if the time since the last poll
+   * is less than the `tombstoneRetention` value of that poll, otherwise the tombstones
+   * for objects that have been deleted may not be returned.
    *
    * ```json
    * {
@@ -468,7 +474,12 @@ export abstract class Graffiti {
      * property will be returned.
      */
     session?: GraffitiSession,
-  ): GraffitiStream<GraffitiObject<Schema>>;
+  ): GraffitiStream<
+    GraffitiObject<Schema>,
+    {
+      tombstoneRetention: number;
+    }
+  >;
 
   /**
    * This method has the same signature as {@link discover} but listens for
@@ -535,7 +546,6 @@ export abstract class Graffiti {
     session: GraffitiSession,
   ): GraffitiStream<{
     channel: string;
-    source: string;
     lastModified: number;
     count: number;
   }>;
@@ -554,15 +564,12 @@ export abstract class Graffiti {
    * and {@link GraffitiObjectBase.source | `source`} of the orphaned objects
    * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
    * The {@link GraffitiObjectBase.lastModified | lastModified} field is the
-   * time that the user last modified the orphan and the
-   * {@link GraffitiObjectBase.tombstone | `tombstone`} field is `true`
-   * if the object has been deleted.
+   * time that the user last modified the orphan.
    */
   abstract listOrphans(session: GraffitiSession): GraffitiStream<{
     name: string;
     source: string;
     lastModified: string;
-    tombstone: boolean;
   }>;
 
   /**
@@ -583,15 +590,34 @@ export abstract class Graffiti {
    */
   abstract login(
     /**
-     * An optional actor to prompt the user to login as. For example,
-     * if a session expired and the user is trying to reauthenticate,
-     * or if the user entered their username in an application-side login form.
-     *
-     * If not provided, the implementation should prompt the user to
-     * supply an actor ID along with their other login information
-     * (e.g. password).
+     * Suggestions for the permissions that the
+     * login process should grant. The login process may not
+     * provide the exact proposed permissions.
      */
-    actor?: string,
+    proposal?: {
+      /**
+       * A suggested actor to login as. For example, if a user tries to
+       * edit a post but are not logged in, the interface can infer that
+       * they might want to log in as the actor who created the post
+       * they are attempting to edit.
+       *
+       * Even if provided, the implementation should allow the user
+       * to log in as a different actor if they choose.
+       */
+      actor?: string;
+      /**
+       * A yet to be defined permissions scope. An application may use
+       * this to indicate the minimum necessary scope needed to
+       * operate. For example, it may need to be able read private
+       * messages from a certain set of channels, or write messages that
+       * follow a particular schema.
+       *
+       * The login process should make it clear what scope an application
+       * is requesting and allow the user to enhance or reduce that
+       * scope as necessary.
+       */
+      scope?: {};
+    },
     /**
      * An arbitrary string that will be returned with the
      * {@link GraffitiSession | session} object
