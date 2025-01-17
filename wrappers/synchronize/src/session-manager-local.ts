@@ -1,7 +1,7 @@
-import {
-  type Graffiti,
-  type GraffitiLoginEvent,
-  type GraffitiLogoutEvent,
+import type {
+  Graffiti,
+  GraffitiLoginEvent,
+  GraffitiLogoutEvent,
 } from "@graffiti-garden/api";
 
 /**
