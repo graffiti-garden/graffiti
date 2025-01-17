@@ -1,58 +1,41 @@
 {
-  "name": "@graffiti-garden/implementation-pouchdb",
-  "version": "0.0.7",
-  "description": "An implementation of the Graffiti API using PouchDB",
+  "name": "@graffiti-garden/api",
+  "version": "0.0.9",
+  "description": "The heart of Graffiti",
   "type": "module",
-  "main": "./dist/index.js",
-  "browser": "./dist/index.js",
+  "main": "src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./dist/index.js"
-    },
-    "./sync": "./src/sync.ts",
-    "./utilities": "./src/utilities.ts"
-  },
-  "scripts": {
-    "test": "vitest",
-    "build": "rollup -c rollup.config.js",
-    "prepublishOnly": "npm install && npm test && npm run build"
+    ".": "./src/index.ts",
+    "./tests": "./tests/index.ts"
   },
   "files": [
     "src",
-    "dist",
+    "tests",
     "package.json",
-    "README.md"
+    "tsconfig.json"
   ],
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
+  "scripts": {
+    "docs": "typedoc --options typedoc.json",
+    "prepublishOnly": "npm install"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/graffiti-garden/implementation-pouchdb.git"
+    "url": "git+https://github.com/graffiti-garden/api.git"
   },
   "bugs": {
-    "url": "https://github.com/graffiti-garden/implementation-pouchdb/issues"
+    "url": "https://github.com/graffiti-garden/api/issues"
   },
+  "homepage": "https://api.graffiti.garden/classes/Graffiti.html",
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^28.0.2",
-    "@rollup/plugin-json": "^6.1.0",
-    "@rollup/plugin-node-resolve": "^16.0.0",
-    "@rollup/plugin-terser": "^0.4.4",
-    "@types/json-schema": "^7.0.15",
-    "@types/pouchdb": "^6.4.2",
-    "rollup": "^4.30.1",
-    "rollup-plugin-node-polyfills": "^0.2.1",
-    "rollup-plugin-typescript2": "^0.36.0",
-    "rollup-plugin-visualizer": "^5.14.0",
     "tslib": "^2.8.1",
+    "typedoc": "^0.26.11",
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.0.9",
-    "@repeaterjs/repeater": "^3.0.6",
+    "@types/json-schema": "^7.0.15",
     "ajv": "^8.17.1",
-    "ajv-draft-04": "^1.0.0",
-    "fast-json-patch": "^3.1.1",
-    "pouchdb": "^9.0.0"
+    "fast-json-patch": "^3.1.1"
   }
 }
