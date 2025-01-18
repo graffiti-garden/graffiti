@@ -12,6 +12,8 @@ import type {
 } from "@graffiti-garden/api";
 import { useGraffiti, useGraffitiSession } from "./injections";
 
+const REFRESH_RATE = 100; // milliseconds
+
 /**
  * A reactive version of the [`Graffiti.discover`](https://api.graffiti.garden/classes/Graffiti.html#discover)
  * method. Its arguments are the same, but now they can be
@@ -63,6 +65,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
     }, []);
   }
 
+  let batchFlattenTimer: ReturnType<typeof setTimeout> | undefined = undefined;
   function onValue(value: GraffitiObject<Schema>) {
     const url = graffiti.objectToUri(value);
     const existing = resultsRaw.get(url);
@@ -74,6 +77,17 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
       return;
     }
     resultsRaw.set(url, value);
+
+    // Don't flatten the results all at once,
+    // because we may get a lot of results
+    // and we don't want the interface to
+    // freeze up
+    if (!batchFlattenTimer) {
+      batchFlattenTimer = setTimeout(() => {
+        flattenResults();
+        batchFlattenTimer = undefined;
+      }, REFRESH_RATE);
+    }
   }
 
   const channelsGetter = () => toValue(channels);
@@ -96,8 +110,6 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
         continue;
       }
       onValue(value.value);
-      // TODO: don't flatten every time
-      flattenResults();
     }
   }
 
@@ -160,8 +172,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
       }
 
       onValue(value);
-      // TODO: don't flatten every time
-      flattenResults();
+
       result = await myIterator.next();
     }
 
@@ -184,9 +195,14 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
   watch(
     [channelsGetter, schemaGetter, sessionGetter],
     () => {
+      // Clear all the state
       resultsRaw.clear();
       lastModified = undefined;
+      fullRepollBy = undefined;
+      clearTimeout(batchFlattenTimer);
       flattenResults();
+
+      // Repoll
       poll();
       pollLocalModifications();
     },
