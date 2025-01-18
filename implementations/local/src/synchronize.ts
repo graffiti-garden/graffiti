@@ -112,40 +112,39 @@ export class GraffitiSynchronize {
     const [channels, schema, session] = args;
     const validate = attemptAjvCompile(this.ajv, schema);
 
-    const repeater: GraffitiStream<GraffitiObject<typeof schema>> =
-      new Repeater(async (push, stop) => {
-        const callback = (event: SynchronizeEvent) => {
-          const { oldObject: oldObjectRaw, newObject: newObjectRaw } =
-            event.detail;
+    const repeater: ReturnType<
+      typeof Graffiti.prototype.synchronize<typeof schema>
+    > = new Repeater(async (push, stop) => {
+      const callback = (event: SynchronizeEvent) => {
+        const { oldObject: oldObjectRaw, newObject: newObjectRaw } =
+          event.detail;
 
-          for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
-            if (
-              objectRaw &&
-              objectRaw.channels.some((channel) =>
-                channels.includes(channel),
-              ) &&
-              isAllowed(objectRaw, session)
-            ) {
-              const object = { ...objectRaw };
-              maskObject(object, channels, session);
-              if (validate(object)) {
-                push({ value: object });
-                break;
-              }
+        for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
+          if (
+            objectRaw &&
+            objectRaw.channels.some((channel) => channels.includes(channel)) &&
+            isAllowed(objectRaw, session)
+          ) {
+            const object = { ...objectRaw };
+            maskObject(object, channels, session);
+            if (validate(object)) {
+              push({ value: object });
+              break;
             }
           }
-        };
+        }
+      };
 
-        this.synchronizeEvents.addEventListener(
-          "change",
-          callback as EventListener,
-        );
-        await stop;
-        this.synchronizeEvents.removeEventListener(
-          "change",
-          callback as EventListener,
-        );
-      });
+      this.synchronizeEvents.addEventListener(
+        "change",
+        callback as EventListener,
+      );
+      await stop;
+      this.synchronizeEvents.removeEventListener(
+        "change",
+        callback as EventListener,
+      );
+    });
 
     return repeater;
   };
