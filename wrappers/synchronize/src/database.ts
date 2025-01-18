@@ -358,11 +358,8 @@ export class GraffitiPouchDBBase {
       endKeyAppend = maximum.toString().padStart(15, "0");
     }
 
-    const repeater: GraffitiStream<
-      GraffitiObject<typeof schema>,
-      {
-        tombstoneRetention: number;
-      }
+    const repeater: ReturnType<
+      typeof Graffiti.prototype.discover<typeof schema>
     > = new Repeater(async (push, stop) => {
       const processedIds = new Set<string>();
 
