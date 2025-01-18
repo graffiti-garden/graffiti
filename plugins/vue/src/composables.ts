@@ -14,7 +14,14 @@ import { useGraffiti, useGraffitiSession } from "./injections";
 
 /**
  * A reactive version of the [`Graffiti.discover`](https://api.graffiti.garden/classes/Graffiti.html#discover)
- * method.
+ * method. Its arguments are the same, but now they can be
+ * reactive Vue refs or getters. As they change the output will
+ * automatically update.
+ *
+ * Rather than returning a stream of Graffiti objects, this
+ * function returns a reactive array of objects. It also
+ * provides a method to poll for new results and a boolean
+ * ref indicating if the poll is currently running.
  *
  * @returns An object containing
  * - `results`: a reactive array of Graffiti objects
@@ -89,51 +96,100 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
         continue;
       }
       onValue(value.value);
+      // TODO: don't flatten every time
       flattenResults();
     }
   }
 
   const isPolling = ref(false);
+  let lastModified: number | undefined = undefined;
+  let fullRepollBy: number | undefined = undefined;
   let iterator: ReturnType<typeof graffiti.discover<Schema>> | undefined =
     undefined;
   async function poll() {
-    iterator?.return();
-    isPolling.value = true;
+    const startOfPoll = new Date().getTime();
 
+    // Add a query for lastModified if it's not in the schema
+    const schema = { ...schemaGetter() };
+    if (
+      lastModified &&
+      fullRepollBy &&
+      fullRepollBy > startOfPoll &&
+      (!schema.properties ||
+        !("lastModified" in schema.properties) ||
+        !("minimum" in schema.properties.lastModified))
+    ) {
+      console.log(typeof lastModified);
+      schema.properties = {
+        ...schema.properties,
+        lastModified: {
+          ...schema.properties?.lastModified,
+          minimum: lastModified,
+        },
+      };
+    }
+
+    let myIterator: ReturnType<typeof graffiti.discover<Schema>>;
     try {
-      iterator = graffiti.discover(
-        channelsGetter(),
-        schemaGetter(),
-        sessionGetter(),
-      );
+      myIterator = graffiti.discover(channelsGetter(), schema, sessionGetter());
     } catch (e) {
       console.error(e);
-      flattenResults();
-      isPolling.value = false;
       return;
     }
 
-    for await (const result of iterator) {
-      if (result.error) {
-        console.error(result.error);
+    // Kill the previous iterator if its
+    // still running and claim its spot
+    iterator?.return({ tombstoneRetention: 0 });
+    iterator = myIterator;
+    isPolling.value = true;
+
+    // Keep track of the latest lastModified value
+    // while streaming results
+    let myLastModified = lastModified;
+    let result = await myIterator.next();
+    while (!result.done) {
+      if (result.value.error) {
+        console.error(result.value.error);
+        result = await myIterator.next();
         continue;
       }
-      onValue(result.value);
+
+      const value = result.value.value;
+      if (!myLastModified || value.lastModified > myLastModified) {
+        myLastModified = value.lastModified;
+      }
+
+      onValue(value);
+      // TODO: don't flatten every time
       flattenResults();
+      result = await myIterator.next();
     }
 
+    // Make sure we're still the current iterator
+    if (iterator !== myIterator) return;
+
+    // We've successfully polled all results
+    // without getting overridden
+    iterator = undefined;
     isPolling.value = false;
+
+    // Only now do we update the cache parameters
+    // because the results may have appeared out
+    // of order
+    const { tombstoneRetention } = result.value;
+    lastModified = myLastModified;
+    fullRepollBy = startOfPoll + tombstoneRetention;
   }
 
   watch(
     [channelsGetter, schemaGetter, sessionGetter],
     () => {
       resultsRaw.clear();
+      lastModified = undefined;
       flattenResults();
       poll();
       pollLocalModifications();
     },
-
     {
       immediate: true,
     },
