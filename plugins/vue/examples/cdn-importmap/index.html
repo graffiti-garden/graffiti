@@ -41,11 +41,15 @@
         <template id="my-template">
             <h1>My Graffiti App</h1>
             <p>
-                This is an example of writing a
-                <a href="https://graffiti.garden">Graffiti</a> app with
+                This is an example of a
+                <a href="https://graffiti.garden">Graffiti</a> app built with
                 <a href="https://vuejs.org"> Vue.js </a> in a single HTML file.
                 Right click and choose "View Page Source" to see the complete
-                source code. This app imports the
+                source code or see it in context
+                <a
+                    href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/cdn-importmap"
+                    >on Github</a
+                >. This app imports the
                 <a href="https://github.com/graffiti-garden/wrapper-vue"
                     >Graffiti Vue.js wrapper</a
                 >
@@ -58,7 +62,7 @@
                 <a
                     href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap"
                     >import map</a
-                >
+                >.
             </p>
             <p v-if="!$graffitiSession.value">
                 <button @click="$graffiti.login()">Log in</button>
