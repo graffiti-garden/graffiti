@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src"]
+  "include": ["src", "rollup.config.ts"]
 }
