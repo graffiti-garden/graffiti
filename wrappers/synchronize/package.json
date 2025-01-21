@@ -1,14 +1,18 @@
 {
   "name": "@graffiti-garden/implementation-pouchdb",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An implementation of the Graffiti API using PouchDB",
   "type": "module",
-  "main": "./dist/index.js",
+  "types": "./src/index.ts",
+  "module": "./dist/index.js",
   "browser": "./dist/index.js",
+  "main": "./dist/index.cjs",
   "exports": {
     ".": {
       "types": "./src/index.ts",
-      "default": "./dist/index.js"
+      "import": "./dist/index.js",
+      "browser": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./database": "./src/database.ts",
     "./synchronize": "./src/synchronize.ts",
@@ -17,6 +21,7 @@
   },
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest --coverage",
     "build": "rollup -c rollup.config.js",
     "prepublishOnly": "npm install && npm test && npm run build"
   },
@@ -42,6 +47,7 @@
     "@rollup/plugin-terser": "^0.4.4",
     "@types/json-schema": "^7.0.15",
     "@types/pouchdb": "^6.4.2",
+    "@vitest/coverage-v8": "^2.1.8",
     "rollup": "^4.30.1",
     "rollup-plugin-node-polyfills": "^0.2.1",
     "rollup-plugin-typescript2": "^0.36.0",
