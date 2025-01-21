@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { useGraffiti, useGraffitiSession } from "../src/plugin";
+import { useGraffiti, useGraffitiSession } from "../../src/plugin";
 import { type GraffitiObject, type JSONSchema4 } from "@graffiti-garden/api";
 
 const graffiti = useGraffiti();
@@ -77,13 +77,27 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
 
 <template>
     <h1>Graffiti Vue Wrapper Demo</h1>
-    <div v-if="session">
+    <p>
+        This Graffiti application written in Vue
+        <a href="https://vuejs.org/guide/scaling-up/sfc.html"
+            >Single File Component</a
+        >
+        and built with <a href="https://vitejs.dev/">Vite</a>. It uses the
+        <a href="https://github.com/graffiti-garden/wrapper-vue"
+            >Graffiti Vue.js wrapper</a
+        >
+        and the
+        <a href="https://github.com/graffiti-garden/implementation-pouchdb"
+            >PouchDB implementation of Graffiti</a
+        >.
+    </p>
+    <p v-if="session">
         Logged in as: {{ session.actor }}
         <button @click="graffiti.logout(session)">Log out</button>
-    </div>
-    <div v-else>
+    </p>
+    <p v-else>
         <button @click="graffiti.login()">Log in</button>
-    </div>
+    </p>
     <GraffitiDiscover
         :channels="channels"
         :schema="noteSchema"

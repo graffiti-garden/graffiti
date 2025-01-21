@@ -12,10 +12,10 @@
     }
   },
   "scripts": {
-    "demo": "vite --config vite-demo.config.js",
-    "build-demo": "vite build --config vite-demo.config.js",
+    "example": "cd examples/node-vite-sfc && vite",
+    "build-example": "cd examples/node-vite-sfc && vite build",
     "build": "vite build",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm install && npm run build"
   },
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
