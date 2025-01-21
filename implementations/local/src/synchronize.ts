@@ -1,10 +1,6 @@
 import Ajv from "ajv-draft-04";
 import { Graffiti } from "@graffiti-garden/api";
-import type {
-  GraffitiObjectBase,
-  GraffitiObject,
-  GraffitiStream,
-} from "@graffiti-garden/api";
+import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
 import {
   applyPropPatch,

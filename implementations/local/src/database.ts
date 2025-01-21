@@ -1,9 +1,7 @@
 import type {
   Graffiti,
-  GraffitiObject,
   GraffitiObjectBase,
   GraffitiLocation,
-  GraffitiStream,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
