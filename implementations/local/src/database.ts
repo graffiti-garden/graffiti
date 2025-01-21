@@ -248,7 +248,7 @@ export class GraffitiPouchDBBase {
       channels: objectPartial.channels,
       allowed: objectPartial.allowed,
       name: objectPartial.name ?? randomBase64(),
-      source: "local",
+      source: objectPartial.source ?? this.source,
       actor: session.actor,
       tombstone: false,
       lastModified: new Date().getTime(),
