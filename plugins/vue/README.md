@@ -21,7 +21,7 @@ or the `useGraffitiSession` composable in the Composition API.
 You must install this package along with Vue.js and an implementation of the Graffiti API.
 In this example, we will use the [PouchDB implementation](https://github.com/graffiti-garden/implementation-pouchdb)
 of the Graffiti API, but any other would be similar.
-In node.js, simply install both with npm:
+In node.js, simply install them with npm:
 
 ```bash
 npm install vue
@@ -29,7 +29,8 @@ npm install @graffiti-garden/implementation-pouchdb
 npm install @graffiti-garden/wrapper-vue
 ```
 
-In the browser, you can use a CDN like jsDelivr.
+In the browser, you can use a CDN like
+[jsDelivr](https://www.jsdelivr.com/).
 Add an import map the the `<head>` of your HTML file:
 
 ```html

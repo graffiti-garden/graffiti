@@ -78,9 +78,9 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
 <template>
     <h1>Graffiti Vue Wrapper Demo</h1>
     <p>
-        This Graffiti application written in Vue
+        This Graffiti application written as a
         <a href="https://vuejs.org/guide/scaling-up/sfc.html"
-            >Single File Component</a
+            >Vue Single File Component</a
         >
         and built with <a href="https://vitejs.dev/">Vite</a>. It uses the
         <a href="https://github.com/graffiti-garden/wrapper-vue"
@@ -89,6 +89,10 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         and the
         <a href="https://github.com/graffiti-garden/implementation-pouchdb"
             >PouchDB implementation of Graffiti</a
+        >. View the source code
+        <a
+            href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/node-vite-sfc"
+            >on Github</a
         >.
     </p>
     <p v-if="session">
