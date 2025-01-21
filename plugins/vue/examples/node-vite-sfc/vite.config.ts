@@ -3,6 +3,5 @@ import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   plugins: [vue()],
-  root: "./demo",
-  base: "wrapper-vue",
+  base: "/wrapper-vue/node-vite-sfc/dist",
 });

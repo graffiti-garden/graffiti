@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>My Graffiti App</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/plugin.js",
+                    "@graffiti-garden/implementation-pouchdb": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-pouchdb/dist/index.js"
+                }
+            }
+        </script>
+        <style>
+            .waving {
+                animation: wave 1s infinite;
+            }
+            @keyframes wave {
+                0% {
+                    transform: rotate(0deg);
+                }
+                25% {
+                    transform: rotate(15deg);
+                }
+                50% {
+                    transform: rotate(0deg);
+                }
+                75% {
+                    transform: rotate(-15deg);
+                }
+                100% {
+                    transform: rotate(0deg);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+        <template id="my-template">
+            <h1>My Graffiti App</h1>
+            <p>
+                This is an example of writing a
+                <a href="https://graffiti.garden">Graffiti</a> app with
+                <a href="https://vuejs.org"> Vue.js </a> in a single HTML file.
+                Right click and choose "View Page Source" to see the complete
+                source code. This app imports the
+                <a href="https://github.com/graffiti-garden/wrapper-vue"
+                    >Graffiti Vue.js wrapper</a
+                >
+                and the
+                <a
+                    href="https://github.com/graffiti-garden/implementation-pouchdb"
+                    >PouchDB implementation of Graffiti</a
+                >
+                via CDN using an
+                <a
+                    href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap"
+                    >import map</a
+                >
+            </p>
+            <p v-if="!$graffitiSession.value">
+                <button @click="$graffiti.login()">Log in</button>
+            </p>
+            <p v-else>
+                Logged in as: {{ $graffitiSession.value.actor }}
+                <button @click="$graffiti.logout($graffitiSession.value)">
+                    Log out
+                </button>
+            </p>
+            <graffiti-discover
+                v-slot="{ results: waves, isPolling }"
+                :channels="[ 'https://graffiti.garden' ]"
+                :schema="{
+                    properties: {
+                        value: {
+                            required: ['activity'],
+                            properties: {
+                                activity: { enum: ['Wave'] }
+                            }
+                        }
+                    }
+                }"
+            >
+                <template v-if="$graffitiSession.value">
+                    <button
+                        v-if="!waves.some(
+                            wave => wave.actor === $graffitiSession.value.actor
+                        )"
+                        @click="$graffiti.put({
+                            value: { activity: 'Wave' },
+                            channels: [ 'https://graffiti.garden' ]
+                        }, $graffitiSession.value)"
+                    >
+                        👋
+                    </button>
+                    <button
+                        v-else
+                        class="waving"
+                        @click="waves.filter(
+                            wave => wave.actor === $graffitiSession.value.actor
+                        ).map(wave => $graffiti.delete(wave, $graffitiSession.value))"
+                    >
+                        👋
+                    </button>
+                </template>
+                <template v-else>
+                    <p>To wave 👋 you need to be logged in.</p>
+                </template>
+
+                <p v-if="isPolling">Loading...</p>
+                <p v-else>
+                    {{ waves.length }} people have waved from this page!
+                </p>
+            </graffiti-discover>
+        </template>
+        <script type="module">
+            import { createApp } from "vue";
+            import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
+            import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
+
+            createApp({
+                template: document.getElementById("my-template").innerHTML,
+            })
+                .use(GraffitiPlugin, {
+                    useGraffiti: () => new GraffitiPouchDB(),
+                })
+                .mount("#app");
+        </script>
+    </body>
+</html>
