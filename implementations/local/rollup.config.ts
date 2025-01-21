@@ -7,33 +7,42 @@ import { visualizer } from "rollup-plugin-visualizer";
 import nodePolyfills from "rollup-plugin-node-polyfills";
 
 function createConfig(
-  output: {
-    file: string;
-    format: string;
-  },
+  outputFile: string,
+  formatFormat: "es" | "cjs",
   browser: boolean,
 ) {
   return {
     input: "src/index.ts",
-    output: { ...output, sourcemap: true },
+    output: {
+      file: "dist/" + outputFile,
+      format: formatFormat,
+      sourcemap: true,
+    },
+    // When using the browser, everything is external.
+    // Otherwise, all modules are external.
+    ...(browser
+      ? {}
+      : {
+          external: (id: string) =>
+            id.includes("node_modules") && !id.includes("@graffiti-garden"),
+        }),
     plugins: [
-      typescript({
-        tsconfig: "tsconfig.json",
-      }),
+      typescript({ tsconfig: "tsconfig.json" }),
       json(),
       resolve({
-        browser: browser,
+        browser,
         preferBuiltins: !browser,
       }),
       commonjs(),
-      browser ? nodePolyfills() : undefined,
+      ...(browser ? [nodePolyfills()] : []),
       terser(),
-      visualizer({ filename: `dist/${output.format}-stats.html` }),
+      visualizer({ filename: `dist-stats/${outputFile}.html` }),
     ],
   };
 }
 
 export default [
-  createConfig({ file: "dist/index.js", format: "esm" }, true),
-  createConfig({ file: "dist/index.cjs", format: "cjs" }, false),
+  createConfig("index.js", "es", false),
+  createConfig("index.browser.js", "es", true),
+  createConfig("index.cjs.js", "cjs", false),
 ];
