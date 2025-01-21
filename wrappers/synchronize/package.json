@@ -1,18 +1,22 @@
 {
   "name": "@graffiti-garden/implementation-pouchdb",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "An implementation of the Graffiti API using PouchDB",
-  "type": "module",
   "types": "./src/index.ts",
   "module": "./dist/index.js",
-  "browser": "./dist/index.js",
+  "browser": "./dist/index.browser.js",
   "main": "./dist/index.cjs",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./dist/index.js",
-      "browser": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./src/index.ts",
+        "node": "./dist/index.cjs",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./src/index.ts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./database": "./src/database.ts",
     "./synchronize": "./src/synchronize.ts",
