@@ -12,7 +12,7 @@ and a `GraffitiDiscover` [renderless component](https://vuejs.org/guide/componen
 that produce a reactive arrays of objects from the results of [`discover`](https://api.graffiti.garden/classes/Graffiti.html#discover).
 - A reactive [`GraffitiSession`](https://api.graffiti.garden/interfaces/GraffitiSession.html) object
 that holds the user's most recent log-in state announced
-from [`sessionEvents`](https://api.graffiti.garden/interfaces/Graffiti.html#sessionevents).
+from [`sessionEvents`](https://api.graffiti.garden/classes/Graffiti.html#sessionevents).
 It is accessible via the `$graffitiSession` global property in templates and the Options API,
 or the `useGraffitiSession` composable in the Composition API.
 
