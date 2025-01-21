@@ -12,7 +12,7 @@ import type {
   JSONSchema4,
   GraffitiSession,
 } from "@graffiti-garden/api";
-import { Ajv } from "ajv";
+import type { Ajv } from "ajv";
 import { applyPatch, JsonPatchError } from "fast-json-patch";
 
 export const locationToUri: Graffiti["locationToUri"] = (location) => {
