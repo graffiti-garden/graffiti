@@ -1,10 +1,9 @@
 import { it, expect, describe, assert } from "vitest";
-import {
-  type GraffitiFactory,
-  type GraffitiSession,
-  type GraffitiStream,
-  type JSONSchema4,
-} from "../src/index";
+import type {
+  GraffitiFactory,
+  GraffitiSession,
+  JSONSchema4,
+} from "@graffiti-garden/api";
 import { randomString, nextStreamValue, randomPutObject } from "./utils";
 
 export const graffitiDiscoverTests = (

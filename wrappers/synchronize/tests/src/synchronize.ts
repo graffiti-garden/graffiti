@@ -1,5 +1,5 @@
 import { it, expect, describe } from "vitest";
-import { type GraffitiFactory, type GraffitiSession } from "../src/index";
+import type { GraffitiFactory, GraffitiSession } from "@graffiti-garden/api";
 import { randomPutObject, randomString } from "./utils";
 
 export const graffitiSynchronizeTests = (

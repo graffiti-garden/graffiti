@@ -1,5 +1,5 @@
 import { assert } from "vitest";
-import type { GraffitiPutObject, GraffitiStream } from "../src";
+import type { GraffitiPutObject, GraffitiStream } from "@graffiti-garden/api";
 
 export function randomString(): string {
   const array = new Uint8Array(16);
