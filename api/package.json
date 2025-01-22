@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "0.1.2",
+  "version": "0.1.6",
   "description": "The heart of Graffiti",
   "types": "./dist/src/index.d.ts",
   "module": "./dist/index.js",
@@ -17,7 +17,10 @@
         "default": "./dist/index.cjs.js"
       }
     },
-    "./tests": "./tests/index.ts"
+    "./tests": {
+      "types": "./dist/tests/src/index.d.ts",
+      "default": "./dist/tests/index.js"
+    }
   },
   "files": [
     "src",
@@ -30,7 +33,9 @@
   "license": "GPL-3.0-or-later",
   "scripts": {
     "docs": "typedoc --options typedoc.json",
-    "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
+    "build-api": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
+    "build-tests": "cd tests && rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
+    "build": "npm run build-api && npm run build-tests",
     "prepublishOnly": "npm install && npm run build"
   },
   "repository": {

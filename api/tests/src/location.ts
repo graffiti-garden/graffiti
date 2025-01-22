@@ -1,5 +1,8 @@
 import { it, expect, describe } from "vitest";
-import { GraffitiErrorInvalidUri, type GraffitiFactory } from "../src/index";
+import {
+  GraffitiErrorInvalidUri,
+  type GraffitiFactory,
+} from "@graffiti-garden/api";
 import { randomString } from "./utils";
 
 export const graffitiLocationTests = (useGraffiti: GraffitiFactory) => {
