@@ -32,8 +32,8 @@ export class GraffitiSynchronize {
 
   // Pass in the ajv instance
   // and database methods to wrap
-  constructor(ajv: Ajv, graffiti: GraffitiDatabaseMethods) {
-    this.ajv = ajv;
+  constructor(graffiti: GraffitiDatabaseMethods, ajv?: Ajv) {
+    this.ajv = ajv ?? new Ajv({ strict: false });
     this.graffiti = graffiti;
   }
 

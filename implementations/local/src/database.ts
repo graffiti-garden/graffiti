@@ -20,7 +20,7 @@ import {
   isAllowed,
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
-import type Ajv from "ajv-draft-04";
+import Ajv from "ajv-draft-04";
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -58,8 +58,8 @@ export class GraffitiPouchDBBase {
   protected readonly tombstoneRetention: number = 86400000; // 1 day in ms
   protected readonly ajv: Ajv;
 
-  constructor(ajv: Ajv, options?: GraffitiPouchDBOptions) {
-    this.ajv = ajv;
+  constructor(options?: GraffitiPouchDBOptions, ajv?: Ajv) {
+    this.ajv = ajv ?? new Ajv({ strict: false });
     this.source = options?.sourceName ?? this.source;
     this.tombstoneRetention =
       options?.tombstoneRetention ?? this.tombstoneRetention;

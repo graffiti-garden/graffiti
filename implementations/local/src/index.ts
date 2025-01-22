@@ -3,9 +3,16 @@ import Ajv from "ajv-draft-04";
 import { GraffitiSessionManagerLocal } from "./session-manager-local";
 import { GraffitiPouchDBBase, type GraffitiPouchDBOptions } from "./database";
 import { GraffitiSynchronize } from "./synchronize";
-import { locationToUri, uriToLocation } from "./utilities";
+import * as GraffitiPouchDBUtilities from "./utilities";
 
 export type { GraffitiPouchDBOptions };
+
+export {
+  GraffitiPouchDBBase,
+  GraffitiSynchronize,
+  GraffitiSessionManagerLocal,
+  GraffitiPouchDBUtilities,
+};
 
 /**
  * An implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
@@ -21,8 +28,8 @@ export class GraffitiPouchDB extends Graffiti {
   logout = this.sessionManagerLocal.logout;
   sessionEvents = this.sessionManagerLocal.sessionEvents;
 
-  locationToUri = locationToUri;
-  uriToLocation = uriToLocation;
+  locationToUri = GraffitiPouchDBUtilities.locationToUri;
+  uriToLocation = GraffitiPouchDBUtilities.uriToLocation;
 
   protected readonly graffitiPouchDbBase: GraffitiPouchDBBase;
   protected readonly graffitiSynchronize: GraffitiSynchronize;
@@ -39,10 +46,10 @@ export class GraffitiPouchDB extends Graffiti {
   constructor(options?: GraffitiPouchDBOptions) {
     super();
 
-    this.graffitiPouchDbBase = new GraffitiPouchDBBase(this.ajv, options);
+    this.graffitiPouchDbBase = new GraffitiPouchDBBase(options, this.ajv);
     this.graffitiSynchronize = new GraffitiSynchronize(
-      this.ajv,
       this.graffitiPouchDbBase,
+      this.ajv,
     );
 
     this.put = this.graffitiSynchronize.put;
