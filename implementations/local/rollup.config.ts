@@ -8,21 +8,28 @@ import nodePolyfills from "rollup-plugin-node-polyfills";
 
 function createConfig(
   outputFile: string,
-  formatFormat: "es" | "cjs",
+  format: "es" | "cjs",
   browser: boolean,
 ) {
+  const external: string[] = [];
+  // on browser everything is external
+  if (!browser) {
+    // externalize the api so
+    // instanceof checks work for errors
+    external.push("@graffiti-garden/api");
+    // Also externalize pouchdb
+    if (format === "cjs") {
+      external.push("pouchdb");
+    }
+  }
   return {
     input: "src/index.ts",
     output: {
       file: "dist/" + outputFile,
-      format: formatFormat,
+      format,
       sourcemap: true,
     },
-    // When using the browser, everything is external.
-    // Otherwise, all modules are external.
-    ...(browser
-      ? {}
-      : { external: (id: string) => id.includes("node_modules") }),
+    external,
     plugins: [
       typescript({
         tsconfig: "tsconfig.json",
@@ -30,11 +37,11 @@ function createConfig(
       }),
       json(),
       resolve({
-        browser,
-        preferBuiltins: !browser,
+        browser: format === "es",
+        preferBuiltins: format === "cjs",
       }),
       commonjs(),
-      ...(browser ? [nodePolyfills()] : []),
+      ...(format === "es" ? [nodePolyfills()] : []),
       terser(),
       visualizer({ filename: `dist-stats/${outputFile}.html` }),
     ],
