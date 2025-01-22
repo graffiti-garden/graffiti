@@ -22,12 +22,12 @@ function createConfig(
     // Otherwise, all modules are external.
     ...(browser
       ? {}
-      : {
-          external: (id: string) =>
-            id.includes("node_modules") && !id.includes("@graffiti-garden"),
-        }),
+      : { external: (id: string) => id.includes("node_modules") }),
     plugins: [
-      typescript({ tsconfig: "tsconfig.json" }),
+      typescript({
+        tsconfig: "tsconfig.json",
+        useTsconfigDeclarationDir: true,
+      }),
       json(),
       resolve({
         browser,
