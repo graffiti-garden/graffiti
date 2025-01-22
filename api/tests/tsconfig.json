@@ -9,7 +9,8 @@
     "verbatimModuleSyntax": true,
     "declaration": true,
     "declarationMap": true,
-    "declarationDir": "./dist/src"
+    "declarationDir": "../dist/tests",
+    "rootDir": "."
   },
   "include": ["src"]
 }

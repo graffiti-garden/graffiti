@@ -9,7 +9,7 @@ import {
   GraffitiErrorForbidden,
   GraffitiErrorPatchTestFailed,
   GraffitiErrorPatchError,
-} from "../src/index";
+} from "@graffiti-garden/api";
 import { randomPutObject, randomString } from "./utils";
 
 export const graffitiCRUDTests = (
