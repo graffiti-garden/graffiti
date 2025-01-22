@@ -1,7 +1,6 @@
 import { it, expect, describe } from "vitest";
 import { type GraffitiFactory, type GraffitiSession } from "../src/index";
 import { randomPutObject, randomString } from "./utils";
-import { randomInt } from "crypto";
 
 export const graffitiSynchronizeTests = (
   useGraffiti: GraffitiFactory,

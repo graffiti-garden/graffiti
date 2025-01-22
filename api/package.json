@@ -1,24 +1,36 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The heart of Graffiti",
-  "type": "module",
-  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "module": "dist/index.js",
+  "main": "dist/index.cjs.js",
   "exports": {
-    ".": "./src/index.ts",
+    ".": {
+      "import": {
+        "types": "./src/index.ts",
+        "node": "./dist/index.cjs.js",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./src/index.ts",
+        "default": "./dist/index.cjs.js"
+      }
+    },
     "./tests": "./tests/index.ts"
   },
   "files": [
     "src",
     "tests",
     "package.json",
-    "tsconfig.json"
+    "README.md"
   ],
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "scripts": {
     "docs": "typedoc --options typedoc.json",
-    "prepublishOnly": "npm install"
+    "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
+    "prepublishOnly": "npm install && npm run build"
   },
   "repository": {
     "type": "git",
@@ -29,6 +41,9 @@
   },
   "homepage": "https://api.graffiti.garden/classes/Graffiti.html",
   "devDependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.31.0",
+    "rollup-plugin-typescript2": "^0.36.0",
     "tslib": "^2.8.1",
     "typedoc": "^0.26.11",
     "vitest": "^2.1.8"

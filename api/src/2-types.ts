@@ -1,4 +1,4 @@
-import { type JTDDataType } from "ajv/dist/core";
+import type { JTDDataType } from "ajv/dist/core";
 import type { Operation as JSONPatchOperation } from "fast-json-patch";
 
 /**
