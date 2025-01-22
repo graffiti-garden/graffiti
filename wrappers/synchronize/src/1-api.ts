@@ -229,6 +229,11 @@ import type { JSONSchema4 } from "json-schema";
  * npx http-server
  * ```
  *
+ * ## TODO
+ *
+ * - Test for listChannels and listOrphans,
+ * - Implement scope.
+ *
  * @groupDescription CRUD Methods
  * Methods for {@link put | creating}, {@link get | reading}, {@link patch | updating},
  * and {@link delete | deleting} {@link GraffitiObjectBase | Graffiti objects}.
@@ -654,7 +659,7 @@ export abstract class Graffiti {
   /**
    * An event target that can be used to listen for `login`
    * and `logout` events. They are custom events of types
-   * {@link GraffitiLoginEvent`} and {@link GraffitiLogoutEvent }
+   * {@link GraffitiLoginEvent} and {@link GraffitiLogoutEvent }
    * respectively.
    *
    * @group Session Management
