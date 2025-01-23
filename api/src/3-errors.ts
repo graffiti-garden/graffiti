@@ -61,3 +61,11 @@ export class GraffitiErrorInvalidUri extends Error {
     Object.setPrototypeOf(this, GraffitiErrorInvalidUri.prototype);
   }
 }
+
+export class GraffitiErrorOther extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "GraffitiErrorOther";
+    Object.setPrototypeOf(this, GraffitiErrorOther.prototype);
+  }
+}

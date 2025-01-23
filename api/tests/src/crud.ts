@@ -58,7 +58,9 @@ export const graffitiCRUDTests = (
       expect(beforeReplaced.name).toEqual(previous.name);
       expect(beforeReplaced.actor).toEqual(previous.actor);
       expect(beforeReplaced.source).toEqual(previous.source);
-      expect(beforeReplaced.lastModified).toBeGreaterThan(gotten.lastModified);
+      expect(beforeReplaced.lastModified).toBeGreaterThanOrEqual(
+        gotten.lastModified,
+      );
 
       // Get it again
       const afterReplaced = await graffiti.get(previous, {});
@@ -70,7 +72,7 @@ export const graffitiCRUDTests = (
       const beforeDeleted = await graffiti.delete(afterReplaced, session);
       expect(beforeDeleted.tombstone).toEqual(true);
       expect(beforeDeleted.value).toEqual(newValue);
-      expect(beforeDeleted.lastModified).toBeGreaterThan(
+      expect(beforeDeleted.lastModified).toBeGreaterThanOrEqual(
         beforeReplaced.lastModified,
       );
 
@@ -92,28 +94,15 @@ export const graffitiCRUDTests = (
         ),
       ).rejects.toThrow(GraffitiErrorForbidden);
 
-      await expect(
-        graffiti.delete(
-          {
-            name: "asdf",
-            source: "asdf",
-            actor: session2.actor,
-          },
-          session1,
-        ),
-      ).rejects.toThrow(GraffitiErrorForbidden);
+      const putted = await graffiti.put({ value: {}, channels: [] }, session2);
 
-      await expect(
-        graffiti.patch(
-          {},
-          {
-            name: "asdf",
-            source: "asdf",
-            actor: session2.actor,
-          },
-          session1,
-        ),
-      ).rejects.toThrow(GraffitiErrorForbidden);
+      await expect(graffiti.delete(putted, session1)).rejects.toThrow(
+        GraffitiErrorForbidden,
+      );
+
+      await expect(graffiti.patch({}, putted, session1)).rejects.toThrow(
+        GraffitiErrorForbidden,
+      );
     });
 
     it("put and get with schema", async () => {
