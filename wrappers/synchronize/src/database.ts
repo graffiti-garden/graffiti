@@ -14,10 +14,10 @@ import {
   locationToUri,
   unpackLocationOrUri,
   randomBase64,
-  applyPropPatch,
+  applyGraffitiPatch,
   attemptAjvCompile,
-  maskObject,
-  isAllowed,
+  maskGraffitiObject,
+  isActorAllowedGraffitiObject,
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
 import Ajv from "ajv-draft-04";
@@ -151,11 +151,12 @@ export class GraffitiPouchDBBase {
     const { _id, _rev, ...object } = doc;
 
     // Make sure the user is allowed to see it
-    if (!isAllowed(doc, session)) throw new GraffitiErrorNotFound();
+    if (!isActorAllowedGraffitiObject(doc, session))
+      throw new GraffitiErrorNotFound();
 
     // Mask out the allowed list and channels
     // if the user is not the owner
-    maskObject(object, [], session);
+    maskGraffitiObject(object, [], session);
 
     const validate = attemptAjvCompile(this.ajv, schema);
     if (!validate(object)) {
@@ -283,7 +284,7 @@ export class GraffitiPouchDBBase {
     // Patch it outside of the database
     const patchObject: GraffitiObjectBase = { ...originalObject };
     for (const prop of ["value", "channels", "allowed"] as const) {
-      applyPropPatch(prop, patch, patchObject);
+      applyGraffitiPatch(prop, patch, patchObject);
     }
 
     // Make sure the value is an object
@@ -383,11 +384,11 @@ export class GraffitiPouchDBBase {
           processedIds.add(_id);
 
           // Make sure the user is allowed to see it
-          if (!isAllowed(doc, session)) continue;
+          if (!isActorAllowedGraffitiObject(doc, session)) continue;
 
           // Mask out the allowed list and channels
           // if the user is not the owner
-          maskObject(object, channels, session);
+          maskGraffitiObject(object, channels, session);
 
           // Check that it matches the schema
           if (validate(object)) {
