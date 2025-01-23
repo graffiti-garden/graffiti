@@ -1,11 +1,11 @@
 import { it, expect, describe } from "vitest";
-import {
-  GraffitiErrorInvalidUri,
-  type GraffitiFactory,
-} from "@graffiti-garden/api";
+import type { Graffiti } from "@graffiti-garden/api";
+import { GraffitiErrorInvalidUri } from "@graffiti-garden/api";
 import { randomString } from "./utils";
 
-export const graffitiLocationTests = (useGraffiti: GraffitiFactory) => {
+export const graffitiLocationTests = (
+  useGraffiti: () => Pick<Graffiti, "locationToUri" | "uriToLocation">,
+) => {
   describe("URI and location conversion", () => {
     it("location to uri and back", async () => {
       const graffiti = useGraffiti();

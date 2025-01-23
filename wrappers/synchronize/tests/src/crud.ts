@@ -1,8 +1,10 @@
 import { it, expect, describe } from "vitest";
+import type {
+  Graffiti,
+  GraffitiSession,
+  GraffitiPatch,
+} from "@graffiti-garden/api";
 import {
-  type GraffitiFactory,
-  type GraffitiSession,
-  type GraffitiPatch,
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorInvalidSchema,
@@ -13,7 +15,7 @@ import {
 import { randomPutObject, randomString } from "./utils";
 
 export const graffitiCRUDTests = (
-  useGraffiti: GraffitiFactory,
+  useGraffiti: () => Pick<Graffiti, "put" | "get" | "delete" | "patch">,
   useSession1: () => GraffitiSession,
   useSession2: () => GraffitiSession,
 ) => {
