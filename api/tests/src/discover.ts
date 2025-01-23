@@ -1,13 +1,13 @@
 import { it, expect, describe, assert } from "vitest";
 import type {
-  GraffitiFactory,
+  Graffiti,
   GraffitiSession,
   JSONSchema4,
 } from "@graffiti-garden/api";
 import { randomString, nextStreamValue, randomPutObject } from "./utils";
 
 export const graffitiDiscoverTests = (
-  useGraffiti: GraffitiFactory,
+  useGraffiti: () => Pick<Graffiti, "discover" | "put" | "delete" | "patch">,
   useSession1: () => GraffitiSession,
   useSession2: () => GraffitiSession,
 ) => {
