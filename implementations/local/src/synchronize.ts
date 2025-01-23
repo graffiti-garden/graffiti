@@ -3,10 +3,10 @@ import { Graffiti } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
 import {
-  applyPropPatch,
+  applyGraffitiPatch,
   attemptAjvCompile,
-  isAllowed,
-  maskObject,
+  isActorAllowedGraffitiObject,
+  maskGraffitiObject,
 } from "./utilities";
 
 type SynchronizeEvent = CustomEvent<{
@@ -75,7 +75,7 @@ export class GraffitiSynchronize {
     const newObject: GraffitiObjectBase = { ...oldObject };
     newObject.tombstone = false;
     for (const prop of ["value", "channels", "allowed"] as const) {
-      applyPropPatch(prop, args[0], newObject);
+      applyGraffitiPatch(prop, args[0], newObject);
     }
     this.synchronizeDispatch(oldObject, newObject);
     return oldObject;
@@ -119,10 +119,10 @@ export class GraffitiSynchronize {
           if (
             objectRaw &&
             objectRaw.channels.some((channel) => channels.includes(channel)) &&
-            isAllowed(objectRaw, session)
+            isActorAllowedGraffitiObject(objectRaw, session)
           ) {
             const object = { ...objectRaw };
-            maskObject(object, channels, session);
+            maskGraffitiObject(object, channels, session);
             if (validate(object)) {
               push({ value: object });
               break;
