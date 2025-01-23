@@ -60,7 +60,7 @@ export function unpackLocationOrUri(locationOrUri: GraffitiLocation | string) {
   }
 }
 
-export function applyPropPatch<Prop extends keyof GraffitiPatch>(
+export function applyGraffitiPatch<Prop extends keyof GraffitiPatch>(
   prop: Prop,
   patch: GraffitiPatch,
   object: GraffitiObjectBase,
@@ -95,7 +95,7 @@ export function attemptAjvCompile<Schema extends JSONSchema4>(
   }
 }
 
-export function maskObject(
+export function maskGraffitiObject(
   object: GraffitiObjectBase,
   channels: string[],
   session?: GraffitiSession,
@@ -107,7 +107,7 @@ export function maskObject(
     );
   }
 }
-export function isAllowed(
+export function isActorAllowedGraffitiObject(
   object: GraffitiObjectBase,
   session?: GraffitiSession,
 ) {

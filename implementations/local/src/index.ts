@@ -3,7 +3,7 @@ import Ajv from "ajv-draft-04";
 import { GraffitiSessionManagerLocal } from "./session-manager-local";
 import { GraffitiPouchDBBase, type GraffitiPouchDBOptions } from "./database";
 import { GraffitiSynchronize } from "./synchronize";
-import * as GraffitiPouchDBUtilities from "./utilities";
+import { locationToUri, uriToLocation } from "./utilities";
 
 export type { GraffitiPouchDBOptions };
 
@@ -11,8 +11,8 @@ export {
   GraffitiPouchDBBase,
   GraffitiSynchronize,
   GraffitiSessionManagerLocal,
-  GraffitiPouchDBUtilities,
 };
+export * from "./utilities";
 
 /**
  * An implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
@@ -28,8 +28,8 @@ export class GraffitiPouchDB extends Graffiti {
   logout = this.sessionManagerLocal.logout;
   sessionEvents = this.sessionManagerLocal.sessionEvents;
 
-  locationToUri = GraffitiPouchDBUtilities.locationToUri;
-  uriToLocation = GraffitiPouchDBUtilities.uriToLocation;
+  locationToUri = locationToUri;
+  uriToLocation = uriToLocation;
 
   protected readonly graffitiPouchDbBase: GraffitiPouchDBBase;
   protected readonly graffitiSynchronize: GraffitiSynchronize;
