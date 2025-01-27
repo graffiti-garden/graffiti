@@ -16,7 +16,12 @@
         let session = undefined;
         window.sessionManager = new GraffitiSolidSessionManagerBrowser();
 
-        function onLogout() {
+        function onLogout(event) {
+            if (event && event.detail.error) {
+                return alert(
+                    `Error logging out with actor ${event.detail.actor}: ${event.detail.error.message}`,
+                );
+            }
             const button = document.querySelector("#toggle-login-button");
             button.onclick = () => sessionManager.login();
             button.innerText = "Login";
@@ -26,10 +31,9 @@
 
         function onLogin(event) {
             if (event.detail.error) {
-                console.error("Error logging in:", event.detail.error);
-            } else {
-                session = event.detail.session;
+                return alert(`Error logging in: ${event.detail.error.message}`);
             }
+            session = event.detail.session;
             const button = document.querySelector("#toggle-login-button");
             button.innerText = "Logout";
             button.onclick = () => sessionManager.logout(session);

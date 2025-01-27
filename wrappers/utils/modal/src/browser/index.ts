@@ -14,16 +14,28 @@ export interface LoginOptions {
 export class GraffitiSolidSessionManagerBrowser
   implements Pick<Graffiti, "login" | "sessionEvents">
 {
-  state: string | undefined = undefined;
   login: Graffiti["login"] = async (proposal, state) => {
-    this.state = state;
+    if (state) {
+      localStorage.setItem("graffiti-login-state", state);
+    } else {
+      localStorage.removeItem("graffiti-login-state");
+    }
     this.open();
   };
 
   logout: Graffiti["logout"] = async (session, state) => {
     if ("fetch" in session) {
+      if (state) {
+        localStorage.setItem("graffiti-logout-state", state);
+      } else {
+        localStorage.removeItem("graffiti-logout-state");
+      }
       await this.solidSession.logout();
     } else {
+      const existingActor = localStorage.getItem("graffiti-login-actor");
+      if (existingActor === session.actor) {
+        localStorage.removeItem("graffiti-login-actor");
+      }
       const detail: GraffitiLogoutEvent["detail"] = {
         state,
         actor: session.actor,
@@ -34,8 +46,10 @@ export class GraffitiSolidSessionManagerBrowser
   };
 
   cancelLogin() {
+    const state = localStorage.getItem("graffiti-login-state") ?? undefined;
+    if (state) localStorage.removeItem("graffiti-login-state");
     const detail: GraffitiLoginEvent["detail"] = {
-      state: this.state,
+      state,
       error: new Error("User cancelled login"),
     };
     const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
@@ -43,18 +57,51 @@ export class GraffitiSolidSessionManagerBrowser
     this.close();
   }
 
-  onSolidLoginEvent() {
-    console.log("something??");
-    if (this.solidSession.info.isLoggedIn && this.solidSession.info.webId) {
-      const detail = {
+  onSolidLoginEvent(error?: Error) {
+    const state = localStorage.getItem("graffiti-login-state") ?? undefined;
+    if (state) localStorage.removeItem("graffiti-login-state");
+    let detail: GraffitiLoginEvent["detail"] & {
+      session?: {
+        fetch: typeof fetch;
+      };
+    };
+    if (
+      !error &&
+      this.solidSession.info.isLoggedIn &&
+      this.solidSession.info.webId
+    ) {
+      detail = {
+        state,
         session: {
           actor: this.solidSession.info.webId,
           fetch: this.solidSession.fetch,
         },
       };
-      const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
-      this.sessionEvents.dispatchEvent(event);
+    } else {
+      detail = {
+        state,
+        error: error ?? new Error("Login with solid failed"),
+      };
     }
+    const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
+    this.sessionEvents.dispatchEvent(event);
+  }
+
+  onSolidLogoutEvent() {
+    const state = localStorage.getItem("graffiti-logout-state") ?? undefined;
+    if (state) localStorage.removeItem("graffiti-logout-state");
+    let detail: GraffitiLogoutEvent["detail"];
+    if (this.solidSession.info.webId) {
+      detail = { state, actor: this.solidSession.info.webId };
+    } else {
+      detail = {
+        state,
+        error: new Error("Logged out, but no actor given"),
+        actor: "",
+      };
+    }
+    const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
+    this.sessionEvents.dispatchEvent(event);
   }
 
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
@@ -63,25 +110,31 @@ export class GraffitiSolidSessionManagerBrowser
   main: HTMLElement;
   solidSession = getDefaultSession();
   constructor(options?: LoginOptions) {
-    this.solidSession.events.on(
-      "sessionRestore",
-      this.onSolidLoginEvent.bind(this),
+    this.solidSession.events.on("sessionRestore", () =>
+      this.onSolidLoginEvent(),
     );
-    this.solidSession.events.on("login", this.onSolidLoginEvent.bind(this));
-    this.solidSession.handleIncomingRedirect({ restorePreviousSession: true });
-    this.solidSession.events.on("logout", () => {
-      let detail: GraffitiLogoutEvent["detail"];
-      if (this.solidSession.info.webId) {
-        detail = { actor: this.solidSession.info.webId };
-      } else {
-        detail = {
-          error: new Error("Logged out, but no actor given"),
-          actor: "",
-        };
-      }
-      const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
-      this.sessionEvents.dispatchEvent(event);
+    this.solidSession.events.on("login", () => this.onSolidLoginEvent());
+    this.solidSession.events.on("logout", () => this.onSolidLogoutEvent());
+    this.solidSession.events.on("error", (error) => {
+      this.onSolidLoginEvent(error ? new Error(error) : undefined);
     });
+
+    const sessionRestorer = async () => {
+      // Allow listeners to be added first
+      await Promise.resolve();
+
+      const actor = window.localStorage.getItem("graffiti-login-actor");
+      if (actor) {
+        const event: GraffitiLoginEvent = new CustomEvent("login", {
+          detail: { session: { actor } },
+        });
+        this.sessionEvents.dispatchEvent(event);
+      }
+      await this.solidSession.handleIncomingRedirect({
+        restorePreviousSession: true,
+      });
+    };
+    sessionRestorer();
 
     this.dialog.className = "graffiti-login";
     this.dialog.innerHTML = dialogHTML;
@@ -120,10 +173,8 @@ export class GraffitiSolidSessionManagerBrowser
   }
 
   open() {
-    console.log("here...");
     this.onWelcome();
     this.dialog.showModal();
-    console.log("there...");
     this.dialog.focus();
   }
 
@@ -185,12 +236,17 @@ export class GraffitiSolidSessionManagerBrowser
         return;
       }
 
+      const state = localStorage.getItem("graffiti-login-state") ?? undefined;
+      if (state) localStorage.removeItem("graffiti-login-state");
       const detail: GraffitiLoginEvent["detail"] = {
-        state: this.state,
+        state,
         session: { actor },
       };
       const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
       this.sessionEvents.dispatchEvent(event);
+
+      // Save the actor for later
+      localStorage.setItem("graffiti-login-actor", actor);
 
       this.close();
     });
@@ -210,6 +266,14 @@ export class GraffitiSolidSessionManagerBrowser
     ) as HTMLFormElement;
     form.addEventListener("submit", async (evt) => {
       evt.preventDefault();
+
+      // Change the login button to "Logging in..."
+      const submitButton = form.querySelector(
+        "input[type=submit]",
+      ) as HTMLButtonElement;
+      submitButton.value = "Logging in...";
+      submitButton.disabled = true;
+
       const formData = new FormData(form);
       const oidcIssuer = formData.get("solid-issuer") as string;
       try {
