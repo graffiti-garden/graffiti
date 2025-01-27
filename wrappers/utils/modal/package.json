@@ -2,11 +2,28 @@
   "name": "@graffiti-garden/solid-oidc-interface",
   "version": "0.0.1",
   "description": "",
-  "main": "src/index.ts",
-  "type": "module",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "browser": "./dist/index.js",
+  "main": "./dist/index.cjs.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/index.d.ts",
+        "node": "./dist/index.cjs.js",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/index.cjs.js"
+      }
+    }
+  },
   "files": [
     "src",
-    "dist"
+    "dist",
+    "package.json",
+    "README.md"
   ],
   "scripts": {
     "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2"
@@ -20,8 +37,9 @@
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-terser": "^0.4.4",
-    "rollup": "^4.32.0",
+    "rollup": "^4.20.0",
     "rollup-plugin-string-import": "^1.2.5",
-    "rollup-plugin-typescript2": "^0.36.0"
+    "rollup-plugin-typescript2": "^0.36.0",
+    "rollup-plugin-visualizer": "^5.14.0"
   }
 }
