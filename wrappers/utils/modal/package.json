@@ -1,6 +1,6 @@
 {
-  "name": "@graffiti-garden/graffiti",
-  "version": "1.0.2",
+  "name": "@graffiti-garden/solid-oidc-interface",
+  "version": "0.0.1",
   "description": "",
   "main": "src/index.ts",
   "type": "module",
@@ -9,29 +9,19 @@
     "dist"
   ],
   "scripts": {
-    "build": "node esbuild.config.js",
-    "demo": "vite",
-    "build-demo": "vite build",
-    "prepublishOnly": "npm run build"
+    "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/graffiti-garden/graffiti.git"
-  },
-  "author": "Theia Henderson",
-  "license": "GPL-3.0-or-later",
-  "bugs": {
-    "url": "https://github.com/graffiti-garden/graffiti/issues"
-  },
-  "homepage": "https://github.com/graffiti-garden/graffiti#readme",
   "dependencies": {
-    "@graffiti-garden/actor-manager-client": "^1.1.7",
-    "@graffiti-garden/byo-storage": "^1.0.2",
-    "@graffiti-garden/link-service-client": "^1.0.4",
-    "abort-utils": "^0.11.1",
-    "esbuild-plugin-inline-import": "^1.0.4"
+    "@graffiti-garden/api": "^0.1.8",
+    "@inrupt/solid-client-authn-browser": "^2.3.0"
   },
   "devDependencies": {
-    "vite": "^5.1.4"
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.32.0",
+    "rollup-plugin-string-import": "^1.2.5",
+    "rollup-plugin-typescript2": "^0.36.0"
   }
 }
