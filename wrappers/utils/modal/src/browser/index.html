@@ -1,0 +1,102 @@
+<header>
+    <button id="graffiti-login-close">Close</button>
+</header>
+
+<main id="graffiti-login-main"></main>
+
+<template id="graffiti-login-welcome">
+    <h1>
+        <a target="_blank" href="https://graffiti.garden">
+            Welcome to Graffiti!
+        </a>
+    </h1>
+
+    <p>
+        <a target="_blank" href="https://graffiti.garden"> Graffiti</a> is a
+        system that connects different social media applications so that you can
+        seamlessly migrate between them without losing your data or
+        relationships. With a little bit of web programming, you can also modify
+        existing Graffiti applications or create your own.
+    </p>
+
+    <p>
+        If you just want to try Graffiti out, choose "Login Locally" below. You
+        won't need to create an account but any data you create will only be
+        visible to you and stored locally in the browser.
+    </p>
+
+    <p>
+        Alternatively, you can log in with any Solid OIDC provider, a portable
+        identity that you can use across different applications.
+    </p>
+
+    <form>
+        <button id="graffiti-login-local-button">Login Locally</button>
+        <button id="graffiti-login-solid-button">Login with Solid OIDC</button>
+    </form>
+</template>
+
+<template id="graffiti-login-local">
+    <h1>Graffiti Local Login</h1>
+
+    <p>
+        This is a local account so you can choose any username you want, but
+        only you will be able to see your posts. If you want to share with
+        others, please
+        <a id="graffiti-login-solid-button">login with Solid</a> instead.
+    </p>
+
+    <form id="graffiti-login-local-form">
+        <label for="graffiti-login-local-actor">Choose a username:</label>
+        <input
+            id="graffiti-login-local-actor"
+            name="actor"
+            type="text"
+            placeholder="Username"
+        />
+        <input type="submit" value="Login" />
+    </form>
+</template>
+
+<template id="graffiti-login-solid">
+    <h1>Graffiti Solid Login</h1>
+
+    <p>
+        This is a Solid account so you can use your existing Solid identity to
+        log in. If you don't have a Solid identity yet, you can create one at
+        <a href="https://solidproject.org/users/get-a-solid-pod"
+            >solidproject.org</a
+        >.
+    </p>
+
+    <p>
+        Alternatively, if you want to log in locally, you can choose a username
+        and log in with a local account instead
+        <a id="graffiti-login-local-button">here</a>.
+    </p>
+
+    <form id="graffiti-login-solid-form">
+        <label for="graffiti-login-solid-issuer"
+            >Choose an Identity Provider:</label
+        >
+        <input
+            list="graffiti-login-solid-issuers"
+            id="graffiti-login-solid-issuer"
+            name="solid-issuer"
+            placeholder="https://example.com"
+        />
+
+        <datalist id="graffiti-login-solid-issuers">
+            <option value="https://login.inrupt.com"></option>
+            <option value="https://solidcommunity.net"></option>
+            <option value="https://solidweb.org"></option>
+            <option value="https://solidweb.me"></option>
+            <option value="https://teamid.live"></option>
+            <option value="https://solid.redpencil.io"></option>
+            <option value="https://idp.use.id"></option>
+            <option value="https://inrupt.net"></option>
+        </datalist>
+
+        <input type="submit" value="Login" />
+    </form>
+</template>

@@ -7,26 +7,38 @@
 </head>
 
 <body>
-    <h1>Welcome to Graffiti!</h1>
+    <h1>Graffiti Login</h1>
+    <button id="toggle-login-button"></button>
+    <span id="display-actor"></span>
 
-    <li>
-        <button onclick="graffiti.openLoginManager()">Login</button>
-    </li>
+    <script type="module">
+        import { GraffitiSolidSessionManagerBrowser } from "../dist/index.js";
+        let session = undefined;
+        window.sessionManager = new GraffitiSolidSessionManagerBrowser();
 
-    <p></p>
+        function onLogout() {
+            const button = document.querySelector("#toggle-login-button");
+            button.onclick = () => sessionManager.login();
+            button.innerText = "Login";
+            const span = document.querySelector("#display-actor");
+            span.innerText = "";
+        }
 
-    <div id="stuff">
-        <form onsubmit="subscribe(event)">
-            <input id="context" type="text" />
-            <button type="submit">Change Context</button>
-        </form>
-        <form onsubmit="post(event)">
-            <input id="message" type="text" />
-            <button type="submit">Post</button>
-        </form>
+        function onLogin(event) {
+            if (event.detail.error) {
+                console.error("Error logging in:", event.detail.error);
+            } else {
+                session = event.detail.session;
+            }
+            const button = document.querySelector("#toggle-login-button");
+            button.innerText = "Logout";
+            button.onclick = () => sessionManager.logout(session);
+            const span = document.querySelector("#display-actor");
+            span.innerText = "Your Actor ID is: " + session.actor;
+        }
 
-        <ul id="posts"></ul>
-    </div>
-
-    <script type="module" src="main.ts"></script>
+        sessionManager.sessionEvents.addEventListener("login", onLogin);
+        sessionManager.sessionEvents.addEventListener("logout", onLogout);
+        onLogout();
+    </script>
 </body>
