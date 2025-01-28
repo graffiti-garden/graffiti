@@ -1,3 +1,3 @@
 export interface GraffitiSolidOIDCInterfaceOptions {
-  style?: string;
+  useDefaultStyle?: boolean;
 }
