@@ -297,8 +297,17 @@ export type GraffitiLoginEvent = CustomEvent<
  * or when their session times out or otherwise becomes invalid.
  * The event name to listen for is `logout`.
  */
-export type GraffitiLogoutEvent = CustomEvent<{
-  actor: string;
-  state?: string;
-  error?: Error;
-}>;
+export type GraffitiLogoutEvent = CustomEvent<
+  {
+    state?: string;
+  } & (
+    | {
+        error: Error;
+        actor?: string;
+      }
+    | {
+        error?: undefined;
+        actor: string;
+      }
+  )
+>;
