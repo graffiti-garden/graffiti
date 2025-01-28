@@ -1,14 +1,7 @@
-import { Graffiti } from "@graffiti-garden/api";
 import type { GraffitiSolidOIDCInterfaceOptions } from "../types";
-import { getSessionFromStorage } from "@inrupt/solid-client-authn-node";
+import { GraffitiLocalSessionManager } from "@graffiti-garden/implementation-local/session-manager";
+// TODO: actually use solid for node version
+// import { getSessionFromStorage } from "@inrupt/solid-client-authn-node";
 
 export type { GraffitiSolidOIDCInterfaceOptions };
-
-export class GraffitiSolidOIDCInterface
-  implements Pick<Graffiti, "login" | "sessionEvents">
-{
-  constructor(options?: GraffitiSolidOIDCInterfaceOptions) {}
-  sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
-  login: Graffiti["login"] = async () => {};
-  logout: Graffiti["logout"] = async () => {};
-}
+export { GraffitiLocalSessionManager as GraffitiSolidOIDCInterface };
