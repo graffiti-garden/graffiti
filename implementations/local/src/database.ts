@@ -21,11 +21,12 @@ import {
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
 import Ajv from "ajv-draft-04";
+import { applyPatch } from "fast-json-patch";
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
  */
-export interface GraffitiPouchDBOptions {
+export interface GraffitiLocalOptions {
   /**
    * Options to pass to the PouchDB constructor.
    * Defaults to `{ name: "graffitiDb" }`.
@@ -52,13 +53,25 @@ export interface GraffitiPouchDBOptions {
  * An implementation of only the database operations of the
  * GraffitiAPI without synchronization or session management.
  */
-export class GraffitiPouchDBBase {
+export class GraffitiLocalDatabase
+  implements
+    Pick<
+      Graffiti,
+      | "get"
+      | "put"
+      | "patch"
+      | "delete"
+      | "discover"
+      | "listChannels"
+      | "listOrphans"
+    >
+{
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
   protected readonly source: string = "local";
   protected readonly tombstoneRetention: number = 86400000; // 1 day in ms
   protected readonly ajv: Ajv;
 
-  constructor(options?: GraffitiPouchDBOptions, ajv?: Ajv) {
+  constructor(options?: GraffitiLocalOptions, ajv?: Ajv) {
     this.ajv = ajv ?? new Ajv({ strict: false });
     this.source = options?.sourceName ?? this.source;
     this.tombstoneRetention =
@@ -302,7 +315,7 @@ export class GraffitiPouchDBBase {
     // Patch it outside of the database
     const patchObject: GraffitiObjectBase = { ...originalObject };
     for (const prop of ["value", "channels", "allowed"] as const) {
-      applyGraffitiPatch(prop, patch, patchObject);
+      applyGraffitiPatch(applyPatch, prop, patch, patchObject);
     }
 
     // Make sure the value is an object

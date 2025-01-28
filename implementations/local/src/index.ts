@@ -1,26 +1,18 @@
 import { Graffiti } from "@graffiti-garden/api";
 import Ajv from "ajv-draft-04";
-import { GraffitiSessionManagerLocal } from "./session-manager-local";
-import { GraffitiPouchDBBase, type GraffitiPouchDBOptions } from "./database";
+import { GraffitiLocalSessionManager } from "./session-manager";
+import { GraffitiLocalDatabase, type GraffitiLocalOptions } from "./database";
 import { GraffitiSynchronize } from "./synchronize";
 import { locationToUri, uriToLocation } from "./utilities";
 
-export type { GraffitiPouchDBOptions };
-
-export {
-  GraffitiPouchDBBase,
-  GraffitiSynchronize,
-  GraffitiSessionManagerLocal,
-};
-export * from "./utilities";
-
 /**
- * An implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
- * based on [PouchDB](https://pouchdb.com/). By default, PouchDb stores data in a local
- * database, either in the browser or in Node.js, but it can be configured to
- * use a remote database instead.
+ * A local implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+ * based on [PouchDB](https://pouchdb.com/). PouchDb will automatically persist data in a local
+ * database, either in the browser or in Node.js.
+ * It can also be configured to work with an external [CouchDB](https://couchdb.apache.org/) server,
+ * although using it with a remote server will not be secure.
  */
-export class GraffitiPouchDB extends Graffiti {
+export class GraffitiLocal extends Graffiti {
   locationToUri = locationToUri;
   uriToLocation = uriToLocation;
 
@@ -36,16 +28,16 @@ export class GraffitiPouchDB extends Graffiti {
   listChannels: Graffiti["listChannels"];
   listOrphans: Graffiti["listOrphans"];
 
-  constructor(options?: GraffitiPouchDBOptions) {
+  constructor(options?: GraffitiLocalOptions) {
     super();
 
-    const sessionManagerLocal = new GraffitiSessionManagerLocal();
+    const sessionManagerLocal = new GraffitiLocalSessionManager();
     this.login = sessionManagerLocal.login.bind(sessionManagerLocal);
     this.logout = sessionManagerLocal.logout.bind(sessionManagerLocal);
     this.sessionEvents = sessionManagerLocal.sessionEvents;
 
     const ajv = new Ajv({ strict: false });
-    const graffitiPouchDbBase = new GraffitiPouchDBBase(options, ajv);
+    const graffitiPouchDbBase = new GraffitiLocalDatabase(options, ajv);
     const graffitiSynchronize = new GraffitiSynchronize(
       graffitiPouchDbBase,
       ajv,

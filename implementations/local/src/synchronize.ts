@@ -2,6 +2,7 @@ import Ajv from "ajv-draft-04";
 import type { Graffiti } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
+import { applyPatch } from "fast-json-patch";
 import {
   applyGraffitiPatch,
   attemptAjvCompile,
@@ -25,7 +26,13 @@ type GraffitiDatabaseMethods = Pick<
  * The partial implementation must include the primary database methods:
  * `get`, `put`, `patch`, `delete`, and `discover`.
  */
-export class GraffitiSynchronize {
+export class GraffitiSynchronize
+  implements
+    Pick<
+      Graffiti,
+      "put" | "get" | "patch" | "delete" | "discover" | "synchronize"
+    >
+{
   protected readonly synchronizeEvents = new EventTarget();
   protected readonly ajv: Ajv;
   protected readonly graffiti: GraffitiDatabaseMethods;
@@ -75,7 +82,7 @@ export class GraffitiSynchronize {
     const newObject: GraffitiObjectBase = { ...oldObject };
     newObject.tombstone = false;
     for (const prop of ["value", "channels", "allowed"] as const) {
-      applyGraffitiPatch(prop, args[0], newObject);
+      applyGraffitiPatch(applyPatch, prop, args[0], newObject);
     }
     this.synchronizeDispatch(oldObject, newObject);
     return oldObject;

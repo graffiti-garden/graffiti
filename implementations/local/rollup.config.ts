@@ -17,11 +17,14 @@ function createConfig(
     // externalize the api so
     // instanceof checks work for errors
     external.push("@graffiti-garden/api");
-    // And Ajv because it is big and used a lot
+    // And these because they can be big
     external.push("ajv");
     external.push("ajv-draft-04");
-    // Also externalize pouchdb
+    external.push("@repeaterjs/repeater");
+    external.push("fast-json-patch");
     if (format === "cjs") {
+      // don't externalize pouchdb for esm
+      // because it may not build properly
       external.push("pouchdb");
     }
   }
@@ -54,7 +57,13 @@ function createConfig(
   };
 }
 
-const inputs = ["index", "session-manager-local", "synchronize"];
+const inputs = [
+  "index",
+  "database",
+  "session-manager",
+  "synchronize",
+  "utilities",
+];
 
 const output: ReturnType<typeof createConfig>[] = [];
 for (const inputFile of inputs) {
