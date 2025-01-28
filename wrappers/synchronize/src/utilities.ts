@@ -13,7 +13,7 @@ import type {
   GraffitiSession,
 } from "@graffiti-garden/api";
 import type { Ajv } from "ajv";
-import { applyPatch, JsonPatchError } from "fast-json-patch";
+import type { applyPatch } from "fast-json-patch";
 
 export const locationToUri: Graffiti["locationToUri"] = (location) => {
   return `${location.source}/${encodeURIComponent(location.actor)}/${encodeURIComponent(location.name)}`;
@@ -61,6 +61,7 @@ export function unpackLocationOrUri(locationOrUri: GraffitiLocation | string) {
 }
 
 export function applyGraffitiPatch<Prop extends keyof GraffitiPatch>(
+  apply: typeof applyPatch,
   prop: Prop,
   patch: GraffitiPatch,
   object: GraffitiObjectBase,
@@ -68,9 +69,16 @@ export function applyGraffitiPatch<Prop extends keyof GraffitiPatch>(
   const ops = patch[prop];
   if (!ops || !ops.length) return;
   try {
-    object[prop] = applyPatch(object[prop], ops, true, false).newDocument;
+    object[prop] = apply(object[prop], ops, true, false).newDocument;
   } catch (e) {
-    if (e instanceof JsonPatchError) {
+    if (
+      typeof e === "object" &&
+      e &&
+      "name" in e &&
+      typeof e.name === "string" &&
+      "message" in e &&
+      typeof e.message === "string"
+    ) {
       if (e.name === "TEST_OPERATION_FAILED") {
         throw new GraffitiErrorPatchTestFailed(e.message);
       } else {
