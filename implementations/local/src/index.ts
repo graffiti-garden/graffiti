@@ -5,6 +5,8 @@ import { GraffitiLocalDatabase, type GraffitiLocalOptions } from "./database";
 import { GraffitiSynchronize } from "./synchronize";
 import { locationToUri, uriToLocation } from "./utilities";
 
+export type { GraffitiLocalOptions };
+
 /**
  * A local implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
  * based on [PouchDB](https://pouchdb.com/). PouchDb will automatically persist data in a local
