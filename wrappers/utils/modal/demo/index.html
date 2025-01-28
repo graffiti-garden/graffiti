@@ -8,7 +8,7 @@
 
 <body>
     <h1>Graffiti Login</h1>
-    <button id="toggle-login-button"></button>
+    <button id="toggle-login-button">Loading...</button>
     <span id="display-actor"></span>
 
     <script type="module">
@@ -41,8 +41,27 @@
             span.innerText = "Your Actor ID is: " + session.actor;
         }
 
+        function onSessionInitialized(event) {
+            if (event.detail?.error) {
+                return alert(
+                    `Error initializing session: ${event.detail.error.message}`,
+                );
+            }
+            const href = event.detail?.href;
+            if (href) {
+                alert("Session restored, redirect back to: " + href);
+            }
+            const button = document.querySelector("#toggle-login-button");
+            if (button.innerText === "Loading...") {
+                onLogout();
+            }
+        }
+
         sessionManager.sessionEvents.addEventListener("login", onLogin);
         sessionManager.sessionEvents.addEventListener("logout", onLogout);
-        onLogout();
+        sessionManager.sessionEvents.addEventListener(
+            "initialized",
+            onSessionInitialized,
+        );
     </script>
 </body>

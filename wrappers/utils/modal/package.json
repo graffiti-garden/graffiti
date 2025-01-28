@@ -1,7 +1,7 @@
 {
   "name": "@graffiti-garden/solid-oidc-interface",
-  "version": "0.0.2",
-  "description": "",
+  "version": "0.0.4",
+  "description": "An implementation of the Graffiti API's login functionality using Solid OIDC",
   "types": "./dist/browser/index.d.ts",
   "module": "./dist/index.js",
   "browser": "./dist/index.js",
@@ -30,7 +30,8 @@
     "prepublishOnly": "npm update && npm run build"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.1.9",
+    "@graffiti-garden/api": "^0.1.10",
+    "@graffiti-garden/implementation-pouchdb": "^0.1.13",
     "@inrupt/solid-client-authn-browser": "^2.3.0"
   },
   "devDependencies": {
