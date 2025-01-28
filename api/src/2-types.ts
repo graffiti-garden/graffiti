@@ -277,18 +277,14 @@ export type GraffitiStream<TValue, TReturn = void> = AsyncGenerator<
  * The event name to listen for is `login`.
  */
 export type GraffitiLoginEvent = CustomEvent<
-  {
-    state?: string;
-  } & (
-    | {
-        error: Error;
-        session?: undefined;
-      }
-    | {
-        error?: undefined;
-        session: GraffitiSession;
-      }
-  )
+  | {
+      error: Error;
+      session?: undefined;
+    }
+  | {
+      error?: undefined;
+      session: GraffitiSession;
+    }
 >;
 
 /**
@@ -298,16 +294,27 @@ export type GraffitiLoginEvent = CustomEvent<
  * The event name to listen for is `logout`.
  */
 export type GraffitiLogoutEvent = CustomEvent<
-  {
-    state?: string;
-  } & (
-    | {
-        error: Error;
-        actor?: string;
-      }
-    | {
-        error?: undefined;
-        actor: string;
-      }
-  )
+  | {
+      error: Error;
+      actor?: string;
+    }
+  | {
+      error?: undefined;
+      actor: string;
+    }
 >;
+
+/**
+ * The event type produced in {@link Graffiti.sessionEvents}
+ * after an application has attempted to complete any login redirects
+ * and restore any previously active sessions.
+ * Successful session restores will be returned in parallel as
+ * their own {@link GraffitiLoginEvent} events.
+ * This event optionally return an `href` property
+ * if there were any redirects during the restoration process.
+ * The event name to listen for is `initialized`.
+ */
+export type GraffitiSessionInitializedEvent = CustomEvent<{
+  error?: Error;
+  href?: string;
+}>;

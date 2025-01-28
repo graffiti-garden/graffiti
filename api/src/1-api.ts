@@ -623,13 +623,6 @@ export abstract class Graffiti {
        */
       scope?: {};
     },
-    /**
-     * An arbitrary string that will be returned with the
-     * {@link GraffitiSession | session} object
-     * when the login process is complete.
-     * See {@link GraffitiLoginEvent}.
-     */
-    state?: string,
   ): Promise<void>;
 
   /**
@@ -648,19 +641,14 @@ export abstract class Graffiti {
      * The {@link GraffitiSession | session} object to logout.
      */
     session: GraffitiSession,
-    /**
-     * An arbitrary string that will be returned with the
-     * when the logout process is complete.
-     * See {@link GraffitiLogoutEvent}.
-     */
-    state?: string,
   ): Promise<void>;
 
   /**
-   * An event target that can be used to listen for `login`
-   * and `logout` events. They are custom events of types
-   * {@link GraffitiLoginEvent} and {@link GraffitiLogoutEvent }
-   * respectively.
+   * An event target that can be used to listen for the following
+   * events and they're corresponding event types:
+   * - `login` - {@link GraffitiLoginEvent}
+   * - `logout` - {@link GraffitiLogoutEvent}
+   * - `initialized` - {@link GraffitiSessionInitializedEvent}
    *
    * @group Session Management
    */
