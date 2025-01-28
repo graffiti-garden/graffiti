@@ -17,6 +17,9 @@ function createConfig(
     // externalize the api so
     // instanceof checks work for errors
     external.push("@graffiti-garden/api");
+    // And Ajv because it is big and used a lot
+    external.push("ajv");
+    external.push("ajv-draft-04");
     // Also externalize pouchdb
     if (format === "cjs") {
       external.push("pouchdb");

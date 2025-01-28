@@ -21,19 +21,12 @@ export * from "./utilities";
  * use a remote database instead.
  */
 export class GraffitiPouchDB extends Graffiti {
-  protected readonly ajv = new Ajv({ strict: false });
-
-  protected readonly sessionManagerLocal = new GraffitiSessionManagerLocal();
-  login = this.sessionManagerLocal.login;
-  logout = this.sessionManagerLocal.logout;
-  sessionEvents = this.sessionManagerLocal.sessionEvents;
-
   locationToUri = locationToUri;
   uriToLocation = uriToLocation;
 
-  protected readonly graffitiPouchDbBase: GraffitiPouchDBBase;
-  protected readonly graffitiSynchronize: GraffitiSynchronize;
-
+  login: Graffiti["login"];
+  logout: Graffiti["logout"];
+  sessionEvents: Graffiti["sessionEvents"];
   put: Graffiti["put"];
   get: Graffiti["get"];
   patch: Graffiti["patch"];
@@ -46,19 +39,28 @@ export class GraffitiPouchDB extends Graffiti {
   constructor(options?: GraffitiPouchDBOptions) {
     super();
 
-    this.graffitiPouchDbBase = new GraffitiPouchDBBase(options, this.ajv);
-    this.graffitiSynchronize = new GraffitiSynchronize(
-      this.graffitiPouchDbBase,
-      this.ajv,
+    const sessionManagerLocal = new GraffitiSessionManagerLocal();
+    this.login = sessionManagerLocal.login.bind(sessionManagerLocal);
+    this.logout = sessionManagerLocal.logout.bind(sessionManagerLocal);
+    this.sessionEvents = sessionManagerLocal.sessionEvents;
+
+    const ajv = new Ajv({ strict: false });
+    const graffitiPouchDbBase = new GraffitiPouchDBBase(options, ajv);
+    const graffitiSynchronize = new GraffitiSynchronize(
+      graffitiPouchDbBase,
+      ajv,
     );
 
-    this.put = this.graffitiSynchronize.put;
-    this.get = this.graffitiSynchronize.get;
-    this.patch = this.graffitiSynchronize.patch;
-    this.delete = this.graffitiSynchronize.delete;
-    this.discover = this.graffitiSynchronize.discover;
-    this.synchronize = this.graffitiSynchronize.synchronize;
-    this.listChannels = this.graffitiPouchDbBase.listChannels;
-    this.listOrphans = this.graffitiPouchDbBase.listOrphans;
+    this.put = graffitiSynchronize.put.bind(graffitiSynchronize);
+    this.get = graffitiSynchronize.get.bind(graffitiSynchronize);
+    this.patch = graffitiSynchronize.patch.bind(graffitiSynchronize);
+    this.delete = graffitiSynchronize.delete.bind(graffitiSynchronize);
+    this.discover = graffitiSynchronize.discover.bind(graffitiSynchronize);
+    this.synchronize =
+      graffitiSynchronize.synchronize.bind(graffitiSynchronize);
+    this.listChannels =
+      graffitiPouchDbBase.listChannels.bind(graffitiPouchDbBase);
+    this.listOrphans =
+      graffitiPouchDbBase.listOrphans.bind(graffitiPouchDbBase);
   }
 }
