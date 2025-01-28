@@ -7,7 +7,7 @@ import { visualizer } from "rollup-plugin-visualizer";
 import nodePolyfills from "rollup-plugin-node-polyfills";
 
 function createConfig(
-  outputFile: string,
+  inputFile: string,
   format: "es" | "cjs",
   browser: boolean,
 ) {
@@ -25,8 +25,11 @@ function createConfig(
       external.push("pouchdb");
     }
   }
+  const outputFile =
+    inputFile +
+    (format === "es" ? (browser ? ".browser.js" : ".js") : ".cjs.js");
   return {
-    input: "src/index.ts",
+    input: "src/" + inputFile + ".ts",
     output: {
       file: "dist/" + outputFile,
       format,
@@ -51,8 +54,16 @@ function createConfig(
   };
 }
 
-export default [
-  createConfig("index.js", "es", false),
-  createConfig("index.browser.js", "es", true),
-  createConfig("index.cjs.js", "cjs", false),
-];
+const inputs = ["index", "session-manager-local", "synchronize"];
+
+const output: ReturnType<typeof createConfig>[] = [];
+for (const inputFile of inputs) {
+  for (const format of ["es", "cjs"] as const) {
+    output.push(createConfig(inputFile, format, false));
+    if (format === "es") {
+      output.push(createConfig(inputFile, format, true));
+    }
+  }
+}
+
+export default output;
