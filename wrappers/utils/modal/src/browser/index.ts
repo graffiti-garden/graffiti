@@ -6,14 +6,14 @@ import type {
 } from "@graffiti-garden/api";
 import { getDefaultSession } from "@inrupt/solid-client-authn-browser";
 import type { GraffitiSolidOIDCInterfaceOptions } from "../types";
-import { GraffitiSessionManagerLocal } from "@graffiti-garden/implementation-pouchdb";
+import { GraffitiLocalSessionManager } from "@graffiti-garden/implementation-local/session-manager";
 
 export type { GraffitiSolidOIDCInterfaceOptions };
 
 export class GraffitiSolidOIDCInterface
   implements Pick<Graffiti, "login" | "logout" | "sessionEvents">
 {
-  protected sessionManagerLocal = new GraffitiSessionManagerLocal();
+  protected sessionManagerLocal = new GraffitiLocalSessionManager();
   sessionEvents = new EventTarget();
   protected dialog = document.createElement("dialog");
   protected main: Promise<HTMLElement>;
