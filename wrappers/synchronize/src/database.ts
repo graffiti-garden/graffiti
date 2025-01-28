@@ -165,42 +165,60 @@ export class GraffitiPouchDBBase {
     return object;
   };
 
-  protected async deleteBefore(
+  /**
+   * Deletes all docs at a particular location.
+   * If the `keepLatest` flag is set to true,
+   * the doc with the most recent timestamp will be
+   * spared. If there are multiple docs with the same
+   * timestamp, the one with the highest `_id` will be
+   * spared.
+   */
+  protected async deleteAtLocation(
     location: GraffitiLocation,
-    modifiedBefore?: number,
+    keepLatest: boolean = false,
   ) {
     const docsAtLocation = await this.queryByLocation(location);
+    if (!docsAtLocation.length) return undefined;
+
+    // Get the most recent lastModified timestamp.
+    const latestModified = docsAtLocation
+      .map((doc) => doc.lastModified)
+      .reduce((a, b) => (a > b ? a : b));
 
     // Delete all old docs
-    const docs = docsAtLocation.filter(
-      (doc) => !modifiedBefore || doc.lastModified < modifiedBefore,
+    const docsToDelete = docsAtLocation.filter(
+      (doc) => !keepLatest || doc.lastModified < latestModified,
     );
 
     // For docs with the same timestamp,
     // keep the one with the highest _id
     // to break concurrency ties
     const concurrentDocsAll = docsAtLocation.filter(
-      (doc) => modifiedBefore && doc.lastModified === modifiedBefore,
+      (doc) => keepLatest && doc.lastModified === latestModified,
     );
     if (concurrentDocsAll.length) {
-      const keepDoc = concurrentDocsAll.reduce((a, b) =>
-        a._id > b._id ? a : b,
-      );
+      const keepDocId = concurrentDocsAll
+        .map((doc) => doc._id)
+        .reduce((a, b) => (a > b ? a : b));
       const concurrentDocsToDelete = concurrentDocsAll.filter(
-        (doc) => doc._id !== keepDoc._id,
+        (doc) => doc._id !== keepDocId,
       );
-      docs.push(...concurrentDocsToDelete);
+      docsToDelete.push(...concurrentDocsToDelete);
     }
+
+    const lastModified = keepLatest ? latestModified : new Date().getTime();
 
     let deletedObject: GraffitiObjectBase | undefined = undefined;
     // Go through documents oldest to newest
-    for (const doc of docs.sort((a, b) => a.lastModified - b.lastModified)) {
+    for (const doc of docsToDelete.sort(
+      (a, b) => a.lastModified - b.lastModified,
+    )) {
       // Change it's tombstone to true
       // and update it's timestamp
       const deletedDoc = {
         ...doc,
         tombstone: true,
-        lastModified: modifiedBefore ?? new Date().getTime(),
+        lastModified,
       };
       try {
         await this.db.put(deletedDoc);
@@ -229,7 +247,7 @@ export class GraffitiPouchDBBase {
       throw new GraffitiErrorForbidden();
     }
 
-    const deletedObject = await this.deleteBefore(location);
+    const deletedObject = await this.deleteAtLocation(location);
     if (!deletedObject) {
       throw new GraffitiErrorNotFound();
     }
@@ -259,7 +277,7 @@ export class GraffitiPouchDBBase {
     });
 
     // Delete the old object
-    const previousObject = await this.deleteBefore(object, object.lastModified);
+    const previousObject = await this.deleteAtLocation(object, true);
     if (previousObject) {
       return previousObject;
     } else {
@@ -324,7 +342,7 @@ export class GraffitiPouchDBBase {
     });
 
     // Delete the old object
-    await this.deleteBefore(patchObject, patchObject.lastModified);
+    await this.deleteAtLocation(patchObject, true);
 
     return {
       ...originalObject,
