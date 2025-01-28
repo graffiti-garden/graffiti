@@ -13,77 +13,8 @@ export type { GraffitiSolidOIDCInterfaceOptions };
 export class GraffitiSolidOIDCInterface
   implements Pick<Graffiti, "login" | "logout" | "sessionEvents">
 {
-  login: Graffiti["login"] = async (proposal) => {
-    if (proposal?.actor) {
-      if (proposal.actor.startsWith("http")) {
-        await this.onSolidLogin();
-      } else {
-        await this.onLocalLogin(proposal.actor);
-      }
-    } else {
-      await this.onWelcome();
-    }
-    this.open();
-  };
-
-  logout: Graffiti["logout"] = async (session) => {
-    if (session.actor.startsWith("http") && "fetch" in session) {
-      return this.solidSession.logout();
-    } else {
-      return this.sessionManagerLocal.logout(session);
-    }
-  };
-
-  protected cancelLogin() {
-    const event: GraffitiLoginEvent = new CustomEvent("login", {
-      detail: { error: new Error("User cancelled login") },
-    });
-    this.sessionEvents.dispatchEvent(event);
-    this.close();
-  }
-
-  protected onSolidLoginEvent(error?: Error) {
-    let detail: GraffitiLoginEvent["detail"] & {
-      session?: {
-        fetch: typeof fetch;
-      };
-    };
-    if (
-      !error &&
-      this.solidSession.info.isLoggedIn &&
-      this.solidSession.info.webId
-    ) {
-      detail = {
-        session: {
-          actor: this.solidSession.info.webId,
-          fetch: this.solidSession.fetch,
-        },
-      };
-    } else {
-      detail = {
-        error: error ?? new Error("Login with solid failed"),
-      };
-    }
-    const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
-    this.sessionEvents.dispatchEvent(event);
-  }
-
-  protected onSolidLogoutEvent() {
-    let detail: GraffitiLogoutEvent["detail"];
-    if (this.solidSession.info.webId) {
-      detail = { actor: this.solidSession.info.webId };
-    } else {
-      detail = {
-        error: new Error("Logged out, but no actor given"),
-      };
-    }
-    const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
-    this.sessionEvents.dispatchEvent(event);
-  }
-
-  sessionManagerLocal = new GraffitiSessionManagerLocal();
+  protected sessionManagerLocal = new GraffitiSessionManagerLocal();
   sessionEvents = new EventTarget();
-
   protected dialog = document.createElement("dialog");
   protected main: Promise<HTMLElement>;
   protected solidSession = getDefaultSession();
@@ -164,6 +95,74 @@ export class GraffitiSolidOIDCInterface
     }
 
     this.onWelcome();
+  }
+
+  login: Graffiti["login"] = async (proposal) => {
+    if (proposal?.actor) {
+      if (proposal.actor.startsWith("http")) {
+        await this.onSolidLogin();
+      } else {
+        await this.onLocalLogin(proposal.actor);
+      }
+    } else {
+      await this.onWelcome();
+    }
+    this.open();
+  };
+
+  logout: Graffiti["logout"] = async (session) => {
+    if (session.actor.startsWith("http") && "fetch" in session) {
+      return this.solidSession.logout();
+    } else {
+      return this.sessionManagerLocal.logout(session);
+    }
+  };
+
+  protected cancelLogin() {
+    const event: GraffitiLoginEvent = new CustomEvent("login", {
+      detail: { error: new Error("User cancelled login") },
+    });
+    this.sessionEvents.dispatchEvent(event);
+    this.close();
+  }
+
+  protected onSolidLoginEvent(error?: Error) {
+    let detail: GraffitiLoginEvent["detail"] & {
+      session?: {
+        fetch: typeof fetch;
+      };
+    };
+    if (
+      !error &&
+      this.solidSession.info.isLoggedIn &&
+      this.solidSession.info.webId
+    ) {
+      detail = {
+        session: {
+          actor: this.solidSession.info.webId,
+          fetch: this.solidSession.fetch,
+        },
+      };
+    } else {
+      detail = {
+        error: error ?? new Error("Login with solid failed"),
+      };
+    }
+    const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
+    this.sessionEvents.dispatchEvent(event);
+  }
+
+  protected onSolidLogoutEvent() {
+    let detail: GraffitiLogoutEvent["detail"];
+    if (this.solidSession.info.webId) {
+      detail = { actor: this.solidSession.info.webId };
+    } else {
+      detail = {
+        error: new Error("Logged out, but no actor given"),
+      };
+    }
+    const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
+    this.sessionEvents.dispatchEvent(event);
   }
 
   protected open() {
