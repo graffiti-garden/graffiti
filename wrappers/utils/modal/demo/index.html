@@ -2,7 +2,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Graffiti</title>
+    <title>Graffiti Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
 
@@ -12,9 +12,9 @@
     <span id="display-actor"></span>
 
     <script type="module">
-        import { GraffitiSolidSessionManagerBrowser } from "../dist/index.js";
+        import { GraffitiSolidOIDCInterface } from "../dist/index.js";
         let session = undefined;
-        window.sessionManager = new GraffitiSolidSessionManagerBrowser();
+        window.sessionManager = new GraffitiSolidOIDCInterface();
 
         function onLogout(event) {
             if (event && event.detail.error) {
