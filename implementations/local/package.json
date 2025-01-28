@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/implementation-pouchdb",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "An implementation of the Graffiti API using PouchDB",
   "types": "./dist/src/index.d.ts",
   "module": "./dist/index.js",
@@ -16,6 +16,28 @@
       "require": {
         "types": "./dist/src/index.d.ts",
         "default": "./dist/index.cjs.js"
+      }
+    },
+    "./session-manager-local": {
+      "import": {
+        "types": "./dist/src/session-manager-local.d.ts",
+        "node": "./dist/session-manager-local.cjs.js",
+        "default": "./dist/session-manager-local.js"
+      },
+      "require": {
+        "types": "./dist/src/session-manager-local.d.ts",
+        "default": "./dist/session-manager-local.cjs.js"
+      }
+    },
+    "./synchronize": {
+      "import": {
+        "types": "./dist/src/synchronize.d.ts",
+        "node": "./dist/synchronize.cjs.js",
+        "default": "./dist/synchronize.js"
+      },
+      "require": {
+        "types": "./dist/src/synchronize.d.ts",
+        "default": "./dist/synchronize.cjs.js"
       }
     }
   },
