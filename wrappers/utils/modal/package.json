@@ -1,6 +1,6 @@
 {
-  "name": "@graffiti-garden/solid-oidc-interface",
-  "version": "0.0.4",
+  "name": "@graffiti-garden/solid-oidc-session-manager",
+  "version": "0.0.5",
   "description": "An implementation of the Graffiti API's login functionality using Solid OIDC",
   "types": "./dist/browser/index.d.ts",
   "module": "./dist/index.js",
@@ -14,7 +14,7 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/browser/index.d.ts",
+        "types": "./dist/node/index.d.ts",
         "default": "./dist/index.cjs.js"
       }
     }
@@ -29,9 +29,18 @@
     "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
     "prepublishOnly": "npm update && npm run build"
   },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/solid-oidc-session-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/solid-oidc-session-manager/issues"
+  },
   "dependencies": {
     "@graffiti-garden/api": "^0.1.10",
-    "@graffiti-garden/implementation-pouchdb": "^0.1.13",
+    "@graffiti-garden/implementation-local": "^0.2.1",
     "@inrupt/solid-client-authn-browser": "^2.3.0"
   },
   "devDependencies": {
