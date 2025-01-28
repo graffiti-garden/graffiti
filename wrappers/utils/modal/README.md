@@ -5,10 +5,11 @@ using [Solid OIDC](https://solid.github.io/solid-oidc/).
 
 In the browser, when an application calls `graffiti.login()`, a dialog opens up that allows the user to log in either
 locally (for demoing/testing) or with a Solid OIDC provider.
-The `actor` IDs produced from Solid login are webIds that start with `http`, while
-`actor` IDs produced from local login will not.
+The `actor` IDs produced from Solid login are webId URLs that start with `http`,
+while `actor` IDs produced from local login will not start with `http`.
 
-In node.js it currently just returns an instance of the
+The node.js interface is not currently implemented and just
+returns an instance of
 [`GraffitiLocalSessionManager`](https://github.com/graffiti-garden/implementation-local/blob/main/src/session-manager.ts),
 but at some point it will be extended to use
 [@inrupt/solid-client-authn-node](https://docs.inrupt.com/developer-tools/javascript/client-libraries/tutorial/authenticate-nodejs-web-server/).
@@ -36,7 +37,7 @@ sessionManager.sessionEvents.addEventListener("login", (event) => {
 button.onclick = () => sessionManager.login()
 ```
 
-See the [demo](./demo) for a full example.
+See the [demo](./demo/index.html) for a full example.
 
 ## Development
 
@@ -47,7 +48,7 @@ npm install
 npm run build
 ```
 
-Then you can run the [demo](./demo) by running:
+Then you can run the [demo](./demo/index.html) by running:
 
 ```bash
 npx http-server
