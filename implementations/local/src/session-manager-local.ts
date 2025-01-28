@@ -2,6 +2,7 @@ import type {
   Graffiti,
   GraffitiLoginEvent,
   GraffitiLogoutEvent,
+  GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
 
 /**
@@ -24,19 +25,47 @@ export class GraffitiSessionManagerLocal {
       // Allow listeners to be added first
       await Promise.resolve();
 
-      if (typeof window === "undefined") return;
-      const actor = window.localStorage.getItem("graffitiActor");
-      if (actor) {
+      // Restore previous sessions
+      for (const actor of this.getLoggedInActors()) {
         const event: GraffitiLoginEvent = new CustomEvent("login", {
           detail: { session: { actor } },
         });
         this.sessionEvents.dispatchEvent(event);
       }
+
+      const event: GraffitiSessionInitializedEvent = new CustomEvent(
+        "initialized",
+      );
+      this.sessionEvents.dispatchEvent(event);
     };
     sessionRestorer();
   }
 
-  login: Graffiti["login"] = async (proposal, state) => {
+  loggedInActors: string[] = [];
+
+  protected getLoggedInActors(): string[] {
+    if (typeof window !== "undefined") {
+      const actorsString = window.localStorage.getItem("graffiti-actor");
+      return actorsString
+        ? actorsString.split(",").map(decodeURIComponent)
+        : [];
+    } else {
+      return this.loggedInActors;
+    }
+  }
+
+  protected setLoggedInActors(actors: string[]) {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        "graffiti-actor",
+        actors.map(encodeURIComponent).join(","),
+      );
+    } else {
+      this.loggedInActors = actors;
+    }
+  }
+
+  login: Graffiti["login"] = async (proposal) => {
     let actor = proposal?.actor;
     if (!actor && typeof window !== "undefined") {
       const response = window.prompt(
@@ -52,20 +81,16 @@ export class GraffitiSessionManagerLocal {
     let detail: GraffitiLoginEvent["detail"];
     if (!actor) {
       detail = {
-        state,
         error: new Error("No actor ID provided to login"),
       };
     } else {
-      // try to store it in the database
-      const session = { actor };
-
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("graffitiActor", actor);
+      const existingActors = this.getLoggedInActors();
+      if (!existingActors.includes(actor)) {
+        this.setLoggedInActors([...existingActors, actor]);
       }
 
       detail = {
-        state,
-        session,
+        session: { actor },
       };
     }
 
@@ -73,22 +98,20 @@ export class GraffitiSessionManagerLocal {
     this.sessionEvents.dispatchEvent(event);
   };
 
-  logout: Graffiti["logout"] = async (session, state) => {
-    let exists = true;
-    if (typeof window !== "undefined") {
-      exists = !!window.localStorage.getItem("graffitiActor");
-      if (exists) {
-        window.localStorage.removeItem("graffitiActor");
-      }
+  logout: Graffiti["logout"] = async (session) => {
+    const existingActors = this.getLoggedInActors();
+    const exists = existingActors.includes(session.actor);
+    if (exists) {
+      this.setLoggedInActors(
+        existingActors.filter((actor) => actor !== session.actor),
+      );
     }
 
     const detail: GraffitiLogoutEvent["detail"] = exists
       ? {
-          state,
           actor: session.actor,
         }
       : {
-          state,
           actor: session.actor,
           error: new Error("Not logged in with that actor"),
         };
