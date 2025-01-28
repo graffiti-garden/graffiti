@@ -3,8 +3,6 @@ import type {
   GraffitiLoginEvent,
   GraffitiLogoutEvent,
 } from "@graffiti-garden/api";
-import dialogHTML from "./index.html";
-import defaultStyle from "./style.css";
 import { getDefaultSession } from "@inrupt/solid-client-authn-browser";
 import type { GraffitiSolidOIDCInterfaceOptions } from "../types";
 
@@ -106,7 +104,7 @@ export class GraffitiSolidOIDCInterface
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
 
   protected dialog = document.createElement("dialog");
-  protected main: HTMLElement;
+  protected main: Promise<HTMLElement>;
   protected solidSession = getDefaultSession();
   constructor(options?: GraffitiSolidOIDCInterfaceOptions) {
     this.solidSession.events.on("sessionRestore", () =>
@@ -136,8 +134,6 @@ export class GraffitiSolidOIDCInterface
     sessionRestorer();
 
     this.dialog.className = "graffiti-login";
-    this.dialog.innerHTML = dialogHTML;
-    document.body.prepend(this.dialog);
 
     // Click outside of dialog to close
     this.dialog.addEventListener("click", (e) => {
@@ -153,18 +149,26 @@ export class GraffitiSolidOIDCInterface
       }
     });
 
-    // Or click the close button to close
-    const closeBtn = this.dialog.querySelector("#graffiti-login-close");
-    closeBtn?.addEventListener("click", () => this.cancelLogin());
+    document.body.prepend(this.dialog);
 
-    this.main = this.dialog.querySelector(
-      "#graffiti-login-main",
-    ) as HTMLElement;
+    const scriptPath = import.meta.url;
+    const scriptDir = scriptPath.substring(0, scriptPath.lastIndexOf("/"));
 
-    const style = options?.style ? options.style : defaultStyle;
-    if (style.length) {
-      const styleEl = document.createElement("style");
-      styleEl.textContent = style;
+    this.main = fetch(scriptDir + "/index.html")
+      .then((res) => res.text())
+      .then((dialogHTML) => {
+        this.dialog.innerHTML = dialogHTML;
+
+        const closeBtn = this.dialog.querySelector("#graffiti-login-close");
+        closeBtn?.addEventListener("click", () => this.cancelLogin());
+
+        return this.dialog.querySelector("#graffiti-login-main") as HTMLElement;
+      });
+
+    if (options?.useDefaultStyle !== false) {
+      const styleEl = document.createElement("link");
+      styleEl.rel = "stylesheet";
+      styleEl.href = scriptDir + "/style.css";
       document.head.append(styleEl);
     }
 
@@ -181,14 +185,14 @@ export class GraffitiSolidOIDCInterface
     this.dialog.close();
   }
 
-  protected displayTemplate(id: string) {
+  protected async displayTemplate(id: string) {
     // Remove all children
-    this.main.querySelectorAll("*").forEach((child) => {
+    (await this.main).querySelectorAll("*").forEach((child) => {
       child.remove();
     });
     const template = this.dialog.querySelector("#" + id) as HTMLTemplateElement;
     const content = template.content.cloneNode(true);
-    this.main.appendChild(content);
+    (await this.main).appendChild(content);
   }
 
   protected addLocalLoginButton() {
@@ -211,14 +215,14 @@ export class GraffitiSolidOIDCInterface
     });
   }
 
-  protected onWelcome() {
-    this.displayTemplate("graffiti-login-welcome");
+  protected async onWelcome() {
+    await this.displayTemplate("graffiti-login-welcome");
     this.addLocalLoginButton();
     this.addSolidLoginButton();
   }
 
-  protected onLocalLogin() {
-    this.displayTemplate("graffiti-login-local");
+  protected async onLocalLogin() {
+    await this.displayTemplate("graffiti-login-local");
     this.addSolidLoginButton();
 
     const form = this.dialog.querySelector(
@@ -256,8 +260,8 @@ export class GraffitiSolidOIDCInterface
     input.focus();
   }
 
-  protected onSolidLogin() {
-    this.displayTemplate("graffiti-login-solid");
+  protected async onSolidLogin() {
+    await this.displayTemplate("graffiti-login-solid");
     this.addLocalLoginButton();
 
     const form = this.dialog.querySelector(

@@ -3,7 +3,7 @@ import terser from "@rollup/plugin-terser";
 import json from "@rollup/plugin-json";
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
-import { importAsString } from "rollup-plugin-string-import";
+import copy from "rollup-plugin-copy";
 import { visualizer } from "rollup-plugin-visualizer";
 
 function makeConfig(input: string, output: string, format: "es" | "cjs") {
@@ -19,9 +19,15 @@ function makeConfig(input: string, output: string, format: "es" | "cjs") {
         tsconfig: "tsconfig.json",
         useTsconfigDeclarationDir: true,
       }),
-      importAsString({
-        include: ["**/*.css", "**/*.html"],
-      }),
+      format === "es" &&
+        copy({
+          targets: [
+            { src: "src/browser/index.html", dest: "dist" },
+            { src: "src/browser/style.css", dest: "dist" },
+            { src: "src/browser/rock-salt.woff2", dest: "dist" },
+            { src: "src/browser/graffiti.jpg", dest: "dist" },
+          ],
+        }),
       json(),
       resolve({
         browser: format === "es",
@@ -29,7 +35,7 @@ function makeConfig(input: string, output: string, format: "es" | "cjs") {
       }),
       commonjs(),
       terser(),
-      visualizer({ filename: `dist/index.stats.html` }),
+      visualizer({ filename: `dist-stats/${format}.html` }),
     ],
   };
 }

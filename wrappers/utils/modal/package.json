@@ -26,10 +26,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2"
+    "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
+    "prepublishOnly": "npm update && npm run build"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.1.8",
+    "@graffiti-garden/api": "^0.1.9",
     "@inrupt/solid-client-authn-browser": "^2.3.0"
   },
   "devDependencies": {
@@ -38,8 +39,8 @@
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-terser": "^0.4.4",
-    "rollup": "^4.20.0",
-    "rollup-plugin-string-import": "^1.2.5",
+    "rollup": "^4.32.1",
+    "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-typescript2": "^0.36.0",
     "rollup-plugin-visualizer": "^5.14.0"
   }
