@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-vue",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Vue.js wrapper for the Graffiti API",
   "type": "module",
   "main": "dist/plugin.js",
@@ -33,10 +33,10 @@
     "url": "https://github.com/graffiti-garden/wrapper-vue/issues"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.1.0"
+    "@graffiti-garden/api": "^0.1.11"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-pouchdb": "^0.1.0",
+    "@graffiti-garden/implementation-local": "^0.2.4",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/language-server": "^2.2.0",
     "@vue/typescript-plugin": "^2.2.0",
@@ -44,7 +44,8 @@
     "tslib": "^2.8.1",
     "typescript": "^5.7.3",
     "vite": "^5.4.14",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
   },
   "peerDependencies": {
     "vue": "^3.5.13"

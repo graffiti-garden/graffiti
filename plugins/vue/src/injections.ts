@@ -4,7 +4,7 @@ import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
 
 export const graffitiInjectKey = Symbol() as InjectionKey<Graffiti>;
 export const graffitiSessionInjectKey = Symbol() as InjectionKey<
-  Ref<GraffitiSession | undefined>
+  Ref<GraffitiSession | undefined | null>
 >;
 
 export function useGraffiti() {
