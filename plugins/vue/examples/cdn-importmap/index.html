@@ -8,8 +8,8 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/plugin.js",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js"
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.0.5/dist/plugin.js",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local@0.2.5/dist/index.browser.js"
                 }
             }
         </script>
@@ -64,18 +64,26 @@
                     >import map</a
                 >.
             </p>
-            <p v-if="!$graffitiSession.value">
-                <button @click="$graffiti.login()">Log in</button>
-            </p>
-            <p v-else>
+
+            <!--vvvv Begin login vvvv-->
+            <p v-if="$graffitiSession.value">
                 Logged in as: {{ $graffitiSession.value.actor }}
                 <button @click="$graffiti.logout($graffitiSession.value)">
                     Log out
                 </button>
             </p>
+            <p v-else-if="$graffitiSession.value === null">
+                <button @click="$graffiti.login()">Log in</button>
+            </p>
+            <p v-else>
+                <button>Loading...</button>
+            </p>
+            <!--^^^^ End login ^^^^-->
+
+            <!--vvvv Begin waves vvvv-->
             <graffiti-discover
                 v-slot="{ results: waves, isPolling }"
-                :channels="[ 'https://graffiti.garden' ]"
+                :channels="[ channel ]"
                 :schema="{
                     properties: {
                         value: {
@@ -94,7 +102,7 @@
                         )"
                         @click="$graffiti.put({
                             value: { activity: 'Wave' },
-                            channels: [ 'https://graffiti.garden' ]
+                            channels: [ channel ]
                         }, $graffitiSession.value)"
                     >
                         👋
@@ -115,9 +123,94 @@
 
                 <p v-if="isPolling">Loading...</p>
                 <p v-else>
-                    {{ waves.length }} people have waved from this page!
+                    {{ waves.length }} people have waved from this page~
                 </p>
             </graffiti-discover>
+            <!--^^^^ End waves ^^^^-->
+
+            <!--vvvv Begin posts vvvv-->
+            <graffiti-discover
+                v-slot="{ results: posts, isPolling }"
+                :channels="[ channel ]"
+                :schema="{
+                    properties: {
+                        value: {
+                            required: ['content'],
+                            properties: {
+                                content: { type: 'string' }
+                            }
+                        }
+                    }
+                }"
+            >
+                <form
+                    @submit.prevent="$graffiti.put({
+                        value: { content },
+                        channels: [ channel ]
+                    }, $graffitiSession.value)"
+                >
+                    <label for="post">Post:</label>
+                    <input id="post" v-model="content" />
+                    <input type="submit" value="Post" />
+                </form>
+                <ul>
+                    <li v-for="post in posts">
+                        <div>{{ post.actor }}</div>
+                        <div>
+                            {{ new Date(post.lastModified).toLocaleString() }}
+                        </div>
+                        <div
+                            class="content"
+                            v-if="editing !== $graffiti.objectToUri(post)"
+                        >
+                            {{ post.value.content }}
+                        </div>
+                        <form
+                            v-else
+                            @submit.prevent="
+                                savingEdits = true;
+                                $graffiti.patch(
+                                    {
+                                        value: [{ op: 'replace', path: '/content', value: editText }],
+                                    },
+                                    post,
+                                    $graffitiSession.value
+                                ).then(() => {
+                                    savingEdits = false;
+                                    editing = '';
+                                });"
+                        >
+                            <input type="text" v-model="editText" />
+                            <input
+                                type="submit"
+                                :value="savingEdits ? 'Saving...' : 'Save'"
+                                :disabled="savingEdits"
+                            />
+                        </form>
+                        <menu
+                            v-if="post.actor === $graffitiSession.value?.actor"
+                        >
+                            <li>
+                                <button
+                                    @click="$graffiti.delete(post, $graffitiSession.value)"
+                                >
+                                    Delete
+                                </button>
+                            </li>
+                            <li>
+                                <button
+                                    @click="
+                                        editText = post.value.content;
+                                        editing = $graffiti.objectToUri(post);"
+                                >
+                                    Edit
+                                </button>
+                            </li>
+                        </menu>
+                    </li>
+                </ul>
+            </graffiti-discover>
+            <!--vvvv End posts ^^^^-->
         </template>
         <script type="module">
             import { createApp } from "vue";
@@ -126,6 +219,16 @@
 
             createApp({
                 template: document.getElementById("my-template").innerHTML,
+                // Declare reactive data
+                data() {
+                    return {
+                        channel: window.location.href,
+                        content: "",
+                        editing: "",
+                        editText: "",
+                        savingEdits: false,
+                    };
+                },
             })
                 .use(GraffitiPlugin, {
                     useGraffiti: () => new GraffitiLocal(),

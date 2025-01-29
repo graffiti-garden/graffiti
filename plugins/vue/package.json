@@ -36,7 +36,7 @@
     "@graffiti-garden/api": "^0.1.11"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-local": "^0.2.4",
+    "@graffiti-garden/implementation-local": "^0.2.5",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/language-server": "^2.2.0",
     "@vue/typescript-plugin": "^2.2.0",

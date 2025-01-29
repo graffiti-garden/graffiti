@@ -19,13 +19,13 @@ or the `useGraffitiSession` composable in the Composition API.
 ## Installation
 
 You must install this package along with Vue.js and an implementation of the Graffiti API.
-In this example, we will use the [PouchDB implementation](https://github.com/graffiti-garden/implementation-pouchdb)
+In this example, we will use the [PouchDB implementation](https://github.com/graffiti-garden/implementation-local)
 of the Graffiti API, but any other would be similar.
 In node.js, simply install them with npm:
 
 ```bash
 npm install vue
-npm install @graffiti-garden/implementation-pouchdb
+npm install @graffiti-garden/implementation-local
 npm install @graffiti-garden/wrapper-vue
 ```
 
@@ -39,7 +39,7 @@ Add an import map the the `<head>` of your HTML file:
         {
             "imports": {
                 "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.js",
-                "@graffiti-garden/implementation-pouchdb": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-pouchdb/dist/index.js",
+                "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js",
                 "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/plugin.js"
             }
         }
@@ -51,12 +51,12 @@ In ether case install the plugin in your Vue app as follows:
 
 ```typescript
 import { createApp } from "vue";
-import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
+import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
 
 createApp({})
   .use(GraffitiPlugin, {
-    useGraffiti: () => new GraffitiPouchDB(),
+    useGraffiti: () => new GraffitiLocal(),
   });
   .mount("#app");
 ```
