@@ -106,7 +106,7 @@ export function attemptAjvCompile<Schema extends JSONSchema4>(
 export function maskGraffitiObject(
   object: GraffitiObjectBase,
   channels: string[],
-  session?: GraffitiSession,
+  session?: GraffitiSession | null,
 ): void {
   if (object.actor !== session?.actor) {
     object.allowed = object.allowed && session ? [session.actor] : undefined;
@@ -117,7 +117,7 @@ export function maskGraffitiObject(
 }
 export function isActorAllowedGraffitiObject(
   object: GraffitiObjectBase,
-  session?: GraffitiSession,
+  session?: GraffitiSession | null,
 ) {
   return (
     object.allowed === undefined ||
