@@ -7,13 +7,15 @@ import type {
   GraffitiSession,
   GraffitiLoginEvent,
   GraffitiLogoutEvent,
+  GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
 import { graffitiInjectKey, graffitiSessionInjectKey } from "./injections";
+import type { Router } from "vue-router";
 
 declare module "vue" {
   export interface ComponentCustomProperties {
     $graffiti: Graffiti;
-    $graffitiSession: Ref<GraffitiSession | undefined>;
+    $graffitiSession: Ref<GraffitiSession | undefined | null>;
   }
 
   export interface GlobalComponents {
@@ -28,7 +30,30 @@ export interface GraffitiPluginOptions {
 export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
   install(app: App, options: GraffitiPluginOptions) {
     const graffiti = options.useGraffiti();
-    const graffitiSession = ref<GraffitiSession | undefined>(undefined);
+    const graffitiSession = ref<GraffitiSession | undefined | null>(undefined);
+    graffiti.sessionEvents.addEventListener("initialized", (evt) => {
+      const detail = (evt as GraffitiSessionInitializedEvent).detail;
+
+      // Set the session to "null" if the user is not logged in
+      if (!graffitiSession.value) {
+        graffitiSession.value = null;
+      }
+
+      if (detail.error) {
+        console.error(detail.error);
+      }
+
+      if (detail.href) {
+        // If we're using Vue Router, redirect to the URL after login
+        const router = app.config.globalProperties.$router as
+          | Router
+          | undefined;
+        if (router) {
+          const url = new URL(detail.href);
+          router.replace(url.pathname + url.search + url.hash);
+        }
+      }
+    });
     graffiti.sessionEvents.addEventListener("login", (evt) => {
       const detail = (evt as GraffitiLoginEvent).detail;
       if (detail.error) {
@@ -45,7 +70,7 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
         console.error("Error logging out:");
         console.error(detail.error);
       } else {
-        graffitiSession.value = undefined;
+        graffitiSession.value = null;
       }
     });
 

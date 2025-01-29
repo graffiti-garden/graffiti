@@ -1,10 +1,10 @@
 import { createApp } from "vue";
 import App from "./App.vue";
 import { GraffitiPlugin } from "../../src/plugin";
-import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
+import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 
 createApp(App)
   .use(GraffitiPlugin, {
-    useGraffiti: () => new GraffitiPouchDB(),
+    useGraffiti: () => new GraffitiLocal(),
   })
   .mount("#app");

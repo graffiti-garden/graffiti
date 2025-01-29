@@ -99,9 +99,10 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         Logged in as: {{ session.actor }}
         <button @click="graffiti.logout(session)">Log out</button>
     </p>
-    <p v-else>
+    <p v-else-if="session === null">
         <button @click="graffiti.login()">Log in</button>
     </p>
+    <p v-else>Loading...</p>
     <GraffitiDiscover
         :channels="channels"
         :schema="noteSchema"
@@ -151,7 +152,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                     {{ result.actor }}
                 </div>
                 <div class="timestamp">
-                    {{ result.lastModified.toLocaleString() }}
+                    {{ new Date(result.lastModified).toLocaleString() }}
                 </div>
 
                 <div
