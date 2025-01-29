@@ -35,6 +35,7 @@ export class GraffitiLocalSessionManager {
 
       const event: GraffitiSessionInitializedEvent = new CustomEvent(
         "initialized",
+        { detail: {} },
       );
       this.sessionEvents.dispatchEvent(event);
     };
