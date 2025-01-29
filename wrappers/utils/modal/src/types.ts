@@ -1,3 +1,3 @@
-export interface GraffitiSolidOIDCInterfaceOptions {
+export interface GraffitiSolidOIDCSessionManagerOptions {
   useDefaultStyle?: boolean;
 }
