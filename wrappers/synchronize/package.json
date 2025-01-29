@@ -1,9 +1,10 @@
 {
-  "name": "@graffiti-garden/api",
-  "version": "0.1.11",
-  "description": "The heart of Graffiti",
+  "name": "@graffiti-garden/implementation-local",
+  "version": "0.2.4",
+  "description": "A local implementation of the Graffiti API using PouchDB",
   "types": "./dist/src/index.d.ts",
   "module": "./dist/index.js",
+  "browser": "./dist/index.browser.js",
   "main": "./dist/index.cjs.js",
   "exports": {
     ".": {
@@ -17,46 +18,93 @@
         "default": "./dist/index.cjs.js"
       }
     },
-    "./tests": {
-      "types": "./dist/tests/src/index.d.ts",
-      "default": "./dist/tests/index.js"
+    "./database": {
+      "import": {
+        "types": "./dist/src/database.d.ts",
+        "node": "./dist/database.cjs.js",
+        "default": "./dist/database.js"
+      },
+      "require": {
+        "types": "./dist/src/database.d.ts",
+        "default": "./dist/database.cjs.js"
+      }
+    },
+    "./session-manager": {
+      "import": {
+        "types": "./dist/src/session-manager.d.ts",
+        "node": "./dist/session-manager.cjs.js",
+        "default": "./dist/session-manager.js"
+      },
+      "require": {
+        "types": "./dist/src/session-manager.d.ts",
+        "default": "./dist/session-manager.cjs.js"
+      }
+    },
+    "./synchronize": {
+      "import": {
+        "types": "./dist/src/synchronize.d.ts",
+        "node": "./dist/synchronize.cjs.js",
+        "default": "./dist/synchronize.js"
+      },
+      "require": {
+        "types": "./dist/src/synchronize.d.ts",
+        "default": "./dist/synchronize.cjs.js"
+      }
+    },
+    "./utilities": {
+      "import": {
+        "types": "./dist/src/utilities.d.ts",
+        "node": "./dist/utilities.cjs.js",
+        "default": "./dist/utilities.js"
+      },
+      "require": {
+        "types": "./dist/src/utilities.d.ts",
+        "default": "./dist/utilities.cjs.js"
+      }
     }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --coverage",
+    "build": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
+    "prepublishOnly": "npm update && npm test && npm run build"
   },
   "files": [
     "src",
     "dist",
-    "tests",
     "package.json",
     "README.md"
   ],
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
-  "scripts": {
-    "docs": "typedoc --options typedoc.json",
-    "build-api": "rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
-    "build-tests": "cd tests && rollup -c rollup.config.ts --configPlugin rollup-plugin-typescript2",
-    "build": "npm run build-api && npm run build-tests",
-    "prepublishOnly": "npm update && npm run build"
-  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/graffiti-garden/api.git"
+    "url": "git+https://github.com/graffiti-garden/implementation-local.git"
   },
   "bugs": {
-    "url": "https://github.com/graffiti-garden/api/issues"
+    "url": "https://github.com/graffiti-garden/implementation-local/issues"
   },
-  "homepage": "https://api.graffiti.garden/classes/Graffiti.html",
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-terser": "^0.4.4",
-    "rollup": "^4.31.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "rollup": "^4.30.1",
+    "rollup-plugin-node-polyfills": "^0.2.1",
     "rollup-plugin-typescript2": "^0.36.0",
+    "rollup-plugin-visualizer": "^5.14.0",
     "tslib": "^2.8.1",
-    "typedoc": "^0.26.11",
     "vitest": "^2.1.8"
   },
   "dependencies": {
-    "@types/json-schema": "^7.0.15",
+    "@graffiti-garden/api": "^0.1.11",
+    "@repeaterjs/repeater": "^3.0.6",
+    "@types/pouchdb": "^6.4.2",
     "ajv": "^8.17.1",
-    "fast-json-patch": "^3.1.1"
+    "ajv-draft-04": "^1.0.0",
+    "fast-json-patch": "^3.1.1",
+    "pouchdb": "^9.0.0"
   }
 }
