@@ -221,33 +221,30 @@ export class GraffitiLocalDatabase
 
     const lastModified = keepLatest ? latestModified : new Date().getTime();
 
-    let deletedObject: GraffitiObjectBase | undefined = undefined;
-    // Go through documents oldest to newest
-    for (const doc of docsToDelete.sort(
-      (a, b) => a.lastModified - b.lastModified,
-    )) {
-      // Change it's tombstone to true
-      // and update it's timestamp
-      const deletedDoc = {
+    const deleteResults = await this.db.bulkDocs<GraffitiObjectBase>(
+      docsToDelete.map((doc) => ({
         ...doc,
         tombstone: true,
         lastModified,
-      };
-      try {
-        await this.db.put(deletedDoc);
-      } catch (error) {
-        if (
-          error &&
-          typeof error === "object" &&
-          "name" in error &&
-          error.name === "conflict"
-        ) {
-          // Document was already deleted
-          continue;
+      })),
+    );
+
+    // Get one of the docs that was deleted
+    let deletedObject: GraffitiObjectBase | undefined = undefined;
+    for (const resultOrError of deleteResults) {
+      if ("ok" in resultOrError) {
+        const { id } = resultOrError;
+        const deletedDoc = docsToDelete.find((doc) => doc._id === id);
+        if (deletedDoc) {
+          const { _id, _rev, _conflicts, _attachments, ...object } = deletedDoc;
+          deletedObject = {
+            ...object,
+            tombstone: true,
+            lastModified,
+          };
+          break;
         }
       }
-      const { _id, _rev, ...object } = deletedDoc;
-      deletedObject = object;
     }
 
     return deletedObject;
