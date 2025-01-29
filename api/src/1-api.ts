@@ -338,7 +338,7 @@ export abstract class Graffiti {
      * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
      * property must be `undefined`.
      */
-    session?: GraffitiSession,
+    session?: GraffitiSession | null,
   ): Promise<GraffitiObject<Schema>>;
 
   /**
@@ -478,7 +478,7 @@ export abstract class Graffiti {
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
      */
-    session?: GraffitiSession,
+    session?: GraffitiSession | null,
   ): GraffitiStream<
     GraffitiObject<Schema>,
     {
@@ -524,7 +524,7 @@ export abstract class Graffiti {
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
      */
-    session?: GraffitiSession,
+    session?: GraffitiSession | null,
   ): GraffitiStream<GraffitiObject<Schema>>;
 
   /**
