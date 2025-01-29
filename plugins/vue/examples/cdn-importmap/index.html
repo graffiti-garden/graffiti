@@ -9,7 +9,7 @@
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
                     "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/plugin.js",
-                    "@graffiti-garden/implementation-pouchdb": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-pouchdb/dist/index.js"
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js"
                 }
             }
         </script>
@@ -55,7 +55,7 @@
                 >
                 and the
                 <a
-                    href="https://github.com/graffiti-garden/implementation-pouchdb"
+                    href="https://github.com/graffiti-garden/implementation-local"
                     >PouchDB implementation of Graffiti</a
                 >
                 via CDN using an
@@ -122,13 +122,13 @@
         <script type="module">
             import { createApp } from "vue";
             import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-            import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
+            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 
             createApp({
                 template: document.getElementById("my-template").innerHTML,
             })
                 .use(GraffitiPlugin, {
-                    useGraffiti: () => new GraffitiPouchDB(),
+                    useGraffiti: () => new GraffitiLocal(),
                 })
                 .mount("#app");
         </script>
