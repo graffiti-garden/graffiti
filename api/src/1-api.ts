@@ -22,9 +22,9 @@ import type { JSONSchema4 } from "json-schema";
  * [graffiti-garden/api](https://github.com/graffiti-garden/api).
  *
  * There are several different implementations of this Graffiti API available,
- * including a [decentralized implementation](https://github.com/graffiti-garden/client-core),
- * and a [local implementation](https://github.com/graffiti-garden/implementation-pouchdb)
- * that can be used for testing. In our design of Graffiti, this API is our
+ * including a [federated implementation](https://github.com/graffiti-garden/implementation-federated),
+ * and a [local implementation](https://github.com/graffiti-garden/implementation-local)
+ * that can be used for testing and development. In our design of Graffiti, this API is our
  * primary focus as it is the layer that shapes the experience
  * of developing applications. While different implementations can provide tradeoffs between
  * other important properties (e.g. privacy, security, scalability), those properties
