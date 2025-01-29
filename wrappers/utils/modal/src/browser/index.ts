@@ -5,12 +5,12 @@ import type {
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
 import { getDefaultSession } from "@inrupt/solid-client-authn-browser";
-import type { GraffitiSolidOIDCInterfaceOptions } from "../types";
+import type { GraffitiSolidOIDCSessionManagerOptions } from "../types";
 import { GraffitiLocalSessionManager } from "@graffiti-garden/implementation-local/session-manager";
 
-export type { GraffitiSolidOIDCInterfaceOptions };
+export type { GraffitiSolidOIDCSessionManagerOptions } from "../types";
 
-export class GraffitiSolidOIDCInterface
+export class GraffitiSolidOIDCSessionManager
   implements Pick<Graffiti, "login" | "logout" | "sessionEvents">
 {
   protected sessionManagerLocal = new GraffitiLocalSessionManager();
@@ -18,7 +18,7 @@ export class GraffitiSolidOIDCInterface
   protected dialog = document.createElement("dialog");
   protected main: Promise<HTMLElement>;
   protected solidSession = getDefaultSession();
-  constructor(options?: GraffitiSolidOIDCInterfaceOptions) {
+  constructor(options?: GraffitiSolidOIDCSessionManagerOptions) {
     // Forward local login/logout events (but not initialization)
     for (const event of ["login", "logout"] as const) {
       this.sessionManagerLocal.sessionEvents.addEventListener(event, (evt) => {
