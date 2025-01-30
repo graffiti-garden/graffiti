@@ -1,4 +1,4 @@
-import { it, expect, describe } from "vitest";
+import { it, expect, describe, assert } from "vitest";
 import type { GraffitiFactory, GraffitiSession } from "@graffiti-garden/api";
 import { randomPutObject, randomString } from "./utils";
 
@@ -7,7 +7,7 @@ export const graffitiSynchronizeTests = (
   useSession1: () => GraffitiSession,
   useSession2: () => GraffitiSession,
 ) => {
-  describe("synchronize", () => {
+  describe("synchronizeDiscover", () => {
     it("get", async () => {
       const graffiti1 = useGraffiti();
       const session = useSession1();
@@ -17,7 +17,7 @@ export const graffitiSynchronizeTests = (
       const putted = await graffiti1.put(object, session);
 
       const graffiti2 = useGraffiti();
-      const next = graffiti2.synchronize(channels, {}).next();
+      const next = graffiti2.synchronizeDiscover(channels, {}).next();
       const gotten = await graffiti2.get(putted, {}, session);
 
       const result = (await next).value;
@@ -49,9 +49,9 @@ export const graffitiSynchronizeTests = (
       );
 
       // Start listening for changes...
-      const before = graffiti.synchronize([beforeChannel], {}).next();
-      const after = graffiti.synchronize([afterChannel], {}).next();
-      const shared = graffiti.synchronize([sharedChannel], {}).next();
+      const before = graffiti.synchronizeDiscover([beforeChannel], {}).next();
+      const after = graffiti.synchronizeDiscover([afterChannel], {}).next();
+      const shared = graffiti.synchronizeDiscover([sharedChannel], {}).next();
 
       // Replace the object
       const newValue = { goodbye: "world" };
@@ -115,9 +115,9 @@ export const graffitiSynchronizeTests = (
       );
 
       // Start listening for changes...
-      const before = graffiti.synchronize([beforeChannel], {}).next();
-      const after = graffiti.synchronize([afterChannel], {}).next();
-      const shared = graffiti.synchronize([sharedChannel], {}).next();
+      const before = graffiti.synchronizeDiscover([beforeChannel], {}).next();
+      const after = graffiti.synchronizeDiscover([afterChannel], {}).next();
+      const shared = graffiti.synchronizeDiscover([sharedChannel], {}).next();
 
       await graffiti.patch(
         {
@@ -193,7 +193,7 @@ export const graffitiSynchronizeTests = (
         session,
       );
 
-      const next = graffiti.synchronize(channels, {}).next();
+      const next = graffiti.synchronizeDiscover(channels, {}).next();
 
       graffiti.delete(putted, session);
 
@@ -216,9 +216,13 @@ export const graffitiSynchronizeTests = (
       const allChannels = [randomString(), randomString(), randomString()];
       const channels = allChannels.slice(1);
 
-      const creatorNext = graffiti.synchronize(channels, {}, session1).next();
-      const allowedNext = graffiti.synchronize(channels, {}, session2).next();
-      const noSession = graffiti.synchronize(channels, {}).next();
+      const creatorNext = graffiti
+        .synchronizeDiscover(channels, {}, session1)
+        .next();
+      const allowedNext = graffiti
+        .synchronizeDiscover(channels, {}, session2)
+        .next();
+      const noSession = graffiti.synchronizeDiscover(channels, {}).next();
 
       const value = {
         hello: "world",
@@ -254,6 +258,96 @@ export const graffitiSynchronizeTests = (
       expect(allowedResult.value.value).toEqual(value);
       expect(allowedResult.value.allowed).toEqual([session2.actor]);
       expect(allowedResult.value.channels).toEqual(channels);
+    });
+  });
+
+  describe("synchronizeGet", () => {
+    it("replace, delete", async () => {
+      const graffiti = useGraffiti();
+      const session = useSession1();
+
+      const object = randomPutObject();
+      const putted = await graffiti.put(object, session);
+
+      const iterator = graffiti.synchronizeGet(putted, {});
+      const next = iterator.next();
+
+      // Change the object
+      const newValue = { goodbye: "world" };
+      const putted2 = await graffiti.put(
+        {
+          ...putted,
+          value: newValue,
+        },
+        session,
+      );
+
+      const result = (await next).value;
+      assert(result && !result.error);
+
+      expect(result.value.value).toEqual(newValue);
+      expect(result.value.actor).toEqual(session.actor);
+      expect(result.value.channels).toEqual([]);
+      expect(result.value.tombstone).toBe(false);
+      expect(result.value.lastModified).toEqual(putted2.lastModified);
+      expect(result.value.allowed).toBeUndefined();
+
+      // Delete the object
+      const deleted = await graffiti.delete(putted2, session);
+      const result2 = (await iterator.next()).value;
+      assert(result2 && !result2.error);
+      expect(result2.value.tombstone).toBe(true);
+      expect(result2.value.lastModified).toEqual(deleted.lastModified);
+
+      // Put something else
+      await graffiti.put(randomPutObject(), session);
+      await expect(
+        Promise.race([
+          iterator.next(),
+          new Promise((resolve, reject) => setTimeout(reject, 100, "Timeout")),
+        ]),
+      ).rejects.toThrow("Timeout");
+    });
+
+    it("not allowed", async () => {
+      const graffiti = useGraffiti();
+      const session1 = useSession1();
+      const session2 = useSession2();
+
+      const object = randomPutObject();
+      const putted = await graffiti.put(object, session1);
+
+      const iterator1 = graffiti.synchronizeGet(putted, {}, session1);
+      const iterator2 = graffiti.synchronizeGet(putted, {}, session2);
+
+      const next1 = iterator1.next();
+      const next2 = iterator2.next();
+
+      const newValue = { goodbye: "world" };
+      const putted2 = await graffiti.put(
+        {
+          ...putted,
+          ...object,
+          allowed: [],
+          value: newValue,
+        },
+        session1,
+      );
+      const result1 = (await next1).value;
+      const result2 = (await next2).value;
+      assert(result1 && !result1.error);
+      assert(result2 && !result2.error);
+
+      expect(result1.value.value).toEqual(newValue);
+      expect(result2.value.value).toEqual(object.value);
+      expect(result1.value.actor).toEqual(session1.actor);
+      expect(result2.value.actor).toEqual(session1.actor);
+      expect(result1.value.channels).toEqual(object.channels);
+      expect(result2.value.channels).toEqual([]);
+      expect(result1.value.tombstone).toBe(false);
+      expect(result2.value.tombstone).toBe(true);
+      expect(result1.value.lastModified).toEqual(putted2.lastModified);
+      expect(result2.value.lastModified).toEqual(putted2.lastModified);
     });
   });
 };

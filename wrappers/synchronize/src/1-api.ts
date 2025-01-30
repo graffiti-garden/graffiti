@@ -507,9 +507,9 @@ export abstract class Graffiti {
    * all instance's of that friend's name in the user's application instantly,
    * providing a consistent user experience.
    *
-   * @group Query Methods
+   * @group Synchronize Methods
    */
-  abstract synchronize<Schema extends JSONSchema4>(
+  abstract synchronizeDiscover<Schema extends JSONSchema4>(
     /**
      * The {@link GraffitiObjectBase.channels | `channels`} that the objects must be associated with.
      */
@@ -523,6 +523,35 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
+     */
+    session?: GraffitiSession | null,
+  ): GraffitiStream<GraffitiObject<Schema>>;
+
+  /**
+   * This method has the same signature as {@link get} but, like {@link synchronizeDiscover},
+   * it listens for changes made via {@link put}, {@link patch}, and {@link delete} or
+   * fetched from {@link get} or {@link discover} and then streams appropriate
+   * changes to provide a responsive and consistent user experience.
+   *
+   * Unlike {@link get}, which returns a single result, this method continuously
+   *  listens for changes which are output as an asynchronous {@link GraffitiStream}.
+   *
+   * @group Synchronize Methods
+   */
+  abstract synchronizeGet<Schema extends JSONSchema4>(
+    /**
+     * The location of the object to get.
+     */
+    locationOrUri: GraffitiLocation | string,
+    /**
+     * The JSON schema to validate the retrieved object against.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
+     * property must be `undefined`.
      */
     session?: GraffitiSession | null,
   ): GraffitiStream<GraffitiObject<Schema>>;
