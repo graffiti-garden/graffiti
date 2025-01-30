@@ -60,7 +60,7 @@ export interface GraffitiObjectBase {
    * the sender should put their object in the channel of the recipient's {@link actor | `actor`} URI to notify them of the message and also add
    * the recipient's {@link actor | `actor`} URI to the `allowed` array to prevent others from seeing the message.
    */
-  allowed?: string[];
+  allowed?: string[] | null;
 
   /**
    * The URI of the `actor` that {@link Graffiti.put | created } the object. This `actor` also has the unique permission to
@@ -314,7 +314,11 @@ export type GraffitiLogoutEvent = CustomEvent<
  * if there were any redirects during the restoration process.
  * The event name to listen for is `initialized`.
  */
-export type GraffitiSessionInitializedEvent = CustomEvent<{
-  error?: Error;
-  href?: string;
-}>;
+export type GraffitiSessionInitializedEvent = CustomEvent<
+  | {
+      error?: Error;
+      href?: string;
+    }
+  | null
+  | undefined
+>;
