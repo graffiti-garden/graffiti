@@ -88,7 +88,7 @@ export class GraffitiLocalDatabase
     this.db
       //@ts-ignore
       .put({
-        _id: "_design/index3",
+        _id: "_design/indexes",
         views: {
           byChannelAndLastModified: {
             map: function (object: GraffitiObjectBase) {
@@ -101,6 +101,31 @@ export class GraffitiLocalDatabase
                 //@ts-ignore
                 emit(id);
               });
+            }.toString(),
+          },
+          perActorChannelStats: {
+            map: function (object: GraffitiObjectBase) {
+              if (object.tombstone) return;
+              object.channels.forEach(function (channel) {
+                const id =
+                  encodeURIComponent(object.actor) +
+                  "/" +
+                  encodeURIComponent(channel);
+                //@ts-ignore
+                emit(id, object.lastModified);
+              });
+            }.toString(),
+            reduce: "_stats",
+          },
+          perActorOrphans: {
+            map: function (object: GraffitiObjectBase) {
+              if (object.channels.length === 0) {
+                //@ts-ignore
+                emit(encodeURIComponent(object.actor), {
+                  name: object.name,
+                  lastModified: object.lastModified,
+                });
+              }
             }.toString(),
           },
         },
@@ -269,13 +294,18 @@ export class GraffitiLocalDatabase
     if (objectPartial.actor && objectPartial.actor !== session.actor) {
       throw new GraffitiErrorForbidden();
     }
+    if (objectPartial.source && objectPartial.source !== this.source) {
+      throw new GraffitiErrorForbidden(
+        "Putting an object that does not match this source",
+      );
+    }
 
     const object: GraffitiObjectBase = {
       value: objectPartial.value,
       channels: objectPartial.channels,
       allowed: objectPartial.allowed,
       name: objectPartial.name ?? randomBase64(),
-      source: objectPartial.source ?? this.source,
+      source: this.source,
       actor: session.actor,
       tombstone: false,
       lastModified: new Date().getTime(),
@@ -396,7 +426,7 @@ export class GraffitiLocalDatabase
         const endkey = encodedChannel + "/" + endKeyAppend;
 
         const result = await this.db.query<GraffitiObjectBase>(
-          "index3/byChannelAndLastModified",
+          "indexes/byChannelAndLastModified",
           { startkey, endkey, include_docs: true },
         );
 
@@ -435,13 +465,57 @@ export class GraffitiLocalDatabase
     return repeater;
   };
 
-  listChannels: Graffiti["listChannels"] = (...args) => {
-    // TODO
-    return (async function* () {})();
+  listChannels: Graffiti["listChannels"] = (session) => {
+    const repeater: ReturnType<typeof Graffiti.prototype.listChannels> =
+      new Repeater(async (push, stop) => {
+        const key = encodeURIComponent(session.actor) + "/";
+        const result = await this.db.query("indexes/perActorChannelStats", {
+          startkey: key,
+          endkey: key + "\uffff",
+          reduce: true,
+          group: true,
+        });
+        for (const row of result.rows) {
+          const channelEncoded = row.key.split("/")[1];
+          if (typeof channelEncoded !== "string") continue;
+          const { count, max: lastModified } = row.value;
+          if (typeof count !== "number" || typeof lastModified !== "number")
+            continue;
+          push({
+            value: {
+              channel: decodeURIComponent(channelEncoded),
+              count,
+              lastModified,
+            },
+          });
+          stop();
+        }
+      });
+
+    return repeater;
   };
 
-  listOrphans: Graffiti["listOrphans"] = (...args) => {
-    // TODO
-    return (async function* () {})();
+  listOrphans: Graffiti["listOrphans"] = (session) => {
+    const repeater: ReturnType<typeof Graffiti.prototype.listOrphans> =
+      new Repeater(async (push, stop) => {
+        const result = await this.db.query("indexes/perActorOrphans", {
+          key: encodeURIComponent(session.actor),
+        });
+        for (const row of result.rows) {
+          const { name, lastModified } = row.value;
+          if (typeof name !== "string" || typeof lastModified !== "number")
+            continue;
+          push({
+            value: {
+              name,
+              lastModified,
+              source: this.source,
+            },
+          });
+        }
+        stop();
+      });
+
+    return repeater;
   };
 }
