@@ -535,8 +535,8 @@ export class GraffitiLocalDatabase
               lastModified,
             },
           });
-          stop();
         }
+        stop();
       });
 
     return repeater;

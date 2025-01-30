@@ -1,7 +1,9 @@
 import Ajv from "ajv-draft-04";
 import type {
   Graffiti,
+  GraffitiObject,
   GraffitiSession,
+  GraffitiStream,
   JSONSchema4,
 } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
@@ -23,7 +25,7 @@ type SynchronizeEvent = CustomEvent<{
 
 type GraffitiDatabaseMethods = Pick<
   Graffiti,
-  "get" | "put" | "patch" | "delete" | "discover"
+  "get" | "put" | "patch" | "delete" | "discover" | "recoverOrphans"
 >;
 
 /**
@@ -41,8 +43,10 @@ export class GraffitiSynchronize
       | "patch"
       | "delete"
       | "discover"
+      | "recoverOrphans"
       | "synchronizeDiscover"
       | "synchronizeGet"
+      | "synchronizeRecoverOrphans"
     >
 {
   protected readonly synchronizeEvents = new EventTarget();
@@ -106,8 +110,9 @@ export class GraffitiSynchronize
     return oldObject;
   };
 
-  discover: Graffiti["discover"] = (...args) => {
-    const iterator = this.graffiti.discover(...args);
+  protected objectStream<Schema extends JSONSchema4>(
+    iterator: ReturnType<typeof Graffiti.prototype.discover<Schema>>,
+  ) {
     const dispatch = this.synchronizeDispatch.bind(this);
     const wrapper = async function* () {
       let result = await iterator.next();
@@ -121,6 +126,16 @@ export class GraffitiSynchronize
       return result.value;
     };
     return wrapper();
+  }
+
+  discover: Graffiti["discover"] = (...args) => {
+    const iterator = this.graffiti.discover(...args);
+    return this.objectStream(iterator);
+  };
+
+  recoverOrphans: Graffiti["recoverOrphans"] = (...args) => {
+    const iterator = this.graffiti.recoverOrphans(...args);
+    return this.objectStream(iterator);
   };
 
   protected synchronize<Schema extends JSONSchema4>(
@@ -182,6 +197,16 @@ export class GraffitiSynchronize
       const objectUri = locationToUri(object);
       const { uri } = unpackLocationOrUri(locationOrUri);
       return objectUri === uri;
+    }
+    return this.synchronize(matchObject, [], schema, session);
+  };
+
+  synchronizeRecoverOrphans: Graffiti["synchronizeRecoverOrphans"] = (
+    ...args
+  ) => {
+    const [schema, session] = args;
+    function matchObject(object: GraffitiObjectBase) {
+      return object.actor === session.actor && object.channels.length === 0;
     }
     return this.synchronize(matchObject, [], schema, session);
   };

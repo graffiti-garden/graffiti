@@ -75,4 +75,3 @@ import * as GraffitiUtilities from "@graffiti-garden/implementation-local/utilit
 ## TODO
 
 - Remove tombstones according to the `tombstoneRetention` setting.
-- Implement `listOrphans` and `listChannels`.
