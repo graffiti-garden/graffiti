@@ -1,5 +1,9 @@
 import Ajv from "ajv-draft-04";
-import type { Graffiti } from "@graffiti-garden/api";
+import type {
+  Graffiti,
+  GraffitiSession,
+  JSONSchema4,
+} from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
 import { applyPatch } from "fast-json-patch";
@@ -7,7 +11,9 @@ import {
   applyGraffitiPatch,
   attemptAjvCompile,
   isActorAllowedGraffitiObject,
+  locationToUri,
   maskGraffitiObject,
+  unpackLocationOrUri,
 } from "./utilities";
 
 type SynchronizeEvent = CustomEvent<{
@@ -30,7 +36,13 @@ export class GraffitiSynchronize
   implements
     Pick<
       Graffiti,
-      "put" | "get" | "patch" | "delete" | "discover" | "synchronize"
+      | "put"
+      | "get"
+      | "patch"
+      | "delete"
+      | "discover"
+      | "synchronizeDiscover"
+      | "synchronizeGet"
     >
 {
   protected readonly synchronizeEvents = new EventTarget();
@@ -111,12 +123,16 @@ export class GraffitiSynchronize
     return wrapper();
   };
 
-  synchronize: Graffiti["synchronize"] = (...args) => {
-    const [channels, schema, session] = args;
+  protected synchronize<Schema extends JSONSchema4>(
+    matchObject: (object: GraffitiObjectBase) => boolean,
+    channels: string[],
+    schema: Schema,
+    session?: GraffitiSession | null,
+  ) {
     const validate = attemptAjvCompile(this.ajv, schema);
 
     const repeater: ReturnType<
-      typeof Graffiti.prototype.synchronize<typeof schema>
+      typeof Graffiti.prototype.synchronizeDiscover<typeof schema>
     > = new Repeater(async (push, stop) => {
       const callback = (event: SynchronizeEvent) => {
         const { oldObject: oldObjectRaw, newObject: newObjectRaw } =
@@ -125,7 +141,7 @@ export class GraffitiSynchronize
         for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
           if (
             objectRaw &&
-            objectRaw.channels.some((channel) => channels.includes(channel)) &&
+            matchObject(objectRaw) &&
             isActorAllowedGraffitiObject(objectRaw, session)
           ) {
             const object = { ...objectRaw };
@@ -150,5 +166,23 @@ export class GraffitiSynchronize
     });
 
     return repeater;
+  }
+
+  synchronizeDiscover: Graffiti["synchronizeDiscover"] = (...args) => {
+    const [channels, schema, session] = args;
+    function matchObject(object: GraffitiObjectBase) {
+      return object.channels.some((channel) => channels.includes(channel));
+    }
+    return this.synchronize(matchObject, channels, schema, session);
+  };
+
+  synchronizeGet: Graffiti["synchronizeGet"] = (...args) => {
+    const [locationOrUri, schema, session] = args;
+    function matchObject(object: GraffitiObjectBase) {
+      const objectUri = locationToUri(object);
+      const { uri } = unpackLocationOrUri(locationOrUri);
+      return objectUri === uri;
+    }
+    return this.synchronize(matchObject, [], schema, session);
   };
 }
