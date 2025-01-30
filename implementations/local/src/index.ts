@@ -26,10 +26,11 @@ export class GraffitiLocal extends Graffiti {
   patch: Graffiti["patch"];
   delete: Graffiti["delete"];
   discover: Graffiti["discover"];
+  recoverOrphans: Graffiti["recoverOrphans"];
   synchronizeGet: Graffiti["synchronizeGet"];
   synchronizeDiscover: Graffiti["synchronizeDiscover"];
-  listChannels: Graffiti["listChannels"];
-  listOrphans: Graffiti["listOrphans"];
+  synchronizeRecoverOrphans: Graffiti["synchronizeRecoverOrphans"];
+  channelStats: Graffiti["channelStats"];
 
   constructor(options?: GraffitiLocalOptions) {
     super();
@@ -55,9 +56,11 @@ export class GraffitiLocal extends Graffiti {
       graffitiSynchronize.synchronizeDiscover.bind(graffitiSynchronize);
     this.synchronizeGet =
       graffitiSynchronize.synchronizeGet.bind(graffitiSynchronize);
-    this.listChannels =
-      graffitiPouchDbBase.listChannels.bind(graffitiPouchDbBase);
-    this.listOrphans =
-      graffitiPouchDbBase.listOrphans.bind(graffitiPouchDbBase);
+    this.synchronizeRecoverOrphans =
+      graffitiSynchronize.synchronizeRecoverOrphans.bind(graffitiSynchronize);
+    this.channelStats =
+      graffitiPouchDbBase.channelStats.bind(graffitiPouchDbBase);
+    this.recoverOrphans =
+      graffitiPouchDbBase.recoverOrphans.bind(graffitiPouchDbBase);
   }
 }
