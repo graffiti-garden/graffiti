@@ -231,7 +231,6 @@ import type { JSONSchema4 } from "json-schema";
  *
  * ## TODO
  *
- * - Test for listChannels and listOrphans,
  * - Implement scope.
  *
  * @groupDescription CRUD Methods
