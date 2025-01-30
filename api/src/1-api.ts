@@ -417,7 +417,7 @@ export abstract class Graffiti {
    * not specified by the `discover` method will not be revealed. This masking happens
    * before the supplied schema is applied.
    *
-   * {@link discover} can be used in conjunction with {@link synchronize}
+   * {@link discover} can be used in conjunction with {@link synchronizeDiscover}
    * to provide a responsive and consistent user experience.
    *
    * Since different implementations may fetch data from multiple sources there is
@@ -489,21 +489,22 @@ export abstract class Graffiti {
   /**
    * This method has the same signature as {@link discover} but listens for
    * changes made via {@link put}, {@link patch}, and {@link delete} or
-   * fetched from {@link get} or {@link discover} and then streams appropriate
-   * changes to provide a responsive and consistent user experience.
+   * fetched from {@link get}, {@link discover}, and {@link recoverOrphans}
+   * and then streams appropriate changes to provide a responsive and
+   * consistent user experience.
    *
    * Unlike {@link discover}, this method continuously listens for changes
    * and will not terminate unless the user calls the `return` method on the iterator
    * or `break`s out of the loop.
    *
    * Example 1: Suppose a user publishes a post using {@link put}. If the feed
-   * displaying that user's posts is using {@link synchronize} to listen for changes,
+   * displaying that user's posts is using {@link synchronizeDiscover} to listen for changes,
    * then the user's new post will instantly appear in their feed, giving the UI a
    * responsive feel.
    *
    * Example 2: Suppose one of a user's friends changes their name. As soon as the
    * user's application receives one notice of that change (using {@link get}
-   * or {@link discover}), then {@link synchronize} listeners can be used to update
+   * or {@link discover}), then {@link synchronizeDiscover} listeners can be used to update
    * all instance's of that friend's name in the user's application instantly,
    * providing a consistent user experience.
    *
@@ -530,11 +531,11 @@ export abstract class Graffiti {
   /**
    * This method has the same signature as {@link get} but, like {@link synchronizeDiscover},
    * it listens for changes made via {@link put}, {@link patch}, and {@link delete} or
-   * fetched from {@link get} or {@link discover} and then streams appropriate
-   * changes to provide a responsive and consistent user experience.
+   * fetched from {@link get}, {@link discover}, and {@link recoverOrphans} and then
+   * streams appropriate changes to provide a responsive and consistent user experience.
    *
    * Unlike {@link get}, which returns a single result, this method continuously
-   *  listens for changes which are output as an asynchronous {@link GraffitiStream}.
+   * listens for changes which are output as an asynchronous {@link GraffitiStream}.
    *
    * @group Synchronize Methods
    */
@@ -557,7 +558,32 @@ export abstract class Graffiti {
   ): GraffitiStream<GraffitiObject<Schema>>;
 
   /**
-   * Returns a list of all {@link GraffitiObjectBase.channels | `channels`}
+   * This method has the same signature as {@link recoverOrphans} but,
+   * like {@link synchronizeDiscover}, it listens for changes made via
+   * {@link put}, {@link patch}, and {@link delete} or fetched from
+   * {@link get}, {@link discover}, and {@link recoverOrphans} and then
+   * streams appropriate changes to provide a responsive and consistent user experience.
+   *
+   * Unlike {@link recoverOrphans}, this method continuously listens for changes
+   * and will not terminate unless the user calls the `return` method on the iterator
+   * or `break`s out of the loop.
+   *
+   * @group Synchronize Methods
+   */
+  abstract synchronizeRecoverOrphans<Schema extends JSONSchema4>(
+    /**
+     * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession,
+  ): GraffitiStream<GraffitiObject<Schema>>;
+
+  /**
+   * Returns statistics about all the {@link GraffitiObjectBase.channels | `channels`}
    * that an {@link GraffitiObjectBase.actor | `actor`} has posted to.
    * This is not very useful for most applications, but
    * necessary for certain applications where a user wants a
@@ -566,13 +592,15 @@ export abstract class Graffiti {
    *
    * @group Utilities
    *
-   * @returns A stream the {@link GraffitiObjectBase.channels | `channel`}s
+   * @returns A stream of all {@link GraffitiObjectBase.channels | `channel`}s
    * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
    * The `lastModified` field is the time that the user last modified an
    * object in that channel. The `count` field is the number of objects
    * that the user has posted to that channel.
+   * {@link GraffitiObjectBase.tombstone | `tombstone`}d objects are not included
+   * in either the `count` or `lastModified` fields.
    */
-  abstract listChannels(
+  abstract channelStats(
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
@@ -580,36 +608,41 @@ export abstract class Graffiti {
     session: GraffitiSession,
   ): GraffitiStream<{
     channel: string;
-    lastModified: number;
     count: number;
+    lastModified: number;
   }>;
 
   /**
-   * Returns a list of all {@link GraffitiObjectBase | objects} a user has posted that are
-   * not associated with any {@link GraffitiObjectBase.channels | `channel`}, i.e. orphaned objects.
-   * This is not very useful for most applications, but
-   * necessary for certain applications where a user wants a
-   * global view of all their Graffiti data or to debug
+   * Discovers objects not contained in *any*
+   * {@link GraffitiObjectBase.channels | `channels`}
+   * that were created by the querying {@link GraffitiObjectBase.actor | `actor`}
+   * and match the given [JSON Schema](https://json-schema.org).
+   * Unlike {@link discover}, this method will not return objects created by other users.
+   *
+   * This method is not useful for most applications, but necessary for
+   * getting a global view of all a user's Graffiti data or debugging
    * channel usage.
    *
-   * @group Utilities
+   * It's return value is the same as {@link discover}.
    *
-   * @returns A stream of the {@link GraffitiObjectBase.name | `name`}
-   * and {@link GraffitiObjectBase.source | `source`} of the orphaned objects
-   * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
-   * The {@link GraffitiObjectBase.lastModified | lastModified} field is the
-   * time that the user last modified the orphan.
+   * @group Utilities
    */
-  abstract listOrphans(session: GraffitiSession): GraffitiStream<{
-    name: string;
-    source: string;
-    lastModified: string;
-  }>;
-
-  /**
-   * The age at which a query for a session will be considered expired.
-   */
-  // abstract readonly maxAge: number;
+  abstract recoverOrphans<Schema extends JSONSchema4>(
+    /**
+     * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession,
+  ): GraffitiStream<
+    GraffitiObject<Schema>,
+    {
+      tombstoneRetention: number;
+    }
+  >;
 
   /**
    * Begins the login process. Depending on the implementation, this may
