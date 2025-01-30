@@ -245,7 +245,7 @@ export interface GraffitiPatch {
 /**
  * This type represents a stream of data that are
  * returned by Graffiti's query-like operations such as
- * {@link Graffiti.discover} and {@link Graffiti.listChannels}.
+ * {@link Graffiti.discover} and {@link Graffiti.recoverOrphans}.
  *
  * Errors are returned within the stream rather than as
  * exceptions that would halt the entire stream. This is because
