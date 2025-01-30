@@ -2,6 +2,7 @@ import type {
   Graffiti,
   GraffitiObjectBase,
   GraffitiLocation,
+  JSONSchema4,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
@@ -62,8 +63,8 @@ export class GraffitiLocalDatabase
       | "patch"
       | "delete"
       | "discover"
-      | "listChannels"
-      | "listOrphans"
+      | "recoverOrphans"
+      | "channelStats"
     >
 {
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
@@ -90,7 +91,7 @@ export class GraffitiLocalDatabase
       .put({
         _id: "_design/indexes",
         views: {
-          byChannelAndLastModified: {
+          objectsPerChannelAndLastModified: {
             map: function (object: GraffitiObjectBase) {
               const paddedLastModified = object.lastModified
                 .toString()
@@ -103,7 +104,20 @@ export class GraffitiLocalDatabase
               });
             }.toString(),
           },
-          perActorChannelStats: {
+          orphansPerActorAndLastModified: {
+            map: function (object: GraffitiObjectBase) {
+              if (object.channels.length === 0) {
+                const paddedLastModified = object.lastModified
+                  .toString()
+                  .padStart(15, "0");
+                const id =
+                  encodeURIComponent(object.actor) + "/" + paddedLastModified;
+                //@ts-ignore
+                emit(id);
+              }
+            }.toString(),
+          },
+          channelStatsPerActor: {
             map: function (object: GraffitiObjectBase) {
               if (object.tombstone) return;
               object.channels.forEach(function (channel) {
@@ -116,17 +130,6 @@ export class GraffitiLocalDatabase
               });
             }.toString(),
             reduce: "_stats",
-          },
-          perActorOrphans: {
-            map: function (object: GraffitiObjectBase) {
-              if (object.channels.length === 0) {
-                //@ts-ignore
-                emit(encodeURIComponent(object.actor), {
-                  name: object.name,
-                  lastModified: object.lastModified,
-                });
-              }
-            }.toString(),
           },
         },
       })
@@ -391,29 +394,37 @@ export class GraffitiLocalDatabase
     };
   };
 
-  discover: Graffiti["discover"] = (...args) => {
-    const [channels, schema, session] = args;
-
-    const validate = attemptAjvCompile(this.ajv, schema);
-
+  protected queryLastModifiedSuffixes(schema: JSONSchema4) {
     // Use the index for queries over ranges of lastModified
-    let startKeyAppend = "";
-    let endKeyAppend = "\uffff";
+    let startKeySuffix = "";
+    let endKeySuffix = "\uffff";
     const lastModifiedSchema = schema.properties?.lastModified;
     if (lastModifiedSchema?.minimum) {
       let minimum = Math.ceil(lastModifiedSchema.minimum);
       minimum === lastModifiedSchema.minimum &&
         lastModifiedSchema.exclusiveMinimum &&
         minimum++;
-      startKeyAppend = minimum.toString().padStart(15, "0");
+      startKeySuffix = minimum.toString().padStart(15, "0");
     }
     if (lastModifiedSchema?.maximum) {
       let maximum = Math.floor(lastModifiedSchema.maximum);
       maximum === lastModifiedSchema.maximum &&
         lastModifiedSchema.exclusiveMaximum &&
         maximum--;
-      endKeyAppend = maximum.toString().padStart(15, "0");
+      endKeySuffix = maximum.toString().padStart(15, "0");
     }
+    return {
+      startKeySuffix,
+      endKeySuffix,
+    };
+  }
+
+  discover: Graffiti["discover"] = (...args) => {
+    const [channels, schema, session] = args;
+    const validate = attemptAjvCompile(this.ajv, schema);
+
+    const { startKeySuffix, endKeySuffix } =
+      this.queryLastModifiedSuffixes(schema);
 
     const repeater: ReturnType<
       typeof Graffiti.prototype.discover<typeof schema>
@@ -421,12 +432,12 @@ export class GraffitiLocalDatabase
       const processedIds = new Set<string>();
 
       for (const channel of channels) {
-        const encodedChannel = encodeURIComponent(channel);
-        const startkey = encodedChannel + "/" + startKeyAppend;
-        const endkey = encodedChannel + "/" + endKeyAppend;
+        const keyPrefix = encodeURIComponent(channel) + "/";
+        const startkey = keyPrefix + startKeySuffix;
+        const endkey = keyPrefix + endKeySuffix;
 
         const result = await this.db.query<GraffitiObjectBase>(
-          "indexes/byChannelAndLastModified",
+          "indexes/objectsPerChannelAndLastModified",
           { startkey, endkey, include_docs: true },
         );
 
@@ -450,9 +461,7 @@ export class GraffitiLocalDatabase
 
           // Check that it matches the schema
           if (validate(object)) {
-            push({
-              value: object,
-            });
+            push({ value: object });
           }
         }
       }
@@ -465,13 +474,51 @@ export class GraffitiLocalDatabase
     return repeater;
   };
 
-  listChannels: Graffiti["listChannels"] = (session) => {
-    const repeater: ReturnType<typeof Graffiti.prototype.listChannels> =
+  recoverOrphans: Graffiti["recoverOrphans"] = (schema, session) => {
+    const validate = attemptAjvCompile(this.ajv, schema);
+
+    const { startKeySuffix, endKeySuffix } =
+      this.queryLastModifiedSuffixes(schema);
+    const keyPrefix = encodeURIComponent(session.actor) + "/";
+    const startkey = keyPrefix + startKeySuffix;
+    const endkey = keyPrefix + endKeySuffix;
+
+    const repeater: ReturnType<
+      typeof Graffiti.prototype.recoverOrphans<typeof schema>
+    > = new Repeater(async (push, stop) => {
+      const result = await this.db.query<GraffitiObjectBase>(
+        "indexes/orphansPerActorAndLastModified",
+        { startkey, endkey, include_docs: true },
+      );
+
+      for (const row of result.rows) {
+        const doc = row.doc;
+        if (!doc) continue;
+
+        // No masking/access necessary because
+        // the objects are all owned by the querier
+
+        const { _id, _rev, ...object } = doc;
+        if (validate(object)) {
+          push({ value: object });
+        }
+      }
+      stop();
+      return {
+        tombstoneRetention: this.tombstoneRetention,
+      };
+    });
+
+    return repeater;
+  };
+
+  channelStats: Graffiti["channelStats"] = (session) => {
+    const repeater: ReturnType<typeof Graffiti.prototype.channelStats> =
       new Repeater(async (push, stop) => {
-        const key = encodeURIComponent(session.actor) + "/";
-        const result = await this.db.query("indexes/perActorChannelStats", {
-          startkey: key,
-          endkey: key + "\uffff",
+        const keyPrefix = encodeURIComponent(session.actor) + "/";
+        const result = await this.db.query("indexes/channelStatsPerActor", {
+          startkey: keyPrefix,
+          endkey: keyPrefix + "\uffff",
           reduce: true,
           group: true,
         });
@@ -490,30 +537,6 @@ export class GraffitiLocalDatabase
           });
           stop();
         }
-      });
-
-    return repeater;
-  };
-
-  listOrphans: Graffiti["listOrphans"] = (session) => {
-    const repeater: ReturnType<typeof Graffiti.prototype.listOrphans> =
-      new Repeater(async (push, stop) => {
-        const result = await this.db.query("indexes/perActorOrphans", {
-          key: encodeURIComponent(session.actor),
-        });
-        for (const row of result.rows) {
-          const { name, lastModified } = row.value;
-          if (typeof name !== "string" || typeof lastModified !== "number")
-            continue;
-          push({
-            value: {
-              name,
-              lastModified,
-              source: this.source,
-            },
-          });
-        }
-        stop();
       });
 
     return repeater;
