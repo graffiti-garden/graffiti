@@ -121,6 +121,7 @@ export function isActorAllowedGraffitiObject(
 ) {
   return (
     object.allowed === undefined ||
+    object.allowed === null ||
     (!!session?.actor &&
       (object.actor === session.actor ||
         object.allowed.includes(session.actor)))
