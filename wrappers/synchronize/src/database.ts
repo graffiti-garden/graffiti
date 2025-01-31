@@ -19,6 +19,7 @@ import {
   attemptAjvCompile,
   maskGraffitiObject,
   isActorAllowedGraffitiObject,
+  isObjectNewer,
 } from "./utilities";
 import { Repeater } from "@repeaterjs/repeater";
 import Ajv from "ajv-draft-04";
@@ -166,9 +167,7 @@ export class GraffitiLocalDatabase
       >((acc, doc) => {
         if (doc) acc.push(doc);
         return acc;
-      }, [])
-      // Remove tombstones
-      .filter((doc) => !doc.tombstone);
+      }, []);
     return docs;
   }
 
@@ -180,20 +179,19 @@ export class GraffitiLocalDatabase
     const [locationOrUri, schema, session] = args;
     const { location } = unpackLocationOrUri(locationOrUri);
 
-    const docs = await this.queryByLocation(location);
+    const docsAll = await this.queryByLocation(location);
+
+    // Filter out ones not allowed
+    const docs = docsAll.filter((doc) =>
+      isActorAllowedGraffitiObject(doc, session),
+    );
     if (!docs.length) throw new GraffitiErrorNotFound();
 
     // Get the most recent document
-    const doc = docs.reduce((a, b) =>
-      a.lastModified > b.lastModified ? a : b,
-    );
+    const doc = docs.reduce((a, b) => (isObjectNewer(a, b) ? a : b));
 
     // Strip out the _id and _rev
     const { _id, _rev, ...object } = doc;
-
-    // Make sure the user is allowed to see it
-    if (!isActorAllowedGraffitiObject(doc, session))
-      throw new GraffitiErrorNotFound();
 
     // Mask out the allowed list and channels
     // if the user is not the owner
@@ -218,7 +216,8 @@ export class GraffitiLocalDatabase
     location: GraffitiLocation,
     keepLatest: boolean = false,
   ) {
-    const docsAtLocation = await this.queryByLocation(location);
+    const docsAtLocationAll = await this.queryByLocation(location);
+    const docsAtLocation = docsAtLocationAll.filter((doc) => !doc.tombstone);
     if (!docsAtLocation.length) return undefined;
 
     // Get the most recent lastModified timestamp.
@@ -341,6 +340,11 @@ export class GraffitiLocalDatabase
       throw new GraffitiErrorForbidden();
     }
     const originalObject = await this.get(locationOrUri, {}, session);
+    if (originalObject.tombstone) {
+      throw new GraffitiErrorNotFound(
+        "The object you are trying to patch has been deleted",
+      );
+    }
 
     // Patch it outside of the database
     const patchObject: GraffitiObjectBase = { ...originalObject };
@@ -461,7 +465,7 @@ export class GraffitiLocalDatabase
 
           // Check that it matches the schema
           if (validate(object)) {
-            push({ value: object });
+            await push({ value: object });
           }
         }
       }
@@ -500,7 +504,7 @@ export class GraffitiLocalDatabase
 
         const { _id, _rev, ...object } = doc;
         if (validate(object)) {
-          push({ value: object });
+          await push({ value: object });
         }
       }
       stop();
@@ -528,7 +532,7 @@ export class GraffitiLocalDatabase
           const { count, max: lastModified } = row.value;
           if (typeof count !== "number" || typeof lastModified !== "number")
             continue;
-          push({
+          await push({
             value: {
               channel: decodeURIComponent(channelEncoded),
               count,
