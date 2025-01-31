@@ -63,7 +63,7 @@ export const graffitiCRUDTests = (
         expect(beforeReplaced.name).toEqual(previous.name);
         expect(beforeReplaced.actor).toEqual(previous.actor);
         expect(beforeReplaced.source).toEqual(previous.source);
-        expect(beforeReplaced.lastModified).toBeGreaterThanOrEqual(
+        expect(beforeReplaced.lastModified).toBeGreaterThan(
           gotten.lastModified,
         );
 
@@ -77,7 +77,7 @@ export const graffitiCRUDTests = (
         const beforeDeleted = await graffiti.delete(afterReplaced, session);
         expect(beforeDeleted.tombstone).toEqual(true);
         expect(beforeDeleted.value).toEqual(newValue);
-        expect(beforeDeleted.lastModified).toBeGreaterThanOrEqual(
+        expect(beforeDeleted.lastModified).toBeGreaterThan(
           beforeReplaced.lastModified,
         );
 
