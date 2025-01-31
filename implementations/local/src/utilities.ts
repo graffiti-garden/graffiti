@@ -60,6 +60,18 @@ export function unpackLocationOrUri(locationOrUri: GraffitiLocation | string) {
   }
 }
 
+export function isObjectNewer(
+  left: GraffitiObjectBase,
+  right: GraffitiObjectBase,
+) {
+  return (
+    left.lastModified > right.lastModified ||
+    (left.lastModified === right.lastModified &&
+      !left.tombstone &&
+      right.tombstone)
+  );
+}
+
 export function applyGraffitiPatch<Prop extends keyof GraffitiPatch>(
   apply: typeof applyPatch,
   prop: Prop,
