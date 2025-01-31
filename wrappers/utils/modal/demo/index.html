@@ -12,9 +12,9 @@
     <span id="display-actor"></span>
 
     <script type="module">
-        import { GraffitiSolidOIDCInterface } from "../dist/index.js";
+        import { GraffitiSolidOIDCSessionManager } from "../dist/index.js";
         let session = undefined;
-        window.sessionManager = new GraffitiSolidOIDCInterface();
+        window.sessionManager = new GraffitiSolidOIDCSessionManager();
 
         function onLogout(event) {
             if (event && event.detail.error) {
