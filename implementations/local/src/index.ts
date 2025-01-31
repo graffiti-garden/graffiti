@@ -52,15 +52,15 @@ export class GraffitiLocal extends Graffiti {
     this.patch = graffitiSynchronize.patch.bind(graffitiSynchronize);
     this.delete = graffitiSynchronize.delete.bind(graffitiSynchronize);
     this.discover = graffitiSynchronize.discover.bind(graffitiSynchronize);
+    this.recoverOrphans =
+      graffitiSynchronize.recoverOrphans.bind(graffitiPouchDbBase);
+    this.channelStats =
+      graffitiPouchDbBase.channelStats.bind(graffitiPouchDbBase);
     this.synchronizeDiscover =
       graffitiSynchronize.synchronizeDiscover.bind(graffitiSynchronize);
     this.synchronizeGet =
       graffitiSynchronize.synchronizeGet.bind(graffitiSynchronize);
     this.synchronizeRecoverOrphans =
       graffitiSynchronize.synchronizeRecoverOrphans.bind(graffitiSynchronize);
-    this.channelStats =
-      graffitiPouchDbBase.channelStats.bind(graffitiPouchDbBase);
-    this.recoverOrphans =
-      graffitiPouchDbBase.recoverOrphans.bind(graffitiPouchDbBase);
   }
 }
