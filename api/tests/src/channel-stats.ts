@@ -81,10 +81,12 @@ export const graffitiChannelStatsTests = (
         { value: { index: 0 }, channels },
         session,
       );
-      // Replace it with only one channel
+      // But then delete it
+      await graffiti.delete(first, session);
+
+      // Create a new object with only one channel
       const second = await graffiti.put(
         {
-          ...first,
           value: { index: 1 },
           channels: channels.slice(2),
         },
