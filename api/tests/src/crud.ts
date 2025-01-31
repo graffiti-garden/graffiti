@@ -81,10 +81,25 @@ export const graffitiCRUDTests = (
           beforeReplaced.lastModified,
         );
 
-        // Try to get it and fail
-        await expect(graffiti.get(afterReplaced, {})).rejects.toThrow(
-          GraffitiErrorNotFound,
-        );
+        // Get a tombstone
+        const final = await graffiti.get(afterReplaced, {});
+        expect(final).toEqual(beforeDeleted);
+      });
+
+      it("get non-existant", async () => {
+        const graffiti = useGraffiti();
+        const session = useSession1();
+
+        const putted = await graffiti.put(randomPutObject(), session);
+        await expect(
+          graffiti.get(
+            {
+              ...putted,
+              name: randomString(),
+            },
+            {},
+          ),
+        ).rejects.toBeInstanceOf(GraffitiErrorNotFound);
       });
 
       it("put, get, delete with wrong actor", async () => {
@@ -218,10 +233,14 @@ export const graffitiCRUDTests = (
         expect(gotten.channels).toEqual(channels);
 
         // But not without session
-        await expect(graffiti.get(putted, {})).rejects.toThrow();
+        await expect(graffiti.get(putted, {})).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
 
         // Or the wrong session
-        await expect(graffiti.get(putted, {}, session2)).rejects.toThrow();
+        await expect(graffiti.get(putted, {}, session2)).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
       });
 
       it("put and get with specific access control", async () => {
@@ -250,7 +269,9 @@ export const graffitiCRUDTests = (
         expect(gotten.channels).toEqual(channels);
 
         // But not without session
-        await expect(graffiti.get(putted, {})).rejects.toThrow();
+        await expect(graffiti.get(putted, {})).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
 
         const gotten2 = await graffiti.get(putted, {}, session2);
         expect(gotten2.value).toEqual(value);
@@ -285,6 +306,17 @@ export const graffitiCRUDTests = (
         expect(beforePatched.lastModified).toBe(gotten.lastModified);
 
         await graffiti.delete(putted, session);
+      });
+
+      it("patch deleted object", async () => {
+        const graffiti = useGraffiti();
+        const session = useSession1();
+
+        const putted = await graffiti.put(randomPutObject(), session);
+        const deleted = await graffiti.delete(putted, session);
+        await expect(
+          graffiti.patch({}, putted, session),
+        ).rejects.toBeInstanceOf(GraffitiErrorNotFound);
       });
 
       it("deep patch", async () => {
