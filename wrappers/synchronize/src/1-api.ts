@@ -37,21 +37,27 @@ import type { JSONSchema4 } from "json-schema";
  *
  * ## Overview
  *
- * This API tries to draw from well-known concepts and standards wherever possible.
- * JSON objects, representing social artifacts (e.g. posts, profiles) and activities
- * (e.g. likes, follows) can be interacted with through standard CRUD operations:
+ * Graffiti provides applications with methods to create and store data
+ * on behalf of their users using standard CRUD operations:
  *  {@link put}, {@link get}, {@link patch}, and {@link delete}.
- * Objects can be typed with [JSON Schema](https://json-schema.org/) and patches
- * can be applied with [JSON Patch](https://jsonpatch.com).
- * For interoperability between Graffiti applications, we recommend using established properties from the
- * [Activity Vocabulary](https://www.w3.org/TR/activitystreams-vocabulary/) when available.
+ * This data can represent both social artifacts (e.g. posts, profiles) and
+ * activities (e.g. likes, follows) and is stored as JSON.
  *
- * The social aspect of Graffiti comes from the {@link discover} operation
+ * The social aspect of Graffiti comes from the {@link discover} method
  * which allows applications to find objects that other users made.
  * It is a lot like a traditional query operation, but it only
  * returns objects that have been placed in particular
  * {@link GraffitiObjectBase.channels | `channels`}
  * specified by the discovering application.
+ *
+ * Graffiti builds on well known concepts and standards wherever possible.
+ * JSON Objects can be typed with [JSON Schema](https://json-schema.org/) and patches
+ * can be applied with [JSON Patch](https://jsonpatch.com).
+ * For interoperability between Graffiti applications, we recommend that
+ * objects use established properties from the
+ * [Activity Vocabulary](https://www.w3.org/TR/activitystreams-vocabulary/) when available,
+ * however it is always possible to create additional properties, contributing
+ * to the broader [folksonomy](https://en.wikipedia.org/wiki/Folksonomy).
  *
  * {@link GraffitiObjectBase.channels | `channels`} are one of the major concepts
  * unique to Graffiti along with *interaction relativity*.
@@ -498,7 +504,7 @@ export abstract class Graffiti {
   >;
 
   /**
-   * Discovers objects not contained in *any*
+   * Discovers objects **not** contained in any
    * {@link GraffitiObjectBase.channels | `channels`}
    * that were created by the querying {@link GraffitiObjectBase.actor | `actor`}
    * and match the given [JSON Schema](https://json-schema.org).
