@@ -23,6 +23,7 @@ import type { JSONSchema4 } from "json-schema";
  *
  * There are several different implementations of this Graffiti API available,
  * including a [federated implementation](https://github.com/graffiti-garden/implementation-federated),
+ * that lets users choose where their data is stored,
  * and a [local implementation](https://github.com/graffiti-garden/implementation-local)
  * that can be used for testing and development. In our design of Graffiti, this API is our
  * primary focus as it is the layer that shapes the experience
@@ -237,12 +238,11 @@ import type { JSONSchema4 } from "json-schema";
  * Methods for {@link put | creating}, {@link get | reading}, {@link patch | updating},
  * and {@link delete | deleting} {@link GraffitiObjectBase | Graffiti objects}.
  * @groupDescription Query Methods
- * Methods for retrieving multiple {@link GraffitiObjectBase | Graffiti objects} at a time.
+ * Methods that retrieve or accumulate information about multiple {@link GraffitiObjectBase | Graffiti objects} at a time.
  * @groupDescription Session Management
  * Methods and properties for logging in and out of a Graffiti implementation.
  * @groupDescription Utilities
- * Methods for for converting Graffiti objects to and from URIs
- * and for finding lost objects.
+ * Methods for for converting Graffiti objects to and from URIs.
  */
 export abstract class Graffiti {
   /**
@@ -498,6 +498,140 @@ export abstract class Graffiti {
   >;
 
   /**
+   * Discovers objects not contained in *any*
+   * {@link GraffitiObjectBase.channels | `channels`}
+   * that were created by the querying {@link GraffitiObjectBase.actor | `actor`}
+   * and match the given [JSON Schema](https://json-schema.org).
+   * Unlike {@link discover}, this method will not return objects created by other users.
+   *
+   * This method is not useful for most applications, but necessary for
+   * getting a global view of all a user's Graffiti data or debugging
+   * channel usage.
+   *
+   * It's return value is the same as {@link discover}.
+   *
+   * @group Query Methods
+   */
+  abstract recoverOrphans<Schema extends JSONSchema4>(
+    /**
+     * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession,
+  ): GraffitiStream<
+    GraffitiObject<Schema>,
+    {
+      tombstoneRetention: number;
+    }
+  >;
+
+  /**
+   * Returns statistics about all the {@link GraffitiObjectBase.channels | `channels`}
+   * that an {@link GraffitiObjectBase.actor | `actor`} has posted to.
+   * This is not very useful for most applications, but
+   * necessary for certain applications where a user wants a
+   * global view of all their Graffiti data or to debug
+   * channel usage.
+   *
+   * @group Query Methods
+   *
+   * @returns A stream of all {@link GraffitiObjectBase.channels | `channel`}s
+   * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
+   * The `lastModified` field is the time that the user last modified an
+   * object in that channel. The `count` field is the number of objects
+   * that the user has posted to that channel.
+   * {@link GraffitiObjectBase.tombstone | `tombstone`}d objects are not included
+   * in either the `count` or `lastModified` fields.
+   */
+  abstract channelStats(
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession,
+  ): GraffitiStream<{
+    channel: string;
+    count: number;
+    lastModified: number;
+  }>;
+
+  /**
+   * Begins the login process. Depending on the implementation, this may
+   * involve redirecting the user to a login page or opening a popup,
+   * so it should always be called in response to a user action.
+   *
+   * The {@link GraffitiSession | session} object is returned
+   * asynchronously via {@link Graffiti.sessionEvents | sessionEvents}
+   * as a {@link GraffitiLoginEvent} with event type `login`.
+   *
+   * @group Session Management
+   */
+  abstract login(
+    /**
+     * Suggestions for the permissions that the
+     * login process should grant. The login process may not
+     * provide the exact proposed permissions.
+     */
+    proposal?: {
+      /**
+       * A suggested actor to login as. For example, if a user tries to
+       * edit a post but are not logged in, the interface can infer that
+       * they might want to log in as the actor who created the post
+       * they are attempting to edit.
+       *
+       * Even if provided, the implementation should allow the user
+       * to log in as a different actor if they choose.
+       */
+      actor?: string;
+      /**
+       * A yet to be defined permissions scope. An application may use
+       * this to indicate the minimum necessary scope needed to
+       * operate. For example, it may need to be able read private
+       * messages from a certain set of channels, or write messages that
+       * follow a particular schema.
+       *
+       * The login process should make it clear what scope an application
+       * is requesting and allow the user to enhance or reduce that
+       * scope as necessary.
+       */
+      scope?: {};
+    },
+  ): Promise<void>;
+
+  /**
+   * Begins the logout process. Depending on the implementation, this may
+   * involve redirecting the user to a logout page or opening a popup,
+   * so it should always be called in response to a user action.
+   *
+   * A confirmation will be returned asynchronously via
+   * {@link Graffiti.sessionEvents | sessionEvents}
+   * as a {@link GraffitiLogoutEvent} as event type `logout`.
+   *
+   * @group Session Management
+   */
+  abstract logout(
+    /**
+     * The {@link GraffitiSession | session} object to logout.
+     */
+    session: GraffitiSession,
+  ): Promise<void>;
+
+  /**
+   * An event target that can be used to listen for the following
+   * events and they're corresponding event types:
+   * - `login` - {@link GraffitiLoginEvent}
+   * - `logout` - {@link GraffitiLogoutEvent}
+   * - `initialized` - {@link GraffitiSessionInitializedEvent}
+   *
+   * @group Session Management
+   */
+  abstract readonly sessionEvents: EventTarget;
+
+  /**
    * This method has the same signature as {@link discover} but listens for
    * changes made via {@link put}, {@link patch}, and {@link delete} or
    * fetched from {@link get}, {@link discover}, and {@link recoverOrphans}
@@ -592,140 +726,6 @@ export abstract class Graffiti {
      */
     session: GraffitiSession,
   ): GraffitiStream<GraffitiObject<Schema>>;
-
-  /**
-   * Returns statistics about all the {@link GraffitiObjectBase.channels | `channels`}
-   * that an {@link GraffitiObjectBase.actor | `actor`} has posted to.
-   * This is not very useful for most applications, but
-   * necessary for certain applications where a user wants a
-   * global view of all their Graffiti data or to debug
-   * channel usage.
-   *
-   * @group Utilities
-   *
-   * @returns A stream of all {@link GraffitiObjectBase.channels | `channel`}s
-   * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
-   * The `lastModified` field is the time that the user last modified an
-   * object in that channel. The `count` field is the number of objects
-   * that the user has posted to that channel.
-   * {@link GraffitiObjectBase.tombstone | `tombstone`}d objects are not included
-   * in either the `count` or `lastModified` fields.
-   */
-  abstract channelStats(
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
-     */
-    session: GraffitiSession,
-  ): GraffitiStream<{
-    channel: string;
-    count: number;
-    lastModified: number;
-  }>;
-
-  /**
-   * Discovers objects not contained in *any*
-   * {@link GraffitiObjectBase.channels | `channels`}
-   * that were created by the querying {@link GraffitiObjectBase.actor | `actor`}
-   * and match the given [JSON Schema](https://json-schema.org).
-   * Unlike {@link discover}, this method will not return objects created by other users.
-   *
-   * This method is not useful for most applications, but necessary for
-   * getting a global view of all a user's Graffiti data or debugging
-   * channel usage.
-   *
-   * It's return value is the same as {@link discover}.
-   *
-   * @group Utilities
-   */
-  abstract recoverOrphans<Schema extends JSONSchema4>(
-    /**
-     * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
-     */
-    schema: Schema,
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
-     */
-    session: GraffitiSession,
-  ): GraffitiStream<
-    GraffitiObject<Schema>,
-    {
-      tombstoneRetention: number;
-    }
-  >;
-
-  /**
-   * Begins the login process. Depending on the implementation, this may
-   * involve redirecting the user to a login page or opening a popup,
-   * so it should always be called in response to a user action.
-   *
-   * The {@link GraffitiSession | session} object is returned
-   * asynchronously via {@link Graffiti.sessionEvents | sessionEvents}
-   * as a {@link GraffitiLoginEvent} with event type `login`.
-   *
-   * @group Session Management
-   */
-  abstract login(
-    /**
-     * Suggestions for the permissions that the
-     * login process should grant. The login process may not
-     * provide the exact proposed permissions.
-     */
-    proposal?: {
-      /**
-       * A suggested actor to login as. For example, if a user tries to
-       * edit a post but are not logged in, the interface can infer that
-       * they might want to log in as the actor who created the post
-       * they are attempting to edit.
-       *
-       * Even if provided, the implementation should allow the user
-       * to log in as a different actor if they choose.
-       */
-      actor?: string;
-      /**
-       * A yet to be defined permissions scope. An application may use
-       * this to indicate the minimum necessary scope needed to
-       * operate. For example, it may need to be able read private
-       * messages from a certain set of channels, or write messages that
-       * follow a particular schema.
-       *
-       * The login process should make it clear what scope an application
-       * is requesting and allow the user to enhance or reduce that
-       * scope as necessary.
-       */
-      scope?: {};
-    },
-  ): Promise<void>;
-
-  /**
-   * Begins the logout process. Depending on the implementation, this may
-   * involve redirecting the user to a logout page or opening a popup,
-   * so it should always be called in response to a user action.
-   *
-   * A confirmation will be returned asynchronously via
-   * {@link Graffiti.sessionEvents | sessionEvents}
-   * as a {@link GraffitiLogoutEvent} as event type `logout`.
-   *
-   * @group Session Management
-   */
-  abstract logout(
-    /**
-     * The {@link GraffitiSession | session} object to logout.
-     */
-    session: GraffitiSession,
-  ): Promise<void>;
-
-  /**
-   * An event target that can be used to listen for the following
-   * events and they're corresponding event types:
-   * - `login` - {@link GraffitiLoginEvent}
-   * - `logout` - {@link GraffitiLogoutEvent}
-   * - `initialized` - {@link GraffitiSessionInitializedEvent}
-   *
-   * @group Session Management
-   */
-  abstract readonly sessionEvents: EventTarget;
 }
 
 /**
