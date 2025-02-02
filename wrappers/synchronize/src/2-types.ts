@@ -310,8 +310,11 @@ export type GraffitiLogoutEvent = CustomEvent<
  * and restore any previously active sessions.
  * Successful session restores will be returned in parallel as
  * their own {@link GraffitiLoginEvent} events.
- * This event optionally return an `href` property
- * if there were any redirects during the restoration process.
+ *
+ * This event optionally returns an `href` property
+ * representing the URL the user originated a login request
+ * from, which may be useful for redirecting the user back to
+ * the page they were on after login.
  * The event name to listen for is `initialized`.
  */
 export type GraffitiSessionInitializedEvent = CustomEvent<
