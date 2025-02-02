@@ -312,13 +312,25 @@ export abstract class Graffiti {
 
   /**
    * Retrieves an object from a given location.
-   * If no object exists at that location or if the retrieving
-   * {@link GraffitiObjectBase.actor | `actor`} is not the creator or included in
-   * the object's {@link GraffitiObjectBase.allowed | `allowed`} property,
-   * a {@link GraffitiErrorNotFound} is thrown.
    *
-   * The retrieved object is also type-checked against the provided [JSON schema](https://json-schema.org/)
+   * The retrieved object is type-checked against the provided [JSON schema](https://json-schema.org/)
    * otherwise a {@link GraffitiErrorSchemaMismatch} is thrown.
+   *
+   * If the object existed but has since been deleted,
+   * or the retrieving {@link GraffitiObjectBase.actor | `actor`}
+   * was {@link GraffitiObjectBase.allowed | `allowed`} to access
+   * the object but now isn't, this method will return the latest
+   * version of the object that the {@link GraffitiObjectBase.actor | `actor`}
+   * was allowed to access with its {@link GraffitiObjectBase.tombstone | `tombstone`}
+   * set to `true`, so long as that version is still cached.
+   *
+   * Otherwise, if the object never existed, or the
+   * retrieving {@link GraffitiObjectBase.actor | `actor`} was never
+   * {@link GraffitiObjectBase.allowed | `allowed`} to access it, or if
+   * the object was changed long enough ago that its history has been
+   * purged from the cache, a {@link GraffitiErrorNotFound} is thrown.
+   * The rate at which the cache is purged is implementation dependent.
+   * See the `tombstoneReturn` property returned by {@link discover}.
    *
    * @group CRUD Methods
    */
