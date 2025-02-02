@@ -4,9 +4,12 @@ import type { GraffitiPutObject, GraffitiStream } from "@graffiti-garden/api";
 export function randomString(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  return Array.from(array)
+  const str = Array.from(array)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+
+  // check for unicode support
+  return str + "👩🏽‍❤️‍💋‍👩🏻🫱🏼‍🫲🏿";
 }
 
 export function randomValue() {
