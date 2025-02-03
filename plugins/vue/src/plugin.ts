@@ -39,11 +39,11 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
         graffitiSession.value = null;
       }
 
-      if (detail.error) {
+      if (detail && detail.error) {
         console.error(detail.error);
       }
 
-      if (detail.href) {
+      if (detail && detail.href) {
         // If we're using Vue Router, redirect to the URL after login
         const router = app.config.globalProperties.$router as
           | Router

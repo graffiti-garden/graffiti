@@ -33,10 +33,10 @@
     "url": "https://github.com/graffiti-garden/wrapper-vue/issues"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.1.11"
+    "@graffiti-garden/api": "^0.2.2"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-local": "^0.2.5",
+    "@graffiti-garden/implementation-local": "^0.2.6",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/language-server": "^2.2.0",
     "@vue/typescript-plugin": "^2.2.0",
