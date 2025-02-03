@@ -6,6 +6,7 @@ import type {
   GraffitiSession,
   GraffitiPutObject,
   GraffitiStream,
+  ChannelStats,
 } from "./2-types";
 import type { JSONSchema4 } from "json-schema";
 
@@ -545,13 +546,8 @@ export abstract class Graffiti {
    *
    * @group Query Methods
    *
-   * @returns A stream of all {@link GraffitiObjectBase.channels | `channel`}s
+   * @returns A stream of statistics for each {@link GraffitiObjectBase.channels | `channel`}
    * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
-   * The `lastModified` field is the time that the user last modified an
-   * object in that channel. The `count` field is the number of objects
-   * that the user has posted to that channel.
-   * {@link GraffitiObjectBase.tombstone | `tombstone`}d objects are not included
-   * in either the `count` or `lastModified` fields.
    */
   abstract channelStats(
     /**
@@ -559,11 +555,7 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): GraffitiStream<{
-    channel: string;
-    count: number;
-    lastModified: number;
-  }>;
+  ): GraffitiStream<ChannelStats>;
 
   /**
    * Begins the login process. Depending on the implementation, this may
