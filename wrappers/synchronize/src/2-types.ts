@@ -271,6 +271,29 @@ export type GraffitiStream<TValue, TReturn = void> = AsyncGenerator<
 >;
 
 /**
+ * Statistic about single channel returned by {@link Graffiti.channelStats}.
+ * These statistics only account for contributions made by the
+ * querying actor.
+ */
+export type ChannelStats = {
+  /**
+   * The URI of the channel.
+   */
+  channel: string;
+  /**
+   * The number of non-{@link GraffitiObjectBase.tombstone | `tombstone`}d objects
+   * that the actor has posted to the channel.
+   */
+  count: number;
+  /**
+   * The time that the actor {@link Graffiti.lastModified | last modified} an object in the channel,
+   * measured in milliseconds since January 1, 1970.
+   * {@link GraffitiObjectBase.tombstone | Tombstone}d objects do not effect this modification time.
+   */
+  lastModified: number;
+};
+
+/**
  * The event type produced in {@link Graffiti.sessionEvents}
  * when a user logs in manually from {@link Graffiti.login}
  * or when their session is restored from a previous login.
