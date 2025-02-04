@@ -73,7 +73,7 @@ export class GraffitiSolidOIDCSessionManager
 
     document.body.prepend(this.dialog);
 
-    this.main = import("./index.html").then(({ default: dialogHTML }) => {
+    this.main = import("./dialog.html").then(({ default: dialogHTML }) => {
       this.dialog.innerHTML = dialogHTML;
 
       const closeBtn = this.dialog.querySelector("#graffiti-login-close");
