@@ -85,7 +85,7 @@ export class GraffitiSolidOIDCSessionManager
     if (options?.useDefaultStyle !== false) {
       Promise.all([
         import("./style.css"),
-        import("./graffiti.jpg"),
+        import("./graffiti.webp"),
         import("./rock-salt.woff2"),
       ]).then(([{ default: style }, { default: image }, { default: font }]) => {
         const styleEl = document.createElement("style");
