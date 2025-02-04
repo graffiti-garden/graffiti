@@ -20,7 +20,7 @@ import {
   maskGraffitiObject,
   isActorAllowedGraffitiObject,
   isObjectNewer,
-} from "./utilities";
+} from "./utilities.js";
 import { Repeater } from "@repeaterjs/repeater";
 import Ajv from "ajv-draft-04";
 import { applyPatch } from "fast-json-patch";
