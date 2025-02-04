@@ -286,7 +286,7 @@ export type ChannelStats = {
    */
   count: number;
   /**
-   * The time that the actor {@link Graffiti.lastModified | last modified} an object in the channel,
+   * The time that the actor {@link GraffitiObjectBase.lastModified | last modified} an object in the channel,
    * measured in milliseconds since January 1, 1970.
    * {@link GraffitiObjectBase.tombstone | Tombstone}d objects do not effect this modification time.
    */
