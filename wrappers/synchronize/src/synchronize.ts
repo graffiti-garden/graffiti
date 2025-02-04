@@ -14,7 +14,7 @@ import {
   locationToUri,
   maskGraffitiObject,
   unpackLocationOrUri,
-} from "./utilities";
+} from "./utilities.js";
 
 type SynchronizeEvent = CustomEvent<{
   oldObject: GraffitiObjectBase;

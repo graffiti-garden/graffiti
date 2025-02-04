@@ -1,9 +1,12 @@
 import { Graffiti } from "@graffiti-garden/api";
 import Ajv from "ajv-draft-04";
-import { GraffitiLocalSessionManager } from "./session-manager";
-import { GraffitiLocalDatabase, type GraffitiLocalOptions } from "./database";
-import { GraffitiSynchronize } from "./synchronize";
-import { locationToUri, uriToLocation } from "./utilities";
+import { GraffitiLocalSessionManager } from "./session-manager.js";
+import {
+  GraffitiLocalDatabase,
+  type GraffitiLocalOptions,
+} from "./database.js";
+import { GraffitiSynchronize } from "./synchronize.js";
+import { locationToUri, uriToLocation } from "./utilities.js";
 
 export type { GraffitiLocalOptions };
 
