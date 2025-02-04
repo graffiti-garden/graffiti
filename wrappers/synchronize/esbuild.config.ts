@@ -22,6 +22,5 @@ for (const format of ["esm", "cjs"] as const) {
     format,
     target: "esnext",
     outdir: `dist/${format}`,
-    treeShaking: true,
   });
 }
