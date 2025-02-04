@@ -73,25 +73,27 @@ export class GraffitiSolidOIDCSessionManager
 
     document.body.prepend(this.dialog);
 
-    const scriptPath = import.meta.url;
-    const scriptDir = scriptPath.substring(0, scriptPath.lastIndexOf("/"));
+    this.main = import("./index.html").then(({ default: dialogHTML }) => {
+      this.dialog.innerHTML = dialogHTML;
 
-    this.main = fetch(scriptDir + "/index.html")
-      .then((res) => res.text())
-      .then((dialogHTML) => {
-        this.dialog.innerHTML = dialogHTML;
+      const closeBtn = this.dialog.querySelector("#graffiti-login-close");
+      closeBtn?.addEventListener("click", () => this.cancelLogin());
 
-        const closeBtn = this.dialog.querySelector("#graffiti-login-close");
-        closeBtn?.addEventListener("click", () => this.cancelLogin());
-
-        return this.dialog.querySelector("#graffiti-login-main") as HTMLElement;
-      });
+      return this.dialog.querySelector("#graffiti-login-main") as HTMLElement;
+    });
 
     if (options?.useDefaultStyle !== false) {
-      const styleEl = document.createElement("link");
-      styleEl.rel = "stylesheet";
-      styleEl.href = scriptDir + "/style.css";
-      document.head.append(styleEl);
+      Promise.all([
+        import("./style.css"),
+        import("./graffiti.jpg"),
+        import("./rock-salt.woff2"),
+      ]).then(([{ default: style }, { default: image }, { default: font }]) => {
+        const styleEl = document.createElement("style");
+        style = style.replace("url(graffiti.jpg)", `url(${image})`);
+        style = style.replace("url(rock-salt.woff2)", `url(${font})`);
+        styleEl.textContent = style;
+        document.head.append(styleEl);
+      });
     }
 
     this.onWelcome();
