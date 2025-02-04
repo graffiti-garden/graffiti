@@ -1,26 +1,27 @@
 import * as esbuild from "esbuild";
+import { polyfillNode } from "esbuild-plugin-polyfill-node";
+
+await esbuild.build({
+  entryPoints: ["src/index.ts"],
+  platform: "browser",
+  bundle: true,
+  sourcemap: true,
+  minify: true,
+  format: "esm",
+  target: "esnext",
+  outfile: "dist/index.browser.js",
+  plugins: [polyfillNode()],
+});
 
 for (const format of ["esm", "cjs"] as const) {
   await esbuild.build({
-    entryPoints: ["src/index.ts"],
+    entryPoints: ["src/*"],
     platform: "neutral",
-    bundle: true,
     sourcemap: true,
     minify: true,
     format,
     target: "esnext",
-    outfile: `dist/${format === "esm" ? "index.js" : "index.cjs.js"}`,
+    outdir: `dist/${format}`,
+    treeShaking: true,
   });
 }
-
-await esbuild.build({
-  entryPoints: ["tests/index.ts"],
-  platform: "node",
-  sourcemap: true,
-  bundle: true,
-  minify: true,
-  external: ["vitest", "@graffiti-garden/api"],
-  format: "esm",
-  target: "esnext",
-  outfile: "dist/tests.js",
-});
