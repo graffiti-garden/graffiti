@@ -55,3 +55,13 @@ npx http-server
 ```
 
 and navigating to [localhost:8080/demo](http://localhost:8080/demo).
+
+### Image Compression
+
+To make the `.jpg` image smaller, use:
+
+```
+cwebp -q QUALITY -m 6 -mt graffiti.jpg -o graffiti.webp
+```
+
+Where quality is a number between 0 (horrible) and 100 (perfect).

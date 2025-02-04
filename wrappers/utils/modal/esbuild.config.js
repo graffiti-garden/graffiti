@@ -17,7 +17,7 @@ await esbuild.build({
   loader: {
     ".html": "text",
     ".css": "text",
-    ".jpg": "dataurl",
+    ".webp": "dataurl",
     ".woff2": "dataurl",
   },
 });
