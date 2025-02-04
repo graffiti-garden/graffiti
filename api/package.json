@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "The heart of Graffiti",
   "type": "module",
   "types": "./dist/src/index.d.ts",
@@ -52,7 +52,7 @@
     "tsx": "^4.19.2",
     "typedoc": "^0.27.6",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@types/json-schema": "^7.0.15",
