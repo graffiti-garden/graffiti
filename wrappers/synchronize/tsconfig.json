@@ -2,6 +2,7 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",
+    "lib": ["es2023"],
     "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
@@ -9,8 +10,7 @@
     "verbatimModuleSyntax": true,
     "declaration": true,
     "declarationMap": true,
-    "declarationDir": "./dist/",
-    "rootDir": "."
+    "declarationDir": "./dist"
   },
-  "include": ["src", "tests"]
+  "include": ["src"]
 }
