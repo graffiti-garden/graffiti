@@ -1,6 +1,8 @@
 import type { App, Plugin, Ref } from "vue";
 import { ref } from "vue";
 import Discover from "./Discover.vue";
+import Get from "./Get.vue";
+import RecoverOrphans from "./RecoverOrphans.vue";
 import type {
   GraffitiFactory,
   Graffiti,
@@ -20,6 +22,8 @@ declare module "vue" {
 
   export interface GlobalComponents {
     GraffitiDiscover: typeof Discover;
+    GraffitiGet: typeof Get;
+    GraffitiRecoverOrphans: typeof RecoverOrphans;
   }
 }
 
@@ -86,3 +90,5 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
 export * from "./composables";
 export * from "./injections";
 export { Discover as GraffitiDiscover };
+export { Get as GraffitiGet };
+export { RecoverOrphans as GraffitiRecoverOrphans };
