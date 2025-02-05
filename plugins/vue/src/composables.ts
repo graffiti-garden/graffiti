@@ -11,8 +11,78 @@ import type {
   JSONSchema4,
 } from "@graffiti-garden/api";
 import { useGraffiti, useGraffitiSession } from "./injections";
+import type { GraffitiStream } from "@graffiti-garden/api";
+import { Poller, StreamPoller } from "./pollers";
+import { ArrayReducer, Reducer } from "./reducers";
 
-const REFRESH_RATE = 100; // milliseconds
+function makeComposable<Schema extends JSONSchema4>(
+  reducer: Reducer<Schema>,
+  poller: Poller<Schema>,
+  synchronizeFactory: () => GraffitiStream<GraffitiObject<Schema>>,
+  toWatch: readonly (() => any)[],
+) {
+  let synchronizeIterator: GraffitiStream<GraffitiObject<Schema>> | undefined =
+    undefined;
+  async function pollSynchronize() {
+    synchronizeIterator = synchronizeFactory();
+    for await (const result of synchronizeIterator) {
+      if (result.error) {
+        console.error(result.error);
+        continue;
+      }
+      reducer.onObject(result.value);
+    }
+  }
+
+  const poll = () => poller.poll(reducer.onObject.bind(reducer));
+
+  const isPolling = ref(false);
+  watch(
+    toWatch,
+    async () => {
+      synchronizeIterator?.return();
+      reducer.clear();
+      poller.clear();
+
+      pollSynchronize();
+
+      isPolling.value = true;
+      try {
+        await poll();
+      } finally {
+        isPolling.value = false;
+      }
+    },
+    {
+      immediate: true,
+    },
+  );
+  onScopeDispose(() => synchronizeIterator?.return());
+
+  return { poll, isPolling };
+}
+
+function toSessionGetter(
+  sessionInjected: ReturnType<typeof useGraffitiSession>,
+  session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+) {
+  return () => {
+    const sessionValue = toValue(session);
+    if (sessionValue === undefined) {
+      return sessionInjected?.value;
+    } else {
+      return sessionValue;
+    }
+  };
+}
+
+function callGetters<T extends readonly (() => any)[]>(
+  getters: T,
+): {
+  [K in keyof T]: ReturnType<T[K]>;
+} {
+  return getters.map((fn) => fn()) as any;
+}
 
 /**
  * A reactive version of the [`Graffiti.discover`](https://api.graffiti.garden/classes/Graffiti.html#discover)
@@ -46,174 +116,32 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
    * A Graffiti session object. If not provided, the
    * global plugin session will be used.
    */
-  session?: MaybeRefOrGetter<GraffitiSession | undefined>,
+  session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ) {
   const graffiti = useGraffiti();
   const sessionInjected = useGraffitiSession();
 
-  const results = ref<(GraffitiObject<Schema> & { tombstone: false })[]>([]);
-  const resultsRaw = new Map<string, GraffitiObject<Schema>>();
-  function flattenResults() {
-    results.value = Array.from(resultsRaw.values()).reduce<
-      (GraffitiObject<Schema> & { tombstone: false })[]
-    >((acc, o) => {
-      const { tombstone, value } = o;
-      if (!tombstone) {
-        acc.push({ ...o, tombstone, value });
-      }
-      return acc;
-    }, []);
-  }
-
-  let batchFlattenTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-  function onValue(value: GraffitiObject<Schema>) {
-    const url = graffiti.objectToUri(value);
-    const existing = resultsRaw.get(url);
-    if (
-      existing &&
-      (existing.lastModified > value.lastModified ||
-        (existing.lastModified === value.lastModified && !existing.tombstone))
-    ) {
-      return;
-    }
-    resultsRaw.set(url, value);
-
-    // Don't flatten the results all at once,
-    // because we may get a lot of results
-    // and we don't want the interface to
-    // freeze up
-    if (!batchFlattenTimer) {
-      batchFlattenTimer = setTimeout(() => {
-        flattenResults();
-        batchFlattenTimer = undefined;
-      }, REFRESH_RATE);
-    }
-  }
-
   const channelsGetter = () => toValue(channels);
   const schemaGetter = () => toValue(schema);
-  const sessionGetter = () => toValue(session) ?? sessionInjected?.value;
+  const sessionGetter = toSessionGetter(sessionInjected, session);
+  const argGetters = [channelsGetter, schemaGetter, sessionGetter] as const;
 
-  let localIterator:
-    | ReturnType<typeof graffiti.synchronize<Schema>>
-    | undefined = undefined;
-  async function pollLocalModifications() {
-    localIterator?.return();
-    localIterator = graffiti.synchronize(
-      channelsGetter(),
-      schemaGetter(),
-      sessionGetter(),
-    );
-    for await (const value of localIterator) {
-      if (value.error) {
-        console.error(value.error);
-        continue;
-      }
-      onValue(value.value);
-    }
-  }
+  const synchronizeFactory = () =>
+    graffiti.synchronizeDiscover(...callGetters(argGetters));
+  const streamFactory = () => graffiti.discover(...callGetters(argGetters));
 
-  const isPolling = ref(false);
-  let lastModified: number | undefined = undefined;
-  let fullRepollBy: number | undefined = undefined;
-  let iterator: ReturnType<typeof graffiti.discover<Schema>> | undefined =
-    undefined;
-  async function poll() {
-    const startOfPoll = new Date().getTime();
+  const reducer = new ArrayReducer<Schema>(graffiti);
+  const poller = new StreamPoller(schemaGetter, streamFactory);
 
-    // Add a query for lastModified if it's not in the schema
-    const schema = { ...schemaGetter() };
-    if (
-      lastModified &&
-      fullRepollBy &&
-      fullRepollBy > startOfPoll &&
-      (!schema.properties ||
-        !("lastModified" in schema.properties) ||
-        !("minimum" in schema.properties.lastModified))
-    ) {
-      console.log(typeof lastModified);
-      schema.properties = {
-        ...schema.properties,
-        lastModified: {
-          ...schema.properties?.lastModified,
-          minimum: lastModified,
-        },
-      };
-    }
-
-    let myIterator: ReturnType<typeof graffiti.discover<Schema>>;
-    try {
-      myIterator = graffiti.discover(channelsGetter(), schema, sessionGetter());
-    } catch (e) {
-      console.error(e);
-      return;
-    }
-
-    // Kill the previous iterator if its
-    // still running and claim its spot
-    iterator?.return({ tombstoneRetention: 0 });
-    iterator = myIterator;
-    isPolling.value = true;
-
-    // Keep track of the latest lastModified value
-    // while streaming results
-    let myLastModified = lastModified;
-    let result = await myIterator.next();
-    while (!result.done) {
-      if (result.value.error) {
-        console.error(result.value.error);
-        result = await myIterator.next();
-        continue;
-      }
-
-      const value = result.value.value;
-      if (!myLastModified || value.lastModified > myLastModified) {
-        myLastModified = value.lastModified;
-      }
-
-      onValue(value);
-
-      result = await myIterator.next();
-    }
-
-    // Make sure we're still the current iterator
-    if (iterator !== myIterator) return;
-
-    // We've successfully polled all results
-    // without getting overridden
-    iterator = undefined;
-    isPolling.value = false;
-
-    // Only now do we update the cache parameters
-    // because the results may have appeared out
-    // of order
-    const { tombstoneRetention } = result.value;
-    lastModified = myLastModified;
-    fullRepollBy = startOfPoll + tombstoneRetention;
-  }
-
-  watch(
-    [channelsGetter, schemaGetter, sessionGetter],
-    () => {
-      // Clear all the state
-      resultsRaw.clear();
-      lastModified = undefined;
-      fullRepollBy = undefined;
-      clearTimeout(batchFlattenTimer);
-      flattenResults();
-
-      // Repoll
-      poll();
-      pollLocalModifications();
-    },
-    {
-      immediate: true,
-    },
+  const { poll, isPolling } = makeComposable(
+    reducer,
+    poller,
+    synchronizeFactory,
+    argGetters,
   );
-  onScopeDispose(() => localIterator?.return());
 
   return {
-    results,
+    results: reducer.results,
     poll,
     isPolling,
   };
