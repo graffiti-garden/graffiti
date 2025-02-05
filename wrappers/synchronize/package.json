@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "The heart of Graffiti",
   "types": "./dist/src/index.d.ts",
   "module": "./dist/index.mjs",
@@ -18,8 +18,10 @@
       }
     },
     "./tests": {
-      "types": "./dist/tests/index.d.ts",
-      "default": "./dist/tests.mjs"
+      "import": {
+        "types": "./dist/tests/index.d.ts",
+        "default": "./dist/tests.mjs"
+      }
     }
   },
   "files": [
