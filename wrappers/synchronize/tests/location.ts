@@ -6,7 +6,7 @@ import { randomString } from "./utils";
 export const graffitiLocationTests = (
   useGraffiti: () => Pick<Graffiti, "locationToUri" | "uriToLocation">,
 ) => {
-  describe("URI and location conversion", () => {
+  describe.concurrent("URI and location conversion", () => {
     it("location to uri and back", async () => {
       const graffiti = useGraffiti();
       const location = {
