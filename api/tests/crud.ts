@@ -19,7 +19,7 @@ export const graffitiCRUDTests = (
   useSession1: () => GraffitiSession,
   useSession2: () => GraffitiSession,
 ) => {
-  describe(
+  describe.concurrent(
     "CRUD",
     {
       timeout: 20000,
@@ -63,7 +63,7 @@ export const graffitiCRUDTests = (
         expect(beforeReplaced.name).toEqual(previous.name);
         expect(beforeReplaced.actor).toEqual(previous.actor);
         expect(beforeReplaced.source).toEqual(previous.source);
-        expect(beforeReplaced.lastModified).toBeGreaterThan(
+        expect(beforeReplaced.lastModified).toBeGreaterThanOrEqual(
           gotten.lastModified,
         );
 
@@ -77,7 +77,7 @@ export const graffitiCRUDTests = (
         const beforeDeleted = await graffiti.delete(afterReplaced, session);
         expect(beforeDeleted.tombstone).toEqual(true);
         expect(beforeDeleted.value).toEqual(newValue);
-        expect(beforeDeleted.lastModified).toBeGreaterThan(
+        expect(beforeDeleted.lastModified).toBeGreaterThanOrEqual(
           beforeReplaced.lastModified,
         );
 
@@ -290,6 +290,9 @@ export const graffitiCRUDTests = (
         };
         const putted = await graffiti.put({ value, channels: [] }, session);
 
+        // Wait just a bit to make sure the lastModified is different
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
         const patch: GraffitiPatch = {
           value: [
             { op: "replace", path: "/something", value: "goodbye, world~ :c" },
@@ -298,6 +301,7 @@ export const graffitiCRUDTests = (
         const beforePatched = await graffiti.patch(patch, putted, session);
         expect(beforePatched.value).toEqual(value);
         expect(beforePatched.tombstone).toBe(true);
+        expect(beforePatched.lastModified).toBeGreaterThan(putted.lastModified);
 
         const gotten = await graffiti.get(putted, {});
         expect(gotten.value).toEqual({

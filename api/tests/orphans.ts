@@ -46,6 +46,9 @@ export const graffitiOrphanTests = (
       object.channels = [];
       const putOrphan = await graffiti.put(object, session);
 
+      // Wait for the put to be processed
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
       const putNotOrphan = await graffiti.put(
         {
           ...putOrphan,
@@ -55,6 +58,7 @@ export const graffitiOrphanTests = (
         session,
       );
       expect(putNotOrphan.name).toBe(putOrphan.name);
+      expect(putNotOrphan.lastModified).toBeGreaterThan(putOrphan.lastModified);
 
       const orphanIterator = graffiti.recoverOrphans({}, session);
       let numResults = 0;
