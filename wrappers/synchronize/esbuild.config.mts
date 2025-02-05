@@ -8,7 +8,6 @@ for (const format of ["esm", "cjs"] as const) {
     sourcemap: true,
     minify: true,
     format,
-    target: "esnext",
     outfile: `dist/${format === "esm" ? "index.mjs" : "index.cjs"}`,
   });
 }
@@ -18,9 +17,7 @@ await esbuild.build({
   platform: "node",
   sourcemap: true,
   bundle: true,
-  minify: true,
   external: ["vitest", "@graffiti-garden/api"],
   format: "esm",
-  target: "esnext",
   outfile: "dist/tests.mjs",
 });
