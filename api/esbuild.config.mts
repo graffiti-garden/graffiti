@@ -9,7 +9,7 @@ for (const format of ["esm", "cjs"] as const) {
     minify: true,
     format,
     target: "esnext",
-    outfile: `dist/${format === "esm" ? "index.js" : "index.cjs.js"}`,
+    outfile: `dist/${format === "esm" ? "index.mjs" : "index.cjs"}`,
   });
 }
 
@@ -22,5 +22,5 @@ await esbuild.build({
   external: ["vitest", "@graffiti-garden/api"],
   format: "esm",
   target: "esnext",
-  outfile: "dist/tests.js",
+  outfile: "dist/tests.mjs",
 });
