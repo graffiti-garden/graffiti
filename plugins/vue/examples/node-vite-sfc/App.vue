@@ -17,7 +17,6 @@ const noteSchema = {
                 },
                 createdAt: {
                     type: "string",
-                    format: "date-time",
                 },
             },
             required: ["content", "createdAt"],
