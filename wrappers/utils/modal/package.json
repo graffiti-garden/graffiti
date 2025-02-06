@@ -1,22 +1,23 @@
 {
   "name": "@graffiti-garden/solid-oidc-session-manager",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "An implementation of the Graffiti API's login functionality using Solid OIDC",
   "type": "module",
   "types": "./dist/browser/index.d.ts",
-  "module": "./dist/browser/index.js",
-  "browser": "./dist/browser/index.js",
-  "main": "./dist/node/index.js",
+  "browser": "./dist/browser/esm/index.js",
+  "main": "./dist/node/cjs/index.js",
+  "module": "./dist/node/esm/index.js",
   "exports": {
     ".": {
       "import": {
         "types": "./dist/browser/index.d.ts",
-        "node": "./dist/node/index.js",
-        "default": "./dist/browser/index.js"
+        "node": "./dist/node/esm/index.js",
+        "default": "./dist/browser/esm/index.js"
       },
       "require": {
         "types": "./dist/node/index.d.ts",
-        "default": "./dist/node/index.js"
+        "node": "./dist/node/cjs/index.js",
+        "default": "./dist/browser/cjs/index.js"
       }
     }
   },
@@ -27,7 +28,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "npm run build:js && npm run build:types",
+    "build": "rm -rf dist && npm run build:js && npm run build:types",
     "build:js": "node esbuild.config.js",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "prepublishOnly": "npm update && npm run build"
