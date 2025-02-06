@@ -1,7 +1,6 @@
-import { rmSync } from "fs";
 import * as esbuild from "esbuild";
 
-for (const format of ["esm", "cjs"]) {
+for (const format of ["esm", "cjs"] as const) {
   await esbuild.build({
     entryPoints: ["src/browser/index.ts"],
     platform: "browser",
@@ -22,6 +21,7 @@ for (const format of ["esm", "cjs"]) {
   await esbuild.build({
     entryPoints: ["src/node/index.ts"],
     platform: "node",
+    format,
     sourcemap: true,
     minify: true,
     outdir: `dist/node/${format}`,
