@@ -1,20 +1,28 @@
-import { it, expect, describe, assert } from "vitest";
+import { it, expect, describe, assert, beforeEach } from "vitest";
 import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
-import { randomPutObject, randomString } from "./utils";
+import { randomString } from "./utils";
 
 export const graffitiChannelStatsTests = (
   useGraffiti: () => Pick<
     Graffiti,
     "channelStats" | "put" | "delete" | "patch"
   >,
-  useSession1: () => GraffitiSession,
-  useSession2: () => GraffitiSession,
+  useSession1: () => GraffitiSession | Promise<GraffitiSession>,
+  useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
-  describe("channel stats", () => {
-    it("list channels", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
+  describe("channel stats", { timeout: 20000 }, () => {
+    let graffiti: ReturnType<typeof useGraffiti>;
+    let session: GraffitiSession;
+    let session1: GraffitiSession;
+    let session2: GraffitiSession;
+    beforeEach(async () => {
+      graffiti = useGraffiti();
+      session1 = await useSession1();
+      session = session1;
+      session2 = await useSession2();
+    });
 
+    it("list channels", async () => {
       const existingChannels: Map<string, number> = new Map();
       const channelIterator1 = graffiti.channelStats(session);
       for await (const channel of channelIterator1) {
@@ -65,9 +73,6 @@ export const graffitiChannelStatsTests = (
     });
 
     it("list channels with deleted channel", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const channels = [randomString(), randomString(), randomString()];
 
       // Add an item with two channels

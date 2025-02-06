@@ -1,4 +1,4 @@
-import { it, expect, describe } from "vitest";
+import { it, expect, describe, beforeEach } from "vitest";
 import type {
   Graffiti,
   GraffitiSession,
@@ -16,8 +16,8 @@ import { randomPutObject, randomString } from "./utils";
 
 export const graffitiCRUDTests = (
   useGraffiti: () => Pick<Graffiti, "put" | "get" | "delete" | "patch">,
-  useSession1: () => GraffitiSession,
-  useSession2: () => GraffitiSession,
+  useSession1: () => GraffitiSession | Promise<GraffitiSession>,
+  useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
   describe.concurrent(
     "CRUD",
@@ -25,9 +25,18 @@ export const graffitiCRUDTests = (
       timeout: 20000,
     },
     () => {
+      let graffiti: ReturnType<typeof useGraffiti>;
+      let session: GraffitiSession;
+      let session1: GraffitiSession;
+      let session2: GraffitiSession;
+      beforeEach(async () => {
+        graffiti = useGraffiti();
+        session1 = await useSession1();
+        session = session1;
+        session2 = await useSession2();
+      });
+
       it("put, get, delete", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
         const value = {
           something: "hello, world~ c:",
         };
@@ -87,9 +96,6 @@ export const graffitiCRUDTests = (
       });
 
       it("get non-existant", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const putted = await graffiti.put(randomPutObject(), session);
         await expect(
           graffiti.get(
@@ -103,10 +109,6 @@ export const graffitiCRUDTests = (
       });
 
       it("put, get, delete with wrong actor", async () => {
-        const graffiti = useGraffiti();
-        const session1 = useSession1();
-        const session2 = useSession2();
-
         await expect(
           graffiti.put(
             { value: {}, channels: [], actor: session2.actor },
@@ -129,9 +131,6 @@ export const graffitiCRUDTests = (
       });
 
       it("put and get with schema", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const schema = {
           properties: {
             value: {
@@ -166,9 +165,6 @@ export const graffitiCRUDTests = (
       });
 
       it("put and get with invalid schema", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const putted = await graffiti.put({ value: {}, channels: [] }, session);
         await expect(
           graffiti.get(putted, {
@@ -183,9 +179,6 @@ export const graffitiCRUDTests = (
       });
 
       it("put and get with wrong schema", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const putted = await graffiti.put(
           {
             value: {
@@ -212,10 +205,6 @@ export const graffitiCRUDTests = (
       });
 
       it("put and get with empty access control", async () => {
-        const graffiti = useGraffiti();
-        const session1 = useSession1();
-        const session2 = useSession2();
-
         const value = {
           um: "hi",
         };
@@ -244,10 +233,6 @@ export const graffitiCRUDTests = (
       });
 
       it("put and get with specific access control", async () => {
-        const graffiti = useGraffiti();
-        const session1 = useSession1();
-        const session2 = useSession2();
-
         const value = {
           um: "hi",
         };
@@ -282,9 +267,6 @@ export const graffitiCRUDTests = (
       });
 
       it("patch value", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const value = {
           something: "hello, world~ c:",
         };
@@ -313,9 +295,6 @@ export const graffitiCRUDTests = (
       });
 
       it("patch deleted object", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const putted = await graffiti.put(randomPutObject(), session);
         const deleted = await graffiti.delete(putted, session);
         await expect(
@@ -324,9 +303,6 @@ export const graffitiCRUDTests = (
       });
 
       it("deep patch", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const value = {
           something: {
             another: {
@@ -365,9 +341,6 @@ export const graffitiCRUDTests = (
       });
 
       it("patch channels", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const channelsBefore = [randomString()];
         const channelsAfter = [randomString()];
 
@@ -387,9 +360,6 @@ export const graffitiCRUDTests = (
       });
 
       it("patch 'increment' with test", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const putted = await graffiti.put(
           {
             value: {
@@ -439,8 +409,6 @@ export const graffitiCRUDTests = (
       });
 
       it("invalid patch", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
         const object = randomPutObject();
         const putted = await graffiti.put(object, session);
 
@@ -459,8 +427,6 @@ export const graffitiCRUDTests = (
       });
 
       it("patch channels to be wrong", async () => {
-        const graffiti = useGraffiti();
-        const session = useSession1();
         const object = randomPutObject();
         object.allowed = [randomString()];
         const putted = await graffiti.put(object, session);
