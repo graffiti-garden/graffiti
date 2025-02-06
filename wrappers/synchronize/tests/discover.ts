@@ -1,4 +1,4 @@
-import { it, expect, describe, assert, beforeEach } from "vitest";
+import { it, expect, describe, assert, beforeAll } from "vitest";
 import type {
   Graffiti,
   GraffitiSession,
@@ -16,7 +16,7 @@ export const graffitiDiscoverTests = (
     let session: GraffitiSession;
     let session1: GraffitiSession;
     let session2: GraffitiSession;
-    beforeEach(async () => {
+    beforeAll(async () => {
       graffiti = useGraffiti();
       session1 = await useSession1();
       session = session1;
