@@ -8,11 +8,20 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.0.5/dist/plugin.js",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local@0.2.5/dist/index.browser.js"
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/plugin.js",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js"
                 }
             }
         </script>
+        <!-- <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "../../dist/plugin.js",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js"
+                }
+            }
+        </script> -->
         <style>
             .waving {
                 animation: wave 1s infinite;
@@ -39,7 +48,7 @@
     <body>
         <div id="app"></div>
         <template id="my-template">
-            <h1>My Graffiti App</h1>
+            <h1>My Graffiti App!</h1>
             <p>
                 This is an example of a
                 <a href="https://graffiti.garden">Graffiti</a> app built with
@@ -154,7 +163,10 @@
                     <input type="submit" value="Post" />
                 </form>
                 <ul>
-                    <li v-for="post in posts">
+                    <li
+                        v-for="post in posts"
+                        :key="$graffiti.objectToUri(post)"
+                    >
                         <div>{{ post.actor }}</div>
                         <div>
                             {{ new Date(post.lastModified).toLocaleString() }}
@@ -187,17 +199,19 @@
                                 :disabled="savingEdits"
                             />
                         </form>
-                        <menu
-                            v-if="post.actor === $graffitiSession.value?.actor"
-                        >
-                            <li>
+                        <menu>
+                            <li
+                                v-if="post.actor === $graffitiSession.value?.actor"
+                            >
                                 <button
                                     @click="$graffiti.delete(post, $graffitiSession.value)"
                                 >
                                     Delete
                                 </button>
                             </li>
-                            <li>
+                            <li
+                                v-if="post.actor === $graffitiSession.value?.actor"
+                            >
                                 <button
                                     @click="
                                         editText = post.value.content;
@@ -206,11 +220,102 @@
                                     Edit
                                 </button>
                             </li>
+                            <li v-if="$graffitiSession.value">
+                                <graffiti-discover
+                                    v-slot="{ results: bookmarks }"
+                                    :channels="[ $graffiti.objectToUri(post) ]"
+                                    :schema="{
+                                        properties: {
+                                            value: {
+                                                required: ['activity', 'target'],
+                                                properties: {
+                                                    activity: { enum: ['Bookmark'] },
+                                                    target: { enum : [ $graffiti.objectToUri(post) ] },
+                                                }
+                                            },
+                                            actor: {
+                                                enum: [ $graffitiSession.value.actor ]
+                                            }
+                                        }
+                                    }"
+                                >
+                                    <button
+                                        v-if="bookmarks.length"
+                                        @click="bookmarks.forEach(
+                                        bookmark => $graffiti.delete(
+                                            bookmark,
+                                            $graffitiSession.value))"
+                                    >
+                                        Bookmarked
+                                    </button>
+                                    <button
+                                        v-else
+                                        @click="$graffiti.put({
+                                    value: {
+                                        activity: 'Bookmark',
+                                        target: $graffiti.objectToUri(post),
+                                    },
+                                    channels: [ $graffiti.objectToUri(post), $graffitiSession.value.actor ],
+                                    allowed: [],
+                                }, $graffitiSession.value)"
+                                    >
+                                        Bookmark
+                                    </button>
+                                </graffiti-discover>
+                            </li>
                         </menu>
                     </li>
                 </ul>
             </graffiti-discover>
-            <!--vvvv End posts ^^^^-->
+            <!--^^^^ End posts ^^^^-->
+
+            <!--vvvv Begin bookmarks vvvv-->
+            <h2>Bookmarks</h2>
+            <graffiti-discover
+                v-if="$graffitiSession.value"
+                v-slot="{ results: bookmarks }"
+                :channels="[ $graffitiSession.value?.actor ]"
+                :schema="{
+                    properties: {
+                        value: {
+                            required: ['activity', 'target'],
+                            properties: {
+                                activity: { enum: ['Bookmark'] },
+                                target: { type: 'string' },
+                            }
+                        },
+                        actor: {
+                            enum: [ $graffitiSession.value.actor ]
+                        }
+                    }
+                }"
+            >
+                <ul>
+                    <template
+                        v-for="bookmark of bookmarks"
+                        :key="$graffiti.objectToUri(bookmark)"
+                    >
+                        <graffiti-get
+                            v-slot="{ result: post }"
+                            :location-or-uri="bookmark.value.target"
+                            :schema="{
+                                    properties: {
+                                        value: {
+                                            required: ['content'],
+                                            properties: {
+                                                content: { type: 'string' }
+                                            }
+                                        }
+                                    }
+                                }"
+                        >
+                            <li v-if="post">{{ post.value.content }}</li>
+                            <li v-else-if="post===undefined">Loading...</li>
+                        </graffiti-get>
+                    </template>
+                </ul>
+            </graffiti-discover>
+            <!--^^^^ End bookmarks ^^^^-->
         </template>
         <script type="module">
             import { createApp } from "vue";
