@@ -62,6 +62,7 @@ export class ArrayReducer<Schema extends JSONSchema4>
     this.resultsRaw.clear();
     this.results.value = [];
     clearTimeout(this.batchFlattenTimer);
+    this.batchFlattenTimer = undefined;
   }
 
   flattenResults() {

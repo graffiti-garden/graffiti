@@ -57,6 +57,8 @@ export class StreamPoller<Schema extends JSONSchema4>
 
   clear() {
     this.bookmark = undefined;
+    this.iterator?.return({ tombstoneRetention: 0 });
+    this.iterator = undefined;
   }
 
   poll: Poller<Schema>["poll"] = async (onObject) => {
@@ -85,9 +87,7 @@ export class StreamPoller<Schema extends JSONSchema4>
       return;
     }
 
-    // Kill the previous iterator if its
-    // still running and claim its spot
-    this.iterator?.return({ tombstoneRetention: 0 });
+    // Claim the spot as the current iterator
     this.iterator = myIterator;
 
     // Keep track of the latest lastModified value
