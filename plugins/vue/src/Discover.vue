@@ -6,7 +6,7 @@ import { useGraffitiDiscover } from "./composables";
 const props = defineProps<{
     channels: string[];
     schema: Schema;
-    session?: GraffitiSession;
+    session?: GraffitiSession | null;
 }>();
 
 const { results, poll, isPolling } = useGraffitiDiscover<Schema>(

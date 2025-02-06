@@ -9,5 +9,5 @@
     "verbatimModuleSyntax": true,
     "plugins": [{ "name": "@vue/typescript-plugin" }]
   },
-  "include": ["src"]
+  "include": ["."]
 }
