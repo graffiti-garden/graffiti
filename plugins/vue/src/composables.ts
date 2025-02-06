@@ -40,7 +40,12 @@ function makeComposable<Schema extends JSONSchema4>(
   const isPolling = ref(false);
   watch(
     toWatch,
-    async () => {
+    async (newValue, oldValue) => {
+      // Catch unnecessary updates
+      if (JSON.stringify(newValue) === JSON.stringify(oldValue)) {
+        return;
+      }
+
       synchronizeIterator?.return();
       reducer.clear();
       poller.clear();
