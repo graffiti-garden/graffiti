@@ -13,15 +13,6 @@
                 }
             }
         </script>
-        <!-- <script type="importmap">
-            {
-                "imports": {
-                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "../../dist/plugin.js",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js"
-                }
-            }
-        </script> -->
         <style>
             .waving {
                 animation: wave 1s infinite;
@@ -138,6 +129,16 @@
             <!--^^^^ End waves ^^^^-->
 
             <!--vvvv Begin posts vvvv-->
+            <form
+                @submit.prevent="$graffiti.put({
+                    value: { content },
+                    channels: [ channel ]
+                }, $graffitiSession.value)"
+            >
+                <label for="post">Post:</label>
+                <input id="post" v-model="content" />
+                <input type="submit" value="Post" />
+            </form>
             <graffiti-discover
                 v-slot="{ results: posts, isPolling }"
                 :channels="[ channel ]"
@@ -152,16 +153,6 @@
                     }
                 }"
             >
-                <form
-                    @submit.prevent="$graffiti.put({
-                        value: { content },
-                        channels: [ channel ]
-                    }, $graffitiSession.value)"
-                >
-                    <label for="post">Post:</label>
-                    <input id="post" v-model="content" />
-                    <input type="submit" value="Post" />
-                </form>
                 <ul>
                     <li
                         v-for="post in posts"

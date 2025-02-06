@@ -145,6 +145,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                         new Date(b.lastModified).getTime() -
                         new Date(a.lastModified).getTime(),
                 )"
+                :key="$graffiti.objectToUri(result)"
                 class="post"
             >
                 <div class="actor">
