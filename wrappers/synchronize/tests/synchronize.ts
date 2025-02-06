@@ -1,16 +1,26 @@
-import { it, expect, describe, assert } from "vitest";
+import { it, expect, describe, assert, beforeEach } from "vitest";
 import type { GraffitiFactory, GraffitiSession } from "@graffiti-garden/api";
 import { randomPutObject, randomString } from "./utils";
 
 export const graffitiSynchronizeTests = (
   useGraffiti: GraffitiFactory,
-  useSession1: () => GraffitiSession,
-  useSession2: () => GraffitiSession,
+  useSession1: () => GraffitiSession | Promise<GraffitiSession>,
+  useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
   describe.concurrent("synchronizeDiscover", () => {
+    let graffiti: ReturnType<typeof useGraffiti>;
+    let session: GraffitiSession;
+    let session1: GraffitiSession;
+    let session2: GraffitiSession;
+    beforeEach(async () => {
+      graffiti = useGraffiti();
+      session1 = await useSession1();
+      session = session1;
+      session2 = await useSession2();
+    });
+
     it("get", async () => {
       const graffiti1 = useGraffiti();
-      const session = useSession1();
 
       const object = randomPutObject();
       const channels = object.channels.slice(1);
@@ -31,9 +41,6 @@ export const graffitiSynchronizeTests = (
     });
 
     it("put", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const beforeChannel = randomString();
       const afterChannel = randomString();
       const sharedChannel = randomString();
@@ -97,9 +104,6 @@ export const graffitiSynchronizeTests = (
     });
 
     it("patch", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const beforeChannel = randomString();
       const afterChannel = randomString();
       const sharedChannel = randomString();
@@ -178,9 +182,6 @@ export const graffitiSynchronizeTests = (
     });
 
     it("delete", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const channels = [randomString(), randomString(), randomString()];
 
       const oldValue = { hello: "world" };
@@ -209,10 +210,6 @@ export const graffitiSynchronizeTests = (
     });
 
     it("not allowed", async () => {
-      const graffiti = useGraffiti();
-      const session1 = useSession1();
-      const session2 = useSession2();
-
       const allChannels = [randomString(), randomString(), randomString()];
       const channels = allChannels.slice(1);
 
@@ -261,11 +258,19 @@ export const graffitiSynchronizeTests = (
     });
   });
 
-  describe("synchronizeGet", () => {
-    it("replace, delete", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
+  describe.concurrent("synchronizeGet", () => {
+    let graffiti: ReturnType<typeof useGraffiti>;
+    let session: GraffitiSession;
+    let session1: GraffitiSession;
+    let session2: GraffitiSession;
+    beforeEach(async () => {
+      graffiti = useGraffiti();
+      session1 = await useSession1();
+      session = session1;
+      session2 = await useSession2();
+    });
 
+    it("replace, delete", async () => {
       const object = randomPutObject();
       const putted = await graffiti.put(object, session);
 
@@ -310,10 +315,6 @@ export const graffitiSynchronizeTests = (
     });
 
     it("not allowed", async () => {
-      const graffiti = useGraffiti();
-      const session1 = useSession1();
-      const session2 = useSession2();
-
       const object = randomPutObject();
       const putted = await graffiti.put(object, session1);
 

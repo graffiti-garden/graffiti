@@ -1,4 +1,4 @@
-import { it, expect, describe, assert } from "vitest";
+import { it, expect, describe, assert, beforeEach } from "vitest";
 import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
 import { randomPutObject, randomString } from "./utils";
 
@@ -7,14 +7,22 @@ export const graffitiOrphanTests = (
     Graffiti,
     "recoverOrphans" | "put" | "delete" | "patch"
   >,
-  useSession1: () => GraffitiSession,
-  useSession2: () => GraffitiSession,
+  useSession1: () => GraffitiSession | Promise<GraffitiSession>,
+  useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
-  describe("recoverOrphans", () => {
-    it("list orphans", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
+  describe("recoverOrphans", { timeout: 20000 }, () => {
+    let graffiti: ReturnType<typeof useGraffiti>;
+    let session: GraffitiSession;
+    let session1: GraffitiSession;
+    let session2: GraffitiSession;
+    beforeEach(async () => {
+      graffiti = useGraffiti();
+      session1 = await useSession1();
+      session = session1;
+      session2 = await useSession2();
+    });
 
+    it("list orphans", async () => {
       const existingOrphans: string[] = [];
       const orphanIterator1 = graffiti.recoverOrphans({}, session);
       for await (const orphan of orphanIterator1) {
@@ -39,9 +47,6 @@ export const graffitiOrphanTests = (
     });
 
     it("replaced orphan, no longer", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const object = randomPutObject();
       object.channels = [];
       const putOrphan = await graffiti.put(object, session);
