@@ -82,6 +82,8 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
     app.provide(graffitiSessionInjectKey, graffitiSession);
 
     app.component("GraffitiDiscover", Discover);
+    app.component("GraffitiGet", Get);
+    app.component("GraffitiRecoverOrphans", RecoverOrphans);
     app.config.globalProperties.$graffiti = graffiti;
     app.config.globalProperties.$graffitiSession = graffitiSession;
   },
