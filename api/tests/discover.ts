@@ -1,4 +1,4 @@
-import { it, expect, describe, assert } from "vitest";
+import { it, expect, describe, assert, beforeEach } from "vitest";
 import type {
   Graffiti,
   GraffitiSession,
@@ -8,19 +8,27 @@ import { randomString, nextStreamValue, randomPutObject } from "./utils";
 
 export const graffitiDiscoverTests = (
   useGraffiti: () => Pick<Graffiti, "discover" | "put" | "delete" | "patch">,
-  useSession1: () => GraffitiSession,
-  useSession2: () => GraffitiSession,
+  useSession1: () => GraffitiSession | Promise<GraffitiSession>,
+  useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
   describe.concurrent("discover", { timeout: 20000 }, () => {
+    let graffiti: ReturnType<typeof useGraffiti>;
+    let session: GraffitiSession;
+    let session1: GraffitiSession;
+    let session2: GraffitiSession;
+    beforeEach(async () => {
+      graffiti = useGraffiti();
+      session1 = await useSession1();
+      session = session1;
+      session2 = await useSession2();
+    });
+
     it("discover nothing", async () => {
-      const graffiti = useGraffiti();
       const iterator = graffiti.discover([], {});
       expect(await iterator.next()).toHaveProperty("done", true);
     });
 
     it("discover single", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
       const object = randomPutObject();
 
       const putted = await graffiti.put(object, session);
@@ -39,8 +47,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover wrong channel", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
       const object = randomPutObject();
       await graffiti.put(object, session);
       const iterator = graffiti.discover([randomString()], {});
@@ -48,10 +54,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover not allowed", async () => {
-      const graffiti = useGraffiti();
-      const session1 = useSession1();
-      const session2 = useSession2();
-
       const object = randomPutObject();
       object.allowed = [randomString(), randomString()];
       const putted = await graffiti.put(object, session1);
@@ -73,10 +75,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover allowed", async () => {
-      const graffiti = useGraffiti();
-      const session1 = useSession1();
-      const session2 = useSession2();
-
       const object = randomPutObject();
       object.allowed = [randomString(), session2.actor, randomString()];
       const putted = await graffiti.put(object, session1);
@@ -93,10 +91,6 @@ export const graffitiDiscoverTests = (
 
     for (const prop of ["name", "actor", "lastModified"] as const) {
       it(`discover for ${prop}`, async () => {
-        const graffiti = useGraffiti();
-        const session1 = useSession1();
-        const session2 = useSession2();
-
         const object1 = randomPutObject();
         const putted1 = await graffiti.put(object1, session1);
 
@@ -123,9 +117,6 @@ export const graffitiDiscoverTests = (
     }
 
     it("discover with lastModified range", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const object = randomPutObject();
       const putted1 = await graffiti.put(object, session);
       // Make sure the lastModified is different
@@ -219,10 +210,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover schema allowed, as and not as owner", async () => {
-      const graffiti = useGraffiti();
-      const session1 = useSession1();
-      const session2 = useSession2();
-
       const object = randomPutObject();
       object.allowed = [randomString(), session2.actor, randomString()];
       await graffiti.put(object, session1);
@@ -315,10 +302,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover schema channels, as and not as owner", async () => {
-      const graffiti = useGraffiti();
-      const session1 = useSession1();
-      const session2 = useSession2();
-
       const object = randomPutObject();
       object.channels = [randomString(), randomString(), randomString()];
       await graffiti.put(object, session1);
@@ -411,9 +394,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover query for empty allowed", async () => {
-      const graffiti = useGraffiti();
-      const session1 = useSession1();
-
       const publicO = randomPutObject();
 
       const publicSchema = {
@@ -445,9 +425,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover query for values", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const object1 = randomPutObject();
       object1.value = { test: randomString() };
       await graffiti.put(object1, session);
@@ -486,9 +463,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover for deleted content", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const object = randomPutObject();
       const putted = await graffiti.put(object, session);
       const deleted = await graffiti.delete(putted, session);
@@ -506,9 +480,6 @@ export const graffitiDiscoverTests = (
     it("discover for replaced channels", async () => {
       // Do this a bunch to check for concurrency issues
       for (let i = 0; i < 10; i++) {
-        const graffiti = useGraffiti();
-        const session = useSession1();
-
         const object1 = randomPutObject();
         const putted = await graffiti.put(object1, session);
         const object2 = randomPutObject();
@@ -548,8 +519,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover for patched allowed", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
       const object = randomPutObject();
       const putted = await graffiti.put(object, session);
       await graffiti.patch(
@@ -569,9 +538,6 @@ export const graffitiDiscoverTests = (
     });
 
     it("put concurrently and discover one", async () => {
-      const graffiti = useGraffiti();
-      const session = useSession1();
-
       const object = randomPutObject();
       object.name = randomString();
 
