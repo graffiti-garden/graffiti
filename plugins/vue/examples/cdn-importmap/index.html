@@ -80,10 +80,15 @@
             </p>
             <!--^^^^ End login ^^^^-->
 
+            <p>
+                <label for="channel">Channel for posts and waves: </label>
+                <input id="channel" v-model="channel" />
+            </p>
+
             <!--vvvv Begin waves vvvv-->
             <graffiti-discover
                 v-slot="{ results: waves, isPolling }"
-                :channels="[ channel ]"
+                :channels="[channel]"
                 :schema="{
                     properties: {
                         value: {
@@ -123,17 +128,20 @@
 
                 <p v-if="isPolling">Loading...</p>
                 <p v-else>
-                    {{ waves.length }} people have waved from this page~
+                    {{ waves.length }} people have waved from this channel~
                 </p>
             </graffiti-discover>
             <!--^^^^ End waves ^^^^-->
 
             <!--vvvv Begin posts vvvv-->
             <form
-                @submit.prevent="$graffiti.put({
-                    value: { content },
-                    channels: [ channel ]
-                }, $graffitiSession.value)"
+                @submit.prevent="
+                    content.length &&
+                    $graffiti.put({
+                        value: { content },
+                        channels: [ channel ]
+                    }, $graffitiSession.value);
+                    content='';"
             >
                 <label for="post">Post:</label>
                 <input id="post" v-model="content" />
@@ -233,22 +241,25 @@
                                     <button
                                         v-if="bookmarks.length"
                                         @click="bookmarks.forEach(
-                                        bookmark => $graffiti.delete(
-                                            bookmark,
-                                            $graffitiSession.value))"
+                                            bookmark => $graffiti.delete(
+                                                bookmark,
+                                                $graffitiSession.value))"
                                     >
                                         Bookmarked
                                     </button>
                                     <button
                                         v-else
                                         @click="$graffiti.put({
-                                    value: {
-                                        activity: 'Bookmark',
-                                        target: $graffiti.objectToUri(post),
-                                    },
-                                    channels: [ $graffiti.objectToUri(post), $graffitiSession.value.actor ],
-                                    allowed: [],
-                                }, $graffitiSession.value)"
+                                            value: {
+                                                activity: 'Bookmark',
+                                                target: $graffiti.objectToUri(post),
+                                            },
+                                            channels: [
+                                                $graffiti.objectToUri(post),
+                                                $graffitiSession.value.actor,
+                                            ],
+                                            allowed: [],
+                                        }, $graffitiSession.value)"
                                     >
                                         Bookmark
                                     </button>
@@ -261,7 +272,7 @@
             <!--^^^^ End posts ^^^^-->
 
             <!--vvvv Begin bookmarks vvvv-->
-            <h2>Bookmarks</h2>
+            <h2>My Bookmarks</h2>
             <graffiti-discover
                 v-if="$graffitiSession.value"
                 v-slot="{ results: bookmarks }"
@@ -318,7 +329,7 @@
                 // Declare reactive data
                 data() {
                     return {
-                        channel: window.location.href,
+                        channel: window.location.origin,
                         content: "",
                         editing: "",
                         editText: "",
