@@ -1,8 +1,7 @@
 {
   "name": "@graffiti-garden/solid-oidc-session-manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An implementation of the Graffiti API's login functionality using Solid OIDC",
-  "type": "module",
   "types": "./dist/browser/index.d.ts",
   "browser": "./dist/browser/esm/index.js",
   "main": "./dist/node/cjs/index.js",
@@ -29,7 +28,7 @@
   ],
   "scripts": {
     "build": "rm -rf dist && npm run build:js && npm run build:types",
-    "build:js": "node esbuild.config.js",
+    "build:js": "tsx esbuild.config.mts",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "prepublishOnly": "npm update && npm run build"
   },
@@ -43,12 +42,13 @@
     "url": "https://github.com/graffiti-garden/solid-oidc-session-manager/issues"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.2.2",
-    "@graffiti-garden/implementation-local": "^0.2.6",
-    "@inrupt/solid-client-authn-browser": "^2.3.0",
-    "typescript": "^5.7.3"
+    "@graffiti-garden/api": "^0.2.8",
+    "@graffiti-garden/implementation-local": "^0.2.10",
+    "@inrupt/solid-client-authn-browser": "^2.3.0"
   },
   "devDependencies": {
-    "esbuild": "^0.24.2"
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
   }
 }
