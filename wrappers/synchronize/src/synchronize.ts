@@ -16,15 +16,15 @@ import {
   unpackLocationOrUri,
 } from "./utilities.js";
 
-type SynchronizeEvent = CustomEvent<{
-  oldObject: GraffitiObjectBase;
-  newObject?: GraffitiObjectBase;
-}>;
-
 type GraffitiDatabaseMethods = Pick<
   Graffiti,
   "get" | "put" | "patch" | "delete" | "discover" | "recoverOrphans"
 >;
+
+type Callback = (
+  oldObject: GraffitiObjectBase,
+  newObject?: GraffitiObjectBase,
+) => void;
 
 /**
  * Wraps a partial implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
@@ -47,9 +47,9 @@ export class GraffitiSynchronize
       | "synchronizeRecoverOrphans"
     >
 {
-  protected readonly synchronizeEvents = new EventTarget();
   protected readonly ajv: Ajv;
   protected readonly graffiti: GraffitiDatabaseMethods;
+  protected readonly callbacks = new Set<Callback>();
 
   // Pass in the ajv instance
   // and database methods to wrap
@@ -58,17 +58,20 @@ export class GraffitiSynchronize
     this.graffiti = graffiti;
   }
 
-  protected synchronizeDispatch(
+  protected async synchronizeDispatch(
     oldObject: GraffitiObjectBase,
     newObject?: GraffitiObjectBase,
   ) {
-    const event: SynchronizeEvent = new CustomEvent("change", {
-      detail: {
-        oldObject,
-        newObject,
-      },
-    });
-    this.synchronizeEvents.dispatchEvent(event);
+    for (const callback of this.callbacks) {
+      callback(oldObject, newObject);
+    }
+    // No idea why this works...
+    // You can't await push in the callback
+    // below, because the await will only resolve
+    // after a subsequent .next() call
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
   }
 
   get: Graffiti["get"] = async (...args) => {
@@ -87,7 +90,7 @@ export class GraffitiSynchronize
       allowed: partialObject.allowed,
       tombstone: false,
     };
-    this.synchronizeDispatch(oldObject, newObject);
+    await this.synchronizeDispatch(oldObject, newObject);
     return oldObject;
   };
 
@@ -98,13 +101,13 @@ export class GraffitiSynchronize
     for (const prop of ["value", "channels", "allowed"] as const) {
       applyGraffitiPatch(applyPatch, prop, args[0], newObject);
     }
-    this.synchronizeDispatch(oldObject, newObject);
+    await this.synchronizeDispatch(oldObject, newObject);
     return oldObject;
   };
 
   delete: Graffiti["delete"] = async (...args) => {
     const oldObject = await this.graffiti.delete(...args);
-    this.synchronizeDispatch(oldObject);
+    await this.synchronizeDispatch(oldObject);
     return oldObject;
   };
 
@@ -147,10 +150,7 @@ export class GraffitiSynchronize
     const repeater: ReturnType<
       typeof Graffiti.prototype.synchronizeDiscover<typeof schema>
     > = new Repeater(async (push, stop) => {
-      const callback = (event: SynchronizeEvent) => {
-        const { oldObject: oldObjectRaw, newObject: newObjectRaw } =
-          event.detail;
-
+      const callback: Callback = async (oldObjectRaw, newObjectRaw) => {
         for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
           if (
             objectRaw &&
@@ -167,15 +167,9 @@ export class GraffitiSynchronize
         }
       };
 
-      this.synchronizeEvents.addEventListener(
-        "change",
-        callback as EventListener,
-      );
+      this.callbacks.add(callback);
       await stop;
-      this.synchronizeEvents.removeEventListener(
-        "change",
-        callback as EventListener,
-      );
+      this.callbacks.delete(callback);
     });
 
     return repeater;

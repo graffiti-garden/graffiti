@@ -8,7 +8,6 @@ await esbuild.build({
   sourcemap: true,
   minify: true,
   format: "esm",
-  target: "esnext",
   outfile: "dist/index.browser.js",
   plugins: [polyfillNode()],
 });
@@ -20,7 +19,6 @@ for (const format of ["esm", "cjs"] as const) {
     sourcemap: true,
     minify: true,
     format,
-    target: "esnext",
     outdir: `dist/${format}`,
   });
 }
