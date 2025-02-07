@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-vue",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Vue.js wrapper for the Graffiti API",
   "type": "module",
   "types": "./dist/plugin.d.ts",
@@ -41,10 +41,10 @@
     "url": "https://github.com/graffiti-garden/wrapper-vue/issues"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.2.8"
+    "@graffiti-garden/api": "^0.2.11"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-local": "^0.2.10",
+    "@graffiti-garden/implementation-local": "^0.2.12",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/typescript-plugin": "^2.2.0",
     "rollup-plugin-visualizer": "^5.14.0",
