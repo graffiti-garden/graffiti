@@ -51,7 +51,6 @@ export class SingletonReducer<Schema extends JSONSchema4>
 export class ArrayReducer<Schema extends JSONSchema4>
   implements Reducer<Schema>
 {
-  REFRESH_RATE = 100; // milliseconds
   readonly results = ref<(GraffitiObject<Schema> & { tombstone: false })[]>([]);
   readonly resultsRaw = new Map<string, GraffitiObject<Schema>>();
   batchFlattenTimer: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -92,7 +91,7 @@ export class ArrayReducer<Schema extends JSONSchema4>
       this.batchFlattenTimer = setTimeout(() => {
         this.flattenResults();
         this.batchFlattenTimer = undefined;
-      }, this.REFRESH_RATE);
+      }, 0);
     }
   }
 }
