@@ -1,7 +1,6 @@
 import { resolve } from "path";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
-import { visualizer } from "rollup-plugin-visualizer";
 import dts from "vite-plugin-dts";
 
 export default defineConfig({
@@ -22,7 +21,6 @@ export default defineConfig({
           vue: "Vue",
         },
       },
-      plugins: [visualizer({ filename: "dist/stats.html" })],
     },
   },
 });

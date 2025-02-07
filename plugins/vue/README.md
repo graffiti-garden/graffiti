@@ -40,7 +40,7 @@ Add an import map the the `<head>` of your HTML file:
             "imports": {
                 "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.js",
                 "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js",
-                "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/plugin.js"
+                "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/plugin.mjs"
             }
         }
     </script>
