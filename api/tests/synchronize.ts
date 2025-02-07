@@ -209,6 +209,55 @@ export const graffitiSynchronizeTests = (
       );
     });
 
+    it("synchronize happens before putters", async () => {
+      const object = randomPutObject();
+      const iterator = graffiti.synchronizeDiscover(object.channels, {});
+
+      for (let i = 0; i < 10; i++) {
+        const next = iterator.next();
+        const putted = graffiti.put(object, session);
+
+        let first: undefined | string = undefined;
+        next.then(() => {
+          if (!first) first = "synchronize";
+        });
+        putted.then(() => {
+          if (!first) first = "put";
+        });
+        await putted;
+
+        expect(first).toBe("synchronize");
+
+        const patched = graffiti.patch({}, await putted, session);
+        const next2 = iterator.next();
+
+        let second: undefined | string = undefined;
+        next2.then(() => {
+          if (!second) second = "synchronize";
+        });
+        patched.then(() => {
+          if (!second) second = "patch";
+        });
+        await patched;
+
+        expect(second).toBe("synchronize");
+
+        const deleted = graffiti.delete(await putted, session);
+        const next3 = iterator.next();
+
+        let third: undefined | string = undefined;
+        next3.then(() => {
+          if (!third) third = "synchronize";
+        });
+        deleted.then(() => {
+          if (!third) third = "delete";
+        });
+        await deleted;
+
+        expect(third).toBe("synchronize");
+      }
+    });
+
     it("not allowed", async () => {
       const allChannels = [randomString(), randomString(), randomString()];
       const channels = allChannels.slice(1);
