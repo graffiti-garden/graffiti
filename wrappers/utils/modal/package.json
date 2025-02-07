@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/solid-oidc-session-manager",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "An implementation of the Graffiti API's login functionality using Solid OIDC",
   "types": "./dist/browser/index.d.ts",
   "browser": "./dist/browser/esm/index.js",
