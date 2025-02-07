@@ -61,17 +61,34 @@ export class GraffitiSynchronize
   protected async synchronizeDispatch(
     oldObject: GraffitiObjectBase,
     newObject?: GraffitiObjectBase,
+    waitForListeners = false,
   ) {
     for (const callback of this.callbacks) {
       callback(oldObject, newObject);
     }
-    // No idea why this works...
-    // You can't await push in the callback
-    // below, because the await will only resolve
-    // after a subsequent .next() call
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    if (waitForListeners) {
+      // Wait for the listeners to receive
+      // their objects, before returning the operation
+      // that triggered them.
+      //
+      // This is important for mutators (put, patch, delete)
+      // to ensure the application state has been updated
+      // everywhere before returning, giving consistent
+      // feedback to the user that the operation has completed.
+      //
+      // The opposite is true for accessors (get, discover, recoverOrphans),
+      // where it is a weird user experience to call `get`
+      // in one place and have the application update
+      // somewhere else first. It is also less efficient.
+      //
+      // The hack is simply to await one "macro task cycle".
+      // We need to wait for this cycle rather than using
+      // `await push` in the callback, because it turns out
+      // that `await push` won't resolve until the following
+      // .next() call of the iterator, so if only
+      // one .next() is called, this dispatch will hang.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
 
   get: Graffiti["get"] = async (...args) => {
@@ -90,7 +107,7 @@ export class GraffitiSynchronize
       allowed: partialObject.allowed,
       tombstone: false,
     };
-    await this.synchronizeDispatch(oldObject, newObject);
+    await this.synchronizeDispatch(oldObject, newObject, true);
     return oldObject;
   };
 
@@ -101,13 +118,13 @@ export class GraffitiSynchronize
     for (const prop of ["value", "channels", "allowed"] as const) {
       applyGraffitiPatch(applyPatch, prop, args[0], newObject);
     }
-    await this.synchronizeDispatch(oldObject, newObject);
+    await this.synchronizeDispatch(oldObject, newObject, true);
     return oldObject;
   };
 
   delete: Graffiti["delete"] = async (...args) => {
     const oldObject = await this.graffiti.delete(...args);
-    await this.synchronizeDispatch(oldObject);
+    await this.synchronizeDispatch(oldObject, undefined, true);
     return oldObject;
   };
 
@@ -150,7 +167,7 @@ export class GraffitiSynchronize
     const repeater: ReturnType<
       typeof Graffiti.prototype.synchronizeDiscover<typeof schema>
     > = new Repeater(async (push, stop) => {
-      const callback: Callback = async (oldObjectRaw, newObjectRaw) => {
+      const callback: Callback = (oldObjectRaw, newObjectRaw) => {
         for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
           if (
             objectRaw &&
