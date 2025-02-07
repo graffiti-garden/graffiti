@@ -35,13 +35,8 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
   install(app: App, options: GraffitiPluginOptions) {
     const graffiti = options.useGraffiti();
     const graffitiSession = ref<GraffitiSession | undefined | null>(undefined);
-    graffiti.sessionEvents.addEventListener("initialized", (evt) => {
+    graffiti.sessionEvents.addEventListener("initialized", async (evt) => {
       const detail = (evt as GraffitiSessionInitializedEvent).detail;
-
-      // Set the session to "null" if the user is not logged in
-      if (!graffitiSession.value) {
-        graffitiSession.value = null;
-      }
 
       if (detail && detail.error) {
         console.error(detail.error);
@@ -54,8 +49,13 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
           | undefined;
         if (router) {
           const url = new URL(detail.href);
-          router.replace(url.pathname + url.search + url.hash);
+          await router.replace(url.pathname + url.search + url.hash);
         }
+      }
+
+      // Set the session to "null" if the user is not logged in
+      if (!graffitiSession.value) {
+        graffitiSession.value = null;
       }
     });
     graffiti.sessionEvents.addEventListener("login", (evt) => {
