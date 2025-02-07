@@ -16,7 +16,16 @@ import type { Router } from "vue-router";
 
 declare module "vue" {
   export interface ComponentCustomProperties {
+    /**
+     * Global {@link Graffiti} instance passed into the plugin.
+     */
     $graffiti: Graffiti;
+    /**
+     * Reactive global {@link GraffitiSession} instance.
+     * While the application is loading and restoring the session,
+     * the value will be `undefined`. If the user is not logged in,
+     * the value will be `null`.
+     */
     $graffitiSession: Ref<GraffitiSession | undefined | null>;
   }
 
@@ -27,10 +36,22 @@ declare module "vue" {
   }
 }
 
+/**
+ * Options for the {@link GraffitiPlugin}.
+ */
 export interface GraffitiPluginOptions {
+  /**
+   * A factory contructor for a {@link Graffiti} instance
+   * that will be globally available through `$graffiti` and
+   * `useGraffiti`.
+   */
   useGraffiti: GraffitiFactory;
 }
 
+/**
+ * A Vue plugin that exposes the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+ * with some additional reactive functionality.
+ */
 export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
   install(app: App, options: GraffitiPluginOptions) {
     const graffiti = options.useGraffiti();
