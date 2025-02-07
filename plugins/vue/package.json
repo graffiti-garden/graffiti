@@ -1,20 +1,20 @@
 {
   "name": "@graffiti-garden/wrapper-vue",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Vue.js wrapper for the Graffiti API",
   "types": "./dist/plugin.d.ts",
-  "module": "./dist/plugin.js",
-  "main": "./dist/plugin.cjs",
-  "browser": "./dist/plugin.js",
+  "module": "./dist/plugin.mjs",
+  "main": "./dist/plugin.js",
+  "browser": "./dist/plugin.mjs",
   "exports": {
     ".": {
       "import": {
         "types": "./dist/plugin.d.ts",
-        "default": "./dist/plugin.js"
+        "default": "./dist/plugin.mjs"
       },
       "require": {
         "types": "./dist/plugin.d.ts",
-        "default": "./dist/plugin.cjs"
+        "default": "./dist/plugin.js"
       }
     }
   },
@@ -44,9 +44,9 @@
   },
   "devDependencies": {
     "@graffiti-garden/implementation-local": "^0.2.12",
+    "@types/node": "^22.13.1",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/typescript-plugin": "^2.2.0",
-    "rollup-plugin-visualizer": "^5.14.0",
     "vite": "^5.4.14",
     "vite-plugin-dts": "^4.5.0",
     "vite-plugin-node-polyfills": "^0.23.0",
