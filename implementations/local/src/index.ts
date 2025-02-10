@@ -5,7 +5,6 @@ import {
   GraffitiLocalDatabase,
   type GraffitiLocalOptions,
 } from "./database.js";
-import { GraffitiSynchronize } from "./synchronize.js";
 import { locationToUri, uriToLocation } from "./utilities.js";
 
 export type { GraffitiLocalOptions };
@@ -21,49 +20,33 @@ export class GraffitiLocal extends Graffiti {
   locationToUri = locationToUri;
   uriToLocation = uriToLocation;
 
-  login: Graffiti["login"];
-  logout: Graffiti["logout"];
-  sessionEvents: Graffiti["sessionEvents"];
+  protected sessionManagerLocal = new GraffitiLocalSessionManager();
+  login = this.sessionManagerLocal.login.bind(this.sessionManagerLocal);
+  logout = this.sessionManagerLocal.logout.bind(this.sessionManagerLocal);
+  sessionEvents = this.sessionManagerLocal.sessionEvents;
+
   put: Graffiti["put"];
   get: Graffiti["get"];
   patch: Graffiti["patch"];
   delete: Graffiti["delete"];
   discover: Graffiti["discover"];
   recoverOrphans: Graffiti["recoverOrphans"];
-  synchronizeGet: Graffiti["synchronizeGet"];
-  synchronizeDiscover: Graffiti["synchronizeDiscover"];
-  synchronizeRecoverOrphans: Graffiti["synchronizeRecoverOrphans"];
   channelStats: Graffiti["channelStats"];
 
   constructor(options?: GraffitiLocalOptions) {
     super();
 
-    const sessionManagerLocal = new GraffitiLocalSessionManager();
-    this.login = sessionManagerLocal.login.bind(sessionManagerLocal);
-    this.logout = sessionManagerLocal.logout.bind(sessionManagerLocal);
-    this.sessionEvents = sessionManagerLocal.sessionEvents;
-
     const ajv = new Ajv({ strict: false });
     const graffitiPouchDbBase = new GraffitiLocalDatabase(options, ajv);
-    const graffitiSynchronize = new GraffitiSynchronize(
-      graffitiPouchDbBase,
-      ajv,
-    );
 
-    this.put = graffitiSynchronize.put.bind(graffitiSynchronize);
-    this.get = graffitiSynchronize.get.bind(graffitiSynchronize);
-    this.patch = graffitiSynchronize.patch.bind(graffitiSynchronize);
-    this.delete = graffitiSynchronize.delete.bind(graffitiSynchronize);
-    this.discover = graffitiSynchronize.discover.bind(graffitiSynchronize);
+    this.put = graffitiPouchDbBase.put.bind(graffitiPouchDbBase);
+    this.get = graffitiPouchDbBase.get.bind(graffitiPouchDbBase);
+    this.patch = graffitiPouchDbBase.patch.bind(graffitiPouchDbBase);
+    this.delete = graffitiPouchDbBase.delete.bind(graffitiPouchDbBase);
+    this.discover = graffitiPouchDbBase.discover.bind(graffitiPouchDbBase);
     this.recoverOrphans =
-      graffitiSynchronize.recoverOrphans.bind(graffitiPouchDbBase);
+      graffitiPouchDbBase.recoverOrphans.bind(graffitiPouchDbBase);
     this.channelStats =
       graffitiPouchDbBase.channelStats.bind(graffitiPouchDbBase);
-    this.synchronizeDiscover =
-      graffitiSynchronize.synchronizeDiscover.bind(graffitiSynchronize);
-    this.synchronizeGet =
-      graffitiSynchronize.synchronizeGet.bind(graffitiSynchronize);
-    this.synchronizeRecoverOrphans =
-      graffitiSynchronize.synchronizeRecoverOrphans.bind(graffitiSynchronize);
   }
 }

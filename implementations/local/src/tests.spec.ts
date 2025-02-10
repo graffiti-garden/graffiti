@@ -1,7 +1,6 @@
 import {
   graffitiLocationTests,
   graffitiCRUDTests,
-  graffitiSynchronizeTests,
   graffitiDiscoverTests,
   graffitiOrphanTests,
   graffitiChannelStatsTests,
@@ -14,7 +13,6 @@ const useSession2 = () => ({ actor: "someoneelse" });
 
 graffitiLocationTests(useGraffiti);
 graffitiCRUDTests(useGraffiti, useSession1, useSession2);
-graffitiSynchronizeTests(useGraffiti, useSession1, useSession2);
 graffitiDiscoverTests(useGraffiti, useSession1, useSession2);
 graffitiOrphanTests(useGraffiti, useSession1, useSession2);
 graffitiChannelStatsTests(useGraffiti, useSession1, useSession2);
