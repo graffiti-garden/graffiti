@@ -5,6 +5,6 @@ import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 
 createApp(App)
   .use(GraffitiPlugin, {
-    useGraffiti: () => new GraffitiLocal(),
+    graffiti: new GraffitiLocal(),
   })
   .mount("#app");

@@ -1,25 +1,21 @@
 # Graffiti Wrapper for Vue.js
 
-This is a wrapper around the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
-as [Vue.js](https://vuejs.org/) plugin.
-It provides the following features:
-- A global Graffiti instance via the `$graffiti`
-[global property](https://vuejs.org/api/application.html#app-config-globalproperties)
-in templates and the Options API, or the `useGraffiti` [composable](https://vuejs.org/guide/reusability/composables.html)
-in the Composition API.
-- A `useGraffitiDiscover` [composable](https://vuejs.org/guide/reusability/composables.html)
-and a `GraffitiDiscover` [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
-that produce a reactive arrays of objects from the results of [`discover`](https://api.graffiti.garden/classes/Graffiti.html#discover).
-- A reactive [`GraffitiSession`](https://api.graffiti.garden/interfaces/GraffitiSession.html) object
-that holds the user's most recent log-in state announced
-from [`sessionEvents`](https://api.graffiti.garden/classes/Graffiti.html#sessionevents).
-It is accessible via the `$graffitiSession` global property in templates and the Options API,
-or the `useGraffitiSession` composable in the Composition API.
+This is a [Vue.js](https://vuejs.org/) plugin that wraps around
+the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+to provide [reactive](https://en.wikipedia.org/wiki/Reactive_programming) versions
+of various Graffiti API methods.
+These reactive methods are available as both
+[renderless components](https://vuejs.org/guide/components/slots#renderless-components),
+which make it possible to create a whole Graffiti app in an HTML template,
+and [composables](https://vuejs.org/guide/reusability/composables.html),
+which can be used in the programmatic [composition API](https://vuejs.org/guide/extras/composition-api-faq.html).
+
+[**Read the API documentation**](https://vue.graffiti.garden/classes/GrafittiPlugin.html).
 
 ## Installation
 
 You must install this package along with Vue.js and an implementation of the Graffiti API.
-In this example, we will use the [PouchDB implementation](https://github.com/graffiti-garden/implementation-local)
+In this example, we will use the [local implementation](https://github.com/graffiti-garden/implementation-local)
 of the Graffiti API, but any other would be similar.
 In node.js, simply install them with npm:
 
