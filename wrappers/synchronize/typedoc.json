@@ -1,8 +1,8 @@
 {
   "entryPoints": ["src/index.ts"],
   "sort": ["source-order"],
-  "cname": "api.graffiti.garden",
-  "titleLink": "/classes/Graffiti.html",
+  "cname": "sync.graffiti.garden",
+  "titleLink": "/classes/GraffitiSynchronize.html",
   "searchInDocuments": true,
   "searchInComments": true
 }
