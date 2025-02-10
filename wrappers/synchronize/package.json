@@ -1,5 +1,5 @@
 {
-  "name": "@graffiti-garden/api",
+  "name": "@graffiti-garden/synchronize",
   "version": "0.2.11",
   "description": "The heart of Graffiti",
   "types": "./dist/src/index.d.ts",
