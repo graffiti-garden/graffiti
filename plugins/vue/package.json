@@ -26,8 +26,10 @@
   ],
   "scripts": {
     "example": "cd examples/node-vite-sfc && vite",
-    "build-example": "cd examples/node-vite-sfc && vite build",
-    "build": "vite build",
+    "build:example": "cd examples/node-vite-sfc && vite build",
+    "build:js": "vite build",
+    "build:docs": "npm run build:js && typedoc --options typedoc.json",
+    "build": "npm run build:docs && npm run build:example && cp -r examples docs",
     "prepublishOnly": "npm install && npm run build"
   },
   "author": "Theia Henderson",
@@ -44,9 +46,10 @@
   },
   "devDependencies": {
     "@graffiti-garden/implementation-local": "^0.2.12",
-    "@types/node": "^22.13.1",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/typescript-plugin": "^2.2.0",
+    "typedoc": "^0.27.6",
+    "typedoc-plugin-vue": "^1.4.0",
     "vite": "^5.4.14",
     "vite-plugin-dts": "^4.5.0",
     "vite-plugin-node-polyfills": "^0.23.0",

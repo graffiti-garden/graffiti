@@ -11,7 +11,7 @@ import type {
   GraffitiSession,
   JSONSchema4,
 } from "@graffiti-garden/api";
-import { useGraffiti, useGraffitiSession } from "./injections";
+import { useGraffiti, useGraffitiSession } from "./globals";
 import type { GraffitiStream } from "@graffiti-garden/api";
 import { GetPoller, Poller, StreamPoller } from "./pollers";
 import { ArrayReducer, Reducer, SingletonReducer } from "./reducers";
@@ -103,11 +103,6 @@ function callGetters<T extends readonly (() => any)[]>(
  *
  * All [`tombstone`](https://api.graffiti.garden/interfaces/GraffitiObjectBase.html#tombstone)d
  * objects are filtered out.
- *
- * @returns An object containing
- * - `results`: a reactive array of Graffiti objects
- * - `poll`: a method to poll for new results
- * - `isPolling`: a boolean ref indicating if the poll is currently running
  */
 export function useGraffitiDiscover<Schema extends JSONSchema4>(
   /**
@@ -128,8 +123,9 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
    */
   schema: MaybeRefOrGetter<Schema>,
   /**
-   * A Graffiti session object. If not provided, the
-   * global plugin session will be used.
+   * A Graffiti session object. If `undefined`, the
+   * global plugin session will be used. If `null`,
+   * no session will be used.
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ) {
@@ -156,8 +152,20 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
   );
 
   return {
+    /**
+     * A reactive array of Graffiti objects, without any
+     * tombstones.
+     */
     results: reducer.results,
+    /**
+     * A method to poll for new results. Only new results
+     * are polled, not the entire set of results.
+     */
     poll,
+    /**
+     * A [Ref] that indicates if the poll is currently running.
+     * Useful to show a loading spinner or disable a button.
+     */
     isPolling,
   };
 }

@@ -94,9 +94,11 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
             >on Github</a
         >.
     </p>
-    <p v-if="session">
-        Logged in as: {{ session.actor }}
-        <button @click="graffiti.logout(session)">Log out</button>
+    <p v-if="$graffitiSession.value">
+        Logged in as: {{ $graffitiSession.value.actor }}
+        <button @click="graffiti.logout($graffitiSession.value)">
+            Log out
+        </button>
     </p>
     <p v-else-if="session === null">
         <button @click="graffiti.login()">Log in</button>

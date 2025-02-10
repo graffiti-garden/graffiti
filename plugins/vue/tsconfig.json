@@ -7,6 +7,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
     "plugins": [{ "name": "@vue/typescript-plugin" }]
   },
   "include": ["src"]
