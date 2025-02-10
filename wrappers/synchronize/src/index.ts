@@ -1,8 +1,11 @@
 import Ajv from "ajv-draft-04";
+import { Graffiti } from "@graffiti-garden/api";
 import type {
-  Graffiti,
+  GraffitiLocation,
   GraffitiSession,
+  GraffitiObject,
   JSONSchema4,
+  GraffitiStream,
 } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
@@ -14,12 +17,7 @@ import {
   locationToUri,
   maskGraffitiObject,
   unpackLocationOrUri,
-} from "./utilities.js";
-
-type GraffitiDatabaseMethods = Pick<
-  Graffiti,
-  "get" | "put" | "patch" | "delete" | "discover" | "recoverOrphans"
->;
+} from "@graffiti-garden/implementation-local/utilities";
 
 type Callback = (
   oldObject: GraffitiObjectBase,
@@ -32,30 +30,30 @@ type Callback = (
  * The partial implementation must include the primary database methods:
  * `get`, `put`, `patch`, `delete`, and `discover`.
  */
-export class GraffitiSynchronize
-  implements
-    Pick<
-      Graffiti,
-      | "put"
-      | "get"
-      | "patch"
-      | "delete"
-      | "discover"
-      | "recoverOrphans"
-      | "synchronizeDiscover"
-      | "synchronizeGet"
-      | "synchronizeRecoverOrphans"
-    >
-{
+export class GraffitiSynchronize extends Graffiti {
   protected readonly ajv: Ajv;
-  protected readonly graffiti: GraffitiDatabaseMethods;
+  protected readonly graffiti: Graffiti;
   protected readonly callbacks = new Set<Callback>();
+
+  channelStats: Graffiti["channelStats"];
+  locationToUri: Graffiti["locationToUri"];
+  uriToLocation: Graffiti["uriToLocation"];
+  login: Graffiti["login"];
+  logout: Graffiti["logout"];
+  sessionEvents: Graffiti["sessionEvents"];
 
   // Pass in the ajv instance
   // and database methods to wrap
-  constructor(graffiti: GraffitiDatabaseMethods, ajv?: Ajv) {
+  constructor(graffiti: Graffiti, ajv?: Ajv) {
+    super();
     this.ajv = ajv ?? new Ajv({ strict: false });
     this.graffiti = graffiti;
+    this.channelStats = graffiti.channelStats.bind(graffiti);
+    this.locationToUri = graffiti.locationToUri.bind(graffiti);
+    this.uriToLocation = graffiti.uriToLocation.bind(graffiti);
+    this.login = graffiti.login.bind(graffiti);
+    this.logout = graffiti.logout.bind(graffiti);
+    this.sessionEvents = graffiti.sessionEvents;
   }
 
   protected async synchronizeDispatch(
@@ -164,59 +162,144 @@ export class GraffitiSynchronize
   ) {
     const validate = attemptAjvCompile(this.ajv, schema);
 
-    const repeater: ReturnType<
-      typeof Graffiti.prototype.synchronizeDiscover<typeof schema>
-    > = new Repeater(async (push, stop) => {
-      const callback: Callback = (oldObjectRaw, newObjectRaw) => {
-        for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
-          if (
-            objectRaw &&
-            matchObject(objectRaw) &&
-            isActorAllowedGraffitiObject(objectRaw, session)
-          ) {
-            const object = { ...objectRaw };
-            maskGraffitiObject(object, channels, session);
-            if (validate(object)) {
-              push({ value: object });
-              break;
+    const repeater: GraffitiStream<GraffitiObject<Schema>> = new Repeater(
+      async (push, stop) => {
+        const callback: Callback = (oldObjectRaw, newObjectRaw) => {
+          for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
+            if (
+              objectRaw &&
+              matchObject(objectRaw) &&
+              isActorAllowedGraffitiObject(objectRaw, session)
+            ) {
+              const object = { ...objectRaw };
+              maskGraffitiObject(object, channels, session);
+              if (validate(object)) {
+                push({ value: object });
+                break;
+              }
             }
           }
-        }
-      };
+        };
 
-      this.callbacks.add(callback);
-      await stop;
-      this.callbacks.delete(callback);
-    });
+        this.callbacks.add(callback);
+        await stop;
+        this.callbacks.delete(callback);
+      },
+    );
 
     return repeater;
   }
 
-  synchronizeDiscover: Graffiti["synchronizeDiscover"] = (...args) => {
-    const [channels, schema, session] = args;
+  /**
+   * This method has the same signature as {@link discover} but listens for
+   * changes made via {@link put}, {@link patch}, and {@link delete} or
+   * fetched from {@link get}, {@link discover}, and {@link recoverOrphans}
+   * and then streams appropriate changes to provide a responsive and
+   * consistent user experience.
+   *
+   * Unlike {@link discover}, this method continuously listens for changes
+   * and will not terminate unless the user calls the `return` method on the iterator
+   * or `break`s out of the loop.
+   *
+   * Example 1: Suppose a user publishes a post using {@link put}. If the feed
+   * displaying that user's posts is using {@link synchronizeDiscover} to listen for changes,
+   * then the user's new post will instantly appear in their feed, giving the UI a
+   * responsive feel.
+   *
+   * Example 2: Suppose one of a user's friends changes their name. As soon as the
+   * user's application receives one notice of that change (using {@link get}
+   * or {@link discover}), then {@link synchronizeDiscover} listeners can be used to update
+   * all instance's of that friend's name in the user's application instantly,
+   * providing a consistent user experience.
+   *
+   * @group Synchronize Methods
+   */
+  synchronizeDiscover<Schema extends JSONSchema4>(
+    /**
+     * The {@link GraffitiObjectBase.channels | `channels`} that the objects must be associated with.
+     */
+    channels: string[],
+    /**
+     * A [JSON Schema](https://json-schema.org) that objects must satisfy.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
+     * property will be returned.
+     */
+    session?: GraffitiSession | null,
+  ): GraffitiStream<GraffitiObject<Schema>> {
     function matchObject(object: GraffitiObjectBase) {
       return object.channels.some((channel) => channels.includes(channel));
     }
     return this.synchronize(matchObject, channels, schema, session);
-  };
+  }
 
-  synchronizeGet: Graffiti["synchronizeGet"] = (...args) => {
-    const [locationOrUri, schema, session] = args;
+  /**
+   * This method has the same signature as {@link get} but, like {@link synchronizeDiscover},
+   * it listens for changes made via {@link put}, {@link patch}, and {@link delete} or
+   * fetched from {@link get}, {@link discover}, and {@link recoverOrphans} and then
+   * streams appropriate changes to provide a responsive and consistent user experience.
+   *
+   * Unlike {@link get}, which returns a single result, this method continuously
+   * listens for changes which are output as an asynchronous {@link GraffitiStream}.
+   *
+   * @group Synchronize Methods
+   */
+  synchronizeGet<Schema extends JSONSchema4>(
+    /**
+     * The location of the object to get.
+     */
+    locationOrUri: GraffitiLocation | string,
+    /**
+     * The JSON schema to validate the retrieved object against.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
+     * property must be `undefined`.
+     */
+    session?: GraffitiSession | null,
+  ): GraffitiStream<GraffitiObject<Schema>> {
     function matchObject(object: GraffitiObjectBase) {
       const objectUri = locationToUri(object);
       const { uri } = unpackLocationOrUri(locationOrUri);
       return objectUri === uri;
     }
     return this.synchronize(matchObject, [], schema, session);
-  };
+  }
 
-  synchronizeRecoverOrphans: Graffiti["synchronizeRecoverOrphans"] = (
-    ...args
-  ) => {
-    const [schema, session] = args;
+  /**
+   * This method has the same signature as {@link recoverOrphans} but,
+   * like {@link synchronizeDiscover}, it listens for changes made via
+   * {@link put}, {@link patch}, and {@link delete} or fetched from
+   * {@link get}, {@link discover}, and {@link recoverOrphans} and then
+   * streams appropriate changes to provide a responsive and consistent user experience.
+   *
+   * Unlike {@link recoverOrphans}, this method continuously listens for changes
+   * and will not terminate unless the user calls the `return` method on the iterator
+   * or `break`s out of the loop.
+   *
+   * @group Synchronize Methods
+   */
+  synchronizeRecoverOrphans<Schema extends JSONSchema4>(
+    /**
+     * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
+     */
+    schema: Schema,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession,
+  ): GraffitiStream<GraffitiObject<Schema>> {
     function matchObject(object: GraffitiObjectBase) {
       return object.actor === session.actor && object.channels.length === 0;
     }
     return this.synchronize(matchObject, [], schema, session);
-  };
+  }
 }
