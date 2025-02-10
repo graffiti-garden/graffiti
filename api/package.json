@@ -35,8 +35,8 @@
   "scripts": {
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
-    "build": "rm -rf dist && npm run build:types && npm run build:js",
-    "docs": "typedoc --options typedoc.json",
+    "build": "rm -rf dist && rm -rf docs && npm run build:types && npm run build:js && npm run build:docs",
+    "build:docs": "typedoc --options typedoc.json",
     "prepublishOnly": "npm update && npm run build"
   },
   "repository": {
