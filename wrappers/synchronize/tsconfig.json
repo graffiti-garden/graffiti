@@ -9,7 +9,10 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "skipLibCheck": true,
+    "outDir": "dist"
   },
-  "include": ["src", "tests"]
+  "include": ["src"],
+  "exclude": ["src/**/*.spec.ts"]
 }

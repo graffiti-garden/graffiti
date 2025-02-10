@@ -1,5 +1,8 @@
 # Graffiti Synchronize
 
+This library wraps the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+to propogate changes made from one method to corresponding listeners.
+
 [**View the Documentation**](https://sync.graffiti.garden/classes/GraffitiSynchronize.html)
 
 ## Installation

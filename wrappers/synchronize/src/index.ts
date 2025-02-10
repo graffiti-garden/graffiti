@@ -42,8 +42,9 @@ export class GraffitiSynchronize extends Graffiti {
   logout: Graffiti["logout"];
   sessionEvents: Graffiti["sessionEvents"];
 
-  // Pass in the ajv instance
-  // and database methods to wrap
+  /**
+   * TODO
+   */
   constructor(graffiti: Graffiti, ajv?: Ajv) {
     super();
     this.ajv = ajv ?? new Ajv({ strict: false });
