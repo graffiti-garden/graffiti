@@ -9,8 +9,7 @@
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
     "declaration": true,
-    "declarationMap": true,
-    "declarationDir": "./dist"
+    "declarationMap": true
   },
-  "include": ["src"]
+  "include": ["src", "tests"]
 }

@@ -1,5 +1,4 @@
 import * as esbuild from "esbuild";
-import { polyfillNode } from "esbuild-plugin-polyfill-node";
 
 await esbuild.build({
   entryPoints: ["src/index.ts"],
@@ -9,12 +8,11 @@ await esbuild.build({
   minify: true,
   format: "esm",
   outfile: "dist/index.browser.js",
-  plugins: [polyfillNode()],
 });
 
 for (const format of ["esm", "cjs"] as const) {
   await esbuild.build({
-    entryPoints: ["src/*"],
+    entryPoints: ["src/index.ts"],
     platform: "neutral",
     sourcemap: true,
     minify: true,
