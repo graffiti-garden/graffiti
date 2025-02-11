@@ -25,10 +25,40 @@ type Callback = (
 ) => void;
 
 /**
- * Wraps a partial implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
- * to provide the [`synchronize`](https://api.graffiti.garden/classes/Graffiti.html#synchronize) method.
- * The partial implementation must include the primary database methods:
- * `get`, `put`, `patch`, `delete`, and `discover`.
+ * Wraps the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+ * so that changes made or received in one part of an application
+ * are automatically routed to other parts of the application.
+ * This is an important tool for building responsive
+ * and consistent user interfaces, and is built upon to make
+ * the [Graffiti Vue Plugin](https://vue.graffiti.garden/variables/GraffitiPlugin.html)
+ * and possibly other front-end libraries in the future.
+ *
+ * Specifically, it provides the following *synchronize*
+ * methods for each of the following API methods:
+ *
+ * | API Method | Synchronize Method |
+ * |------------|--------------------|
+ * | {@link get} | {@link synchronizeGet} |
+ * | {@link discover} | {@link synchronizeDiscover} |
+ * | {@link recoverOrphans} | {@link synchronizeRecoverOrphans} |
+ *
+ * Whenever a change is made via {@link put}, {@link patch}, and {@link delete} or
+ * received from {@link get}, {@link discover}, and {@link recoverOrphans},
+ * those changes are forwarded to the appropriate synchronize method.
+ * Each synchronize method returns an iterator that streams these changes
+ * continually until the user calls `return` on the iterator or `break`s out of the loop,
+ * allowing for live updates without additional polling.
+ *
+ * Example 1: Suppose a user publishes a post using {@link put}. If the feed
+ * displaying that user's posts is using {@link synchronizeDiscover} to listen for changes,
+ * then the user's new post will instantly appear in their feed, giving the UI a
+ * responsive feel.
+ *
+ * Example 2: Suppose one of a user's friends changes their name. As soon as the
+ * user's application receives one notice of that change (using {@link get}
+ * or {@link discover}), then {@link synchronizeDiscover} listeners can be used to update
+ * all instance's of that friend's name in the user's application instantly,
+ * providing a consistent user experience.
  */
 export class GraffitiSynchronize extends Graffiti {
   protected readonly ajv: Ajv;
@@ -43,9 +73,23 @@ export class GraffitiSynchronize extends Graffiti {
   sessionEvents: Graffiti["sessionEvents"];
 
   /**
-   * TODO
+   * Wraps a Graffiti API instance to provide the synchronize methods.
+   * The GraffitiSyncrhonize class rather than the Graffiti class
+   * must be used for all functions for the synchronize methods to work.
    */
-  constructor(graffiti: Graffiti, ajv?: Ajv) {
+  constructor(
+    /**
+     * The [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
+     * instance to wrap.
+     */
+    graffiti: Graffiti,
+    /**
+     * An optional instance of Ajv to use for validating
+     * objects before dispatching them to listeners.
+     * If not provided, a new instance of Ajv will be created.
+     */
+    ajv?: Ajv,
+  ) {
     super();
     this.ajv = ajv ?? new Ajv({ strict: false });
     this.graffiti = graffiti;
@@ -202,36 +246,12 @@ export class GraffitiSynchronize extends Graffiti {
    * and will not terminate unless the user calls the `return` method on the iterator
    * or `break`s out of the loop.
    *
-   * Example 1: Suppose a user publishes a post using {@link put}. If the feed
-   * displaying that user's posts is using {@link synchronizeDiscover} to listen for changes,
-   * then the user's new post will instantly appear in their feed, giving the UI a
-   * responsive feel.
-   *
-   * Example 2: Suppose one of a user's friends changes their name. As soon as the
-   * user's application receives one notice of that change (using {@link get}
-   * or {@link discover}), then {@link synchronizeDiscover} listeners can be used to update
-   * all instance's of that friend's name in the user's application instantly,
-   * providing a consistent user experience.
-   *
    * @group Synchronize Methods
    */
   synchronizeDiscover<Schema extends JSONSchema4>(
-    /**
-     * The {@link GraffitiObjectBase.channels | `channels`} that the objects must be associated with.
-     */
-    channels: string[],
-    /**
-     * A [JSON Schema](https://json-schema.org) that objects must satisfy.
-     */
-    schema: Schema,
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
-     * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
-     * property will be returned.
-     */
-    session?: GraffitiSession | null,
+    ...args: Parameters<typeof Graffiti.prototype.discover<Schema>>
   ): GraffitiStream<GraffitiObject<Schema>> {
+    const [channels, schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.channels.some((channel) => channels.includes(channel));
     }
@@ -239,8 +259,8 @@ export class GraffitiSynchronize extends Graffiti {
   }
 
   /**
-   * This method has the same signature as {@link get} but, like {@link synchronizeDiscover},
-   * it listens for changes made via {@link put}, {@link patch}, and {@link delete} or
+   * This method has the same signature as {@link get} but
+   * listens for changes made via {@link put}, {@link patch}, and {@link delete} or
    * fetched from {@link get}, {@link discover}, and {@link recoverOrphans} and then
    * streams appropriate changes to provide a responsive and consistent user experience.
    *
@@ -250,22 +270,9 @@ export class GraffitiSynchronize extends Graffiti {
    * @group Synchronize Methods
    */
   synchronizeGet<Schema extends JSONSchema4>(
-    /**
-     * The location of the object to get.
-     */
-    locationOrUri: GraffitiLocation | string,
-    /**
-     * The JSON schema to validate the retrieved object against.
-     */
-    schema: Schema,
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
-     * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
-     * property must be `undefined`.
-     */
-    session?: GraffitiSession | null,
+    ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
   ): GraffitiStream<GraffitiObject<Schema>> {
+    const [locationOrUri, schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       const objectUri = locationToUri(object);
       const { uri } = unpackLocationOrUri(locationOrUri);
@@ -275,8 +282,8 @@ export class GraffitiSynchronize extends Graffiti {
   }
 
   /**
-   * This method has the same signature as {@link recoverOrphans} but,
-   * like {@link synchronizeDiscover}, it listens for changes made via
+   * This method has the same signature as {@link recoverOrphans} but
+   * listens for changes made via
    * {@link put}, {@link patch}, and {@link delete} or fetched from
    * {@link get}, {@link discover}, and {@link recoverOrphans} and then
    * streams appropriate changes to provide a responsive and consistent user experience.
@@ -288,16 +295,9 @@ export class GraffitiSynchronize extends Graffiti {
    * @group Synchronize Methods
    */
   synchronizeRecoverOrphans<Schema extends JSONSchema4>(
-    /**
-     * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
-     */
-    schema: Schema,
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
-     */
-    session: GraffitiSession,
+    ...args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>
   ): GraffitiStream<GraffitiObject<Schema>> {
+    const [schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.actor === session.actor && object.channels.length === 0;
     }
