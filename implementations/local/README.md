@@ -64,8 +64,6 @@ Pieces of this implementation can be pulled out to use in other implementations.
 ```typescript
 // The basic database interface based on PouchDB
 import { GraffitiLocalDatabase } from "@graffiti-garden/implementation-local/database";
-// A wrapper around any implementation of the database methods that provides synchronize
-import { GraffitiSynchronize } from "@graffiti-garden/implementation-local/synchronize";
 // The log in and out methods and events - insecure but useful for testing
 import { GraffitiLocalSessionManager } from "@graffiti-garden/implementation-local/session-manager";
 // Various utilities for implementing the Graffiti API
