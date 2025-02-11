@@ -43,6 +43,7 @@ declare module "vue" {
     GraffitiRecoverOrphans: typeof RecoverOrphans;
   }
 }
+export type { ComponentCustomProperties } from "vue";
 
 /**
  * Options for the {@link GraffitiPlugin}.
@@ -51,8 +52,11 @@ export interface GraffitiPluginOptions {
   /**
    * An instance of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
    * for the Vue.js plugin to use.
-   * This instance will be available in Vue templates as
+   * This instance, wrapped with [GraffitiSynchronize](https://sync.graffiti.garden/classes/GraffitiSynchronize.html),
+   * will be exposed in Vue templates as
    * `$graffiti` and in setup functions as {@link useGraffiti}.
+   * You must interact with Graffiti through these wrapped instances
+   * to enable reactivity.
    *
    * You'll likely want to use the [federated implementation](https://github.com/graffiti-garden/implementation-federated).
    * However, you could also use the [local implementation](https://github.com/graffiti-garden/implementation-local)
@@ -66,8 +70,6 @@ export interface GraffitiPluginOptions {
  * the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
  * to provide [reactive](https://en.wikipedia.org/wiki/Reactive_programming) versions
  * of various Graffiti API methods.
- *
- * [See the README for installation instructions](/).
  *
  * These reactive methods are available as both
  * [renderless components](https://vuejs.org/guide/components/slots#renderless-components),
@@ -89,8 +91,10 @@ export interface GraffitiPluginOptions {
  *
  * | Global variabale | [Composable](https://vuejs.org/guide/reusability/composables.html) |
  * | --- | --- |
- * | `$graffiti` | {@link useGraffiti} |
- * | `$graffitiSession` | {@link useGraffitiSession} |
+ * | {@link ComponentCustomProperties.$graffiti | $graffiti } | {@link useGraffiti} |
+ * | {@link ComponentCustomProperties.$graffitiSession | $graffitiSession } | {@link useGraffitiSession} |
+ *
+ * [See the README for installation instructions](/).
  *
  * You can find live examples [here](/examples/), but basic usage looks like this:
  *
@@ -106,44 +110,46 @@ export interface GraffitiPluginOptions {
  *   })
  * ```
  *
- * ```html
+ * ```vue
  * <!-- App.vue -->
- * <button
- *   v-if="$graffitiSession.value"
- *   @click="$graffiti.put({
- *     value: { content: 'Hello, world!' },
- *     channels: [ 'my-channel' ]
- *   })"
- * >
- *   Say Hello
- * </button>
- * <button v-else @click="$graffiti.login()">
- *   Log In to Say Hello
- * </button>
+ * <template>
+ *   <button
+ *     v-if="$graffitiSession.value"
+ *     @click="$graffiti.put({
+ *       value: { content: 'Hello, world!' },
+ *       channels: [ 'my-channel' ]
+ *     }, $graffitiSession.value)"
+ *   >
+ *     Say Hello
+ *   </button>
+ *   <button v-else @click="$graffiti.login()">
+ *     Log In to Say Hello
+ *   </button>
  *
- * <graffiti-discover
- *   v-slot="{ results }"
- *   :channels="[ 'my-channel' ]"
- *   :schema="{
- *     properties: {
- *       value: {
- *         required: ['content'],
- *         properties: {
- *           content: { type: 'string' }
+ *   <GraffitiDiscover
+ *     v-slot="{ results }"
+ *     :channels="[ 'my-channel' ]"
+ *     :schema="{
+ *       properties: {
+ *         value: {
+ *           required: ['content'],
+ *           properties: {
+ *             content: { type: 'string' }
+ *           }
  *         }
  *       }
- *     }
- *   }"
- * >
- *   <ul>
- *     <li
- *       v-for="result in results"
- *       :key="$graffiti.objectToUri(result)"
- *     >
- *       {{ result.value.content }}
- *     </li>
- *   </ul>
- * </graffiti-discover>
+ *     }"
+ *   >
+ *     <ul>
+ *       <li
+ *         v-for="result in results"
+ *         :key="$graffiti.objectToUri(result)"
+ *       >
+ *         {{ result.value.content }}
+ *       </li>
+ *     </ul>
+ *   </GraffitiDiscover>
+ * </template>
  * ```
  */
 export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
@@ -207,7 +213,11 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
 };
 
 export * from "./composables";
-export { useGraffiti, useGraffitiSession } from "./globals";
+export {
+  useGraffiti,
+  useGraffitiSynchronize,
+  useGraffitiSession,
+} from "./globals";
 export { Discover as GraffitiDiscover };
 export { Get as GraffitiGet };
 export { RecoverOrphans as GraffitiRecoverOrphans };
