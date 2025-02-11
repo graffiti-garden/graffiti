@@ -17,12 +17,24 @@ import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 declare module "vue" {
   export interface ComponentCustomProperties {
     /**
-     * Global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance
-     * passed into the plugin via {@link GraffitiPluginOptions.graffiti}.
+     * Global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance.
+     *
+     * In the [composition API](https://vuejs.org/guide/introduction.html#composition-api)
+     * use {@link useGraffiti} instead.
+     *
+     * This is the same Graffiti registered with the {@link GraffitiPlugin}
+     * via {@link GraffitiPluginOptions.graffiti}, only it has been wrapped
+     * with [GraffitiSynchronize](https://sync.graffiti.garden/classes/GraffitiSynchronize.html).
+     * Be sure to use the wrapped instance to enable reactivity.
      */
     $graffiti: Graffiti;
     /**
-     * Global reactive [GraffitiSession](https://api.graffiti.garden/classes/GraffitiSession.html) instance.
+     * Global reactive [GraffitiSession](https://api.graffiti.garden/classes/GraffitiSession.html) instance
+     * as a [Vue ref](https://vuejs.org/api/reactivity-core.html#ref).
+     *
+     * In the [composition API](https://vuejs.org/guide/introduction.html#composition-api)
+     * use {@link useGraffitiSession} instead.
+     *
      * While the application is loading and restoring any previous sessions,
      * the value will be `undefined`. If the user is not logged in,
      * the value will be `null`.
@@ -35,9 +47,6 @@ declare module "vue" {
   }
 
   export interface GlobalComponents {
-    /**
-     * Something???
-     */
     GraffitiDiscover: typeof Discover;
     GraffitiGet: typeof Get;
     GraffitiRecoverOrphans: typeof RecoverOrphans;
@@ -53,8 +62,8 @@ export interface GraffitiPluginOptions {
    * An instance of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
    * for the Vue.js plugin to use.
    * This instance, wrapped with [GraffitiSynchronize](https://sync.graffiti.garden/classes/GraffitiSynchronize.html),
-   * will be exposed in Vue templates as
-   * `$graffiti` and in setup functions as {@link useGraffiti}.
+   * will be exposed in Vue templates as {@link ComponentCustomProperties.$graffiti | $graffiti}
+   * and in setup functions as {@link useGraffiti}.
    * You must interact with Graffiti through these wrapped instances
    * to enable reactivity.
    *
