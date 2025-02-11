@@ -91,41 +91,27 @@ function callGetters<T extends readonly (() => any)[]>(
 }
 
 /**
- * A reactive version of the [`Graffiti.discover`](https://api.graffiti.garden/classes/Graffiti.html#discover)
- * method. Its arguments are the same, but now they can be
- * reactive Vue refs or getters. As they change the output will
- * automatically update.
+ * The [Graffiti.discover](https://api.graffiti.garden/classes/Graffiti.html#discover)
+ * method as a reactive [composable](https://vuejs.org/guide/reusability/composables.html)
+ * for use in the Vue [composition API](https://vuejs.org/guide/introduction.html#composition-api).
  *
- * Rather than returning a stream of Graffiti objects, this
- * function returns a reactive array of objects. It also
- * provides a method to poll for new results and a boolean
- * ref indicating if the poll is currently running.
+ * Its corresponding renderless component is {@link GraffitiDiscover}.
  *
- * All [`tombstone`](https://api.graffiti.garden/interfaces/GraffitiObjectBase.html#tombstone)d
- * objects are filtered out.
+ * The arguments of this composable as the same as Graffiti.discover,
+ * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
+ * As they change the output will automatically update.
+ * Reactivity only triggers when the root array or object changes,
+ * not when the elements or properties change.
+ * If you need deep reactivity, wrap your argument in a getter.
  */
 export function useGraffitiDiscover<Schema extends JSONSchema4>(
-  /**
-   * A list of channels to discover objects from.
-   * Reactivity will only trigger
-   * when the root array changes, not when the elements
-   * change. If you need reactivity on the elements,
-   * create a getter, e.g. `() => [toValue(myReactiveChannel)]`.
-   */
   channels: MaybeRefOrGetter<string[]>,
-  /**
-   * A [JSON Schema](https://json-schema.org/) object describing the schema
-   * of the objects to discover. All other objects will be filtered out
-   * and the output will be typed as `GraffitiObject<Schema>`.
-   * Reactivity only triggers when the root object changes, not when
-   * the root object changes, not when the properties change.
-   * Create a getter if you need reactivity on the properties.
-   */
   schema: MaybeRefOrGetter<Schema>,
   /**
-   * A Graffiti session object. If `undefined`, the
-   * global plugin session will be used. If `null`,
-   * no session will be used.
+   * If the session is `undefined`, the global session,
+   * {@link ComponentCustomProperties.$graffitiSession | $graffitiSession},
+   * will be used. Otherwise, the provided value will be used.
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ) {
@@ -153,17 +139,17 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
 
   return {
     /**
-     * A reactive array of Graffiti objects, without any
-     * tombstones.
+     * A [Ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
+     * an array of Graffiti objects. All tombstoned objects have been filtered out.
      */
     results: reducer.results,
     /**
-     * A method to poll for new results. Only new results
-     * are polled, not the entire set of results.
+     * A method to poll for new results.
      */
     poll,
     /**
-     * A [Ref] that indicates if the poll is currently running.
+     * A boolean [Ref](https://vuejs.org/api/reactivity-core.html#ref)
+     * that indicates if the poll is currently running.
      * Useful to show a loading spinner or disable a button.
      */
     isPolling,
@@ -171,42 +157,27 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
 }
 
 /**
- * A reactive version of the [`Graffiti.get`](https://api.graffiti.garden/classes/Graffiti.html#get)
- * method. Its arguments are the same, but now they can be
- * reactive Vue refs or getters. As they change the output will
- * automatically update.
+ * The [Graffiti.get](https://api.graffiti.garden/classes/Graffiti.html#get)
+ * method as a reactive [composable](https://vuejs.org/guide/reusability/composables.html)
+ * for use in the Vue [composition API](https://vuejs.org/guide/introduction.html#composition-api).
  *
- * Rather than returning a single Graffiti object, this
- * function returns a reactive object. It also
- * provides a method to poll for new results and a boolean
- * ref indicating if the poll is currently running.
+ * Its corresponding renderless component is {@link GraffitiGet}.
  *
- * While the object is first being fetched, the result
- * is `undefined`. If the object has been deleted,
- * the result is `null`. Otherwise, the result is the
- * most recent object fetched. All [`tombstone`](https://api.graffiti.garden/interfaces/GraffitiObjectBase.html#tombstone)d
- * objects are filtered out.
- *
- * @returns An object containing
- * - `results`: a reactive array of Graffiti objects
- * - `poll`: a method to poll for new results
- * - `isPolling`: a boolean ref indicating if the poll is currently running
+ * The arguments of this composable as the same as Graffiti.get,
+ * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
+ * As they change the output will automatically update.
+ * Reactivity only triggers when the root array or object changes,
+ * not when the elements or properties change.
+ * If you need deep reactivity, wrap your argument in a getter.
  */
 export function useGraffitiGet<Schema extends JSONSchema4>(
-  /**
-   * A Graffiti location or URI to fetch the object from.
-   */
   locationOrUri: MaybeRefOrGetter<GraffitiLocation | string>,
-  /**
-   * A [JSON Schema](https://json-schema.org/) object describing the schema
-   * of the objects to discover. All other objects will be filtered out
-   * and the output will be typed as `GraffitiObject<Schema>`.
-   * Like the `channels` argument, reactivity only triggers when
-   */
   schema: MaybeRefOrGetter<Schema>,
   /**
-   * A Graffiti session object. If not provided, the
-   * global plugin session will be used.
+   * If the session is `undefined`, the global session,
+   * {@link ComponentCustomProperties.$graffitiSession | $graffitiSession},
+   * will be used. Otherwise, the provided value will be used.
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ) {
@@ -236,12 +207,40 @@ export function useGraffitiGet<Schema extends JSONSchema4>(
   );
 
   return {
+    /**
+     * A [Ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
+     * the retrieved Graffiti object, if it exists. If the object has been deleted,
+     * the result is `null`. If the object is still being fetched, the result is `undefined`.
+     */
     result: reducer.result,
+    /**
+     * A method to poll for new results.
+     */
     poll,
+    /**
+     * A boolean [Ref](https://vuejs.org/api/reactivity-core.html#ref)
+     * that indicates if the poll is currently running.
+     * Useful to show a loading spinner or disable a button.
+     */
     isPolling,
   };
 }
 
+/**
+ * The [Graffiti.recoverOrphans](https://api.graffiti.garden/classes/Graffiti.html#recoverorphans)
+ * method as a reactive [composable](https://vuejs.org/guide/reusability/composables.html)
+ * for use in the Vue [composition API](https://vuejs.org/guide/introduction.html#composition-api).
+ *
+ * Its corresponding renderless component is {@link GraffitiRecoverOrphans}.
+ *
+ * The arguments of this composable as the same as Graffiti.get,
+ * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
+ * As they change the output will automatically update.
+ * Reactivity only triggers when the root array or object changes,
+ * not when the elements or properties change.
+ * If you need deep reactivity, wrap your argument in a getter.
+ */
 export function useGraffitiRecoverOrphans<Schema extends JSONSchema4>(
   schema: MaybeRefOrGetter<Schema>,
   session: MaybeRefOrGetter<GraffitiSession>,
@@ -268,8 +267,20 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema4>(
   );
 
   return {
+    /**
+     * A [Ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
+     * an array of Graffiti objects. All tombstoned objects have been filtered out.
+     */
     results: reducer.results,
+    /**
+     * A method to poll for new results.
+     */
     poll,
+    /**
+     * A boolean [Ref](https://vuejs.org/api/reactivity-core.html#ref)
+     * that indicates if the poll is currently running.
+     * Useful to show a loading spinner or disable a button.
+     */
     isPolling,
   };
 }

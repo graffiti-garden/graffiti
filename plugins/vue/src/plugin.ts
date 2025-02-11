@@ -84,7 +84,7 @@ export interface GraffitiPluginOptions {
  * [renderless components](https://vuejs.org/guide/components/slots#renderless-components),
  * which make it possible to create a whole Graffiti app in an HTML template,
  * and [composables](https://vuejs.org/guide/reusability/composables.html),
- * which can be used in the programmatic [composition API](https://vuejs.org/guide/extras/composition-api-faq.html).
+ * which can be used in the programmatic [composition API](https://vuejs.org/guide/introduction.html#composition-api).
  *
  * | [API](https://api.graffiti.garden/classes/Graffiti.html) method | [Composable](https://vuejs.org/guide/reusability/composables.html) | [Component](https://vuejs.org/guide/components/slots#renderless-components) |
  * | --- | --- | --- |
@@ -232,17 +232,26 @@ export {
  * The [Graffiti.discover](https://api.graffiti.garden/classes/Graffiti.html#discover)
  * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
  * for use in Vue templates.
+ *
+ * Its props and slots are identical to the arguments and return values of
+ * the composable {@link useGraffitiDiscover}.
  */
 export const GraffitiDiscover = Discover;
 /**
  * The [Graffiti.get](https://api.graffiti.garden/classes/Graffiti.html#get)
  * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
  * for use in Vue templates.
+ *
+ * Its props and slots are identical to the arguments and return values of
+ * the composable {@link useGraffitiGet}.
  */
 export const GraffitiGet = Get;
 /**
  * The [Graffiti.recoverOrphans](https://api.graffiti.garden/classes/Graffiti.html#recoverorphans)
  * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
  * for use in Vue templates.
+ *
+ * Its props and slots are identical to the arguments and return values of
+ * the composable {@link useGraffitiRecoverOrphans}.
  */
 export const GraffitiRecoverOrphans = RecoverOrphans;
