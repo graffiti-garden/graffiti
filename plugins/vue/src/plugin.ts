@@ -12,6 +12,7 @@ import type {
 } from "@graffiti-garden/api";
 import { graffitiInjectKey, graffitiSessionInjectKey } from "./globals";
 import type { Router } from "vue-router";
+import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 
 declare module "vue" {
   export interface ComponentCustomProperties {
@@ -147,7 +148,9 @@ export interface GraffitiPluginOptions {
  */
 export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
   install(app: App, options: GraffitiPluginOptions) {
-    const graffiti = options.graffiti;
+    const graffitiBase = options.graffiti;
+    const graffiti = new GraffitiSynchronize(graffitiBase);
+
     const graffitiSession = ref<GraffitiSession | undefined | null>(undefined);
     graffiti.sessionEvents.addEventListener("initialized", async (evt) => {
       const detail = (evt as GraffitiSessionInitializedEvent).detail;
