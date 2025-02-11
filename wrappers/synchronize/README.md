@@ -1,7 +1,12 @@
 # Graffiti Synchronize
 
 This library wraps the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
-to propogate changes made from one method to corresponding listeners.
+so that changes made or received in one part of an application
+are automatically routed to other parts of the application.
+This is an important tool for building responsive
+and consistent user interfaces, and is built upon to make
+the [Graffiti Vue Plugin](https://vue.graffiti.garden/variables/GraffitiPlugin.html)
+and possibly other front-end libraries in the future.
 
 [**View the Documentation**](https://sync.graffiti.garden/classes/GraffitiSynchronize.html)
 
@@ -26,10 +31,10 @@ In the browser, you can use a CDN like jsDelivr. Add an import map the the `<hea
 </head>
 ```
 
-In either case, you can then import the package like so:
+In either case, you can then import and contruct the class as follows:
 
 ```typescript
 import { GraffitiSynchronize } from "@graffiti-garden/wrapper-syncronize";
-const graffiti = new GraffitiLocal()
+const graffiti = new GraffitiLocal() // or any other implementation of the Graffiti API
 const graffitiSynchronized = new GraffitiSynchronize(graffiti)
 ```
