@@ -227,6 +227,22 @@ export {
   useGraffitiSynchronize,
   useGraffitiSession,
 } from "./globals";
-export { Discover as GraffitiDiscover };
-export { Get as GraffitiGet };
-export { RecoverOrphans as GraffitiRecoverOrphans };
+
+/**
+ * The [Graffiti.discover](https://api.graffiti.garden/classes/Graffiti.html#discover)
+ * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
+ * for use in Vue templates.
+ */
+export const GraffitiDiscover = Discover;
+/**
+ * The [Graffiti.get](https://api.graffiti.garden/classes/Graffiti.html#get)
+ * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
+ * for use in Vue templates.
+ */
+export const GraffitiGet = Get;
+/**
+ * The [Graffiti.recoverOrphans](https://api.graffiti.garden/classes/Graffiti.html#recoverorphans)
+ * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
+ * for use in Vue templates.
+ */
+export const GraffitiRecoverOrphans = RecoverOrphans;

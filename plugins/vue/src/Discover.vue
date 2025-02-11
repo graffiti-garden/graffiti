@@ -4,9 +4,6 @@ import type { GraffitiSession, JSONSchema4 } from "@graffiti-garden/api";
 import { useGraffitiDiscover } from "./composables";
 
 const props = defineProps<{
-    /**
-     * Some comment
-     */
     channels: string[];
     schema: Schema;
     session?: GraffitiSession | null;
