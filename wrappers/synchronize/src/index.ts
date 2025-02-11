@@ -1,7 +1,6 @@
 import Ajv from "ajv-draft-04";
 import { Graffiti } from "@graffiti-garden/api";
 import type {
-  GraffitiLocation,
   GraffitiSession,
   GraffitiObject,
   JSONSchema4,
