@@ -11,7 +11,7 @@ import type {
   GraffitiSession,
   JSONSchema4,
 } from "@graffiti-garden/api";
-import { useGraffiti, useGraffitiSession } from "./globals";
+import { useGraffitiSynchronize, useGraffitiSession } from "./globals";
 import type { GraffitiStream } from "@graffiti-garden/api";
 import { GetPoller, Poller, StreamPoller } from "./pollers";
 import { ArrayReducer, Reducer, SingletonReducer } from "./reducers";
@@ -129,7 +129,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ) {
-  const graffiti = useGraffiti();
+  const graffiti = useGraffitiSynchronize();
   const sessionInjected = useGraffitiSession();
 
   const channelsGetter = () => toValue(channels);
@@ -210,7 +210,7 @@ export function useGraffitiGet<Schema extends JSONSchema4>(
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ) {
-  const graffiti = useGraffiti();
+  const graffiti = useGraffitiSynchronize();
   const sessionInjected = useGraffitiSession();
 
   const locationOrUriGetter = () => toValue(locationOrUri);
@@ -246,7 +246,7 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema4>(
   schema: MaybeRefOrGetter<Schema>,
   session: MaybeRefOrGetter<GraffitiSession>,
 ) {
-  const graffiti = useGraffiti();
+  const graffiti = useGraffitiSynchronize();
 
   const schemaGetter = () => toValue(schema);
   const sessionGetter = () => toValue(session);
