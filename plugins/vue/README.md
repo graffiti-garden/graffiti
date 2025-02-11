@@ -10,7 +10,7 @@ which make it possible to create a whole Graffiti app in an HTML template,
 and [composables](https://vuejs.org/guide/reusability/composables.html),
 which can be used in the programmatic [composition API](https://vuejs.org/guide/extras/composition-api-faq.html).
 
-[**Read the API documentation**](https://vue.graffiti.garden/variables/GrafittiPlugin.html).
+[**Read the API documentation**](https://vue.graffiti.garden/variables/GraffitiPlugin.html).
 
 ## Installation
 
@@ -57,4 +57,4 @@ createApp({})
   .mount("#app");
 ```
 
-[See live examples of both methods](/examples).
+[See live examples of both methods](https://vue.graffiti.garden/examples/)

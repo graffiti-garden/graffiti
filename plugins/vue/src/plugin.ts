@@ -105,7 +105,7 @@ export interface GraffitiPluginOptions {
  *
  * [See the README for installation instructions](/).
  *
- * You can find live examples [here](/examples/), but basic usage looks like this:
+ * You can [try out live examples](/examples/), but basic usage looks like this:
  *
  * ```ts
  * import { createApp } from "vue";
