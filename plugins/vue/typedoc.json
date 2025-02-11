@@ -5,5 +5,6 @@
   "titleLink": "/variables/GraffitiPlugin.html",
   "searchInDocuments": true,
   "searchInComments": true,
-  "plugin": ["typedoc-plugin-vue"]
+  "plugin": ["typedoc-plugin-vue"],
+  "highlightLanguages": ["bash", "html", "typescript", "vue"]
 }

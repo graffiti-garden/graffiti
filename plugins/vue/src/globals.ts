@@ -10,7 +10,7 @@ export const graffitiSessionInjectKey = Symbol() as InjectionKey<
 
 /**
  * Returns the global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance
- * that has been wrapped with the [GraffitiSynchronize](https://api.graffiti.garden/classes/GraffitiSynchronize.html) class.
+ * that has been wrapped by the {@link GraffitiPlugin} with the [GraffitiSynchronize](https://sync.graffiti.garden/classes/GraffitiSynchronize.html).
  * @throws If the {@link GraffitiPlugin} is not installed
  */
 export function useGraffitiSynchronize() {
@@ -24,8 +24,13 @@ export function useGraffitiSynchronize() {
 }
 
 /**
- * Returns the global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance
- * passed into the plugin via {@link GraffitiPluginOptions.graffiti}.
+ * Returns the global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance.
+ *
+ * Be sure to use Graffiti from either this function or the global variable `$graffiti` in templates,
+ * because they have been wrapped by the {@link GraffitiPlugin} with
+ * [GraffitiSynchronize](https://sync.graffiti.garden/classes/GraffitiSynchronize.html)
+ * to enable reactivity.
+ *
  * @throws If the {@link GraffitiPlugin} is not installed
  */
 export function useGraffiti(): Graffiti {
@@ -33,7 +38,8 @@ export function useGraffiti(): Graffiti {
 }
 
 /**
- * Returns the global reactive [GraffitiSession](https://api.graffiti.garden/interfaces/GraffitiSession.html) instance.
+ * Returns a global reactive [GraffitiSession](https://api.graffiti.garden/interfaces/GraffitiSession.html) instance
+ * as a [Vue ref](https://vuejs.org/api/reactivity-core.html#ref).
  *
  * While the application is loading and restoring any previous sessions,
  * the value will be `undefined`. If the user is not logged in,
