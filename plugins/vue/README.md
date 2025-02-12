@@ -52,7 +52,7 @@ import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
 
 createApp({})
   .use(GraffitiPlugin, {
-    useGraffiti: () => new GraffitiLocal(),
+    useGraffiti: new GraffitiLocal(),
   })
   .mount("#app");
 ```
