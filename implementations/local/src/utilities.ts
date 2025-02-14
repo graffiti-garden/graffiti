@@ -6,10 +6,11 @@ import {
 } from "@graffiti-garden/api";
 import type {
   Graffiti,
+  GraffitiObject,
   GraffitiObjectBase,
   GraffitiLocation,
   GraffitiPatch,
-  JSONSchema4,
+  JSONSchema,
   GraffitiSession,
 } from "@graffiti-garden/api";
 import type { Ajv } from "ajv";
@@ -102,12 +103,18 @@ export function applyGraffitiPatch<Prop extends keyof GraffitiPatch>(
   }
 }
 
-export function attemptAjvCompile<Schema extends JSONSchema4>(
+export function compileGraffitiObjectSchema<Schema extends JSONSchema>(
   ajv: Ajv,
   schema: Schema,
 ) {
   try {
-    return ajv.compile(schema);
+    // Force the validation guard because
+    // it is too big for the type checker.
+    // Fortunately json-schema-to-ts is
+    // well tested against ajv.
+    return ajv.compile(schema) as (
+      data: GraffitiObjectBase,
+    ) => data is GraffitiObject<Schema>;
   } catch (error) {
     throw new GraffitiErrorInvalidSchema(
       error instanceof Error ? error.message : undefined,
