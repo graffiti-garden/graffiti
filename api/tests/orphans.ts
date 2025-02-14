@@ -32,7 +32,7 @@ export const graffitiOrphanTests = (
 
       const object = randomPutObject();
       object.channels = [];
-      const putted = await graffiti.put(object, session);
+      const putted = await graffiti.put<{}>(object, session);
       const orphanIterator2 = graffiti.recoverOrphans({}, session);
       let numResults = 0;
       for await (const orphan of orphanIterator2) {
@@ -49,12 +49,12 @@ export const graffitiOrphanTests = (
     it("replaced orphan, no longer", async () => {
       const object = randomPutObject();
       object.channels = [];
-      const putOrphan = await graffiti.put(object, session);
+      const putOrphan = await graffiti.put<{}>(object, session);
 
       // Wait for the put to be processed
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const putNotOrphan = await graffiti.put(
+      const putNotOrphan = await graffiti.put<{}>(
         {
           ...putOrphan,
           ...object,

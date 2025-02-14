@@ -8,7 +8,7 @@ import type {
   GraffitiStream,
   ChannelStats,
 } from "./2-types";
-import type { JSONSchema4 } from "json-schema";
+import type { JSONSchema } from "json-schema-to-ts";
 
 /**
  * This API describes a small but powerful set of methods that
@@ -239,7 +239,7 @@ export abstract class Graffiti {
    *
    * @group CRUD Methods
    */
-  abstract put<Schema>(
+  abstract put<Schema extends JSONSchema>(
     /**
      * The object to be put. This object is statically type-checked against the [JSON schema](https://json-schema.org/) that can be optionally provided
      * as the generic type parameter. We highly recommend providing a schema to
@@ -278,7 +278,7 @@ export abstract class Graffiti {
    *
    * @group CRUD Methods
    */
-  abstract get<Schema extends JSONSchema4>(
+  abstract get<Schema extends JSONSchema>(
     /**
      * The location of the object to get.
      */
@@ -415,7 +415,7 @@ export abstract class Graffiti {
    *
    * @group Query Methods
    */
-  abstract discover<Schema extends JSONSchema4>(
+  abstract discover<Schema extends JSONSchema>(
     /**
      * The {@link GraffitiObjectBase.channels | `channels`} that objects must be associated with.
      */
@@ -453,7 +453,7 @@ export abstract class Graffiti {
    *
    * @group Query Methods
    */
-  abstract recoverOrphans<Schema extends JSONSchema4>(
+  abstract recoverOrphans<Schema extends JSONSchema>(
     /**
      * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
      */

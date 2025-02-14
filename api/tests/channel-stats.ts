@@ -38,7 +38,7 @@ export const graffitiChannelStatsTests = (
       // one value to channels[2]
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < i + 1; j++) {
-          await graffiti.put(
+          await graffiti.put<{}>(
             {
               value: {
                 index: j,
@@ -49,7 +49,7 @@ export const graffitiChannelStatsTests = (
           );
         }
       }
-      await graffiti.put(
+      await graffiti.put<{}>(
         { value: { index: 3 }, channels: [channels[2]] },
         session,
       );
@@ -76,7 +76,7 @@ export const graffitiChannelStatsTests = (
       const channels = [randomString(), randomString(), randomString()];
 
       // Add an item with two channels
-      const before = await graffiti.put(
+      const before = await graffiti.put<{}>(
         {
           value: { index: 2 },
           channels: channels.slice(1),
@@ -85,7 +85,7 @@ export const graffitiChannelStatsTests = (
       );
 
       // Add an item with all channels
-      const first = await graffiti.put(
+      const first = await graffiti.put<{}>(
         { value: { index: 0 }, channels },
         session,
       );
@@ -93,7 +93,7 @@ export const graffitiChannelStatsTests = (
       await graffiti.delete(first, session);
 
       // Create a new object with only one channel
-      const second = await graffiti.put(
+      const second = await graffiti.put<{}>(
         {
           value: { index: 1 },
           channels: channels.slice(2),
