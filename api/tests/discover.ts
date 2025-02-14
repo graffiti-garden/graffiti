@@ -2,7 +2,7 @@ import { it, expect, describe, assert, beforeAll } from "vitest";
 import type {
   Graffiti,
   GraffitiSession,
-  JSONSchema4,
+  JSONSchema,
 } from "@graffiti-garden/api";
 import { randomString, nextStreamValue, randomPutObject } from "./utils";
 
@@ -31,7 +31,7 @@ export const graffitiDiscoverTests = (
     it("discover single", async () => {
       const object = randomPutObject();
 
-      const putted = await graffiti.put(object, session);
+      const putted = await graffiti.put<{}>(object, session);
 
       const queryChannels = [randomString(), object.channels[0]];
       const iterator = graffiti.discover(queryChannels, {});
@@ -48,7 +48,7 @@ export const graffitiDiscoverTests = (
 
     it("discover wrong channel", async () => {
       const object = randomPutObject();
-      await graffiti.put(object, session);
+      await graffiti.put<{}>(object, session);
       const iterator = graffiti.discover([randomString()], {});
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
@@ -56,7 +56,7 @@ export const graffitiDiscoverTests = (
     it("discover not allowed", async () => {
       const object = randomPutObject();
       object.allowed = [randomString(), randomString()];
-      const putted = await graffiti.put(object, session1);
+      const putted = await graffiti.put<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover(object.channels, {}, session1);
       const value = await nextStreamValue(iteratorSession1);
@@ -77,7 +77,7 @@ export const graffitiDiscoverTests = (
     it("discover allowed", async () => {
       const object = randomPutObject();
       object.allowed = [randomString(), session2.actor, randomString()];
-      const putted = await graffiti.put(object, session1);
+      const putted = await graffiti.put<{}>(object, session1);
 
       const iteratorSession2 = graffiti.discover(object.channels, {}, session2);
       const value = await nextStreamValue(iteratorSession2);
@@ -92,13 +92,13 @@ export const graffitiDiscoverTests = (
     for (const prop of ["name", "actor", "lastModified"] as const) {
       it(`discover for ${prop}`, async () => {
         const object1 = randomPutObject();
-        const putted1 = await graffiti.put(object1, session1);
+        const putted1 = await graffiti.put<{}>(object1, session1);
 
         const object2 = randomPutObject();
         object2.channels = object1.channels;
         // Make sure the lastModified is different for the query
         await new Promise((r) => setTimeout(r, 20));
-        const putted2 = await graffiti.put(object2, session2);
+        const putted2 = await graffiti.put<{}>(object2, session2);
 
         const iterator = graffiti.discover(object1.channels, {
           properties: {
@@ -118,10 +118,10 @@ export const graffitiDiscoverTests = (
 
     it("discover with lastModified range", async () => {
       const object = randomPutObject();
-      const putted1 = await graffiti.put(object, session);
+      const putted1 = await graffiti.put<{}>(object, session);
       // Make sure the lastModified is different
       await new Promise((r) => setTimeout(r, 20));
-      const putted2 = await graffiti.put(object, session);
+      const putted2 = await graffiti.put<{}>(object, session);
 
       expect(putted1.name).not.toEqual(putted2.name);
       expect(putted1.lastModified).toBeLessThan(putted2.lastModified);
@@ -129,8 +129,7 @@ export const graffitiDiscoverTests = (
       const gtIterator = graffiti.discover([object.channels[0]], {
         properties: {
           lastModified: {
-            minimum: putted2.lastModified,
-            exclusiveMinimum: true,
+            exclusiveMinimum: putted2.lastModified,
           },
         },
       });
@@ -138,8 +137,7 @@ export const graffitiDiscoverTests = (
       const gtIteratorEpsilon = graffiti.discover([object.channels[0]], {
         properties: {
           lastModified: {
-            minimum: putted2.lastModified - 0.1,
-            exclusiveMinimum: true,
+            exclusiveMinimum: putted2.lastModified - 0.1,
           },
         },
       });
@@ -169,8 +167,7 @@ export const graffitiDiscoverTests = (
       const ltIterator = graffiti.discover(object.channels, {
         properties: {
           lastModified: {
-            maximum: putted1.lastModified,
-            exclusiveMaximum: true,
+            exclusiveMaximum: putted1.lastModified,
           },
         },
       });
@@ -179,8 +176,7 @@ export const graffitiDiscoverTests = (
       const ltIteratorEpsilon = graffiti.discover(object.channels, {
         properties: {
           lastModified: {
-            maximum: putted1.lastModified + 0.1,
-            exclusiveMaximum: true,
+            exclusiveMaximum: putted1.lastModified + 0.1,
           },
         },
       });
@@ -212,7 +208,7 @@ export const graffitiDiscoverTests = (
     it("discover schema allowed, as and not as owner", async () => {
       const object = randomPutObject();
       object.allowed = [randomString(), session2.actor, randomString()];
-      await graffiti.put(object, session1);
+      await graffiti.put<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover(
         object.channels,
@@ -304,7 +300,7 @@ export const graffitiDiscoverTests = (
     it("discover schema channels, as and not as owner", async () => {
       const object = randomPutObject();
       object.channels = [randomString(), randomString(), randomString()];
-      await graffiti.put(object, session1);
+      await graffiti.put<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover(
         [object.channels[0], object.channels[2]],
@@ -400,9 +396,9 @@ export const graffitiDiscoverTests = (
         not: {
           required: ["allowed"],
         },
-      } satisfies JSONSchema4;
+      } satisfies JSONSchema;
 
-      await graffiti.put(publicO, session1);
+      await graffiti.put<{}>(publicO, session1);
       const iterator = graffiti.discover(
         publicO.channels,
         publicSchema,
@@ -415,7 +411,7 @@ export const graffitiDiscoverTests = (
 
       const restricted = randomPutObject();
       restricted.allowed = [];
-      await graffiti.put(restricted, session1);
+      await graffiti.put<{}>(restricted, session1);
       const iterator2 = graffiti.discover(
         restricted.channels,
         publicSchema,
@@ -427,17 +423,17 @@ export const graffitiDiscoverTests = (
     it("discover query for values", async () => {
       const object1 = randomPutObject();
       object1.value = { test: randomString() };
-      await graffiti.put(object1, session);
+      await graffiti.put<{}>(object1, session);
 
       const object2 = randomPutObject();
       object2.channels = object1.channels;
       object2.value = { test: randomString(), something: randomString() };
-      await graffiti.put(object2, session);
+      await graffiti.put<{}>(object2, session);
 
       const object3 = randomPutObject();
       object3.channels = object1.channels;
       object3.value = { other: randomString(), something: randomString() };
-      await graffiti.put(object3, session);
+      await graffiti.put<{}>(object3, session);
 
       const counts = new Map<string, number>();
       for (const property of ["test", "something", "other"] as const) {
@@ -464,7 +460,7 @@ export const graffitiDiscoverTests = (
 
     it("discover for deleted content", async () => {
       const object = randomPutObject();
-      const putted = await graffiti.put(object, session);
+      const putted = await graffiti.put<{}>(object, session);
       const deleted = await graffiti.delete(putted, session);
 
       const iterator = graffiti.discover(object.channels, {});
@@ -481,9 +477,9 @@ export const graffitiDiscoverTests = (
       // Do this a bunch to check for concurrency issues
       for (let i = 0; i < 10; i++) {
         const object1 = randomPutObject();
-        const putted = await graffiti.put(object1, session);
+        const putted = await graffiti.put<{}>(object1, session);
         const object2 = randomPutObject();
-        const replaced = await graffiti.put(
+        const replaced = await graffiti.put<{}>(
           {
             ...putted,
             ...object2,
@@ -520,7 +516,7 @@ export const graffitiDiscoverTests = (
 
     it("discover for patched allowed", async () => {
       const object = randomPutObject();
-      const putted = await graffiti.put(object, session);
+      const putted = await graffiti.put<{}>(object, session);
       await graffiti.patch(
         {
           allowed: [{ op: "add", path: "", value: [] }],
@@ -543,7 +539,7 @@ export const graffitiDiscoverTests = (
 
       const putPromises = Array(100)
         .fill(0)
-        .map(() => graffiti.put(object, session));
+        .map(() => graffiti.put<{}>(object, session));
       await Promise.all(putPromises);
 
       const iterator = graffiti.discover(object.channels, {});

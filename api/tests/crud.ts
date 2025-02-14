@@ -3,7 +3,9 @@ import type {
   Graffiti,
   GraffitiSession,
   GraffitiPatch,
+  JSONSchema,
 } from "@graffiti-garden/api";
+import type { FromSchema } from "json-schema-to-ts";
 import {
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
@@ -43,7 +45,7 @@ export const graffitiCRUDTests = (
         const channels = [randomString(), randomString()];
 
         // Put the object
-        const previous = await graffiti.put({ value, channels }, session);
+        const previous = await graffiti.put<{}>({ value, channels }, session);
         expect(previous.value).toEqual({});
         expect(previous.channels).toEqual([]);
         expect(previous.allowed).toBeUndefined();
@@ -63,7 +65,7 @@ export const graffitiCRUDTests = (
         const newValue = {
           something: "goodbye, world~ :c",
         };
-        const beforeReplaced = await graffiti.put(
+        const beforeReplaced = await graffiti.put<{}>(
           { ...previous, value: newValue, channels: [] },
           session,
         );
@@ -96,7 +98,7 @@ export const graffitiCRUDTests = (
       });
 
       it("get non-existant", async () => {
-        const putted = await graffiti.put(randomPutObject(), session);
+        const putted = await graffiti.put<{}>(randomPutObject(), session);
         await expect(
           graffiti.get(
             {
@@ -110,13 +112,13 @@ export const graffitiCRUDTests = (
 
       it("put, get, delete with wrong actor", async () => {
         await expect(
-          graffiti.put(
+          graffiti.put<{}>(
             { value: {}, channels: [], actor: session2.actor },
             session1,
           ),
         ).rejects.toThrow(GraffitiErrorForbidden);
 
-        const putted = await graffiti.put(
+        const putted = await graffiti.put<{}>(
           { value: {}, channels: [] },
           session2,
         );
@@ -139,17 +141,33 @@ export const graffitiCRUDTests = (
                   type: "string",
                 },
                 another: {
-                  type: "integer",
+                  type: "array",
+                  items: {
+                    type: "number",
+                  },
+                },
+                deeper: {
+                  type: "object",
+                  properties: {
+                    deepProp: {
+                      type: "string",
+                    },
+                  },
+                  required: ["deepProp"],
                 },
               },
+              required: ["another", "deeper"],
             },
           },
-        } as const;
+        } as const satisfies JSONSchema;
 
         const goodValue = {
           something: "hello",
-          another: 42,
-        } as const;
+          another: [1, 2, 3],
+          deeper: {
+            deepProp: "hello",
+          },
+        };
 
         const putted = await graffiti.put<typeof schema>(
           {
@@ -158,14 +176,19 @@ export const graffitiCRUDTests = (
           },
           session,
         );
-
         const gotten = await graffiti.get(putted, schema);
+
         expect(gotten.value.something).toEqual(goodValue.something);
         expect(gotten.value.another).toEqual(goodValue.another);
+        expect(gotten.value.another[0]).toEqual(1);
+        expect(gotten.value.deeper.deepProp).toEqual(goodValue.deeper.deepProp);
       });
 
       it("put and get with invalid schema", async () => {
-        const putted = await graffiti.put({ value: {}, channels: [] }, session);
+        const putted = await graffiti.put<{}>(
+          { value: {}, channels: [] },
+          session,
+        );
         await expect(
           graffiti.get(putted, {
             properties: {
@@ -179,7 +202,7 @@ export const graffitiCRUDTests = (
       });
 
       it("put and get with wrong schema", async () => {
-        const putted = await graffiti.put(
+        const putted = await graffiti.put<{}>(
           {
             value: {
               hello: "world",
@@ -210,7 +233,7 @@ export const graffitiCRUDTests = (
         };
         const allowed = [randomString()];
         const channels = [randomString()];
-        const putted = await graffiti.put(
+        const putted = await graffiti.put<{}>(
           { value, allowed, channels },
           session1,
         );
@@ -238,7 +261,7 @@ export const graffitiCRUDTests = (
         };
         const allowed = [randomString(), session2.actor, randomString()];
         const channels = [randomString()];
-        const putted = await graffiti.put(
+        const putted = await graffiti.put<{}>(
           {
             value,
             allowed,
@@ -270,7 +293,7 @@ export const graffitiCRUDTests = (
         const value = {
           something: "hello, world~ c:",
         };
-        const putted = await graffiti.put({ value, channels: [] }, session);
+        const putted = await graffiti.put<{}>({ value, channels: [] }, session);
 
         // Wait just a bit to make sure the lastModified is different
         await new Promise((resolve) => setTimeout(resolve, 10));
@@ -295,7 +318,7 @@ export const graffitiCRUDTests = (
       });
 
       it("patch deleted object", async () => {
-        const putted = await graffiti.put(randomPutObject(), session);
+        const putted = await graffiti.put<{}>(randomPutObject(), session);
         const deleted = await graffiti.delete(putted, session);
         await expect(
           graffiti.patch({}, putted, session),
@@ -310,7 +333,7 @@ export const graffitiCRUDTests = (
             },
           },
         };
-        const putted = await graffiti.put(
+        const putted = await graffiti.put<{}>(
           { value: value, channels: [] },
           session,
         );
@@ -344,7 +367,7 @@ export const graffitiCRUDTests = (
         const channelsBefore = [randomString()];
         const channelsAfter = [randomString()];
 
-        const putted = await graffiti.put(
+        const putted = await graffiti.put<{}>(
           { value: {}, channels: channelsBefore },
           session,
         );
@@ -360,7 +383,7 @@ export const graffitiCRUDTests = (
       });
 
       it("patch 'increment' with test", async () => {
-        const putted = await graffiti.put(
+        const putted = await graffiti.put<{}>(
           {
             value: {
               counter: 1,
@@ -410,7 +433,7 @@ export const graffitiCRUDTests = (
 
       it("invalid patch", async () => {
         const object = randomPutObject();
-        const putted = await graffiti.put(object, session);
+        const putted = await graffiti.put<{}>(object, session);
 
         await expect(
           graffiti.patch(
@@ -429,7 +452,7 @@ export const graffitiCRUDTests = (
       it("patch channels to be wrong", async () => {
         const object = randomPutObject();
         object.allowed = [randomString()];
-        const putted = await graffiti.put(object, session);
+        const putted = await graffiti.put<{}>(object, session);
 
         const patches: GraffitiPatch[] = [
           {
