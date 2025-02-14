@@ -2,8 +2,9 @@ import { it, expect, describe, assert, beforeAll } from "vitest";
 import type { GraffitiSession } from "@graffiti-garden/api";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { randomPutObject, randomString } from "@graffiti-garden/api/tests";
+import { GraffitiSynchronize } from "./index";
 
-const useGraffiti = () => new GraffitiLocal();
+const useGraffiti = () => new GraffitiSynchronize(new GraffitiLocal());
 const graffiti = useGraffiti();
 
 const useSession1 = async () => {
@@ -32,7 +33,7 @@ describe.concurrent("synchronizeDiscover", () => {
 
     const object = randomPutObject();
     const channels = object.channels.slice(1);
-    const putted = await graffiti1.put(object, session);
+    const putted = await graffiti1.put<{}>(object, session);
 
     const graffiti2 = useGraffiti();
     const next = graffiti2.synchronizeDiscover(channels, {}).next();
@@ -55,7 +56,7 @@ describe.concurrent("synchronizeDiscover", () => {
 
     const oldValue = { hello: "world" };
     const oldChannels = [beforeChannel, sharedChannel];
-    const putted = await graffiti.put(
+    const putted = await graffiti.put<{}>(
       {
         value: oldValue,
         channels: oldChannels,
@@ -71,7 +72,7 @@ describe.concurrent("synchronizeDiscover", () => {
     // Replace the object
     const newValue = { goodbye: "world" };
     const newChannels = [afterChannel, sharedChannel];
-    await graffiti.put(
+    await graffiti.put<{}>(
       {
         ...putted,
         value: newValue,
@@ -118,7 +119,7 @@ describe.concurrent("synchronizeDiscover", () => {
 
     const oldValue = { hello: "world" };
     const oldChannels = [beforeChannel, sharedChannel];
-    const putted = await graffiti.put(
+    const putted = await graffiti.put<{}>(
       {
         value: oldValue,
         channels: oldChannels,
@@ -194,7 +195,7 @@ describe.concurrent("synchronizeDiscover", () => {
 
     const oldValue = { hello: "world" };
     const oldChannels = [randomString(), ...channels.slice(1)];
-    const putted = await graffiti.put(
+    const putted = await graffiti.put<{}>(
       {
         value: oldValue,
         channels: oldChannels,
@@ -223,7 +224,7 @@ describe.concurrent("synchronizeDiscover", () => {
 
     for (let i = 0; i < 10; i++) {
       const next = iterator.next();
-      const putted = graffiti.put(object, session);
+      const putted = graffiti.put<{}>(object, session);
 
       let first: undefined | string = undefined;
       next.then(() => {
@@ -282,10 +283,13 @@ describe.concurrent("synchronizeDiscover", () => {
       hello: "world",
     };
     const allowed = [randomString(), session2.actor];
-    await graffiti.put({ value, channels: allChannels, allowed }, session1);
+    await graffiti.put<{}>({ value, channels: allChannels, allowed }, session1);
 
     // Expect no session to time out!
     await expect(
+      // @ts-ignore - otherwise you might get
+      // "Type instantiation is excessively deep
+      //  and possibly infinite."
       Promise.race([
         noSession,
         new Promise((resolve, rejects) => setTimeout(rejects, 100, "Timeout")),
@@ -327,14 +331,14 @@ describe.concurrent("synchronizeGet", () => {
 
   it("replace, delete", async () => {
     const object = randomPutObject();
-    const putted = await graffiti.put(object, session);
+    const putted = await graffiti.put<{}>(object, session);
 
     const iterator = graffiti.synchronizeGet(putted, {});
     const next = iterator.next();
 
     // Change the object
     const newValue = { goodbye: "world" };
-    const putted2 = await graffiti.put(
+    const putted2 = await graffiti.put<{}>(
       {
         ...putted,
         value: newValue,
@@ -360,8 +364,11 @@ describe.concurrent("synchronizeGet", () => {
     expect(result2.value.lastModified).toEqual(deleted.lastModified);
 
     // Put something else
-    await graffiti.put(randomPutObject(), session);
+    await graffiti.put<{}>(randomPutObject(), session);
     await expect(
+      // @ts-ignore - otherwise you might get
+      // "Type instantiation is excessively deep
+      //  and possibly infinite."
       Promise.race([
         iterator.next(),
         new Promise((resolve, reject) => setTimeout(reject, 100, "Timeout")),
@@ -371,7 +378,7 @@ describe.concurrent("synchronizeGet", () => {
 
   it("not allowed", async () => {
     const object = randomPutObject();
-    const putted = await graffiti.put(object, session1);
+    const putted = await graffiti.put<{}>(object, session1);
 
     const iterator1 = graffiti.synchronizeGet(putted, {}, session1);
     const iterator2 = graffiti.synchronizeGet(putted, {}, session2);
@@ -380,7 +387,7 @@ describe.concurrent("synchronizeGet", () => {
     const next2 = iterator2.next();
 
     const newValue = { goodbye: "world" };
-    const putted2 = await graffiti.put(
+    const putted2 = await graffiti.put<{}>(
       {
         ...putted,
         ...object,
