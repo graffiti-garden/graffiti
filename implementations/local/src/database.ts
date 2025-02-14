@@ -49,6 +49,11 @@ export interface GraffitiLocalOptions {
    * documentation for more information.
    */
   tombstoneRetention?: number;
+  /**
+   * An optional Ajv instance to use for schema validation.
+   * If not provided, an internal instance will be created.
+   */
+  ajv?: Ajv;
 }
 
 /**
@@ -74,7 +79,7 @@ export class GraffitiLocalDatabase
   protected readonly ajv: Ajv;
 
   constructor(options?: GraffitiLocalOptions) {
-    this.ajv = new Ajv({ strict: false });
+    this.ajv = options?.ajv ?? new Ajv({ strict: false });
     this.source = options?.sourceName ?? this.source;
     this.tombstoneRetention =
       options?.tombstoneRetention ?? this.tombstoneRetention;
