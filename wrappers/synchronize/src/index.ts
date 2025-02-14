@@ -1,9 +1,9 @@
-import Ajv from "ajv-draft-04";
+import Ajv from "ajv";
 import { Graffiti } from "@graffiti-garden/api";
 import type {
   GraffitiSession,
   GraffitiObject,
-  JSONSchema4,
+  JSONSchema,
   GraffitiStream,
 } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
@@ -11,7 +11,7 @@ import { Repeater } from "@repeaterjs/repeater";
 import { applyPatch } from "fast-json-patch";
 import {
   applyGraffitiPatch,
-  attemptAjvCompile,
+  compileGraffitiObjectSchema,
   isActorAllowedGraffitiObject,
   locationToUri,
   maskGraffitiObject,
@@ -107,13 +107,13 @@ export class GraffitiSynchronize extends Graffiti {
     this.sessionEvents = graffiti.sessionEvents;
   }
 
-  protected synchronize<Schema extends JSONSchema4>(
+  protected synchronize<Schema extends JSONSchema>(
     matchObject: (object: GraffitiObjectBase) => boolean,
     channels: string[],
     schema: Schema,
     session?: GraffitiSession | null,
   ) {
-    const validate = attemptAjvCompile(this.ajv, schema);
+    const validate = compileGraffitiObjectSchema(this.ajv, schema);
 
     const repeater: GraffitiStream<GraffitiObject<Schema>> = new Repeater(
       async (push, stop) => {
@@ -159,14 +159,14 @@ export class GraffitiSynchronize extends Graffiti {
    *
    * @group Synchronize Methods
    */
-  synchronizeDiscover<Schema extends JSONSchema4>(
+  synchronizeDiscover<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.discover<Schema>>
   ): GraffitiStream<GraffitiObject<Schema>> {
     const [channels, schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.channels.some((channel) => channels.includes(channel));
     }
-    return this.synchronize(matchObject, channels, schema, session);
+    return this.synchronize<Schema>(matchObject, channels, schema, session);
   }
 
   /**
@@ -180,7 +180,7 @@ export class GraffitiSynchronize extends Graffiti {
    *
    * @group Synchronize Methods
    */
-  synchronizeGet<Schema extends JSONSchema4>(
+  synchronizeGet<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
   ): GraffitiStream<GraffitiObject<Schema>> {
     const [locationOrUri, schema, session] = args;
@@ -189,7 +189,7 @@ export class GraffitiSynchronize extends Graffiti {
       const { uri } = unpackLocationOrUri(locationOrUri);
       return objectUri === uri;
     }
-    return this.synchronize(matchObject, [], schema, session);
+    return this.synchronize<Schema>(matchObject, [], schema, session);
   }
 
   /**
@@ -205,14 +205,14 @@ export class GraffitiSynchronize extends Graffiti {
    *
    * @group Synchronize Methods
    */
-  synchronizeRecoverOrphans<Schema extends JSONSchema4>(
+  synchronizeRecoverOrphans<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>
   ): GraffitiStream<GraffitiObject<Schema>> {
     const [schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.actor === session.actor && object.channels.length === 0;
     }
-    return this.synchronize(matchObject, [], schema, session);
+    return this.synchronize<Schema>(matchObject, [], schema, session);
   }
 
   protected async synchronizeDispatch(
@@ -255,7 +255,7 @@ export class GraffitiSynchronize extends Graffiti {
   };
 
   put: Graffiti["put"] = async (...args) => {
-    const oldObject = await this.graffiti.put(...args);
+    const oldObject = await this.graffiti.put<{}>(...args);
     const partialObject = args[0];
     const newObject: GraffitiObjectBase = {
       ...oldObject,
@@ -285,7 +285,7 @@ export class GraffitiSynchronize extends Graffiti {
     return oldObject;
   };
 
-  protected objectStream<Schema extends JSONSchema4>(
+  protected objectStream<Schema extends JSONSchema>(
     iterator: ReturnType<typeof Graffiti.prototype.discover<Schema>>,
   ) {
     const dispatch = this.synchronizeDispatch.bind(this);
@@ -305,11 +305,11 @@ export class GraffitiSynchronize extends Graffiti {
 
   discover: Graffiti["discover"] = (...args) => {
     const iterator = this.graffiti.discover(...args);
-    return this.objectStream(iterator);
+    return this.objectStream<(typeof args)[1]>(iterator);
   };
 
   recoverOrphans: Graffiti["recoverOrphans"] = (...args) => {
     const iterator = this.graffiti.recoverOrphans(...args);
-    return this.objectStream(iterator);
+    return this.objectStream<(typeof args)[0]>(iterator);
   };
 }
