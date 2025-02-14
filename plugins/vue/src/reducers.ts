@@ -1,9 +1,13 @@
 import { ref } from "vue";
-import type { JSONSchema4 } from "@graffiti-garden/api";
-import type { GraffitiObject, Graffiti } from "@graffiti-garden/api";
+import type { Ref } from "vue";
+import type {
+  GraffitiObject,
+  Graffiti,
+  JSONSchema,
+} from "@graffiti-garden/api";
 import { isObjectNewer } from "@graffiti-garden/implementation-local/utilities";
 
-export abstract class Reducer<Schema extends JSONSchema4> {
+export abstract class Reducer<Schema extends JSONSchema> {
   abstract clear(): void;
   abstract onObject(object: GraffitiObject<Schema> | null): void;
 }
@@ -15,12 +19,12 @@ export abstract class Reducer<Schema extends JSONSchema4> {
  * is `undefined`. If the object has been deleted,
  * the result is `null`.
  */
-export class SingletonReducer<Schema extends JSONSchema4>
+export class SingletonReducer<Schema extends JSONSchema>
   implements Reducer<Schema>
 {
-  readonly result = ref<
+  readonly result: Ref<
     (GraffitiObject<Schema> & { tombstone: false }) | null | undefined
-  >(undefined);
+  > = ref(undefined);
 
   clear() {
     this.result.value = undefined;
@@ -35,7 +39,10 @@ export class SingletonReducer<Schema extends JSONSchema4>
       if (!object || object.tombstone) {
         this.result.value = null;
       } else {
-        this.result.value = object;
+        this.result.value = {
+          ...object,
+          tombstone: false,
+        };
       }
     }
   }
@@ -48,12 +55,13 @@ export class SingletonReducer<Schema extends JSONSchema4>
  * they are processed in batches every `REFRESH_RATE` milliseconds
  * to avoid freezing the interface.
  */
-export class ArrayReducer<Schema extends JSONSchema4>
+export class ArrayReducer<Schema extends JSONSchema>
   implements Reducer<Schema>
 {
-  readonly results = ref<(GraffitiObject<Schema> & { tombstone: false })[]>([]);
-  readonly resultsRaw = new Map<string, GraffitiObject<Schema>>();
-  batchFlattenTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+  readonly results: Ref<(GraffitiObject<Schema> & { tombstone: false })[]> =
+    ref([]);
+  readonly resultsRaw: Map<string, GraffitiObject<Schema>> = new Map();
+  batchFlattenTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(readonly graffiti: Graffiti) {}
 

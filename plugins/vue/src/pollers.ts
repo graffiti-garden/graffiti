@@ -1,10 +1,10 @@
 import type {
   Graffiti,
-  JSONSchema4,
+  JSONSchema,
   GraffitiObject,
 } from "@graffiti-garden/api";
 
-export abstract class Poller<Schema extends JSONSchema4> {
+export abstract class Poller<Schema extends JSONSchema> {
   abstract poll(
     onObject: (object: GraffitiObject<Schema> | null) => void,
   ): Promise<void>;
@@ -14,7 +14,7 @@ export abstract class Poller<Schema extends JSONSchema4> {
 /**
  * Polls for a single object and calls onValue with the result.
  */
-export class GetPoller<Schema extends JSONSchema4> implements Poller<Schema> {
+export class GetPoller<Schema extends JSONSchema> implements Poller<Schema> {
   constructor(readonly getter: () => Promise<GraffitiObject<Schema>>) {}
 
   poll: Poller<Schema>["poll"] = async (onObject) => {
@@ -36,17 +36,14 @@ export class GetPoller<Schema extends JSONSchema4> implements Poller<Schema> {
  * If `poll` is called multiple times, it doesn't poll the results
  * entirely from scratch, but instead only polls the new results.
  */
-export class StreamPoller<Schema extends JSONSchema4>
-  implements Poller<Schema>
-{
+export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
   bookmark:
     | {
         lastModified: number;
         fullRepollBy: number;
       }
-    | undefined = undefined;
-  iterator: ReturnType<typeof Graffiti.prototype.discover<Schema>> | undefined =
-    undefined;
+    | undefined;
+  iterator: ReturnType<typeof Graffiti.prototype.discover<Schema>> | undefined;
 
   constructor(
     readonly schemaGetter: () => Schema,
@@ -65,16 +62,24 @@ export class StreamPoller<Schema extends JSONSchema4>
     const startOfPoll = new Date().getTime();
 
     // Add a query for lastModified if it's not in the schema
-    const schema = { ...this.schemaGetter() };
+    const schemaRaw = this.schemaGetter();
+    let schema: JSONSchema & object =
+      typeof schemaRaw === "object" ? schemaRaw : {};
     if (this.bookmark && this.bookmark.fullRepollBy > startOfPoll) {
-      schema.properties = {
-        ...schema.properties,
-        lastModified: {
-          minimum: this.bookmark.lastModified,
-          // if the schema already has a minimum
-          // it won't be overridden because
-          // the schema below takes precedence
-          ...schema.properties?.lastModified,
+      const lastModifiedSchema = schema.properties?.lastModified;
+      schema = {
+        ...schema,
+        properties: {
+          ...schema.properties,
+          lastModified: {
+            minimum: this.bookmark.lastModified,
+            // if the schema already has a minimum
+            // it won't be overridden because
+            // the schema below takes precedence
+            ...(typeof lastModifiedSchema === "object"
+              ? lastModifiedSchema
+              : {}),
+          },
         },
       };
     }

@@ -1,22 +1,17 @@
-import {
-  onScopeDispose,
-  ref,
-  toValue,
-  watch,
-  type MaybeRefOrGetter,
-} from "vue";
+import { onScopeDispose, ref, toValue, watch } from "vue";
+import type { Ref, MaybeRefOrGetter } from "vue";
 import type {
   GraffitiLocation,
   GraffitiObject,
   GraffitiSession,
-  JSONSchema4,
+  JSONSchema,
+  GraffitiStream,
 } from "@graffiti-garden/api";
 import { useGraffitiSynchronize, useGraffitiSession } from "./globals";
-import type { GraffitiStream } from "@graffiti-garden/api";
 import { GetPoller, Poller, StreamPoller } from "./pollers";
 import { ArrayReducer, Reducer, SingletonReducer } from "./reducers";
 
-function makeComposable<Schema extends JSONSchema4>(
+function makeComposable<Schema extends JSONSchema>(
   reducer: Reducer<Schema>,
   poller: Poller<Schema>,
   synchronizeFactory: () => GraffitiStream<GraffitiObject<Schema>>,
@@ -105,7 +100,7 @@ function callGetters<T extends readonly (() => any)[]>(
  * not when the elements or properties change.
  * If you need deep reactivity, wrap your argument in a getter.
  */
-export function useGraffitiDiscover<Schema extends JSONSchema4>(
+export function useGraffitiDiscover<Schema extends JSONSchema>(
   channels: MaybeRefOrGetter<string[]>,
   schema: MaybeRefOrGetter<Schema>,
   /**
@@ -114,7 +109,11 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
    * will be used. Otherwise, the provided value will be used.
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
-) {
+): {
+  results: Ref<(GraffitiObject<Schema> & { tombstone: false })[]>;
+  poll: () => Promise<void>;
+  isPolling: Ref<boolean>;
+} {
   const graffiti = useGraffitiSynchronize();
   const sessionInjected = useGraffitiSession();
 
@@ -128,9 +127,9 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
   const streamFactory = () => graffiti.discover(...callGetters(argGetters));
 
   const reducer = new ArrayReducer<Schema>(graffiti);
-  const poller = new StreamPoller(schemaGetter, streamFactory);
+  const poller = new StreamPoller<Schema>(schemaGetter, streamFactory);
 
-  const { poll, isPolling } = makeComposable(
+  const { poll, isPolling } = makeComposable<Schema>(
     reducer,
     poller,
     synchronizeFactory,
@@ -171,7 +170,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema4>(
  * not when the elements or properties change.
  * If you need deep reactivity, wrap your argument in a getter.
  */
-export function useGraffitiGet<Schema extends JSONSchema4>(
+export function useGraffitiGet<Schema extends JSONSchema>(
   locationOrUri: MaybeRefOrGetter<GraffitiLocation | string>,
   schema: MaybeRefOrGetter<Schema>,
   /**
@@ -180,7 +179,11 @@ export function useGraffitiGet<Schema extends JSONSchema4>(
    * will be used. Otherwise, the provided value will be used.
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
-) {
+): {
+  result: Ref<GraffitiObject<Schema> | null | undefined>;
+  poll: () => Promise<void>;
+  isPolling: Ref<boolean>;
+} {
   const graffiti = useGraffitiSynchronize();
   const sessionInjected = useGraffitiSession();
 
@@ -197,9 +200,10 @@ export function useGraffitiGet<Schema extends JSONSchema4>(
     graffiti.synchronizeGet(...callGetters(argGetters));
 
   const reducer = new SingletonReducer<Schema>();
-  const poller = new GetPoller(() => graffiti.get(...callGetters(argGetters)));
+  const getter = () => graffiti.get<Schema>(...callGetters(argGetters));
+  const poller = new GetPoller<Schema>(getter);
 
-  const { poll, isPolling } = makeComposable(
+  const { poll, isPolling } = makeComposable<Schema>(
     reducer,
     poller,
     synchronizeFactory,
@@ -241,10 +245,14 @@ export function useGraffitiGet<Schema extends JSONSchema4>(
  * not when the elements or properties change.
  * If you need deep reactivity, wrap your argument in a getter.
  */
-export function useGraffitiRecoverOrphans<Schema extends JSONSchema4>(
+export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
   schema: MaybeRefOrGetter<Schema>,
   session: MaybeRefOrGetter<GraffitiSession>,
-) {
+): {
+  results: Ref<(GraffitiObject<Schema> & { tombstone: false })[]>;
+  poll: () => Promise<void>;
+  isPolling: Ref<boolean>;
+} {
   const graffiti = useGraffitiSynchronize();
 
   const schemaGetter = () => toValue(schema);
@@ -255,11 +263,11 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema4>(
     graffiti.synchronizeRecoverOrphans(...callGetters(argGetters));
 
   const reducer = new ArrayReducer<Schema>(graffiti);
-  const poller = new StreamPoller(schemaGetter, () =>
-    graffiti.recoverOrphans(...callGetters(argGetters)),
-  );
+  const streamFactory = () =>
+    graffiti.recoverOrphans<Schema>(...callGetters(argGetters));
+  const poller = new StreamPoller<Schema>(schemaGetter, streamFactory);
 
-  const { poll, isPolling } = makeComposable(
+  const { poll, isPolling } = makeComposable<Schema>(
     reducer,
     poller,
     synchronizeFactory,

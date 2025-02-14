@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useGraffiti, useGraffitiSession } from "../../src/plugin";
-import { type GraffitiObject, type JSONSchema4 } from "@graffiti-garden/api";
+import type { GraffitiObject, JSONSchema } from "@graffiti-garden/api";
 
 const graffiti = useGraffiti();
 const session = useGraffitiSession();
@@ -16,13 +16,13 @@ const noteSchema = {
                     type: "string",
                 },
                 createdAt: {
-                    type: "string",
+                    type: "number",
                 },
             },
             required: ["content", "createdAt"],
         },
     },
-} as const satisfies JSONSchema4;
+} as const satisfies JSONSchema;
 
 const posting = ref(false);
 const myNote = ref("");
@@ -38,7 +38,7 @@ async function postNote() {
             channels: channels.value,
             value: {
                 content: myNote.value,
-                createdAt: new Date().toISOString(),
+                createdAt: new Date().getTime(),
             },
         },
         session.value,
