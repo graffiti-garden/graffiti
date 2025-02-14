@@ -2,7 +2,7 @@ import type {
   Graffiti,
   GraffitiObjectBase,
   GraffitiLocation,
-  JSONSchema4,
+  JSONSchema,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
@@ -16,13 +16,13 @@ import {
   unpackLocationOrUri,
   randomBase64,
   applyGraffitiPatch,
-  attemptAjvCompile,
   maskGraffitiObject,
   isActorAllowedGraffitiObject,
   isObjectNewer,
+  compileGraffitiObjectSchema,
 } from "./utilities.js";
 import { Repeater } from "@repeaterjs/repeater";
-import Ajv from "ajv-draft-04";
+import Ajv from "ajv";
 import { applyPatch } from "fast-json-patch";
 
 /**
@@ -73,8 +73,8 @@ export class GraffitiLocalDatabase
   protected readonly tombstoneRetention: number = 86400000; // 1 day in ms
   protected readonly ajv: Ajv;
 
-  constructor(options?: GraffitiLocalOptions, ajv?: Ajv) {
-    this.ajv = ajv ?? new Ajv({ strict: false });
+  constructor(options?: GraffitiLocalOptions) {
+    this.ajv = new Ajv({ strict: false });
     this.source = options?.sourceName ?? this.source;
     this.tombstoneRetention =
       options?.tombstoneRetention ?? this.tombstoneRetention;
@@ -191,13 +191,13 @@ export class GraffitiLocalDatabase
     const doc = docs.reduce((a, b) => (isObjectNewer(a, b) ? a : b));
 
     // Strip out the _id and _rev
-    const { _id, _rev, ...object } = doc;
+    const { _id, _rev, _conflicts, _attachments, ...object } = doc;
 
     // Mask out the allowed list and channels
     // if the user is not the owner
     maskGraffitiObject(object, [], session);
 
-    const validate = attemptAjvCompile(this.ajv, schema);
+    const validate = compileGraffitiObjectSchema(this.ajv, schema);
     if (!validate(object)) {
       throw new GraffitiErrorSchemaMismatch();
     }
@@ -398,24 +398,46 @@ export class GraffitiLocalDatabase
     };
   };
 
-  protected queryLastModifiedSuffixes(schema: JSONSchema4) {
+  protected queryLastModifiedSuffixes(schema: JSONSchema) {
     // Use the index for queries over ranges of lastModified
     let startKeySuffix = "";
     let endKeySuffix = "\uffff";
-    const lastModifiedSchema = schema.properties?.lastModified;
-    if (lastModifiedSchema?.minimum) {
-      let minimum = Math.ceil(lastModifiedSchema.minimum);
-      minimum === lastModifiedSchema.minimum &&
-        lastModifiedSchema.exclusiveMinimum &&
-        minimum++;
-      startKeySuffix = minimum.toString().padStart(15, "0");
-    }
-    if (lastModifiedSchema?.maximum) {
-      let maximum = Math.floor(lastModifiedSchema.maximum);
-      maximum === lastModifiedSchema.maximum &&
-        lastModifiedSchema.exclusiveMaximum &&
-        maximum--;
-      endKeySuffix = maximum.toString().padStart(15, "0");
+    if (
+      typeof schema === "object" &&
+      schema.properties?.lastModified &&
+      typeof schema.properties.lastModified === "object"
+    ) {
+      const lastModifiedSchema = schema.properties.lastModified;
+
+      const minimum = lastModifiedSchema.minimum;
+      const exclusiveMinimum = lastModifiedSchema.exclusiveMinimum;
+
+      let intMinimum: number | undefined;
+      if (exclusiveMinimum !== undefined) {
+        intMinimum = Math.ceil(exclusiveMinimum);
+        intMinimum === exclusiveMinimum && intMinimum++;
+      } else if (minimum !== undefined) {
+        intMinimum = Math.ceil(minimum);
+      }
+
+      if (intMinimum !== undefined) {
+        startKeySuffix = intMinimum.toString().padStart(15, "0");
+      }
+
+      const maximum = lastModifiedSchema.maximum;
+      const exclusiveMaximum = lastModifiedSchema.exclusiveMaximum;
+
+      let intMaximum: number | undefined;
+      if (exclusiveMaximum !== undefined) {
+        intMaximum = Math.floor(exclusiveMaximum);
+        intMaximum === exclusiveMaximum && intMaximum--;
+      } else if (maximum !== undefined) {
+        intMaximum = Math.floor(maximum);
+      }
+
+      if (intMaximum !== undefined) {
+        endKeySuffix = intMaximum.toString().padStart(15, "0");
+      }
     }
     return {
       startKeySuffix,
@@ -425,7 +447,7 @@ export class GraffitiLocalDatabase
 
   discover: Graffiti["discover"] = (...args) => {
     const [channels, schema, session] = args;
-    const validate = attemptAjvCompile(this.ajv, schema);
+    const validate = compileGraffitiObjectSchema(this.ajv, schema);
 
     const { startKeySuffix, endKeySuffix } =
       this.queryLastModifiedSuffixes(schema);
@@ -479,7 +501,7 @@ export class GraffitiLocalDatabase
   };
 
   recoverOrphans: Graffiti["recoverOrphans"] = (schema, session) => {
-    const validate = attemptAjvCompile(this.ajv, schema);
+    const validate = compileGraffitiObjectSchema(this.ajv, schema);
 
     const { startKeySuffix, endKeySuffix } =
       this.queryLastModifiedSuffixes(schema);

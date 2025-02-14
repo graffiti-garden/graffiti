@@ -1,5 +1,4 @@
 import { Graffiti } from "@graffiti-garden/api";
-import Ajv from "ajv-draft-04";
 import { GraffitiLocalSessionManager } from "./session-manager.js";
 import {
   GraffitiLocalDatabase,
@@ -36,8 +35,7 @@ export class GraffitiLocal extends Graffiti {
   constructor(options?: GraffitiLocalOptions) {
     super();
 
-    const ajv = new Ajv({ strict: false });
-    const graffitiPouchDbBase = new GraffitiLocalDatabase(options, ajv);
+    const graffitiPouchDbBase = new GraffitiLocalDatabase(options);
 
     this.put = graffitiPouchDbBase.put.bind(graffitiPouchDbBase);
     this.get = graffitiPouchDbBase.get.bind(graffitiPouchDbBase);
