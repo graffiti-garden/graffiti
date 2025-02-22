@@ -3,9 +3,10 @@
     font-style: normal;
     font-weight: 400;
     src: url(rock-salt.woff2) format("woff2");
-    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
-        U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193,
-        U+2212, U+2215, U+FEFF, U+FFFD;
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+        U+FEFF, U+FFFD;
 }
 
 .graffiti-login {
@@ -112,6 +113,7 @@
 
     button,
     input[type="submit"],
+    input[type="text"],
     menu a {
         font-size: 1rem;
         text-align: center;
@@ -127,6 +129,16 @@
         text-overflow: ellipsis;
         background: none;
         line-height: 1.2rem;
+    }
+
+    label:has(+ input[type="text"]) {
+        margin-bottom: -0.75em;
+    }
+
+    input[type="text"] {
+        font-weight: 500;
+        background: var(--front);
+        text-align: left;
     }
 
     header button {
@@ -175,7 +187,7 @@
     :is(button, ul a, input[type="submit"]):hover {
         cursor: pointer;
         background: var(--hover);
-        color: white;
+        color: var(--front);
     }
 
     p a:hover {
