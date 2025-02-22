@@ -1,1 +1,4 @@
-export interface GraffitiSolidOIDCSessionManagerOptions {}
+export interface GraffitiSolidOIDCSessionManagerOptions {
+  restorePreviousSession?: boolean;
+  sessionEvents?: EventTarget;
+}

@@ -14,11 +14,14 @@ export class GraffitiSolidOIDCSessionManager
   implements Pick<Graffiti, "login" | "logout" | "sessionEvents">
 {
   protected sessionManagerLocal = new GraffitiLocalSessionManager();
-  sessionEvents = new EventTarget();
+  sessionEvents: EventTarget;
+
   protected dialog = document.createElement("dialog");
   protected main: Promise<HTMLElement>;
   protected solidSession = getDefaultSession();
   constructor(options?: GraffitiSolidOIDCSessionManagerOptions) {
+    this.sessionEvents = options?.sessionEvents ?? new EventTarget();
+
     // Forward local login/logout events (but not initialization)
     for (const event of ["login", "logout"] as const) {
       this.sessionManagerLocal.sessionEvents.addEventListener(event, (evt) => {
@@ -43,7 +46,7 @@ export class GraffitiSolidOIDCSessionManager
     });
     this.solidSession
       .handleIncomingRedirect({
-        restorePreviousSession: true,
+        restorePreviousSession: options?.restorePreviousSession ?? true,
       })
       .then(() => {
         const event: GraffitiSessionInitializedEvent = new CustomEvent(
