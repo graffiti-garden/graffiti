@@ -44,6 +44,22 @@ export interface GraffitiLocalOptions {
    */
   sourceName?: string;
   /**
+   * Whether to allow putting objects with a different than the
+   * default source name. Defaults to `false`.
+   *
+   * Allows this implementation to be used as a client-side cache
+   * for remote sources.
+   */
+  allowOtherSources?: boolean;
+  /**
+   * Whether to allow the user to set the lastModified field
+   * when putting objects. Defaults to `false`.
+   *
+   * Allows this implementation to be used as a client-side cache
+   * for remote sources.
+   */
+  allowSettinngLastModified?: boolean;
+  /**
    * The time in milliseconds to keep tombstones before deleting them.
    * See the {@link https://api.graffiti.garden/classes/Graffiti.html#discover | `discover` }
    * documentation for more information.
@@ -76,6 +92,8 @@ export class GraffitiLocalDatabase
   protected readonly db: PouchDB.Database<GraffitiObjectBase>;
   protected readonly source: string = "local";
   protected readonly tombstoneRetention: number = 86400000; // 1 day in ms
+  protected readonly allowOtherSources: boolean = false;
+  protected readonly allowSettingLastModified: boolean = false;
   protected readonly ajv: Ajv;
 
   constructor(options?: GraffitiLocalOptions) {
@@ -83,6 +101,10 @@ export class GraffitiLocalDatabase
     this.source = options?.sourceName ?? this.source;
     this.tombstoneRetention =
       options?.tombstoneRetention ?? this.tombstoneRetention;
+    this.allowOtherSources =
+      options?.allowOtherSources ?? this.allowOtherSources;
+    this.allowSettingLastModified =
+      options?.allowSettinngLastModified ?? this.allowSettingLastModified;
     const pouchDbOptions = {
       name: "graffitiDb",
       ...options?.pouchDBOptions,
@@ -301,11 +323,19 @@ export class GraffitiLocalDatabase
     if (objectPartial.actor && objectPartial.actor !== session.actor) {
       throw new GraffitiErrorForbidden();
     }
-    if (objectPartial.source && objectPartial.source !== this.source) {
+    if (
+      objectPartial.source &&
+      objectPartial.source !== this.source &&
+      !this.allowOtherSources
+    ) {
       throw new GraffitiErrorForbidden(
         "Putting an object that does not match this source",
       );
     }
+
+    const lastModified =
+      (this.allowSettingLastModified && objectPartial.lastModified) ||
+      new Date().getTime();
 
     const object: GraffitiObjectBase = {
       value: objectPartial.value,
@@ -315,7 +345,7 @@ export class GraffitiLocalDatabase
       source: this.source,
       actor: session.actor,
       tombstone: false,
-      lastModified: new Date().getTime(),
+      lastModified,
     };
 
     await this.db.put({
