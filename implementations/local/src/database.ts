@@ -189,10 +189,12 @@ export class GraffitiLocalDatabase
 
   get ajv() {
     if (!this.ajv_) {
-      this.ajv_ = (async () => {
-        const { default: Ajv } = await import("ajv");
-        return new Ajv({ strict: false });
-      })();
+      this.ajv_ = this.options.ajv
+        ? Promise.resolve(this.options.ajv)
+        : (async () => {
+            const { default: Ajv } = await import("ajv");
+            return new Ajv({ strict: false });
+          })();
     }
     return this.ajv_;
   }
