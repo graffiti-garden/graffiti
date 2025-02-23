@@ -19,11 +19,12 @@ export class GraffitiSolidOIDCSessionManager
   sessionEvents: EventTarget;
 
   protected dialog = document.createElement("dialog");
-  protected main: Promise<HTMLElement>;
+  protected shadow: ShadowRoot;
+  protected main_: Promise<HTMLElement> | undefined;
   protected solidSession: Promise<Session> | undefined;
-  options: GraffitiSolidOIDCSessionManagerOptions | undefined;
+  protected options: GraffitiSolidOIDCSessionManagerOptions | undefined;
 
-  useSolidSession() {
+  protected useSolidSession() {
     if (!this.solidSession) {
       this.solidSession = (async () => {
         const { getDefaultSession } = await import(
@@ -97,6 +98,7 @@ export class GraffitiSolidOIDCSessionManager
     }
 
     this.dialog.className = "graffiti-login";
+    this.dialog.innerHTML = "Loading...";
 
     // Click outside of dialog to close
     this.dialog.addEventListener("click", (e) => {
@@ -115,35 +117,48 @@ export class GraffitiSolidOIDCSessionManager
     const host = document.createElement("div");
     host.id = "graffiti-login-host";
 
-    const shadow = host.attachShadow({ mode: "closed" });
-    shadow.appendChild(this.dialog);
+    this.shadow = host.attachShadow({ mode: "closed" });
+    this.shadow.appendChild(this.dialog);
 
     document.body.append(host);
+  }
 
-    this.main = import("./dialog.html").then(({ default: dialogHTML }) => {
-      this.dialog.innerHTML = dialogHTML;
+  protected get main() {
+    if (!this.main_) {
+      this.main_ = Promise.all([
+        import("./dialog.html"),
+        import("./style.css"),
+        import("./graffiti.webp"),
+        import("./rock-salt.woff2"),
+      ]).then(
+        ([
+          { default: dialogHTML },
+          { default: style },
+          { default: image },
+          { default: font },
+        ]) => {
+          this.dialog.innerHTML = dialogHTML;
 
-      const closeBtn = this.dialog.querySelector("#graffiti-login-close");
-      closeBtn?.addEventListener("click", () => this.cancelLogin());
+          const closeBtn = this.dialog.querySelector("#graffiti-login-close");
+          closeBtn?.addEventListener("click", () => this.cancelLogin());
 
-      return this.dialog.querySelector("#graffiti-login-main") as HTMLElement;
-    });
+          const main = this.dialog.querySelector(
+            "#graffiti-login-main",
+          ) as HTMLElement;
 
-    Promise.all([
-      import("./style.css"),
-      import("./graffiti.webp"),
-      import("./rock-salt.woff2"),
-    ]).then(([{ default: style }, { default: image }, { default: font }]) => {
-      style = style.replace("url(graffiti.jpg)", `url(${image})`);
-      style = style.replace("url(rock-salt.woff2)", `url(${font})`);
+          style = style.replace("url(graffiti.jpg)", `url(${image})`);
+          style = style.replace("url(rock-salt.woff2)", `url(${font})`);
 
-      const sheet = new CSSStyleSheet();
-      sheet.replace(style).then(() => {
-        shadow.adoptedStyleSheets = [sheet];
-      });
-    });
+          const sheet = new CSSStyleSheet();
+          sheet.replace(style).then(() => {
+            this.shadow.adoptedStyleSheets = [sheet];
+          });
 
-    this.onWelcome();
+          return main;
+        },
+      );
+    }
+    return this.main_;
   }
 
   login: Graffiti["login"] = async (proposal) => {

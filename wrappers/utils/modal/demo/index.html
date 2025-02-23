@@ -32,7 +32,11 @@
                 );
             }
             const button = document.querySelector("#toggle-login-button");
-            button.onclick = () => sessionManager.login();
+            button.onclick = async () => {
+                button.innerText = "Logging in...";
+                await sessionManager.login();
+                button.innerText = "Login";
+            };
             button.innerText = "Login";
             const span = document.querySelector("#display-actor");
             span.innerText = "";
