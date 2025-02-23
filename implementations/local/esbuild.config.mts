@@ -6,9 +6,10 @@ await esbuild.build({
   platform: "browser",
   bundle: true,
   sourcemap: true,
+  splitting: true,
   minify: true,
   format: "esm",
-  outfile: "dist/index.browser.js",
+  outdir: "dist/browser",
   plugins: [polyfillNode()],
 });
 
