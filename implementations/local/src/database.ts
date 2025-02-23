@@ -10,7 +10,6 @@ import {
   GraffitiErrorForbidden,
   GraffitiErrorPatchError,
 } from "@graffiti-garden/api";
-import PouchDB from "pouchdb";
 import {
   locationToUri,
   unpackLocationOrUri,
@@ -72,6 +71,9 @@ export interface GraffitiLocalOptions {
   ajv?: Ajv;
 }
 
+const DEFAULT_TOMBSTONE_RETENTION = 86400000; // 1 day in milliseconds
+const DEFAULT_SOURCE_NAME = "local";
+
 /**
  * An implementation of only the database operations of the
  * GraffitiAPI without synchronization or session management.
@@ -89,97 +91,101 @@ export class GraffitiLocalDatabase
       | "channelStats"
     >
 {
-  protected readonly db: PouchDB.Database<GraffitiObjectBase>;
-  protected readonly source: string = "local";
-  protected readonly tombstoneRetention: number = 86400000; // 1 day in ms
-  protected readonly allowOtherSources: boolean = false;
-  protected readonly allowSettingLastModified: boolean = false;
+  protected db_: Promise<PouchDB.Database<GraffitiObjectBase>> | undefined;
+  protected readonly options: GraffitiLocalOptions;
   protected readonly ajv: Ajv;
+
+  get db() {
+    if (!this.db_) {
+      this.db_ = (async () => {
+        const { default: PouchDB } = await import("pouchdb");
+        const pouchDbOptions = {
+          name: "graffitiDb",
+          ...this.options.pouchDBOptions,
+        };
+        const db = new PouchDB<GraffitiObjectBase>(
+          pouchDbOptions.name,
+          pouchDbOptions,
+        );
+        await db
+          //@ts-ignore
+          .put({
+            _id: "_design/indexes",
+            views: {
+              objectsPerChannelAndLastModified: {
+                map: function (object: GraffitiObjectBase) {
+                  const paddedLastModified = object.lastModified
+                    .toString()
+                    .padStart(15, "0");
+                  object.channels.forEach(function (channel) {
+                    const id =
+                      encodeURIComponent(channel) + "/" + paddedLastModified;
+                    //@ts-ignore
+                    emit(id);
+                  });
+                }.toString(),
+              },
+              orphansPerActorAndLastModified: {
+                map: function (object: GraffitiObjectBase) {
+                  if (object.channels.length === 0) {
+                    const paddedLastModified = object.lastModified
+                      .toString()
+                      .padStart(15, "0");
+                    const id =
+                      encodeURIComponent(object.actor) +
+                      "/" +
+                      paddedLastModified;
+                    //@ts-ignore
+                    emit(id);
+                  }
+                }.toString(),
+              },
+              channelStatsPerActor: {
+                map: function (object: GraffitiObjectBase) {
+                  if (object.tombstone) return;
+                  object.channels.forEach(function (channel) {
+                    const id =
+                      encodeURIComponent(object.actor) +
+                      "/" +
+                      encodeURIComponent(channel);
+                    //@ts-ignore
+                    emit(id, object.lastModified);
+                  });
+                }.toString(),
+                reduce: "_stats",
+              },
+            },
+          })
+          //@ts-ignore
+          .catch((error) => {
+            if (
+              error &&
+              typeof error === "object" &&
+              "name" in error &&
+              error.name === "conflict"
+            ) {
+              // Design document already exists
+              return;
+            } else {
+              throw error;
+            }
+          });
+        return db;
+      })();
+    }
+    return this.db_;
+  }
 
   constructor(options?: GraffitiLocalOptions) {
     this.ajv = options?.ajv ?? new Ajv({ strict: false });
-    this.source = options?.sourceName ?? this.source;
-    this.tombstoneRetention =
-      options?.tombstoneRetention ?? this.tombstoneRetention;
-    this.allowOtherSources =
-      options?.allowOtherSources ?? this.allowOtherSources;
-    this.allowSettingLastModified =
-      options?.allowSettinngLastModified ?? this.allowSettingLastModified;
-    const pouchDbOptions = {
-      name: "graffitiDb",
-      ...options?.pouchDBOptions,
-    };
-    this.db = new PouchDB<GraffitiObjectBase>(
-      pouchDbOptions.name,
-      pouchDbOptions,
-    );
-
-    this.db
-      //@ts-ignore
-      .put({
-        _id: "_design/indexes",
-        views: {
-          objectsPerChannelAndLastModified: {
-            map: function (object: GraffitiObjectBase) {
-              const paddedLastModified = object.lastModified
-                .toString()
-                .padStart(15, "0");
-              object.channels.forEach(function (channel) {
-                const id =
-                  encodeURIComponent(channel) + "/" + paddedLastModified;
-                //@ts-ignore
-                emit(id);
-              });
-            }.toString(),
-          },
-          orphansPerActorAndLastModified: {
-            map: function (object: GraffitiObjectBase) {
-              if (object.channels.length === 0) {
-                const paddedLastModified = object.lastModified
-                  .toString()
-                  .padStart(15, "0");
-                const id =
-                  encodeURIComponent(object.actor) + "/" + paddedLastModified;
-                //@ts-ignore
-                emit(id);
-              }
-            }.toString(),
-          },
-          channelStatsPerActor: {
-            map: function (object: GraffitiObjectBase) {
-              if (object.tombstone) return;
-              object.channels.forEach(function (channel) {
-                const id =
-                  encodeURIComponent(object.actor) +
-                  "/" +
-                  encodeURIComponent(channel);
-                //@ts-ignore
-                emit(id, object.lastModified);
-              });
-            }.toString(),
-            reduce: "_stats",
-          },
-        },
-      })
-      //@ts-ignore
-      .catch((error) => {
-        if (
-          error &&
-          typeof error === "object" &&
-          "name" in error &&
-          error.name === "conflict"
-        ) {
-          // Design document already exists
-          return;
-        } else {
-          throw error;
-        }
-      });
+    this.options = options ?? {};
   }
 
   protected async queryByLocation(location: GraffitiLocation) {
     const uri = locationToUri(location) + "/";
-    const results = await this.db.allDocs({
+    const results = await (
+      await this.db
+    ).allDocs({
       startkey: uri,
       endkey: uri + "\uffff", // \uffff is the last unicode character
       include_docs: true,
@@ -275,7 +281,9 @@ export class GraffitiLocalDatabase
 
     const lastModified = keepLatest ? latestModified : new Date().getTime();
 
-    const deleteResults = await this.db.bulkDocs<GraffitiObjectBase>(
+    const deleteResults = await (
+      await this.db
+    ).bulkDocs<GraffitiObjectBase>(
       docsToDelete.map((doc) => ({
         ...doc,
         tombstone: true,
@@ -325,8 +333,9 @@ export class GraffitiLocalDatabase
     }
     if (
       objectPartial.source &&
-      objectPartial.source !== this.source &&
-      !this.allowOtherSources
+      objectPartial.source !==
+        (this.options.sourceName ?? DEFAULT_SOURCE_NAME) &&
+      !(this.options.allowOtherSources ?? false)
     ) {
       throw new GraffitiErrorForbidden(
         "Putting an object that does not match this source",
@@ -334,7 +343,8 @@ export class GraffitiLocalDatabase
     }
 
     const lastModified =
-      (this.allowSettingLastModified && objectPartial.lastModified) ||
+      ((this.options.allowSettinngLastModified ?? false) &&
+        objectPartial.lastModified) ||
       new Date().getTime();
 
     const object: GraffitiObjectBase = {
@@ -342,13 +352,16 @@ export class GraffitiLocalDatabase
       channels: objectPartial.channels,
       allowed: objectPartial.allowed,
       name: objectPartial.name ?? randomBase64(),
-      source: this.source,
+      source:
+        objectPartial.source ?? this.options.sourceName ?? DEFAULT_SOURCE_NAME,
       actor: session.actor,
       tombstone: false,
       lastModified,
     };
 
-    await this.db.put({
+    await (
+      await this.db
+    ).put({
       _id: this.docId(object),
       ...object,
     });
@@ -418,7 +431,9 @@ export class GraffitiLocalDatabase
     }
 
     patchObject.lastModified = new Date().getTime();
-    await this.db.put({
+    await (
+      await this.db
+    ).put({
       ...patchObject,
       _id: this.docId(patchObject),
     });
@@ -497,7 +512,9 @@ export class GraffitiLocalDatabase
         const startkey = keyPrefix + startKeySuffix;
         const endkey = keyPrefix + endKeySuffix;
 
-        const result = await this.db.query<GraffitiObjectBase>(
+        const result = await (
+          await this.db
+        ).query<GraffitiObjectBase>(
           "indexes/objectsPerChannelAndLastModified",
           { startkey, endkey, include_docs: true },
         );
@@ -528,7 +545,8 @@ export class GraffitiLocalDatabase
       }
       stop();
       return {
-        tombstoneRetention: this.tombstoneRetention,
+        tombstoneRetention:
+          this.options.tombstoneRetention ?? DEFAULT_TOMBSTONE_RETENTION,
       };
     });
 
@@ -547,10 +565,13 @@ export class GraffitiLocalDatabase
     const repeater: ReturnType<
       typeof Graffiti.prototype.recoverOrphans<typeof schema>
     > = new Repeater(async (push, stop) => {
-      const result = await this.db.query<GraffitiObjectBase>(
-        "indexes/orphansPerActorAndLastModified",
-        { startkey, endkey, include_docs: true },
-      );
+      const result = await (
+        await this.db
+      ).query<GraffitiObjectBase>("indexes/orphansPerActorAndLastModified", {
+        startkey,
+        endkey,
+        include_docs: true,
+      });
 
       for (const row of result.rows) {
         const doc = row.doc;
@@ -566,7 +587,8 @@ export class GraffitiLocalDatabase
       }
       stop();
       return {
-        tombstoneRetention: this.tombstoneRetention,
+        tombstoneRetention:
+          this.options.tombstoneRetention ?? DEFAULT_TOMBSTONE_RETENTION,
       };
     });
 
@@ -577,7 +599,9 @@ export class GraffitiLocalDatabase
     const repeater: ReturnType<typeof Graffiti.prototype.channelStats> =
       new Repeater(async (push, stop) => {
         const keyPrefix = encodeURIComponent(session.actor) + "/";
-        const result = await this.db.query("indexes/channelStatsPerActor", {
+        const result = await (
+          await this.db
+        ).query("indexes/channelStatsPerActor", {
           startkey: keyPrefix,
           endkey: keyPrefix + "\uffff",
           reduce: true,
