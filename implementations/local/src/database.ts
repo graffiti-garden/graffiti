@@ -21,8 +21,8 @@ import {
   compileGraffitiObjectSchema,
 } from "./utilities.js";
 import { Repeater } from "@repeaterjs/repeater";
-import Ajv from "ajv";
-import { applyPatch } from "fast-json-patch";
+import type Ajv from "ajv";
+import type { applyPatch } from "fast-json-patch";
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -92,8 +92,9 @@ export class GraffitiLocalDatabase
     >
 {
   protected db_: Promise<PouchDB.Database<GraffitiObjectBase>> | undefined;
+  protected applyPatch_: Promise<typeof applyPatch> | undefined;
+  protected ajv_: Promise<Ajv> | undefined;
   protected readonly options: GraffitiLocalOptions;
-  protected readonly ajv: Ajv;
 
   get db() {
     if (!this.db_) {
@@ -176,8 +177,27 @@ export class GraffitiLocalDatabase
     return this.db_;
   }
 
+  get applyPatch() {
+    if (!this.applyPatch_) {
+      this.applyPatch_ = (async () => {
+        const { applyPatch } = await import("fast-json-patch");
+        return applyPatch;
+      })();
+    }
+    return this.applyPatch_;
+  }
+
+  get ajv() {
+    if (!this.ajv_) {
+      this.ajv_ = (async () => {
+        const { default: Ajv } = await import("ajv");
+        return new Ajv({ strict: false });
+      })();
+    }
+    return this.ajv_;
+  }
+
   constructor(options?: GraffitiLocalOptions) {
-    this.ajv = options?.ajv ?? new Ajv({ strict: false });
     this.options = options ?? {};
   }
 
@@ -230,7 +250,7 @@ export class GraffitiLocalDatabase
     // if the user is not the owner
     maskGraffitiObject(object, [], session);
 
-    const validate = compileGraffitiObjectSchema(this.ajv, schema);
+    const validate = compileGraffitiObjectSchema(await this.ajv, schema);
     if (!validate(object)) {
       throw new GraffitiErrorSchemaMismatch();
     }
@@ -397,7 +417,7 @@ export class GraffitiLocalDatabase
     // Patch it outside of the database
     const patchObject: GraffitiObjectBase = { ...originalObject };
     for (const prop of ["value", "channels", "allowed"] as const) {
-      applyGraffitiPatch(applyPatch, prop, patch, patchObject);
+      applyGraffitiPatch(await this.applyPatch, prop, patch, patchObject);
     }
 
     // Make sure the value is an object
@@ -497,7 +517,6 @@ export class GraffitiLocalDatabase
 
   discover: Graffiti["discover"] = (...args) => {
     const [channels, schema, session] = args;
-    const validate = compileGraffitiObjectSchema(this.ajv, schema);
 
     const { startKeySuffix, endKeySuffix } =
       this.queryLastModifiedSuffixes(schema);
@@ -505,6 +524,8 @@ export class GraffitiLocalDatabase
     const repeater: ReturnType<
       typeof Graffiti.prototype.discover<typeof schema>
     > = new Repeater(async (push, stop) => {
+      const validate = compileGraffitiObjectSchema(await this.ajv, schema);
+
       const processedIds = new Set<string>();
 
       for (const channel of channels) {
@@ -554,8 +575,6 @@ export class GraffitiLocalDatabase
   };
 
   recoverOrphans: Graffiti["recoverOrphans"] = (schema, session) => {
-    const validate = compileGraffitiObjectSchema(this.ajv, schema);
-
     const { startKeySuffix, endKeySuffix } =
       this.queryLastModifiedSuffixes(schema);
     const keyPrefix = encodeURIComponent(session.actor) + "/";
@@ -565,6 +584,8 @@ export class GraffitiLocalDatabase
     const repeater: ReturnType<
       typeof Graffiti.prototype.recoverOrphans<typeof schema>
     > = new Repeater(async (push, stop) => {
+      const validate = compileGraffitiObjectSchema(await this.ajv, schema);
+
       const result = await (
         await this.db
       ).query<GraffitiObjectBase>("indexes/orphansPerActorAndLastModified", {
