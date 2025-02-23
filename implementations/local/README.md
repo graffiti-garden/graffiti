@@ -21,7 +21,7 @@ In the browser, you can use a CDN like jsDelivr. Add an import map the the `<hea
     <script type="importmap">
         {
             "imports": {
-                "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/index.browser.js"
+                "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js"
             }
         }
     </script>
