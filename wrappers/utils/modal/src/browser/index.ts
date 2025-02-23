@@ -4,9 +4,11 @@ import type {
   GraffitiLogoutEvent,
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
-import { getDefaultSession } from "@inrupt/solid-client-authn-browser";
+import type { Session } from "@inrupt/solid-client-authn-browser";
 import type { GraffitiSolidOIDCSessionManagerOptions } from "../types";
 import { GraffitiLocalSessionManager } from "@graffiti-garden/implementation-local/session-manager";
+
+const SOLID_CLIENT_STORAGE_PREFIX = "solidClient";
 
 export type { GraffitiSolidOIDCSessionManagerOptions } from "../types";
 
@@ -18,9 +20,69 @@ export class GraffitiSolidOIDCSessionManager
 
   protected dialog = document.createElement("dialog");
   protected main: Promise<HTMLElement>;
-  protected solidSession = getDefaultSession();
+  protected solidSession: Promise<Session> | undefined;
+  options: GraffitiSolidOIDCSessionManagerOptions | undefined;
+
+  useSolidSession() {
+    if (!this.solidSession) {
+      this.solidSession = (async () => {
+        const { getDefaultSession } = await import(
+          "@inrupt/solid-client-authn-browser"
+        );
+        const session = getDefaultSession();
+
+        session.events.on("login", () => this.onSolidLoginEvent());
+        session.events.on("logout", () => this.onSolidLogoutEvent());
+        session.events.on("error", (error) => {
+          this.onSolidLoginEvent(error ? new Error(error) : undefined);
+        });
+        let restoreHref: string | undefined = undefined;
+        session.events.on("sessionRestore", (href) => {
+          this.onSolidLoginEvent();
+          restoreHref = href;
+        });
+        session
+          .handleIncomingRedirect({
+            restorePreviousSession:
+              this.options?.restorePreviousSession ?? true,
+          })
+          .then(() => {
+            const event: GraffitiSessionInitializedEvent = new CustomEvent(
+              "initialized",
+              {
+                detail: { href: restoreHref },
+              },
+            );
+            this.sessionEvents.dispatchEvent(event);
+          });
+        return session;
+      })();
+    }
+    return this.solidSession;
+  }
+
   constructor(options?: GraffitiSolidOIDCSessionManagerOptions) {
+    this.options = options;
     this.sessionEvents = options?.sessionEvents ?? new EventTarget();
+
+    // Check for local storage starting with
+    // the solid prefix
+    // to trigger the import (it's big)
+    let loadingSolid = false;
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(SOLID_CLIENT_STORAGE_PREFIX)) {
+        this.useSolidSession();
+        loadingSolid = true;
+        break;
+      }
+    }
+    if (!loadingSolid) {
+      // Dispatch as a promise to
+      // allow event listeners to be added
+      Promise.resolve().then(() => {
+        this.sessionEvents.dispatchEvent(new CustomEvent("initialized"));
+      });
+    }
 
     // Forward local login/logout events (but not initialization)
     for (const event of ["login", "logout"] as const) {
@@ -33,30 +95,6 @@ export class GraffitiSolidOIDCSessionManager
         );
       });
     }
-
-    this.solidSession.events.on("login", () => this.onSolidLoginEvent());
-    this.solidSession.events.on("logout", () => this.onSolidLogoutEvent());
-    this.solidSession.events.on("error", (error) => {
-      this.onSolidLoginEvent(error ? new Error(error) : undefined);
-    });
-    let restoreHref: string | undefined = undefined;
-    this.solidSession.events.on("sessionRestore", (href) => {
-      this.onSolidLoginEvent();
-      restoreHref = href;
-    });
-    this.solidSession
-      .handleIncomingRedirect({
-        restorePreviousSession: options?.restorePreviousSession ?? true,
-      })
-      .then(() => {
-        const event: GraffitiSessionInitializedEvent = new CustomEvent(
-          "initialized",
-          {
-            detail: { href: restoreHref },
-          },
-        );
-        this.sessionEvents.dispatchEvent(event);
-      });
 
     this.dialog.className = "graffiti-login";
 
@@ -123,7 +161,7 @@ export class GraffitiSolidOIDCSessionManager
 
   logout: Graffiti["logout"] = async (session) => {
     if (session.actor.startsWith("http") && "fetch" in session) {
-      return this.solidSession.logout();
+      return await (await this.useSolidSession()).logout();
     } else {
       return this.sessionManagerLocal.logout(session);
     }
@@ -137,21 +175,18 @@ export class GraffitiSolidOIDCSessionManager
     this.close();
   }
 
-  protected onSolidLoginEvent(error?: Error) {
+  protected async onSolidLoginEvent(error?: Error) {
     let detail: GraffitiLoginEvent["detail"] & {
       session?: {
         fetch: typeof fetch;
       };
     };
-    if (
-      !error &&
-      this.solidSession.info.isLoggedIn &&
-      this.solidSession.info.webId
-    ) {
+    const session = await this.useSolidSession();
+    if (!error && session.info.isLoggedIn && session.info.webId) {
       detail = {
         session: {
-          actor: this.solidSession.info.webId,
-          fetch: this.solidSession.fetch,
+          actor: session.info.webId,
+          fetch: session.fetch,
         },
       };
     } else {
@@ -163,10 +198,11 @@ export class GraffitiSolidOIDCSessionManager
     this.sessionEvents.dispatchEvent(event);
   }
 
-  protected onSolidLogoutEvent() {
+  protected async onSolidLogoutEvent() {
     let detail: GraffitiLogoutEvent["detail"];
-    if (this.solidSession.info.webId) {
-      detail = { actor: this.solidSession.info.webId };
+    const session = await this.useSolidSession();
+    if (session.info.webId) {
+      detail = { actor: session.info.webId };
     } else {
       detail = {
         error: new Error("Logged out, but no actor given"),
@@ -271,7 +307,9 @@ export class GraffitiSolidOIDCSessionManager
       const formData = new FormData(form);
       const oidcIssuer = formData.get("solid-issuer") as string;
       try {
-        await this.solidSession.login({
+        await (
+          await this.useSolidSession()
+        ).login({
           oidcIssuer,
           redirectUrl: window.location.href,
           clientName: "Graffiti Application",
