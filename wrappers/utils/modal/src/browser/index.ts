@@ -322,11 +322,14 @@ export class GraffitiSolidOIDCSessionManager
       const formData = new FormData(form);
       const oidcIssuer = formData.get("solid-issuer") as string;
       try {
+        // Strip out the hash from the URL
+        const redirectUrl = new URL(window.location.href);
+        redirectUrl.hash = "";
         await (
           await this.useSolidSession()
         ).login({
           oidcIssuer,
-          redirectUrl: window.location.href,
+          redirectUrl: redirectUrl.toString(),
           clientName: "Graffiti Application",
         });
       } catch (error) {
