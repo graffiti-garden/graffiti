@@ -413,3 +413,59 @@ describe.concurrent("synchronizeGet", () => {
     expect(result2.value.lastModified).toEqual(putted2.lastModified);
   });
 });
+
+// can't be concurrent because it gets ALL
+describe("synchronizeAll", () => {
+  let session: GraffitiSession;
+  let session1: GraffitiSession;
+  let session2: GraffitiSession;
+  beforeAll(async () => {
+    session1 = await useSession1();
+    session = session1;
+    session2 = await useSession2();
+  });
+
+  it("sync from multiple channels and actors", async () => {
+    const object1 = randomPutObject();
+    const object2 = randomPutObject();
+
+    expect(object1.channels).not.toEqual(object2.channels);
+
+    const iterator = graffiti.synchronizeAll();
+
+    const next1 = iterator.next();
+    const next2 = iterator.next();
+
+    await graffiti.put<{}>(object1, session1);
+    await graffiti.put<{}>(object2, session2);
+
+    const result1 = (await next1).value;
+    const result2 = (await next2).value;
+    assert(result1 && !result1.error);
+    assert(result2 && !result2.error);
+
+    expect(result1.value.value).toEqual(object1.value);
+    expect(result1.value.channels).toEqual([]);
+    expect(result2.value.value).toEqual(object2.value);
+  });
+
+  it("omniscient", async () => {
+    const graffiti = new GraffitiSynchronize(new GraffitiLocal(), {
+      omniscient: true,
+    });
+
+    const object1 = randomPutObject();
+    object1.allowed = [randomString()];
+
+    const iterator = graffiti.synchronizeAll();
+    const next = iterator.next();
+
+    await graffiti.put<{}>(object1, session1);
+
+    const result = (await next).value;
+    assert(result && !result.error);
+    expect(result.value.value).toEqual(object1.value);
+    expect(result.value.channels).toEqual(object1.channels);
+    expect(result.value.allowed).toEqual(object1.allowed);
+  });
+});
