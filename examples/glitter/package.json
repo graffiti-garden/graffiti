@@ -9,19 +9,20 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/api": "^0.0.8",
-    "@graffiti-garden/implementation-pouchdb": "^0.0.6",
-    "@graffiti-garden/wrapper-vue": "^0.0.3",
-    "@vitejs/plugin-vue": "^5.1.1",
-    "vue": "^3.4.34",
-    "vue-router": "^4.4.2",
+    "@graffiti-garden/api": "^0.4.3",
+    "@graffiti-garden/implementation-remote": "^0.1.1",
+    "@graffiti-garden/wrapper-vue": "^0.3.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0",
     "vue3-click-away": "^1.2.4"
   },
   "devDependencies": {
-    "@vue/language-server": "^2.0.29",
-    "@vue/typescript-plugin": "^2.0.29",
-    "tslib": "^2.6.3",
-    "typescript": "^5.5.4",
-    "vite": "^5.3.5"
+    "@vue/language-server": "^2.2.0",
+    "@vue/tsconfig": "^0.7.0",
+    "@vue/typescript-plugin": "^2.2.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.3",
+    "vite": "^5.4.14"
   }
 }

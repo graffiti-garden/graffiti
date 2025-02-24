@@ -13,7 +13,7 @@ const sessionRef = useGraffitiSession();
 const props = withDefaults(
     defineProps<{
         actor: string;
-        editable: boolean;
+        editable?: boolean;
     }>(),
     {
         editable: false,

@@ -33,7 +33,7 @@ const actor = computed(() =>
     </p>
     <Notes
         :actors="[actor]"
-        :at="actor !== $graffitiSession.value?.actor ? actor : undefined"
+        :at="actor !== $graffitiSession.value?.actor ? [actor] : undefined"
         :prompt="
             actor === $graffitiSession.value?.actor
                 ? 'what\'s on your mind?'

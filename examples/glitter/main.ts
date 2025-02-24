@@ -1,10 +1,10 @@
-import { createApp, provide, reactive, ref } from "vue";
+import { createApp } from "vue";
 import Directory from "./components/Directory.vue";
 import Feed from "./components/Feed.vue";
 import Profile from "./components/Profile.vue";
 import Navigation from "./components/Navigation.vue";
 import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-import { GraffitiPouchDB } from "@graffiti-garden/implementation-pouchdb";
+import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
 import VueClickAway from "vue3-click-away";
 import { createRouter, createWebHistory } from "vue-router";
 import "./style.css";
@@ -36,22 +36,10 @@ const router = createRouter({
   routes,
 });
 
-// Horrible, I know
-// this is just for testing
-const one = "Sandbank8803";
-const two = "hb#&6CQBx!ua%q";
-const three = "tracker.graffiti.garden";
-const four = "graffiti";
-
 createApp(Navigation)
   .use(router)
   .use(GraffitiPlugin, {
-    useGraffiti: () =>
-      new GraffitiPouchDB({
-        pouchDBOptions: {
-          name: `https://${encodeURIComponent(one)}:${encodeURIComponent(two)}@${three}/${four}`,
-        },
-      }),
+    graffiti: new GraffitiRemote(),
   })
   .use(VueClickAway)
   .directive("focus", { mounted: (el: HTMLElement) => el.focus() })

@@ -11,8 +11,8 @@ const session = useGraffitiSession();
 const props = withDefaults(
     defineProps<{
         note: GraffitiObject<ReturnType<typeof noteSchema>>;
-        follows: string[];
-        inReplyToContentAddress: string;
+        follows?: string[];
+        inReplyToContentAddress?: string;
     }>(),
     {
         follows: () => [],

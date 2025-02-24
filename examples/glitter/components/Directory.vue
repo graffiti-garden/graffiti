@@ -45,7 +45,8 @@ async function toggleJoin() {
             myJoins.value.map((join) => graffiti.delete(join, session)),
         );
     } else {
-        await graffiti.put<typeof joinSchema>(
+        const schema = joinSchema(joinChannel);
+        await graffiti.put<typeof schema>(
             {
                 value: {
                     type: "Join",
