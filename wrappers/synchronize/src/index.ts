@@ -1,4 +1,4 @@
-import Ajv from "ajv";
+import type Ajv from "ajv";
 import { Graffiti } from "@graffiti-garden/api";
 import type {
   GraffitiSession,
@@ -8,7 +8,7 @@ import type {
 } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
-import { applyPatch } from "fast-json-patch";
+import type { applyPatch } from "fast-json-patch";
 import {
   applyGraffitiPatch,
   compileGraffitiObjectSchema,
@@ -23,6 +23,20 @@ export type GraffitiSynchronizeCallback = (
   oldObject: GraffitiObjectBase,
   newObject?: GraffitiObjectBase,
 ) => void;
+
+export interface GraffitiSynchronizeOptions {
+  /**
+   * Allows synchronize to listen to all objects, not just those
+   * that the session is allowed to see. This is useful to get a
+   * global view of all Graffiti objects passsing through the system,
+   * for example to build a client-side cache. Additional mechanisms
+   * should be in place to ensure that users do not see objects or
+   * properties they are not allowed to see.
+   *
+   * Default: `false`
+   */
+  omniscient?: boolean;
+}
 
 /**
  * Wraps the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
@@ -67,9 +81,11 @@ export type GraffitiSynchronizeCallback = (
  * streams appropriate changes to provide a responsive and consistent user experience.
  */
 export class GraffitiSynchronize extends Graffiti {
-  protected readonly ajv: Ajv;
+  protected ajv_: Promise<Ajv> | undefined;
+  protected applyPatch_: Promise<typeof applyPatch> | undefined;
   protected readonly graffiti: Graffiti;
   protected readonly callbacks = new Set<GraffitiSynchronizeCallback>();
+  protected readonly options: GraffitiSynchronizeOptions;
 
   channelStats: Graffiti["channelStats"];
   locationToUri: Graffiti["locationToUri"];
@@ -77,6 +93,26 @@ export class GraffitiSynchronize extends Graffiti {
   login: Graffiti["login"];
   logout: Graffiti["logout"];
   sessionEvents: Graffiti["sessionEvents"];
+
+  get ajv() {
+    if (!this.ajv_) {
+      this.ajv_ = (async () => {
+        const { default: Ajv } = await import("ajv");
+        return new Ajv({ strict: false });
+      })();
+    }
+    return this.ajv_;
+  }
+
+  get applyPatch() {
+    if (!this.applyPatch_) {
+      this.applyPatch_ = (async () => {
+        const { applyPatch } = await import("fast-json-patch");
+        return applyPatch;
+      })();
+    }
+    return this.applyPatch_;
+  }
 
   /**
    * Wraps a Graffiti API instance to provide the synchronize methods.
@@ -89,15 +125,10 @@ export class GraffitiSynchronize extends Graffiti {
      * instance to wrap.
      */
     graffiti: Graffiti,
-    /**
-     * An optional instance of Ajv to use for validating
-     * objects before dispatching them to listeners.
-     * If not provided, a new instance of Ajv will be created.
-     */
-    ajv?: Ajv,
+    options?: GraffitiSynchronizeOptions,
   ) {
     super();
-    this.ajv = ajv ?? new Ajv({ strict: false });
+    this.options = options ?? {};
     this.graffiti = graffiti;
     this.channelStats = graffiti.channelStats.bind(graffiti);
     this.locationToUri = graffiti.locationToUri.bind(graffiti);
@@ -113,10 +144,9 @@ export class GraffitiSynchronize extends Graffiti {
     schema: Schema,
     session?: GraffitiSession | null,
   ) {
-    const validate = compileGraffitiObjectSchema(this.ajv, schema);
-
     const repeater: GraffitiStream<GraffitiObject<Schema>> = new Repeater(
       async (push, stop) => {
+        const validate = compileGraffitiObjectSchema(await this.ajv, schema);
         const callback: GraffitiSynchronizeCallback = (
           oldObjectRaw,
           newObjectRaw,
@@ -125,10 +155,13 @@ export class GraffitiSynchronize extends Graffiti {
             if (
               objectRaw &&
               matchObject(objectRaw) &&
-              isActorAllowedGraffitiObject(objectRaw, session)
+              (this.options.omniscient ||
+                isActorAllowedGraffitiObject(objectRaw, session))
             ) {
               const object = { ...objectRaw };
-              maskGraffitiObject(object, channels, session);
+              if (!this.options.omniscient) {
+                maskGraffitiObject(object, channels, session);
+              }
               if (validate(object)) {
                 push({ value: object });
                 break;
@@ -215,6 +248,23 @@ export class GraffitiSynchronize extends Graffiti {
     return this.synchronize<Schema>(matchObject, [], schema, session);
   }
 
+  /**
+   * Streams changes made to *any* object in *any* channel
+   * and made by *any* user. You may want to use it in conjuction with
+   * {@link GraffitiSyncrhonizeOptions.omniscient} to get a global view
+   * of all Graffiti objects passing through the system. This is useful
+   * for building a client-side cache, for example.
+   *
+   * Be careful using this method. Without additional filters it can
+   * expose the user to content out of context.
+   */
+  synchronizeAll(
+    schema?: JSONSchema,
+    session?: GraffitiSession | null,
+  ): GraffitiStream<GraffitiObjectBase> {
+    return this.synchronize(() => true, [], schema ?? {}, session);
+  }
+
   protected async synchronizeDispatch(
     oldObject: GraffitiObjectBase,
     newObject?: GraffitiObjectBase,
@@ -273,7 +323,7 @@ export class GraffitiSynchronize extends Graffiti {
     const newObject: GraffitiObjectBase = { ...oldObject };
     newObject.tombstone = false;
     for (const prop of ["value", "channels", "allowed"] as const) {
-      applyGraffitiPatch(applyPatch, prop, args[0], newObject);
+      applyGraffitiPatch(await this.applyPatch, prop, args[0], newObject);
     }
     await this.synchronizeDispatch(oldObject, newObject, true);
     return oldObject;

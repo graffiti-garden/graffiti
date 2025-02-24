@@ -6,8 +6,9 @@ await esbuild.build({
   bundle: true,
   sourcemap: true,
   minify: true,
+  splitting: true,
   format: "esm",
-  outfile: "dist/index.browser.js",
+  outdir: "dist/browser",
 });
 
 for (const format of ["esm", "cjs"] as const) {
