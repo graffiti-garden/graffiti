@@ -13,15 +13,13 @@ const sessionRef = useGraffitiSession();
 
 const props = withDefaults(
     defineProps<{
-        actors: string[];
-        inReplyTo: string | undefined;
-        at: string | undefined;
+        actors?: string[];
+        inReplyTo?: string;
+        at?: string[];
         prompt: string;
     }>(),
     {
         actors: () => [],
-        inReplyTo: undefined,
-        at: undefined,
         prompt: "what's on your mind?",
     },
 );
@@ -44,11 +42,7 @@ const {
 );
 
 const notesSorted = computed(() =>
-    notes.value.sort(
-        (a, b) =>
-            new Date(b.value.createdAt).getTime() -
-            new Date(a.value.createdAt).getTime(),
-    ),
+    notes.value.sort((a, b) => b.value.createdAt - a.value.createdAt),
 );
 
 const isSubmitting = ref(false);
@@ -64,7 +58,7 @@ async function submitNote() {
 
     const note = {
         content: noteContent.value,
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().getTime(),
         at: undefined,
         inReplyTo: undefined,
     } as const;

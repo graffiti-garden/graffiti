@@ -1,4 +1,4 @@
-import type { JSONSchema4 } from "@graffiti-garden/api";
+import type { JSONSchema } from "@graffiti-garden/api";
 
 export function joinSchema(object: string) {
   return {
@@ -12,7 +12,7 @@ export function joinSchema(object: string) {
         required: ["type", "object"],
       },
     },
-  } as const satisfies JSONSchema4;
+  } as const satisfies JSONSchema;
 }
 
 export function followSchema(actor: string, object?: string) {
@@ -31,7 +31,7 @@ export function followSchema(actor: string, object?: string) {
       },
       actor: { type: "string", enum: [actor] },
     },
-  } as const satisfies JSONSchema4;
+  } as const satisfies JSONSchema;
 }
 
 export function profileSchema(actor: string) {
@@ -46,7 +46,7 @@ export function profileSchema(actor: string) {
         required: ["type", "name"],
       },
     },
-  } as const satisfies JSONSchema4;
+  } as const satisfies JSONSchema;
 }
 
 export function noteSchema(inReplyTo?: string) {
@@ -55,7 +55,7 @@ export function noteSchema(inReplyTo?: string) {
       value: {
         properties: {
           content: { type: "string" },
-          createdAt: { type: "string" },
+          createdAt: { type: "number" },
           at: {
             type: "array",
             items: { type: "string" },
@@ -68,5 +68,5 @@ export function noteSchema(inReplyTo?: string) {
         required: ["content", "createdAt"],
       },
     },
-  } as const satisfies JSONSchema4;
+  } as const satisfies JSONSchema;
 }
