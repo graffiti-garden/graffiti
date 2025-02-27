@@ -1,5 +1,5 @@
 {
-  "entryPoints": ["dist/plugin.d.ts"],
+  "entryPoints": ["dist/node/plugin.d.ts"],
   "tsconfig": "tsconfig.typedoc.json",
   "cname": "vue.graffiti.garden",
   "titleLink": "/variables/GraffitiPlugin.html",

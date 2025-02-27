@@ -1,4 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["dist/plugin.d.ts"]
+  "include": ["dist/node/plugin.d.ts"]
 }

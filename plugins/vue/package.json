@@ -1,20 +1,20 @@
 {
   "name": "@graffiti-garden/wrapper-vue",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Vue.js wrapper for the Graffiti API",
-  "types": "./dist/plugin.d.ts",
-  "module": "./dist/plugin.mjs",
-  "main": "./dist/plugin.js",
-  "browser": "./dist/plugin.mjs",
+  "types": "./dist/node/plugin.d.ts",
+  "module": "./dist/node/plugin.mjs",
+  "main": "./dist/node/plugin.js",
+  "browser": "./dist/browser/plugin.mjs",
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/plugin.d.ts",
-        "default": "./dist/plugin.mjs"
+        "types": "./dist/node/plugin.d.ts",
+        "default": "./dist/node/plugin.mjs"
       },
       "require": {
-        "types": "./dist/plugin.d.ts",
-        "default": "./dist/plugin.js"
+        "types": "./dist/node/plugin.d.ts",
+        "default": "./dist/node/plugin.js"
       }
     }
   },
@@ -27,9 +27,11 @@
   "scripts": {
     "example": "cd examples/node-vite-sfc && vite",
     "build:example": "cd examples/node-vite-sfc && vite build",
-    "build:js": "vite build",
+    "build:js:node": "vite build --config vite.config.node.mts",
+    "build:js:browser": "vite build --config vite.config.browser.mts",
+    "build:js": "npm run build:js:node && npm run build:js:browser",
     "build:docs": "npm run build:js && typedoc --options typedoc.json",
-    "build": "npm run build:docs && npm run build:example && cp -r examples docs",
+    "build": "rm -rf dist && npm run build:docs && npm run build:example && cp -r examples docs",
     "prepublishOnly": "npm install && npm run build"
   },
   "author": "Theia Henderson",
