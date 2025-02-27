@@ -180,7 +180,11 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
           | Router
           | undefined;
         if (router) {
+          const base = router.options.history.base;
           const url = new URL(detail.href);
+          if (url.pathname.startsWith(base)) {
+            url.pathname = url.pathname.slice(base.length);
+          }
           await router.replace(url.pathname + url.search + url.hash);
         }
       }
