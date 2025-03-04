@@ -141,6 +141,7 @@ export const GraffitiObjectJSONSchema = {
     lastModified: { type: "number" },
     tombstone: { type: "boolean" },
   },
+  additionalProperties: false,
   required: [
     "value",
     "channels",
