@@ -135,7 +135,7 @@ import type { JSONSchema } from "json-schema-to-ts";
  * exists relative to an observer," or equivalently, all interaction is [reified](https://en.wikipedia.org/wiki/Reification_(computer_science)).
  * For example, if one user creates a post and another user wants to "like" that post,
  * their like is not modifying the original post, it is simply another data object that points
- * to the post being liked, via its {@link locationToUri | URI}.
+ * to the post being liked, via its {@link GraffitiObjectBase.uri | URI}.
  *
  * ```json
  * {
@@ -185,50 +185,15 @@ import type { JSONSchema } from "json-schema-to-ts";
  * Methods that retrieve or accumulate information about multiple {@link GraffitiObjectBase | Graffiti objects} at a time.
  * @groupDescription Session Management
  * Methods and properties for logging in and out of a Graffiti implementation.
- * @groupDescription Utilities
- * Methods for for converting Graffiti objects to and from URIs.
  */
 export abstract class Graffiti {
-  /**
-   * Converts a {@link GraffitiLocation} object containing a
-   * {@link GraffitiObjectBase.name | `name`}, {@link GraffitiObjectBase.actor | `actor`},
-   * and {@link GraffitiObjectBase.source | `source`} into a globally unique URI.
-   * The form of this URI is implementation dependent.
-   *
-   * Its exact inverse is {@link uriToLocation}.
-   *
-   * @group Utilities
-   */
-  abstract locationToUri(location: GraffitiLocation): string;
-
-  /**
-   * Parses a globally unique Graffiti URI into a {@link GraffitiLocation}
-   * object containing a {@link GraffitiObjectBase.name | `name`},
-   * {@link GraffitiObjectBase.actor | `actor`}, and {@link GraffitiObjectBase.source | `source`}.
-   *
-   * Its exact inverse is {@link locationToUri}.
-   *
-   * @group Utilities
-   */
-  abstract uriToLocation(uri: string): GraffitiLocation;
-
-  /**
-   * An alias of {@link locationToUri}
-   *
-   * @group Utilities
-   */
-  objectToUri(object: GraffitiObjectBase) {
-    return this.locationToUri(object);
-  }
-
   /**
    * Creates a new {@link GraffitiObjectBase | object} or replaces an existing object.
    * An object can only be replaced by the same {@link GraffitiObjectBase.actor | `actor`}
    * that created it.
    *
-   * Replacement occurs when the {@link GraffitiLocation} properties of the supplied object
-   * ({@link GraffitiObjectBase.name | `name`}, {@link GraffitiObjectBase.actor | `actor`},
-   * and {@link GraffitiObjectBase.source | `source`}) exactly match the location of an existing object.
+   * Replacement occurs when the {@link GraffitiObjectBase.uri | `uri`} of
+   * the replaced object exactly matches an existing object's URI.
    *
    * @returns The object that was replaced if one exists or an object with
    * with a `null` {@link GraffitiObjectBase.value | `value`} if this method

@@ -56,9 +56,8 @@ export const graffitiCRUDTests = (
         expect(gotten.value).toEqual(value);
         expect(gotten.channels).toEqual([]);
         expect(gotten.allowed).toBeUndefined();
-        expect(gotten.name).toEqual(previous.name);
+        expect(gotten.uri).toEqual(previous.uri);
         expect(gotten.actor).toEqual(previous.actor);
-        expect(gotten.source).toEqual(previous.source);
         expect(gotten.lastModified).toEqual(previous.lastModified);
 
         // Replace it
@@ -71,9 +70,8 @@ export const graffitiCRUDTests = (
         );
         expect(beforeReplaced.value).toEqual(value);
         expect(beforeReplaced.tombstone).toEqual(true);
-        expect(beforeReplaced.name).toEqual(previous.name);
+        expect(beforeReplaced.uri).toEqual(previous.uri);
         expect(beforeReplaced.actor).toEqual(previous.actor);
-        expect(beforeReplaced.source).toEqual(previous.source);
         expect(beforeReplaced.lastModified).toBeGreaterThanOrEqual(
           gotten.lastModified,
         );
@@ -95,19 +93,6 @@ export const graffitiCRUDTests = (
         // Get a tombstone
         const final = await graffiti.get(afterReplaced, {});
         expect(final).toEqual(beforeDeleted);
-      });
-
-      it("get non-existant", async () => {
-        const putted = await graffiti.put<{}>(randomPutObject(), session);
-        await expect(
-          graffiti.get(
-            {
-              ...putted,
-              name: randomString(),
-            },
-            {},
-          ),
-        ).rejects.toBeInstanceOf(GraffitiErrorNotFound);
       });
 
       it("put, get, delete with wrong actor", async () => {
