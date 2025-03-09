@@ -48,7 +48,7 @@ export const graffitiCRUDTests = (
         const previous = await graffiti.put<{}>({ value, channels }, session);
         expect(previous.value).toEqual({});
         expect(previous.channels).toEqual([]);
-        expect(previous.allowed).toBeUndefined();
+        expect(previous.allowed).toEqual([]);
         expect(previous.actor).toEqual(session.actor);
 
         // Get it back
@@ -65,7 +65,11 @@ export const graffitiCRUDTests = (
           something: "goodbye, world~ :c",
         };
         const beforeReplaced = await graffiti.put<{}>(
-          { ...previous, value: newValue, channels: [] },
+          {
+            uri: previous.uri,
+            value: newValue,
+            channels: [],
+          },
           session,
         );
         expect(beforeReplaced.value).toEqual(value);

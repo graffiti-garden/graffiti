@@ -481,8 +481,8 @@ export const graffitiDiscoverTests = (
         const object2 = randomPutObject();
         const replaced = await graffiti.put<{}>(
           {
-            ...putted,
             ...object2,
+            uri: putted.uri,
           },
           session,
         );

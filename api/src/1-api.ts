@@ -196,9 +196,10 @@ export abstract class Graffiti {
    * the replaced object exactly matches an existing object's URI.
    *
    * @returns The object that was replaced if one exists or an object with
-   * with a `null` {@link GraffitiObjectBase.value | `value`} if this method
-   * created a new object.
-   * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
+   * with an empty {@link GraffitiObjectBase.value | `value`},
+   * {@link GraffitiObjectBase.channels | `channels`}, and {@link GraffitiObjectBase.allowed | `allowed`}
+   * list if the method created a new object.
+   * In either case, the object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
    * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
    * field updated to the time of replacement/creation.
    *
