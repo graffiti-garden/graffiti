@@ -16,25 +16,29 @@ import type {
 import type { Ajv } from "ajv";
 import type { applyPatch } from "fast-json-patch";
 
-export const locationToUri: Graffiti["locationToUri"] = (location) => {
-  return `${location.source}/${encodeURIComponent(location.actor)}/${encodeURIComponent(location.name)}`;
-};
+export function packUri(components: {
+  name: string;
+  actor: string;
+  origin: string;
+}) {
+  return `${components.origin}/${encodeURIComponent(components.actor)}/${encodeURIComponent(components.name)}`;
+}
 
-export const uriToLocation: Graffiti["uriToLocation"] = (uri) => {
+export function unpackUri(uri: string) {
   const parts = uri.split("/");
   const nameEncoded = parts.pop();
-  const webIdEncoded = parts.pop();
-  if (!nameEncoded || !webIdEncoded || !parts.length) {
+  const actorEncoded = parts.pop();
+  if (!nameEncoded || !actorEncoded || !parts.length) {
     throw new GraffitiErrorInvalidUri();
   }
   return {
     name: decodeURIComponent(nameEncoded),
-    actor: decodeURIComponent(webIdEncoded),
-    source: parts.join("/"),
+    actor: decodeURIComponent(actorEncoded),
+    origin: parts.join("/"),
   };
-};
+}
 
-export function randomBase64(numBytes: number = 16) {
+export function randomBase64(numBytes: number = 24) {
   const bytes = new Uint8Array(numBytes);
   crypto.getRandomValues(bytes);
   // Convert it to base64
@@ -44,21 +48,7 @@ export function randomBase64(numBytes: number = 16) {
 }
 
 export function unpackLocationOrUri(locationOrUri: GraffitiLocation | string) {
-  if (typeof locationOrUri === "string") {
-    return {
-      location: uriToLocation(locationOrUri),
-      uri: locationOrUri,
-    };
-  } else {
-    return {
-      location: {
-        name: locationOrUri.name,
-        actor: locationOrUri.actor,
-        source: locationOrUri.source,
-      },
-      uri: locationToUri(locationOrUri),
-    };
-  }
+  return typeof locationOrUri === "string" ? locationOrUri : locationOrUri.uri;
 }
 
 export function isObjectNewer(
