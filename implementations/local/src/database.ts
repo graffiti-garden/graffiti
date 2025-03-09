@@ -418,7 +418,7 @@ export class GraffitiLocalDatabase
         ...object,
         value: {},
         channels: [],
-        allowed: undefined,
+        allowed: [],
         tombstone: true,
       };
     }
