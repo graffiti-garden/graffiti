@@ -11,7 +11,8 @@ import {
   GraffitiErrorPatchError,
 } from "@graffiti-garden/api";
 import {
-  locationToUri,
+  unpackUri,
+  packUri,
   unpackLocationOrUri,
   randomBase64,
   applyGraffitiPatch,
@@ -37,19 +38,18 @@ export interface GraffitiLocalOptions {
    */
   pouchDBOptions?: PouchDB.Configuration.DatabaseConfiguration;
   /**
-   * Defines the name of the {@link https://api.graffiti.garden/interfaces/GraffitiObjectBase.html#source | `source` }
-   * under which to store objects.
-   * Defaults to `"local"`.
+   * Includes the scheme and other information (possibly domain name)
+   * to prefix prefixes all URIs put in the system. Defaults to `graffiti:local:`.
    */
-  sourceName?: string;
+  origin?: string;
   /**
-   * Whether to allow putting objects with a different than the
-   * default source name. Defaults to `false`.
+   * Whether to allow putting objects with a different origin
+   * than the one specified. Defaults to `false`.
    *
    * Allows this implementation to be used as a client-side cache
    * for remote sources.
    */
-  allowOtherSources?: boolean;
+  allowOtherOrigins?: boolean;
   /**
    * Whether to allow the user to set the lastModified field
    * when putting objects. Defaults to `false`.
@@ -72,7 +72,7 @@ export interface GraffitiLocalOptions {
 }
 
 const DEFAULT_TOMBSTONE_RETENTION = 86400000; // 1 day in milliseconds
-const DEFAULT_SOURCE_NAME = "local";
+const DEFAULT_ORIGIN = "graffiti:local:";
 
 /**
  * An implementation of only the database operations of the
@@ -95,6 +95,7 @@ export class GraffitiLocalDatabase
   protected applyPatch_: Promise<typeof applyPatch> | undefined;
   protected ajv_: Promise<Ajv> | undefined;
   protected readonly options: GraffitiLocalOptions;
+  protected readonly origin: string;
 
   get db() {
     if (!this.db_) {
@@ -201,10 +202,11 @@ export class GraffitiLocalDatabase
 
   constructor(options?: GraffitiLocalOptions) {
     this.options = options ?? {};
+    this.origin = this.options.origin ?? DEFAULT_ORIGIN;
   }
 
-  protected async queryByLocation(location: GraffitiLocation) {
-    const uri = locationToUri(location) + "/";
+  protected async allDocsAtLocation(locationOrUri: GraffitiLocation | string) {
+    const uri = unpackLocationOrUri(locationOrUri) + "/";
     const results = await (
       await this.db
     ).allDocs({
@@ -227,20 +229,22 @@ export class GraffitiLocalDatabase
   }
 
   protected docId(location: GraffitiLocation) {
-    return locationToUri(location) + "/" + randomBase64();
+    return location.uri + "/" + randomBase64();
   }
 
   get: Graffiti["get"] = async (...args) => {
     const [locationOrUri, schema, session] = args;
-    const { location } = unpackLocationOrUri(locationOrUri);
 
-    const docsAll = await this.queryByLocation(location);
+    const docsAll = await this.allDocsAtLocation(locationOrUri);
 
     // Filter out ones not allowed
     const docs = docsAll.filter((doc) =>
       isActorAllowedGraffitiObject(doc, session),
     );
-    if (!docs.length) throw new GraffitiErrorNotFound();
+    if (!docs.length)
+      throw new GraffitiErrorNotFound(
+        "The object you are trying to get either does not exist or you are not allowed to see it",
+      );
 
     // Get the most recent document
     const doc = docs.reduce((a, b) => (isObjectNewer(a, b) ? a : b));
@@ -268,10 +272,10 @@ export class GraffitiLocalDatabase
    * spared.
    */
   protected async deleteAtLocation(
-    location: GraffitiLocation,
+    locationOrUri: GraffitiLocation | string,
     keepLatest: boolean = false,
   ) {
-    const docsAtLocationAll = await this.queryByLocation(location);
+    const docsAtLocationAll = await this.allDocsAtLocation(locationOrUri);
     const docsAtLocation = docsAtLocationAll.filter((doc) => !doc.tombstone);
     if (!docsAtLocation.length) return undefined;
 
@@ -336,14 +340,17 @@ export class GraffitiLocalDatabase
 
   delete: Graffiti["delete"] = async (...args) => {
     const [locationOrUri, session] = args;
-    const { location } = unpackLocationOrUri(locationOrUri);
-    if (location.actor !== session.actor) {
-      throw new GraffitiErrorForbidden();
+    const uri = unpackLocationOrUri(locationOrUri);
+    const { actor } = unpackUri(uri);
+    if (actor !== session.actor) {
+      throw new GraffitiErrorForbidden(
+        "You cannot delete an object owned by another actor",
+      );
     }
 
-    const deletedObject = await this.deleteAtLocation(location);
+    const deletedObject = await this.deleteAtLocation(locationOrUri);
     if (!deletedObject) {
-      throw new GraffitiErrorNotFound();
+      throw new GraffitiErrorNotFound("The object has already been deleted");
     }
     return deletedObject;
   };
@@ -351,17 +358,27 @@ export class GraffitiLocalDatabase
   put: Graffiti["put"] = async (...args) => {
     const [objectPartial, session] = args;
     if (objectPartial.actor && objectPartial.actor !== session.actor) {
-      throw new GraffitiErrorForbidden();
-    }
-    if (
-      objectPartial.source &&
-      objectPartial.source !==
-        (this.options.sourceName ?? DEFAULT_SOURCE_NAME) &&
-      !(this.options.allowOtherSources ?? false)
-    ) {
       throw new GraffitiErrorForbidden(
-        "Putting an object that does not match this source",
+        "Cannot put an object with a different actor than the session actor",
       );
+    }
+
+    if (objectPartial.uri) {
+      if (
+        !objectPartial.uri.startsWith(this.origin) &&
+        !(this.options.allowOtherOrigins ?? false)
+      ) {
+        throw new GraffitiErrorForbidden(
+          `Putting an object with a URI that does not start with '${this.origin}' is not allowed`,
+        );
+      } else {
+        const { actor } = unpackUri(objectPartial.uri);
+        if (actor !== session.actor) {
+          throw new GraffitiErrorForbidden(
+            "The object you are trying to modify is owned by another actor",
+          );
+        }
+      }
     }
 
     const lastModified =
@@ -373,9 +390,13 @@ export class GraffitiLocalDatabase
       value: objectPartial.value,
       channels: objectPartial.channels,
       allowed: objectPartial.allowed,
-      name: objectPartial.name ?? randomBase64(),
-      source:
-        objectPartial.source ?? this.options.sourceName ?? DEFAULT_SOURCE_NAME,
+      uri:
+        objectPartial.uri ??
+        packUri({
+          actor: session.actor,
+          name: randomBase64(),
+          origin: this.origin,
+        }),
       actor: session.actor,
       tombstone: false,
       lastModified,
@@ -405,11 +426,25 @@ export class GraffitiLocalDatabase
 
   patch: Graffiti["patch"] = async (...args) => {
     const [patch, locationOrUri, session] = args;
-    const { location } = unpackLocationOrUri(locationOrUri);
-    if (location.actor !== session.actor) {
-      throw new GraffitiErrorForbidden();
+    const uri = unpackLocationOrUri(locationOrUri);
+    const { actor } = unpackUri(uri);
+    if (actor !== session.actor) {
+      throw new GraffitiErrorForbidden(
+        "The object you are trying to patch is owned by another actor",
+      );
     }
-    const originalObject = await this.get(locationOrUri, {}, session);
+    let originalObject: GraffitiObjectBase;
+    try {
+      originalObject = await this.get(locationOrUri, {}, session);
+    } catch (e) {
+      if (e instanceof GraffitiErrorNotFound) {
+        throw new GraffitiErrorNotFound(
+          "The object you are trying to patch does not exist",
+        );
+      } else {
+        throw e;
+      }
+    }
     if (originalObject.tombstone) {
       throw new GraffitiErrorNotFound(
         "The object you are trying to patch has been deleted",

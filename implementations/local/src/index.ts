@@ -4,7 +4,6 @@ import {
   GraffitiLocalDatabase,
   type GraffitiLocalOptions,
 } from "./database.js";
-import { locationToUri, uriToLocation } from "./utilities.js";
 
 export type { GraffitiLocalOptions };
 
@@ -16,9 +15,6 @@ export type { GraffitiLocalOptions };
  * although using it with a remote server will not be secure.
  */
 export class GraffitiLocal extends Graffiti {
-  locationToUri = locationToUri;
-  uriToLocation = uriToLocation;
-
   protected sessionManagerLocal = new GraffitiLocalSessionManager();
   login = this.sessionManagerLocal.login.bind(this.sessionManagerLocal);
   logout = this.sessionManagerLocal.logout.bind(this.sessionManagerLocal);
