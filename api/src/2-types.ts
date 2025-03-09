@@ -12,9 +12,7 @@ import type { Operation as JSONPatchOperation } from "fast-json-patch";
  * or properties that emerge in the Graffiti [folksonomy](https://en.wikipedia.org/wiki/Folksonomy)
  * to promote interoperability.
  *
- * The {@link name | `name`}, {@link actor | `actor`}, and {@link source | `source`}
- * properties together uniquely describe the {@link GraffitiLocation | object's location}
- * and can be {@link Graffiti.locationToUri | converted to a globally unique URI}.
+ * The object is globally addressable via its {@link uri | `uri`}.
  *
  * The {@link channels | `channels`} and {@link allowed | `allowed`} properties
  * enable the object's creator to shape the visibility of and access to their object.
@@ -78,21 +76,22 @@ export interface GraffitiObjectBase {
   actor: string;
 
   /**
-   * A name for the object. This name is not globally unique but it is unique when
-   * combined with the {@link actor | `actor`} and {@link source | `source`}.
-   * Often times it is not specified by the user and randomly generated during {@link Graffiti.put | creation}.
-   * If an object is created with the same `name`, `actor`, and `source` as an existing object,
-   * the existing object will be replaced with the new object.
+   * A globally unique identifier for the object. It can be used to point to
+   * an object or to retrieve the object directly with {@link Graffiti.get}.
+   * If an object is {@link Graffiti.put | put} with the same URI
+   * as an existing object, the existing object will be replaced with the new object.
+   *
+   * The URI is generated on creation and include sufficient randomness to prevent collisions
+   * and guessing. The URI starts with "scheme", just like web URLs start with `http` or `https`, to indicate
+   * to indicate the particular Graffiti implementation. This allows for applications
+   * to pull from multiple coexisting Graffiti implementations without collision.
+   * Existing schemes include `graffiti:local:` for objects stored locally
+   * (see the [local implementation](https://github.com/graffiti-garden/implementation-local))
+   * and `graffiti:remote:` for objects stored on remote web servers (see the
+   * [remote implementation](https://github.com/graffiti-garden/implementation-remote)).
+   * Other options like `graffiti:p2p:`, for example may exist in the future.
    */
-  name: string;
-
-  /**
-   * The URI of the source that stores the object. In some decentralized implementations,
-   * it can represent the server or [pod](https://en.wikipedia.org/wiki/Solid_(web_decentralization_project)#Design)
-   * that a user has delegated to store their objects. In others it may represent the distributed
-   * storage network that the object is stored on.
-   */
-  source: string;
+  uri: string;
 
   /**
    * The time the object was last modified, measured in milliseconds since January 1, 1970.
@@ -135,38 +134,23 @@ export const GraffitiObjectJSONSchema = {
     value: { type: "object" },
     channels: { type: "array", items: { type: "string" } },
     allowed: { type: "array", items: { type: "string" }, nullable: true },
+    uri: { type: "string" },
     actor: { type: "string" },
-    name: { type: "string" },
-    source: { type: "string" },
     lastModified: { type: "number" },
     tombstone: { type: "boolean" },
   },
   additionalProperties: false,
-  required: [
-    "value",
-    "channels",
-    "actor",
-    "name",
-    "source",
-    "lastModified",
-    "tombstone",
-  ],
+  required: ["value", "channels", "actor", "uri", "lastModified", "tombstone"],
 } as const satisfies JSONSchema;
 
 /**
- * This is a subset of properties from {@link GraffitiObjectBase} that uniquely
- * identify an object's location: {@link GraffitiObjectBase.actor | `actor`},
- * {@link GraffitiObjectBase.name | `name`}, and {@link GraffitiObjectBase.source | `source`}.
- * Attempts to create an object with the same `actor`, `name`, and `source`
- * as an existing object will replace the existing object (see {@link Graffiti.put}).
- *
- * This location can be converted to
- * a globally unique URI using {@link Graffiti.locationToUri}.
+ * This is an object containing only the {@link GraffitiObjectBase.uri | `uri`}
+ * property of a {@link GraffitiObjectBase | GraffitiObject}.
+ * It is used as a utility type so that users can call {@link Graffiti.get},
+ * {@link Graffiti.patch}, or {@link Graffiti.delete} directly on an object
+ * rather than on `object.uri`.
  */
-export type GraffitiLocation = Pick<
-  GraffitiObjectBase,
-  "actor" | "name" | "source"
->;
+export type GraffitiLocation = Pick<GraffitiObjectBase, "uri">;
 
 /**
  * This object is a subset of {@link GraffitiObjectBase} that a user must construct locally before calling {@link Graffiti.put}.
@@ -176,12 +160,8 @@ export type GraffitiLocation = Pick<
  * This local object must have a {@link GraffitiObjectBase.value | `value`} and {@link GraffitiObjectBase.channels | `channels`}
  * and may optionally have an {@link GraffitiObjectBase.allowed | `allowed`} property.
  *
- * It may also contain any of the {@link GraffitiLocation } properties: {@link GraffitiObjectBase.actor | `actor`},
- * {@link GraffitiObjectBase.name | `name`}, and {@link GraffitiObjectBase.source | `source`}.
- * If the location provided exactly matches an existing object, the existing object will be replaced.
- * If no `name` is provided, one will be randomly generated.
- * If no `actor` is provided, the `actor` from the supplied {@link GraffitiSession | `session` } will be used.
- * If no `source` is provided, one may be inferred by the depending on implementation.
+ * It may also include a {@link GraffitiObjectBase.uri | `uri`} property to specify the
+ * URI of an existing object to replace. If no `uri` is provided, one will be generated during object creation.
  *
  * This object does not need a {@link GraffitiObjectBase.lastModified | `lastModified`} or {@link GraffitiObjectBase.tombstone | `tombstone`}
  * property since these are automatically generated by the Graffiti system.
@@ -204,8 +184,7 @@ export const GraffitiPutObjectJSONSchema = {
 } as const satisfies JSONSchema;
 
 /**
- * This object contains information that
- * {@link GraffitiObjectBase.source | `source`}s can
+ * This object contains information that the underlying implementation can
  * use to verify that a user has permission to operate a
  * particular {@link GraffitiObjectBase.actor | `actor`}.
  * This object is required of all {@link Graffiti} methods
@@ -289,10 +268,12 @@ export interface GraffitiPatch {
  *
  * Errors are returned within the stream rather than as
  * exceptions that would halt the entire stream. This is because
- * some implementations may pull data from multiple
- * {@link GraffitiObjectBase.source | `source`}s
+ * some implementations may pull data from multiple sources
  * including some that may be unreliable. In many cases,
  * these errors can be safely ignored.
+ * The `origin` property of the error object indicates the
+ * source of the error including its scheme and other
+ * implementation-specific details (e.g. domain name).
  *
  * The stream is an [`AsyncGenerator`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function)
  * that can be iterated over using `for await` loops or calling `next` on the generator.
@@ -305,7 +286,7 @@ export type GraffitiStream<TValue, TReturn = void> = AsyncGenerator<
     }
   | {
       error: Error;
-      source: string;
+      origin: string;
     },
   TReturn
 >;

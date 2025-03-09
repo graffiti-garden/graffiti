@@ -89,7 +89,7 @@ export const graffitiDiscoverTests = (
       expect(value.lastModified).toEqual(putted.lastModified);
     });
 
-    for (const prop of ["name", "actor", "lastModified"] as const) {
+    for (const prop of ["actor", "lastModified"] as const) {
       it(`discover for ${prop}`, async () => {
         const object1 = randomPutObject();
         const putted1 = await graffiti.put<{}>(object1, session1);
@@ -109,8 +109,8 @@ export const graffitiDiscoverTests = (
         });
 
         const value = await nextStreamValue(iterator);
-        expect(value.name).toEqual(putted1.name);
-        expect(value.name).not.toEqual(putted2.name);
+        expect(value.uri).toEqual(putted1.uri);
+        expect(value.uri).not.toEqual(putted2.uri);
         expect(value.value).toEqual(object1.value);
         await expect(iterator.next()).resolves.toHaveProperty("done", true);
       });
@@ -123,7 +123,7 @@ export const graffitiDiscoverTests = (
       await new Promise((r) => setTimeout(r, 20));
       const putted2 = await graffiti.put<{}>(object, session);
 
-      expect(putted1.name).not.toEqual(putted2.name);
+      expect(putted1.uri).not.toEqual(putted2.uri);
       expect(putted1.lastModified).toBeLessThan(putted2.lastModified);
 
       const gtIterator = graffiti.discover([object.channels[0]], {
@@ -142,7 +142,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value1 = await nextStreamValue(gtIteratorEpsilon);
-      expect(value1.name).toEqual(putted2.name);
+      expect(value1.uri).toEqual(putted2.uri);
       expect(await gtIteratorEpsilon.next()).toHaveProperty("done", true);
       const gteIterator = graffiti.discover(object.channels, {
         properties: {
@@ -153,7 +153,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value = await nextStreamValue(gteIterator);
-      expect(value.name).toEqual(putted2.name);
+      expect(value.uri).toEqual(putted2.uri);
       expect(await gteIterator.next()).toHaveProperty("done", true);
       const gteIteratorEpsilon = graffiti.discover(object.channels, {
         properties: {
@@ -181,7 +181,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value3 = await nextStreamValue(ltIteratorEpsilon);
-      expect(value3.name).toEqual(putted1.name);
+      expect(value3.uri).toEqual(putted1.uri);
       expect(await ltIteratorEpsilon.next()).toHaveProperty("done", true);
 
       const lteIterator = graffiti.discover(object.channels, {
@@ -192,7 +192,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value2 = await nextStreamValue(lteIterator);
-      expect(value2.name).toEqual(putted1.name);
+      expect(value2.uri).toEqual(putted1.uri);
       expect(await lteIterator.next()).toHaveProperty("done", true);
 
       const lteIteratorEpsilon = graffiti.discover(object.channels, {
@@ -535,11 +535,22 @@ export const graffitiDiscoverTests = (
 
     it("put concurrently and discover one", async () => {
       const object = randomPutObject();
-      object.name = randomString();
 
-      const putPromises = Array(100)
+      // Put a first one to get a URI
+      const putted = await graffiti.put<{}>(object, session);
+      console.log(putted.uri);
+
+      const putPromises = Array(99)
         .fill(0)
-        .map(() => graffiti.put<{}>(object, session));
+        .map(() =>
+          graffiti.put<{}>(
+            {
+              ...object,
+              uri: putted.uri,
+            },
+            session,
+          ),
+        );
       await Promise.all(putPromises);
 
       const iterator = graffiti.discover(object.channels, {});
@@ -553,6 +564,8 @@ export const graffitiDiscoverTests = (
           valueCount++;
         }
       }
+      console.log(`tombstoneCount: ${tombstoneCount}`);
+      console.log(`valueCount: ${valueCount}`);
       expect(tombstoneCount).toBe(99);
       expect(valueCount).toBe(1);
     });
