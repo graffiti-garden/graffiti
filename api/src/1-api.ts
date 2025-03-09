@@ -230,7 +230,7 @@ export abstract class Graffiti {
    * the object's `actor`,
    * the object's {@link GraffitiObjectBase.allowed | `allowed`} and
    * {@link GraffitiObjectBase.channels | `channels`} properties are
-   * not revealed.
+   * not revealed, similar to a BCC.
    *
    * If the object existed but has since been deleted,
    * or the retrieving {@link GraffitiObjectBase.actor | `actor`}
@@ -238,14 +238,15 @@ export abstract class Graffiti {
    * the object but now isn't, this method may return the latest
    * version of the object that the {@link GraffitiObjectBase.actor | `actor`}
    * was allowed to access with its {@link GraffitiObjectBase.tombstone | `tombstone`}
-   * set to `true`, if that object is stored in an implementation-side cache.
+   * set to `true`. This allows for the invalidation of the object
+   * in a client-side cache.
    *
    * Otherwise, if the object never existed, or the
    * retrieving {@link GraffitiObjectBase.actor | `actor`} was never
    * {@link GraffitiObjectBase.allowed | `allowed`} to access it, or if
-   * the object was changed long enough ago that its history has been
-   * purged from the cache, a {@link GraffitiErrorNotFound} is thrown.
-   * The rate at which the cache is purged is implementation dependent.
+   * the object was changed long enough ago that it has been permanently deleted,
+   * a {@link GraffitiErrorNotFound} is thrown.
+   * The rate at which permanent deletions happen is implementation dependent.
    * See the `tombstoneRetention` property returned by {@link discover}.
    *
    * @group CRUD Methods
@@ -273,11 +274,12 @@ export abstract class Graffiti {
    * The patching {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
-   * @returns The object that was deleted if one exists or an object with
-   * with a `null` {@link GraffitiObjectBase.value | `value`} otherwise.
+   * @returns The original object prior to the patch
    * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
    * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
    * field updated to the time of deletion.
+   *
+   * @throws {@link GraffitiErrorNotFound} if the object does not exist or has already been deleted.
    *
    * @group CRUD Methods
    */
@@ -303,14 +305,12 @@ export abstract class Graffiti {
    * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
-   * If the object does not exist or has already been deleted,
-   * {@link GraffitiErrorNotFound} is thrown.
-   *
-   * @returns The object that was deleted if one exists or an object with
-   * with a `null` {@link GraffitiObjectBase.value | `value`} otherwise.
+   * @returns The object that was deleted if one exists.
    * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
    * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
    * field updated to the time of deletion.
+   *
+   * @throws {@link GraffitiErrorNotFound} if the object does not exist or has already been deleted.
    *
    * @group CRUD Methods
    */
@@ -348,7 +348,7 @@ export abstract class Graffiti {
    * no guarentee on the order that objects are returned in. Additionally, the method
    * will return objects that have been deleted but with a
    * {@link GraffitiObjectBase.tombstone | `tombstone`} field set to `true` for
-   * cache invalidation purposes.
+   * client-side cache invalidation purposes.
    * The final `return()` value of the stream includes a `tombstoneRetention`
    * property that represents the minimum amount of time,
    * in milliseconds, that an application will retain and return tombstones for objects that
@@ -377,7 +377,7 @@ export abstract class Graffiti {
    * application, application authors must be intentional about their polling.
    *
    * Implementers should be aware that some users may applications may try to poll
-   * {@link discover} repetitively. You can deal with this by rate limiting or
+   * {@link discover} repetitively. They can deal with this by rate limiting or
    * preemptively fetching data via a bidirectional channel, like a WebSocket.
    * Additionally, implementers should probably index the `lastModified` field
    * to speed up responses to schemas like the one above.
