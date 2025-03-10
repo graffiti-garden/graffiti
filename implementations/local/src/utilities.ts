@@ -5,7 +5,6 @@ import {
   GraffitiErrorPatchTestFailed,
 } from "@graffiti-garden/api";
 import type {
-  Graffiti,
   GraffitiObject,
   GraffitiObjectBase,
   GraffitiLocation,
@@ -16,28 +15,6 @@ import type {
 import type { Ajv } from "ajv";
 import type { applyPatch } from "fast-json-patch";
 
-export function packUri(components: {
-  name: string;
-  actor: string;
-  origin: string;
-}) {
-  return `${components.origin}/${encodeURIComponent(components.actor)}/${encodeURIComponent(components.name)}`;
-}
-
-export function unpackUri(uri: string) {
-  const parts = uri.split("/");
-  const nameEncoded = parts.pop();
-  const actorEncoded = parts.pop();
-  if (!nameEncoded || !actorEncoded || !parts.length) {
-    throw new GraffitiErrorInvalidUri();
-  }
-  return {
-    name: decodeURIComponent(nameEncoded),
-    actor: decodeURIComponent(actorEncoded),
-    origin: parts.join("/"),
-  };
-}
-
 export function randomBase64(numBytes: number = 24) {
   const bytes = new Uint8Array(numBytes);
   crypto.getRandomValues(bytes);
@@ -45,10 +22,6 @@ export function randomBase64(numBytes: number = 24) {
   const base64 = btoa(String.fromCodePoint(...bytes));
   // Make sure it is url safe
   return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/\=+$/, "");
-}
-
-export function unpackLocationOrUri(locationOrUri: GraffitiLocation | string) {
-  return typeof locationOrUri === "string" ? locationOrUri : locationOrUri.uri;
 }
 
 export function isObjectNewer(
