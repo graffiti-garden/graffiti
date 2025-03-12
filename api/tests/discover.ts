@@ -538,7 +538,6 @@ export const graffitiDiscoverTests = (
 
       // Put a first one to get a URI
       const putted = await graffiti.put<{}>(object, session);
-      console.log(putted.uri);
 
       const putPromises = Array(99)
         .fill(0)
@@ -564,8 +563,6 @@ export const graffitiDiscoverTests = (
           valueCount++;
         }
       }
-      console.log(`tombstoneCount: ${tombstoneCount}`);
-      console.log(`valueCount: ${valueCount}`);
       expect(tombstoneCount).toBe(99);
       expect(valueCount).toBe(1);
     });

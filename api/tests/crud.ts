@@ -5,7 +5,6 @@ import type {
   GraffitiPatch,
   JSONSchema,
 } from "@graffiti-garden/api";
-import type { FromSchema } from "json-schema-to-ts";
 import {
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
@@ -97,9 +96,14 @@ export const graffitiCRUDTests = (
         // Get a tombstone
         const final = await graffiti.get(afterReplaced, {});
         expect(final).toEqual(beforeDeleted);
+
+        // Delete it again
+        await expect(graffiti.delete(final, session)).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
       });
 
-      it("put, get, delete with wrong actor", async () => {
+      it("put, delete, patch with wrong actor", async () => {
         await expect(
           graffiti.put<{}>(
             { value: {}, channels: [], actor: session2.actor },
@@ -112,12 +116,53 @@ export const graffitiCRUDTests = (
           session2,
         );
 
+        await expect(
+          graffiti.put<{}>(
+            {
+              uri: putted.uri,
+              value: {},
+              channels: [],
+            },
+            session1,
+          ),
+        ).rejects.toThrow(GraffitiErrorForbidden);
+
         await expect(graffiti.delete(putted, session1)).rejects.toThrow(
           GraffitiErrorForbidden,
         );
 
         await expect(graffiti.patch({}, putted, session1)).rejects.toThrow(
           GraffitiErrorForbidden,
+        );
+      });
+
+      it("put, patch, delete object that is not allowed", async () => {
+        const putted = await graffiti.put<{}>(
+          {
+            value: {},
+            channels: [],
+            allowed: [],
+          },
+          session1,
+        );
+
+        await expect(
+          graffiti.put(
+            {
+              uri: putted.uri,
+              value: {},
+              channels: [],
+            },
+            session2,
+          ),
+        ).rejects.toThrow(GraffitiErrorNotFound);
+
+        await expect(graffiti.patch({}, putted, session2)).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
+
+        await expect(graffiti.delete(putted, session2)).rejects.toThrow(
+          GraffitiErrorNotFound,
         );
       });
 
