@@ -13,7 +13,6 @@ import {
   applyGraffitiPatch,
   compileGraffitiObjectSchema,
   isActorAllowedGraffitiObject,
-  locationToUri,
   maskGraffitiObject,
   unpackLocationOrUri,
 } from "@graffiti-garden/implementation-local/utilities";
@@ -88,8 +87,6 @@ export class GraffitiSynchronize extends Graffiti {
   protected readonly options: GraffitiSynchronizeOptions;
 
   channelStats: Graffiti["channelStats"];
-  locationToUri: Graffiti["locationToUri"];
-  uriToLocation: Graffiti["uriToLocation"];
   login: Graffiti["login"];
   logout: Graffiti["logout"];
   sessionEvents: Graffiti["sessionEvents"];
@@ -131,8 +128,6 @@ export class GraffitiSynchronize extends Graffiti {
     this.options = options ?? {};
     this.graffiti = graffiti;
     this.channelStats = graffiti.channelStats.bind(graffiti);
-    this.locationToUri = graffiti.locationToUri.bind(graffiti);
-    this.uriToLocation = graffiti.uriToLocation.bind(graffiti);
     this.login = graffiti.login.bind(graffiti);
     this.logout = graffiti.logout.bind(graffiti);
     this.sessionEvents = graffiti.sessionEvents;
@@ -217,10 +212,9 @@ export class GraffitiSynchronize extends Graffiti {
     ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
   ): GraffitiStream<GraffitiObject<Schema>> {
     const [locationOrUri, schema, session] = args;
+    const uri = unpackLocationOrUri(locationOrUri);
     function matchObject(object: GraffitiObjectBase) {
-      const objectUri = locationToUri(object);
-      const { uri } = unpackLocationOrUri(locationOrUri);
-      return objectUri === uri;
+      return object.uri === uri;
     }
     return this.synchronize<Schema>(matchObject, [], schema, session);
   }
@@ -251,15 +245,15 @@ export class GraffitiSynchronize extends Graffiti {
   /**
    * Streams changes made to *any* object in *any* channel
    * and made by *any* user. You may want to use it in conjuction with
-   * {@link GraffitiSyncrhonizeOptions.omniscient} to get a global view
+   * {@link GraffitiSynchronizeOptions.omniscient} to get a global view
    * of all Graffiti objects passing through the system. This is useful
    * for building a client-side cache, for example.
    *
    * Be careful using this method. Without additional filters it can
    * expose the user to content out of context.
    */
-  synchronizeAll(
-    schema?: JSONSchema,
+  synchronizeAll<Schema extends JSONSchema>(
+    schema?: Schema,
     session?: GraffitiSession | null,
   ): GraffitiStream<GraffitiObjectBase> {
     return this.synchronize(() => true, [], schema ?? {}, session);
