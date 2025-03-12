@@ -1,5 +1,5 @@
 import type {
-  GraffitiLocation,
+  GraffitiObjectUrl,
   GraffitiObject,
   GraffitiObjectBase,
   GraffitiPatch,
@@ -255,7 +255,7 @@ export abstract class Graffiti {
     /**
      * The location of the object to get.
      */
-    locationOrUrl: GraffitiLocation | string,
+    url: string | GraffitiObjectUrl,
     /**
      * The JSON schema to validate the retrieved object against.
      */
@@ -292,7 +292,7 @@ export abstract class Graffiti {
     /**
      * The location of the object to patch.
      */
-    locationOrUrl: GraffitiLocation | string,
+    url: string | GraffitiObjectUrl,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
@@ -318,7 +318,7 @@ export abstract class Graffiti {
     /**
      * The location of the object to delete.
      */
-    locationOrUrl: GraffitiLocation | string,
+    url: string | GraffitiObjectUrl,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
