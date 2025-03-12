@@ -97,19 +97,21 @@ export interface GraffitiObjectBase {
 
   /**
    * The time the object was last modified, measured in milliseconds since January 1, 1970.
-   * This is used for caching and synchronization.
+   * This is used for client-side caching and synchronization.
    * A number, rather than an ISO string or Date object, is used for easy comparison, sorting,
    * and JSON Schema [range queries](https://json-schema.org/understanding-json-schema/reference/numeric#range).
    *
    * It is possible to use this value to sort objects in a user's interface but in many cases it would be better to
-   * use a `createdAt` property in the object's {@link value | `value`} to indicate when the object was created
+   * use a [`published`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-published)
+   * property in the object's {@link value | `value`} to indicate when the object was created
    * rather than when it was modified.
    */
   lastModified: number;
 
   /**
    * A boolean indicating whether the object has been deleted.
-   * Depending on implementation, objects stay available for some time after deletion to allow for synchronization.
+   * Depending on implementation, objects stay available for some time
+   * after deletion to allow for synchronization and client-side caching
    */
   tombstone: boolean;
 }
@@ -152,7 +154,7 @@ export const GraffitiObjectJSONSchema = {
  * {@link Graffiti.patch}, or {@link Graffiti.delete} directly on an object
  * rather than on `object.url`.
  */
-export type GraffitiLocation = Pick<GraffitiObjectBase, "url">;
+export type GraffitiObjectUrl = Pick<GraffitiObjectBase, "url">;
 
 /**
  * This object is a subset of {@link GraffitiObjectBase} that a user must construct locally before calling {@link Graffiti.put}.
