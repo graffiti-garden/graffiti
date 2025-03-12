@@ -18,7 +18,6 @@ for (const format of ["esm", "cjs"] as const) {
     entryPoints: ["src/*"],
     platform: "neutral",
     sourcemap: true,
-    minify: true,
     format,
     outdir: `dist/${format}`,
   });
