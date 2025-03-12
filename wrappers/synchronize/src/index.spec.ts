@@ -74,7 +74,7 @@ describe.concurrent("synchronizeDiscover", () => {
     const newChannels = [afterChannel, sharedChannel];
     await graffiti.put<{}>(
       {
-        ...putted,
+        uri: putted.uri,
         value: newValue,
         channels: newChannels,
       },
@@ -265,6 +265,9 @@ describe.concurrent("synchronizeDiscover", () => {
 
       expect(third).toBe("synchronize");
     }
+
+    // Try returning...
+    iterator.return();
   });
 
   it("not allowed", async () => {
@@ -340,7 +343,8 @@ describe.concurrent("synchronizeGet", () => {
     const newValue = { goodbye: "world" };
     const putted2 = await graffiti.put<{}>(
       {
-        ...putted,
+        uri: putted.uri,
+        channels: object.channels,
         value: newValue,
       },
       session,
