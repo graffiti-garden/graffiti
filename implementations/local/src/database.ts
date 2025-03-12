@@ -18,6 +18,7 @@ import {
   isActorAllowedGraffitiObject,
   isObjectNewer,
   compileGraffitiObjectSchema,
+  unpackLocationOrUri,
 } from "./utilities.js";
 import { Repeater } from "@repeaterjs/repeater";
 import type Ajv from "ajv";
@@ -41,13 +42,14 @@ export interface GraffitiLocalOptions {
    */
   origin?: string;
   /**
-   * Whether to allow putting objects with a different origin
-   * than the one specified. Defaults to `false`.
+   * Whether to allow putting objects at arbtirary URIs, i.e.
+   * URIs that are *not* prefixed with the origin or not generated
+   * by the system. Defaults to `false`.
    *
    * Allows this implementation to be used as a client-side cache
    * for remote sources.
    */
-  allowOtherOrigins?: boolean;
+  allowSettingArbitraryUris?: boolean;
   /**
    * Whether to allow the user to set the lastModified field
    * when putting objects. Defaults to `false`.
@@ -70,7 +72,7 @@ export interface GraffitiLocalOptions {
 }
 
 const DEFAULT_TOMBSTONE_RETENTION = 86400000; // 1 day in milliseconds
-const DEFAULT_ORIGIN = "graffiti:local";
+const DEFAULT_ORIGIN = "graffiti:local:";
 
 /**
  * An implementation of only the database operations of the
@@ -201,12 +203,13 @@ export class GraffitiLocalDatabase
   constructor(options?: GraffitiLocalOptions) {
     this.options = options ?? {};
     this.origin = this.options.origin ?? DEFAULT_ORIGIN;
+    if (!this.origin.endsWith(":") && !this.origin.endsWith("/")) {
+      this.origin += "/";
+    }
   }
 
   protected async allDocsAtLocation(locationOrUri: GraffitiLocation | string) {
-    const uri =
-      (typeof locationOrUri === "string" ? locationOrUri : locationOrUri.uri) +
-      "/";
+    const uri = unpackLocationOrUri(locationOrUri) + "/";
     const results = await (
       await this.db
     ).allDocs({
@@ -281,28 +284,26 @@ export class GraffitiLocalDatabase
     },
   ) {
     const docsAtLocationAll = await this.allDocsAtLocation(locationOrUri);
-    if (!docsAtLocationAll.length) {
+    const docsAtLocationAllowed = options.session
+      ? docsAtLocationAll.filter((doc) =>
+          isActorAllowedGraffitiObject(doc, options.session),
+        )
+      : docsAtLocationAll;
+    if (!docsAtLocationAllowed.length) {
       throw new GraffitiErrorNotFound(
         "The object you are trying to delete either does not exist or you are not allowed to see it",
       );
-    } else if (options.session) {
-      if (
-        !isActorAllowedGraffitiObject(docsAtLocationAll[0], options.session)
-      ) {
-        throw new GraffitiErrorNotFound(
-          "The object you are trying to delete either does not exist or you are not allowed to see it",
-        );
-      } else {
-        if (
-          docsAtLocationAll.some((doc) => doc.actor !== options.session?.actor)
-        ) {
-          throw new GraffitiErrorForbidden(
-            "You cannot delete an object owned by another actor",
-          );
-        }
-      }
+    } else if (
+      options.session &&
+      docsAtLocationAllowed.some((doc) => doc.actor !== options.session?.actor)
+    ) {
+      throw new GraffitiErrorForbidden(
+        "You cannot delete an object owned by another actor",
+      );
     }
-    const docsAtLocation = docsAtLocationAll.filter((doc) => !doc.tombstone);
+    const docsAtLocation = docsAtLocationAllowed.filter(
+      (doc) => !doc.tombstone,
+    );
     if (!docsAtLocation.length) return undefined;
 
     // Get the most recent lastModified timestamp.
@@ -386,19 +387,21 @@ export class GraffitiLocalDatabase
     }
 
     if (objectPartial.uri) {
-      let oldObject: GraffitiObjectBase;
+      let oldObject: GraffitiObjectBase | undefined;
       try {
         oldObject = await this.get(objectPartial.uri, {}, session);
       } catch (e) {
         if (e instanceof GraffitiErrorNotFound) {
-          throw new GraffitiErrorNotFound(
-            "The object you are trying to replace does not exist or you are not allowed to see it",
-          );
+          if (!this.options.allowSettingArbitraryUris) {
+            throw new GraffitiErrorNotFound(
+              "The object you are trying to replace does not exist or you are not allowed to see it",
+            );
+          }
         } else {
           throw e;
         }
       }
-      if (oldObject.actor !== session.actor) {
+      if (oldObject?.actor !== session.actor) {
         throw new GraffitiErrorForbidden(
           "The object you are trying to replace is owned by another actor",
         );
@@ -414,7 +417,7 @@ export class GraffitiLocalDatabase
       value: objectPartial.value,
       channels: objectPartial.channels,
       allowed: objectPartial.allowed,
-      uri: objectPartial.uri ?? this.origin + "/" + randomBase64(),
+      uri: objectPartial.uri ?? this.origin + randomBase64(),
       actor: session.actor,
       tombstone: false,
       lastModified,

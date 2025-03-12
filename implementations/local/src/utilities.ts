@@ -7,13 +7,17 @@ import {
 import type {
   GraffitiObject,
   GraffitiObjectBase,
-  GraffitiLocation,
   GraffitiPatch,
   JSONSchema,
   GraffitiSession,
+  GraffitiLocation,
 } from "@graffiti-garden/api";
 import type { Ajv } from "ajv";
 import type { applyPatch } from "fast-json-patch";
+
+export function unpackLocationOrUri(locationOrUri: GraffitiLocation | string) {
+  return typeof locationOrUri === "string" ? locationOrUri : locationOrUri.uri;
+}
 
 export function randomBase64(numBytes: number = 24) {
   const bytes = new Uint8Array(numBytes);
