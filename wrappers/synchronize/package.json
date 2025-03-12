@@ -1,11 +1,11 @@
 {
   "name": "@graffiti-garden/wrapper-synchronize",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "description": "Internal synchronization for the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
   "main": "./dist/cjs/index.js",
-  "browser": "./dist/index.browser.js",
+  "browser": "./dist/browser/index.js",
   "exports": {
     ".": {
       "import": {
@@ -31,7 +31,6 @@
   "files": [
     "src",
     "dist",
-    "tests",
     "package.json",
     "README.md"
   ],
@@ -47,16 +46,18 @@
   "homepage": "https://sync.graffiti.garden/classes/GraffitiSynchronize.html",
   "devDependencies": {
     "@types/node": "^22.13.1",
+    "@vitest/coverage-v8": "^3.0.6",
     "tsx": "^4.19.2",
     "typedoc": "^0.27.6",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.4.1",
-    "@graffiti-garden/implementation-local": "^0.4.0",
+    "@graffiti-garden/api": "^0.5.0",
+    "@graffiti-garden/implementation-local": "^0.5.0",
     "@repeaterjs/repeater": "^3.0.6",
     "ajv": "^8.17.1",
+    "esbuild-plugin-polyfill-node": "^0.3.0",
     "fast-json-patch": "^3.1.1"
   }
 }
