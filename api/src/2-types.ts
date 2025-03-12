@@ -12,7 +12,7 @@ import type { Operation as JSONPatchOperation } from "fast-json-patch";
  * or properties that emerge in the Graffiti [folksonomy](https://en.wikipedia.org/wiki/Folksonomy)
  * to promote interoperability.
  *
- * The object is globally addressable via its {@link uri | `uri`}.
+ * The object is globally addressable via its {@link url | `url`}.
  *
  * The {@link channels | `channels`} and {@link allowed | `allowed`} properties
  * enable the object's creator to shape the visibility of and access to their object.
@@ -37,7 +37,7 @@ export interface GraffitiObjectBase {
    * in the highly interoperable ecosystem that Graffiti envisions. For example, channel URIs may be:
    * - A user's own {@link actor | `actor`} URI. Putting an object in this channel is a way to broadcast
    * the object to the user's followers, like posting a tweet.
-   * - The URI of a Graffiti post. Putting an object in this channel is a way to broadcast to anyone viewing
+   * - The URL of a Graffiti post. Putting an object in this channel is a way to broadcast to anyone viewing
    * the post, like commenting on a tweet.
    * - A URI representing a topic. Putting an object in this channel is a way to broadcast to anyone interested
    * in that topic, like posting in a subreddit.
@@ -76,13 +76,14 @@ export interface GraffitiObjectBase {
   actor: string;
 
   /**
-   * A globally unique identifier for the object. It can be used to point to
+   * A globally unique identifier and locator for the object. It can be used to point to
    * an object or to retrieve the object directly with {@link Graffiti.get}.
-   * If an object is {@link Graffiti.put | put} with the same URI
+   * If an object is {@link Graffiti.put | put} with the same URL
    * as an existing object, the existing object will be replaced with the new object.
    *
-   * The URI is generated on creation and include sufficient randomness to prevent collisions
-   * and guessing. The URI starts with "scheme", just like web URLs start with `http` or `https`, to indicate
+   * An object's URL is generated when the object is first creation and
+   * should include sufficient randomness to prevent collisions
+   * and guessing. The URL starts with a "scheme", just like web URLs start with `http` or `https`, to indicate
    * to indicate the particular Graffiti implementation. This allows for applications
    * to pull from multiple coexisting Graffiti implementations without collision.
    * Existing schemes include `graffiti:local:` for objects stored locally
@@ -92,7 +93,7 @@ export interface GraffitiObjectBase {
    * Options available in the future might include `graffiti:solid:` for objects stored on Solid servers
    * or `graffiti:p2p:` for objects stored on a peer-to-peer network.
    */
-  uri: string;
+  url: string;
 
   /**
    * The time the object was last modified, measured in milliseconds since January 1, 1970.
@@ -135,23 +136,23 @@ export const GraffitiObjectJSONSchema = {
     value: { type: "object" },
     channels: { type: "array", items: { type: "string" } },
     allowed: { type: "array", items: { type: "string" }, nullable: true },
-    uri: { type: "string" },
+    url: { type: "string" },
     actor: { type: "string" },
     lastModified: { type: "number" },
     tombstone: { type: "boolean" },
   },
   additionalProperties: false,
-  required: ["value", "channels", "actor", "uri", "lastModified", "tombstone"],
+  required: ["value", "channels", "actor", "url", "lastModified", "tombstone"],
 } as const satisfies JSONSchema;
 
 /**
- * This is an object containing only the {@link GraffitiObjectBase.uri | `uri`}
+ * This is an object containing only the {@link GraffitiObjectBase.url | `url`}
  * property of a {@link GraffitiObjectBase | GraffitiObject}.
  * It is used as a utility type so that users can call {@link Graffiti.get},
  * {@link Graffiti.patch}, or {@link Graffiti.delete} directly on an object
- * rather than on `object.uri`.
+ * rather than on `object.url`.
  */
-export type GraffitiLocation = Pick<GraffitiObjectBase, "uri">;
+export type GraffitiLocation = Pick<GraffitiObjectBase, "url">;
 
 /**
  * This object is a subset of {@link GraffitiObjectBase} that a user must construct locally before calling {@link Graffiti.put}.
@@ -161,8 +162,8 @@ export type GraffitiLocation = Pick<GraffitiObjectBase, "uri">;
  * This local object must have a {@link GraffitiObjectBase.value | `value`} and {@link GraffitiObjectBase.channels | `channels`}
  * and may optionally have an {@link GraffitiObjectBase.allowed | `allowed`} property.
  *
- * It may also include a {@link GraffitiObjectBase.uri | `uri`} property to specify the
- * URI of an existing object to replace. If no `uri` is provided, one will be generated during object creation.
+ * It may also include a {@link GraffitiObjectBase.url | `url`} property to specify the
+ * URL of an existing object to replace. If no `url` is provided, one will be generated during object creation.
  *
  * This object does not need a {@link GraffitiObjectBase.lastModified | `lastModified`} or {@link GraffitiObjectBase.tombstone | `tombstone`}
  * property since these are automatically generated by the Graffiti system.

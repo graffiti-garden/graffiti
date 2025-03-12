@@ -55,7 +55,7 @@ export const graffitiCRUDTests = (
         expect(gotten.value).toEqual(value);
         expect(gotten.channels).toEqual([]);
         expect(gotten.allowed).toBeUndefined();
-        expect(gotten.uri).toEqual(previous.uri);
+        expect(gotten.url).toEqual(previous.url);
         expect(gotten.actor).toEqual(previous.actor);
         expect(gotten.lastModified).toEqual(previous.lastModified);
 
@@ -65,7 +65,7 @@ export const graffitiCRUDTests = (
         };
         const beforeReplaced = await graffiti.put<{}>(
           {
-            uri: previous.uri,
+            url: previous.url,
             value: newValue,
             channels: [],
           },
@@ -73,7 +73,7 @@ export const graffitiCRUDTests = (
         );
         expect(beforeReplaced.value).toEqual(value);
         expect(beforeReplaced.tombstone).toEqual(true);
-        expect(beforeReplaced.uri).toEqual(previous.uri);
+        expect(beforeReplaced.url).toEqual(previous.url);
         expect(beforeReplaced.actor).toEqual(previous.actor);
         expect(beforeReplaced.lastModified).toBeGreaterThanOrEqual(
           gotten.lastModified,
@@ -119,7 +119,7 @@ export const graffitiCRUDTests = (
         await expect(
           graffiti.put<{}>(
             {
-              uri: putted.uri,
+              url: putted.url,
               value: {},
               channels: [],
             },
@@ -149,7 +149,7 @@ export const graffitiCRUDTests = (
         await expect(
           graffiti.put(
             {
-              uri: putted.uri,
+              url: putted.url,
               value: {},
               channels: [],
             },

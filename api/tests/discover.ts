@@ -109,8 +109,8 @@ export const graffitiDiscoverTests = (
         });
 
         const value = await nextStreamValue(iterator);
-        expect(value.uri).toEqual(putted1.uri);
-        expect(value.uri).not.toEqual(putted2.uri);
+        expect(value.url).toEqual(putted1.url);
+        expect(value.url).not.toEqual(putted2.url);
         expect(value.value).toEqual(object1.value);
         await expect(iterator.next()).resolves.toHaveProperty("done", true);
       });
@@ -123,7 +123,7 @@ export const graffitiDiscoverTests = (
       await new Promise((r) => setTimeout(r, 20));
       const putted2 = await graffiti.put<{}>(object, session);
 
-      expect(putted1.uri).not.toEqual(putted2.uri);
+      expect(putted1.url).not.toEqual(putted2.url);
       expect(putted1.lastModified).toBeLessThan(putted2.lastModified);
 
       const gtIterator = graffiti.discover([object.channels[0]], {
@@ -142,7 +142,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value1 = await nextStreamValue(gtIteratorEpsilon);
-      expect(value1.uri).toEqual(putted2.uri);
+      expect(value1.url).toEqual(putted2.url);
       expect(await gtIteratorEpsilon.next()).toHaveProperty("done", true);
       const gteIterator = graffiti.discover(object.channels, {
         properties: {
@@ -153,7 +153,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value = await nextStreamValue(gteIterator);
-      expect(value.uri).toEqual(putted2.uri);
+      expect(value.url).toEqual(putted2.url);
       expect(await gteIterator.next()).toHaveProperty("done", true);
       const gteIteratorEpsilon = graffiti.discover(object.channels, {
         properties: {
@@ -181,7 +181,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value3 = await nextStreamValue(ltIteratorEpsilon);
-      expect(value3.uri).toEqual(putted1.uri);
+      expect(value3.url).toEqual(putted1.url);
       expect(await ltIteratorEpsilon.next()).toHaveProperty("done", true);
 
       const lteIterator = graffiti.discover(object.channels, {
@@ -192,7 +192,7 @@ export const graffitiDiscoverTests = (
         },
       });
       const value2 = await nextStreamValue(lteIterator);
-      expect(value2.uri).toEqual(putted1.uri);
+      expect(value2.url).toEqual(putted1.url);
       expect(await lteIterator.next()).toHaveProperty("done", true);
 
       const lteIteratorEpsilon = graffiti.discover(object.channels, {
@@ -482,7 +482,7 @@ export const graffitiDiscoverTests = (
         const replaced = await graffiti.put<{}>(
           {
             ...object2,
-            uri: putted.uri,
+            url: putted.url,
           },
           session,
         );
@@ -545,7 +545,7 @@ export const graffitiDiscoverTests = (
           graffiti.put<{}>(
             {
               ...object,
-              uri: putted.uri,
+              url: putted.url,
             },
             session,
           ),

@@ -85,7 +85,7 @@ import type { JSONSchema } from "json-schema-to-ts";
  * comment threads, topics, places (real or virtual), pieces of media, and more.
  *
  * For example, consider a comment on a post. If we place that comment in the channel
- * represented by the post's URI, then only people viewing the post will know to
+ * represented by the post's URL, then only people viewing the post will know to
  * look in that channel, giving it visibility akin to a comment on a blog post
  * or comment on Instagram ([since 2019](https://www.buzzfeednews.com/article/katienotopoulos/instagrams-following-activity-tab-is-going-away)).
  * If we also place the comment in the channel represented by the commenter's URI (their
@@ -135,12 +135,12 @@ import type { JSONSchema } from "json-schema-to-ts";
  * exists relative to an observer," or equivalently, all interaction is [reified](https://en.wikipedia.org/wiki/Reification_(computer_science)).
  * For example, if one user creates a post and another user wants to "like" that post,
  * their like is not modifying the original post, it is simply another data object that points
- * to the post being liked, via its {@link GraffitiObjectBase.uri | URI}.
+ * to the post being liked, via its {@link GraffitiObjectBase.url | URL}.
  *
  * ```json
  * {
  *   activity: 'like',
- *   target: 'uri-of-the-post-i-like',
+ *   target: 'url-of-the-post-i-like',
  *   actor: 'my-user-id'
  * }
  * ```
@@ -192,8 +192,8 @@ export abstract class Graffiti {
    * An object can only be replaced by the same {@link GraffitiObjectBase.actor | `actor`}
    * that created it.
    *
-   * Replacement occurs when the {@link GraffitiObjectBase.uri | `uri`} of
-   * the replaced object exactly matches an existing object's URI.
+   * Replacement occurs when the {@link GraffitiObjectBase.url | `url`} of
+   * the replaced object exactly matches an existing object's URL.
    *
    * @returns The object that was replaced if one exists or an object with
    * with an empty {@link GraffitiObjectBase.value | `value`},
@@ -255,7 +255,7 @@ export abstract class Graffiti {
     /**
      * The location of the object to get.
      */
-    locationOrUri: GraffitiLocation | string,
+    locationOrUrl: GraffitiLocation | string,
     /**
      * The JSON schema to validate the retrieved object against.
      */
@@ -292,7 +292,7 @@ export abstract class Graffiti {
     /**
      * The location of the object to patch.
      */
-    locationOrUri: GraffitiLocation | string,
+    locationOrUrl: GraffitiLocation | string,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
@@ -318,7 +318,7 @@ export abstract class Graffiti {
     /**
      * The location of the object to delete.
      */
-    locationOrUri: GraffitiLocation | string,
+    locationOrUrl: GraffitiLocation | string,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.

@@ -27,7 +27,7 @@ export const graffitiOrphanTests = (
       const orphanIterator1 = graffiti.recoverOrphans({}, session);
       for await (const orphan of orphanIterator1) {
         if (orphan.error) continue;
-        existingOrphans.push(orphan.value.uri);
+        existingOrphans.push(orphan.value.url);
       }
 
       const object = randomPutObject();
@@ -37,7 +37,7 @@ export const graffitiOrphanTests = (
       let numResults = 0;
       for await (const orphan of orphanIterator2) {
         if (orphan.error) continue;
-        if (orphan.value.uri === putted.uri) {
+        if (orphan.value.url === putted.url) {
           numResults++;
           expect(orphan.value.lastModified).toBe(putted.lastModified);
         }
@@ -61,14 +61,14 @@ export const graffitiOrphanTests = (
         },
         session,
       );
-      expect(putNotOrphan.uri).toBe(putOrphan.uri);
+      expect(putNotOrphan.url).toBe(putOrphan.url);
       expect(putNotOrphan.lastModified).toBeGreaterThan(putOrphan.lastModified);
 
       const orphanIterator = graffiti.recoverOrphans({}, session);
       let numResults = 0;
       for await (const orphan of orphanIterator) {
         if (orphan.error) continue;
-        if (orphan.value.uri === putOrphan.uri) {
+        if (orphan.value.url === putOrphan.url) {
           numResults++;
           expect(orphan.value.tombstone).toBe(true);
           expect(orphan.value.lastModified).toBe(putNotOrphan.lastModified);
