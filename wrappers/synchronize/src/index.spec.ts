@@ -74,7 +74,7 @@ describe.concurrent("synchronizeDiscover", () => {
     const newChannels = [afterChannel, sharedChannel];
     await graffiti.put<{}>(
       {
-        uri: putted.uri,
+        url: putted.url,
         value: newValue,
         channels: newChannels,
       },
@@ -343,7 +343,7 @@ describe.concurrent("synchronizeGet", () => {
     const newValue = { goodbye: "world" };
     const putted2 = await graffiti.put<{}>(
       {
-        uri: putted.uri,
+        url: putted.url,
         channels: object.channels,
         value: newValue,
       },
