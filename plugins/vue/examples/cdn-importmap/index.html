@@ -162,18 +162,12 @@
                 }"
             >
                 <ul>
-                    <li
-                        v-for="post in posts"
-                        :key="$graffiti.objectToUri(post)"
-                    >
+                    <li v-for="post in posts" :key="post.url">
                         <div>{{ post.actor }}</div>
                         <div>
                             {{ new Date(post.lastModified).toLocaleString() }}
                         </div>
-                        <div
-                            class="content"
-                            v-if="editing !== $graffiti.objectToUri(post)"
-                        >
+                        <div class="content" v-if="editing !== post.url">
                             {{ post.value.content }}
                         </div>
                         <form
@@ -214,7 +208,7 @@
                                 <button
                                     @click="
                                         editText = post.value.content;
-                                        editing = $graffiti.objectToUri(post);"
+                                        editing = post.url;"
                                 >
                                     Edit
                                 </button>
@@ -222,14 +216,14 @@
                             <li v-if="$graffitiSession.value">
                                 <graffiti-discover
                                     v-slot="{ results: bookmarks }"
-                                    :channels="[ $graffiti.objectToUri(post) ]"
+                                    :channels="[ post.url ]"
                                     :schema="{
                                         properties: {
                                             value: {
                                                 required: ['activity', 'target'],
                                                 properties: {
                                                     activity: { enum: ['Bookmark'] },
-                                                    target: { enum : [ $graffiti.objectToUri(post) ] },
+                                                    target: { enum : [ post.url ] },
                                                 }
                                             },
                                             actor: {
@@ -252,10 +246,10 @@
                                         @click="$graffiti.put({
                                             value: {
                                                 activity: 'Bookmark',
-                                                target: $graffiti.objectToUri(post),
+                                                target: post.url,
                                             },
                                             channels: [
-                                                $graffiti.objectToUri(post),
+                                                post.url,
                                                 $graffitiSession.value.actor,
                                             ],
                                             allowed: [],
@@ -293,13 +287,10 @@
                 }"
             >
                 <ul>
-                    <template
-                        v-for="bookmark of bookmarks"
-                        :key="$graffiti.objectToUri(bookmark)"
-                    >
+                    <template v-for="bookmark of bookmarks" :key="bookmark.url">
                         <graffiti-get
                             v-slot="{ result: post }"
-                            :location-or-uri="bookmark.value.target"
+                            :url="bookmark.value.target"
                             :schema="{
                                     properties: {
                                         value: {

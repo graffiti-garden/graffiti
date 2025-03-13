@@ -50,7 +50,7 @@ async function postNote() {
 const editing = ref<string>("");
 const editText = ref<string>("");
 function startEditing(result: GraffitiObject<typeof noteSchema>) {
-    editing.value = graffiti.locationToUri(result);
+    editing.value = result.url;
     editText.value = result.value.content;
 }
 
@@ -147,7 +147,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                         new Date(b.lastModified).getTime() -
                         new Date(a.lastModified).getTime(),
                 )"
-                :key="$graffiti.objectToUri(result)"
+                :key="result.url"
                 class="post"
             >
                 <div class="actor">
@@ -157,10 +157,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                     {{ new Date(result.lastModified).toLocaleString() }}
                 </div>
 
-                <div
-                    class="content"
-                    v-if="editing !== $graffiti.locationToUri(result)"
-                >
+                <div class="content" v-if="editing !== result.url">
                     {{ result.value.content }}
                 </div>
                 <form
@@ -183,12 +180,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                         <button @click="startEditing(result)">Edit</button>
                     </li>
                     <li>
-                        <a
-                            target="_blank"
-                            :href="$graffiti.locationToUri(result)"
-                        >
-                            🔗
-                        </a>
+                        <a target="_blank" :href="result.url"> 🔗 </a>
                     </li>
                 </menu>
             </li>

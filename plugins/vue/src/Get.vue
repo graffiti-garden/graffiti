@@ -1,7 +1,7 @@
 <script setup lang="ts" generic="Schema extends JSONSchema">
 import { toRef } from "vue";
 import type {
-    GraffitiLocation,
+    GraffitiObjectUrl,
     GraffitiObject,
     GraffitiSession,
     JSONSchema,
@@ -9,7 +9,7 @@ import type {
 import { useGraffitiGet } from "./composables";
 
 const props = defineProps<{
-    locationOrUri: string | GraffitiLocation;
+    url: string | GraffitiObjectUrl;
     schema: Schema;
     session?: GraffitiSession | null;
 }>();
@@ -23,7 +23,7 @@ defineSlots<{
 }>();
 
 const { result, poll, isPolling } = useGraffitiGet<Schema>(
-    toRef(props, "locationOrUri"),
+    toRef(props, "url"),
     toRef(props, "schema"),
     toRef(props, "session"),
 );
