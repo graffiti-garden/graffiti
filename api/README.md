@@ -68,4 +68,4 @@ npx http-server
 
 ## TODO
 
-- Implement scope.
+- Login scope?

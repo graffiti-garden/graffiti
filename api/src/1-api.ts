@@ -195,13 +195,19 @@ export abstract class Graffiti {
    * Replacement occurs when the {@link GraffitiObjectBase.url | `url`} of
    * the replaced object exactly matches an existing object's URL.
    *
-   * @returns The object that was replaced if one exists or an object with
+   * @throws {@link GraffitiErrorNotFound} if a {@link GraffitiObjectBase.url | `url`}
+   * is provided that has not been created yet or the {@link GraffitiObjectBase.actor | `actor`}
+   * is not {@link GraffitiObjectBase.allowed | `allowed`} to see it.
+   *
+   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
+   * is not the same `actor` as the one who created the object.
+   *
+   * @returns The object that was replaced if one one exists, otherwise an object with
    * with an empty {@link GraffitiObjectBase.value | `value`},
    * {@link GraffitiObjectBase.channels | `channels`}, and {@link GraffitiObjectBase.allowed | `allowed`}
-   * list if the method created a new object.
-   * In either case, the object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
-   * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * field updated to the time of replacement/creation.
+   * list.
+   * The {@link GraffitiObjectBase.lastModified | `lastModified`} property of the returned object
+   * will be updated to the time of replacement/creation.
    *
    * @group CRUD Methods
    */
@@ -221,7 +227,7 @@ export abstract class Graffiti {
   ): Promise<GraffitiObjectBase>;
 
   /**
-   * Retrieves an object from a given location.
+   * Retrieves an object from a given {@link GraffitiObjectBase.url | `url`}.
    *
    * The retrieved object is type-checked against the provided [JSON schema](https://json-schema.org/)
    * otherwise a {@link GraffitiErrorSchemaMismatch} is thrown.
@@ -232,22 +238,10 @@ export abstract class Graffiti {
    * {@link GraffitiObjectBase.channels | `channels`} properties are
    * not revealed, similar to a BCC.
    *
-   * If the object existed but has since been deleted,
-   * or the retrieving {@link GraffitiObjectBase.actor | `actor`}
-   * was {@link GraffitiObjectBase.allowed | `allowed`} to access
-   * the object but now isn't, this method may return the latest
-   * version of the object that the {@link GraffitiObjectBase.actor | `actor`}
-   * was allowed to access with its {@link GraffitiObjectBase.tombstone | `tombstone`}
-   * set to `true`. This allows for the invalidation of the object
-   * in a client-side cache.
+   * @throws {@link GraffitiErrorNotFound} if the object does not exist, has been deleted, or the user is not
+   * {@link GraffitiObjectBase.allowed | `allowed`} to access it.
    *
-   * Otherwise, if the object never existed, or the
-   * retrieving {@link GraffitiObjectBase.actor | `actor`} was never
-   * {@link GraffitiObjectBase.allowed | `allowed`} to access it, or if
-   * the object was changed long enough ago that it has been permanently deleted,
-   * a {@link GraffitiErrorNotFound} is thrown.
-   * The rate at which permanent deletions happen is implementation dependent.
-   * See the `tombstoneRetention` property returned by {@link discover}.
+   * @throws {@link GraffitiErrorSchemaMismatch} if the retrieved object does not match the provided schema.
    *
    * @group CRUD Methods
    */
@@ -270,16 +264,19 @@ export abstract class Graffiti {
   ): Promise<GraffitiObject<Schema>>;
 
   /**
-   * Patches an existing object at a given location.
+   * Patches an existing object at a given {@link GraffitiObjectBase.url | `url`}.
    * The patching {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
-   * @returns The original object prior to the patch
-   * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
-   * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * field updated to the time of deletion.
+   * @returns The original object prior to the patch with its
+   * {@link GraffitiObjectBase.lastModified | `lastModified`}
+   * property updated to the time of deletion.
    *
-   * @throws {@link GraffitiErrorNotFound} if the object does not exist or has already been deleted.
+   * @throws {@link GraffitiErrorNotFound} if the object does not exist, has already been deleted,
+   * or the user is not {@link GraffitiObjectBase.allowed | `allowed`} to access it.
+   *
+   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
+   * is not the same `actor` as the one who created the object.
    *
    * @group CRUD Methods
    */
@@ -301,16 +298,19 @@ export abstract class Graffiti {
   ): Promise<GraffitiObjectBase>;
 
   /**
-   * Deletes an object from a given location.
+   * Deletes an object from a given {@link GraffitiObjectBase.url | `url`}.
    * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
-   * @returns The object that was deleted if one exists.
-   * The object will have a {@link GraffitiObjectBase.tombstone | `tombstone`}
-   * field set to `true` and a {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * field updated to the time of deletion.
+   * @returns The object that was deleted its
+   * {@link GraffitiObjectBase.lastModified | `lastModified`}
+   * property updated to the time of deletion.
    *
-   * @throws {@link GraffitiErrorNotFound} if the object does not exist or has already been deleted.
+   * @throws {@link GraffitiErrorNotFound} if the object does not exist,  has already been deleted,
+   * or the user is not {@link GraffitiObjectBase.allowed | `allowed`} to access it.
+   *
+   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
+   * is not the same `actor` as the one who created the object.
    *
    * @group CRUD Methods
    */
@@ -333,7 +333,12 @@ export abstract class Graffiti {
    *
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
-   * The method must be polled again for new objects.
+   * The {@link GraffitiStream} ends by returning a `continue`
+   * method and a `cursor` string, each of which can be be used to poll for new objects.
+   * The `continue` method preserves the typing of the stream and the `cursor`
+   * string can be serialized to continue the stream after an application is closed
+   * and reopened.
+   * See the {@link continueStream} method for more information on continuing a stream.
    *
    * `discover` will not return objects that the {@link GraffitiObjectBase.actor | `actor`}
    * is not {@link GraffitiObjectBase.allowed | `allowed`} to access.
@@ -345,42 +350,10 @@ export abstract class Graffiti {
    * before the supplied schema is applied.
    *
    * Since different implementations may fetch data from multiple sources there is
-   * no guarentee on the order that objects are returned in. Additionally, the method
-   * will return objects that have been deleted but with a
-   * {@link GraffitiObjectBase.tombstone | `tombstone`} field set to `true` for
-   * client-side cache invalidation purposes.
-   * The final `return()` value of the stream includes a `tombstoneRetention`
-   * property that represents the minimum amount of time,
-   * in milliseconds, that an application will retain and return tombstones for objects that
-   * have been deleted.
-   *
-   * When repolling, the {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * field can be queried via the schema to
-   * only fetch objects that have been modified since the last poll.
-   * Such queries should only be done if the time since the last poll
-   * is less than the `tombstoneRetention` value of that poll, otherwise the tombstones
-   * for objects that have been deleted may not be returned.
-   *
-   * ```json
-   * {
-   *   "properties": {
-   *     "lastModified": {
-   *       "minimum": LAST_RETRIEVED_TIME
-   *     }
-   *   }
-   * }
-   * ```
-   *
-   * `discover` needs to be polled for new data because live updates to
-   * an application can be visually distracting or lead to toxic engagement.
-   * If and when an application wants real-time updates, such as in a chat
-   * application, application authors must be intentional about their polling.
-   *
-   * Implementers should be aware that some users may applications may try to poll
-   * {@link discover} repetitively. They can deal with this by rate limiting or
-   * preemptively fetching data via a bidirectional channel, like a WebSocket.
-   * Additionally, implementers should probably index the `lastModified` field
-   * to speed up responses to schemas like the one above.
+   * no guarentee on the order that objects are returned in.
+   * It is also possible that duplicate objects are returned and their
+   * {@link GraffitiObjectBase.lastModified | `lastModified`} fields must be used
+   * to determine which object is the most recent.
    *
    * @returns A stream of objects that match the given {@link GraffitiObjectBase.channels | `channels`}
    * and [JSON Schema](https://json-schema.org).
@@ -403,12 +376,7 @@ export abstract class Graffiti {
      * property will be returned.
      */
     session?: GraffitiSession | null,
-  ): GraffitiStream<
-    GraffitiObject<Schema>,
-    {
-      tombstoneRetention: number;
-    }
-  >;
+  ): GraffitiStream<GraffitiObject<Schema>>;
 
   /**
    * Discovers objects **not** contained in any
@@ -421,7 +389,13 @@ export abstract class Graffiti {
    * getting a global view of all a user's Graffiti data or debugging
    * channel usage.
    *
-   * It's return value is the same as {@link discover}.
+   * Like {@link discover}, objects are returned asynchronously as they are discovered,
+   * the stream will end once all leads have been exhausted, and the stream
+   * can be continued using the `continue` method or `cursor` string.
+   *
+   * @returns A stream of objects created by the querying {@link GraffitiObjectBase.actor | `actor`}
+   * that do not belong to any {@link GraffitiObjectBase.channels | `channels`}
+   * and match the given [JSON Schema](https://json-schema.org).
    *
    * @group Query Methods
    */
@@ -435,12 +409,7 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): GraffitiStream<
-    GraffitiObject<Schema>,
-    {
-      tombstoneRetention: number;
-    }
-  >;
+  ): GraffitiStream<GraffitiObject<Schema>>;
 
   /**
    * Returns statistics about all the {@link GraffitiObjectBase.channels | `channels`}
@@ -449,6 +418,10 @@ export abstract class Graffiti {
    * necessary for certain applications where a user wants a
    * global view of all their Graffiti data or to debug
    * channel usage.
+
+   * Like {@link discover}, objects are returned asynchronously as they are discovered,
+      * the stream will end once all leads have been exhausted, and the stream
+      * can be continued using the `continue` method or `cursor` string.
    *
    * @group Query Methods
    *
@@ -462,6 +435,34 @@ export abstract class Graffiti {
      */
     session: GraffitiSession,
   ): GraffitiStream<ChannelStats>;
+
+  /**
+   * Continues a {@link GraffitiStream} from a given `cursor` string.
+   * The continuation will return new objects that have been created
+   * that match the original stream, and also return objects that
+   * have been deleted but with a `tombstone` property set to `true`.
+   *
+   * The continuation may also include duplicates of objects that
+   * were already returned by the original stream. This is dependent
+   * on how much state the underlying implementation maintains.
+   *
+   * The `cursor` allows the client to
+   * serialize the state of the stream and continue it later.
+   * However this method loses any typing information that was
+   * present in the original stream. To preserve typing, the
+   * use the `continue` method returned with the `cursor` at the
+   * end of the original stream.
+   *
+   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
+   * provided in the `session` is not the same as the `actor`
+   * that initiated the original stream.
+   *
+   * @group Query Methods
+   */
+  abstract continueStream<T>(
+    cursor: string,
+    session?: GraffitiSession | null,
+  ): GraffitiStream<T>;
 
   /**
    * Begins the login process. Depending on the implementation, this may
