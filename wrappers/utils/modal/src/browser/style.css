@@ -139,6 +139,7 @@
         font-weight: 500;
         background: var(--front);
         text-align: left;
+        color: black;
     }
 
     header button {
