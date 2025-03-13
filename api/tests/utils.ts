@@ -28,5 +28,6 @@ export function randomPutObject(): GraffitiPutObject<{}> {
 export async function nextStreamValue<S>(iterator: GraffitiStream<S>) {
   const result = await iterator.next();
   assert(!result.done && !result.value.error, "result has no value");
+  assert(!result.value.tombstone, "result has been deleted!");
   return result.value.value;
 }
