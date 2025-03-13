@@ -214,7 +214,7 @@ export class GraffitiSynchronize extends Graffiti {
     const [locationOrUri, schema, session] = args;
     const uri = unpackLocationOrUri(locationOrUri);
     function matchObject(object: GraffitiObjectBase) {
-      return object.uri === uri;
+      return object.url === uri;
     }
     return this.synchronize<Schema>(matchObject, [], schema, session);
   }
