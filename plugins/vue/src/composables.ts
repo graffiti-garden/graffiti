@@ -1,7 +1,7 @@
 import { onScopeDispose, ref, toValue, watch } from "vue";
 import type { Ref, MaybeRefOrGetter } from "vue";
 import type {
-  GraffitiLocation,
+  GraffitiObjectUrl,
   GraffitiObject,
   GraffitiSession,
   JSONSchema,
@@ -171,7 +171,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
  * If you need deep reactivity, wrap your argument in a getter.
  */
 export function useGraffitiGet<Schema extends JSONSchema>(
-  locationOrUri: MaybeRefOrGetter<GraffitiLocation | string>,
+  locationOrUri: MaybeRefOrGetter<GraffitiObjectUrl | string>,
   schema: MaybeRefOrGetter<Schema>,
   /**
    * If the session is `undefined`, the global session,

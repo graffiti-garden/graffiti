@@ -86,10 +86,9 @@ export class ArrayReducer<Schema extends JSONSchema>
 
   onObject(object: GraffitiObject<Schema> | null) {
     if (!object) return;
-    const url = this.graffiti.objectToUri(object);
-    const existing = this.resultsRaw.get(url);
+    const existing = this.resultsRaw.get(object.url);
     if (existing && !isObjectNewer(object, existing)) return;
-    this.resultsRaw.set(url, object);
+    this.resultsRaw.set(object.url, object);
 
     // Don't flatten the results all at once,
     // because we may get a lot of results
