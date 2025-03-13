@@ -1,4 +1,4 @@
-import { Graffiti } from "@graffiti-garden/api";
+import { Graffiti, type GraffitiSession } from "@graffiti-garden/api";
 import { GraffitiLocalSessionManager } from "./session-manager.js";
 import {
   GraffitiLocalDatabase,
@@ -27,6 +27,7 @@ export class GraffitiLocal extends Graffiti {
   discover: Graffiti["discover"];
   recoverOrphans: Graffiti["recoverOrphans"];
   channelStats: Graffiti["channelStats"];
+  continueStream: Graffiti["continueStream"];
 
   constructor(options?: GraffitiLocalOptions) {
     super();
@@ -42,5 +43,7 @@ export class GraffitiLocal extends Graffiti {
       graffitiPouchDbBase.recoverOrphans.bind(graffitiPouchDbBase);
     this.channelStats =
       graffitiPouchDbBase.channelStats.bind(graffitiPouchDbBase);
+    this.continueStream =
+      graffitiPouchDbBase.continueStream.bind(graffitiPouchDbBase);
   }
 }

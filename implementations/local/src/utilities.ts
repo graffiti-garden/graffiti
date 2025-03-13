@@ -10,13 +10,13 @@ import type {
   GraffitiPatch,
   JSONSchema,
   GraffitiSession,
-  GraffitiLocation,
+  GraffitiObjectUrl,
 } from "@graffiti-garden/api";
 import type { Ajv } from "ajv";
 import type { applyPatch } from "fast-json-patch";
 
-export function unpackLocationOrUri(locationOrUri: GraffitiLocation | string) {
-  return typeof locationOrUri === "string" ? locationOrUri : locationOrUri.uri;
+export function unpackObjectUrl(url: string | GraffitiObjectUrl) {
+  return typeof url === "string" ? url : url.url;
 }
 
 export function randomBase64(numBytes: number = 24) {
@@ -26,18 +26,6 @@ export function randomBase64(numBytes: number = 24) {
   const base64 = btoa(String.fromCodePoint(...bytes));
   // Make sure it is url safe
   return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/\=+$/, "");
-}
-
-export function isObjectNewer(
-  left: GraffitiObjectBase,
-  right: GraffitiObjectBase,
-) {
-  return (
-    left.lastModified > right.lastModified ||
-    (left.lastModified === right.lastModified &&
-      !left.tombstone &&
-      right.tombstone)
-  );
 }
 
 export function applyGraffitiPatch<Prop extends keyof GraffitiPatch>(
