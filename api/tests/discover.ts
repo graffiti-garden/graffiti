@@ -40,7 +40,6 @@ export const graffitiDiscoverTests = (
       expect(value.channels).toEqual([object.channels[0]]);
       expect(value.allowed).toBeUndefined();
       expect(value.actor).toEqual(session.actor);
-      expect(value.tombstone).toBe(false);
       expect(value.lastModified).toEqual(putted.lastModified);
       const result2 = await iterator.next();
       expect(result2.done).toBe(true);
@@ -64,7 +63,6 @@ export const graffitiDiscoverTests = (
       expect(value.channels).toEqual(object.channels);
       expect(value.allowed).toEqual(object.allowed);
       expect(value.actor).toEqual(session1.actor);
-      expect(value.tombstone).toBe(false);
       expect(value.lastModified).toEqual(putted.lastModified);
 
       const iteratorSession2 = graffiti.discover(object.channels, {}, session2);
@@ -85,7 +83,6 @@ export const graffitiDiscoverTests = (
       expect(value.allowed).toEqual([session2.actor]);
       expect(value.channels).toEqual(object.channels);
       expect(value.actor).toEqual(session1.actor);
-      expect(value.tombstone).toBe(false);
       expect(value.lastModified).toEqual(putted.lastModified);
     });
 
@@ -465,7 +462,6 @@ export const graffitiDiscoverTests = (
 
       const iterator = graffiti.discover(object.channels, {});
       const value = await nextStreamValue(iterator);
-      expect(value.tombstone).toBe(true);
       expect(value.value).toEqual(object.value);
       expect(value.channels).toEqual(object.channels);
       expect(value.actor).toEqual(session.actor);
@@ -498,15 +494,13 @@ export const graffitiDiscoverTests = (
         // If they have the same timestamp, except
         // only one to have a tombstone
         if (putted.lastModified === replaced.lastModified) {
-          expect(value1.tombstone || value2.tombstone).toBe(true);
-          expect(value1.tombstone && value2.tombstone).toBe(false);
+          // expect(value1.tombstone || value2.tombstone).toBe(true);
+          // expect(value1.tombstone && value2.tombstone).toBe(false);
         } else {
-          expect(value1.tombstone).toBe(true);
           expect(value1.value).toEqual(object1.value);
           expect(value1.channels).toEqual(object1.channels);
           expect(value1.lastModified).toEqual(replaced.lastModified);
 
-          expect(value2.tombstone).toBe(false);
           expect(value2.value).toEqual(object2.value);
           expect(value2.channels).toEqual(object2.channels);
           expect(value2.lastModified).toEqual(replaced.lastModified);
@@ -526,7 +520,6 @@ export const graffitiDiscoverTests = (
       );
       const iterator = graffiti.discover(object.channels, {});
       const value = await nextStreamValue(iterator);
-      expect(value.tombstone).toBe(true);
       expect(value.value).toEqual(object.value);
       expect(value.channels).toEqual(object.channels);
       expect(value.allowed).toBeUndefined();
@@ -557,11 +550,11 @@ export const graffitiDiscoverTests = (
       let valueCount = 0;
       for await (const result of iterator) {
         assert(!result.error, "result has error");
-        if (result.value.tombstone) {
-          tombstoneCount++;
-        } else {
-          valueCount++;
-        }
+        // if (result.value.tombstone) {
+        //   tombstoneCount++;
+        // } else {
+        valueCount++;
+        // }
       }
       expect(tombstoneCount).toBe(99);
       expect(valueCount).toBe(1);

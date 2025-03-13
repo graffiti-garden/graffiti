@@ -72,7 +72,6 @@ export const graffitiCRUDTests = (
           session,
         );
         expect(beforeReplaced.value).toEqual(value);
-        expect(beforeReplaced.tombstone).toEqual(true);
         expect(beforeReplaced.url).toEqual(previous.url);
         expect(beforeReplaced.actor).toEqual(previous.actor);
         expect(beforeReplaced.lastModified).toBeGreaterThanOrEqual(
@@ -83,22 +82,21 @@ export const graffitiCRUDTests = (
         const afterReplaced = await graffiti.get(previous, {});
         expect(afterReplaced.value).toEqual(newValue);
         expect(afterReplaced.lastModified).toEqual(beforeReplaced.lastModified);
-        expect(afterReplaced.tombstone).toEqual(false);
 
         // Delete it
         const beforeDeleted = await graffiti.delete(afterReplaced, session);
-        expect(beforeDeleted.tombstone).toEqual(true);
         expect(beforeDeleted.value).toEqual(newValue);
         expect(beforeDeleted.lastModified).toBeGreaterThanOrEqual(
           beforeReplaced.lastModified,
         );
 
-        // Get a tombstone
-        const final = await graffiti.get(afterReplaced, {});
-        expect(final).toEqual(beforeDeleted);
+        // Get is not found
+        await expect(graffiti.get(afterReplaced, {})).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
 
         // Delete it again
-        await expect(graffiti.delete(final, session)).rejects.toThrow(
+        await expect(graffiti.delete(beforeDeleted, session)).rejects.toThrow(
           GraffitiErrorNotFound,
         );
       });
@@ -339,7 +337,6 @@ export const graffitiCRUDTests = (
         };
         const beforePatched = await graffiti.patch(patch, putted, session);
         expect(beforePatched.value).toEqual(value);
-        expect(beforePatched.tombstone).toBe(true);
         expect(beforePatched.lastModified).toBeGreaterThan(putted.lastModified);
 
         const gotten = await graffiti.get(putted, {});

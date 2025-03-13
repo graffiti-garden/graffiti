@@ -70,7 +70,6 @@ export const graffitiOrphanTests = (
         if (orphan.error) continue;
         if (orphan.value.url === putOrphan.url) {
           numResults++;
-          expect(orphan.value.tombstone).toBe(true);
           expect(orphan.value.lastModified).toBe(putNotOrphan.lastModified);
           expect(orphan.value.channels).toEqual([]);
         }
