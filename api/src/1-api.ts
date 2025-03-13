@@ -459,10 +459,10 @@ export abstract class Graffiti {
    *
    * @group Query Methods
    */
-  abstract continueStream<T>(
+  abstract continueStream(
     cursor: string,
     session?: GraffitiSession | null,
-  ): GraffitiStream<T>;
+  ): GraffitiStream<unknown>;
 
   /**
    * Begins the login process. Depending on the implementation, this may

@@ -287,18 +287,18 @@ export interface GraffitiPatch {
  * were already returned by the original stream. This is dependent
  * on how much state the underlying implementation maintains.
  */
-export type GraffitiStream<TValue, Tombstone = undefined> = AsyncGenerator<
+export type GraffitiStream<TValue> = AsyncGenerator<
   | {
       error?: undefined;
       value: TValue;
-      tombstone: Tombstone;
+      tombstone?: boolean;
     }
   | {
       error: Error;
       origin: string;
     },
   {
-    continue: () => GraffitiStream<TValue, boolean>;
+    continue: () => GraffitiStream<TValue>;
     cursor: string;
   }
 >;
