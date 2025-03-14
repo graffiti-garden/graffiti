@@ -2,9 +2,10 @@ import type Ajv from "ajv";
 import { Graffiti } from "@graffiti-garden/api";
 import type {
   GraffitiSession,
-  GraffitiObject,
   JSONSchema,
-  GraffitiStream,
+  GraffitiObjectStream,
+  GraffitiObjectStreamContinueEntry,
+  GraffitiObjectStreamContinue,
 } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
@@ -14,13 +15,13 @@ import {
   compileGraffitiObjectSchema,
   isActorAllowedGraffitiObject,
   maskGraffitiObject,
-  unpackLocationOrUri,
+  unpackObjectUrl,
 } from "@graffiti-garden/implementation-local/utilities";
 export type * from "@graffiti-garden/api";
 
 export type GraffitiSynchronizeCallback = (
-  oldObject: GraffitiObjectBase,
-  newObject?: GraffitiObjectBase,
+  oldObject: GraffitiObjectStreamContinueEntry<{}>,
+  newObject?: GraffitiObjectStreamContinueEntry<{}>,
 ) => void;
 
 export interface GraffitiSynchronizeOptions {
@@ -138,8 +139,10 @@ export class GraffitiSynchronize extends Graffiti {
     channels: string[],
     schema: Schema,
     session?: GraffitiSession | null,
-  ) {
-    const repeater: GraffitiStream<GraffitiObject<Schema>> = new Repeater(
+  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
+    const seenUrls = new Set<string>();
+
+    const repeater = new Repeater<GraffitiObjectStreamContinueEntry<Schema>>(
       async (push, stop) => {
         const validate = compileGraffitiObjectSchema(await this.ajv, schema);
         const callback: GraffitiSynchronizeCallback = (
@@ -147,18 +150,23 @@ export class GraffitiSynchronize extends Graffiti {
           newObjectRaw,
         ) => {
           for (const objectRaw of [newObjectRaw, oldObjectRaw]) {
-            if (
+            if (objectRaw?.tombstone) {
+              if (seenUrls.has(objectRaw.object.url)) {
+                push(objectRaw);
+              }
+            } else if (
               objectRaw &&
-              matchObject(objectRaw) &&
+              matchObject(objectRaw.object) &&
               (this.options.omniscient ||
-                isActorAllowedGraffitiObject(objectRaw, session))
+                isActorAllowedGraffitiObject(objectRaw.object, session))
             ) {
-              const object = { ...objectRaw };
+              const object = { ...objectRaw.object };
               if (!this.options.omniscient) {
                 maskGraffitiObject(object, channels, session);
               }
               if (validate(object)) {
-                push({ value: object });
+                push({ object });
+                seenUrls.add(object.url);
                 break;
               }
             }
@@ -189,7 +197,7 @@ export class GraffitiSynchronize extends Graffiti {
    */
   synchronizeDiscover<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.discover<Schema>>
-  ): GraffitiStream<GraffitiObject<Schema>> {
+  ): GraffitiObjectStreamContinue<Schema> {
     const [channels, schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.channels.some((channel) => channels.includes(channel));
@@ -210,11 +218,11 @@ export class GraffitiSynchronize extends Graffiti {
    */
   synchronizeGet<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
-  ): GraffitiStream<GraffitiObject<Schema>> {
-    const [locationOrUri, schema, session] = args;
-    const uri = unpackLocationOrUri(locationOrUri);
+  ): GraffitiObjectStreamContinue<Schema> {
+    const [objectUrl, schema, session] = args;
+    const url = unpackObjectUrl(objectUrl);
     function matchObject(object: GraffitiObjectBase) {
-      return object.url === uri;
+      return object.url === url;
     }
     return this.synchronize<Schema>(matchObject, [], schema, session);
   }
@@ -234,7 +242,7 @@ export class GraffitiSynchronize extends Graffiti {
    */
   synchronizeRecoverOrphans<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>
-  ): GraffitiStream<GraffitiObject<Schema>> {
+  ): GraffitiObjectStreamContinue<Schema> {
     const [schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.actor === session.actor && object.channels.length === 0;
@@ -253,15 +261,15 @@ export class GraffitiSynchronize extends Graffiti {
    * expose the user to content out of context.
    */
   synchronizeAll<Schema extends JSONSchema>(
-    schema?: Schema,
+    schema: Schema,
     session?: GraffitiSession | null,
-  ): GraffitiStream<GraffitiObjectBase> {
-    return this.synchronize(() => true, [], schema ?? {}, session);
+  ): GraffitiObjectStreamContinue<Schema> {
+    return this.synchronize<Schema>(() => true, [], schema, session);
   }
 
   protected async synchronizeDispatch(
-    oldObject: GraffitiObjectBase,
-    newObject?: GraffitiObjectBase,
+    oldObject: GraffitiObjectStreamContinueEntry<{}>,
+    newObject?: GraffitiObjectStreamContinueEntry<{}>,
     waitForListeners = false,
   ) {
     for (const callback of this.callbacks) {
@@ -294,7 +302,7 @@ export class GraffitiSynchronize extends Graffiti {
 
   get: Graffiti["get"] = async (...args) => {
     const object = await this.graffiti.get(...args);
-    this.synchronizeDispatch(object);
+    this.synchronizeDispatch({ object });
     return object;
   };
 
@@ -306,45 +314,88 @@ export class GraffitiSynchronize extends Graffiti {
       value: partialObject.value,
       channels: partialObject.channels,
       allowed: partialObject.allowed,
-      tombstone: false,
     };
-    await this.synchronizeDispatch(oldObject, newObject, true);
+    await this.synchronizeDispatch(
+      {
+        tombstone: true,
+        object: oldObject,
+      },
+      {
+        object: newObject,
+      },
+      true,
+    );
     return oldObject;
   };
 
   patch: Graffiti["patch"] = async (...args) => {
     const oldObject = await this.graffiti.patch(...args);
     const newObject: GraffitiObjectBase = { ...oldObject };
-    newObject.tombstone = false;
     for (const prop of ["value", "channels", "allowed"] as const) {
       applyGraffitiPatch(await this.applyPatch, prop, args[0], newObject);
     }
-    await this.synchronizeDispatch(oldObject, newObject, true);
+    await this.synchronizeDispatch(
+      {
+        tombstone: true,
+        object: oldObject,
+      },
+      {
+        object: newObject,
+      },
+      true,
+    );
     return oldObject;
   };
 
   delete: Graffiti["delete"] = async (...args) => {
     const oldObject = await this.graffiti.delete(...args);
-    await this.synchronizeDispatch(oldObject, undefined, true);
+    await this.synchronizeDispatch(
+      {
+        tombstone: true,
+        object: oldObject,
+      },
+      undefined,
+      true,
+    );
     return oldObject;
   };
 
-  protected objectStream<Schema extends JSONSchema>(
-    iterator: ReturnType<typeof Graffiti.prototype.discover<Schema>>,
-  ) {
-    const dispatch = this.synchronizeDispatch.bind(this);
-    const wrapper = async function* () {
-      let result = await iterator.next();
-      while (!result.done) {
+  protected objectStreamContinue<Schema extends JSONSchema>(
+    iterator: GraffitiObjectStreamContinue<Schema>,
+  ): GraffitiObjectStreamContinue<Schema> {
+    const this_ = this;
+    return (async function* () {
+      while (true) {
+        const result = await iterator.next();
+        if (result.done) {
+          const { continue: continue_, cursor } = result.value;
+          return {
+            continue: () => this_.objectStreamContinue<Schema>(continue_()),
+            cursor,
+          };
+        }
         if (!result.value.error) {
-          dispatch(result.value.value);
+          this_.synchronizeDispatch(
+            result.value as GraffitiObjectStreamContinueEntry<{}>,
+          );
         }
         yield result.value;
-        result = await iterator.next();
       }
-      return result.value;
-    };
-    return wrapper();
+    })();
+  }
+
+  protected objectStream<Schema extends JSONSchema>(
+    iterator: GraffitiObjectStream<Schema>,
+  ): GraffitiObjectStream<Schema> {
+    const wrapped = this.objectStreamContinue<Schema>(iterator);
+    return (async function* () {
+      // Filter out the tombstones for type safety
+      while (true) {
+        const result = await wrapped.next();
+        if (result.done) return result.value;
+        if (result.value.error || !result.value.tombstone) yield result.value;
+      }
+    })();
   }
 
   discover: Graffiti["discover"] = (...args) => {
@@ -355,5 +406,10 @@ export class GraffitiSynchronize extends Graffiti {
   recoverOrphans: Graffiti["recoverOrphans"] = (...args) => {
     const iterator = this.graffiti.recoverOrphans(...args);
     return this.objectStream<(typeof args)[0]>(iterator);
+  };
+
+  continueObjectStream: Graffiti["continueObjectStream"] = (...args) => {
+    // TODO!!
+    return this.graffiti.continueObjectStream(...args);
   };
 }
