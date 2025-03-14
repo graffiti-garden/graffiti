@@ -27,7 +27,7 @@ export const graffitiOrphanTests = (
       const orphanIterator1 = graffiti.recoverOrphans({}, session);
       for await (const orphan of orphanIterator1) {
         if (orphan.error) continue;
-        existingOrphans.push(orphan.value.url);
+        existingOrphans.push(orphan.object.url);
       }
 
       const object = randomPutObject();
@@ -38,9 +38,9 @@ export const graffitiOrphanTests = (
       for await (const orphan of orphanIterator2) {
         if (orphan.error) continue;
         assert(!orphan.tombstone, "orphan is tombstone");
-        if (orphan.value.url === putted.url) {
+        if (orphan.object.url === putted.url) {
           numResults++;
-          expect(orphan.value.lastModified).toBe(putted.lastModified);
+          expect(orphan.object.lastModified).toBe(putted.lastModified);
         }
       }
       expect(numResults).toBe(1);
@@ -56,7 +56,7 @@ export const graffitiOrphanTests = (
 
       expect(Object.keys(object.value).length).toBeGreaterThanOrEqual(1);
       expect(Object.keys(object.value)[0]).toBeTypeOf("string");
-      const iterator1 = graffiti.recoverOrphans(
+      const iterator1 = graffiti.recoverOrphans<{}>(
         {
           properties: {
             value: {
@@ -71,7 +71,7 @@ export const graffitiOrphanTests = (
         },
         session,
       );
-      const value1 = await nextStreamValue(iterator1);
+      const value1 = await nextStreamValue<{}>(iterator1);
       expect(value1.value).toEqual(object.value);
       const returnValue = await iterator1.next();
       assert(returnValue.done, "value2 is not done");
@@ -92,7 +92,7 @@ export const graffitiOrphanTests = (
       let numResults = 0;
       for await (const orphan of orphanIterator) {
         if (orphan.error) continue;
-        if (orphan.value.url === putOrphan.url) {
+        if (orphan.object.url === putOrphan.url) {
           numResults++;
         }
       }
@@ -104,9 +104,8 @@ export const graffitiOrphanTests = (
         !value2.done && !value2.value.error,
         "value2 is done or has error",
       );
-      expect(value2.value.tombstone).toBe(true);
-      expect(value2.value.value.lastModified).toBe(putNotOrphan.lastModified);
-      expect(value2.value.value.channels).toEqual([]);
+      assert(value2.value.tombstone, "value2 is not tombstone");
+      expect(value2.value.url).toBe(putOrphan.url);
       await expect(iterator2.next()).resolves.toHaveProperty("done", true);
     });
   });

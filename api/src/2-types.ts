@@ -258,7 +258,7 @@ export interface GraffitiPatch {
 
 /**
  * This type represents a stream of data that are
- * returned by Graffiti's query-like operations such as
+ * returned by Graffiti's query-like operations
  * {@link Graffiti.discover} and {@link Graffiti.recoverOrphans}.
  *
  * Errors are returned within the stream rather than as
@@ -279,29 +279,77 @@ export interface GraffitiPatch {
  * The `continue` function preserves the typing of the original stream,
  * where as the `cursor` string can be serialized for use after a user
  * has closed and reopened an application.
- * Use {@link Graffiti.continueStream} to resume a stream from the `cursor` string.
+ * Use {@link Graffiti.continueObjectStream} to resume a stream from the `cursor` string.
  *
- * Unlike the original stream, the continued stream also includes a `tombstone`
- * boolean to indicate whether a stream element previously returned has been deleted.
- * The continuation may also include duplicates of objects that
- * were already returned by the original stream. This is dependent
- * on how much state the underlying implementation maintains.
+ * Unlike the original stream, the continued stream also includes
+ * includes the {@link GraffitiObjectBase.url | `url`}s of any objects
+ * that have been deleted since the original stream was created along
+ * with a `tombstone` property set to `true`.
  */
-export type GraffitiStream<TValue> = AsyncGenerator<
+export type GraffitiObjectStream<Schema extends JSONSchema> = AsyncGenerator<
+  GraffitiObjectStreamEntry<Schema>,
+  GraffitiObjectStreamReturn<Schema>
+>;
+
+/**
+ * A stream of data that are returned by Graffiti's {@link Graffiti.channelStats} method.
+ * See {@link GraffitiObjectStream} for more information on streams.
+ */
+export type GraffitiChannelStatsStream = AsyncGenerator<
+  | GraffitiStreamError
   | {
       error?: undefined;
-      value: TValue;
-      tombstone?: boolean;
+      value: ChannelStats;
     }
-  | {
-      error: Error;
-      origin: string;
-    },
-  {
-    continue: () => GraffitiStream<TValue>;
-    cursor: string;
-  }
 >;
+
+/**
+ * An internal utility type to build the {@link GraffitiObjectStream}
+ * and {@link GraffitiChannelStatsStream} types.
+ * @internal
+ */
+export interface GraffitiStreamError {
+  error: Error;
+  origin: string;
+}
+
+/**
+ * An internal utility type to build the {@link GraffitiObjectStream}
+ * type
+ * @internal
+ */
+export type GraffitiObjectStreamEntry<Schema extends JSONSchema> =
+  | GraffitiStreamError
+  | {
+      error?: undefined;
+      tombstone?: undefined;
+      object: GraffitiObject<Schema>;
+    };
+
+/**
+ * An internal utility type to build the {@link GraffitiObjectStream}
+ * type.
+ * @internal
+ */
+export type GraffitiObjectStreamReturn<Schema extends JSONSchema> = {
+  continue: () => GraffitiObjectStreamContinuation<Schema>;
+  cursor: string;
+};
+
+/**
+ * An internal utility type to build the {@link GraffitiObjectStream} type
+ * @internal
+ */
+export type GraffitiObjectStreamContinuation<Schema extends JSONSchema> =
+  AsyncGenerator<
+    | GraffitiObjectStreamEntry<Schema>
+    | {
+        error?: undefined;
+        tombstone: true;
+        url: string;
+      },
+    GraffitiObjectStreamReturn<Schema>
+  >;
 
 /**
  * Statistic about single channel returned by {@link Graffiti.channelStats}.
