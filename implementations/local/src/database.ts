@@ -31,7 +31,10 @@ type ObjectStreamMetaEntry<Schema extends JSONSchema> =
     }
   | {
       tombstone: true;
-      url: string;
+      object: {
+        url: string;
+        lastModified: number;
+      };
     };
 
 /**
@@ -76,6 +79,7 @@ export interface GraffitiLocalOptions {
 }
 
 const DEFAULT_ORIGIN = "graffiti:local:";
+const LAST_MODIFIED_BUFFER = 60000;
 
 type GraffitiObjectWithTombstone = GraffitiObjectBase & { tombstone: boolean };
 
@@ -604,8 +608,7 @@ export class GraffitiLocalDatabase
     ifModifiedSince: number | undefined,
     channels?: string[],
     processedIds?: Set<string>,
-  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>, number | undefined> {
-    let myIfModifiedSince: number | undefined = ifModifiedSince;
+  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>> {
     const showTombstones = ifModifiedSince !== undefined;
 
     const result = await (
@@ -627,10 +630,6 @@ export class GraffitiLocalDatabase
 
       const object = this.extractGraffitiObject(doc);
 
-      if (!myIfModifiedSince || object.lastModified > myIfModifiedSince) {
-        myIfModifiedSince = object.lastModified;
-      }
-
       if (channels) {
         if (!isActorAllowedGraffitiObject(object, session)) continue;
         maskGraffitiObject(object, channels, session);
@@ -638,10 +637,16 @@ export class GraffitiLocalDatabase
 
       if (!validate(object)) continue;
 
-      yield doc.tombstone ? { tombstone: true, url: object.url } : { object };
+      yield doc.tombstone
+        ? {
+            tombstone: true,
+            object: {
+              url: object.url,
+              lastModified: object.lastModified,
+            },
+          }
+        : { object };
     }
-
-    return myIfModifiedSince;
   }
 
   protected async *discoverMeta<Schema extends JSONSchema>(
@@ -656,6 +661,8 @@ export class GraffitiLocalDatabase
     );
 
     const processedIds = new Set<string>();
+
+    const startTime = new Date().getTime();
 
     for (const channel of channels) {
       const keyPrefix = encodeURIComponent(channel) + "/";
@@ -673,17 +680,11 @@ export class GraffitiLocalDatabase
         processedIds,
       );
 
-      while (true) {
-        const result = await iterator.next();
-        if (result.done) {
-          ifModifiedSince = result.value;
-          break;
-        }
-        yield result.value;
-      }
+      for await (const result of iterator) yield result;
     }
 
-    return ifModifiedSince;
+    // Subtract a minute to make sure we don't miss any objects
+    return startTime - LAST_MODIFIED_BUFFER;
   }
 
   protected async *recoverOrphansMeta<Schema extends JSONSchema>(
@@ -701,6 +702,8 @@ export class GraffitiLocalDatabase
 
     const validate = compileGraffitiObjectSchema(await this.ajv, schema);
 
+    const startTime = new Date().getTime();
+
     const iterator = this.streamObjects<Schema>(
       "indexes/orphansPerActorAndLastModified",
       startkey,
@@ -710,13 +713,9 @@ export class GraffitiLocalDatabase
       ifModifiedSince,
     );
 
-    while (true) {
-      const result = await iterator.next();
-      if (result.done) {
-        return result.value;
-      }
-      yield result.value;
-    }
+    for await (const result of iterator) yield result;
+
+    return startTime - LAST_MODIFIED_BUFFER;
   }
 
   protected async *discoverContinue<Schema extends JSONSchema>(
