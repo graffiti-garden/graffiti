@@ -337,7 +337,15 @@ export type GraffitiObjectStreamReturn<Schema extends JSONSchema> = {
 };
 
 /**
- * An internal utility type to build the {@link GraffitiObjectStream} type
+ * An internal utility type to build the {@link GraffitiObjectStream} type.
+ *
+ * While it is not possible to re-{@link Graffiti.put | put} objects that have been
+ * {@link Graffiti.delete | deleted}, objects may appear deleted if
+ * an {@link GraffitiObjectBase.actor | `actor`} is no longer
+ * {@link GraffitiObjectBase.allowed | `allowed`} to access them.
+ * Therefore the {@link GraffitiObjectBase.lastModified | `lastModified`} property
+ * is necessary to compare object versions.
+ *
  * @internal
  */
 export type GraffitiObjectStreamContinuation<Schema extends JSONSchema> =
@@ -346,7 +354,10 @@ export type GraffitiObjectStreamContinuation<Schema extends JSONSchema> =
     | {
         error?: undefined;
         tombstone: true;
-        url: string;
+        object: {
+          url: string;
+          lastModified: number;
+        };
       },
     GraffitiObjectStreamReturn<Schema>
   >;

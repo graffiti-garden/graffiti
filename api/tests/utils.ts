@@ -3,6 +3,7 @@ import type {
   GraffitiPutObject,
   GraffitiObjectStream,
   JSONSchema,
+  GraffitiObject,
 } from "@graffiti-garden/api";
 
 export function randomString(): string {
@@ -31,7 +32,7 @@ export function randomPutObject(): GraffitiPutObject<{}> {
 
 export async function nextStreamValue<Schema extends JSONSchema>(
   iterator: GraffitiObjectStream<Schema>,
-) {
+): Promise<GraffitiObject<Schema>> {
   const result = await iterator.next();
   assert(!result.done && !result.value.error, "result has no value");
   assert(!result.value.tombstone, "result has been deleted!");
