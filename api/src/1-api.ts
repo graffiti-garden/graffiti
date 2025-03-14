@@ -5,8 +5,10 @@ import type {
   GraffitiPatch,
   GraffitiSession,
   GraffitiPutObject,
-  GraffitiStream,
+  GraffitiObjectStream,
   ChannelStats,
+  GraffitiChannelStatsStream,
+  GraffitiObjectStreamContinuation,
 } from "./2-types";
 import type { JSONSchema } from "json-schema-to-ts";
 
@@ -302,7 +304,13 @@ export abstract class Graffiti {
    * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
-   * @returns The object that was deleted its
+   * It is not possible to re-{@link put} an object that has been deleted
+   * to ensure a user's [right to be forgotten](https://en.wikipedia.org/wiki/Right_to_be_forgotten).
+   * In cases where deleting and restoring an object is useful, an object's
+   * {@link GraffitiObjectBase.allowed | `allowed`} property can be set to
+   * an empty list to hide it from all users except the creator.
+   *
+   * @returns The object that was deleted with its
    * {@link GraffitiObjectBase.lastModified | `lastModified`}
    * property updated to the time of deletion.
    *
@@ -333,21 +341,21 @@ export abstract class Graffiti {
    *
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
-   * The {@link GraffitiStream} ends by returning a `continue`
+   * The {@link GraffitiObjectStream} ends by returning a `continue`
    * method and a `cursor` string, each of which can be be used to poll for new objects.
-   * The `continue` method preserves the typing of the stream and the `cursor`
+   * The `continue` method preserves the type safety of the stream and the `cursor`
    * string can be serialized to continue the stream after an application is closed
    * and reopened.
-   * See the {@link continueStream} method for more information on continuing a stream.
+   * See the {@link continueObjectStream} method for more information.
    *
    * `discover` will not return objects that the {@link GraffitiObjectBase.actor | `actor`}
    * is not {@link GraffitiObjectBase.allowed | `allowed`} to access.
-   * If the actor is not the creator of a discovered object,
+   * If the `actor` is not the creator of a discovered object,
    * the allowed list will be masked to only contain the querying actor if the
    * allowed list is not `undefined` (public). Additionally, if the actor is not the
    * creator of a discovered object, any {@link GraffitiObjectBase.channels | `channels`}
    * not specified by the `discover` method will not be revealed. This masking happens
-   * before the supplied schema is applied.
+   * before the object is validated against the supplied `schema`.
    *
    * Since different implementations may fetch data from multiple sources there is
    * no guarentee on the order that objects are returned in.
@@ -376,7 +384,7 @@ export abstract class Graffiti {
      * property will be returned.
      */
     session?: GraffitiSession | null,
-  ): GraffitiStream<GraffitiObject<Schema>>;
+  ): GraffitiObjectStream<Schema>;
 
   /**
    * Discovers objects **not** contained in any
@@ -409,7 +417,7 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): GraffitiStream<GraffitiObject<Schema>>;
+  ): GraffitiObjectStream<Schema>;
 
   /**
    * Returns statistics about all the {@link GraffitiObjectBase.channels | `channels`}
@@ -418,10 +426,9 @@ export abstract class Graffiti {
    * necessary for certain applications where a user wants a
    * global view of all their Graffiti data or to debug
    * channel usage.
-
+   *
    * Like {@link discover}, objects are returned asynchronously as they are discovered,
-      * the stream will end once all leads have been exhausted, and the stream
-      * can be continued using the `continue` method or `cursor` string.
+   * the stream will end once all leads have been exhausted.
    *
    * @group Query Methods
    *
@@ -434,13 +441,14 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): GraffitiStream<ChannelStats>;
+  ): GraffitiChannelStatsStream;
 
   /**
-   * Continues a {@link GraffitiStream} from a given `cursor` string.
+   * Continues a {@link GraffitiObjectStream} from a given `cursor` string.
    * The continuation will return new objects that have been created
-   * that match the original stream, and also return objects that
-   * have been deleted but with a `tombstone` property set to `true`.
+   * that match the original stream, and also returns the
+   * {@link GraffitiObjectBase.url | `url`}s of objects that
+   * have been deleted, as marked by a `tombstone`.
    *
    * The continuation may also include duplicates of objects that
    * were already returned by the original stream. This is dependent
@@ -449,8 +457,9 @@ export abstract class Graffiti {
    * The `cursor` allows the client to
    * serialize the state of the stream and continue it later.
    * However this method loses any typing information that was
-   * present in the original stream. To preserve typing, the
-   * use the `continue` method returned with the `cursor` at the
+   * present in the original stream. For better type safety
+   * and when serializing is not necessary, use the `continue`
+   * method instead, returned along with the `cursor` at the
    * end of the original stream.
    *
    * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
@@ -459,10 +468,10 @@ export abstract class Graffiti {
    *
    * @group Query Methods
    */
-  abstract continueStream(
+  abstract continueObjectStream(
     cursor: string,
     session?: GraffitiSession | null,
-  ): GraffitiStream<unknown>;
+  ): GraffitiObjectStreamContinuation<{}>;
 
   /**
    * Begins the login process. Depending on the implementation, this may

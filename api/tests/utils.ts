@@ -1,5 +1,9 @@
 import { assert } from "vitest";
-import type { GraffitiPutObject, GraffitiStream } from "@graffiti-garden/api";
+import type {
+  GraffitiPutObject,
+  GraffitiObjectStream,
+  JSONSchema,
+} from "@graffiti-garden/api";
 
 export function randomString(): string {
   const array = new Uint8Array(16);
@@ -25,9 +29,11 @@ export function randomPutObject(): GraffitiPutObject<{}> {
   };
 }
 
-export async function nextStreamValue<S>(iterator: GraffitiStream<S>) {
+export async function nextStreamValue<Schema extends JSONSchema>(
+  iterator: GraffitiObjectStream<Schema>,
+) {
   const result = await iterator.next();
   assert(!result.done && !result.value.error, "result has no value");
   assert(!result.value.tombstone, "result has been deleted!");
-  return result.value.value;
+  return result.value.object;
 }
