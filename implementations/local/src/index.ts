@@ -27,7 +27,7 @@ export class GraffitiLocal extends Graffiti {
   discover: Graffiti["discover"];
   recoverOrphans: Graffiti["recoverOrphans"];
   channelStats: Graffiti["channelStats"];
-  continueStream: Graffiti["continueStream"];
+  continueObjectStream: Graffiti["continueObjectStream"];
 
   constructor(options?: GraffitiLocalOptions) {
     super();
@@ -43,7 +43,20 @@ export class GraffitiLocal extends Graffiti {
       graffitiPouchDbBase.recoverOrphans.bind(graffitiPouchDbBase);
     this.channelStats =
       graffitiPouchDbBase.channelStats.bind(graffitiPouchDbBase);
-    this.continueStream =
-      graffitiPouchDbBase.continueStream.bind(graffitiPouchDbBase);
+    this.continueObjectStream =
+      graffitiPouchDbBase.continueObjectStream.bind(graffitiPouchDbBase);
   }
 }
+
+function myFunction<T extends boolean>(
+  flag: T,
+): T extends true ? string : number {
+  if (!flag) {
+    return "Hello" as T extends true ? string : number;
+  } else {
+    return 42 as T extends true ? string : number;
+  }
+}
+// Usage
+const a = myFunction(false); // Type is number
+const b = myFunction(true); // Type is string

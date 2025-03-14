@@ -5,8 +5,7 @@ import type {
   JSONSchema,
   GraffitiSession,
   GraffitiObject,
-  GraffitiStream,
-  ChannelStats,
+  GraffitiObjectStreamContinuation,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
@@ -22,9 +21,18 @@ import {
   compileGraffitiObjectSchema,
   unpackObjectUrl,
 } from "./utilities.js";
-import { Repeater } from "@repeaterjs/repeater";
 import type Ajv from "ajv";
 import type { applyPatch } from "fast-json-patch";
+
+type ObjectStreamMetaEntry<Schema extends JSONSchema> =
+  | {
+      tombstone?: undefined;
+      object: GraffitiObject<Schema>;
+    }
+  | {
+      tombstone: true;
+      url: string;
+    };
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -587,103 +595,102 @@ export class GraffitiLocalDatabase
     };
   }
 
-  protected discoverMeta<Schema extends JSONSchema>(
-    channels: string[],
-    schema: Schema,
-    session?: GraffitiSession | null,
+  protected async *streamObjects<Schema extends JSONSchema>(
+    index: string,
+    startkey: string,
+    endkey: string,
+    validate: ReturnType<typeof compileGraffitiObjectSchema<Schema>>,
+    session: GraffitiSession | undefined | null,
+    ifModifiedSince: number | undefined,
+    channels?: string[],
+    processedIds?: Set<string>,
+  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>, number | undefined> {
+    let myIfModifiedSince: number | undefined = ifModifiedSince;
+    const showTombstones = ifModifiedSince !== undefined;
+
+    const result = await (
+      await this.db
+    ).query<GraffitiObjectWithTombstone>(index, {
+      startkey,
+      endkey,
+      include_docs: true,
+    });
+
+    for (const row of result.rows) {
+      const doc = row.doc;
+      if (!doc) continue;
+
+      if (processedIds?.has(doc._id)) continue;
+      processedIds?.add(doc._id);
+
+      if (!showTombstones && doc.tombstone) continue;
+
+      const object = this.extractGraffitiObject(doc);
+
+      if (!myIfModifiedSince || object.lastModified > myIfModifiedSince) {
+        myIfModifiedSince = object.lastModified;
+      }
+
+      if (channels) {
+        if (!isActorAllowedGraffitiObject(object, session)) continue;
+        maskGraffitiObject(object, channels, session);
+      }
+
+      if (!validate(object)) continue;
+
+      yield doc.tombstone ? { tombstone: true, url: object.url } : { object };
+    }
+
+    return myIfModifiedSince;
+  }
+
+  protected async *discoverMeta<Schema extends JSONSchema>(
+    args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
     ifModifiedSince?: number,
-  ): GraffitiStream<GraffitiObject<Schema>> {
+  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>, number | undefined> {
+    const [channels, schema, session] = args;
+    const validate = compileGraffitiObjectSchema(await this.ajv, schema);
     const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
       schema,
       ifModifiedSince,
     );
 
-    // Don't return tombstones on the first pass
-    const showTombstones = ifModifiedSince !== undefined;
+    const processedIds = new Set<string>();
 
-    const repeater: GraffitiStream<GraffitiObject<typeof schema>> =
-      // @ts-ignore
-      new Repeater(async (push, stop) => {
-        const validate = compileGraffitiObjectSchema(await this.ajv, schema);
+    for (const channel of channels) {
+      const keyPrefix = encodeURIComponent(channel) + "/";
+      const startkey = keyPrefix + startKeySuffix;
+      const endkey = keyPrefix + endKeySuffix;
 
-        const processedIds = new Set<string>();
+      const iterator = this.streamObjects<Schema>(
+        "indexes/objectsPerChannelAndLastModified",
+        startkey,
+        endkey,
+        validate,
+        session,
+        ifModifiedSince,
+        channels,
+        processedIds,
+      );
 
-        for (const channel of channels) {
-          const keyPrefix = encodeURIComponent(channel) + "/";
-          const startkey = keyPrefix + startKeySuffix;
-          const endkey = keyPrefix + endKeySuffix;
-
-          const result = await (
-            await this.db
-          ).query<GraffitiObjectWithTombstone>(
-            "indexes/objectsPerChannelAndLastModified",
-            { startkey, endkey, include_docs: true },
-          );
-
-          for (const row of result.rows) {
-            const doc = row.doc;
-            if (!doc) continue;
-
-            if (!showTombstones && doc.tombstone) continue;
-
-            const object = this.extractGraffitiObject(doc);
-
-            if (!ifModifiedSince || object.lastModified > ifModifiedSince) {
-              ifModifiedSince = object.lastModified;
-            }
-
-            // Don't double return the same object
-            // (which can happen if it's in multiple channels)
-            if (processedIds.has(doc._id)) continue;
-            processedIds.add(doc._id);
-
-            // Make sure the user is allowed to see it
-            if (!isActorAllowedGraffitiObject(doc, session)) continue;
-
-            // Mask out the allowed list and channels
-            // if the user is not the owner
-            maskGraffitiObject(object, channels, session);
-
-            // Check that it matches the schema
-            if (validate(object)) {
-              await push({
-                value: object,
-                ...(doc.tombstone ? { tombstone: true } : {}),
-              });
-            }
-          }
+      while (true) {
+        const result = await iterator.next();
+        if (result.done) {
+          ifModifiedSince = result.value;
+          break;
         }
-        stop();
+        yield result.value;
+      }
+    }
 
-        const cursor: string =
-          "discover:" +
-          JSON.stringify({
-            channels,
-            schema,
-            ifModifiedSince,
-            actor: session?.actor,
-          });
-        return {
-          cursor,
-          continue: () =>
-            this.continueStream(cursor, session) as GraffitiStream<
-              GraffitiObject<Schema>
-            >,
-        };
-      });
-
-    return repeater;
+    return ifModifiedSince;
   }
 
-  discover: Graffiti["discover"] = (...args) => {
-    return this.discoverMeta<(typeof args)[1]>(...args);
-  };
-
-  protected recoverOrphansMeta<Schema extends JSONSchema>(
-    schema: Schema,
-    session: GraffitiSession,
+  protected async *recoverOrphansMeta<Schema extends JSONSchema>(
+    args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>,
     ifModifiedSince?: number,
-  ): GraffitiStream<GraffitiObject<Schema>> {
+  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>, number | undefined> {
+    const [schema, session] = args;
     const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
       schema,
       ifModifiedSince,
@@ -692,141 +699,140 @@ export class GraffitiLocalDatabase
     const startkey = keyPrefix + startKeySuffix;
     const endkey = keyPrefix + endKeySuffix;
 
-    // Don't return tombstones on the first pass
-    const showTombstones = ifModifiedSince !== undefined;
+    const validate = compileGraffitiObjectSchema(await this.ajv, schema);
 
-    const repeater: GraffitiStream<GraffitiObject<Schema>> =
-      // @ts-ignore
-      new Repeater(async (push, stop) => {
-        const validate = compileGraffitiObjectSchema(await this.ajv, schema);
+    const iterator = this.streamObjects<Schema>(
+      "indexes/orphansPerActorAndLastModified",
+      startkey,
+      endkey,
+      validate,
+      session,
+      ifModifiedSince,
+    );
 
-        const result = await (
-          await this.db
-        ).query<GraffitiObjectWithTombstone>(
-          "indexes/orphansPerActorAndLastModified",
-          {
-            startkey,
-            endkey,
-            include_docs: true,
-          },
-        );
+    while (true) {
+      const result = await iterator.next();
+      if (result.done) {
+        return result.value;
+      }
+      yield result.value;
+    }
+  }
 
-        for (const row of result.rows) {
-          const doc = row.doc;
-          if (!doc) continue;
+  protected async *discoverContinue<Schema extends JSONSchema>(
+    args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
+    ifModifiedSince?: number,
+  ): GraffitiObjectStreamContinuation<Schema> {
+    const iterator = this.discoverMeta(args, ifModifiedSince);
 
-          if (!showTombstones && doc.tombstone) continue;
-
-          if (!ifModifiedSince || doc.lastModified > ifModifiedSince) {
-            ifModifiedSince = doc.lastModified;
-          }
-
-          // No masking/access necessary because
-          // the objects are all owned by the querier
-
-          const object = this.extractGraffitiObject(doc);
-          if (validate(object)) {
-            await push({
-              value: object,
-              ...(doc.tombstone ? { tombstone: true } : {}),
-            });
-          }
-        }
-        stop();
-        const cursor: string =
-          "recover-orphans:" +
-          JSON.stringify({
-            schema,
-            actor: session.actor,
-            ifModifiedSince,
-          });
+    while (true) {
+      const result = await iterator.next();
+      if (result.done) {
+        const ifModifiedSince = result.value;
         return {
-          cursor,
-          continue: () =>
-            this.continueStream(cursor, session) as GraffitiStream<
-              GraffitiObject<Schema>
-            >,
+          continue: () => this.discoverContinue<Schema>(args, ifModifiedSince),
+          cursor: "",
         };
-      });
+      }
+      yield result.value;
+    }
+  }
 
-    return repeater;
+  discover: Graffiti["discover"] = (...args) => {
+    const iterator = this.discoverMeta(args);
+
+    const this_ = this;
+    return (async function* () {
+      while (true) {
+        const result = await iterator.next();
+        if (result.done) {
+          return {
+            continue: () =>
+              this_.discoverContinue<(typeof args)[1]>(args, result.value),
+            cursor: "",
+          };
+        }
+        // Make sure to filter out tombstones
+        if (result.value.tombstone) continue;
+        yield result.value;
+      }
+    })();
+  };
+
+  protected async *recoverContinue<Schema extends JSONSchema>(
+    args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>,
+    ifModifiedSince?: number,
+  ): GraffitiObjectStreamContinuation<Schema> {
+    const iterator = this.recoverOrphansMeta(args, ifModifiedSince);
+
+    while (true) {
+      const result = await iterator.next();
+      if (result.done) {
+        const ifModifiedSince = result.value;
+        return {
+          continue: () => this.recoverContinue<Schema>(args, ifModifiedSince),
+          cursor: "",
+        };
+      }
+      yield result.value;
+    }
   }
 
   recoverOrphans: Graffiti["recoverOrphans"] = (...args) => {
-    return this.recoverOrphansMeta<(typeof args)[0]>(...args);
+    const iterator = this.recoverOrphansMeta(args);
+
+    const this_ = this;
+    return (async function* () {
+      while (true) {
+        const result = await iterator.next();
+        if (result.done) {
+          return {
+            continue: () =>
+              this_.recoverContinue<(typeof args)[0]>(args, result.value),
+            cursor: "",
+          };
+        }
+        // Make sure to filter out tombstones
+        if (result.value.tombstone) continue;
+        yield result.value;
+      }
+    })();
   };
 
   channelStats: Graffiti["channelStats"] = (session) => {
-    const repeater: ReturnType<typeof Graffiti.prototype.channelStats> =
-      new Repeater(async (push, stop) => {
-        const keyPrefix = encodeURIComponent(session.actor) + "/";
-        const result = await (
-          await this.db
-        ).query("indexes/channelStatsPerActor", {
-          startkey: keyPrefix,
-          endkey: keyPrefix + "\uffff",
-          reduce: true,
-          group: true,
-        });
-        for (const row of result.rows) {
-          const channelEncoded = row.key.split("/")[1];
-          if (typeof channelEncoded !== "string") continue;
-          const { count, max: lastModified } = row.value;
-          if (typeof count !== "number" || typeof lastModified !== "number")
-            continue;
-          await push({
-            value: {
-              channel: decodeURIComponent(channelEncoded),
-              count,
-              lastModified,
-            },
-          });
-        }
-        stop();
-        const cursor = "channel-stats";
-        return {
-          cursor,
-          continue: () =>
-            this.continueStream(
-              cursor,
-              session,
-            ) as GraffitiStream<ChannelStats>,
-        };
+    const this_ = this;
+    return (async function* () {
+      const keyPrefix = encodeURIComponent(session.actor) + "/";
+      const result = await (
+        await this_.db
+      ).query("indexes/channelStatsPerActor", {
+        startkey: keyPrefix,
+        endkey: keyPrefix + "\uffff",
+        reduce: true,
+        group: true,
       });
-
-    return repeater;
+      for (const row of result.rows) {
+        const channelEncoded = row.key.split("/")[1];
+        if (typeof channelEncoded !== "string") continue;
+        const { count, max: lastModified } = row.value;
+        if (typeof count !== "number" || typeof lastModified !== "number")
+          continue;
+        yield {
+          value: {
+            channel: decodeURIComponent(channelEncoded),
+            count,
+            lastModified,
+          },
+        };
+      }
+    })();
   };
 
-  continueStream: Graffiti["continueStream"] = (cursor, session) => {
-    if (cursor === "channel-stats") {
-      if (!session) {
-        throw new GraffitiErrorForbidden(
-          "You must be logged in to continue the stream",
-        );
-      }
-      return this.channelStats(session);
-    } else if (cursor.startsWith("recover-orphans:")) {
-      const { schema, actor, ifModifiedSince } = JSON.parse(
-        cursor.slice("recover-orphans:".length),
-      );
-      if (!session || session.actor !== actor) {
-        throw new GraffitiErrorForbidden(
-          "You must be logged in as the actor same actor who started the stream",
-        );
-      }
-      return this.recoverOrphansMeta(schema, session, ifModifiedSince);
-    } else if (cursor.startsWith("discover:")) {
-      const { channels, schema, actor, ifModifiedSince } = JSON.parse(
-        cursor.slice("discover:".length),
-      );
-      if (session?.actor !== actor) {
-        throw new GraffitiErrorForbidden(
-          "You must be logged in as the actor same actor who started the stream",
-        );
-      }
-      return this.discoverMeta(channels, schema, session, ifModifiedSince);
-    } else {
-      throw new GraffitiErrorNotFound("Cursor not found");
-    }
+  continueObjectStream: Graffiti["continueObjectStream"] = (
+    cursor,
+    session,
+  ) => {
+    // TODO: Implement this
+    throw new GraffitiErrorNotFound("Cursor not found");
   };
 }
