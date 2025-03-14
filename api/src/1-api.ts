@@ -8,7 +8,7 @@ import type {
   GraffitiObjectStream,
   ChannelStats,
   GraffitiChannelStatsStream,
-  GraffitiObjectStreamContinuation,
+  GraffitiObjectStreamContinue,
 } from "./2-types";
 import type { JSONSchema } from "json-schema-to-ts";
 
@@ -471,7 +471,7 @@ export abstract class Graffiti {
   abstract continueObjectStream(
     cursor: string,
     session?: GraffitiSession | null,
-  ): GraffitiObjectStreamContinuation<{}>;
+  ): GraffitiObjectStreamContinue<{}>;
 
   /**
    * Begins the login process. Depending on the implementation, this may
