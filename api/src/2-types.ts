@@ -287,7 +287,7 @@ export interface GraffitiPatch {
  * with a `tombstone` property set to `true`.
  */
 export type GraffitiObjectStream<Schema extends JSONSchema> = AsyncGenerator<
-  GraffitiObjectStreamEntry<Schema>,
+  GraffitiStreamError | GraffitiObjectStreamEntry<Schema>,
   GraffitiObjectStreamReturn<Schema>
 >;
 
@@ -318,12 +318,26 @@ export interface GraffitiStreamError {
  * type
  * @internal
  */
-export type GraffitiObjectStreamEntry<Schema extends JSONSchema> =
-  | GraffitiStreamError
+export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
+  error?: undefined;
+  tombstone?: undefined;
+  object: GraffitiObject<Schema>;
+}
+
+/**
+ * An internal utility type to build the {@link GraffitiObjectStream}
+ * type
+ * @internal
+ */
+export type GraffitiObjectStreamContinueEntry<Schema extends JSONSchema> =
+  | GraffitiObjectStreamEntry<Schema>
   | {
       error?: undefined;
-      tombstone?: undefined;
-      object: GraffitiObject<Schema>;
+      tombstone: true;
+      object: {
+        url: string;
+        lastModified: number;
+      };
     };
 
 /**
@@ -332,7 +346,7 @@ export type GraffitiObjectStreamEntry<Schema extends JSONSchema> =
  * @internal
  */
 export type GraffitiObjectStreamReturn<Schema extends JSONSchema> = {
-  continue: () => GraffitiObjectStreamContinuation<Schema>;
+  continue: () => GraffitiObjectStreamContinue<Schema>;
   cursor: string;
 };
 
@@ -348,17 +362,9 @@ export type GraffitiObjectStreamReturn<Schema extends JSONSchema> = {
  *
  * @internal
  */
-export type GraffitiObjectStreamContinuation<Schema extends JSONSchema> =
+export type GraffitiObjectStreamContinue<Schema extends JSONSchema> =
   AsyncGenerator<
-    | GraffitiObjectStreamEntry<Schema>
-    | {
-        error?: undefined;
-        tombstone: true;
-        object: {
-          url: string;
-          lastModified: number;
-        };
-      },
+    GraffitiStreamError | GraffitiObjectStreamContinueEntry<Schema>,
     GraffitiObjectStreamReturn<Schema>
   >;
 
