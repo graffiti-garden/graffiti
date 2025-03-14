@@ -1,6 +1,8 @@
 import { it, expect, describe, assert, beforeAll } from "vitest";
 import type {
   Graffiti,
+  GraffitiObjectBase,
+  GraffitiObjectStreamEntry,
   GraffitiSession,
   JSONSchema,
 } from "@graffiti-garden/api";
@@ -487,7 +489,7 @@ export const graffitiDiscoverTests = (
       const value = await tombIterator.next();
       assert(!value.done && !value.value.error, "value is done");
       assert(value.value.tombstone, "value is not tombstone");
-      expect(value.value.url).toEqual(putted.url);
+      expect(value.value.object.url).toEqual(putted.url);
       await expect(tombIterator.next()).resolves.toHaveProperty("done", true);
     });
 
@@ -532,13 +534,15 @@ export const graffitiDiscoverTests = (
         }
 
         // Otherwise 1 should be done and 2 should not
-        await expect(iterator1.next()).resolves.toHaveProperty("done", true);
+        const value5 = await iterator1.next();
+        assert(value5.done, "value5 is not done");
 
         const value4 = await tombIterator.next();
         assert(!value4.done && !value4.value.error, "value is done");
 
         assert(value4.value.tombstone, "value is not tombstone");
-        expect(value4.value.url).toEqual(putted.url);
+        expect(value4.value.object.url).toEqual(putted.url);
+        expect(value4.value.object.lastModified).toEqual(replaced.lastModified);
 
         const value2 = await nextStreamValue<{}>(iterator2);
         await expect(iterator2.next()).resolves.toHaveProperty("done", true);
@@ -546,6 +550,53 @@ export const graffitiDiscoverTests = (
         expect(value2.value).toEqual(object2.value);
         expect(value2.channels).toEqual(object2.channels);
         expect(value2.lastModified).toEqual(replaced.lastModified);
+
+        // Replace the channels back
+        const patched = await graffiti.patch(
+          {
+            channels: [{ op: "replace", path: "", value: object1.channels }],
+          },
+          replaced,
+          session,
+        );
+
+        const tombIterator2 = value5.value.continue();
+
+        let result:
+          | {
+              tombstone: true;
+              object: {
+                url: string;
+                lastModified: number;
+              };
+            }
+          | {
+              tombstone?: undefined;
+              object: GraffitiObjectBase;
+            }
+          | undefined;
+        for await (const value of tombIterator2) {
+          if (value.error) continue;
+          if (!result) {
+            result = value;
+            continue;
+          }
+          if (
+            value.object.lastModified > result.object.lastModified ||
+            (value.object.lastModified === result.object.lastModified &&
+              !value.tombstone &&
+              result.tombstone)
+          ) {
+            result = value;
+          }
+        }
+
+        assert(result, "result is not defined");
+        assert(!result.tombstone, "result is tombstone");
+        expect(result.object.url).toEqual(replaced.url);
+        expect(result.object.lastModified).toEqual(patched.lastModified);
+        expect(result.object.channels).toEqual(object1.channels);
+        expect(result.object.value).toEqual(object2.value);
       }
     });
 
@@ -573,7 +624,7 @@ export const graffitiDiscoverTests = (
       const value = await iterator.next();
       assert(!value.done && !value.value.error, "value is done");
       assert(value.value.tombstone, "value is not tombstone");
-      expect(value.value.url).toEqual(putted.url);
+      expect(value.value.object.url).toEqual(putted.url);
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
 

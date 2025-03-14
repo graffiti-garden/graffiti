@@ -105,7 +105,7 @@ export const graffitiOrphanTests = (
         "value2 is done or has error",
       );
       assert(value2.value.tombstone, "value2 is not tombstone");
-      expect(value2.value.url).toBe(putOrphan.url);
+      expect(value2.value.object.url).toBe(putOrphan.url);
       await expect(iterator2.next()).resolves.toHaveProperty("done", true);
     });
   });
