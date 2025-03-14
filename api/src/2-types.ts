@@ -257,8 +257,7 @@ export interface GraffitiPatch {
 }
 
 /**
- * This type represents a stream of data that are
- * returned by Graffiti's query-like operations
+ * A stream of data that are returned by Graffiti's query-like operations
  * {@link Graffiti.discover} and {@link Graffiti.recoverOrphans}.
  *
  * Errors are returned within the stream rather than as
@@ -266,25 +265,15 @@ export interface GraffitiPatch {
  * some implementations may pull data from multiple sources
  * including some that may be unreliable. In many cases,
  * these errors can be safely ignored.
- * The `origin` property of the error object indicates the
- * source of the error including its scheme and other
- * implementation-specific details (e.g. domain name).
+ * See {@link GraffitiStreamError}.
  *
  * The stream is an [`AsyncGenerator`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function)
  * that can be iterated over using `for await` loops or calling `next` on the generator.
  * The stream can be terminated by breaking out of a loop calling `return` on the generator.
  *
- * The stream ends by returning a `continue` function and a `cursor` string,
+ * The stream ends by returning a {@link GraffitiObjectStreamReturn.continue | `continue`}
+ * function and a {@link GraffitiObjectStreamReturn.cursor | `cursor`} string,
  * each of which can be used to resume the stream from where it left off.
- * The `continue` function preserves the typing of the original stream,
- * where as the `cursor` string can be serialized for use after a user
- * has closed and reopened an application.
- * Use {@link Graffiti.continueObjectStream} to resume a stream from the `cursor` string.
- *
- * Unlike the original stream, the continued stream also includes
- * includes the {@link GraffitiObjectBase.url | `url`}s of any objects
- * that have been deleted since the original stream was created along
- * with a `tombstone` property set to `true`.
  */
 export type GraffitiObjectStream<Schema extends JSONSchema> = AsyncGenerator<
   GraffitiStreamError | GraffitiObjectStreamEntry<Schema>,
@@ -292,73 +281,134 @@ export type GraffitiObjectStream<Schema extends JSONSchema> = AsyncGenerator<
 >;
 
 /**
- * A stream of data that are returned by Graffiti's {@link Graffiti.channelStats} method.
- * See {@link GraffitiObjectStream} for more information on streams.
- */
-export type GraffitiChannelStatsStream = AsyncGenerator<
-  | GraffitiStreamError
-  | {
-      error?: undefined;
-      value: ChannelStats;
-    }
->;
-
-/**
- * An internal utility type to build the {@link GraffitiObjectStream}
- * and {@link GraffitiChannelStatsStream} types.
+ * An error that can occur in either the
+ * {@link GraffitiObjectStream} or {@link GraffitiChannelStatsStream}.
+ *
  * @internal
  */
 export interface GraffitiStreamError {
+  /**
+   * The error that occurred while streaming data.
+   */
   error: Error;
+  /**
+   * The origin that the error occurred. It will include
+   * the scheme of the Graffiti implementation used and other
+   * implementation-specific information like a hostname.
+   */
   origin: string;
 }
 
 /**
- * An internal utility type to build the {@link GraffitiObjectStream}
- * type
+ * A successful result from a {@link GraffitiObjectStream} or
+ * {@link GraffitiObjectStreamContinue} that includes an object.
+ *
  * @internal
  */
 export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
+  /**
+   * Empty property for compatibility with {@link GraffitiStreamError}
+   */
   error?: undefined;
+  /**
+   * Empty property for compatibility with {@link GraffitiObjectStreamContinueTombstone}
+   */
   tombstone?: undefined;
+  /**
+   * The object returned by the stream.
+   */
   object: GraffitiObject<Schema>;
 }
 
 /**
- * An internal utility type to build the {@link GraffitiObjectStream}
- * type
+ * A result from a {@link GraffitiObjectStreamContinue} that indicated
+ * an object has been deleted since the original stream was run.
+ * Only sparse metadata about the deleted object is returned to respect
+ * the deleting user's privacy.
+ *
+ * @internal
+ */
+export interface GraffitiObjectStreamContinueTombstone {
+  /**
+   * Empty property for compatibility with {@link GraffitiStreamError}
+   */
+  error?: undefined;
+  /**
+   * Use this property to differentiate a tombstone from a
+   * {@link GraffitiObjectStreamEntry}.
+   */
+  tombstone: true;
+  /**
+   * Sparse metadata about the deleted object. The full object is not returned
+   * to respect a user's privacy.
+   */
+  object: {
+    /**
+     * The {@link GraffitiObjectBase.url | `url`} of the deleted object.
+     */
+    url: string;
+    /**
+     * The time at which the object was deleted, comparable to
+     * {@link GraffitiObjectBase.lastModified | `lastModified`}.
+     *
+     * While it is not possible to re-{@link Graffiti.put | put} objects that have been
+     * {@link Graffiti.delete | deleted}, objects may appear deleted if
+     * an {@link GraffitiObjectBase.actor | `actor`} is no longer
+     * {@link GraffitiObjectBase.allowed | `allowed`} to access them.
+     * Therefore the {@link GraffitiObjectBase.lastModified | `lastModified`} property
+     * is necessary to compare object versions.
+     */
+    lastModified: number;
+  };
+}
+
+/**
+ * A continuation of the {@link GraffitiObjectStream} type can include
+ * both objects and tombstones of deleted objects.
+ *
  * @internal
  */
 export type GraffitiObjectStreamContinueEntry<Schema extends JSONSchema> =
   | GraffitiObjectStreamEntry<Schema>
-  | {
-      error?: undefined;
-      tombstone: true;
-      object: {
-        url: string;
-        lastModified: number;
-      };
-    };
+  | GraffitiObjectStreamContinueTombstone;
 
 /**
- * An internal utility type to build the {@link GraffitiObjectStream}
- * type.
+ * The output of a {@link GraffitiObjectStream} or a {@link GraffitiObjectStreamContinue}
+ * that allows the stream to be continued from where it left off.
+ *
+ * The {@link continue} function preserves the typing of the original stream,
+ * where as the {@link cursor} string can be serialized for use after a user
+ * has closed and reopened an application.
+ *
+ * The continued stream may include `tombstone`s of objects that have been
+ * deleted since the original stream was run. See {@link GraffitiObjectStreamContinueTombstone}.
+ * The continued stream may also return some objects that were already
+ * returned by the original stream, depending on how much state the
+ * underlying implementation is able to preserve.
+ *
  * @internal
  */
-export type GraffitiObjectStreamReturn<Schema extends JSONSchema> = {
+export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
+  /**
+   * @returns A function that creates new stream that continues from where the original stream left off.
+   * It preserves the typing of the original stream.
+   */
   continue: () => GraffitiObjectStreamContinue<Schema>;
+  /**
+   * A string that can be serialized and stored to resume the stream later.
+   * It must be passed to the {@link Graffiti.continueObjectStream} method
+   * to resume the stream.
+   */
   cursor: string;
-};
+}
 
 /**
- * An internal utility type to build the {@link GraffitiObjectStream} type.
+ * A continutation of the {@link GraffitiObjectStream} type, as returned by
+ * the {@link GraffitiObjectStreamReturn.continue} or by using
+ * {@link GraffitiObjectStreamReturn.cursor} with {@link Graffiti.continueObjectStream}.
  *
- * While it is not possible to re-{@link Graffiti.put | put} objects that have been
- * {@link Graffiti.delete | deleted}, objects may appear deleted if
- * an {@link GraffitiObjectBase.actor | `actor`} is no longer
- * {@link GraffitiObjectBase.allowed | `allowed`} to access them.
- * Therefore the {@link GraffitiObjectBase.lastModified | `lastModified`} property
- * is necessary to compare object versions.
+ * The continued stream may include `tombstone`s of objects that have been
+ * deleted since the original stream was run. See {@link GraffitiObjectStreamContinueTombstone}.
  *
  * @internal
  */
@@ -390,6 +440,18 @@ export type ChannelStats = {
    */
   lastModified: number;
 };
+
+/**
+ * A stream of data that are returned by Graffiti's {@link Graffiti.channelStats} method.
+ * See {@link GraffitiObjectStream} for more information on streams.
+ */
+export type GraffitiChannelStatsStream = AsyncGenerator<
+  | GraffitiStreamError
+  | {
+      error?: undefined;
+      value: ChannelStats;
+    }
+>;
 
 /**
  * The event type produced in {@link Graffiti.sessionEvents}
