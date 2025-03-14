@@ -197,7 +197,7 @@ export class GraffitiSynchronize extends Graffiti {
    */
   synchronizeDiscover<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.discover<Schema>>
-  ): GraffitiObjectStreamContinue<Schema> {
+  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
     const [channels, schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.channels.some((channel) => channels.includes(channel));
@@ -218,7 +218,7 @@ export class GraffitiSynchronize extends Graffiti {
    */
   synchronizeGet<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
-  ): GraffitiObjectStreamContinue<Schema> {
+  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
     const [objectUrl, schema, session] = args;
     const url = unpackObjectUrl(objectUrl);
     function matchObject(object: GraffitiObjectBase) {
@@ -242,7 +242,7 @@ export class GraffitiSynchronize extends Graffiti {
    */
   synchronizeRecoverOrphans<Schema extends JSONSchema>(
     ...args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>
-  ): GraffitiObjectStreamContinue<Schema> {
+  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
     const [schema, session] = args;
     function matchObject(object: GraffitiObjectBase) {
       return object.actor === session.actor && object.channels.length === 0;
@@ -263,7 +263,7 @@ export class GraffitiSynchronize extends Graffiti {
   synchronizeAll<Schema extends JSONSchema>(
     schema: Schema,
     session?: GraffitiSession | null,
-  ): GraffitiObjectStreamContinue<Schema> {
+  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
     return this.synchronize<Schema>(() => true, [], schema, session);
   }
 
