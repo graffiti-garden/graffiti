@@ -4,8 +4,8 @@ import type {
   GraffitiObjectUrl,
   JSONSchema,
   GraffitiSession,
-  GraffitiObject,
-  GraffitiObjectStreamContinuation,
+  GraffitiObjectStreamContinue,
+  GraffitiObjectStreamContinueEntry,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
@@ -23,19 +23,6 @@ import {
 } from "./utilities.js";
 import type Ajv from "ajv";
 import type { applyPatch } from "fast-json-patch";
-
-type ObjectStreamMetaEntry<Schema extends JSONSchema> =
-  | {
-      tombstone?: undefined;
-      object: GraffitiObject<Schema>;
-    }
-  | {
-      tombstone: true;
-      object: {
-        url: string;
-        lastModified: number;
-      };
-    };
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -608,7 +595,7 @@ export class GraffitiLocalDatabase
     ifModifiedSince: number | undefined,
     channels?: string[],
     processedIds?: Set<string>,
-  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>> {
+  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
     const showTombstones = ifModifiedSince !== undefined;
 
     const result = await (
@@ -652,7 +639,10 @@ export class GraffitiLocalDatabase
   protected async *discoverMeta<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
     ifModifiedSince?: number,
-  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>, number | undefined> {
+  ): AsyncGenerator<
+    GraffitiObjectStreamContinueEntry<Schema>,
+    number | undefined
+  > {
     const [channels, schema, session] = args;
     const validate = compileGraffitiObjectSchema(await this.ajv, schema);
     const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
@@ -690,7 +680,10 @@ export class GraffitiLocalDatabase
   protected async *recoverOrphansMeta<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>,
     ifModifiedSince?: number,
-  ): AsyncGenerator<ObjectStreamMetaEntry<Schema>, number | undefined> {
+  ): AsyncGenerator<
+    GraffitiObjectStreamContinueEntry<Schema>,
+    number | undefined
+  > {
     const [schema, session] = args;
     const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
       schema,
@@ -721,7 +714,7 @@ export class GraffitiLocalDatabase
   protected async *discoverContinue<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
     ifModifiedSince?: number,
-  ): GraffitiObjectStreamContinuation<Schema> {
+  ): GraffitiObjectStreamContinue<Schema> {
     const iterator = this.discoverMeta(args, ifModifiedSince);
 
     while (true) {
@@ -761,7 +754,7 @@ export class GraffitiLocalDatabase
   protected async *recoverContinue<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>,
     ifModifiedSince?: number,
-  ): GraffitiObjectStreamContinuation<Schema> {
+  ): GraffitiObjectStreamContinue<Schema> {
     const iterator = this.recoverOrphansMeta(args, ifModifiedSince);
 
     while (true) {
