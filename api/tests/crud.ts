@@ -99,6 +99,14 @@ export const graffitiCRUDTests = (
         await expect(graffiti.delete(beforeDeleted, session)).rejects.toThrow(
           GraffitiErrorNotFound,
         );
+
+        // Try to re-put it
+        await expect(
+          graffiti.put(
+            { url: beforeDeleted.url, value: {}, channels: [] },
+            session,
+          ),
+        ).rejects.toThrow(GraffitiErrorNotFound);
       });
 
       it("put, delete, patch with wrong actor", async () => {
