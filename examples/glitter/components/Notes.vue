@@ -27,7 +27,7 @@ const props = withDefaults(
 function channels() {
     const channels = [...props.actors];
     if (props.inReplyTo) channels.push(props.inReplyTo);
-    if (props.at) channels.push(props.at);
+    if (props.at) channels.push(...props.at);
     return channels;
 }
 
@@ -81,7 +81,7 @@ async function submitNote() {
                     ...note,
                     at: props.at,
                 },
-                channels: [props.at],
+                channels: [...props.at],
             },
             session,
         );
@@ -116,7 +116,7 @@ async function submitNote() {
         <button v-else disabled>🔄 refreshing...</button>
     </div>
     <ul>
-        <li v-for="note in notesSorted" :key="$graffiti.locationToUri(note)">
+        <li v-for="note in notesSorted" :key="note.url">
             <Note :note="note" />
         </li>
     </ul>

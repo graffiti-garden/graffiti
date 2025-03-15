@@ -73,11 +73,11 @@ const editText = ref("");
     <div class="modifiers" v-click-away="() => (editMenuOpen = false)">
         <input
             type="checkbox"
-            :id="'menu' + $graffiti.locationToUri(note)"
+            :id="'menu' + note.url"
             :checked="editMenuOpen"
             @click="editMenuOpen = !editMenuOpen"
         />
-        <label :for="'menu' + $graffiti.locationToUri(note)">⚙️</label>
+        <label :for="'menu' + note.url">⚙️</label>
 
         <menu v-if="editMenuOpen" @click="editMenuOpen = false">
             <template v-if="note.actor === session?.actor">
@@ -98,12 +98,7 @@ const editText = ref("");
                 </li>
             </template>
             <li>
-                <a
-                    target="_blank"
-                    class="button"
-                    :href="$graffiti.locationToUri(note)"
-                    >link</a
-                >
+                <a target="_blank" class="button" :href="note.url">link</a>
             </li>
         </menu>
     </div>
@@ -144,18 +139,16 @@ const editText = ref("");
     <div class="post-annotators">
         <input
             type="checkbox"
-            :id="'comments' + $graffiti.locationToUri(note)"
+            :id="'comments' + note.url"
             :checked="commentsOpen"
             @click="commentsOpen = !commentsOpen"
         />
-        <label :for="'comments' + $graffiti.locationToUri(note)">
-            comments
-        </label>
+        <label :for="'comments' + note.url"> comments </label>
     </div>
 
     <Notes
         v-if="commentsOpen"
-        :inReplyTo="$graffiti.locationToUri(note)"
+        :inReplyTo="note.url"
         prompt="write a comment..."
     />
 </template>

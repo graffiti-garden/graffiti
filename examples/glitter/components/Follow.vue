@@ -30,7 +30,9 @@ async function toggleFollow() {
     isToggling.value = true;
     if (follows.value.length) {
         await Promise.all(
-            follows.value.map((follow) => graffiti.delete(follow, session)),
+            follows.value.map<Promise<any>>((follow) =>
+                graffiti.delete(follow, session),
+            ),
         );
     } else if (props.object) {
         await graffiti.put<ReturnType<typeof followSchema>>(
