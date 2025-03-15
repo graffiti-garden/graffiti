@@ -16,7 +16,7 @@ const { results: follows, isPolling } = useGraffitiDiscover(
 );
 
 const actors = computed(() => [
-    ...new Set([...follows.value.map((f) => f.value.object)]),
+    ...new Set([...follows.value.map<string>((f) => f.value.object)]),
 ]);
 </script>
 
