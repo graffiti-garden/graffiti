@@ -4,6 +4,9 @@ import type {
   GraffitiObjectStream,
   JSONSchema,
   GraffitiObject,
+  GraffitiObjectStreamReturn,
+  GraffitiObjectStreamContinue,
+  Graffiti,
 } from "@graffiti-garden/api";
 
 export function randomString(): string {
@@ -37,4 +40,18 @@ export async function nextStreamValue<Schema extends JSONSchema>(
   assert(!result.done && !result.value.error, "result has no value");
   assert(!result.value.tombstone, "result has been deleted!");
   return result.value.object;
+}
+
+export function continueStream<Schema extends JSONSchema>(
+  graffiti: Pick<Graffiti, "continueObjectStream">,
+  streamReturn: GraffitiObjectStreamReturn<Schema>,
+  type: "cursor" | "continue",
+): GraffitiObjectStreamContinue<Schema> {
+  if (type === "cursor") {
+    return graffiti.continueObjectStream(
+      streamReturn.cursor,
+    ) as unknown as GraffitiObjectStreamContinue<Schema>;
+  } else {
+    return streamReturn.continue();
+  }
 }
