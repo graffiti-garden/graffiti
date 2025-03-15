@@ -1,6 +1,5 @@
 import {
   GraffitiErrorInvalidSchema,
-  GraffitiErrorInvalidUri,
   GraffitiErrorPatchError,
   GraffitiErrorPatchTestFailed,
 } from "@graffiti-garden/api";
