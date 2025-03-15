@@ -12,8 +12,6 @@ import {
   continueStream,
 } from "./utils";
 
-const continueType = "continue";
-
 export const graffitiDiscoverTests = (
   useGraffiti: () => Pick<
     Graffiti,
@@ -478,213 +476,227 @@ export const graffitiDiscoverTests = (
       expect(counts.get("other")).toBe(1);
     });
 
-    it("discover for deleted content", async () => {
-      const object = randomPutObject();
+    for (const continueType of ["cursor", "continue"] as const) {
+      describe(`continue discover with ${continueType}`, () => {
+        it("discover for deleted content", async () => {
+          const object = randomPutObject();
 
-      const putted = await graffiti.put<{}>(object, session);
+          const putted = await graffiti.put<{}>(object, session);
 
-      const iterator1 = graffiti.discover<{}>(object.channels, {});
-      const value1 = await nextStreamValue<{}>(iterator1);
-      expect(value1.value).toEqual(object.value);
-      const returnValue = await iterator1.next();
-      assert(returnValue.done, "value2 is not done");
+          const iterator1 = graffiti.discover<{}>(object.channels, {});
+          const value1 = await nextStreamValue<{}>(iterator1);
+          expect(value1.value).toEqual(object.value);
+          const returnValue = await iterator1.next();
+          assert(returnValue.done, "value2 is not done");
 
-      const deleted = await graffiti.delete(putted, session);
+          const deleted = await graffiti.delete(putted, session);
 
-      const iterator = graffiti.discover(object.channels, {});
-      await expect(iterator.next()).resolves.toHaveProperty("done", true);
+          const iterator = graffiti.discover(object.channels, {});
+          await expect(iterator.next()).resolves.toHaveProperty("done", true);
 
-      const tombIterator = continueStream<{}>(
-        graffiti,
-        returnValue.value,
-        continueType,
-      );
-      const value = await tombIterator.next();
-      assert(!value.done && !value.value.error, "value is done");
-      assert(value.value.tombstone, "value is not tombstone");
-      expect(value.value.object.url).toEqual(putted.url);
-      await expect(tombIterator.next()).resolves.toHaveProperty("done", true);
-    });
+          const tombIterator = continueStream<{}>(
+            graffiti,
+            returnValue.value,
+            continueType,
+          );
+          const value = await tombIterator.next();
+          assert(!value.done && !value.value.error, "value is done");
+          assert(value.value.tombstone, "value is not tombstone");
+          expect(value.value.object.url).toEqual(putted.url);
+          await expect(tombIterator.next()).resolves.toHaveProperty(
+            "done",
+            true,
+          );
+        });
 
-    it("discover for replaced channels", async () => {
-      // Do this a bunch to check for concurrency issues
-      for (let i = 0; i < 20; i++) {
-        const object1 = randomPutObject();
-        const putted = await graffiti.put<{}>(object1, session);
+        it("discover for replaced channels", async () => {
+          // Do this a bunch to check for concurrency issues
+          for (let i = 0; i < 20; i++) {
+            const object1 = randomPutObject();
+            const putted = await graffiti.put<{}>(object1, session);
 
-        const iterator3 = graffiti.discover<{}>(object1.channels, {});
-        const value3 = await nextStreamValue<{}>(iterator3);
-        expect(value3.value).toEqual(object1.value);
-        const returnValue = await iterator3.next();
-        assert(returnValue.done, "value2 is not done");
+            const iterator3 = graffiti.discover<{}>(object1.channels, {});
+            const value3 = await nextStreamValue<{}>(iterator3);
+            expect(value3.value).toEqual(object1.value);
+            const returnValue = await iterator3.next();
+            assert(returnValue.done, "value2 is not done");
 
-        const object2 = randomPutObject();
-        const replaced = await graffiti.put<{}>(
-          {
-            ...object2,
-            url: putted.url,
-          },
-          session,
-        );
+            const object2 = randomPutObject();
+            const replaced = await graffiti.put<{}>(
+              {
+                ...object2,
+                url: putted.url,
+              },
+              session,
+            );
 
-        const iterator1 = graffiti.discover<{}>(object1.channels, {});
-        const iterator2 = graffiti.discover<{}>(object2.channels, {});
-        const tombIterator = continueStream<{}>(
-          graffiti,
-          returnValue.value,
-          continueType,
-        );
+            const iterator1 = graffiti.discover<{}>(object1.channels, {});
+            const iterator2 = graffiti.discover<{}>(object2.channels, {});
+            const tombIterator = continueStream<{}>(
+              graffiti,
+              returnValue.value,
+              continueType,
+            );
 
-        if (putted.lastModified === replaced.lastModified) {
-          const value1 = await iterator1.next();
-          const value2 = await iterator2.next();
-          const value3 = await tombIterator.next();
+            if (putted.lastModified === replaced.lastModified) {
+              const value1 = await iterator1.next();
+              const value2 = await iterator2.next();
+              const value3 = await tombIterator.next();
 
-          // Only one should be done
-          expect(value1.done || value2.done).toBe(true);
-          expect(value1.done && value2.done).toBe(false);
+              // Only one should be done
+              expect(value1.done || value2.done).toBe(true);
+              expect(value1.done && value2.done).toBe(false);
 
-          assert(!value3.done && !value3.value.error, "value is done");
-          expect(value3.value.tombstone || value2.done).toBe(true);
-          expect(value3.value.tombstone && value2.done).toBe(false);
-          continue;
-        }
-
-        // Otherwise 1 should be done and 2 should not
-        const value5 = await iterator1.next();
-        assert(value5.done, "value5 is not done");
-
-        const value4 = await tombIterator.next();
-        assert(!value4.done && !value4.value.error, "value is done");
-
-        assert(value4.value.tombstone, "value is not tombstone");
-        expect(value4.value.object.url).toEqual(putted.url);
-        expect(value4.value.object.lastModified).toEqual(replaced.lastModified);
-
-        const value2 = await nextStreamValue<{}>(iterator2);
-        await expect(iterator2.next()).resolves.toHaveProperty("done", true);
-
-        expect(value2.value).toEqual(object2.value);
-        expect(value2.channels).toEqual(object2.channels);
-        expect(value2.lastModified).toEqual(replaced.lastModified);
-
-        // Replace the channels back
-        const patched = await graffiti.patch(
-          {
-            channels: [{ op: "replace", path: "", value: object1.channels }],
-          },
-          replaced,
-          session,
-        );
-
-        const tombIterator2 = continueStream<{}>(
-          graffiti,
-          value5.value,
-          continueType,
-        );
-
-        let result:
-          | {
-              tombstone: true;
-              object: {
-                url: string;
-                lastModified: number;
-              };
+              assert(!value3.done && !value3.value.error, "value is done");
+              expect(value3.value.tombstone || value2.done).toBe(true);
+              expect(value3.value.tombstone && value2.done).toBe(false);
+              continue;
             }
-          | {
-              tombstone?: undefined;
-              object: GraffitiObjectBase;
+
+            // Otherwise 1 should be done and 2 should not
+            const value5 = await iterator1.next();
+            assert(value5.done, "value5 is not done");
+
+            const value4 = await tombIterator.next();
+            assert(!value4.done && !value4.value.error, "value is done");
+
+            assert(value4.value.tombstone, "value is not tombstone");
+            expect(value4.value.object.url).toEqual(putted.url);
+            expect(value4.value.object.lastModified).toEqual(
+              replaced.lastModified,
+            );
+
+            const value2 = await nextStreamValue<{}>(iterator2);
+            await expect(iterator2.next()).resolves.toHaveProperty(
+              "done",
+              true,
+            );
+
+            expect(value2.value).toEqual(object2.value);
+            expect(value2.channels).toEqual(object2.channels);
+            expect(value2.lastModified).toEqual(replaced.lastModified);
+
+            // Replace the channels back
+            const patched = await graffiti.patch(
+              {
+                channels: [
+                  { op: "replace", path: "", value: object1.channels },
+                ],
+              },
+              replaced,
+              session,
+            );
+
+            const tombIterator2 = continueStream<{}>(
+              graffiti,
+              value5.value,
+              continueType,
+            );
+
+            let result:
+              | {
+                  tombstone: true;
+                  object: {
+                    url: string;
+                    lastModified: number;
+                  };
+                }
+              | {
+                  tombstone?: undefined;
+                  object: GraffitiObjectBase;
+                }
+              | undefined;
+            for await (const value of tombIterator2) {
+              if (value.error) continue;
+              if (!result) {
+                result = value;
+                continue;
+              }
+              if (
+                value.object.lastModified > result.object.lastModified ||
+                (value.object.lastModified === result.object.lastModified &&
+                  !value.tombstone &&
+                  result.tombstone)
+              ) {
+                result = value;
+              }
             }
-          | undefined;
-        for await (const value of tombIterator2) {
-          if (value.error) continue;
-          if (!result) {
-            result = value;
-            continue;
+
+            assert(result, "result is not defined");
+            assert(!result.tombstone, "result is tombstone");
+            expect(result.object.url).toEqual(replaced.url);
+            expect(result.object.lastModified).toEqual(patched.lastModified);
+            expect(result.object.channels).toEqual(object1.channels);
+            expect(result.object.value).toEqual(object2.value);
           }
-          if (
-            value.object.lastModified > result.object.lastModified ||
-            (value.object.lastModified === result.object.lastModified &&
-              !value.tombstone &&
-              result.tombstone)
-          ) {
-            result = value;
-          }
-        }
+        });
 
-        assert(result, "result is not defined");
-        assert(!result.tombstone, "result is tombstone");
-        expect(result.object.url).toEqual(replaced.url);
-        expect(result.object.lastModified).toEqual(patched.lastModified);
-        expect(result.object.channels).toEqual(object1.channels);
-        expect(result.object.value).toEqual(object2.value);
-      }
-    });
+        it("discover for patched allowed", async () => {
+          const object = randomPutObject();
+          const putted = await graffiti.put<{}>(object, session);
 
-    it("discover for patched allowed", async () => {
-      const object = randomPutObject();
-      const putted = await graffiti.put<{}>(object, session);
+          const iterator1 = graffiti.discover<{}>(object.channels, {});
+          const value1 = await nextStreamValue<{}>(iterator1);
+          expect(value1.value).toEqual(object.value);
+          const returnValue = await iterator1.next();
+          assert(returnValue.done, "value2 is not done");
 
-      const iterator1 = graffiti.discover<{}>(object.channels, {});
-      const value1 = await nextStreamValue<{}>(iterator1);
-      expect(value1.value).toEqual(object.value);
-      const returnValue = await iterator1.next();
-      assert(returnValue.done, "value2 is not done");
-
-      await graffiti.patch(
-        {
-          allowed: [{ op: "add", path: "", value: [] }],
-        },
-        putted,
-        session,
-      );
-      const iterator2 = graffiti.discover(object.channels, {});
-      expect(await iterator2.next()).toHaveProperty("done", true);
-
-      const iterator = continueStream<{}>(
-        graffiti,
-        returnValue.value,
-        continueType,
-      );
-      const value = await iterator.next();
-      assert(!value.done && !value.value.error, "value is done");
-      assert(value.value.tombstone, "value is not tombstone");
-      expect(value.value.object.url).toEqual(putted.url);
-      await expect(iterator.next()).resolves.toHaveProperty("done", true);
-    });
-
-    it("put concurrently and discover one", async () => {
-      const object = randomPutObject();
-
-      // Put a first one to get a URI
-      const putted = await graffiti.put<{}>(object, session);
-
-      const putPromises = Array(99)
-        .fill(0)
-        .map(() =>
-          graffiti.put<{}>(
+          await graffiti.patch(
             {
-              ...object,
-              url: putted.url,
+              allowed: [{ op: "add", path: "", value: [] }],
             },
+            putted,
             session,
-          ),
-        );
-      await Promise.all(putPromises);
+          );
+          const iterator2 = graffiti.discover(object.channels, {});
+          expect(await iterator2.next()).toHaveProperty("done", true);
 
-      const iterator = graffiti.discover(object.channels, {});
-      let tombstoneCount = 0;
-      let valueCount = 0;
-      for await (const result of iterator) {
-        assert(!result.error, "result has error");
-        if (result.tombstone) {
-          tombstoneCount++;
-        } else {
-          valueCount++;
-        }
-      }
-      expect(tombstoneCount).toBe(0);
-      expect(valueCount).toBe(1);
-    });
+          const iterator = continueStream<{}>(
+            graffiti,
+            returnValue.value,
+            continueType,
+          );
+          const value = await iterator.next();
+          assert(!value.done && !value.value.error, "value is done");
+          assert(value.value.tombstone, "value is not tombstone");
+          expect(value.value.object.url).toEqual(putted.url);
+          await expect(iterator.next()).resolves.toHaveProperty("done", true);
+        });
+
+        it("put concurrently and discover one", async () => {
+          const object = randomPutObject();
+
+          // Put a first one to get a URI
+          const putted = await graffiti.put<{}>(object, session);
+
+          const putPromises = Array(99)
+            .fill(0)
+            .map(() =>
+              graffiti.put<{}>(
+                {
+                  ...object,
+                  url: putted.url,
+                },
+                session,
+              ),
+            );
+          await Promise.all(putPromises);
+
+          const iterator = graffiti.discover(object.channels, {});
+          let tombstoneCount = 0;
+          let valueCount = 0;
+          for await (const result of iterator) {
+            assert(!result.error, "result has error");
+            if (result.tombstone) {
+              tombstoneCount++;
+            } else {
+              valueCount++;
+            }
+          }
+          expect(tombstoneCount).toBe(0);
+          expect(valueCount).toBe(1);
+        });
+      });
+    }
   });
 };

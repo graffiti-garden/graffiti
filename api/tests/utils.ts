@@ -7,6 +7,7 @@ import type {
   GraffitiObjectStreamReturn,
   GraffitiObjectStreamContinue,
   Graffiti,
+  GraffitiSession,
 } from "@graffiti-garden/api";
 
 export function randomString(): string {
@@ -46,10 +47,12 @@ export function continueStream<Schema extends JSONSchema>(
   graffiti: Pick<Graffiti, "continueObjectStream">,
   streamReturn: GraffitiObjectStreamReturn<Schema>,
   type: "cursor" | "continue",
+  session?: GraffitiSession | null,
 ): GraffitiObjectStreamContinue<Schema> {
   if (type === "cursor") {
     return graffiti.continueObjectStream(
       streamReturn.cursor,
+      session,
     ) as unknown as GraffitiObjectStreamContinue<Schema>;
   } else {
     return streamReturn.continue();

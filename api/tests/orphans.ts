@@ -7,8 +7,6 @@ import {
   continueStream,
 } from "./utils";
 
-const continueType = "continue";
-
 export const graffitiOrphanTests = (
   useGraffiti: () => Pick<
     Graffiti,
@@ -53,71 +51,78 @@ export const graffitiOrphanTests = (
       expect(numResults).toBe(1);
     });
 
-    it("replaced orphan, no longer", async () => {
-      const object = randomPutObject();
-      object.channels = [];
-      const putOrphan = await graffiti.put<{}>(object, session);
+    for (const continueType of ["continue", "cursor"] as const) {
+      describe(`continue orphans with ${continueType}`, () => {
+        it("replaced orphan, no longer", async () => {
+          const object = randomPutObject();
+          object.channels = [];
+          const putOrphan = await graffiti.put<{}>(object, session);
 
-      // Wait for the put to be processed
-      await new Promise((resolve) => setTimeout(resolve, 10));
+          // Wait for the put to be processed
+          await new Promise((resolve) => setTimeout(resolve, 10));
 
-      expect(Object.keys(object.value).length).toBeGreaterThanOrEqual(1);
-      expect(Object.keys(object.value)[0]).toBeTypeOf("string");
-      const iterator1 = graffiti.recoverOrphans<{}>(
-        {
-          properties: {
-            value: {
+          expect(Object.keys(object.value).length).toBeGreaterThanOrEqual(1);
+          expect(Object.keys(object.value)[0]).toBeTypeOf("string");
+          const iterator1 = graffiti.recoverOrphans<{}>(
+            {
               properties: {
-                [Object.keys(object.value)[0]]: {
-                  type: "string",
+                value: {
+                  properties: {
+                    [Object.keys(object.value)[0]]: {
+                      type: "string",
+                    },
+                  },
+                  required: [Object.keys(object.value)[0]],
                 },
               },
-              required: [Object.keys(object.value)[0]],
             },
-          },
-        },
-        session,
-      );
-      const value1 = await nextStreamValue<{}>(iterator1);
-      expect(value1.value).toEqual(object.value);
-      const returnValue = await iterator1.next();
-      assert(returnValue.done, "value2 is not done");
+            session,
+          );
+          const value1 = await nextStreamValue<{}>(iterator1);
+          expect(value1.value).toEqual(object.value);
+          const returnValue = await iterator1.next();
+          assert(returnValue.done, "value2 is not done");
 
-      const putNotOrphan = await graffiti.put<{}>(
-        {
-          ...putOrphan,
-          ...object,
-          channels: [randomString()],
-        },
-        session,
-      );
-      expect(putNotOrphan.url).toBe(putOrphan.url);
-      expect(putNotOrphan.lastModified).toBeGreaterThan(putOrphan.lastModified);
+          const putNotOrphan = await graffiti.put<{}>(
+            {
+              ...putOrphan,
+              ...object,
+              channels: [randomString()],
+            },
+            session,
+          );
+          expect(putNotOrphan.url).toBe(putOrphan.url);
+          expect(putNotOrphan.lastModified).toBeGreaterThan(
+            putOrphan.lastModified,
+          );
 
-      // The tombstone will not appear to a fresh iterator
-      const orphanIterator = graffiti.recoverOrphans({}, session);
-      let numResults = 0;
-      for await (const orphan of orphanIterator) {
-        if (orphan.error) continue;
-        if (orphan.object.url === putOrphan.url) {
-          numResults++;
-        }
-      }
-      expect(numResults).toBe(0);
+          // The tombstone will not appear to a fresh iterator
+          const orphanIterator = graffiti.recoverOrphans({}, session);
+          let numResults = 0;
+          for await (const orphan of orphanIterator) {
+            if (orphan.error) continue;
+            if (orphan.object.url === putOrphan.url) {
+              numResults++;
+            }
+          }
+          expect(numResults).toBe(0);
 
-      const iterator2 = continueStream<{}>(
-        graffiti,
-        returnValue.value,
-        continueType,
-      );
-      const value2 = await iterator2.next();
-      assert(
-        !value2.done && !value2.value.error,
-        "value2 is done or has error",
-      );
-      assert(value2.value.tombstone, "value2 is not tombstone");
-      expect(value2.value.object.url).toBe(putOrphan.url);
-      await expect(iterator2.next()).resolves.toHaveProperty("done", true);
-    });
+          const iterator2 = continueStream<{}>(
+            graffiti,
+            returnValue.value,
+            continueType,
+            session,
+          );
+          const value2 = await iterator2.next();
+          assert(
+            !value2.done && !value2.value.error,
+            "value2 is done or has error",
+          );
+          assert(value2.value.tombstone, "value2 is not tombstone");
+          expect(value2.value.object.url).toBe(putOrphan.url);
+          await expect(iterator2.next()).resolves.toHaveProperty("done", true);
+        });
+      });
+    }
   });
 };
