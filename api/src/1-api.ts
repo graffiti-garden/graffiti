@@ -341,12 +341,13 @@ export abstract class Graffiti {
    *
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
-   * The {@link GraffitiObjectStream} ends by returning a `continue`
-   * method and a `cursor` string, each of which can be be used to poll for new objects.
+   * The {@link GraffitiObjectStream} ends by returning a
+   * {@link GraffitiObjectStreamReturn.continue | `continue`} method and a
+   * {@link GraffitiObjectStreamReturn.cursor | `cursor`} string,
+   * each of which can be be used to poll for new objects.
    * The `continue` method preserves the type safety of the stream and the `cursor`
    * string can be serialized to continue the stream after an application is closed
    * and reopened.
-   * See the {@link continueObjectStream} method for more information.
    *
    * `discover` will not return objects that the {@link GraffitiObjectBase.actor | `actor`}
    * is not {@link GraffitiObjectBase.allowed | `allowed`} to access.
@@ -399,7 +400,8 @@ export abstract class Graffiti {
    *
    * Like {@link discover}, objects are returned asynchronously as they are discovered,
    * the stream will end once all leads have been exhausted, and the stream
-   * can be continued using the `continue` method or `cursor` string.
+   * can be continued using the {@link GraffitiObjectStreamReturn.continue | `continue`}
+   * method or {@link GraffitiObjectStreamReturn.cursor | `cursor`} string.
    *
    * @returns A stream of objects created by the querying {@link GraffitiObjectBase.actor | `actor`}
    * that do not belong to any {@link GraffitiObjectBase.channels | `channels`}
@@ -444,7 +446,8 @@ export abstract class Graffiti {
   ): GraffitiChannelStatsStream;
 
   /**
-   * Continues a {@link GraffitiObjectStream} from a given `cursor` string.
+   * Continues a {@link GraffitiObjectStream} from a given
+   * {@link GraffitiObjectStreamReturn.cursor | `cursor`} string.
    * The continuation will return new objects that have been created
    * that match the original stream, and also returns the
    * {@link GraffitiObjectBase.url | `url`}s of objects that
@@ -458,8 +461,9 @@ export abstract class Graffiti {
    * serialize the state of the stream and continue it later.
    * However this method loses any typing information that was
    * present in the original stream. For better type safety
-   * and when serializing is not necessary, use the `continue`
-   * method instead, returned along with the `cursor` at the
+   * and when serializing is not necessary, use the
+   * {@link GraffitiObjectStreamReturn.continue | `continue`} method
+   * instead, which is returned along with the `cursor` at the
    * end of the original stream.
    *
    * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
