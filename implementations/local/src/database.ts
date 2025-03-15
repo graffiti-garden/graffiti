@@ -711,6 +711,21 @@ export class GraffitiLocalDatabase
     return startTime - LAST_MODIFIED_BUFFER;
   }
 
+  protected discoverCursor(
+    args: Parameters<typeof Graffiti.prototype.discover<{}>>,
+    ifModifiedSince?: number,
+  ): string {
+    return (
+      "discover:" +
+      JSON.stringify({
+        channels: args[0],
+        schema: args[1],
+        actor: args[2]?.actor,
+        ifModifiedSince: ifModifiedSince,
+      })
+    );
+  }
+
   protected async *discoverContinue<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
     ifModifiedSince?: number,
@@ -723,7 +738,7 @@ export class GraffitiLocalDatabase
         const ifModifiedSince = result.value;
         return {
           continue: () => this.discoverContinue<Schema>(args, ifModifiedSince),
-          cursor: "",
+          cursor: this.discoverCursor(args, ifModifiedSince),
         };
       }
       yield result.value;
@@ -741,7 +756,7 @@ export class GraffitiLocalDatabase
           return {
             continue: () =>
               this_.discoverContinue<(typeof args)[1]>(args, result.value),
-            cursor: "",
+            cursor: this_.discoverCursor(args, result.value),
           };
         }
         // Make sure to filter out tombstones
@@ -751,7 +766,21 @@ export class GraffitiLocalDatabase
     })();
   };
 
-  protected async *recoverContinue<Schema extends JSONSchema>(
+  protected recoverOrphansCursor(
+    args: Parameters<typeof Graffiti.prototype.recoverOrphans<{}>>,
+    ifModifiedSince?: number,
+  ): string {
+    return (
+      "orphans:" +
+      JSON.stringify({
+        schema: args[0],
+        actor: args[1]?.actor,
+        ifModifiedSince,
+      })
+    );
+  }
+
+  protected async *recoverOrphansContinue<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>,
     ifModifiedSince?: number,
   ): GraffitiObjectStreamContinue<Schema> {
@@ -762,8 +791,9 @@ export class GraffitiLocalDatabase
       if (result.done) {
         const ifModifiedSince = result.value;
         return {
-          continue: () => this.recoverContinue<Schema>(args, ifModifiedSince),
-          cursor: "",
+          continue: () =>
+            this.recoverOrphansContinue<Schema>(args, ifModifiedSince),
+          cursor: this.recoverOrphansCursor(args, ifModifiedSince),
         };
       }
       yield result.value;
@@ -780,8 +810,11 @@ export class GraffitiLocalDatabase
         if (result.done) {
           return {
             continue: () =>
-              this_.recoverContinue<(typeof args)[0]>(args, result.value),
-            cursor: "",
+              this_.recoverOrphansContinue<(typeof args)[0]>(
+                args,
+                result.value,
+              ),
+            cursor: this_.recoverOrphansCursor(args, result.value),
           };
         }
         // Make sure to filter out tombstones
@@ -824,7 +857,34 @@ export class GraffitiLocalDatabase
     cursor,
     session,
   ) => {
-    // TODO: Implement this
-    throw new GraffitiErrorNotFound("Cursor not found");
+    if (cursor.startsWith("discover:")) {
+      const { channels, schema, actor, ifModifiedSince } = JSON.parse(
+        cursor.slice("discover:".length),
+      );
+      if (actor && actor !== session?.actor) {
+        throw new GraffitiErrorForbidden(
+          "Cannot continue a cursor for another actor",
+        );
+      }
+      return this.discoverContinue<{}>(
+        [channels, schema, session],
+        ifModifiedSince,
+      );
+    } else if (cursor.startsWith("orphans:")) {
+      const { schema, actor, ifModifiedSince } = JSON.parse(
+        cursor.slice("orphans:".length),
+      );
+      if (!session || actor !== session?.actor) {
+        throw new GraffitiErrorForbidden(
+          "Cannot continue a cursor for another actor",
+        );
+      }
+      return this.recoverOrphansContinue<{}>(
+        [schema, session],
+        ifModifiedSince,
+      );
+    } else {
+      throw new GraffitiErrorNotFound("Cursor not found");
+    }
   };
 }
