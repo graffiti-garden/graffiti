@@ -2,11 +2,15 @@ import type {
   Graffiti,
   JSONSchema,
   GraffitiObject,
+  GraffitiObjectStreamReturn,
+  GraffitiObjectStreamContinueEntry,
+  GraffitiObjectStream,
+  GraffitiObjectStreamContinue,
 } from "@graffiti-garden/api";
 
 export abstract class Poller<Schema extends JSONSchema> {
   abstract poll(
-    onObject: (object: GraffitiObject<Schema> | null) => void,
+    onEntry: (entry: GraffitiObjectStreamContinueEntry<Schema> | null) => void,
   ): Promise<void>;
   abstract clear(): void;
 }
@@ -17,15 +21,15 @@ export abstract class Poller<Schema extends JSONSchema> {
 export class GetPoller<Schema extends JSONSchema> implements Poller<Schema> {
   constructor(readonly getter: () => Promise<GraffitiObject<Schema>>) {}
 
-  poll: Poller<Schema>["poll"] = async (onObject) => {
+  poll: Poller<Schema>["poll"] = async (onEntry) => {
     let object: GraffitiObject<Schema>;
     try {
       object = await this.getter();
     } catch (e) {
-      onObject(null);
+      onEntry(null);
       return;
     }
-    onObject(object);
+    onEntry({ object });
   };
 
   clear() {}
@@ -37,101 +41,42 @@ export class GetPoller<Schema extends JSONSchema> implements Poller<Schema> {
  * entirely from scratch, but instead only polls the new results.
  */
 export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
-  bookmark:
-    | {
-        lastModified: number;
-        fullRepollBy: number;
-      }
-    | undefined;
-  iterator: ReturnType<typeof Graffiti.prototype.discover<Schema>> | undefined;
+  iterator: GraffitiObjectStreamContinue<Schema> | undefined;
 
-  constructor(
-    readonly schemaGetter: () => Schema,
-    readonly streamFactory: () => ReturnType<
-      typeof Graffiti.prototype.discover<Schema>
-    >,
-  ) {}
+  constructor(readonly streamFactory: () => GraffitiObjectStream<Schema>) {}
 
   clear() {
-    this.bookmark = undefined;
-    this.iterator?.return({ tombstoneRetention: 0 });
+    if (this.iterator) {
+      const iterator = this.iterator;
+      this.iterator.return({
+        continue: () => iterator,
+        cursor: "",
+      });
+    }
     this.iterator = undefined;
   }
 
-  poll: Poller<Schema>["poll"] = async (onObject) => {
-    const startOfPoll = new Date().getTime();
-
-    // Add a query for lastModified if it's not in the schema
-    const schemaRaw = this.schemaGetter();
-    let schema: JSONSchema & object =
-      typeof schemaRaw === "object" ? schemaRaw : {};
-    if (this.bookmark && this.bookmark.fullRepollBy > startOfPoll) {
-      const lastModifiedSchema = schema.properties?.lastModified;
-      schema = {
-        ...schema,
-        properties: {
-          ...schema.properties,
-          lastModified: {
-            minimum: this.bookmark.lastModified,
-            // if the schema already has a minimum
-            // it won't be overridden because
-            // the schema below takes precedence
-            ...(typeof lastModifiedSchema === "object"
-              ? lastModifiedSchema
-              : {}),
-          },
-        },
-      };
+  poll: Poller<Schema>["poll"] = async (onEntry) => {
+    if (!this.iterator) {
+      this.iterator = this.streamFactory();
     }
 
-    let myIterator: ReturnType<typeof Graffiti.prototype.discover<Schema>>;
-    try {
-      myIterator = this.streamFactory();
-    } catch (e) {
-      console.error(e);
-      return;
-    }
+    while (true) {
+      const result = await this.iterator.next();
 
-    // Claim the spot as the current iterator
-    this.iterator = myIterator;
+      if (result.done) {
+        if (result.value) {
+          this.iterator = result.value.continue();
+        }
+        break;
+      }
 
-    // Keep track of the latest lastModified value
-    // while streaming results
-    let myLastModified = this.bookmark?.lastModified;
-    let result = await myIterator.next();
-    while (!result.done) {
       if (result.value.error) {
         console.error(result.value.error);
-        result = await myIterator.next();
         continue;
       }
 
-      const object = result.value.value;
-      if (!myLastModified || object.lastModified > myLastModified) {
-        myLastModified = object.lastModified;
-      }
-
-      onObject(object);
-
-      result = await myIterator.next();
-    }
-
-    // Make sure we're still the current iterator
-    if (this.iterator !== myIterator) return;
-
-    // We've successfully polled all results
-    // without getting overridden
-    this.iterator = undefined;
-
-    // Only now do we update the cache parameters
-    // because the results may have appeared out
-    // of order
-    const { tombstoneRetention } = result.value;
-    if (myLastModified) {
-      this.bookmark = {
-        lastModified: myLastModified,
-        fullRepollBy: startOfPoll + tombstoneRetention,
-      };
+      onEntry(result.value);
     }
   };
 }

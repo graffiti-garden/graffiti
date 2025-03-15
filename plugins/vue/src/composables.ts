@@ -5,7 +5,7 @@ import type {
   GraffitiObject,
   GraffitiSession,
   JSONSchema,
-  GraffitiStream,
+  GraffitiObjectStreamContinueEntry,
 } from "@graffiti-garden/api";
 import { useGraffitiSynchronize, useGraffitiSession } from "./globals";
 import { GetPoller, Poller, StreamPoller } from "./pollers";
@@ -14,11 +14,14 @@ import { ArrayReducer, Reducer, SingletonReducer } from "./reducers";
 function makeComposable<Schema extends JSONSchema>(
   reducer: Reducer<Schema>,
   poller: Poller<Schema>,
-  synchronizeFactory: () => GraffitiStream<GraffitiObject<Schema>>,
+  synchronizeFactory: () => AsyncGenerator<
+    GraffitiObjectStreamContinueEntry<Schema>
+  >,
   toWatch: readonly (() => any)[],
 ) {
-  let synchronizeIterator: GraffitiStream<GraffitiObject<Schema>> | undefined =
-    undefined;
+  let synchronizeIterator:
+    | AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>>
+    | undefined;
   async function pollSynchronize() {
     synchronizeIterator = synchronizeFactory();
     for await (const result of synchronizeIterator) {
@@ -26,11 +29,11 @@ function makeComposable<Schema extends JSONSchema>(
         console.error(result.error);
         continue;
       }
-      reducer.onObject(result.value);
+      reducer.onEntry(result);
     }
   }
 
-  const poll = () => poller.poll(reducer.onObject.bind(reducer));
+  const poll = () => poller.poll(reducer.onEntry.bind(reducer));
 
   const isPolling = ref(false);
   watch(
@@ -41,7 +44,7 @@ function makeComposable<Schema extends JSONSchema>(
         return;
       }
 
-      synchronizeIterator?.return();
+      synchronizeIterator?.return(null);
       reducer.clear();
       poller.clear();
 
@@ -58,7 +61,7 @@ function makeComposable<Schema extends JSONSchema>(
       immediate: true,
     },
   );
-  onScopeDispose(() => synchronizeIterator?.return());
+  onScopeDispose(() => synchronizeIterator?.return(null));
 
   return { poll, isPolling };
 }
@@ -110,7 +113,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ): {
-  results: Ref<(GraffitiObject<Schema> & { tombstone: false })[]>;
+  results: Ref<GraffitiObject<Schema>[]>;
   poll: () => Promise<void>;
   isPolling: Ref<boolean>;
 } {
@@ -127,7 +130,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   const streamFactory = () => graffiti.discover(...callGetters(argGetters));
 
   const reducer = new ArrayReducer<Schema>(graffiti);
-  const poller = new StreamPoller<Schema>(schemaGetter, streamFactory);
+  const poller = new StreamPoller<Schema>(streamFactory);
 
   const { poll, isPolling } = makeComposable<Schema>(
     reducer,
@@ -249,7 +252,7 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
   schema: MaybeRefOrGetter<Schema>,
   session: MaybeRefOrGetter<GraffitiSession>,
 ): {
-  results: Ref<(GraffitiObject<Schema> & { tombstone: false })[]>;
+  results: Ref<GraffitiObject<Schema>[]>;
   poll: () => Promise<void>;
   isPolling: Ref<boolean>;
 } {
@@ -265,7 +268,7 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
   const reducer = new ArrayReducer<Schema>(graffiti);
   const streamFactory = () =>
     graffiti.recoverOrphans<Schema>(...callGetters(argGetters));
-  const poller = new StreamPoller<Schema>(schemaGetter, streamFactory);
+  const poller = new StreamPoller<Schema>(streamFactory);
 
   const { poll, isPolling } = makeComposable<Schema>(
     reducer,
