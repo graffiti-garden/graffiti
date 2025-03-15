@@ -81,7 +81,7 @@
     "vitest": "^3.0.5"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.6.0",
+    "@graffiti-garden/api": "^0.6.2",
     "@types/pouchdb": "^6.4.2",
     "ajv": "^8.17.1",
     "fast-json-patch": "^3.1.1",
