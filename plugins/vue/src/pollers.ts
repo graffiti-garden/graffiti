@@ -42,6 +42,7 @@ export class GetPoller<Schema extends JSONSchema> implements Poller<Schema> {
  */
 export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
   iterator: GraffitiObjectStreamContinue<Schema> | undefined;
+  continue: (() => GraffitiObjectStreamContinue<Schema>) | undefined;
 
   constructor(readonly streamFactory: () => GraffitiObjectStream<Schema>) {}
 
@@ -54,11 +55,16 @@ export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
       });
     }
     this.iterator = undefined;
+    this.continue = undefined;
   }
 
   poll: Poller<Schema>["poll"] = async (onEntry) => {
     if (!this.iterator) {
-      this.iterator = this.streamFactory();
+      if (this.continue) {
+        this.iterator = this.continue();
+      } else {
+        this.iterator = this.streamFactory();
+      }
     }
 
     while (true) {
@@ -66,7 +72,8 @@ export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
 
       if (result.done) {
         if (result.value) {
-          this.iterator = result.value.continue();
+          this.iterator = undefined;
+          this.continue = result.value.continue;
         }
         break;
       }

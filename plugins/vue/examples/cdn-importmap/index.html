@@ -148,7 +148,7 @@
                 <input type="submit" value="Post" />
             </form>
             <graffiti-discover
-                v-slot="{ results: posts, isPolling }"
+                v-slot="{ results: posts, poll, isPolling }"
                 :channels="[ channel ]"
                 :schema="{
                     properties: {
@@ -161,6 +161,7 @@
                     }
                 }"
             >
+                <button @click="poll()">Refresh Posts</button>
                 <ul>
                     <li v-for="post in posts" :key="post.url">
                         <div>{{ post.actor }}</div>
