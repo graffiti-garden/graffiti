@@ -2,14 +2,23 @@ import { it, expect, describe, assert, beforeAll } from "vitest";
 import type {
   Graffiti,
   GraffitiObjectBase,
-  GraffitiObjectStreamEntry,
   GraffitiSession,
   JSONSchema,
 } from "@graffiti-garden/api";
-import { randomString, nextStreamValue, randomPutObject } from "./utils";
+import {
+  randomString,
+  nextStreamValue,
+  randomPutObject,
+  continueStream,
+} from "./utils";
+
+const continueType = "continue";
 
 export const graffitiDiscoverTests = (
-  useGraffiti: () => Pick<Graffiti, "discover" | "put" | "delete" | "patch">,
+  useGraffiti: () => Pick<
+    Graffiti,
+    "discover" | "put" | "delete" | "patch" | "continueObjectStream"
+  >,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
@@ -485,7 +494,11 @@ export const graffitiDiscoverTests = (
       const iterator = graffiti.discover(object.channels, {});
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
 
-      const tombIterator = returnValue.value.continue();
+      const tombIterator = continueStream<{}>(
+        graffiti,
+        returnValue.value,
+        continueType,
+      );
       const value = await tombIterator.next();
       assert(!value.done && !value.value.error, "value is done");
       assert(value.value.tombstone, "value is not tombstone");
@@ -514,9 +527,13 @@ export const graffitiDiscoverTests = (
           session,
         );
 
-        const iterator1 = graffiti.discover(object1.channels, {});
+        const iterator1 = graffiti.discover<{}>(object1.channels, {});
         const iterator2 = graffiti.discover<{}>(object2.channels, {});
-        const tombIterator = returnValue.value.continue();
+        const tombIterator = continueStream<{}>(
+          graffiti,
+          returnValue.value,
+          continueType,
+        );
 
         if (putted.lastModified === replaced.lastModified) {
           const value1 = await iterator1.next();
@@ -560,7 +577,11 @@ export const graffitiDiscoverTests = (
           session,
         );
 
-        const tombIterator2 = value5.value.continue();
+        const tombIterator2 = continueStream<{}>(
+          graffiti,
+          value5.value,
+          continueType,
+        );
 
         let result:
           | {
@@ -620,7 +641,11 @@ export const graffitiDiscoverTests = (
       const iterator2 = graffiti.discover(object.channels, {});
       expect(await iterator2.next()).toHaveProperty("done", true);
 
-      const iterator = returnValue.value.continue();
+      const iterator = continueStream<{}>(
+        graffiti,
+        returnValue.value,
+        continueType,
+      );
       const value = await iterator.next();
       assert(!value.done && !value.value.error, "value is done");
       assert(value.value.tombstone, "value is not tombstone");

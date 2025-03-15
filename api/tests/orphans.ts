@@ -1,11 +1,18 @@
 import { it, expect, describe, assert, beforeAll } from "vitest";
 import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
-import { randomPutObject, randomString, nextStreamValue } from "./utils";
+import {
+  randomPutObject,
+  randomString,
+  nextStreamValue,
+  continueStream,
+} from "./utils";
+
+const continueType = "continue";
 
 export const graffitiOrphanTests = (
   useGraffiti: () => Pick<
     Graffiti,
-    "recoverOrphans" | "put" | "delete" | "patch"
+    "recoverOrphans" | "put" | "delete" | "patch" | "continueObjectStream"
   >,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
@@ -98,7 +105,11 @@ export const graffitiOrphanTests = (
       }
       expect(numResults).toBe(0);
 
-      const iterator2 = returnValue.value.continue();
+      const iterator2 = continueStream<{}>(
+        graffiti,
+        returnValue.value,
+        continueType,
+      );
       const value2 = await iterator2.next();
       assert(
         !value2.done && !value2.value.error,
