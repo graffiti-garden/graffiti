@@ -169,8 +169,8 @@ export class GraffitiLocalDatabase
   protected get applyPatch() {
     if (!this.applyPatch_) {
       this.applyPatch_ = (async () => {
-        const { applyPatch } = await import("fast-json-patch");
-        return applyPatch;
+        const imported = await import("fast-json-patch");
+        return imported.applyPatch || imported.default.applyPatch;
       })();
     }
     return this.applyPatch_;
