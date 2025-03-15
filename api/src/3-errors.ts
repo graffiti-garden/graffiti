@@ -54,18 +54,18 @@ export class GraffitiErrorPatchError extends Error {
   }
 }
 
-export class GraffitiErrorInvalidUri extends Error {
+export class GraffitiErrorInvalidUrl extends Error {
   constructor(message?: string) {
     super(message);
-    this.name = "GraffitiErrorInvalidUri";
-    Object.setPrototypeOf(this, GraffitiErrorInvalidUri.prototype);
+    this.name = "GraffitiErrorInvalidUrl";
+    Object.setPrototypeOf(this, GraffitiErrorInvalidUrl.prototype);
   }
 }
 
-export class GraffitiErrorUnrecognizedUriScheme extends Error {
+export class GraffitiErrorUnrecognizedUrlScheme extends Error {
   constructor(message?: string) {
     super(message);
     this.name = "GraffitiErrorUnrecognizedUriScheme";
-    Object.setPrototypeOf(this, GraffitiErrorUnrecognizedUriScheme.prototype);
+    Object.setPrototypeOf(this, GraffitiErrorUnrecognizedUrlScheme.prototype);
   }
 }
