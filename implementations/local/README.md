@@ -72,4 +72,7 @@ import * as GraffitiUtilities from "@graffiti-garden/implementation-local/utilit
 
 ## TODO
 
-- Remove tombstones according to the `tombstoneRetention` setting.
+- Permanently delete content after it has been deleted for a certain amount of time
+- Obscure cursors and make them only usable once.
+  - They should expire, too, if they have been around longer than the delete timer.
+- Fix the LAST_MODIFIED_BUFFER hack.
