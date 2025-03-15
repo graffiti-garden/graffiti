@@ -47,16 +47,3 @@ export class GraffitiLocal extends Graffiti {
       graffitiPouchDbBase.continueObjectStream.bind(graffitiPouchDbBase);
   }
 }
-
-function myFunction<T extends boolean>(
-  flag: T,
-): T extends true ? string : number {
-  if (!flag) {
-    return "Hello" as T extends true ? string : number;
-  } else {
-    return 42 as T extends true ? string : number;
-  }
-}
-// Usage
-const a = myFunction(false); // Type is number
-const b = myFunction(true); // Type is string
