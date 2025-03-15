@@ -212,7 +212,8 @@ export class GraffitiSynchronize extends Graffiti {
    * streams appropriate changes to provide a responsive and consistent user experience.
    *
    * Unlike {@link get}, which returns a single result, this method continuously
-   * listens for changes which are output as an asynchronous {@link GraffitiStream}.
+   * listens for changes which are output as an asynchronous stream, similar
+   * to {@link discover}.
    *
    * @group Synchronize Methods
    */
