@@ -68,6 +68,11 @@ export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
     }
 
     while (true) {
+      // Check if the iterator has been cancelled.
+      if (!this.iterator) {
+        break;
+      }
+
       const result = await this.iterator.next();
 
       if (result.done) {
