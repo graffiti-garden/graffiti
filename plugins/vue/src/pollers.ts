@@ -1,11 +1,12 @@
-import type {
-  Graffiti,
-  JSONSchema,
-  GraffitiObject,
-  GraffitiObjectStreamReturn,
-  GraffitiObjectStreamContinueEntry,
-  GraffitiObjectStream,
-  GraffitiObjectStreamContinue,
+import {
+  type Graffiti,
+  type JSONSchema,
+  type GraffitiObject,
+  type GraffitiObjectStreamReturn,
+  type GraffitiObjectStreamContinueEntry,
+  type GraffitiObjectStream,
+  type GraffitiObjectStreamContinue,
+  GraffitiErrorNotFound,
 } from "@graffiti-garden/api";
 
 export abstract class Poller<Schema extends JSONSchema> {
@@ -23,13 +24,18 @@ export class GetPoller<Schema extends JSONSchema> implements Poller<Schema> {
 
   poll: Poller<Schema>["poll"] = async (onEntry) => {
     let object: GraffitiObject<Schema>;
+    const myGetter = this.getter;
     try {
-      object = await this.getter();
+      object = await myGetter();
     } catch (e) {
-      onEntry(null);
+      if (this.getter === myGetter) {
+        onEntry(null);
+      }
       return;
     }
-    onEntry({ object });
+    if (this.getter === myGetter) {
+      onEntry({ object });
+    }
   };
 
   clear() {}
@@ -73,7 +79,14 @@ export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
         break;
       }
 
-      const result = await this.iterator.next();
+      const myIterator: GraffitiObjectStreamContinue<Schema> = this.iterator;
+
+      const result = await myIterator.next();
+
+      // Check again if it was cancelled.
+      if (myIterator !== this.iterator) {
+        continue;
+      }
 
       if (result.done) {
         if (result.value) {
