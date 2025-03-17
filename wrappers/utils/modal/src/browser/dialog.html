@@ -1,5 +1,5 @@
 <header>
-    <button id="graffiti-login-close">Close</button>
+    <button id="graffiti-login-close" class="secondary">Close</button>
 </header>
 
 <main id="graffiti-login-main"></main>
@@ -7,42 +7,28 @@
 <template id="graffiti-login-welcome">
     <h1>
         <a target="_blank" href="https://graffiti.garden">
-            Welcome to Graffiti!
+            Graffiti Application Login
         </a>
     </h1>
 
-    <p>
-        <a target="_blank" href="https://graffiti.garden"> Graffiti</a> is a
-        system that connects different social media applications so that you can
-        seamlessly migrate between them without losing your data or
-        relationships. With a little bit of web programming, you can also modify
-        existing Graffiti applications or create your own.
-    </p>
-
-    <p>
-        If you just want to try Graffiti out, choose "Log In Locally". You won't
-        need to create an account but any data you create will only be visible
-        to you and stored locally in the browser.
-    </p>
-
-    <p>
-        Alternatively, you can log in with any Solid OIDC provider, a portable
-        identity that you can use across different applications.
-    </p>
-
     <form>
-        <button id="graffiti-login-local-button">Log In Locally</button>
-        <button id="graffiti-login-solid-button">Log In with Solid OIDC</button>
+        <button id="graffiti-login-solid-button">Log In with Solid</button>
+        <button id="graffiti-login-local-button">Try Without an Account</button>
     </form>
+
+    <p>
+        This application runs on
+        <a target="_blank" href="https://graffiti.garden"> Graffiti</a>.
+    </p>
 </template>
 
 <template id="graffiti-login-local">
-    <h1>Graffiti Local Login</h1>
+    <h1>Trial Login</h1>
 
     <p>
-        You've chosen to log in locally. This means you can choose any username
-        you want, but only you will be able to see your posts. If you want
-        others to see your posts, please
+        With a trial account,
+        <strong>only you will be able to see your posts</strong>. If you want
+        others to see your posts,
         <a id="graffiti-login-solid-button">log in with Solid</a> instead.
     </p>
 
@@ -56,25 +42,22 @@
         />
         <input type="submit" value="Log In" />
     </form>
+
+    <p>
+        This application runs on
+        <a target="_blank" href="https://graffiti.garden"> Graffiti</a>.
+    </p>
 </template>
 
 <template id="graffiti-login-solid">
-    <h1>Graffiti Solid Login</h1>
-
-    <p>
-        You've chosen to log in with Solid. If you don't already have a Solid
-        identity, you can sign up with any of the providers listed below.
-    </p>
-
-    <p>
-        Alternatively, if you don't want to create an account right now, you can
-        try out the application by
-        <a id="graffiti-login-local-button">logging in locally</a>.
-    </p>
+    <h1>Solid Login</h1>
 
     <form id="graffiti-login-solid-form">
         <label for="graffiti-login-solid-issuer"
-            >Choose an Identity Provider:</label
+            >Choose a
+            <a target="_blank" href="https://solidproject.org/users/get-a-pod">
+                Solid Identity Provider</a
+            >:</label
         >
         <input
             type="text"
@@ -82,9 +65,11 @@
             id="graffiti-login-solid-issuer"
             name="solid-issuer"
             placeholder="https://example.com"
+            value="https://login.inrupt.com"
         />
 
         <datalist id="graffiti-login-solid-issuers">
+            <option value="https://login.inrupt.com"></option>
             <option value="https://solidcommunity.net"></option>
             <option value="https://solidweb.org"></option>
             <option value="https://solidweb.me"></option>
@@ -96,4 +81,13 @@
 
         <input type="submit" value="Log In" />
     </form>
+    <p>
+        Don't want to sign up right now?
+        <a id="graffiti-login-local-button">Try without an account</a>.
+    </p>
+
+    <p>
+        This application runs on
+        <a target="_blank" href="https://graffiti.garden"> Graffiti</a>.
+    </p>
 </template>
