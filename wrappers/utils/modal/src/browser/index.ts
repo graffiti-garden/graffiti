@@ -247,22 +247,26 @@ export class GraffitiSolidOIDCSessionManager
   }
 
   protected addLocalLoginButton() {
-    const localLoginButton = this.dialog.querySelector(
+    const localLoginButtons = this.dialog.querySelectorAll(
       "#graffiti-login-local-button",
-    ) as HTMLButtonElement;
-    localLoginButton.addEventListener("click", (evt) => {
-      evt.preventDefault();
-      this.onLocalLogin();
+    );
+    localLoginButtons.forEach((localLoginButton) => {
+      localLoginButton.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        this.onLocalLogin();
+      });
     });
   }
 
   protected addSolidLoginButton() {
-    const solidLoginButton = this.dialog.querySelector(
+    const solidLoginButtons = this.dialog.querySelectorAll(
       "#graffiti-login-solid-button",
-    ) as HTMLButtonElement;
-    solidLoginButton.addEventListener("click", (evt) => {
-      evt.preventDefault();
-      this.onSolidLogin();
+    );
+    solidLoginButtons.forEach((solidLoginButton) => {
+      solidLoginButton.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        this.onSolidLogin();
+      });
     });
   }
 
@@ -298,8 +302,9 @@ export class GraffitiSolidOIDCSessionManager
     const input = this.dialog.querySelector(
       "#graffiti-login-local-actor",
     ) as HTMLInputElement;
+    input.addEventListener("focus", () => input.select());
+    input.value = proposedActor ?? "test-user";
     input.focus();
-    input.value = proposedActor ?? "";
   }
 
   protected async onSolidLogin() {
@@ -309,6 +314,9 @@ export class GraffitiSolidOIDCSessionManager
     const form = this.dialog.querySelector(
       "#graffiti-login-solid-form",
     ) as HTMLFormElement;
+    const text = form.querySelector("input[type=text]") as HTMLInputElement;
+    text.addEventListener("focus", () => text.select());
+    text.focus();
     form.addEventListener("submit", async (evt) => {
       evt.preventDefault();
 
