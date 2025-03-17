@@ -11,7 +11,9 @@ import {
 
 export abstract class Poller<Schema extends JSONSchema> {
   abstract poll(
-    onEntry: (entry: GraffitiObjectStreamContinueEntry<Schema> | null) => void,
+    onEntry: (
+      entry: GraffitiObjectStreamContinueEntry<Schema> | null | "clear",
+    ) => void,
   ): Promise<void>;
   abstract clear(): void;
 }
@@ -67,7 +69,17 @@ export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
   poll: Poller<Schema>["poll"] = async (onEntry) => {
     if (!this.iterator) {
       if (this.continue) {
-        this.iterator = this.continue();
+        try {
+          this.iterator = this.continue();
+        } catch (e) {
+          // The cursor has expired, we need to start from scratch.
+          if (e instanceof GraffitiErrorNotFound) {
+            onEntry("clear");
+            this.iterator = this.streamFactory();
+          } else {
+            throw e;
+          }
+        }
       } else {
         this.iterator = this.streamFactory();
       }
