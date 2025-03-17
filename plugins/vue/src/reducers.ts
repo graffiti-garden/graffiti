@@ -10,7 +10,7 @@ import type {
 export abstract class Reducer<Schema extends JSONSchema> {
   abstract clear(): void;
   abstract onEntry(
-    entry: GraffitiObjectStreamContinueEntry<Schema> | null,
+    entry: GraffitiObjectStreamContinueEntry<Schema> | null | "clear",
   ): void;
 }
 
@@ -54,7 +54,11 @@ export class SingletonReducer<Schema extends JSONSchema>
     this.entry.value = undefined;
   }
 
-  onEntry(entry: GraffitiObjectStreamContinueEntry<Schema> | null) {
+  onEntry(entry: GraffitiObjectStreamContinueEntry<Schema> | null | "clear") {
+    if (entry === "clear") {
+      this.clear();
+      return;
+    }
     if (!entry || isEntryNewer<Schema>(entry, this.entry.value)) {
       this.entry.value = entry;
     }
@@ -96,8 +100,12 @@ export class ArrayReducer<Schema extends JSONSchema>
     }, []);
   }
 
-  onEntry(entry: GraffitiObjectStreamContinueEntry<Schema> | null) {
+  onEntry(entry: GraffitiObjectStreamContinueEntry<Schema> | null | "clear") {
     if (!entry) return;
+    if (entry === "clear") {
+      this.clear();
+      return;
+    }
     const existing = this.resultsRaw.get(entry.object.url);
     if (!isEntryNewer<Schema>(entry, existing)) return;
     this.resultsRaw.set(entry.object.url, entry);
