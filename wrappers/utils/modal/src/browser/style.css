@@ -61,6 +61,14 @@
         margin: 0;
     }
 
+    ::selection {
+        background: rgba(202, 122, 204, 0.5);
+    }
+
+    :focus {
+        outline: 2px solid var(--front);
+    }
+
     header {
         width: 100%;
         display: flex;
@@ -105,9 +113,8 @@
         color: inherit;
     }
 
-    button,
-    :is(p, ul) a,
-    input[type="submit"] {
+    button.secondary,
+    a {
         color: var(--emph);
     }
 
@@ -124,8 +131,6 @@
         padding-top: 0.5rem;
         padding-bottom: 0.5rem;
         transition: 0.1s;
-        white-space: nowrap;
-        overflow: hidden;
         text-overflow: ellipsis;
         background: none;
         line-height: 1.2rem;
@@ -191,8 +196,9 @@
         color: var(--front);
     }
 
-    p a:hover {
+    a:hover {
         text-decoration: underline;
+        cursor: pointer;
     }
 
     form {
@@ -209,13 +215,14 @@
         border: none;
     }
 
-    :is(button, input[type="submit"]).graffiti-login-highlight {
+    :is(button, input[type="submit"]):not(.secondary) {
         background: var(--hover);
         color: var(--front);
     }
 
-    :is(button, input[type="submit"]).graffiti-login-highlight:hover {
+    :is(button, input[type="submit"]):not(.secondary):hover {
         background: var(--emph);
+        color: white;
     }
 
     h3 {
