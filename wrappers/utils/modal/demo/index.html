@@ -2,7 +2,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Graffiti Login</title>
+    <title>Graffiti Popup</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
         /* Try to break the shadow DOM */
@@ -16,65 +16,32 @@
 </head>
 
 <body>
-    <h1>Graffiti Login</h1>
-    <button id="toggle-login-button">Loading...</button>
-    <span id="display-actor"></span>
+    <h1>Graffiti Popup</h1>
+    <button id="open">Open</button>
 
     <script type="module">
-        import { GraffitiSolidOIDCSessionManager } from "../dist/browser/esm/index.js";
-        let session = undefined;
-        window.sessionManager = new GraffitiSolidOIDCSessionManager();
+        import { GraffitiModal } from "../dist/esm/index.js";
 
-        function onLogout(event) {
-            if (event && event.detail.error) {
-                return alert(
-                    `Error logging out with actor ${event.detail.actor}: ${event.detail.error.message}`,
-                );
-            }
-            const button = document.querySelector("#toggle-login-button");
-            button.onclick = async () => {
-                button.innerText = "Logging in...";
-                await sessionManager.login();
-                button.innerText = "Login";
-            };
-            button.innerText = "Login";
-            const span = document.querySelector("#display-actor");
-            span.innerText = "";
-        }
+        const popup = new GraffitiModal({
+            useTemplateHTML: () => {
+                const template = document.createElement("template");
+                template.id = "basic-template";
+                template.innerHTML = `This is a template`;
+                return template.outerHTML;
+            },
+            onClose: () => {
+                console.log("Popup closed");
+            },
+        });
 
-        function onLogin(event) {
-            if (event.detail.error) {
-                return alert(`Error logging in: ${event.detail.error.message}`);
-            }
-            session = event.detail.session;
-            const button = document.querySelector("#toggle-login-button");
-            button.innerText = "Logout";
-            button.onclick = () => sessionManager.logout(session);
-            const span = document.querySelector("#display-actor");
-            span.innerText = "Your Actor ID is: " + session.actor;
-        }
-
-        function onSessionInitialized(event) {
-            if (event.detail?.error) {
-                return alert(
-                    `Error initializing session: ${event.detail.error.message}`,
-                );
-            }
-            const href = event.detail?.href;
-            if (href) {
-                alert("Session restored, redirect back to: " + href);
-            }
-            const button = document.querySelector("#toggle-login-button");
-            if (button.innerText === "Loading...") {
-                onLogout();
-            }
-        }
-
-        sessionManager.sessionEvents.addEventListener("login", onLogin);
-        sessionManager.sessionEvents.addEventListener("logout", onLogout);
-        sessionManager.sessionEvents.addEventListener(
-            "initialized",
-            onSessionInitialized,
-        );
+        const openButton = document.querySelector("#open");
+        openButton.addEventListener("click", async () => {
+            openButton.disabled = true;
+            openButton.innerHTML = "Opening...";
+            await popup.displayTemplate("basic-template");
+            popup.open();
+            openButton.disabled = false;
+            openButton.innerHTML = "Open";
+        });
     </script>
 </body>

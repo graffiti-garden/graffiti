@@ -9,7 +9,7 @@
         U+FEFF, U+FFFD;
 }
 
-.graffiti-login {
+.graffiti-modal {
     --back: rgb(26, 26, 26, 0.7);
     --halfback: rgba(80, 80, 80, 0.7);
     --halfback2: rgba(26, 26, 26, 0.7);
@@ -249,17 +249,17 @@
     }
 }
 
-.graffiti-login[open] {
+.graffiti-modal[open] {
     pointer-events: inherit;
     opacity: 1;
 }
 
-.graffiti-login::backdrop {
+.graffiti-modal::backdrop {
     background-color: black;
     opacity: 0.5;
 }
 
-.graffiti-login::before {
+.graffiti-modal::before {
     content: "";
     position: fixed;
     left: 0;
