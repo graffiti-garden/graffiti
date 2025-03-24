@@ -1,40 +1,33 @@
-# Graffiti Popup
+# Graffiti Modal
 
-This implements the login and logout methods of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
-using [Solid OIDC](https://solid.github.io/solid-oidc/).
-
-In the browser, when an application calls `graffiti.login()`, a dialog opens up that allows the user to log in either
-locally (for demoing/testing) or with a Solid OIDC provider.
-The `actor` IDs produced from Solid login are webId URLs that start with `http`,
-while `actor` IDs produced from local login will not start with `http`.
-
-The node.js interface is not currently implemented and just
-returns an instance of
-[`GraffitiLocalSessionManager`](https://github.com/graffiti-garden/implementation-local/blob/main/src/session-manager.ts),
-but at some point it will be extended to use
-[@inrupt/solid-client-authn-node](https://docs.inrupt.com/developer-tools/javascript/client-libraries/tutorial/authenticate-nodejs-web-server/).
+A styling modal for user input within Graffiti implementations. Used for
+login popups and choosing servers. For example, see the
+[Solid session manager](https://github.com/graffiti-garden/solid-oidc-session-manager/)
 
 ## Usage
 
 Install the package with:
 
 ```
-npm install @graffiti-garden/solid-oidc-session-manager
+npm install @graffiti-garden/modal
 ```
 
 Then use it in your application as follows:
 
 ```typescript
-import { GraffitiSolidOIDCSessionManager } from "@graffiti-garden/solid-oidc-session-manager";
+import { GraffitiModal } from "@graffiti-garden/modal";
 
-const sessionManager = new GraffitiSolidOIDCSessionManager();
-
-sessionManager.sessionEvents.addEventListener("login", (event) => {
-  console.log("Logged in as", event.detail.actor);
+const modal = new GraffitiModal({
+  useTemplateHTML: import("./templates.html").then((module) => module.default),
+  onClose() {
+    console.log("Modal closed");
+  },
 });
 
-// Log in, in response to a user action
-button.onclick = () => sessionManager.login()
+button.addEventListener("click", () => {
+  modal.displayTemplate("my-template"); // The id of a template in the HTML
+  modal.open();
+});
 ```
 
 See the [demo](./demo/index.html) for a full example.
