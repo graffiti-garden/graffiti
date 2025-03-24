@@ -37,7 +37,7 @@ export class GraffitiModal {
 
   protected get templates() {
     if (!this.templates_) {
-      this.main_; // Ensure main is loaded
+      this.main_; // Start loading main, too
       this.templates_ = new Promise<string>(async (r) =>
         r(await this.useTemplateHTML()),
       ).then((html) => {
@@ -56,7 +56,7 @@ export class GraffitiModal {
 
   protected get main() {
     if (!this.main_) {
-      this.templates_; // Ensure templates are loaded
+      this.templates_; // Start loading templates, too
       this.main_ = Promise.all([
         import("./style.css"),
         import("./graffiti.webp"),
