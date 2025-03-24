@@ -2,7 +2,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Graffiti Popup</title>
+    <title>Graffiti Modal Demo</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
         /* Try to break the shadow DOM */
@@ -16,21 +16,21 @@
 </head>
 
 <body>
-    <h1>Graffiti Popup</h1>
+    <h1>Graffiti Modal Demo</h1>
     <button id="open">Open</button>
 
     <script type="module">
         import { GraffitiModal } from "../dist/esm/index.js";
 
-        const popup = new GraffitiModal({
+        const modal = new GraffitiModal({
             useTemplateHTML: () => {
                 const template = document.createElement("template");
-                template.id = "basic-template";
+                template.id = "my-template";
                 template.innerHTML = `This is a template`;
                 return template.outerHTML;
             },
             onClose: () => {
-                console.log("Popup closed");
+                console.log("Modal closed");
             },
         });
 
@@ -38,8 +38,8 @@
         openButton.addEventListener("click", async () => {
             openButton.disabled = true;
             openButton.innerHTML = "Opening...";
-            await popup.displayTemplate("basic-template");
-            popup.open();
+            await modal.displayTemplate("my-template");
+            modal.open();
             openButton.disabled = false;
             openButton.innerHTML = "Open";
         });
