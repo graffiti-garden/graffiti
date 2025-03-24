@@ -1,22 +1,20 @@
 {
-  "name": "@graffiti-garden/solid-oidc-session-manager",
-  "version": "0.1.6",
-  "description": "An implementation of the Graffiti API's login functionality using Solid OIDC",
-  "types": "./dist/browser/index.d.ts",
-  "browser": "./dist/browser/esm/index.js",
-  "main": "./dist/node/cjs/index.js",
-  "module": "./dist/node/esm/index.js",
+  "name": "@graffiti-garden/modal",
+  "version": "0.1.0",
+  "description": "A flexible modal component for Graffiti implementations",
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/browser/index.d.ts",
-        "node": "./dist/node/esm/index.js",
-        "default": "./dist/browser/esm/index.js"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.js"
       },
       "require": {
-        "types": "./dist/node/index.d.ts",
-        "node": "./dist/node/cjs/index.js",
-        "default": "./dist/browser/cjs/index.js"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.js"
       }
     }
   },
@@ -36,14 +34,12 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/graffiti-garden/solid-oidc-session-manager.git"
+    "url": "git+https://github.com/graffiti-garden/modal.git"
   },
   "bugs": {
-    "url": "https://github.com/graffiti-garden/solid-oidc-session-manager/issues"
+    "url": "https://github.com/graffiti-garden/modal/issues"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.4.3",
-    "@graffiti-garden/implementation-local": "^0.4.1",
     "@inrupt/solid-client-authn-browser": "^2.3.0"
   },
   "devDependencies": {
