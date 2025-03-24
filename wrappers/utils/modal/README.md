@@ -1,4 +1,4 @@
-# Graffiti Solid OIDC Session Manager
+# Graffiti Popup
 
 This implements the login and logout methods of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
 using [Solid OIDC](https://solid.github.io/solid-oidc/).
