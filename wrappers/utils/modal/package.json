@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/modal",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": " A stylish modal for user input within Graffiti implementations.",
   "types": "./dist/index.d.ts",
   "browser": "./dist/esm/index.js",
