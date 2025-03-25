@@ -12,9 +12,6 @@ for (const format of ["esm", "cjs"] as const) {
     outdir: `dist/browser/${format}`,
     loader: {
       ".html": "text",
-      ".css": "text",
-      ".webp": "dataurl",
-      ".woff2": "dataurl",
     },
   });
 
