@@ -4,14 +4,14 @@ export class GraffitiModal {
   protected main_: Promise<HTMLElement> | undefined;
   protected useTemplateHTML: () => Promise<string> | string;
   protected templates_: Promise<Map<string, HTMLTemplateElement>> | undefined;
-  protected onClose?: () => any;
+  protected onManualClose?: () => any;
 
   constructor(options: {
     useTemplateHTML: () => Promise<string> | string;
-    onClose?: () => any;
+    onManualClose?: () => any;
   }) {
     this.useTemplateHTML = options.useTemplateHTML;
-    this.onClose = options.onClose;
+    this.onManualClose = options.onManualClose;
 
     this.dialog.className = "graffiti-modal";
 
@@ -26,6 +26,7 @@ export class GraffitiModal {
         e.clientX > rect.left + rect.width
       ) {
         this.close();
+        this.onManualClose?.();
       }
     });
 
@@ -66,7 +67,10 @@ export class GraffitiModal {
         const closeButton = document.createElement("button");
         closeButton.className = "secondary";
         closeButton.textContent = "Close";
-        closeButton?.addEventListener("click", () => this.close());
+        closeButton?.addEventListener("click", () => {
+          this.close();
+          this.onManualClose?.();
+        });
         header.appendChild(closeButton);
 
         const main = document.createElement("main");
@@ -88,25 +92,25 @@ export class GraffitiModal {
     return this.main_;
   }
 
-  protected async open() {
+  async open() {
     await this.main;
     this.dialog.showModal();
     this.dialog.focus();
   }
 
-  protected close() {
+  close() {
     this.dialog.close();
-    this.onClose?.();
   }
 
-  protected async displayTemplate(templateId: string) {
-    (await this.main).innerHTML = "";
+  async displayTemplate(templateId: string) {
+    const main = await this.main;
+    main.innerHTML = "";
     const template = (await this.templates).get(templateId);
     if (!template) {
       throw new Error(`Template not found: ${templateId}`);
     }
     const content = template.content.cloneNode(true);
-    (await this.main).appendChild(content);
-    return content;
+    main.appendChild(content);
+    return main;
   }
 }
