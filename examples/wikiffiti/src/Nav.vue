@@ -136,7 +136,7 @@ header {
         padding: 0.5rem;
         font-size: 1rem;
         border: 1px solid #ccc;
-        border-radius: 4px;
+        border-radius: 0.25rem;
     }
 
     nav {
