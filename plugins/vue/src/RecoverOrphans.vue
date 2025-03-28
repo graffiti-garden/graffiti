@@ -10,22 +10,33 @@ import { useGraffitiRecoverOrphans } from "./composables";
 const props = defineProps<{
     schema: Schema;
     session: GraffitiSession;
+    autopoll?: boolean;
 }>();
 
 defineSlots<{
     default?(props: {
+        objects: GraffitiObject<Schema>[];
         results: GraffitiObject<Schema>[];
         poll: () => void;
         isPolling: boolean;
+        isInitialPolling: boolean;
     }): any;
 }>();
 
-const { results, poll, isPolling } = useGraffitiRecoverOrphans<Schema>(
-    toRef(props, "schema"),
-    toRef(props, "session"),
-);
+const { objects, results, poll, isPolling, isInitialPolling } =
+    useGraffitiRecoverOrphans<Schema>(
+        toRef(props, "schema"),
+        toRef(props, "session"),
+        toRef(props, "autopoll"),
+    );
 </script>
 
 <template>
-    <slot :results="results" :poll="poll" :isPolling="isPolling"></slot>
+    <slot
+        :objects="objects"
+        :results="results"
+        :poll="poll"
+        :isPolling="isPolling"
+        :isInitialPolling="isInitialPolling"
+    ></slot>
 </template>

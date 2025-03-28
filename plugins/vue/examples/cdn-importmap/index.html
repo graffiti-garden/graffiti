@@ -87,7 +87,7 @@
 
             <!--vvvv Begin waves vvvv-->
             <graffiti-discover
-                v-slot="{ results: waves, isPolling }"
+                v-slot="{ objects: waves, isInitialPolling }"
                 :channels="[channel]"
                 :schema="{
                     properties: {
@@ -126,7 +126,7 @@
                     <p>To wave 👋 you need to be logged in.</p>
                 </template>
 
-                <p v-if="isPolling">Loading...</p>
+                <p v-if="isInitialPolling">Loading...</p>
                 <p v-else>
                     {{ waves.length }} people have waved from this channel~
                 </p>
@@ -148,7 +148,7 @@
                 <input type="submit" value="Post" />
             </form>
             <graffiti-discover
-                v-slot="{ results: posts, poll, isPolling }"
+                v-slot="{ objects: posts, poll }"
                 :channels="[ channel ]"
                 :schema="{
                     properties: {
@@ -216,7 +216,7 @@
                             </li>
                             <li v-if="$graffitiSession.value">
                                 <graffiti-discover
-                                    v-slot="{ results: bookmarks }"
+                                    v-slot="{ objects: bookmarks }"
                                     :channels="[ post.url ]"
                                     :schema="{
                                         properties: {
@@ -270,7 +270,7 @@
             <h2>My Bookmarks</h2>
             <graffiti-discover
                 v-if="$graffitiSession.value"
-                v-slot="{ results: bookmarks }"
+                v-slot="{ objects: bookmarks }"
                 :channels="[ $graffitiSession.value?.actor ]"
                 :schema="{
                     properties: {
@@ -290,7 +290,7 @@
                 <ul>
                     <template v-for="bookmark of bookmarks" :key="bookmark.url">
                         <graffiti-get
-                            v-slot="{ result: post }"
+                            v-slot="{ object: post }"
                             :url="bookmark.value.target"
                             :schema="{
                                     properties: {

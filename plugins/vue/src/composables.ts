@@ -18,6 +18,7 @@ function makeComposable<Schema extends JSONSchema>(
     GraffitiObjectStreamContinueEntry<Schema>
   >,
   toWatch: readonly (() => any)[],
+  autopoll: MaybeRefOrGetter<boolean>,
 ) {
   let synchronizeIterator:
     | AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>>
@@ -33,9 +34,21 @@ function makeComposable<Schema extends JSONSchema>(
     }
   }
 
-  const poll = () => poller.poll(reducer.onEntry.bind(reducer));
+  let isAlreadyPolling = false;
+  const poll = async () => {
+    if (isAlreadyPolling) return;
+    isAlreadyPolling = true;
+    try {
+      await poller.poll(reducer.onEntry.bind(reducer));
+    } finally {
+      isAlreadyPolling = false;
+      if (toValue(autopoll)) {
+        poll();
+      }
+    }
+  };
 
-  const isPolling = ref(false);
+  const isInitialPolling = ref(false);
   watch(
     toWatch,
     async (newValue, oldValue) => {
@@ -50,11 +63,11 @@ function makeComposable<Schema extends JSONSchema>(
 
       pollSynchronize();
 
-      isPolling.value = true;
+      isInitialPolling.value = true;
       try {
         await poll();
       } finally {
-        isPolling.value = false;
+        isInitialPolling.value = false;
       }
     },
     {
@@ -63,7 +76,7 @@ function makeComposable<Schema extends JSONSchema>(
   );
   onScopeDispose(() => synchronizeIterator?.return(null));
 
-  return { poll, isPolling };
+  return { poll, isInitialPolling };
 }
 
 function toSessionGetter(
@@ -112,10 +125,13 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
    * will be used. Otherwise, the provided value will be used.
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+  autopoll: MaybeRefOrGetter<boolean> = false,
 ): {
   results: Ref<GraffitiObject<Schema>[]>;
+  objects: Ref<GraffitiObject<Schema>[]>;
   poll: () => Promise<void>;
   isPolling: Ref<boolean>;
+  isInitialPolling: Ref<boolean>;
 } {
   const graffiti = useGraffitiSynchronize();
   const sessionInjected = useGraffitiSession();
@@ -132,29 +148,52 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   const reducer = new ArrayReducer<Schema>(graffiti);
   const poller = new StreamPoller<Schema>(streamFactory);
 
-  const { poll, isPolling } = makeComposable<Schema>(
+  const { poll, isInitialPolling } = makeComposable<Schema>(
     reducer,
     poller,
     synchronizeFactory,
     argGetters,
+    autopoll,
   );
 
   return {
     /**
-     * A [Ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
-     * an array of Graffiti objects. All tombstoned objects have been filtered out.
+     * A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
+     * an array of Graffiti objects.
      */
-    results: reducer.results,
+    objects: reducer.results,
+    /**
+     * @deprecated Use {@link objects} instead.
+     */
+    get results() {
+      console.warn(
+        "The `results` property is deprecated. Use `objects` instead.",
+      );
+      return this.objects;
+    },
     /**
      * A method to poll for new results.
      */
     poll,
     /**
-     * A boolean [Ref](https://vuejs.org/api/reactivity-core.html#ref)
-     * that indicates if the poll is currently running.
+     * A boolean [ref](https://vuejs.org/api/reactivity-core.html#ref)
+     * that indicates if the *first* poll is currently running.
      * Useful to show a loading spinner or disable a button.
+     *
+     * This also tracks new polls when the arguments have changed,
+     * but it does not track ongoing polls from either calling
+     * {@link poll} or using the `autopoll` argument.
      */
-    isPolling,
+    isInitialPolling,
+    /**
+     * @deprecated Use {@link isInitialPolling} instead.
+     */
+    get isPolling() {
+      console.warn(
+        "The `isPolling` property is deprecated. Use `isInitialPolling` instead.",
+      );
+      return this.isInitialPolling;
+    },
   };
 }
 
@@ -182,10 +221,13 @@ export function useGraffitiGet<Schema extends JSONSchema>(
    * will be used. Otherwise, the provided value will be used.
    */
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+  autopoll: MaybeRefOrGetter<boolean> = false,
 ): {
   result: Ref<GraffitiObject<Schema> | null | undefined>;
+  object: Ref<GraffitiObject<Schema> | null | undefined>;
   poll: () => Promise<void>;
   isPolling: Ref<boolean>;
+  isInitialPolling: Ref<boolean>;
 } {
   const graffiti = useGraffitiSynchronize();
   const sessionInjected = useGraffitiSession();
@@ -206,30 +248,53 @@ export function useGraffitiGet<Schema extends JSONSchema>(
   const getter = () => graffiti.get<Schema>(...callGetters(argGetters));
   const poller = new GetPoller<Schema>(getter);
 
-  const { poll, isPolling } = makeComposable<Schema>(
+  const { poll, isInitialPolling } = makeComposable<Schema>(
     reducer,
     poller,
     synchronizeFactory,
     argGetters,
+    autopoll,
   );
 
   return {
     /**
-     * A [Ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
+     * A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
      * the retrieved Graffiti object, if it exists. If the object has been deleted,
      * the result is `null`. If the object is still being fetched, the result is `undefined`.
      */
-    result: reducer.result,
+    object: reducer.result,
+    /**
+     * @deprecated Use {@link object} instead.
+     */
+    get result() {
+      console.warn(
+        "The `result` property is deprecated. Use `object` instead.",
+      );
+      return this.object;
+    },
     /**
      * A method to poll for new results.
      */
     poll,
     /**
-     * A boolean [Ref](https://vuejs.org/api/reactivity-core.html#ref)
-     * that indicates if the poll is currently running.
+     * A boolean [ref](https://vuejs.org/api/reactivity-core.html#ref)
+     * that indicates if the *first* poll is currently running.
      * Useful to show a loading spinner or disable a button.
+     *
+     * This also tracks new polls when the arguments have changed,
+     * but it does not track ongoing polls from either calling
+     * {@link poll} or using the `autopoll` argument.
      */
-    isPolling,
+    isInitialPolling,
+    /**
+     * @deprecated Use {@link isInitialPolling} instead.
+     */
+    get isPolling() {
+      console.warn(
+        "The `isPolling` property is deprecated. Use `isInitialPolling` instead.",
+      );
+      return this.isInitialPolling;
+    },
   };
 }
 
@@ -251,10 +316,13 @@ export function useGraffitiGet<Schema extends JSONSchema>(
 export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
   schema: MaybeRefOrGetter<Schema>,
   session: MaybeRefOrGetter<GraffitiSession>,
+  autopoll: MaybeRefOrGetter<boolean> = false,
 ): {
+  objects: Ref<GraffitiObject<Schema>[]>;
   results: Ref<GraffitiObject<Schema>[]>;
   poll: () => Promise<void>;
   isPolling: Ref<boolean>;
+  isInitialPolling: Ref<boolean>;
 } {
   const graffiti = useGraffitiSynchronize();
 
@@ -270,28 +338,51 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
     graffiti.recoverOrphans<Schema>(...callGetters(argGetters));
   const poller = new StreamPoller<Schema>(streamFactory);
 
-  const { poll, isPolling } = makeComposable<Schema>(
+  const { poll, isInitialPolling } = makeComposable<Schema>(
     reducer,
     poller,
     synchronizeFactory,
     argGetters,
+    autopoll,
   );
 
   return {
     /**
-     * A [Ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
-     * an array of Graffiti objects. All tombstoned objects have been filtered out.
+     * A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
+     * an array of Graffiti objects.
      */
-    results: reducer.results,
+    objects: reducer.results,
+    /**
+     * @deprecated Use {@link objects} instead.
+     */
+    get results() {
+      console.warn(
+        "The `result` property is deprecated. Use `object` instead.",
+      );
+      return this.objects;
+    },
     /**
      * A method to poll for new results.
      */
     poll,
     /**
-     * A boolean [Ref](https://vuejs.org/api/reactivity-core.html#ref)
-     * that indicates if the poll is currently running.
+     * A boolean [ref](https://vuejs.org/api/reactivity-core.html#ref)
+     * that indicates if the *first* poll is currently running.
      * Useful to show a loading spinner or disable a button.
+     *
+     * This also tracks new polls when the arguments have changed,
+     * but it does not track ongoing polls from either calling
+     * {@link poll} or using the `autopoll` argument.
      */
-    isPolling,
+    isInitialPolling,
+    /**
+     * @deprecated Use {@link isInitialPolling} instead.
+     */
+    get isPolling() {
+      console.warn(
+        "The `isPolling` property is deprecated. Use `isInitialPolling` instead.",
+      );
+      return this.isInitialPolling;
+    },
   };
 }
