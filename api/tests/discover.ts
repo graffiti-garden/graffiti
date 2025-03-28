@@ -511,7 +511,7 @@ export const graffitiDiscoverTests = (
 
         it("discover for replaced channels", async () => {
           // Do this a bunch to check for concurrency issues
-          for (let i = 0; i < 20; i++) {
+          async function runTest() {
             const object1 = randomPutObject();
             const putted = await graffiti.put<{}>(object1, session);
 
@@ -550,7 +550,7 @@ export const graffitiDiscoverTests = (
               assert(!value3.done && !value3.value.error, "value is done");
               expect(value3.value.tombstone || value2.done).toBe(true);
               expect(value3.value.tombstone && value2.done).toBe(false);
-              continue;
+              return;
             }
 
             // Otherwise 1 should be done and 2 should not
@@ -629,6 +629,9 @@ export const graffitiDiscoverTests = (
             expect(result.object.channels).toEqual(object1.channels);
             expect(result.object.value).toEqual(object2.value);
           }
+
+          // Run the test 20 times in parallel to check for concurrency issues
+          await Promise.allSettled(Array.from({ length: 20 }, () => runTest()));
         });
 
         it("discover for patched allowed", async () => {
