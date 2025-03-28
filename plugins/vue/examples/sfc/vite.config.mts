@@ -9,5 +9,5 @@ export default defineConfig({
       include: ["events"],
     }),
   ],
-  base: "/examples/node-vite-sfc/dist",
+  base: "/examples/sfc/dist",
 });

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti Direct Messaging</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
+                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                }
+            }
+        </script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
+        />
+    </head>
+    <body>
+        <div id="app"></div>
+        <template id="my-template">
+            <header>
+                <h1>Graffiti Email-like Messaging</h1>
+                <p>
+                    <a download="" href="dms.html"
+                        >Download the source code and make it your own!</a
+                    >
+                </p>
+                <p v-if="$graffitiSession.value">
+                    You are logged in as
+                    <input readonly :value="$graffitiSession.value.actor" />
+                </p>
+                <nav>
+                    <ul v-if="$graffitiSession.value">
+                        <li>
+                            <button @click="state = 'inbox'">Inbox</button>
+                        </li>
+                        <li>
+                            <button @click="state = 'outbox'">Outbox</button>
+                        </li>
+                        <li>
+                            <button @click="state = 'compose'">Compose</button>
+                        </li>
+                        <li>
+                            <button
+                                @click="$graffiti.logout($graffitiSession.value)"
+                            >
+                                Log Out
+                            </button>
+                        </li>
+                    </ul>
+                    <ul v-else>
+                        <li>
+                            <button @click="$graffiti.login()">Log In</button>
+                        </li>
+                    </ul>
+                </nav>
+            </header>
+            <main>
+                <p v-if="!$graffitiSession.value">
+                    You need to
+                    <button @click="$graffiti.login()">log in</button> to send
+                    or receive mail.
+                </p>
+                <template v-else-if="state === 'inbox'">
+                    <h2>Inbox</h2>
+
+                    <graffiti-discover
+                        v-slot="{ objects: messages, poll, isInitialPolling }"
+                        :channels="[$graffitiSession.value.actor]"
+                        :schema="emailSchema()"
+                    >
+                        <button @click="poll()">Check for new messages</button>
+                        <p v-if="isInitialPolling">Loading...</p>
+                        <display-emails :messages="messages" />
+                    </graffiti-discover>
+                </template>
+                <template v-else-if="state === 'outbox'">
+                    <h2>Outbox</h2>
+
+                    <graffiti-discover
+                        v-slot="{ objects: messages }"
+                        :channels="[$graffitiSession.value.actor]"
+                        :schema="emailSchema(true)"
+                    >
+                        <p v-if="isInitialPolling">Loading...</p>
+                        <display-emails :messages="messages" />
+                    </graffiti-discover>
+                </template>
+                <template v-else-if="state === 'compose'">
+                    <h2>Compose</h2>
+                    <form @submit.prevent="sendMail">
+                        <fieldset>
+                            <legend>Recipients</legend>
+                            <ul>
+                                <li v-for="(recipient, index) in recipients">
+                                    <input
+                                        v-model="recipients[index]"
+                                        type="text"
+                                        placeholder="Recipient"
+                                    />
+                                    <button
+                                        @click="recipients.splice(index, 1)"
+                                    >
+                                        Remove
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        @click.prevent="recipients.push('')"
+                                    >
+                                        Add recipient
+                                    </button>
+                                </li>
+                            </ul>
+                        </fieldset>
+                        <label for="subject">Subject:</label>
+                        <input
+                            id="subject"
+                            v-model="subject"
+                            placeholder="Subject"
+                        />
+                        <label for="message">Message:</label>
+                        <textarea
+                            id="message"
+                            v-model="message"
+                            placeholder="Your message here"
+                        ></textarea>
+                        <input
+                            type="submit"
+                            value="Send"
+                            :disabled="!recipients.filter(r => r).length"
+                        />
+                    </form>
+                </template>
+            </main>
+        </template>
+        <template id="display-emails">
+            <ul>
+                <li
+                    v-for="message of messages.sort((a, b) => b.value.published - a.value.published)"
+                    :key="message.id"
+                >
+                    <article>
+                        <header>
+                            <h3>{{ message.value.subject || `NO SUBJECT` }}</h3>
+                            <p>To: {{ message.value.to.join(", ") }}</p>
+                            <p>From: {{ message.actor }}</p>
+                            <p>
+                                Sent: {{ new
+                                Date(message.value.published).toLocaleString()
+                                }}
+                            </p>
+                        </header>
+                        <main>
+                            <p>{{ message.value.content || `NO CONTENT` }}</p>
+                        </main>
+                    </article>
+                </li>
+            </ul>
+        </template>
+        <script type="module">
+            import { createApp } from "vue";
+            import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
+            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
+            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+
+            createApp({
+                template: document.getElementById("my-template").innerHTML,
+                // Declare reactive data
+                data() {
+                    return {
+                        state: "inbox",
+                        recipients: [],
+                        message: "",
+                        subject: "",
+                    };
+                },
+                components: {
+                    DisplayEmails: {
+                        props: ["messages"],
+                        template:
+                            document.getElementById("display-emails").innerHTML,
+                    },
+                },
+                methods: {
+                    async sendMail() {
+                        if (!this.recipients.filter((r) => r).length) {
+                            alert("Please add at least one recipient.");
+                            return;
+                        }
+                        if (
+                            !this.subject &&
+                            !confirm("Send without a subject?")
+                        ) {
+                            return;
+                        }
+                        if (
+                            !this.message &&
+                            !confirm("Send an empty message?")
+                        ) {
+                            return;
+                        }
+                        await this.$graffiti.put(
+                            {
+                                channels: [
+                                    this.$graffitiSession.value.actor,
+                                    ...this.recipients,
+                                ],
+                                allowed: this.recipients,
+                                value: {
+                                    to: this.recipients,
+                                    subject: this.subject,
+                                    content: this.message,
+                                    published: Date.now(),
+                                },
+                            },
+                            this.$graffitiSession.value,
+                        );
+                        this.recipients = [];
+                        this.message = "";
+                        this.state = "outbox";
+                    },
+                    emailSchema(byMe = false) {
+                        const myActor = {
+                            enum: [this.$graffitiSession.value.actor],
+                        };
+                        return {
+                            properties: {
+                                value: {
+                                    required: ["content", "published"],
+                                    properties: {
+                                        title: { type: "string" },
+                                        content: { type: "string" },
+                                        published: { type: "number" },
+                                        to: {
+                                            type: "array",
+                                            items: { type: "string" },
+                                        },
+                                    },
+                                },
+                                actor: byMe ? myActor : { not: myActor },
+                            },
+                        };
+                    },
+                },
+            })
+                .use(GraffitiPlugin, {
+                    graffiti: new GraffitiRemote(),
+                    // Use local for debugging!
+                    // graffiti: new GraffitiLocal(),
+                })
+                .mount("#app");
+        </script>
+    </body>
+</html>
