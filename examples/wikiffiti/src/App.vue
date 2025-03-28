@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, type Ref } from "vue";
-import { useGraffiti, useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
+import {
+    useGraffiti,
+    useGraffitiDiscover,
+    useGraffitiSession,
+} from "@graffiti-garden/wrapper-vue";
 import { editSchema } from "./schemas";
 import { Logoot } from "./logoot";
 import type { GraffitiSession } from "@graffiti-garden/api";
@@ -9,10 +13,16 @@ const props = defineProps<{
     channel: string;
 }>();
 
-const articleTitle = "asdlfkjasldkjfalskjdfl";
-const { results: edits } = useGraffitiDiscover(
+const title = computed(() => {
+    // Decode and convert the channel to title case
+    return decodeURIComponent(props.channel)
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+});
+
+const { results: edits, isPolling } = useGraffitiDiscover(
     () => [props.channel],
-    () => editSchema(articleTitle),
+    () => editSchema(title.value),
 );
 
 const myEdit: Ref<{
@@ -21,7 +31,7 @@ const myEdit: Ref<{
 }> = ref({
     value: {
         activity: "Edit",
-        target: articleTitle,
+        target: title.value,
         inserts: [],
         deletes: {},
     },
@@ -165,6 +175,7 @@ function onInput(event: Event) {
 
 const graffiti = useGraffiti();
 async function saveEdits(session: GraffitiSession) {
+    myEdit.value.value.target = title.value;
     await graffiti.put(
         {
             channels: [props.channel],
@@ -178,24 +189,61 @@ async function saveEdits(session: GraffitiSession) {
         inserts: [],
         deletes: {},
     };
+
+    editing.value = false;
 }
+
+const editing = ref(false);
 </script>
 
 <template>
-    <button v-if="!$graffitiSession.value" @click="$graffiti.login()">
-        Log in to edit
-    </button>
-    <template v-else>
-        <textarea @input="onInput" :value="liveText"></textarea>
-
-        <button
-            @click="saveEdits($graffitiSession.value)"
-            :disabled="
-                !myEdit.value.inserts?.length &&
-                !Object.keys(myEdit.value.deletes ?? {}).length
-            "
-        >
-            Save edits
-        </button>
-    </template>
+    <article>
+        <header>
+            <h2>
+                {{ title }}
+            </h2>
+            <nav>
+                <button v-if="!editing" @click="editing = true">Edit</button>
+                <button v-else @click="editing = false">Cancel</button>
+            </nav>
+        </header>
+        <main v-if="editing">
+            <p v-if="!$graffitiSession.value">
+                You must <button @click="$graffiti.login()">log in</button> to
+                edit.
+            </p>
+            <template v-else>
+                <textarea @input="onInput" :value="liveText"></textarea>
+                <button
+                    @click="saveEdits($graffitiSession.value)"
+                    :disabled="
+                        !myEdit.value.inserts?.length &&
+                        !Object.keys(myEdit.value.deletes ?? {}).length
+                    "
+                >
+                    Save edits
+                </button>
+            </template>
+        </main>
+        <main v-else>
+            <p v-if="isPolling">Loading...</p>
+            <p v-else-if="!liveText.length">
+                <strong>
+                    Wikiffiti does not have an article with this exact name.
+                </strong>
+                Please consider
+                <button @click="editing = true">creating it</button>
+            </p>
+            <p v-else>
+                {{ liveText }}
+            </p>
+        </main>
+    </article>
 </template>
+
+<style>
+article {
+    max-width: 30rem;
+    margin: auto;
+}
+</style>
