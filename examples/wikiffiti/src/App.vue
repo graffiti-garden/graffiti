@@ -284,6 +284,12 @@ article {
         padding-right: 0;
     }
 
+    main > div {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
     details[open] summary {
         padding-bottom: 0.5rem;
     }
