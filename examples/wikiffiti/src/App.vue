@@ -284,12 +284,15 @@ article {
         padding-right: 0;
     }
 
+    details[open] summary {
+        padding-bottom: 0.5rem;
+    }
+
     details {
         flex: 1 1 100%;
 
         summary {
             cursor: pointer;
-            padding-bottom: 0.5rem;
         }
 
         ul {
