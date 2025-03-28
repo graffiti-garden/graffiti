@@ -248,6 +248,9 @@ export class GraffitiLocalDatabase
   get: Graffiti["get"] = async (...args) => {
     const [urlObject, schema, session] = args;
 
+    // TODO: Rate limit getting the same object
+    // over and over
+
     const docsAll = await this.allDocsAtLocation(urlObject);
 
     // Filter out ones not allowed
@@ -605,16 +608,6 @@ export class GraffitiLocalDatabase
     processedIds?: Set<string>,
   ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
     if (ifModifiedSince !== undefined) {
-      const continueBuffer = this.options.continueBuffer ?? 1000;
-      const timeElapsedSinceContinue = Date.now() - ifModifiedSince;
-      if (timeElapsedSinceContinue < continueBuffer) {
-        // Continue was called too soon,
-        // wait a bit before continuing
-        await new Promise((resolve) =>
-          setTimeout(resolve, continueBuffer - timeElapsedSinceContinue),
-        );
-      }
-
       // Subtract a minute to make sure we don't miss any objects
       ifModifiedSince -= LAST_MODIFIED_BUFFER;
     }
@@ -658,6 +651,19 @@ export class GraffitiLocalDatabase
     }
   }
 
+  protected async waitToContinue(ifModifiedSince: number | undefined) {
+    if (ifModifiedSince === undefined) return;
+    const continueBuffer = this.options.continueBuffer ?? 1000;
+    const timeElapsedSinceContinue = Date.now() - ifModifiedSince;
+    if (timeElapsedSinceContinue < continueBuffer) {
+      // Continue was called too soon,
+      // wait a bit before continuing
+      await new Promise((resolve) =>
+        setTimeout(resolve, continueBuffer - timeElapsedSinceContinue),
+      );
+    }
+  }
+
   protected async *discoverMeta<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
     ifModifiedSince?: number,
@@ -665,6 +671,8 @@ export class GraffitiLocalDatabase
     GraffitiObjectStreamContinueEntry<Schema>,
     number | undefined
   > {
+    await this.waitToContinue(ifModifiedSince);
+
     const [channels, schema, session] = args;
     const validate = compileGraffitiObjectSchema(await this.ajv, schema);
     const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
@@ -705,6 +713,8 @@ export class GraffitiLocalDatabase
     GraffitiObjectStreamContinueEntry<Schema>,
     number | undefined
   > {
+    await this.waitToContinue(ifModifiedSince);
+
     const [schema, session] = args;
     const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
       schema,
