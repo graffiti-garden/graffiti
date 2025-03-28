@@ -213,7 +213,7 @@ const md = markdownit({
                 <button v-else @click="editing = false">Cancel</button>
             </nav>
             <details v-if="edits.length">
-                <summary>Show authors</summary>
+                <summary>Select authors</summary>
                 <ul>
                     <li
                         v-for="author in new Set(
