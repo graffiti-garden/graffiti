@@ -5,10 +5,14 @@ import { editSchema } from "./schemas";
 import { Logoot } from "./logoot";
 import type { GraffitiSession } from "@graffiti-garden/api";
 
+const props = defineProps<{
+    channel: string;
+}>();
+
 const articleTitle = "asdlfkjasldkjfalskjdfl";
-const channel = "wiki:" + articleTitle;
-const { results: edits } = useGraffitiDiscover([channel], () =>
-    editSchema(articleTitle),
+const { results: edits } = useGraffitiDiscover(
+    () => [props.channel],
+    () => editSchema(articleTitle),
 );
 
 const myEdit: Ref<{
@@ -161,10 +165,9 @@ function onInput(event: Event) {
 
 const graffiti = useGraffiti();
 async function saveEdits(session: GraffitiSession) {
-    console.log("hello");
     await graffiti.put(
         {
-            channels: [channel],
+            channels: [props.channel],
             value: myEdit.value.value,
         },
         session,
@@ -179,17 +182,11 @@ async function saveEdits(session: GraffitiSession) {
 </script>
 
 <template>
-    <header>
-        <h1>Wikiffiti</h1>
-    </header>
-
     <button v-if="!$graffitiSession.value" @click="$graffiti.login()">
         Log in to edit
     </button>
     <template v-else>
         <textarea @input="onInput" :value="liveText"></textarea>
-
-        {{ liveText }}
 
         <button
             @click="saveEdits($graffitiSession.value)"
