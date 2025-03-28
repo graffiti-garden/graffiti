@@ -8,6 +8,7 @@ import {
 import { editSchema } from "./schemas";
 import { Logoot } from "./logoot";
 import type { GraffitiSession } from "@graffiti-garden/api";
+import markdownit from "markdown-it";
 
 const props = defineProps<{
     channel: string;
@@ -193,7 +194,12 @@ async function saveEdits(session: GraffitiSession) {
     editing.value = false;
 }
 
+const preview = ref(false);
 const editing = ref(false);
+const md = markdownit({
+    html: true,
+    linkify: true,
+});
 </script>
 
 <template>
@@ -213,7 +219,17 @@ const editing = ref(false);
                 edit.
             </p>
             <template v-else>
-                <textarea @input="onInput" :value="liveText"></textarea>
+                <button v-if="!preview" @click="preview = true">
+                    Show preview
+                </button>
+                <button v-else @click="preview = false">Show editor</button>
+                <textarea
+                    v-if="!preview"
+                    @input="onInput"
+                    :value="liveText"
+                ></textarea>
+                <div v-else v-html="md.render(liveText)"></div>
+
                 <button
                     @click="saveEdits($graffitiSession.value)"
                     :disabled="
@@ -234,9 +250,7 @@ const editing = ref(false);
                 Please consider
                 <button @click="editing = true">creating it</button>
             </p>
-            <p v-else>
-                {{ liveText }}
-            </p>
+            <div v-else v-html="md.render(liveText)"></div>
         </main>
     </article>
 </template>
@@ -245,5 +259,11 @@ const editing = ref(false);
 article {
     max-width: 30rem;
     margin: auto;
+}
+
+textarea {
+    width: 100%;
+    resize: vertical;
+    height: 10rem;
 }
 </style>
