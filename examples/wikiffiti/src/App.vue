@@ -212,6 +212,24 @@ const md = markdownit({
                 <button v-if="!editing" @click="editing = true">Edit</button>
                 <button v-else @click="editing = false">Cancel</button>
             </nav>
+            <details v-if="edits.length">
+                <summary>Show authors</summary>
+                <ul>
+                    <li
+                        v-for="author in new Set(
+                            edits.map<string>((edit) => edit.actor),
+                        )"
+                    >
+                        <input
+                            type="checkbox"
+                            v-model="bannedActors"
+                            :value="author"
+                            :id="author"
+                        />
+                        <label :for="author">{{ author }}</label>
+                    </li>
+                </ul>
+            </details>
         </header>
         <main v-if="editing">
             <p v-if="!$graffitiSession.value">
@@ -259,6 +277,54 @@ const md = markdownit({
 article {
     max-width: 30rem;
     margin: auto;
+
+    main,
+    header {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    details {
+        flex: 1 1 100%;
+
+        summary {
+            cursor: pointer;
+        }
+
+        ul {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        li {
+            display: flex;
+        }
+
+        input[type="checkbox"] {
+            display: none;
+        }
+
+        label {
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 0.25rem;
+        }
+
+        label:hover {
+            cursor: pointer;
+        }
+
+        input[type="checkbox"]:checked + label {
+            color: #888;
+        }
+
+        /* Highlight the label when the checkbox is UNchecked */
+        input[type="checkbox"]:not(:checked) + label {
+            background: #d9e1f0;
+        }
+    }
 }
 
 textarea {
