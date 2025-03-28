@@ -12,23 +12,34 @@ const props = defineProps<{
     url: string | GraffitiObjectUrl;
     schema: Schema;
     session?: GraffitiSession | null;
+    autopoll?: boolean;
 }>();
 
 defineSlots<{
     default?(props: {
+        object: GraffitiObject<Schema> | undefined | null;
         result: GraffitiObject<Schema> | undefined | null;
         poll: () => void;
         isPolling: boolean;
+        isInitialPolling: boolean;
     }): any;
 }>();
 
-const { result, poll, isPolling } = useGraffitiGet<Schema>(
-    toRef(props, "url"),
-    toRef(props, "schema"),
-    toRef(props, "session"),
-);
+const { object, result, poll, isPolling, isInitialPolling } =
+    useGraffitiGet<Schema>(
+        toRef(props, "url"),
+        toRef(props, "schema"),
+        toRef(props, "session"),
+        toRef(props, "autopoll"),
+    );
 </script>
 
 <template>
-    <slot :result="result" :poll="poll" :isPolling="isPolling"></slot>
+    <slot
+        :object="object"
+        :result="result"
+        :poll="poll"
+        :isPolling="isPolling"
+        :isInitialPolling="isInitialPolling"
+    ></slot>
 </template>

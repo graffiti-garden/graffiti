@@ -105,9 +105,10 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
     </p>
     <p v-else>Loading...</p>
     <GraffitiDiscover
+        autopoll
         :channels="channels"
         :schema="noteSchema"
-        v-slot="{ results, poll, isPolling }"
+        v-slot="{ objects, poll, isInitialPolling }"
     >
         <div class="controls">
             <form @submit.prevent="postNote">
@@ -138,31 +139,31 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
             />
         </div>
         <ul>
-            <li v-if="isPolling">Loading...</li>
+            <li v-if="isInitialPolling">Loading...</li>
             <li
-                v-for="result in results.sort(
+                v-for="object in objects.sort(
                     (a, b) =>
                         // Sort by lastModified, most recent first
                         // lastModified are ISO strings
                         new Date(b.lastModified).getTime() -
                         new Date(a.lastModified).getTime(),
                 )"
-                :key="result.url"
+                :key="object.url"
                 class="post"
             >
                 <div class="actor">
-                    {{ result.actor }}
+                    {{ object.actor }}
                 </div>
                 <div class="timestamp">
-                    {{ new Date(result.lastModified).toLocaleString() }}
+                    {{ new Date(object.lastModified).toLocaleString() }}
                 </div>
 
-                <div class="content" v-if="editing !== result.url">
-                    {{ result.value.content }}
+                <div class="content" v-if="editing !== object.url">
+                    {{ object.value.content }}
                 </div>
                 <form
                     v-else
-                    @submit.prevent="saveEdits(result)"
+                    @submit.prevent="saveEdits(object)"
                     class="content"
                 >
                     <input type="text" v-model="editText" />
@@ -171,16 +172,16 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                 </form>
 
                 <menu>
-                    <li v-if="result.actor === session?.actor">
-                        <button @click="$graffiti.delete(result, session)">
+                    <li v-if="object.actor === session?.actor">
+                        <button @click="$graffiti.delete(object, session)">
                             Delete
                         </button>
                     </li>
-                    <li v-if="result.actor === session?.actor">
-                        <button @click="startEditing(result)">Edit</button>
+                    <li v-if="object.actor === session?.actor">
+                        <button @click="startEditing(object)">Edit</button>
                     </li>
                     <li>
-                        <a target="_blank" :href="result.url"> 🔗 </a>
+                        <a target="_blank" :href="object.url"> 🔗 </a>
                     </li>
                 </menu>
             </li>
