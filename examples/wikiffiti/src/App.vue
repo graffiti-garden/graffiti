@@ -289,6 +289,7 @@ article {
 
         summary {
             cursor: pointer;
+            padding-bottom: 0.5rem;
         }
 
         ul {
