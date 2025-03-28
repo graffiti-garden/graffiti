@@ -4,11 +4,20 @@
         <meta charset="utf-8" />
         <title>My Graffiti App</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <script type="importmap">
+        <!-- <script type="importmap">
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
                     "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js"
+                }
+            }
+        </script> -->
+        <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "../../dist/browser/plugin.mjs",
                     "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js"
                 }
             }
@@ -138,7 +147,10 @@
                 @submit.prevent="
                     content.length &&
                     $graffiti.put({
-                        value: { content },
+                        value: {
+                            content,
+                            published: Date.now()
+                        },
                         channels: [ channel ]
                     }, $graffitiSession.value);
                     content='';"
@@ -148,14 +160,16 @@
                 <input type="submit" value="Post" />
             </form>
             <graffiti-discover
+                autopoll
                 v-slot="{ objects: posts, poll }"
                 :channels="[ channel ]"
                 :schema="{
                     properties: {
                         value: {
-                            required: ['content'],
+                            required: ['content', 'published'],
                             properties: {
-                                content: { type: 'string' }
+                                content: { type: 'string' },
+                                published: { type: 'number' }
                             }
                         }
                     }
@@ -163,7 +177,10 @@
             >
                 <button @click="poll()">Refresh Posts</button>
                 <ul>
-                    <li v-for="post in posts" :key="post.url">
+                    <li
+                        v-for="post in posts.sort((a, b) => b.value.published - a.value.published)"
+                        :key="post.url"
+                    >
                         <div>{{ post.actor }}</div>
                         <div>
                             {{ new Date(post.lastModified).toLocaleString() }}
@@ -321,7 +338,7 @@
                 // Declare reactive data
                 data() {
                     return {
-                        channel: window.location.origin,
+                        channel: "graffiti-client-demo",
                         content: "",
                         editing: "",
                         editText: "",
