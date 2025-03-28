@@ -15,11 +15,11 @@ const noteSchema = {
                 content: {
                     type: "string",
                 },
-                createdAt: {
+                published: {
                     type: "number",
                 },
             },
-            required: ["content", "createdAt"],
+            required: ["content", "published"],
         },
     },
 } as const satisfies JSONSchema;
@@ -38,7 +38,7 @@ async function postNote() {
             channels: channels.value,
             value: {
                 content: myNote.value,
-                createdAt: new Date().getTime(),
+                published: Date.now(),
             },
         },
         session.value,
@@ -142,11 +142,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
             <li v-if="isInitialPolling">Loading...</li>
             <li
                 v-for="object in objects.sort(
-                    (a, b) =>
-                        // Sort by lastModified, most recent first
-                        // lastModified are ISO strings
-                        new Date(b.lastModified).getTime() -
-                        new Date(a.lastModified).getTime(),
+                    (a, b) => b.value.published - a.value.published,
                 )"
                 :key="object.url"
                 class="post"
@@ -155,7 +151,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
                     {{ object.actor }}
                 </div>
                 <div class="timestamp">
-                    {{ new Date(object.lastModified).toLocaleString() }}
+                    {{ new Date(object.value.published).toLocaleString() }}
                 </div>
 
                 <div class="content" v-if="editing !== object.url">
