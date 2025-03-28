@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-synchronize",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Internal synchronization for the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",

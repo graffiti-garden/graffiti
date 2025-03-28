@@ -6,6 +6,7 @@ import type {
   GraffitiObjectStream,
   GraffitiObjectStreamContinueEntry,
   GraffitiObjectStreamContinue,
+  GraffitiObject,
 } from "@graffiti-garden/api";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
 import { Repeater } from "@repeaterjs/repeater";
@@ -160,7 +161,10 @@ export class GraffitiSynchronize extends Graffiti {
               (this.options.omniscient ||
                 isActorAllowedGraffitiObject(objectRaw.object, session))
             ) {
-              const object = { ...objectRaw.object };
+              // Deep clone the object to prevent mutation
+              const object = JSON.parse(
+                JSON.stringify(objectRaw.object),
+              ) as GraffitiObject<{}>;
               if (!this.options.omniscient) {
                 maskGraffitiObject(object, channels, session);
               }
