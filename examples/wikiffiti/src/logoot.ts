@@ -1,4 +1,5 @@
 export type LogootValue = number[];
+
 /**
  * Create arbitrary precision values between
  * two other values. For collaborative text editing.

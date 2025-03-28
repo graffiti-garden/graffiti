@@ -39,7 +39,7 @@ const search = ref("");
         <form
             role="search"
             @submit.prevent="
-                router.push(`/wiki/${search}`);
+                router.push(`/wiki/${encodeURIComponent(search)}`);
                 search = '';
             "
         >
@@ -100,6 +100,7 @@ a:visited:hover {
 
 p {
     font-family: sans-serif;
+    line-height: 1.5;
 }
 
 header {
@@ -112,13 +113,10 @@ header {
     h1 {
         font-size: 1.75rem;
 
-        a {
-            text-decoration: none;
-            color: black;
-        }
-
-        /* Make it black even when visited */
-        a:visited {
+        a,
+        a:hover,
+        a:visited,
+        a:visited:hover {
             color: black;
         }
     }
