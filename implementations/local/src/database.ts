@@ -63,9 +63,17 @@ export interface GraffitiLocalOptions {
    * If not provided, an internal instance will be created.
    */
   ajv?: Ajv;
+  /**
+   * Wait at least this long (in milliseconds) before continuing a stream.
+   * A basic form of rate limiting. Defaults to 1 seconds.
+   */
+  continueBuffer?: number;
 }
 
 const DEFAULT_ORIGIN = "graffiti:local:";
+
+// During stream continuations, return objects
+// that have possibly already been seen over this window
 const LAST_MODIFIED_BUFFER = 60000;
 
 type GraffitiObjectWithTombstone = GraffitiObjectBase & { tombstone: boolean };
@@ -596,7 +604,20 @@ export class GraffitiLocalDatabase
     channels?: string[],
     processedIds?: Set<string>,
   ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
-    const showTombstones = ifModifiedSince !== undefined;
+    if (ifModifiedSince !== undefined) {
+      const continueBuffer = this.options.continueBuffer ?? 1000;
+      const timeElapsedSinceContinue = Date.now() - ifModifiedSince;
+      if (timeElapsedSinceContinue < continueBuffer) {
+        // Continue was called too soon,
+        // wait a bit before continuing
+        await new Promise((resolve) =>
+          setTimeout(resolve, continueBuffer - timeElapsedSinceContinue),
+        );
+      }
+
+      // Subtract a minute to make sure we don't miss any objects
+      ifModifiedSince -= LAST_MODIFIED_BUFFER;
+    }
 
     const result = await (
       await this.db
@@ -613,7 +634,8 @@ export class GraffitiLocalDatabase
       if (processedIds?.has(doc._id)) continue;
       processedIds?.add(doc._id);
 
-      if (!showTombstones && doc.tombstone) continue;
+      // If this is not a continuation, skip tombstones
+      if (ifModifiedSince === undefined && doc.tombstone) continue;
 
       const object = this.extractGraffitiObject(doc);
 
@@ -673,8 +695,7 @@ export class GraffitiLocalDatabase
       for await (const result of iterator) yield result;
     }
 
-    // Subtract a minute to make sure we don't miss any objects
-    return startTime - LAST_MODIFIED_BUFFER;
+    return startTime;
   }
 
   protected async *recoverOrphansMeta<Schema extends JSONSchema>(
@@ -708,7 +729,7 @@ export class GraffitiLocalDatabase
 
     for await (const result of iterator) yield result;
 
-    return startTime - LAST_MODIFIED_BUFFER;
+    return startTime;
   }
 
   protected discoverCursor(
