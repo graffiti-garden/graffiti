@@ -16,27 +16,22 @@ const props = defineProps<{
 defineSlots<{
     default?(props: {
         objects: GraffitiObject<Schema>[];
-        results: GraffitiObject<Schema>[];
         poll: () => void;
-        isPolling: boolean;
         isInitialPolling: boolean;
     }): any;
 }>();
 
-const { objects, results, poll, isPolling, isInitialPolling } =
-    useGraffitiRecoverOrphans<Schema>(
-        toRef(props, "schema"),
-        toRef(props, "session"),
-        toRef(props, "autopoll"),
-    );
+const { objects, poll, isInitialPolling } = useGraffitiRecoverOrphans<Schema>(
+    toRef(props, "schema"),
+    toRef(props, "session"),
+    toRef(props, "autopoll"),
+);
 </script>
 
 <template>
     <slot
         :objects="objects"
-        :results="results"
         :poll="poll"
-        :isPolling="isPolling"
         :isInitialPolling="isInitialPolling"
     ></slot>
 </template>

@@ -35,12 +35,16 @@ function makeComposable<Schema extends JSONSchema>(
   }
 
   let isAlreadyPolling = false;
+  let innerPoll: (() => Promise<void>) | undefined;
   const poll = async () => {
     if (isAlreadyPolling) return;
+    if (!innerPoll) return;
+    const myPoll = innerPoll;
     isAlreadyPolling = true;
     try {
-      await poller.poll(reducer.onEntry.bind(reducer));
+      await myPoll();
     } finally {
+      if (myPoll !== innerPoll) return;
       isAlreadyPolling = false;
       if (toValue(autopoll)) {
         poll();
@@ -63,10 +67,16 @@ function makeComposable<Schema extends JSONSchema>(
 
       pollSynchronize();
 
+      innerPoll = () => poller.poll(reducer.onEntry.bind(reducer));
+      const myPoll = innerPoll;
+
+      isAlreadyPolling = false;
+
       isInitialPolling.value = true;
       try {
         await poll();
       } finally {
+        if (myPoll !== innerPoll) return;
         isInitialPolling.value = false;
       }
     },
@@ -74,7 +84,12 @@ function makeComposable<Schema extends JSONSchema>(
       immediate: true,
     },
   );
-  onScopeDispose(() => synchronizeIterator?.return(null));
+  onScopeDispose(() => {
+    synchronizeIterator?.return(null);
+    reducer.clear();
+    poller.clear();
+    innerPoll = undefined;
+  });
 
   return { poll, isInitialPolling };
 }
@@ -127,10 +142,8 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
   autopoll: MaybeRefOrGetter<boolean> = false,
 ): {
-  results: Ref<GraffitiObject<Schema>[]>;
   objects: Ref<GraffitiObject<Schema>[]>;
   poll: () => Promise<void>;
-  isPolling: Ref<boolean>;
   isInitialPolling: Ref<boolean>;
 } {
   const graffiti = useGraffitiSynchronize();
@@ -163,15 +176,6 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
      */
     objects: reducer.results,
     /**
-     * @deprecated Use {@link objects} instead.
-     */
-    get results() {
-      console.warn(
-        "The `results` property is deprecated. Use `objects` instead.",
-      );
-      return this.objects;
-    },
-    /**
      * A method to poll for new results.
      */
     poll,
@@ -185,15 +189,6 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
      * {@link poll} or using the `autopoll` argument.
      */
     isInitialPolling,
-    /**
-     * @deprecated Use {@link isInitialPolling} instead.
-     */
-    get isPolling() {
-      console.warn(
-        "The `isPolling` property is deprecated. Use `isInitialPolling` instead.",
-      );
-      return this.isInitialPolling;
-    },
   };
 }
 
@@ -223,10 +218,8 @@ export function useGraffitiGet<Schema extends JSONSchema>(
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
   autopoll: MaybeRefOrGetter<boolean> = false,
 ): {
-  result: Ref<GraffitiObject<Schema> | null | undefined>;
   object: Ref<GraffitiObject<Schema> | null | undefined>;
   poll: () => Promise<void>;
-  isPolling: Ref<boolean>;
   isInitialPolling: Ref<boolean>;
 } {
   const graffiti = useGraffitiSynchronize();
@@ -264,15 +257,6 @@ export function useGraffitiGet<Schema extends JSONSchema>(
      */
     object: reducer.result,
     /**
-     * @deprecated Use {@link object} instead.
-     */
-    get result() {
-      console.warn(
-        "The `result` property is deprecated. Use `object` instead.",
-      );
-      return this.object;
-    },
-    /**
      * A method to poll for new results.
      */
     poll,
@@ -286,15 +270,6 @@ export function useGraffitiGet<Schema extends JSONSchema>(
      * {@link poll} or using the `autopoll` argument.
      */
     isInitialPolling,
-    /**
-     * @deprecated Use {@link isInitialPolling} instead.
-     */
-    get isPolling() {
-      console.warn(
-        "The `isPolling` property is deprecated. Use `isInitialPolling` instead.",
-      );
-      return this.isInitialPolling;
-    },
   };
 }
 
@@ -319,9 +294,7 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
   autopoll: MaybeRefOrGetter<boolean> = false,
 ): {
   objects: Ref<GraffitiObject<Schema>[]>;
-  results: Ref<GraffitiObject<Schema>[]>;
   poll: () => Promise<void>;
-  isPolling: Ref<boolean>;
   isInitialPolling: Ref<boolean>;
 } {
   const graffiti = useGraffitiSynchronize();
@@ -353,15 +326,6 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
      */
     objects: reducer.results,
     /**
-     * @deprecated Use {@link objects} instead.
-     */
-    get results() {
-      console.warn(
-        "The `result` property is deprecated. Use `object` instead.",
-      );
-      return this.objects;
-    },
-    /**
      * A method to poll for new results.
      */
     poll,
@@ -375,14 +339,5 @@ export function useGraffitiRecoverOrphans<Schema extends JSONSchema>(
      * {@link poll} or using the `autopoll` argument.
      */
     isInitialPolling,
-    /**
-     * @deprecated Use {@link isInitialPolling} instead.
-     */
-    get isPolling() {
-      console.warn(
-        "The `isPolling` property is deprecated. Use `isInitialPolling` instead.",
-      );
-      return this.isInitialPolling;
-    },
   };
 }
