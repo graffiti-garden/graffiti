@@ -36,7 +36,9 @@
                 <ul>
                     <li>
                         <a href="https://www.wikipedia.org">Wikipedia</a>
-                        <graffiti-like target="https://www.wikipedia.org" />
+                        <graffiti-like
+                            target="https://www.wikipedia.org"
+                        ></graffiti-like>
                     </li>
                     <li>
                         The book
@@ -45,18 +47,24 @@
                         >
                             Race After Technology
                         </a>
-                        <graffiti-like target="urn:isbn:9781509526390" />
+                        <graffiti-like
+                            target="urn:isbn:9781509526390"
+                        ></graffiti-like>
                     </li>
                     <li>
                         The movie
                         <a href="https://en.wikipedia.org/wiki/The_Matrix">
                             The Matrix
                         </a>
-                        <graffiti-like target="urn:imdb:tt0133093" />
+                        <graffiti-like
+                            target="urn:imdb:tt0133093"
+                        ></graffiti-like>
                     </li>
                     <li v-if="$graffitiSession.value">
                         Yourself!
-                        <graffiti-like :target="$graffitiSession.value.actor" />
+                        <graffiti-like
+                            :target="$graffitiSession.value.actor"
+                        ></graffiti-like>
                     </li>
                 </ul>
             </main>
