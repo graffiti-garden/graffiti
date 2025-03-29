@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti Like Button</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
+                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                }
+            }
+        </script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
+        />
+    </head>
+    <body>
+        <div id="app"></div>
+        <template id="my-template">
+            <header>
+                <h1>Graffiti Like Button</h1>
+                <p>
+                    <a download href
+                        >Download the source code and make it your own!</a
+                    >
+                </p>
+            </header>
+
+            <main>
+                <h2>Some things to like:</h2>
+                <ul>
+                    <li>
+                        <a href="https://www.wikipedia.org">Wikipedia</a>
+                        <graffiti-like target="https://www.wikipedia.org" />
+                    </li>
+                    <li>
+                        The book
+                        <a
+                            href="https://en.wikipedia.org/wiki/Race_After_Technology"
+                        >
+                            Race After Technology
+                        </a>
+                        <graffiti-like target="urn:isbn:9781509526390" />
+                    </li>
+                    <li>
+                        The movie
+                        <a href="https://en.wikipedia.org/wiki/The_Matrix">
+                            The Matrix
+                        </a>
+                        <graffiti-like target="urn:imdb:tt0133093" />
+                    </li>
+                    <li v-if="$graffitiSession.value">
+                        Yourself!
+                        <graffiti-like :target="$graffitiSession.value.actor" />
+                    </li>
+                </ul>
+            </main>
+        </template>
+        <template id="like-template">
+            <button v-if="!$graffitiSession.value" @click="$graffiti.login()">
+                <slot name="login">Log in to like</slot>
+            </button>
+            <graffiti-discover
+                v-else
+                v-slot="{ objects: likes, isInitialPolling }"
+                :channels="[target]"
+                :schema="{
+                    properties: {
+                        value: {
+                            required: ['activity', 'target'],
+                            properties: {
+                                activity: { enum: ['Like'] },
+                                target: { enum: [target] },
+                            }
+                        },
+                    }
+                }"
+            >
+                <button v-if="isInitialPolling" disabled>Loading...</button>
+                <button
+                    v-else-if="!likes.some(l => l.actor === $graffitiSession.value.actor)"
+                    @click="$graffiti.put({
+                        value: {
+                            activity: 'Like',
+                            target: target,
+                        },
+                        channels: [target]
+                    }, $graffitiSession.value)"
+                >
+                    Like ({{ likes.length }})
+                </button>
+                <button
+                    v-else
+                    @click="likes.filter(
+                        like => like.actor === $graffitiSession.value.actor
+                    ).map(like => $graffiti.delete(like, $graffitiSession.value))"
+                >
+                    Unlike ({{ likes.length }})
+                </button>
+            </graffiti-discover>
+        </template>
+        <script type="module">
+            import { createApp } from "vue";
+            import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
+            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
+            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+
+            createApp({
+                template: "#my-template",
+                components: {
+                    GraffitiLike: {
+                        template: "#like-template",
+                        props: ["target"],
+                    },
+                },
+            })
+                .use(GraffitiPlugin, {
+                    graffiti: new GraffitiRemote(),
+                    // Use local for debugging!
+                    // graffiti: new GraffitiLocal(),
+                })
+                .mount("#app");
+        </script>
+    </body>
+</html>
