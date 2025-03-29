@@ -8,11 +8,13 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7.0/dist/browser/plugin.mjs",
                     "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
                 }
             }
         </script>
+        <!-- "@graffiti-garden/wrapper-vue": "../../dist/browser/plugin.mjs", -->
+
         <link
             rel="stylesheet"
             href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
@@ -103,22 +105,37 @@
                                 <footer>
                                     <nav>
                                         <ul>
-                                            <li>
-                                                <button
-                                                    v-if="
-                                                        $graffitiSession.value
-                                                            ?.actor === reply.actor
-                                                    "
-                                                    @click="
-                                                        deleteReply(
-                                                            reply,
-                                                            $graffitiSession.value,
-                                                        )
-                                                    "
-                                                >
-                                                    Delete
-                                                </button>
-                                            </li>
+                                            <template
+                                                v-if="
+                                                $graffitiSession.value
+                                                    ?.actor === reply.actor
+                                            "
+                                            >
+                                                <li>
+                                                    <button
+                                                        @click="
+                                                            editReply(
+                                                                reply,
+                                                                $graffitiSession.value,
+                                                            )
+                                                        "
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                </li>
+                                                <li>
+                                                    <button
+                                                        @click="
+                                                            deleteReply(
+                                                                reply,
+                                                                $graffitiSession.value,
+                                                            )
+                                                        "
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </li>
+                                            </template>
                                             <li>
                                                 <button
                                                     @click="
@@ -204,6 +221,26 @@
                                 );
                                 this.replying = false;
                                 this.reply = "";
+                            },
+                            async editReply(reply, session) {
+                                const newContent = prompt(
+                                    "Edit your reply",
+                                    reply.value.content,
+                                );
+                                if (!newContent) return;
+                                const patched = await this.$graffiti.patch(
+                                    {
+                                        value: [
+                                            {
+                                                op: "replace",
+                                                path: "/content",
+                                                value: newContent,
+                                            },
+                                        ],
+                                    },
+                                    reply,
+                                    session,
+                                );
                             },
                             async deleteReply(reply, session) {
                                 confirm(
