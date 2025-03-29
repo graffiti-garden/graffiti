@@ -9,7 +9,6 @@
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
                     "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
                     "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
                 }
             }
@@ -78,12 +77,6 @@
 
             createApp({
                 template: "#my-template",
-                components: {
-                    GraffitiLike: {
-                        template: "#like-template",
-                        props: ["target"],
-                    },
-                },
                 methods: {
                     changeName() {
                         const name = prompt("What's your name?");
@@ -105,8 +98,6 @@
             })
                 .use(GraffitiPlugin, {
                     graffiti: new GraffitiRemote(),
-                    // Use local for debugging!
-                    // graffiti: new GraffitiLocal(),
                 })
                 .mount("#app");
         </script>
