@@ -8,7 +8,7 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
                     "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
                     "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
                 }
@@ -18,6 +18,19 @@
             rel="stylesheet"
             href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
         />
+        <style>
+            body {
+                padding: 1rem;
+            }
+
+            ul:has(li article) {
+                padding: 0;
+
+                li {
+                    list-style: none;
+                }
+            }
+        </style>
     </head>
     <body>
         <div id="app"></div>
@@ -29,12 +42,20 @@
                         >Download the source code and make it your own!</a
                     >
                 </p>
-                <p v-if="$graffitiSession.value">
-                    You are logged in as
-                    <input readonly :value="$graffitiSession.value.actor" />
-                </p>
+                <template v-if="$graffitiSession.value">
+                    <p>You are logged in as:</p>
+                    <p>
+                        <button @click="copyActor">
+                            {{ $graffitiSession.value.actor }}
+                        </button>
+                        👈 click to copy
+                    </p>
+                </template>
                 <nav>
                     <ul v-if="$graffitiSession.value">
+                        <li>
+                            <button @click="createChat">✏️ New Chat</button>
+                        </li>
                         <li>
                             <button @click="state = 'chats'">Chats</button>
                         </li>
@@ -55,7 +76,7 @@
             </header>
             <main>
                 <section v-if="!$graffitiSession.value">
-                    <p>Log in to chat with your friends.</p>
+                    <p>Log in to chat!</p>
                 </section>
                 <section v-else-if="state === 'chats'">
                     <h2>Chats</h2>
@@ -67,14 +88,22 @@
                         :schema="inviteSchema"
                     >
                         <ul>
-                            <li>
-                                <button @click="createChat">New Chat</button>
-                            </li>
-                            <li v-for="invite in invitations.sort((a, b) => b.value.published - a.value.published)"
-                                :key="invite.id">
-                                <button @click="state = 'chat:' + invite.url">
-                                    <h3>{{ invite.value.title }}</h3>
-                                    <p>Created by: {{ invite.actor }}</p>
+                            <li
+                                v-for="invite in invitations.sort((a, b) => b.value.published - a.value.published)"
+                                :key="invite.id"
+                            >
+                                <article>
+                                    <header>
+                                        <h3>{{ invite.value.title }}</h3>
+                                        <p>Created by: {{ invite.actor }}</p>
+                                    </header>
+                                    <main>
+                                        <button
+                                            @click="state = 'chat:' + invite.url"
+                                        >
+                                            Open Chat
+                                        </button>
+                                    </main>
                                 </article>
                             </li>
                         </ul>
@@ -89,20 +118,30 @@
                         <header>
                             <h2>{{ invite.value.title }}</h2>
                             <p>Created by: {{ invite.actor }}</p>
-                            <h3>
-                                Members
-                            </h3>
+                            <h3>Members</h3>
                             <ul>
-                                <li v-for="participant in invite.value.participants">
+                                <li
+                                    v-for="participant in invite.value.participants"
+                                >
                                     {{ participant }}
-                                    <button v-if="invite.actor === $graffitiSession.value.actor && participant !== $graffitiSession.value.actor"
-                                        @click="removeParticipant(invite, participant)">Remove</button>
+                                    <button
+                                        v-if="invite.actor === $graffitiSession.value.actor && participant !== $graffitiSession.value.actor"
+                                        @click="removeParticipant(invite, participant)"
+                                    >
+                                        Remove
+                                    </button>
                                 </li>
-                                <li v-if="invite.actor === $graffitiSession.value.actor">
-                                    <button @click="addParticipant(invite)">Add</button>
+                                <li
+                                    v-if="invite.actor === $graffitiSession.value.actor"
+                                >
+                                    <button @click="addParticipant(invite)">
+                                        Add
+                                    </button>
                                 </li>
                             </ul>
-                            <nav v-if="invite.actor === $graffitiSession.value.actor">
+                            <nav
+                                v-if="invite.actor === $graffitiSession.value.actor"
+                            >
                                 <ul>
                                     <li>
                                         <button @click="renameChat(invite)">
@@ -127,7 +166,10 @@
                                 channels: [invite.url]
                             }, $graffitiSession.value); message = ''"
                         >
-                            <input v-model="message" placeholder="Type a message..." />
+                            <input
+                                v-model="message"
+                                placeholder="Type a message..."
+                            />
                         </form>
                         <graffiti-discover
                             autopoll
@@ -146,17 +188,21 @@
                             }"
                         >
                             <ul>
-                                <li v-for="message in messages.sort((a, b) => b.value.published - a.value.published)">
+                                <li
+                                    v-for="message in messages.sort((a, b) => b.value.published - a.value.published)"
+                                >
                                     <article>
-                                        <p>
-                                            {{ message.value.content }}
-                                        </p>
-                                        <p>
-                                            from: {{ message.actor }}
-                                        </p>
-                                        <p>
-                                            sent: {{ new Date(message.value.published).toLocaleString() }}
-                                        </p>
+                                        <header>
+                                            <h3>{{ message.actor }}</h3>
+                                            <p>
+                                                sent: {{ new
+                                                Date(message.value.published).toLocaleString()
+                                                }}
+                                            </p>
+                                        </header>
+                                        <main>
+                                            <p>{{ message.value.content }}</p>
+                                        </main>
                                     </article>
                                 </li>
                             </ul>
@@ -172,7 +218,7 @@
             import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
 
             createApp({
-                template: document.getElementById("my-template").innerHTML,
+                template: "#my-template",
                 // Declare reactive data
                 data() {
                     return {
@@ -181,7 +227,13 @@
                         inviteSchema: {
                             properties: {
                                 value: {
-                                    required: ["activity", "target", "title", "published", "participants"],
+                                    required: [
+                                        "activity",
+                                        "target",
+                                        "title",
+                                        "published",
+                                        "participants",
+                                    ],
                                     properties: {
                                         activity: { enum: ["Invite"] },
                                         target: { enum: ["Chat"] },
@@ -198,6 +250,12 @@
                     };
                 },
                 methods: {
+                    copyActor() {
+                        navigator.clipboard.writeText(
+                            this.$graffitiSession.value.actor,
+                        );
+                        alert("copied!");
+                    },
                     async createChat() {
                         // Ask the user to name the chat
                         const subject = prompt("Name your chat");
@@ -226,17 +284,31 @@
                         this.state = "chat:" + invite.url;
                     },
                     async renameChat(invite) {
-                      const name = prompt("Name your chat", invite.value.title);
-                      if (!name) return;
-                      await this.$graffiti.put({
-                        ...invite,
-                        value: {...invite.value, title: name}
-                      }, this.$graffitiSession.value);
+                        const name = prompt(
+                            "Name your chat",
+                            invite.value.title,
+                        );
+                        if (!name) return;
+                        await this.$graffiti.put(
+                            {
+                                ...invite,
+                                value: { ...invite.value, title: name },
+                            },
+                            this.$graffitiSession.value,
+                        );
                     },
                     async deleteChat(invite) {
-                      if(!confirm("Are you sure you want to delete this chat?")) return;
-                      await this.$graffiti.delete(invite, this.$graffitiSession.value);
-                      this.state = "chats";
+                        if (
+                            !confirm(
+                                "Are you sure you want to delete this chat?",
+                            )
+                        )
+                            return;
+                        await this.$graffiti.delete(
+                            invite,
+                            this.$graffitiSession.value,
+                        );
+                        this.state = "chats";
                     },
                     async addParticipant(invite) {
                         // Ask the user to name the chat
@@ -244,28 +316,53 @@
                         if (!participant) return;
 
                         // Add the participant to the channels, value, and allowed
-                        await this.$graffiti.put({
-                          ...invite,
-                          channels: [...invite.channels, participant],
-                          value: {...invite.value, participants: [...invite.value.participants, participant]},
-                          allowed: [...invite.allowed, participant]
-                        }, this.$graffitiSession.value);
+                        await this.$graffiti.put(
+                            {
+                                ...invite,
+                                channels: [...invite.channels, participant],
+                                value: {
+                                    ...invite.value,
+                                    participants: [
+                                        ...invite.value.participants,
+                                        participant,
+                                    ],
+                                },
+                                allowed: [...invite.allowed, participant],
+                            },
+                            this.$graffitiSession.value,
+                        );
                     },
                     async removeParticipant(invite, participant) {
                         // Remove the participant from the channels, value, and allowed
-                        await this.$graffiti.put({
-                          ...invite,
-                          channels: invite.channels.filter(c => c !== participant),
-                          value: {...invite.value, participants: invite.value.participants.filter(p => p !== participant)},
-                          allowed: invite.allowed.filter(a => a !== participant)
-                        }, this.$graffitiSession.value);
+                        await this.$graffiti.put(
+                            {
+                                ...invite,
+                                channels: invite.channels.filter(
+                                    (c) => c !== participant,
+                                ),
+                                value: {
+                                    ...invite.value,
+                                    participants:
+                                        invite.value.participants.filter(
+                                            (p) => p !== participant,
+                                        ),
+                                },
+                                allowed: invite.allowed.filter(
+                                    (a) => a !== participant,
+                                ),
+                            },
+                            this.$graffitiSession.value,
+                        );
                     },
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiRemote(),
-                    // Use local for debugging!
-                    // graffiti: new GraffitiLocal(),
+                    graffiti: new GraffitiLocal(),
+                    // Switch to the "remote"
+                    // version of Graffiti when you're
+                    // ready to deploy and interact
+                    // with others.
+                    // graffiti: new GraffitiRemote(),
                 })
                 .mount("#app");
         </script>

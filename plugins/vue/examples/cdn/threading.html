@@ -8,18 +8,22 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7.0/dist/browser/plugin.mjs",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
                     "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
                 }
             }
         </script>
-        <!-- "@graffiti-garden/wrapper-vue": "../../dist/browser/plugin.mjs", -->
 
         <link
             rel="stylesheet"
             href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
         />
         <style>
+            body {
+                padding: 1rem;
+            }
+
             ul {
                 padding: 0;
             }
@@ -167,6 +171,7 @@
         <script type="module">
             import { createApp } from "vue";
             import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
+            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
             import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
 
             createApp({
@@ -252,7 +257,8 @@
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiRemote(),
+                    graffiti: new GraffitiLocal(),
+                    // graffiti: new GraffitiRemote(),
                 })
                 .mount("#app");
         </script>

@@ -8,7 +8,7 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
                     "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
                     "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
                 }
@@ -18,6 +18,23 @@
             rel="stylesheet"
             href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
         />
+        <style>
+            body {
+                padding: 1rem;
+            }
+
+            ul li input[type="text"] {
+                width: 10rem;
+            }
+
+            ul:has(li article) {
+                padding: 0;
+
+                li {
+                    list-style: none;
+                }
+            }
+        </style>
     </head>
     <body>
         <div id="app"></div>
@@ -29,10 +46,15 @@
                         >Download the source code and make it your own!</a
                     >
                 </p>
-                <p v-if="$graffitiSession.value">
-                    You are logged in as
-                    <input readonly :value="$graffitiSession.value.actor" />
-                </p>
+                <template v-if="$graffitiSession.value">
+                    <p>You are logged in as:</p>
+                    <p>
+                        <button @click="copyActor">
+                            {{ $graffitiSession.value.actor }}
+                        </button>
+                        👈 click to copy
+                    </p>
+                </template>
                 <nav>
                     <ul v-if="$graffitiSession.value">
                         <li>
@@ -73,8 +95,9 @@
                         :channels="[$graffitiSession.value.actor]"
                         :schema="emailSchema()"
                     >
-                        <button @click="poll()">Check for new messages</button>
                         <p v-if="isInitialPolling">Loading...</p>
+                        <p v-else-if="!messages.length">No messages yet!</p>
+                        <button @click="poll()">Check for new messages</button>
                         <display-emails :messages="messages" />
                     </graffiti-discover>
                 </template>
@@ -87,6 +110,9 @@
                         :schema="emailSchema(true)"
                     >
                         <p v-if="isInitialPolling">Loading...</p>
+                        <p v-else-if="!messages.length">
+                            You have not sent any messages yet!
+                        </p>
                         <display-emails :messages="messages" />
                     </graffiti-discover>
                 </template>
@@ -186,8 +212,15 @@
                     },
                 },
                 methods: {
+                    copyActor() {
+                        navigator.clipboard.writeText(
+                            this.$graffitiSession.value.actor,
+                        );
+                        alert("copied!");
+                    },
                     async sendMail() {
-                        if (!this.recipients.filter((r) => r).length) {
+                        const recipients = this.recipients.filter((r) => r);
+                        if (!recipients.length) {
                             alert("Please add at least one recipient.");
                             return;
                         }
@@ -207,11 +240,11 @@
                             {
                                 channels: [
                                     this.$graffitiSession.value.actor,
-                                    ...this.recipients,
+                                    ...recipients,
                                 ],
-                                allowed: this.recipients,
+                                allowed: recipients,
                                 value: {
-                                    to: this.recipients,
+                                    to: recipients,
                                     subject: this.subject,
                                     content: this.message,
                                     published: Date.now(),
@@ -248,9 +281,8 @@
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiRemote(),
-                    // Use local for debugging!
-                    // graffiti: new GraffitiLocal(),
+                    graffiti: new GraffitiLocal(),
+                    // graffiti: new GraffitiRemote(),
                 })
                 .mount("#app");
         </script>
