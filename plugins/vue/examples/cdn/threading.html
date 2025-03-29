@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti Private Chatrooms</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                }
+            }
+        </script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
+        />
+        <style>
+            ul {
+                padding: 0;
+            }
+
+            ul li {
+                list-style: none;
+            }
+
+            .nested-comments {
+                border-left: 1px solid #ccc;
+                padding-left: 2rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+        <template id="my-template">
+            <header>
+                <h1>Graffiti Threaded Replies</h1>
+                <p>
+                    <a download href
+                        >Download the source code and make it your own!</a
+                    >
+                </p>
+            </header>
+            <main>
+                <article>
+                    <h2>Comment on me!</h2>
+                    <graffiti-replies
+                        target="the-uri-of-the-thing-im-replying-to"
+                        :reply-box-open="true"
+                    ></graffiti-replies>
+                </article>
+            </main>
+        </template>
+        <template id="replies-template">
+            <section>
+                <template v-if="replyBoxOpen">
+                    <template v-if="!$graffitiSession.value">
+                        <button @click="$graffiti.login()">
+                            Log in to reply
+                        </button>
+                    </template>
+                    <form
+                        v-else
+                        @submit.prevent="postReply($graffitiSession.value)"
+                    >
+                        <textarea
+                            id="reply"
+                            type="text"
+                            v-model="reply"
+                            placeholder="My reply..."
+                            aria-label="Reply"
+                        ></textarea>
+                        <input
+                            type="submit"
+                            :value="replying ? 'Replying...' : 'Post Reply'"
+                            :disabled="replying || !reply"
+                        />
+                    </form>
+                </template>
+                <graffiti-discover
+                    v-slot="{ objects: replies }"
+                    :channels="[target]"
+                    :schema="replySchema"
+                >
+                    <ul>
+                        <li
+                            v-for="reply in replies.toSorted(
+                                (a, b) => b.value.published - a.value.published,
+                            )"
+                            :key="reply.url"
+                        >
+                            <article>
+                                <header>
+                                    <h3>{{ reply.actor }}</h3>
+                                    <p>
+                                        {{ new Date( reply.value.published,
+                                        ).toLocaleString() }}
+                                    </p>
+                                </header>
+                                <main>{{ reply.value.content }}</main>
+                                <footer>
+                                    <nav>
+                                        <ul>
+                                            <li>
+                                                <button
+                                                    v-if="
+                                                        $graffitiSession.value
+                                                            ?.actor === reply.actor
+                                                    "
+                                                    @click="
+                                                        deleteReply(
+                                                            reply,
+                                                            $graffitiSession.value,
+                                                        )
+                                                    "
+                                                >
+                                                    Delete
+                                                </button>
+                                            </li>
+                                            <li>
+                                                <button
+                                                    @click="
+                                                        openReplyBoxes.set(
+                                                            reply.url,
+                                                            !openReplyBoxes.get(
+                                                                reply.url,
+                                                            )
+                                                        )
+                                                    "
+                                                >
+                                                    Reply
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                </footer>
+                            </article>
+                            <graffiti-replies
+                                class="nested-comments"
+                                :target="reply.url"
+                                :reply-box-open="openReplyBoxes.get(reply.url)"
+                            ></graffiti-replies>
+                        </li>
+                    </ul>
+                </graffiti-discover>
+            </section>
+        </template>
+        <script type="module">
+            import { createApp } from "vue";
+            import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
+            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+
+            createApp({
+                template: "#my-template",
+                components: {
+                    GraffitiReplies: {
+                        name: "GraffitiReplies",
+                        template: "#replies-template",
+                        props: ["target", "replyBoxOpen"],
+                        data() {
+                            return {
+                                reply: "",
+                                replying: false,
+                                openReplyBoxes: new Map(),
+                            };
+                        },
+                        computed: {
+                            replySchema() {
+                                return {
+                                    properties: {
+                                        value: {
+                                            required: [
+                                                "content",
+                                                "inReplyTo",
+                                                "published",
+                                            ],
+                                            properties: {
+                                                content: { type: "string" },
+                                                inReplyTo: {
+                                                    enum: [this.target],
+                                                },
+                                                published: { type: "number" },
+                                            },
+                                        },
+                                    },
+                                };
+                            },
+                        },
+                        methods: {
+                            async postReply(session) {
+                                this.replying = true;
+                                await this.$graffiti.put(
+                                    {
+                                        value: {
+                                            content: this.reply,
+                                            published: Date.now(),
+                                            inReplyTo: this.target,
+                                        },
+                                        channels: [this.target],
+                                    },
+                                    session,
+                                );
+                                this.replying = false;
+                                this.reply = "";
+                            },
+                            async deleteReply(reply, session) {
+                                confirm(
+                                    "Are you sure you want to delete this reply? It cannot be undone.",
+                                ) && this.$graffiti.delete(reply, session);
+                            },
+                        },
+                    },
+                },
+            })
+                .use(GraffitiPlugin, {
+                    graffiti: new GraffitiRemote(),
+                })
+                .mount("#app");
+        </script>
+    </body>
+</html>
