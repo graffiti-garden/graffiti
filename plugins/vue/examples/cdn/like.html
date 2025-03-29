@@ -8,7 +8,7 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
                     "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
                     "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
                 }
@@ -70,11 +70,7 @@
             </main>
         </template>
         <template id="like-template">
-            <button v-if="!$graffitiSession.value" @click="$graffiti.login()">
-                <slot name="login">Log in to like</slot>
-            </button>
             <graffiti-discover
-                v-else
                 v-slot="{ objects: likes, isInitialPolling }"
                 :channels="[target]"
                 :schema="{
@@ -90,6 +86,12 @@
                 }"
             >
                 <button v-if="isInitialPolling" disabled>Loading...</button>
+                <button
+                    v-else-if="!$graffitiSession.value"
+                    @click="$graffiti.login()"
+                >
+                    Log in to like ({{ likes.length }})
+                </button>
                 <button
                     v-else-if="!likes.some(l => l.actor === $graffitiSession.value.actor)"
                     @click="$graffiti.put({
@@ -128,9 +130,8 @@
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiRemote(),
-                    // Use local for debugging!
-                    // graffiti: new GraffitiLocal(),
+                    graffiti: new GraffitiLocal(),
+                    // graffiti: new GraffitiRemote(),
                 })
                 .mount("#app");
         </script>
