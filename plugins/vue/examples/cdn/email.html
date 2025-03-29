@@ -169,7 +169,7 @@
             import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
 
             createApp({
-                template: document.getElementById("my-template").innerHTML,
+                template: "#my-template",
                 // Declare reactive data
                 data() {
                     return {
@@ -182,8 +182,7 @@
                 components: {
                     DisplayEmails: {
                         props: ["messages"],
-                        template:
-                            document.getElementById("display-emails").innerHTML,
+                        template: "#display-emails",
                     },
                 },
                 methods: {

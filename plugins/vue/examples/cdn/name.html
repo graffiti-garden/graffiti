@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti Profile Name</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
+                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                }
+            }
+        </script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
+        />
+    </head>
+    <body>
+        <div id="app"></div>
+        <template id="my-template">
+            <header>
+                <header>
+                    <h1>Graffiti Profile Name</h1>
+                    <p>
+                        <a download href
+                            >Download the source code and make it your own!</a
+                        >
+                    </p>
+                </header>
+            </header>
+            <main v-if="!$graffitiSession.value">
+                <p>
+                    <button @click="$graffiti.login()">Login</button> to choose
+                    a name!
+                </p>
+            </main>
+            <main v-else>
+                <graffiti-discover
+                    v-slot="{ objects: profiles, isInitialPolling }"
+                    :channels="[$graffitiSession.value.actor]"
+                    :schema="{
+                      properties: {
+                        value: {
+                          properties: {
+                            name: { type: 'string' },
+                            describes: { enum: [$graffitiSession.value.actor] },
+                            published: { type: 'number' },
+                          },
+                          required: ['name', 'describes', 'published'],
+                        },
+                      },
+                    }"
+                >
+                    <p v-if="isInitialPolling">Loading...</p>
+                    <template v-else>
+                        <p v-if="!profiles.length">You haven't set a name!</p>
+                        <p v-else>
+                            Your name is:
+                            <strong>
+                                {{ profiles.sort((a,b)=> b.value.published -
+                                a.value.published)[0].value.name }}
+                            </strong>
+                        </p>
+                        <button @click="changeName">Change your name</button>
+                    </template>
+                </graffiti-discover>
+            </main>
+        </template>
+        <script type="module">
+            import { createApp } from "vue";
+            import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
+            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
+            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+
+            createApp({
+                template: "#my-template",
+                components: {
+                    GraffitiLike: {
+                        template: "#like-template",
+                        props: ["target"],
+                    },
+                },
+                methods: {
+                    changeName() {
+                        const name = prompt("What's your name?");
+                        if (!name) return;
+                        this.$graffiti.put(
+                            {
+                                value: {
+                                    name,
+                                    describes:
+                                        this.$graffitiSession.value.actor,
+                                    published: Date.now(),
+                                },
+                                channels: [this.$graffitiSession.value.actor],
+                            },
+                            this.$graffitiSession.value,
+                        );
+                    },
+                },
+            })
+                .use(GraffitiPlugin, {
+                    graffiti: new GraffitiRemote(),
+                    // Use local for debugging!
+                    // graffiti: new GraffitiLocal(),
+                })
+                .mount("#app");
+        </script>
+    </body>
+</html>
