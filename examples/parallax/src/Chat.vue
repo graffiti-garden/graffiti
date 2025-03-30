@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef } from "vue";
-import type { GraffitiSession, JSONSchema } from "@graffiti-garden/api";
+import type {
+    GraffitiObject,
+    GraffitiSession,
+    JSONSchema,
+} from "@graffiti-garden/api";
 import {
     useGraffiti,
     useGraffitiSession,
@@ -28,6 +32,7 @@ function chatNameSchema(channel: string) {
         },
     } as const satisfies JSONSchema;
 }
+type ChatNameObject = GraffitiObject<ReturnType<typeof chatNameSchema>>;
 
 const { objects: chatNamesRaw, isInitialPolling: isInitialPollingChatNames } =
     useGraffitiDiscover(
@@ -35,18 +40,31 @@ const { objects: chatNamesRaw, isInitialPolling: isInitialPollingChatNames } =
         () => chatNameSchema(props.channel),
     );
 
-const chatNames = computed(() =>
+const chatNames = computed<ChatNameObject[]>(() =>
     chatNamesRaw.value.toSorted(
         (a, b) => b.value.published - a.value.published,
     ),
 );
 
-// The one to display is the most recent one by the actor
 const myChatName = computed(() => {
     const entry = chatNames.value
         .filter((c) => c.actor === graffitiSession.value?.actor)
         .at(0);
     return entry?.value.name;
+});
+
+const groupedChatNames = computed(() => {
+    // Group adjacent chat names with the same name
+    const grouped: ChatNameObject[][] = [];
+    for (const chatName of chatNames.value) {
+        const lastGroup = grouped.at(-1);
+        if (lastGroup && lastGroup.at(-1)?.value.name === chatName.value.name) {
+            lastGroup.push(chatName);
+        } else {
+            grouped.push([chatName]);
+        }
+    }
+    return grouped;
 });
 
 const editingChatName = ref(false);
@@ -105,20 +123,33 @@ async function saveChatName(session: GraffitiSession, name?: string) {
             <button @click="editChatName">Edit</button>
         </h2>
         <ul>
-            <li v-for="chatName in chatNames" :key="chatName.url">
-                <template
-                    v-if="chatName.actor === $graffitiSession.value?.actor"
+            <li v-for="group in groupedChatNames" :key="group.at(0)?.url">
+                <span
+                    v-for="[index, chatName] in group.toReversed().entries()"
+                    :key="chatName.url"
                 >
-                    You named your
-                </template>
-                <template v-else> {{ chatName.actor }} named their </template>
-                view of the chat "{{ chatName.value.name }}"
+                    {{
+                        (chatName.actor === $graffitiSession.value?.actor
+                            ? `${index ? "y" : "Y"}ou`
+                            : chatName.actor) +
+                        (group.length > 1 && index < group.length - 1
+                            ? " and "
+                            : "")
+                    }}
+                </span>
+                named
+                {{
+                    group.some((c) => c.actor === $graffitiSession.value?.actor)
+                        ? "your"
+                        : "their"
+                }}
+                view of the chat "{{ group.at(0)?.value.name }}".
                 <button
-                    v-if="myChatName !== chatName.value.name"
+                    v-if="myChatName !== group.at(0)?.value.name"
                     @click="
                         saveChatName(
                             $graffitiSession.value,
-                            chatName.value.name,
+                            group.at(0)?.value.name,
                         )
                     "
                     :disabled="saving"
@@ -128,5 +159,4 @@ async function saveChatName(session: GraffitiSession, name?: string) {
             </li>
         </ul>
     </template>
-    <!-- // Group ones with the same name -->
 </template>
