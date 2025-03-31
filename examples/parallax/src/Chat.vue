@@ -1,56 +1,59 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef } from "vue";
-import type {
-    GraffitiObject,
-    GraffitiSession,
-    JSONSchema,
-} from "@graffiti-garden/api";
 import {
     useGraffiti,
     useGraffitiSession,
     useGraffitiDiscover,
 } from "@graffiti-garden/wrapper-vue";
+import {
+    chatNameSchema,
+    memberUpdateSchema,
+    type ChatNameObject,
+    type MemberUpdateObject,
+} from "./schemas";
+import { sortByPublished } from "./utils";
+import Membership from "./Membership.vue";
+import ChatNameEditor from "./ChatNameEditor.vue";
 
 const props = defineProps<{
     channel: string;
 }>();
 
-const graffiti = useGraffiti();
 const graffitiSession = useGraffitiSession();
-
-function chatNameSchema(channel: string) {
-    return {
-        properties: {
-            value: {
-                required: ["describes", "name", "published"],
-                properties: {
-                    describes: { enum: [channel] },
-                    name: { type: "string" },
-                    published: { type: "number" },
-                },
-            },
-        },
-    } as const satisfies JSONSchema;
-}
-type ChatNameObject = GraffitiObject<ReturnType<typeof chatNameSchema>>;
 
 const { objects: chatNamesRaw, isInitialPolling: isInitialPollingChatNames } =
     useGraffitiDiscover(
         () => [props.channel],
         () => chatNameSchema(props.channel),
     );
-
-const chatNames = computed<ChatNameObject[]>(() =>
-    chatNamesRaw.value.toSorted(
-        (a, b) => b.value.published - a.value.published,
-    ),
-);
+const chatNames = sortByPublished<ChatNameObject>(chatNamesRaw);
 
 const myChatName = computed(() => {
     const entry = chatNames.value
         .filter((c) => c.actor === graffitiSession.value?.actor)
         .at(0);
     return entry?.value.name;
+});
+
+const {
+    objects: memberUpdatesRaw,
+    isInitialPolling: isInitialPollingMemberUpdates,
+} = useGraffitiDiscover(
+    () => [props.channel],
+    () => memberUpdateSchema(props.channel),
+);
+const memberUpdates = sortByPublished<MemberUpdateObject>(memberUpdatesRaw);
+
+const myMembers = computed(() => {
+    const members = new Set<string>();
+    for (const memberUpdate of memberUpdates.value.toReversed()) {
+        if (memberUpdate.value.activity === "Add") {
+            members.add(memberUpdate.value.target);
+        } else {
+            members.delete(memberUpdate.value.target);
+        }
+    }
+    return members;
 });
 
 const groupedChatNames = computed(() => {
@@ -66,39 +69,6 @@ const groupedChatNames = computed(() => {
     }
     return grouped;
 });
-
-const editingChatName = ref(false);
-const editingChatNameValue = ref("");
-const editor = useTemplateRef("editor");
-async function editChatName() {
-    editingChatName.value = true;
-    editingChatNameValue.value = myChatName.value ?? "";
-    await nextTick();
-    editor.value?.focus();
-    editor.value?.select();
-}
-const saving = ref(false);
-async function saveChatName(session: GraffitiSession, name?: string) {
-    name = name ?? editingChatNameValue.value;
-    if (!name || name === myChatName.value) {
-        editingChatName.value = false;
-        return;
-    }
-    saving.value = true;
-    await graffiti.put<ReturnType<typeof chatNameSchema>>(
-        {
-            channels: [props.channel],
-            value: {
-                describes: props.channel,
-                name,
-                published: Date.now(),
-            },
-        },
-        session,
-    );
-    saving.value = false;
-    editingChatName.value = false;
-}
 </script>
 
 <template>
@@ -106,57 +76,121 @@ async function saveChatName(session: GraffitiSession, name?: string) {
         <p>You are not logged in!</p>
     </template>
     <template v-else>
-        <h2 v-if="editingChatName">
-            <form @submit.prevent="saveChatName($graffitiSession.value)">
-                <input ref="editor" v-model="editingChatNameValue" />
-                <input type="submit" value="Save" :disabled="saving" />
-                <button
-                    @click.prevent="editingChatName = false"
-                    :disabled="saving"
-                >
-                    Cancel
-                </button>
-            </form>
-        </h2>
-        <h2 v-else>
-            {{ myChatName ?? "Unnamed Chat" }}
-            <button @click="editChatName">Edit</button>
-        </h2>
-        <ul>
-            <li v-for="group in groupedChatNames" :key="group.at(0)?.url">
-                <span
-                    v-for="[index, chatName] in group.toReversed().entries()"
-                    :key="chatName.url"
-                >
+        <article>
+            <h2>
+                <ChatNameEditor
+                    :channel="props.channel"
+                    :myChatName="myChatName"
+                    :session="$graffitiSession.value"
+                />
+            </h2>
+            <ul>
+                <li v-for="group in groupedChatNames" :key="group.at(0)?.url">
+                    <span
+                        v-for="[index, chatName] in group
+                            .toReversed()
+                            .entries()"
+                        :key="chatName.url"
+                    >
+                        {{
+                            (chatName.actor === $graffitiSession.value?.actor
+                                ? `${index ? "y" : "Y"}ou`
+                                : chatName.actor) +
+                            (group.length > 1 && index < group.length - 1
+                                ? " and "
+                                : "")
+                        }}
+                    </span>
+                    named
                     {{
-                        (chatName.actor === $graffitiSession.value?.actor
-                            ? `${index ? "y" : "Y"}ou`
-                            : chatName.actor) +
-                        (group.length > 1 && index < group.length - 1
-                            ? " and "
-                            : "")
-                    }}
-                </span>
-                named
-                {{
-                    group.some((c) => c.actor === $graffitiSession.value?.actor)
-                        ? "your"
-                        : "their"
-                }}
-                view of the chat "{{ group.at(0)?.value.name }}".
-                <button
-                    v-if="myChatName !== group.at(0)?.value.name"
-                    @click="
-                        saveChatName(
-                            $graffitiSession.value,
-                            group.at(0)?.value.name,
+                        group.some(
+                            (c) => c.actor === $graffitiSession.value?.actor,
                         )
-                    "
-                    :disabled="saving"
-                >
-                    Use this name
-                </button>
-            </li>
-        </ul>
+                            ? "your"
+                            : "their"
+                    }}
+                    view of the chat "{{ group.at(0)?.value.name }}".
+                    <button v-if="myChatName !== group.at(0)?.value.name">
+                        Use this name
+                    </button>
+                </li>
+            </ul>
+        </article>
+
+        <aside>
+            <h3>Members</h3>
+            <Membership
+                :channel="props.channel"
+                :myMembers="myMembers"
+                :session="$graffitiSession.value"
+            />
+        </aside>
     </template>
 </template>
+
+<style>
+body {
+    font-family: sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+header,
+footer {
+    background-color: #222;
+    color: white;
+    padding: 1em;
+    text-align: center;
+}
+
+main {
+    display: flex;
+    flex: 1;
+    padding: 1em;
+    gap: 1em;
+}
+
+section {
+    flex: 3;
+}
+
+aside {
+    flex: 1;
+    background-color: #f3f3f3;
+    padding: 1em;
+    border-left: 1px solid #ccc;
+}
+
+h1,
+h2,
+h3 {
+    margin-top: 0;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+li {
+    margin-bottom: 0.5em;
+}
+
+article {
+    margin-top: 1em;
+}
+
+footer {
+    font-size: 0.9em;
+}
+</style>
+
+<!-- @click="
+    saveChatName(
+        $graffitiSession.value,
+        group.at(0)?.value.name,
+    )
+"
+:disabled="saving" -->
