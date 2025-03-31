@@ -19,7 +19,7 @@ const routes = [
   },
   {
     path: "/",
-    redirect: "/chat/general",
+    redirect: "/chat/general2",
   },
 ];
 
