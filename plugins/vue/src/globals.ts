@@ -1,12 +1,11 @@
-import { inject } from "vue";
-import type { InjectionKey, Ref } from "vue";
+import type { Ref } from "vue";
 import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
 import type { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 
-export const graffitiInjectKey = Symbol() as InjectionKey<GraffitiSynchronize>;
-export const graffitiSessionInjectKey = Symbol() as InjectionKey<
-  Ref<GraffitiSession | undefined | null>
->;
+export const globals: {
+  graffitiSynchronize?: GraffitiSynchronize;
+  graffitiSession?: Ref<GraffitiSession | undefined | null>;
+} = {};
 
 /**
  * Returns the global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance
@@ -14,7 +13,7 @@ export const graffitiSessionInjectKey = Symbol() as InjectionKey<
  * @throws If the {@link GraffitiPlugin} is not installed
  */
 export function useGraffitiSynchronize() {
-  const graffiti = inject(graffitiInjectKey);
+  const graffiti = globals.graffitiSynchronize;
   if (!graffiti) {
     throw new Error(
       "No Graffiti instance provided, did you forget to install the plugin?",
@@ -57,7 +56,7 @@ export function useGraffiti(): Graffiti {
  * @throws If the {@link GraffitiPlugin} is not installed
  */
 export function useGraffitiSession() {
-  const session = inject(graffitiSessionInjectKey);
+  const session = globals.graffitiSession;
   if (!session) {
     throw new Error(
       "No Graffiti session provided, did you forget to install the plugin?",

@@ -10,7 +10,7 @@ import type {
   GraffitiLogoutEvent,
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
-import { graffitiInjectKey, graffitiSessionInjectKey } from "./globals";
+import { globals } from "./globals";
 import type { Router } from "vue-router";
 import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 
@@ -214,8 +214,8 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
       }
     });
 
-    app.provide(graffitiInjectKey, graffiti);
-    app.provide(graffitiSessionInjectKey, graffitiSession);
+    globals.graffitiSynchronize = graffiti;
+    globals.graffitiSession = graffitiSession;
 
     app.component("GraffitiDiscover", Discover);
     app.component("GraffitiGet", Get);
