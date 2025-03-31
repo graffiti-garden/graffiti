@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-vue",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Vue.js wrapper for the Graffiti API",
   "types": "./dist/node/plugin.d.ts",
   "module": "./dist/node/plugin.mjs",
