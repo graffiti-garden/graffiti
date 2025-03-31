@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { GraffitiSession } from "@graffiti-garden/api";
-import { useGraffiti } from "@graffiti-garden/wrapper-vue";
 import { ref, useTemplateRef, nextTick } from "vue";
-import type { ChatNameSchema } from "./schemas";
+import { setChatName } from "./setters";
 
 const props = defineProps<{
     channel: string;
     myChatName: string | undefined;
     session: GraffitiSession;
+    myMembers: Set<string>;
 }>();
 
 const editing = ref(false);
@@ -23,23 +23,13 @@ async function edit() {
     editor.value?.select();
 }
 
-const graffiti = useGraffiti();
-async function save(name?: string) {
-    name = name ?? editingValue.value;
-    if (!name || name === props.myChatName) {
-        editing.value = false;
-        return;
-    }
+async function save() {
     saving.value = true;
-    await graffiti.put<ChatNameSchema>(
-        {
-            channels: [props.channel],
-            value: {
-                describes: props.channel,
-                name,
-                published: Date.now(),
-            },
-        },
+    await setChatName(
+        editingValue.value,
+        props.myChatName,
+        props.myMembers,
+        props.channel,
         props.session,
     );
     saving.value = false;

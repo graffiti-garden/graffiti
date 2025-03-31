@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { GraffitiSession } from "@graffiti-garden/api";
-import { useGraffiti } from "@graffiti-garden/wrapper-vue";
-import type { MemberUpdateSchema } from "./schemas";
 import { ref } from "vue";
+import { removeMember } from "./setters";
+import { addMember } from "./setters";
 
 const props = defineProps<{
     channel: string;
@@ -10,43 +10,21 @@ const props = defineProps<{
     session: GraffitiSession;
 }>();
 
-const graffiti = useGraffiti();
 const removing = ref(new Set<string>());
 async function remove(member: string) {
     removing.value.add(member);
-    await graffiti.put<MemberUpdateSchema>(
-        {
-            value: {
-                activity: "Remove",
-                target: member,
-                object: props.channel,
-                published: Date.now(),
-            },
-            channels: [props.channel],
-        },
-        props.session,
-    );
+    await removeMember(member, props.myMembers, props.channel, props.session);
     removing.value.delete(member);
 }
 
 const newMember = ref("");
 const adding = ref(false);
 async function add() {
-    const target = newMember.value;
-    if (!target.length) return;
-    if (props.myMembers.has(target)) return;
-    if (props.session.actor === target) return;
     adding.value = true;
-    await graffiti.put<MemberUpdateSchema>(
-        {
-            value: {
-                activity: "Add",
-                target,
-                object: props.channel,
-                published: Date.now(),
-            },
-            channels: [props.channel],
-        },
+    await addMember(
+        newMember.value,
+        props.myMembers,
+        props.channel,
         props.session,
     );
     adding.value = false;

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef } from "vue";
 import {
-    useGraffiti,
     useGraffitiSession,
     useGraffitiDiscover,
 } from "@graffiti-garden/wrapper-vue";
@@ -11,9 +10,11 @@ import {
     type ChatNameObject,
     type MemberUpdateObject,
 } from "./schemas";
-import { sortByPublished } from "./utils";
+import { sortByPublished, groupAdjacentBy } from "./utils";
 import Membership from "./Membership.vue";
 import ChatNameEditor from "./ChatNameEditor.vue";
+import GroupNames from "./GroupNames.vue";
+import { setChatName } from "./setters";
 
 const props = defineProps<{
     channel: string;
@@ -46,7 +47,9 @@ const memberUpdates = sortByPublished<MemberUpdateObject>(memberUpdatesRaw);
 
 const myMembers = computed(() => {
     const members = new Set<string>();
-    for (const memberUpdate of memberUpdates.value.toReversed()) {
+    for (const memberUpdate of memberUpdates.value
+        .filter((m) => m.actor === graffitiSession.value?.actor)
+        .toReversed()) {
         if (memberUpdate.value.activity === "Add") {
             members.add(memberUpdate.value.target);
         } else {
@@ -56,18 +59,36 @@ const myMembers = computed(() => {
     return members;
 });
 
-const groupedChatNames = computed(() => {
-    // Group adjacent chat names with the same name
-    const grouped: ChatNameObject[][] = [];
-    for (const chatName of chatNames.value) {
-        const lastGroup = grouped.at(-1);
-        if (lastGroup && lastGroup.at(-1)?.value.name === chatName.value.name) {
-            lastGroup.push(chatName);
-        } else {
-            grouped.push([chatName]);
-        }
-    }
-    return grouped;
+// Group changes to the same name
+const groupedChatNames = groupAdjacentBy(chatNames, (group, chatName) =>
+    group.some((c) => c.value.name === chatName.value.name),
+);
+
+// Group changes performing the same operation to the same person
+const groupedMemberUpdates = groupAdjacentBy(
+    memberUpdates,
+    (group, memberUpdate) =>
+        group.some(
+            (m) =>
+                m.value.target === memberUpdate.value.target &&
+                m.value.activity === memberUpdate.value.activity,
+        ),
+);
+
+// Merge the groups
+const messages = computed(() => {
+    return [
+        ...groupedChatNames.value.map(
+            (value) => ({ type: "ChatName", value }) as const,
+        ),
+        ...groupedMemberUpdates.value.map(
+            (value) => ({ type: "MemberUpdate", value }) as const,
+        ),
+    ].sort((a, b) => {
+        const aMin = Math.min(...a.value.map((c) => c.value.published));
+        const bMin = Math.min(...b.value.map((c) => c.value.published));
+        return bMin - aMin;
+    });
 });
 </script>
 
@@ -82,37 +103,89 @@ const groupedChatNames = computed(() => {
                     :channel="props.channel"
                     :myChatName="myChatName"
                     :session="$graffitiSession.value"
+                    :myMembers="myMembers"
                 />
             </h2>
             <ul>
-                <li v-for="group in groupedChatNames" :key="group.at(0)?.url">
-                    <span
-                        v-for="[index, chatName] in group
-                            .toReversed()
-                            .entries()"
-                        :key="chatName.url"
-                    >
+                <li v-for="message in messages" :key="message.value[0].url">
+                    <GroupNames :group="message.value" />
+                    <template v-if="message.type === 'ChatName'">
+                        named
                         {{
-                            (chatName.actor === $graffitiSession.value?.actor
-                                ? `${index ? "y" : "Y"}ou`
-                                : chatName.actor) +
-                            (group.length > 1 && index < group.length - 1
-                                ? " and "
-                                : "")
+                            message.value.some(
+                                (c) =>
+                                    c.actor === $graffitiSession.value?.actor,
+                            )
+                                ? "your"
+                                : "their"
                         }}
+                        {{ message.value.length > 1 ? "views" : "view" }}
+                        of the chat "{{ message.value.at(0)?.value.name }}".
+                        <button
+                            v-if="
+                                myChatName !== message.value.at(0)?.value.name
+                            "
+                            @click="
+                                setChatName(
+                                    message.value[0].value.name,
+                                    myChatName,
+                                    myMembers,
+                                    channel,
+                                    $graffitiSession.value,
+                                )
+                            "
+                        >
+                            Use this name
+                        </button>
+                    </template>
+                    <span v-else>
+                        {{
+                            message.value.at(0)?.value.activity === "Add"
+                                ? "added"
+                                : "removed"
+                        }}
+                        {{
+                            message.value.at(0)?.value.target ===
+                            $graffitiSession.value?.actor
+                                ? "you"
+                                : message.value.at(0)?.value.target
+                        }}
+                        {{
+                            message.value.at(0)?.value.activity === "Add"
+                                ? "to"
+                                : "from"
+                        }}
+                        {{
+                            message.value.some(
+                                (c) =>
+                                    c.actor === $graffitiSession.value?.actor,
+                            )
+                                ? "your"
+                                : "their"
+                        }}
+                        {{ message.value.length > 1 ? "views" : "view" }}
+                        of the chat.
+                        <!-- <button
+                            v-if="
+                                myMembers.has(message.value.at(0)?.value.target)
+                            "
+                            @click="
+                                $graffiti.put(
+                                    {
+                                        channels: [props.channel],
+                                        value: {
+                                            activity: 'Remove',
+                                            target: message.value.at(0)?.value
+                                                .target,
+                                        },
+                                    },
+                                    $graffitiSession.value,
+                                )
+                            "
+                        >
+                            Remove {{ message.value.at(0)?.value.target }}
+                        </button> -->
                     </span>
-                    named
-                    {{
-                        group.some(
-                            (c) => c.actor === $graffitiSession.value?.actor,
-                        )
-                            ? "your"
-                            : "their"
-                    }}
-                    view of the chat "{{ group.at(0)?.value.name }}".
-                    <button v-if="myChatName !== group.at(0)?.value.name">
-                        Use this name
-                    </button>
                 </li>
             </ul>
         </article>
@@ -129,22 +202,6 @@ const groupedChatNames = computed(() => {
 </template>
 
 <style>
-body {
-    font-family: sans-serif;
-    margin: 0;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-}
-
-header,
-footer {
-    background-color: #222;
-    color: white;
-    padding: 1em;
-    text-align: center;
-}
-
 main {
     display: flex;
     flex: 1;
@@ -163,34 +220,16 @@ aside {
     border-left: 1px solid #ccc;
 }
 
-h1,
-h2,
-h3 {
-    margin-top: 0;
-}
-
 ul {
     list-style: none;
     padding: 0;
-}
-
-li {
-    margin-bottom: 0.5em;
+    display: flex;
+    flex-direction: column-reverse;
+    overflow-y: auto;
+    display: flex;
 }
 
 article {
     margin-top: 1em;
 }
-
-footer {
-    font-size: 0.9em;
-}
 </style>
-
-<!-- @click="
-    saveChatName(
-        $graffitiSession.value,
-        group.at(0)?.value.name,
-    )
-"
-:disabled="saving" -->
