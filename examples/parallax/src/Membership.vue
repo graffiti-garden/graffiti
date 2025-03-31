@@ -48,6 +48,12 @@ async function copyUsername() {
         </button>
     </p>
 
+    <p>
+        Your messages will <emph>only</emph>
+        be sent to the members you choose to list below, regardless of who
+        others choose to add to their "views" of the chat.
+    </p>
+
     <form @submit.prevent="add()">
         <input v-model="newMember" placeholder="Username" />
         <input type="submit" value="Add" :disabled="adding" />

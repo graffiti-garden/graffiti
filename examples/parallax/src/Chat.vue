@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef } from "vue";
+import { computed, nextTick, ref, useTemplateRef, type Ref } from "vue";
 import {
     useGraffitiSession,
     useGraffitiDiscover,
@@ -7,14 +7,17 @@ import {
 import {
     chatNameSchema,
     memberUpdateSchema,
+    messageSchema,
     type ChatNameObject,
     type MemberUpdateObject,
+    type MessageObject,
 } from "./schemas";
 import { sortByPublished, groupAdjacentBy } from "./utils";
 import Membership from "./Membership.vue";
 import ChatNameEditor from "./ChatNameEditor.vue";
 import GroupNames from "./GroupNames.vue";
 import { setChatName } from "./setters";
+import SendMessage from "./SendMessage.vue";
 
 const props = defineProps<{
     channel: string;
@@ -59,6 +62,14 @@ const myMembers = computed(() => {
     return members;
 });
 
+const { objects: messages_, isInitialPolling: isInitialPollingMessages } =
+    useGraffitiDiscover(
+        () => [props.channel],
+        () => messageSchema(),
+    );
+// Help the type system understand that messages_ is a Ref
+const messages: Ref<MessageObject[]> = messages_;
+
 // Group changes to the same name
 const groupedChatNames = groupAdjacentBy(chatNames, (group, chatName) =>
     group.some((c) => c.value.name === chatName.value.name),
@@ -75,8 +86,18 @@ const groupedMemberUpdates = groupAdjacentBy(
         ),
 );
 
+function publishedTime(
+    object: ChatNameObject[] | MemberUpdateObject[] | MessageObject,
+) {
+    if (Array.isArray(object)) {
+        return Math.min(...object.map((c) => c.value.published));
+    } else {
+        return object.value.published;
+    }
+}
+
 // Merge the groups
-const messages = computed(() => {
+const updates = computed(() => {
     return [
         ...groupedChatNames.value.map(
             (value) => ({ type: "ChatName", value }) as const,
@@ -84,11 +105,8 @@ const messages = computed(() => {
         ...groupedMemberUpdates.value.map(
             (value) => ({ type: "MemberUpdate", value }) as const,
         ),
-    ].sort((a, b) => {
-        const aMin = Math.min(...a.value.map((c) => c.value.published));
-        const bMin = Math.min(...b.value.map((c) => c.value.published));
-        return bMin - aMin;
-    });
+        ...messages.value.map((value) => ({ type: "Message", value }) as const),
+    ].sort((a, b) => publishedTime(b.value) - publishedTime(a.value));
 });
 </script>
 
@@ -107,87 +125,109 @@ const messages = computed(() => {
                 />
             </h2>
             <ul>
-                <li v-for="message in messages" :key="message.value[0].url">
-                    <GroupNames :group="message.value" />
-                    <template v-if="message.type === 'ChatName'">
-                        named
-                        {{
-                            message.value.some(
-                                (c) =>
-                                    c.actor === $graffitiSession.value?.actor,
-                            )
-                                ? "your"
-                                : "their"
-                        }}
-                        {{ message.value.length > 1 ? "views" : "view" }}
-                        of the chat "{{ message.value.at(0)?.value.name }}".
-                        <button
-                            v-if="
-                                myChatName !== message.value.at(0)?.value.name
-                            "
-                            @click="
-                                setChatName(
-                                    message.value[0].value.name,
-                                    myChatName,
-                                    myMembers,
-                                    channel,
-                                    $graffitiSession.value,
-                                )
-                            "
-                        >
-                            Use this name
-                        </button>
+                <li
+                    v-for="update in updates"
+                    :key="
+                        update.type === 'Message'
+                            ? update.value.url
+                            : update.value[0].url
+                    "
+                >
+                    <template v-if="update.type === 'Message'">
+                        <strong>{{ update.value.actor }}</strong
+                        >: {{ update.value.value.content }}
                     </template>
-                    <span v-else>
-                        {{
-                            message.value.at(0)?.value.activity === "Add"
-                                ? "added"
-                                : "removed"
-                        }}
-                        {{
-                            message.value.at(0)?.value.target ===
-                            $graffitiSession.value?.actor
-                                ? "you"
-                                : message.value.at(0)?.value.target
-                        }}
-                        {{
-                            message.value.at(0)?.value.activity === "Add"
-                                ? "to"
-                                : "from"
-                        }}
-                        {{
-                            message.value.some(
-                                (c) =>
-                                    c.actor === $graffitiSession.value?.actor,
-                            )
-                                ? "your"
-                                : "their"
-                        }}
-                        {{ message.value.length > 1 ? "views" : "view" }}
-                        of the chat.
-                        <!-- <button
-                            v-if="
-                                myMembers.has(message.value.at(0)?.value.target)
-                            "
-                            @click="
-                                $graffiti.put(
-                                    {
-                                        channels: [props.channel],
-                                        value: {
-                                            activity: 'Remove',
-                                            target: message.value.at(0)?.value
-                                                .target,
-                                        },
-                                    },
-                                    $graffitiSession.value,
+                    <template v-else>
+                        <GroupNames :group="update.value" />
+                        <template v-if="update.type === 'ChatName'">
+                            named
+                            {{
+                                update.value.some(
+                                    (c) =>
+                                        c.actor ===
+                                        $graffitiSession.value?.actor,
                                 )
-                            "
-                        >
-                            Remove {{ message.value.at(0)?.value.target }}
-                        </button> -->
-                    </span>
+                                    ? "your"
+                                    : "their"
+                            }}
+                            {{ update.value.length > 1 ? "views" : "view" }}
+                            of the chat "{{ update.value.at(0)?.value.name }}".
+                            <button
+                                v-if="
+                                    myChatName !==
+                                    update.value.at(0)?.value.name
+                                "
+                                @click="
+                                    setChatName(
+                                        update.value[0].value.name,
+                                        myChatName,
+                                        myMembers,
+                                        channel,
+                                        $graffitiSession.value,
+                                    )
+                                "
+                            >
+                                Use this name
+                            </button>
+                        </template>
+                        <span v-else>
+                            {{
+                                update.value.at(0)?.value.activity === "Add"
+                                    ? "added"
+                                    : "removed"
+                            }}
+                            {{
+                                update.value.at(0)?.value.target ===
+                                $graffitiSession.value?.actor
+                                    ? "you"
+                                    : update.value.at(0)?.value.target
+                            }}
+                            {{
+                                update.value.at(0)?.value.activity === "Add"
+                                    ? "to"
+                                    : "from"
+                            }}
+                            {{
+                                update.value.some(
+                                    (c) =>
+                                        c.actor ===
+                                        $graffitiSession.value?.actor,
+                                )
+                                    ? "your"
+                                    : "their"
+                            }}
+                            {{ update.value.length > 1 ? "views" : "view" }}
+                            of the chat.
+                            <!-- <button
+                                v-if="
+                                    myMembers.has(message.value.at(0)?.value.target)
+                                "
+                                @click="
+                                    $graffiti.put(
+                                        {
+                                            channels: [props.channel],
+                                            value: {
+                                                activity: 'Remove',
+                                                target: message.value.at(0)?.value
+                                                    .target,
+                                            },
+                                        },
+                                        $graffitiSession.value,
+                                    )
+                                "
+                            >
+                                Remove {{ message.value.at(0)?.value.target }}
+                            </button> -->
+                        </span>
+                    </template>
                 </li>
             </ul>
+
+            <SendMessage
+                :channel="channel"
+                :myMembers="myMembers"
+                :session="$graffitiSession.value"
+            />
         </article>
 
         <aside>

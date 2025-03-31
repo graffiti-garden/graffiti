@@ -69,3 +69,24 @@ export async function removeMember(
     session,
   );
 }
+
+export async function sendMessage(
+  message: string,
+  myMembers: Set<string>,
+  channel: string,
+  session: GraffitiSession,
+) {
+  if (!message.length) return;
+  await useGraffiti().put(
+    {
+      value: {
+        content: message,
+        published: Date.now(),
+        to: [...myMembers],
+      },
+      channels: [channel],
+      allowed: [...myMembers],
+    },
+    session,
+  );
+}
