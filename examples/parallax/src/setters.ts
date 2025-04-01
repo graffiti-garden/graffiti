@@ -1,6 +1,10 @@
 import type { GraffitiSession } from "@graffiti-garden/api";
 import { useGraffiti } from "@graffiti-garden/wrapper-vue";
-import type { ChatNameSchema, MemberUpdateSchema } from "./schemas";
+import type {
+  MessageSchema,
+  ChatNameSchema,
+  MemberUpdateSchema,
+} from "./schemas";
 
 export async function setChatName(
   name: string,
@@ -77,7 +81,7 @@ export async function sendMessage(
   session: GraffitiSession,
 ) {
   if (!message.length) return;
-  await useGraffiti().put(
+  await useGraffiti().put<MessageSchema>(
     {
       value: {
         content: message,

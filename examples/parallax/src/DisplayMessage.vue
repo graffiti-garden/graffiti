@@ -20,14 +20,15 @@ defineProps<{
         >
             <h3>{{ message.actor }}</h3>
         </header>
-        <p>{{ message.value.content }}</p>
+        <main>
+            <p>{{ message.value.content }}</p>
+        </main>
         <footer>
-            <time>
+            <time :datetime="new Date(message.value.published).toISOString()">
                 {{
                     new Date(message.value.published).toLocaleTimeString([], {
                         hour: "numeric",
                         minute: "numeric",
-                        hour12: true,
                     })
                 }}
             </time>
@@ -47,10 +48,21 @@ article {
     align-items: baseline;
     max-width: calc(min(70vw, 30rem));
 
+    header {
+        flex: 0 0 100%;
+    }
+
     footer {
         color: var(--text3);
         font-size: 0.8rem;
-        display: inline;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+
+        time {
+            align-self: flex-end;
+            margin-left: 0.5rem;
+        }
     }
 }
 
