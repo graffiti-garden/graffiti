@@ -15,10 +15,10 @@ import {
 import { sortByPublished, groupAdjacentBy } from "./utils";
 import Membership from "./Membership.vue";
 import ChatNameEditor from "./ChatNameEditor.vue";
-import GroupNames from "./GroupNames.vue";
-import { setChatName } from "./setters";
 import SendMessage from "./SendMessage.vue";
 import DisplayMessage from "./DisplayMessage.vue";
+import DisplayChatNameUpdate from "./DisplayChatNameUpdate.vue";
+import DisplayMembershipUpdate from "./DisplayMembershipUpdate.vue";
 
 const props = defineProps<{
     channel: string;
@@ -141,91 +141,21 @@ const updates = computed(() => {
                             v-if="update.type === 'Message'"
                             :message="update.value"
                         />
-                        <template v-else>
-                            <GroupNames :group="update.value" />
-                            <template v-if="update.type === 'ChatName'">
-                                named
-                                {{
-                                    update.value.some(
-                                        (c) =>
-                                            c.actor ===
-                                            $graffitiSession.value?.actor,
-                                    )
-                                        ? "your"
-                                        : "their"
-                                }}
-                                {{ update.value.length > 1 ? "views" : "view" }}
-                                of the chat "{{
-                                    update.value.at(0)?.value.name
-                                }}".
-                                <button
-                                    v-if="
-                                        myChatName !==
-                                        update.value.at(0)?.value.name
-                                    "
-                                    @click="
-                                        setChatName(
-                                            update.value[0].value.name,
-                                            myChatName,
-                                            myMembers,
-                                            channel,
-                                            $graffitiSession.value,
-                                        )
-                                    "
-                                >
-                                    Use this name
-                                </button>
-                            </template>
-                            <span v-else>
-                                {{
-                                    update.value.at(0)?.value.activity === "Add"
-                                        ? "added"
-                                        : "removed"
-                                }}
-                                {{
-                                    update.value.at(0)?.value.target ===
-                                    $graffitiSession.value?.actor
-                                        ? "you"
-                                        : update.value.at(0)?.value.target
-                                }}
-                                {{
-                                    update.value.at(0)?.value.activity === "Add"
-                                        ? "to"
-                                        : "from"
-                                }}
-                                {{
-                                    update.value.some(
-                                        (c) =>
-                                            c.actor ===
-                                            $graffitiSession.value?.actor,
-                                    )
-                                        ? "your"
-                                        : "their"
-                                }}
-                                {{ update.value.length > 1 ? "views" : "view" }}
-                                of the chat.
-                                <!-- <button
-                                v-if="
-                                    myMembers.has(message.value.at(0)?.value.target)
-                                "
-                                @click="
-                                    $graffiti.put(
-                                        {
-                                            channels: [props.channel],
-                                            value: {
-                                                activity: 'Remove',
-                                                target: message.value.at(0)?.value
-                                                    .target,
-                                            },
-                                        },
-                                        $graffitiSession.value,
-                                    )
-                                "
-                            >
-                                Remove {{ message.value.at(0)?.value.target }}
-                            </button> -->
-                            </span>
-                        </template>
+                        <DisplayChatNameUpdate
+                            v-else-if="update.type === 'ChatName'"
+                            :group="update.value"
+                            :myChatName="myChatName"
+                            :myMembers="myMembers"
+                            :channel="props.channel"
+                            :session="$graffitiSession.value"
+                        />
+                        <DisplayMembershipUpdate
+                            v-else-if="update.type === 'MemberUpdate'"
+                            :group="update.value"
+                            :myMembers="myMembers"
+                            :channel="props.channel"
+                            :session="$graffitiSession.value"
+                        />
                     </li>
                 </ul>
             </main>
@@ -266,9 +196,12 @@ button {
     background: var(--foreground2);
     border: none;
     color: var(--text1);
-    border-radius: 1rem;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
+    border-radius: 1em;
+    padding-left: 1em;
+    padding-right: 1em;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+    font-size: inherit;
 }
 
 button:hover {
@@ -288,6 +221,20 @@ ul {
     li {
         display: flex;
         flex-direction: column;
+        align-items: center;
+
+        aside {
+            font-size: 80%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5em;
+            margin: 1rem;
+            align-items: center;
+
+            p {
+                color: var(--text3);
+            }
+        }
     }
 }
 </style>
