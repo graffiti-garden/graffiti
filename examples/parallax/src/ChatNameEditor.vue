@@ -40,7 +40,7 @@ async function save() {
 <template>
     <span v-if="editing">
         <form @submit.prevent="save()">
-            <input ref="editor" v-model="editingValue" />
+            <input type="text" ref="editor" v-model="editingValue" />
             <input type="submit" value="Save" :disabled="saving" />
             <button @click.prevent="editing = false" :disabled="saving">
                 Cancel
@@ -49,6 +49,30 @@ async function save() {
     </span>
     <span v-else>
         {{ myChatName ?? "Unnamed Chat" }}
-        <button @click="edit">Edit</button>
+        <button @click="edit">Edit Name</button>
     </span>
 </template>
+
+<style scoped>
+button,
+input[type="submit"] {
+    font-size: 1rem;
+}
+
+form {
+    input[type="text"] {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    input[type="submit"] {
+        border-radius: 0;
+        background: var(--highlight);
+    }
+
+    button {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+}
+</style>
