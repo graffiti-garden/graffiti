@@ -18,6 +18,7 @@ import ChatNameEditor from "./ChatNameEditor.vue";
 import GroupNames from "./GroupNames.vue";
 import { setChatName } from "./setters";
 import SendMessage from "./SendMessage.vue";
+import DisplayMessage from "./DisplayMessage.vue";
 
 const props = defineProps<{
     channel: string;
@@ -115,90 +116,95 @@ const updates = computed(() => {
         <p>You are not logged in!</p>
     </template>
     <template v-else>
-        <article>
-            <h2>
-                <ChatNameEditor
-                    :channel="props.channel"
-                    :myChatName="myChatName"
-                    :session="$graffitiSession.value"
-                    :myMembers="myMembers"
-                />
-            </h2>
-            <ul>
-                <li
-                    v-for="update in updates"
-                    :key="
-                        update.type === 'Message'
-                            ? update.value.url
-                            : update.value[0].url
-                    "
-                >
-                    <template v-if="update.type === 'Message'">
-                        <strong>{{ update.value.actor }}</strong
-                        >: {{ update.value.value.content }}
-                    </template>
-                    <template v-else>
-                        <GroupNames :group="update.value" />
-                        <template v-if="update.type === 'ChatName'">
-                            named
-                            {{
-                                update.value.some(
-                                    (c) =>
-                                        c.actor ===
-                                        $graffitiSession.value?.actor,
-                                )
-                                    ? "your"
-                                    : "their"
-                            }}
-                            {{ update.value.length > 1 ? "views" : "view" }}
-                            of the chat "{{ update.value.at(0)?.value.name }}".
-                            <button
-                                v-if="
-                                    myChatName !==
-                                    update.value.at(0)?.value.name
-                                "
-                                @click="
-                                    setChatName(
-                                        update.value[0].value.name,
-                                        myChatName,
-                                        myMembers,
-                                        channel,
-                                        $graffitiSession.value,
+        <article class="chat">
+            <header>
+                <h2>
+                    <ChatNameEditor
+                        :channel="props.channel"
+                        :myChatName="myChatName"
+                        :session="$graffitiSession.value"
+                        :myMembers="myMembers"
+                    />
+                </h2>
+            </header>
+            <main>
+                <ul>
+                    <li
+                        v-for="update in updates"
+                        :key="
+                            update.type === 'Message'
+                                ? update.value.url
+                                : update.value[0].url
+                        "
+                    >
+                        <DisplayMessage
+                            v-if="update.type === 'Message'"
+                            :message="update.value"
+                        />
+                        <template v-else>
+                            <GroupNames :group="update.value" />
+                            <template v-if="update.type === 'ChatName'">
+                                named
+                                {{
+                                    update.value.some(
+                                        (c) =>
+                                            c.actor ===
+                                            $graffitiSession.value?.actor,
                                     )
-                                "
-                            >
-                                Use this name
-                            </button>
-                        </template>
-                        <span v-else>
-                            {{
-                                update.value.at(0)?.value.activity === "Add"
-                                    ? "added"
-                                    : "removed"
-                            }}
-                            {{
-                                update.value.at(0)?.value.target ===
-                                $graffitiSession.value?.actor
-                                    ? "you"
-                                    : update.value.at(0)?.value.target
-                            }}
-                            {{
-                                update.value.at(0)?.value.activity === "Add"
-                                    ? "to"
-                                    : "from"
-                            }}
-                            {{
-                                update.value.some(
-                                    (c) =>
-                                        c.actor ===
-                                        $graffitiSession.value?.actor,
-                                )
-                                    ? "your"
-                                    : "their"
-                            }}
-                            {{ update.value.length > 1 ? "views" : "view" }}
-                            of the chat.
-                            <!-- <button
+                                        ? "your"
+                                        : "their"
+                                }}
+                                {{ update.value.length > 1 ? "views" : "view" }}
+                                of the chat "{{
+                                    update.value.at(0)?.value.name
+                                }}".
+                                <button
+                                    v-if="
+                                        myChatName !==
+                                        update.value.at(0)?.value.name
+                                    "
+                                    @click="
+                                        setChatName(
+                                            update.value[0].value.name,
+                                            myChatName,
+                                            myMembers,
+                                            channel,
+                                            $graffitiSession.value,
+                                        )
+                                    "
+                                >
+                                    Use this name
+                                </button>
+                            </template>
+                            <span v-else>
+                                {{
+                                    update.value.at(0)?.value.activity === "Add"
+                                        ? "added"
+                                        : "removed"
+                                }}
+                                {{
+                                    update.value.at(0)?.value.target ===
+                                    $graffitiSession.value?.actor
+                                        ? "you"
+                                        : update.value.at(0)?.value.target
+                                }}
+                                {{
+                                    update.value.at(0)?.value.activity === "Add"
+                                        ? "to"
+                                        : "from"
+                                }}
+                                {{
+                                    update.value.some(
+                                        (c) =>
+                                            c.actor ===
+                                            $graffitiSession.value?.actor,
+                                    )
+                                        ? "your"
+                                        : "their"
+                                }}
+                                {{ update.value.length > 1 ? "views" : "view" }}
+                                of the chat.
+                                <!-- <button
                                 v-if="
                                     myMembers.has(message.value.at(0)?.value.target)
                                 "
@@ -218,18 +224,21 @@ const updates = computed(() => {
                             >
                                 Remove {{ message.value.at(0)?.value.target }}
                             </button> -->
-                        </span>
-                    </template>
-                </li>
-            </ul>
+                            </span>
+                        </template>
+                    </li>
+                </ul>
+            </main>
 
-            <SendMessage
-                :channel="channel"
-                :myMembers="myMembers"
-                :session="$graffitiSession.value"
-            />
+            <footer>
+                <SendMessage
+                    :channel="channel"
+                    :myMembers="myMembers"
+                    :session="$graffitiSession.value"
+                />
+            </footer>
         </article>
-
+        <!--
         <aside>
             <h3>Members</h3>
             <Membership
@@ -237,39 +246,48 @@ const updates = computed(() => {
                 :myMembers="myMembers"
                 :session="$graffitiSession.value"
             />
-        </aside>
+        </aside> -->
     </template>
 </template>
 
 <style>
-main {
+.chat {
+    background: var(--background1);
     display: flex;
-    flex: 1;
-    padding: 1em;
-    gap: 1em;
+    flex-direction: column;
+    height: 100vh;
+
+    > main {
+        display: contents;
+    }
 }
 
-section {
-    flex: 3;
+button {
+    background: var(--foreground2);
+    border: none;
+    color: var(--text1);
+    border-radius: 1rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
 }
 
-aside {
-    flex: 1;
-    background-color: #f3f3f3;
-    padding: 1em;
-    border-left: 1px solid #ccc;
+button:hover {
+    background: var(--foreground1);
+    cursor: pointer;
 }
 
 ul {
+    flex: 1;
+    overflow-y: scroll;
     list-style: none;
-    padding: 0;
+
     display: flex;
     flex-direction: column-reverse;
-    overflow-y: auto;
-    display: flex;
-}
+    gap: 0.5rem;
 
-article {
-    margin-top: 1em;
+    li {
+        display: flex;
+        flex-direction: column;
+    }
 }
 </style>
