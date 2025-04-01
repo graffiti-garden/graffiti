@@ -43,6 +43,10 @@ function makeComposable<Schema extends JSONSchema>(
     isAlreadyPolling = true;
     try {
       await myPoll();
+    } catch (e) {
+      // If there is an error, wait a little bit so as not to
+      // cause an infinite loop
+      await new Promise((r) => setTimeout(r, 2000));
     } finally {
       if (myPoll !== innerPoll) return;
       isAlreadyPolling = false;
