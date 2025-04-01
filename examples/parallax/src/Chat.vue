@@ -97,7 +97,6 @@ function publishedTime(
     }
 }
 
-// Merge the groups
 const updates = computed(() => {
     return [
         ...groupedChatNames.value.map(
@@ -109,6 +108,8 @@ const updates = computed(() => {
         ...messages.value.map((value) => ({ type: "Message", value }) as const),
     ].sort((a, b) => publishedTime(b.value) - publishedTime(a.value));
 });
+
+const isMembersOpen = ref(false);
 </script>
 
 <template>
@@ -126,6 +127,9 @@ const updates = computed(() => {
                         :myMembers="myMembers"
                     />
                 </h2>
+                <nav>
+                    <button @click="isMembersOpen = true">Members</button>
+                </nav>
             </header>
             <main>
                 <ul>
@@ -168,15 +172,23 @@ const updates = computed(() => {
                 />
             </footer>
         </article>
-        <!--
-        <aside>
-            <h3>Members</h3>
-            <Membership
-                :channel="props.channel"
-                :myMembers="myMembers"
-                :session="$graffitiSession.value"
-            />
-        </aside> -->
+        <dialog :open="isMembersOpen" @close="isMembersOpen = false">
+            <article>
+                <header>
+                    <h3>Members of "{{ myChatName }}"</h3>
+                    <nav>
+                        <button @click="isMembersOpen = false">Close</button>
+                    </nav>
+                </header>
+                <main>
+                    <Membership
+                        :channel="props.channel"
+                        :myMembers="myMembers"
+                        :session="$graffitiSession.value"
+                    />
+                </main>
+            </article>
+        </dialog>
     </template>
 </template>
 
@@ -190,9 +202,23 @@ const updates = computed(() => {
     > main {
         display: contents;
     }
+
+    > footer {
+        padding: 1rem;
+        border-top: 2px solid var(--background2);
+    }
 }
 
-button {
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--background2);
+    padding: 1rem;
+}
+
+button,
+input[type="submit"] {
     background: var(--foreground2);
     border: none;
     color: var(--text1);
@@ -204,12 +230,13 @@ button {
     font-size: inherit;
 }
 
-button:hover {
+:is(button, input[type="submit"]):hover {
     background: var(--foreground1);
     cursor: pointer;
 }
 
-ul {
+.chat ul {
+    padding: 1rem;
     flex: 1;
     overflow-y: scroll;
     list-style: none;
@@ -236,5 +263,76 @@ ul {
             }
         }
     }
+}
+
+/* Overlay the dialog */
+dialog[open] {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 90vw;
+    height: 90vh;
+    transform: translate(-50%, -50%);
+    background: var(--background1);
+    border: 3px solid var(--foreground1);
+    box-shadow: 0 0 3rem rgba(0, 0, 0, 1); /* shadow */
+    color: var(--text1);
+    border-radius: 1rem;
+    overflow: auto;
+    z-index: 1000; /* ensure it floats above page content */
+
+    article {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    header {
+        align-self: stretch;
+    }
+
+    main {
+        padding: 1rem;
+        max-width: 30rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    form {
+        display: flex;
+        flex-direction: row;
+
+        input[type="text"] {
+            flex: 1;
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        input[type="submit"] {
+            background: var(--highlight);
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+    }
+}
+
+input[type="text"] {
+    background: var(--foreground2);
+    color: var(--text1);
+    border: none;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-radius: 1rem;
+}
+
+input[type="text"]::placeholder {
+    color: var(--text4);
+}
+
+input[type="text"]:focus {
+    outline: none;
 }
 </style>
