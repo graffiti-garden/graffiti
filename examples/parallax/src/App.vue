@@ -26,6 +26,8 @@
     --text2: #e9e9e9;
     --text3: #dedede;
     --text4: #b9b9b9;
+    --bad-color: #c9372c;
+    --very-bad-color: #f44336;
     font-family: sans-serif;
     color: var(--text1);
     background: var(--background2);
