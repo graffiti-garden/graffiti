@@ -101,8 +101,8 @@ export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
       }
 
       if (result.done) {
+        this.iterator = undefined;
         if (result.value) {
-          this.iterator = undefined;
           this.continue = result.value.continue;
         }
         break;
