@@ -30,6 +30,8 @@ const { objects: chatNamesRaw, isInitialPolling: isInitialPollingChatNames } =
     useGraffitiDiscover(
         () => [props.channel],
         () => chatNameSchema(props.channel),
+        undefined,
+        true,
     );
 const chatNames = sortByPublished<ChatNameObject>(chatNamesRaw);
 
@@ -46,6 +48,8 @@ const {
 } = useGraffitiDiscover(
     () => [props.channel],
     () => memberUpdateSchema(props.channel),
+    undefined,
+    true,
 );
 const memberUpdates = sortByPublished<MemberUpdateObject>(memberUpdatesRaw);
 
@@ -67,6 +71,8 @@ const { objects: messages_, isInitialPolling: isInitialPollingMessages } =
     useGraffitiDiscover(
         () => [props.channel],
         () => messageSchema(),
+        undefined,
+        true,
     );
 // Help the type system understand that messages_ is a Ref
 const messages: Ref<MessageObject[]> = messages_;
@@ -117,6 +123,23 @@ const isMembersOpen = ref(false);
         <p>You are not logged in!</p>
     </template>
     <template v-else>
+        <dialog :open="isMembersOpen" @close="isMembersOpen = false">
+            <article>
+                <header>
+                    <h3>Members of "{{ myChatName }}"</h3>
+                    <nav>
+                        <button @click="isMembersOpen = false">Close</button>
+                    </nav>
+                </header>
+                <main>
+                    <Membership
+                        :channel="props.channel"
+                        :myMembers="myMembers"
+                        :session="$graffitiSession.value"
+                    />
+                </main>
+            </article>
+        </dialog>
         <article class="chat">
             <header>
                 <h2>
@@ -172,23 +195,6 @@ const isMembersOpen = ref(false);
                 />
             </footer>
         </article>
-        <dialog :open="isMembersOpen" @close="isMembersOpen = false">
-            <article>
-                <header>
-                    <h3>Members of "{{ myChatName }}"</h3>
-                    <nav>
-                        <button @click="isMembersOpen = false">Close</button>
-                    </nav>
-                </header>
-                <main>
-                    <Membership
-                        :channel="props.channel"
-                        :myMembers="myMembers"
-                        :session="$graffitiSession.value"
-                    />
-                </main>
-            </article>
-        </dialog>
     </template>
 </template>
 
