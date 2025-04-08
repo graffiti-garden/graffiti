@@ -19,10 +19,10 @@ async function remove(member: string) {
 
 const newMember = ref("");
 const adding = ref(false);
-async function add() {
+async function add(member?: string) {
     adding.value = true;
     await addMember(
-        newMember.value,
+        member ?? newMember.value,
         props.myMembers,
         props.channel,
         props.session,
@@ -62,22 +62,36 @@ async function copyUsername() {
                 </code>
                 (you)
             </span>
-            <button @click="copyUsername" :disabled="copied">
-                {{ copied ? "Copied!" : "Copy Username" }}
-            </button>
+            <div class="container">
+                <button @click="copyUsername" :disabled="copied">
+                    {{ copied ? "Copied!" : "Copy Username" }}
+                </button>
+                <button
+                    v-if="myMembers.has(session.actor)"
+                    @click="remove(session.actor)"
+                    class="bad"
+                >
+                    Leave
+                </button>
+                <button v-else @click="add(session.actor)" class="good">
+                    Join
+                </button>
+            </div>
         </li>
-        <li v-for="member in myMembers" :key="member">
-            <code>
-                {{ member }}
-            </code>
-            <button
-                @click="remove(member)"
-                :disabled="removing.has(member)"
-                class="bad"
-            >
-                Remove
-            </button>
-        </li>
+        <template v-for="member in myMembers" :key="member">
+            <li v-if="member !== session.actor">
+                <code>
+                    {{ member }}
+                </code>
+                <button
+                    @click="remove(member)"
+                    :disabled="removing.has(member)"
+                    class="bad"
+                >
+                    Remove
+                </button>
+            </li>
+        </template>
     </ul>
 </template>
 
@@ -88,6 +102,13 @@ form {
     input[type="text"] {
         flex: 1;
     }
+}
+
+.container {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 ul {
@@ -105,6 +126,14 @@ ul {
 
         .bad:hover {
             background: var(--very-bad-color);
+        }
+
+        .good {
+            background: var(--highlight);
+        }
+
+        .good:hover {
+            background: var(--highlight-hover);
         }
     }
 

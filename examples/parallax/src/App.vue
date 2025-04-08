@@ -1,27 +1,32 @@
 <template>
-    <!-- <header>
-        <h1>Parallax Chat</h1>
-        <nav>
-            <button v-if="!$graffitiSession.value" @click="$graffiti.login()">
-                Log in
-            </button>
-            <button v-else @click="$graffiti.logout($graffitiSession.value)">
-                Log out
-            </button>
-        </nav>
-    </header> -->
-    <main>
-        <RouterView />
-    </main>
+    <dialog v-if="$graffitiSession.value === null" open class="login">
+        <h1>Parallax</h1>
+        <button @click="$graffiti.login()">Log In</button>
+    </dialog>
+    <dialog v-else-if="$graffitiSession.value === undefined" open class="login">
+        <h1>Parallax is loading...</h1>
+    </dialog>
+    <RouterView v-else v-slot="{ Component }">
+        <component :is="Component" :session="$graffitiSession.value" />
+    </RouterView>
 </template>
 
 <style>
+.login {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+}
+
 :root {
     --background1: #121212;
     --background2: #2e2e2e;
     --foreground1: #4a4a4a;
     --foreground2: #3b3b3b;
     --highlight: #406ec9;
+    --highlight-hover: #4a8bff;
     --text1: #f5f5f5;
     --text2: #e9e9e9;
     --text3: #dedede;

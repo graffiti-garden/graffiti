@@ -36,7 +36,6 @@ export async function addMember(
 ) {
   if (!newMember.length) return;
   if (myMembers.has(newMember)) return;
-  if (session.actor === newMember) return;
   await useGraffiti().put<MemberUpdateSchema>(
     {
       value: {
@@ -45,7 +44,7 @@ export async function addMember(
         object: channel,
         published: Date.now(),
       },
-      channels: [channel],
+      channels: [channel, newMember],
       allowed: [...myMembers, newMember],
     },
     session,
@@ -67,7 +66,7 @@ export async function removeMember(
         object: channel,
         published: Date.now(),
       },
-      channels: [channel],
+      channels: [channel, member],
       allowed: [...myMembers],
     },
     session,

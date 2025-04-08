@@ -1,6 +1,6 @@
 import type { JSONSchema, GraffitiObject } from "@graffiti-garden/api";
 
-export function chatNameSchema(channel: string) {
+export function chatNameSchema(channel: string, actor?: string) {
   return {
     properties: {
       value: {
@@ -11,6 +11,7 @@ export function chatNameSchema(channel: string) {
           published: { type: "number" },
         },
       },
+      actor: actor ? { enum: [actor] } : {},
     },
   } as const satisfies JSONSchema;
 }
@@ -23,8 +24,9 @@ export function memberUpdateSchema(channel: string) {
       value: {
         required: ["activity", "target", "object", "published"],
         properties: {
+          // Add/Remove the target to/from the object
           activity: { enum: ["Add", "Remove"] },
-          target: { type: "string" },
+          target: { type: "string" }, // actor to add
           object: { enum: [channel] },
           published: { type: "number" },
         },
