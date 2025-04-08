@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
 import Chat from "./Chat.vue";
+import AllChats from "./AllChats.vue";
 import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
 import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
 
@@ -14,12 +15,13 @@ if (redirect && redirect !== location.href) {
 const routes = [
   {
     path: "/chat/:channel",
+    name: "chat",
     component: Chat,
     props: true,
   },
   {
     path: "/",
-    redirect: "/chat/general2",
+    component: AllChats,
   },
 ];
 

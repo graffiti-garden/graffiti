@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, useTemplateRef } from "vue";
-import { sendMessage } from "./setters";
+import { addMember, sendMessage } from "./setters";
 import type { GraffitiSession } from "@graffiti-garden/api";
 
 const props = defineProps<{
@@ -35,7 +35,7 @@ async function sendMyMessage() {
 </script>
 
 <template>
-    <form @submit.prevent="sendMyMessage">
+    <form v-if="myMembers.has(session.actor)" @submit.prevent="sendMyMessage">
         <input
             type="text"
             v-model="message"
@@ -44,6 +44,14 @@ async function sendMyMessage() {
             ref="messageInput"
         />
         <input type="submit" value="Send" class="visually-hidden" />
+    </form>
+    <form v-else @submit.prevent="addMember(
+        props.session.actor,
+        props.myMembers,
+        props.channel,
+        props.session,
+    )">
+        <input type="submit" value="Join to Chat!"
     </form>
 </template>
 

@@ -19,9 +19,11 @@ import SendMessage from "./SendMessage.vue";
 import DisplayMessage from "./DisplayMessage.vue";
 import DisplayChatNameUpdate from "./DisplayChatNameUpdate.vue";
 import DisplayMembershipUpdate from "./DisplayMembershipUpdate.vue";
+import type { GraffitiSession } from "@graffiti-garden/api";
 
 const props = defineProps<{
     channel: string;
+    session: GraffitiSession;
 }>();
 
 const graffitiSession = useGraffitiSession();
@@ -51,11 +53,11 @@ const {
     undefined,
     true,
 );
-const memberUpdates = sortByPublished<MemberUpdateObject>(memberUpdatesRaw);
+const memberUpdatesAll = sortByPublished<MemberUpdateObject>(memberUpdatesRaw);
 
 const myMembers = computed(() => {
     const members = new Set<string>();
-    for (const memberUpdate of memberUpdates.value
+    for (const memberUpdate of memberUpdatesAll.value
         .filter((m) => m.actor === graffitiSession.value?.actor)
         .toReversed()) {
         if (memberUpdate.value.activity === "Add") {
@@ -67,6 +69,18 @@ const myMembers = computed(() => {
     return members;
 });
 
+// Show all "adds" but only show
+// "removes" if the actor is in "myMembers"
+const memberUpdates = computed(() => {
+    return memberUpdatesAll.value.filter((memberUpdate) => {
+        if (memberUpdate.value.activity === "Add") {
+            return true;
+        } else {
+            return myMembers.value.has(memberUpdate.actor);
+        }
+    });
+});
+
 const { objects: messages_, isInitialPolling: isInitialPollingMessages } =
     useGraffitiDiscover(
         () => [props.channel],
@@ -74,8 +88,12 @@ const { objects: messages_, isInitialPolling: isInitialPollingMessages } =
         undefined,
         true,
     );
-// Help the type system understand that messages_ is a Ref
-const messages: Ref<MessageObject[]> = messages_;
+const messages: Ref<MessageObject[]> = computed(() => {
+    const messages: MessageObject[] = messages_.value;
+    return messages.filter((message) => {
+        return myMembers.value.has(message.actor);
+    });
+});
 
 // Group changes to the same name
 const groupedChatNames = groupAdjacentBy(chatNames, (group, chatName) =>
@@ -119,14 +137,11 @@ const isMembersOpen = ref(false);
 </script>
 
 <template>
-    <template v-if="!$graffitiSession.value">
-        <p>You are not logged in!</p>
-    </template>
-    <template v-else>
+    <main>
         <dialog :open="isMembersOpen" @close="isMembersOpen = false">
             <article>
                 <header>
-                    <h3>Members of "{{ myChatName }}"</h3>
+                    <h3>Members of "{{ myChatName ?? "Unnamed Chat" }}"</h3>
                     <nav>
                         <button @click="isMembersOpen = false">Close</button>
                     </nav>
@@ -135,24 +150,23 @@ const isMembersOpen = ref(false);
                     <Membership
                         :channel="props.channel"
                         :myMembers="myMembers"
-                        :session="$graffitiSession.value"
+                        :session="session"
                     />
                 </main>
             </article>
         </dialog>
         <article class="chat">
             <header>
+                <button @click="$router.push('/')">⇦</button>
                 <h2>
                     <ChatNameEditor
                         :channel="props.channel"
                         :myChatName="myChatName"
-                        :session="$graffitiSession.value"
+                        :session="session"
                         :myMembers="myMembers"
                     />
                 </h2>
-                <nav>
-                    <button @click="isMembersOpen = true">Members</button>
-                </nav>
+                <button @click="isMembersOpen = true">Members</button>
             </header>
             <main>
                 <ul>
@@ -174,14 +188,14 @@ const isMembersOpen = ref(false);
                             :myChatName="myChatName"
                             :myMembers="myMembers"
                             :channel="props.channel"
-                            :session="$graffitiSession.value"
+                            :session="session"
                         />
                         <DisplayMembershipUpdate
                             v-else-if="update.type === 'MemberUpdate'"
                             :group="update.value"
                             :myMembers="myMembers"
                             :channel="props.channel"
-                            :session="$graffitiSession.value"
+                            :session="session"
                         />
                     </li>
                 </ul>
@@ -191,11 +205,11 @@ const isMembersOpen = ref(false);
                 <SendMessage
                     :channel="channel"
                     :myMembers="myMembers"
-                    :session="$graffitiSession.value"
+                    :session="session"
                 />
             </footer>
         </article>
-    </template>
+    </main>
 </template>
 
 <style>
@@ -215,7 +229,7 @@ const isMembersOpen = ref(false);
     }
 }
 
-header {
+header:not(li *) {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -255,6 +269,11 @@ input[type="submit"] {
         display: flex;
         flex-direction: column;
         align-items: center;
+
+        h3 {
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
 
         aside {
             font-size: 80%;
@@ -306,9 +325,6 @@ dialog[open] {
     }
 
     form {
-        display: flex;
-        flex-direction: row;
-
         input[type="text"] {
             flex: 1;
             border-top-right-radius: 0;
@@ -316,7 +332,6 @@ dialog[open] {
         }
 
         input[type="submit"] {
-            background: var(--highlight);
             border-top-left-radius: 0;
             border-bottom-left-radius: 0;
         }
@@ -340,5 +355,19 @@ input[type="text"]::placeholder {
 
 input[type="text"]:focus {
     outline: none;
+}
+
+input[type="submit"] {
+    background: var(--highlight);
+}
+
+input[type="submit"]:hover {
+    background: var(--highlight-hover);
+}
+
+form {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
 }
 </style>
