@@ -7,14 +7,14 @@ import {
 } from "@graffiti-garden/wrapper-vue";
 import Follow from "./Follow.vue";
 import Name from "./Name.vue";
-import { joinSchema } from "./schemas";
+import { joinSchema, type JoinObject } from "./schemas";
 
 const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
 
 const joinChannel = "Namebook";
 
-const { results: joinsUnfiltered, isPolling: isPollingJoins } =
+const { objects: joinsUnfiltered, isInitialPolling: isPollingJoins } =
     useGraffitiDiscover(
         [joinChannel],
         joinSchema(joinChannel),
@@ -22,7 +22,8 @@ const { results: joinsUnfiltered, isPolling: isPollingJoins } =
     );
 
 const joins = computed(() => {
-    const results = joinsUnfiltered.value;
+    const results: JoinObject[] = joinsUnfiltered.value;
+    // Only show joins that
     return results.filter((v) =>
         v.value.actor ? v.actor === v.value.actor : true,
     );
@@ -49,9 +50,9 @@ async function toggleJoin() {
         await graffiti.put<typeof schema>(
             {
                 value: {
-                    type: "Join",
-                    object: joinChannel,
-                    actor: session.actor,
+                    activity: "Add",
+                    object: session.actor,
+                    target: joinChannel,
                 },
                 channels: ["Namebook"],
             },

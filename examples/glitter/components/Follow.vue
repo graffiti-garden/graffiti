@@ -14,11 +14,12 @@ const props = defineProps<{
     object: string;
 }>();
 
-const { results: follows, isPolling: isPollingFollows } = useGraffitiDiscover(
-    () => (sessionRef.value ? [sessionRef.value.actor] : []),
-    () => followSchema(sessionRef.value?.actor ?? "", props.object),
-    sessionRef,
-);
+const { objects: follows, isInitialPolling: isPollingFollows } =
+    useGraffitiDiscover(
+        () => (sessionRef.value ? [sessionRef.value.actor] : []),
+        () => followSchema(sessionRef.value?.actor ?? "", props.object),
+        sessionRef,
+    );
 
 const isToggling = ref(false);
 async function toggleFollow() {
@@ -38,9 +39,8 @@ async function toggleFollow() {
         await graffiti.put<ReturnType<typeof followSchema>>(
             {
                 value: {
-                    type: "Follow",
+                    activity: "Follow",
                     object: props.object,
-                    actor: session.actor,
                 },
                 channels: [session.actor],
                 actor: session.actor,
