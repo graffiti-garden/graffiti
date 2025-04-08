@@ -1,35 +1,37 @@
-import type { JSONSchema } from "@graffiti-garden/api";
+import type { GraffitiObject, JSONSchema } from "@graffiti-garden/api";
 
-export function joinSchema(object: string) {
+export function joinSchema(channel: string) {
   return {
     properties: {
       value: {
         properties: {
-          type: { enum: ["Join"] },
-          object: { type: "string", enum: [object] },
-          actor: { type: "string" },
+          activity: { const: "Add" },
+          // The actor
+          object: { type: "string" },
+          // To the namebook
+          target: { const: channel },
         },
-        required: ["type", "object"],
+        required: ["activity", "target", "object"],
       },
     },
   } as const satisfies JSONSchema;
 }
+export type JoinObject = GraffitiObject<ReturnType<typeof joinSchema>>;
 
 export function followSchema(actor: string, object?: string) {
   return {
     properties: {
       value: {
         properties: {
-          type: { enum: ["Follow"] },
+          activity: { const: "Follow" },
           object: {
             type: "string",
-            ...(object ? { enum: [object] } : {}),
+            ...(object ? { const: object } : {}),
           },
-          actor: { type: "string", enum: [actor] },
         },
-        required: ["type", "object"],
+        required: ["activity", "object"],
       },
-      actor: { type: "string", enum: [actor] },
+      actor: { const: actor },
     },
   } as const satisfies JSONSchema;
 }
@@ -39,11 +41,11 @@ export function profileSchema(actor: string) {
     properties: {
       value: {
         properties: {
-          type: { enum: ["Profile"] },
           name: { type: "string" },
-          describes: { type: "string", enum: [actor] },
+          describes: { const: actor },
+          published: { type: "number" },
         },
-        required: ["type", "name"],
+        required: ["name", "describes", "published"],
       },
     },
   } as const satisfies JSONSchema;
@@ -55,17 +57,17 @@ export function noteSchema(inReplyTo?: string) {
       value: {
         properties: {
           content: { type: "string" },
-          createdAt: { type: "number" },
-          at: {
+          published: { type: "number" },
+          to: {
             type: "array",
             items: { type: "string" },
           },
           inReplyTo: {
             type: "string",
-            ...(inReplyTo ? { enum: [inReplyTo] } : {}),
+            ...(inReplyTo ? { const: inReplyTo } : {}),
           },
         },
-        required: ["content", "createdAt"],
+        required: ["content", "published"],
       },
     },
   } as const satisfies JSONSchema;

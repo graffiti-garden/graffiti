@@ -32,9 +32,9 @@ function channels() {
 }
 
 const {
-    results: notes,
+    objects: notes,
     poll: pollNotes,
-    isPolling,
+    isInitialPolling: isPolling,
 } = useGraffitiDiscover(
     channels,
     () => noteSchema(props.inReplyTo),
@@ -42,7 +42,7 @@ const {
 );
 
 const notesSorted = computed(() =>
-    notes.value.sort((a, b) => b.value.createdAt - a.value.createdAt),
+    notes.value.sort((a, b) => b.value.published - a.value.published),
 );
 
 const isSubmitting = ref(false);
@@ -58,7 +58,7 @@ async function submitNote() {
 
     const note = {
         content: noteContent.value,
-        createdAt: new Date().getTime(),
+        published: Date.now(),
         at: undefined,
         inReplyTo: undefined,
     } as const;

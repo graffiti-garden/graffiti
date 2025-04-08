@@ -20,7 +20,7 @@ const props = withDefaults(
     },
 );
 
-const { results, isPolling } = useGraffitiDiscover(
+const { objects: results, isInitialPolling: isPolling } = useGraffitiDiscover(
     () => [props.actor],
     () => profileSchema(props.actor),
     sessionRef,
@@ -67,9 +67,9 @@ async function setName() {
         await graffiti.put<ReturnType<typeof profileSchema>>(
             {
                 value: {
-                    type: "Profile",
                     name: editingName.value,
                     describes: props.actor,
+                    published: Date.now(),
                 },
                 channels: [session.actor],
             },
