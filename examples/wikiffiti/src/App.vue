@@ -216,7 +216,7 @@ const md = markdownit({
                 <summary>Select authors</summary>
                 <ul>
                     <li
-                        v-for="author in new Set(
+                        v-for="(author, index) in new Set(
                             edits.map<string>((edit) => edit.actor),
                         )"
                     >
@@ -226,7 +226,8 @@ const md = markdownit({
                             :value="author"
                             :id="author"
                         />
-                        <label :for="author">{{ author }}</label>
+                        <!-- <label :for="author">{{ author }}</label> -->
+                        <label :for="author">[REDACTED] {{ index + 1 }}</label>
                     </li>
                 </ul>
             </details>
