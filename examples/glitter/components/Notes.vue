@@ -70,7 +70,7 @@ async function submitNote() {
                     ...note,
                     inReplyTo: props.inReplyTo,
                 },
-                channels: [props.inReplyTo],
+                channels: [props.inReplyTo, session.actor],
             },
             session,
         );
@@ -81,7 +81,7 @@ async function submitNote() {
                     ...note,
                     at: props.at,
                 },
-                channels: [...props.at],
+                channels: [...props.at, session.actor],
             },
             session,
         );
@@ -111,13 +111,40 @@ async function submitNote() {
         <input type="submit" value="post" />
     </form>
 
-    <div>
-        <button v-if="!isPolling" @click="pollNotes">🔄 refresh posts</button>
-        <button v-else disabled>🔄 refreshing...</button>
+    <div class="refresher">
+        <button v-if="!isPolling" @click="pollNotes">refresh posts</button>
+        <button v-else disabled>refreshing...</button>
     </div>
     <ul>
         <li v-for="note in notesSorted" :key="note.url">
-            <Note :note="note" />
+            <Note :note="note" :showInReplyTo="!inReplyTo" />
         </li>
     </ul>
 </template>
+
+<style>
+form {
+    margin: 0;
+}
+
+.refresher {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    margin: 0;
+    /* display: flex;
+    flex-direction: column;
+    align-items: flex; */
+
+    button {
+        border: none;
+        padding: 0;
+    }
+
+    button:hover {
+        cursor: pointer;
+        background: unset;
+        color: inherit;
+        text-decoration: underline;
+    }
+}
+</style>

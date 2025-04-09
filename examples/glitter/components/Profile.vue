@@ -20,17 +20,7 @@ const actor = computed(() =>
     <h2>
         <a :href="actor">{{ actor }}</a>
     </h2>
-    <p>
-        <button
-            v-if="actor === $graffitiSession.value?.actor"
-            @click="$graffiti.logout($graffitiSession.value)"
-        >
-            Log out
-        </button>
-    </p>
-    <p>
-        <Follow :object="actor" />
-    </p>
+    <Follow :object="actor" />
     <Notes
         :actors="[actor]"
         :at="actor !== $graffitiSession.value?.actor ? [actor] : undefined"
