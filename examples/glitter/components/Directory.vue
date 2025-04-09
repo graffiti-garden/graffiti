@@ -12,7 +12,7 @@ import { followSchema, joinSchema, type JoinObject } from "./schemas";
 const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
 
-const joinChannel = "Namebook";
+const joinChannel = "glitter";
 
 const { objects: joinsUnfiltered, isInitialPolling: isPollingJoins } =
     useGraffitiDiscover(
@@ -54,7 +54,7 @@ async function toggleJoin() {
                     object: session.actor,
                     target: joinChannel,
                 },
-                channels: ["Namebook"],
+                channels: ["glitter"],
             },
             session,
         );
@@ -68,6 +68,7 @@ async function follow() {
     if (!sessionRef.value) return;
     if (following.value.some((f) => f.value.object === followTarget.value))
         return;
+    alert(followTarget.value);
     await graffiti.put<ReturnType<typeof followSchema>>(
         {
             value: {
@@ -127,7 +128,7 @@ function copyActor() {
         <h2>Following</h2>
         <ul>
             <li v-for="follow in following">
-                <Name :actor="follow.actor" />
+                <Name :actor="follow.value.object" />
                 <div class="modifiers">
                     <button
                         @click="

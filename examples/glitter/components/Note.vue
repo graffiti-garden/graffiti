@@ -23,7 +23,9 @@ const props = withDefaults(
 
 const formattedTimestamp = computed(() =>
     props.note
-        ? new Date(props.note.value.published).toLocaleDateString(undefined, {
+        ? new Date(
+              props.note.value.published ?? props.note.lastModified,
+          ).toLocaleDateString(undefined, {
               month: "long",
               day: "numeric",
               year: "numeric",
