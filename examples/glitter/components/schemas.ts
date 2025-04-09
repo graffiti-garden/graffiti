@@ -58,6 +58,7 @@ export function noteSchema(inReplyTo?: string) {
         properties: {
           content: { type: "string" },
           published: { type: "number" },
+          createdAt: { type: "number" },
           to: {
             type: "array",
             items: { type: "string" },
@@ -67,7 +68,7 @@ export function noteSchema(inReplyTo?: string) {
             ...(inReplyTo ? { const: inReplyTo } : {}),
           },
         },
-        required: ["content", "published"],
+        required: ["content"],
       },
     },
   } as const satisfies JSONSchema;

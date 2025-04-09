@@ -42,7 +42,11 @@ const {
 );
 
 const notesSorted = computed(() =>
-    notes.value.sort((a, b) => b.value.published - a.value.published),
+    notes.value.sort(
+        (a, b) =>
+            (b.value.published ?? b.lastModified) -
+            (a.value.published ?? a.lastModified),
+    ),
 );
 
 const isSubmitting = ref(false);

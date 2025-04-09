@@ -2,7 +2,7 @@
     <template v-if="!$graffitiSession.value">
         <dialog>
             <h1>
-                <RouterLink to="/"> namebook </RouterLink>
+                <RouterLink to="/"> ✨ glitter ✨ </RouterLink>
             </h1>
             <p v-if="$graffitiSession.value === undefined">Loading...</p>
             <button v-else @click="$graffiti.login()">log in</button>
@@ -32,7 +32,7 @@
             </menu>
         </header>
 
-        <main>
+        <main class="glitter">
             <RouterView />
             <footer>
                 made of
