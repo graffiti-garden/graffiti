@@ -12,11 +12,12 @@ const props = withDefaults(
     defineProps<{
         note: GraffitiObject<ReturnType<typeof noteSchema>>;
         follows?: string[];
-        inReplyToContentAddress?: string;
+        showInReplyTo?: boolean;
+        isInReplyTo?: boolean;
     }>(),
     {
         follows: () => [],
-        inReplyToContentAddress: "",
+        showInReplyTo: false,
     },
 );
 
@@ -70,7 +71,11 @@ const editText = ref("");
         {{ formattedTimestamp }}
     </h2>
 
-    <div class="modifiers" v-click-away="() => (editMenuOpen = false)">
+    <div
+        class="modifiers"
+        v-if="note.actor === session?.actor"
+        v-click-away="() => (editMenuOpen = false)"
+    >
         <input
             type="checkbox"
             :id="'menu' + note.url"
@@ -80,25 +85,18 @@ const editText = ref("");
         <label :for="'menu' + note.url">⚙️</label>
 
         <menu v-if="editMenuOpen" @click="editMenuOpen = false">
-            <template v-if="note.actor === session?.actor">
-                <li v-if="!editing">
-                    <button
-                        @click="
-                            editing = true;
-                            editText = note.value.content;
-                        "
-                    >
-                        edit
-                    </button>
-                </li>
-                <li>
-                    <button @click="$graffiti.delete(note, session)">
-                        delete
-                    </button>
-                </li>
-            </template>
+            <li v-if="!editing">
+                <button
+                    @click="
+                        editing = true;
+                        editText = note.value.content;
+                    "
+                >
+                    edit
+                </button>
+            </li>
             <li>
-                <a target="_blank" class="button" :href="note.url">link</a>
+                <button @click="$graffiti.delete(note, session)">delete</button>
             </li>
         </menu>
     </div>
@@ -131,12 +129,18 @@ const editText = ref("");
     </form>
     <p v-else v-html="sanitizedContent"></p>
 
-    <p v-if="note.value.inReplyTo" class="inReplyTo">
-        In reply to:
-        <a :href="note.value.inReplyTo">{{ note.value.inReplyTo }}</a>
-    </p>
+    <GraffitiGet
+        v-if="note.value.inReplyTo && showInReplyTo"
+        v-slot="{ object }"
+        :url="note.value.inReplyTo"
+        :schema="noteSchema()"
+    >
+        <li v-if="object" class="inReplyTo">
+            <Note :note="object" isInReplyTo />
+        </li>
+    </GraffitiGet>
 
-    <div class="post-annotators">
+    <div class="post-annotators" v-if="!isInReplyTo">
         <input
             type="checkbox"
             :id="'comments' + note.url"
@@ -155,7 +159,9 @@ const editText = ref("");
 
 <style>
 .inReplyTo {
-    font-size: 70%;
-    color: var(--grey);
+    margin-top: -0.5rem;
+    margin-left: 1rem;
+    margin-bottom: 1rem;
+    margin-right: 1rem;
 }
 </style>

@@ -3,7 +3,7 @@
     --light-blue: #e6eaf2;
     --dark-blue: #193b80;
     --grey: #898f9c;
-    --between-posts: 2rem;
+    --between-posts: 1rem;
     --red: #e11b1b;
 }
 
@@ -153,7 +153,7 @@ main > p {
     text-align: center;
 }
 
-main > *,
+main > :not(form),
 main li {
     margin-bottom: var(--between-posts);
 }
