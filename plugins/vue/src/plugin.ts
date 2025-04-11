@@ -67,8 +67,8 @@ export interface GraffitiPluginOptions {
    * You must interact with Graffiti through these wrapped instances
    * to enable reactivity.
    *
-   * You'll likely want to use the [federated implementation](https://github.com/graffiti-garden/implementation-federated).
-   * However, you could also use the [local implementation](https://github.com/graffiti-garden/implementation-local)
+   * You'll likely want to use the remote implementation
+   * However, you could also use the local implementation
    * for testing. Other implementations may be available in the future.
    */
   graffiti: Graffiti;

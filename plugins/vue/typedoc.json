@@ -7,5 +7,6 @@
   "searchInComments": true,
   "plugin": ["typedoc-plugin-vue"],
   "highlightLanguages": ["bash", "html", "typescript", "vue"],
-  "kindSortOrder": ["Variable", "Interface", "Function"]
+  "kindSortOrder": ["Variable", "Interface", "Function"],
+  "disableSources": true
 }
