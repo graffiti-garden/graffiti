@@ -21,20 +21,19 @@ import type { JSONSchema } from "json-schema-to-ts";
  * The rest of the application can be built with standard client-side
  * user interface tools to present and interact with the data —
  * no server code necessary.
- * The Typescript source for this API is available at
- * [graffiti-garden/api](https://github.com/graffiti-garden/api).
+ * The Typescript source for this API is available at [REDACTED while paper under review].
  *
  * There are several different implementations of this Graffiti API available,
- * including a [federated implementation](https://github.com/graffiti-garden/implementation-federated),
+ * including a federated implementation
  * that lets users choose where their data is stored,
- * and a [local implementation](https://github.com/graffiti-garden/implementation-local)
+ * and a local implementation
  * that can be used for testing and development. In our design of Graffiti, this API is our
  * primary focus as it is the layer that shapes the experience
  * of developing applications. While different implementations can provide tradeoffs between
  * other important properties (e.g. privacy, security, scalability), those properties
  * are useless if the system as a whole doesn't expose useful functionality to developers.
  *
- * On the other side of the stack, there is [Vue plugin](https://github.com/graffiti-garden/wrapper-vue/)
+ * On the other side of the stack, there is [Vue plugin](https://vue.graffiti.garden/variables/GraffitiPlugin.html)
  * that wraps around this API to provide reactivity. Other high-level libraries
  * will be available in the future.
  *
