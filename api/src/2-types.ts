@@ -86,9 +86,8 @@ export interface GraffitiObjectBase {
    * to indicate the particular Graffiti implementation. This allows for applications
    * to pull from multiple coexisting Graffiti implementations without collision.
    * Existing schemes include `graffiti:local:` for objects stored locally
-   * (see the [local implementation](https://github.com/graffiti-garden/implementation-local))
-   * and `graffiti:remote:` for objects stored on Graffiti-specific web servers (see the
-   * [remote implementation](https://github.com/graffiti-garden/implementation-remote)).
+   * (see the local implementation)
+   * and `graffiti:remote:` for objects stored on Graffiti-specific web servers (see the remote implementation).
    * Options available in the future might include `graffiti:solid:` for objects stored on Solid servers
    * or `graffiti:p2p:` for objects stored on a peer-to-peer network.
    */
