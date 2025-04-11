@@ -3,5 +3,6 @@
   "cname": "sync.graffiti.garden",
   "titleLink": "/classes/GraffitiSynchronize.html",
   "searchInDocuments": true,
-  "searchInComments": true
+  "searchInComments": true,
+  "disableSources": true
 }
