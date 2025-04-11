@@ -81,18 +81,10 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         <a href="https://vuejs.org/guide/scaling-up/sfc.html"
             >Vue Single File Component</a
         >
-        and built with <a href="https://vitejs.dev/">Vite</a>. It uses the
-        <a href="https://github.com/graffiti-garden/wrapper-vue"
-            >Graffiti Vue.js wrapper</a
-        >
-        and the
-        <a href="https://github.com/graffiti-garden/implementation-pouchdb"
-            >PouchDB implementation of Graffiti</a
-        >. View the source code
-        <a
-            href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/node-vite-sfc"
-            >on Github</a
-        >.
+        and built with <a href="https://vitejs.dev/">Vite</a>. The link to the
+        source is unforuntately redacted for anonimization while the Graffiti
+        paper is under review. The source code is self-evident in the
+        <a href="../../">single-file examples</a>.
     </p>
     <p v-if="$graffitiSession.value">
         Logged in as: {{ $graffitiSession.value.actor }}

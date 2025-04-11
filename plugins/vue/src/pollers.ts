@@ -85,19 +85,19 @@ export class StreamPoller<Schema extends JSONSchema> implements Poller<Schema> {
       }
     }
 
+    const myIterator: GraffitiObjectStreamContinue<Schema> = this.iterator;
+
     while (true) {
       // Check if the iterator has been cancelled.
-      if (!this.iterator) {
+      if (myIterator !== this.iterator) {
         break;
       }
-
-      const myIterator: GraffitiObjectStreamContinue<Schema> = this.iterator;
 
       const result = await myIterator.next();
 
       // Check again if it was cancelled.
       if (myIterator !== this.iterator) {
-        continue;
+        break;
       }
 
       if (result.done) {
