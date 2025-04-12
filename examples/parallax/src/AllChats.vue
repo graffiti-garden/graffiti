@@ -5,6 +5,7 @@ import type { GraffitiSession, JSONSchema } from "@graffiti-garden/api";
 import { useGraffitiDiscover, useGraffiti } from "@graffiti-garden/wrapper-vue";
 import { addMember } from "./setters";
 import ChatName from "./ChatName.vue";
+import { parallaxOrProvenance, chatAdmin } from "./parallaxOrProvenance";
 
 const props = defineProps<{
     session: GraffitiSession;
@@ -57,7 +58,10 @@ async function createChat(session: GraffitiSession) {
         <button @click="createChat(session)" :disabled="creating">
             {{ creating ? "Creating..." : "New Chat" }}
         </button>
-        <h1>Parallax Chat</h1>
+        <h1>
+            {{ parallaxOrProvenance }}
+            Chat
+        </h1>
         <button @click="$graffiti.logout(session)">Log out</button>
     </header>
     <main>
@@ -71,6 +75,9 @@ async function createChat(session: GraffitiSession) {
                     }"
                 >
                     <ChatName :session="session" :channel="object" />
+                    <span v-if="parallaxOrProvenance === 'Provenance'">
+                        (admin: {{ chatAdmin(()=>object, session) }})
+                    </span>
                 </RouterLink>
             </li>
         </ul>

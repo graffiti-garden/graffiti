@@ -4,15 +4,21 @@ import { useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
 import { chatNameSchema } from "./schemas";
 import { sortByPublished } from "./utils";
 import type { ChatNameObject } from "./schemas";
+import { chatAdmin } from "./parallaxOrProvenance";
 
 const props = defineProps<{
     channel: string;
     session: GraffitiSession;
 }>();
 
+const admin = chatAdmin(
+    () => props.channel,
+    () => props.session,
+);
+
 const { objects, isInitialPolling } = useGraffitiDiscover(
     () => [props.channel],
-    () => chatNameSchema(props.channel, props.session.actor),
+    () => chatNameSchema(props.channel, admin.value),
 );
 const chatNames = sortByPublished<ChatNameObject>(objects);
 

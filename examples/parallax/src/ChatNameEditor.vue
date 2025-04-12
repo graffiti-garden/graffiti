@@ -8,6 +8,7 @@ const props = defineProps<{
     myChatName: string | undefined;
     session: GraffitiSession;
     myMembers: Set<string>;
+    admin: string;
 }>();
 
 const editing = ref(false);
@@ -49,7 +50,9 @@ async function save() {
     </div>
     <div v-else>
         {{ myChatName ?? "Unnamed Chat" }}
-        <button @click="edit">Edit Name</button>
+        <button @click="edit" v-if="session.actor === admin">
+            Edit Name
+        </button>
     </div>
 </template>
 

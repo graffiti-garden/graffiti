@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef, type Ref } from "vue";
+import { computed, ref, type Ref } from "vue";
 import {
     useGraffitiSession,
     useGraffitiDiscover,
@@ -20,6 +20,7 @@ import DisplayMessage from "./DisplayMessage.vue";
 import DisplayChatNameUpdate from "./DisplayChatNameUpdate.vue";
 import DisplayMembershipUpdate from "./DisplayMembershipUpdate.vue";
 import type { GraffitiSession } from "@graffiti-garden/api";
+import { chatAdmin, parallaxOrProvenance } from "./parallaxOrProvenance";
 
 const props = defineProps<{
     channel: string;
@@ -28,6 +29,11 @@ const props = defineProps<{
 
 const graffitiSession = useGraffitiSession();
 
+const admin = chatAdmin(
+    () => props.channel,
+    () => props.session,
+);
+
 const { objects: chatNamesRaw, isInitialPolling: isInitialPollingChatNames } =
     useGraffitiDiscover(
         () => [props.channel],
@@ -35,14 +41,21 @@ const { objects: chatNamesRaw, isInitialPolling: isInitialPollingChatNames } =
         undefined,
         true,
     );
-const chatNames = sortByPublished<ChatNameObject>(chatNamesRaw);
+const chatNamesSorted = sortByPublished<ChatNameObject>(chatNamesRaw);
+const chatNames = computed(() =>
+    chatNamesSorted.value.filter((chatName) => {
+        return (
+            parallaxOrProvenance !== "Provenance" ||
+            chatName.actor === admin.value
+        );
+    }),
+);
 
-const myChatName = computed(() => {
-    const entry = chatNames.value
-        .filter((c) => c.actor === graffitiSession.value?.actor)
-        .at(0);
-    return entry?.value.name;
-});
+const myChatName = computed(
+    () =>
+        chatNames.value.filter((c) => c.actor === admin.value).at(0)?.value
+            .name,
+);
 
 const {
     objects: memberUpdatesRaw,
@@ -58,7 +71,7 @@ const memberUpdatesAll = sortByPublished<MemberUpdateObject>(memberUpdatesRaw);
 const myMembers = computed(() => {
     const members = new Set<string>();
     for (const memberUpdate of memberUpdatesAll.value
-        .filter((m) => m.actor === graffitiSession.value?.actor)
+        .filter((m) => m.actor === admin.value)
         .toReversed()) {
         if (memberUpdate.value.activity === "Add") {
             members.add(memberUpdate.value.target);
@@ -66,6 +79,7 @@ const myMembers = computed(() => {
             members.delete(memberUpdate.value.target);
         }
     }
+    members.add(admin.value);
     return members;
 });
 
@@ -73,6 +87,12 @@ const myMembers = computed(() => {
 // "removes" if the actor is in "myMembers"
 const memberUpdates = computed(() => {
     return memberUpdatesAll.value.filter((memberUpdate) => {
+        if (
+            parallaxOrProvenance === "Provenance" &&
+            memberUpdate.actor !== admin.value
+        ) {
+            return false;
+        }
         if (memberUpdate.value.activity === "Add") {
             return true;
         } else {
@@ -151,6 +171,7 @@ const isMembersOpen = ref(false);
                         :channel="props.channel"
                         :myMembers="myMembers"
                         :session="session"
+                        :admin="admin"
                     />
                 </main>
             </article>
@@ -164,6 +185,7 @@ const isMembersOpen = ref(false);
                         :myChatName="myChatName"
                         :session="session"
                         :myMembers="myMembers"
+                        :admin="admin"
                     />
                 </h2>
                 <button @click="isMembersOpen = true">Members</button>
@@ -189,6 +211,7 @@ const isMembersOpen = ref(false);
                             :myMembers="myMembers"
                             :channel="props.channel"
                             :session="session"
+                            :admin="admin"
                         />
                         <DisplayMembershipUpdate
                             v-else-if="update.type === 'MemberUpdate'"
@@ -196,6 +219,7 @@ const isMembersOpen = ref(false);
                             :myMembers="myMembers"
                             :channel="props.channel"
                             :session="session"
+                            :admin="admin"
                         />
                     </li>
                 </ul>

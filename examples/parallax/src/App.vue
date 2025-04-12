@@ -1,10 +1,14 @@
+<script setup lang="ts">
+import { parallaxOrProvenance } from "./parallaxOrProvenance";
+</script>
+
 <template>
     <dialog v-if="$graffitiSession.value === null" open class="login">
-        <h1>Parallax</h1>
+        <h1>{{ parallaxOrProvenance }}</h1>
         <button @click="$graffiti.login()">Log In</button>
     </dialog>
     <dialog v-else-if="$graffitiSession.value === undefined" open class="login">
-        <h1>Parallax is loading...</h1>
+        <h1>{{ parallaxOrProvenance }} is loading...</h1>
     </dialog>
     <RouterView v-else v-slot="{ Component }">
         <component :is="Component" :session="$graffitiSession.value" />

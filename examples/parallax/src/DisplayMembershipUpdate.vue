@@ -4,12 +4,14 @@ import type { MemberUpdateObject } from "./schemas";
 import { addMember, removeMember } from "./setters";
 import GroupNames from "./GroupNames.vue";
 import { ref } from "vue";
+import { parallaxOrProvenance } from "./parallaxOrProvenance";
 
 const props = defineProps<{
     group: MemberUpdateObject[];
     myMembers: Set<string>;
     channel: string;
     session: GraffitiSession;
+  admin: string;
 }>();
 
 const activity = () => props.group[0].value.activity;
@@ -31,12 +33,15 @@ const countSquared = () => count.value * count.value;
             {{ isAdd() ? "added" : "removed" }}
             {{ member() === props.session.actor ? "you" : member() }}
             {{ isAdd() ? "to" : "from" }}
+            <template v-if="parallaxOrProvenance==='Parallax'">
             {{ includesMe() ? "your" : "their" }}
             {{ group.length > 1 ? "views" : "view" }}
-            of the chat.
+            of
+            </template>
+            the chat.
         </p>
 
-        <template v-if="!targetsMe()">
+        <template v-if="!targetsMe() && session.actor === admin">
             <button
                 v-if="isAdd() && !myMembers.has(member())"
                 @click="addMember(member(), myMembers, channel, session)"
@@ -50,7 +55,7 @@ const countSquared = () => count.value * count.value;
                 Remove {{ member() }}
             </button>
         </template>
-        <template v-else>
+        <template v-else-if="session.actor=== admin">
             <button
                 v-if="isAdd()"
                 v-for="actor in actors().filter(
