@@ -3,11 +3,13 @@ import type { GraffitiSession } from "@graffiti-garden/api";
 import { ref } from "vue";
 import { removeMember } from "./setters";
 import { addMember } from "./setters";
+import { parallaxOrProvenance } from "./parallaxOrProvenance";
 
 const props = defineProps<{
     channel: string;
     myMembers: Set<string>;
     session: GraffitiSession;
+    admin: string;
 }>();
 
 const removing = ref(new Set<string>());
@@ -41,15 +43,13 @@ async function copyUsername() {
 </script>
 
 <template>
-    <p>
+    <p v-if="parallaxOrProvenance === 'Parallax'">
         Your messages will <em>only</em>
         be sent to the members you choose to list below, regardless of who other
         people add to their "views" of the chat.
     </p>
 
-    <p></p>
-
-    <form @submit.prevent="add()">
+    <form @submit.prevent="add()" v-if="session.actor === admin">
         <input type="text" v-model="newMember" placeholder="Username" />
         <input type="submit" value="Add" :disabled="adding" />
     </form>
@@ -67,13 +67,21 @@ async function copyUsername() {
                     {{ copied ? "Copied!" : "Copy Username" }}
                 </button>
                 <button
-                    v-if="myMembers.has(session.actor)"
+                    v-if="
+                        myMembers.has(session.actor) && session.actor === admin
+                    "
                     @click="remove(session.actor)"
+                    :disabled="removing.has(session.actor)"
                     class="bad"
                 >
                     Leave
                 </button>
-                <button v-else @click="add(session.actor)" class="good">
+                <button
+                    v-else-if="session.actor === admin"
+                    @click="add(session.actor)"
+                    :disabled="adding"
+                    class="good"
+                >
                     Join
                 </button>
             </div>
@@ -81,9 +89,10 @@ async function copyUsername() {
         <template v-for="member in myMembers" :key="member">
             <li v-if="member !== session.actor">
                 <code>
-                    {{ member }}
+                    {{ member }} {{ member === admin ? "(admin)" : "" }}
                 </code>
                 <button
+                    v-if="session.actor === admin"
                     @click="remove(member)"
                     :disabled="removing.has(member)"
                     class="bad"
@@ -113,6 +122,7 @@ form {
 
 ul {
     list-style: none;
+    width: 30rem;
 
     li {
         padding: 0.5rem;

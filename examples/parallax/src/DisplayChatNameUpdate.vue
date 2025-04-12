@@ -3,6 +3,7 @@ import type { GraffitiSession } from "@graffiti-garden/api";
 import type { ChatNameObject } from "./schemas";
 import { setChatName } from "./setters";
 import GroupNames from "./GroupNames.vue";
+import { parallaxOrProvenance } from "./parallaxOrProvenance";
 
 const props = defineProps<{
     group: ChatNameObject[];
@@ -10,6 +11,7 @@ const props = defineProps<{
     myMembers: Set<string>;
     channel: string;
     session: GraffitiSession;
+    admin: string;
 }>();
 
 const name = () => props.group[0].value.name;
@@ -22,12 +24,15 @@ const includesMe = () =>
         <p>
             <GroupNames :group="group" />
             named
+            <template v-if="parallaxOrProvenance==='Parallax'">
             {{ includesMe() ? "your" : "their" }}
             {{ group.length > 1 ? "views" : "view" }}
-            of the chat "{{ name() }}".
+            of
+            </template>
+            the chat "{{ name() }}".
         </p>
         <button
-            v-if="myChatName !== name()"
+            v-if="myChatName !== name() && session.actor === admin"
             @click="
                 setChatName(name(), myChatName, myMembers, channel, session)
             "
