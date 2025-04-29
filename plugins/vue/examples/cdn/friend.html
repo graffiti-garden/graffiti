@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti Friends</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
+                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                }
+            }
+        </script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.fuchsia.min.css"
+        />
+        <style>
+            #app {
+                padding: 1rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app">
+            <header>
+                <h1>Graffiti Friends</h1>
+                <p>
+                    <a download href>
+                        Download the source code and make it your own!
+                    </a>
+                </p>
+            </header>
+
+            <main v-if="!$graffitiSession.value">
+                <button @click="$graffiti.login()">Log In</button>
+            </main>
+            <template v-else>
+                <main>
+                    <article>
+                        <h2>Add a friend</h2>
+
+                        <p>
+                            You are logged in as: {{
+                            $graffitiSession.value.actor }}
+                            <button @click="copyActor">
+                                {{ copied ? "Copied!" : "Copy" }}
+                            </button>
+                        </p>
+
+                        <form
+                            @submit.prevent="addFriend(friendActor, $graffitiSession.value)"
+                        >
+                            <label for="friendActor">
+                                Choose a friend to add:
+                            </label>
+                            <input
+                                id="friendActor"
+                                v-model="friendActor"
+                                placeholder="https://alice.example.com"
+                            />
+                            <input type="submit" value="Add Friend" />
+                        </form>
+                    </article>
+
+                    <article>
+                        <h2>My Friends</h2>
+                        <ul>
+                            <li v-for="friend in accepted">
+                                {{ friend }}
+                                <button
+                                    @click="friendObjects
+                                        .filter(f => f.value.target === friend)
+                                        .forEach(f => $graffiti.delete(f))"
+                                >
+                                    Unfriend
+                                </button>
+                            </li>
+                        </ul>
+
+                        <h2>Friend Requests</h2>
+                        <ul>
+                            <li v-for="friend in friendRequests">
+                                {{ friend }}
+                                <button
+                                    @click="addFriend(friend, $graffitiSession.value)"
+                                >
+                                    Confirm
+                                </button>
+                            </li>
+                        </ul>
+
+                        <h2>Sent Requests</h2>
+                        <ul>
+                            <li v-for="friend in sentRequests">
+                                {{ friend }}
+                                <button
+                                    @click="friendObjects
+                                        .filter(f => f.value.target === friend)
+                                        .forEach(f => $graffiti.delete(f))"
+                                >
+                                    Cancel
+                                </button>
+                            </li>
+                        </ul>
+                    </article>
+                </main>
+                <footer>
+                    <button @click="$graffiti.logout($graffitiSession.value)">
+                        Log Out
+                    </button>
+                </footer>
+            </template>
+        </div>
+        <script type="module">
+            import { createApp } from "vue";
+            import {
+                GraffitiPlugin,
+                useGraffitiDiscover,
+                useGraffitiSession,
+            } from "@graffiti-garden/wrapper-vue";
+            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
+            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+
+            createApp({
+                data() {
+                    return {
+                        copied: false,
+                        friendActor: "",
+                    };
+                },
+                setup() {
+                    const { objects: friendObjects } = useGraffitiDiscover(
+                        () => [useGraffitiSession().value.actor],
+                        {
+                            properties: {
+                                value: {
+                                    required: ["activity", "target"],
+                                    properties: {
+                                        activity: { const: "friend" },
+                                        target: { type: "string" },
+                                    },
+                                },
+                            },
+                        },
+                    );
+                    return { friendObjects };
+                },
+                computed: {
+                    myRequests() {
+                        return new Set(
+                            this.friendObjects
+                                .filter(
+                                    (f) =>
+                                        f.actor ===
+                                        this.$graffitiSession.value.actor,
+                                )
+                                .map((f) => f.value.target),
+                        );
+                    },
+                    theirRequests() {
+                        return new Set(
+                            this.friendObjects
+                                .filter(
+                                    (f) =>
+                                        f.value.target ===
+                                        this.$graffitiSession.value.actor,
+                                )
+                                .map((f) => f.actor),
+                        );
+                    },
+                    accepted() {
+                        return this.myRequests.intersection(this.theirRequests);
+                    },
+                    friendRequests() {
+                        return this.theirRequests.difference(this.myRequests);
+                    },
+                    sentRequests() {
+                        return this.myRequests.difference(this.theirRequests);
+                    },
+                },
+                methods: {
+                    copyActor() {
+                        navigator.clipboard.writeText(
+                            this.$graffitiSession.value.actor,
+                        );
+                        this.copied = true;
+                        setTimeout(() => (this.copied = false), 500);
+                    },
+                    addFriend(friendActor, session) {
+                        if (!friendActor) return;
+                        this.$graffiti.put(
+                            {
+                                value: {
+                                    activity: "friend",
+                                    target: friendActor,
+                                },
+                                channels: [session.actor, friendActor],
+                            },
+                            session,
+                        );
+                        this.friendActor = "";
+                    },
+                },
+            })
+                .use(GraffitiPlugin, {
+                    graffiti: new GraffitiLocal(),
+                    // graffiti: new GraffitiRemote(),
+                })
+                .mount("#app");
+        </script>
+    </body>
+</html>
