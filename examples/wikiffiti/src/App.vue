@@ -226,8 +226,7 @@ const md = markdownit({
                             :value="author"
                             :id="author"
                         />
-                        <!-- <label :for="author">{{ author }}</label> -->
-                        <label :for="author">[REDACTED] {{ index + 1 }}</label>
+                        <label :for="author">{{ author }}</label>
                     </li>
                 </ul>
             </details>
