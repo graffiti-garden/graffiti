@@ -39,6 +39,7 @@ const {
     channels,
     () => noteSchema(props.inReplyTo),
     sessionRef,
+    true,
 );
 
 const notesSorted = computed(() =>
@@ -73,6 +74,7 @@ async function submitNote() {
                 value: {
                     ...note,
                     inReplyTo: props.inReplyTo,
+                    isNotQuote: true,
                 },
                 channels: [props.inReplyTo, session.actor],
             },
@@ -115,20 +117,29 @@ async function submitNote() {
         <input type="submit" value="post" />
     </form>
 
-    <div class="refresher">
+      <div class="refresher">
         <button v-if="!isPolling" @click="pollNotes">refresh posts</button>
         <button v-else disabled>refreshing...</button>
     </div>
     <ul>
-        <li v-for="note in notesSorted" :key="note.url">
-            <Note :note="note" :showInReplyTo="!inReplyTo" />
-        </li>
+        <template v-for="note in notesSorted" :key="note.url">
+            <li
+                v-if="
+                    (!note.value.isNotQuote ||
+                        note.value.inReplyTo === inReplyTo) &&
+                    note.actor === $graffitiSession.value?.actor
+                "
+            >
+                <Note :note="note" :showInReplyTo="!inReplyTo" />
+            </li>
+        </template>
     </ul>
 </template>
 
 <style>
 form {
     margin: 0;
+    margin-bottom: 1rem;
 }
 
 .refresher {

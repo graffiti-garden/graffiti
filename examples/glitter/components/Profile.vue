@@ -20,7 +20,7 @@ const actor = computed(() =>
     <h2>
         <a :href="actor">{{ actor }}</a>
     </h2>
-    <Follow :object="actor" />
+    <Follow v-if="actor !== $graffitiSession.value?.actor" :object="actor" />
     <Notes
         :actors="[actor]"
         :at="actor !== $graffitiSession.value?.actor ? [actor] : undefined"
@@ -31,3 +31,15 @@ const actor = computed(() =>
         "
     />
 </template>
+
+<style scoped>
+h1 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+h2 {
+    text-align: center;
+}
+</style>

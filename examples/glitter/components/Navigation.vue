@@ -4,6 +4,7 @@
             <h1>
                 <RouterLink to="/"> ✨ glitter ✨ </RouterLink>
             </h1>
+            <h2>Made with <a href="https://graffiti.garden">Graffiti</a></h2>
             <p v-if="$graffitiSession.value === undefined">Loading...</p>
             <button v-else @click="$graffiti.login()">log in</button>
         </dialog>
@@ -53,5 +54,9 @@ li button {
 
 li button:hover {
     background: var(--dark-blue) !important;
+}
+
+h2 {
+    color: white;
 }
 </style>

@@ -138,16 +138,7 @@ const editText = ref("");
         :schema="noteSchema()"
     >
         <li v-if="object" class="inReplyTo">
-            <Note
-                :note="{
-                    ...object,
-                    value: {
-                        content:
-                            'Quoted replies are currently REDACTED to prevent leaking data from The Glue Factory. Sorry! Anonymizing social applications is hard 😅',
-                    },
-                }"
-                isInReplyTo
-            />
+            <Note :note="object" isInReplyTo />
         </li>
     </GraffitiGet>
 
