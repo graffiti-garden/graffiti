@@ -59,6 +59,7 @@ export function noteSchema(inReplyTo?: string) {
           content: { type: "string" },
           published: { type: "number" },
           createdAt: { type: "number" },
+          isNotQuote: { type: "boolean" },
           to: {
             type: "array",
             items: { type: "string" },
