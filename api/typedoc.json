@@ -4,6 +4,5 @@
   "cname": "api.graffiti.garden",
   "titleLink": "/classes/Graffiti.html",
   "searchInDocuments": true,
-  "searchInComments": true,
-  "disableSources": true
+  "searchInComments": true
 }
