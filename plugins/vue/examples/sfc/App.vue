@@ -91,7 +91,6 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         >. View the source code
         <a
             href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/sfc">on Github</a
-            >on Github</a
         >.
     </p>
     <p v-if="$graffitiSession.value">
