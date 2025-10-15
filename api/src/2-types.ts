@@ -34,8 +34,8 @@ export interface GraffitiObjectBase {
    * {@link Graffiti.discover} method. This allows creators to express the intended audience of their object
    * which helps to prevent [context collapse](https://en.wikipedia.org/wiki/Context_collapse) even
    * in the highly interoperable ecosystem that Graffiti envisions. For example, channel URIs may be:
-   * - A user's own {@link actor | `actor`} URI. Putting an object in this channel is a way to broadcast
-   * the object to the user's followers, like posting a tweet.
+   * - A actor's own {@link actor | `actor`} URI. Putting an object in this channel is a way to broadcast
+   * the object to the actor's followers, like posting a tweet.
    * - The URL of a Graffiti post. Putting an object in this channel is a way to broadcast to anyone viewing
    * the post, like commenting on a tweet.
    * - A URI representing a topic. Putting an object in this channel is a way to broadcast to anyone interested
@@ -49,8 +49,8 @@ export interface GraffitiObjectBase {
    * also know the right {@link channels | `channel` } to look in). An object can always be accessed by its creator, even if
    * the `allowed` array is empty.
    *
-   * The `allowed` array is not revealed to users other than the creator, like
-   * a BCC email. A user may choose to add a `to` property to the object's {@link value | `value`} to indicate
+   * The `allowed` array is not revealed to actors other than the creator, like
+   * a BCC email. An actor may choose to add a `to` property to the object's {@link value | `value`} to indicate
    * other recipients, however this is not enforced by Graffiti and may not accurately reflect the actual `allowed` array.
    *
    * `allowed` can be combined with {@link channels | `channels`}. For example, to send someone a direct message
@@ -94,15 +94,21 @@ export interface GraffitiObjectBase {
   url: string;
 
   /**
-   * The time the object was last modified, measured in milliseconds since January 1, 1970.
-   * It can be used to compare object versions.
-   * A number, rather than an ISO string or Date object, is used for easy comparison, sorting,
-   * and JSON Schema [range queries](https://json-schema.org/understanding-json-schema/reference/numeric#range).
+   * A number used to compare different versions of an object that has been
+   * updated via replacement (see {@link Graffiti.put}) or
+   * patch (see {@link Graffiti.patch}). Newer versions of
+   * an object have larger `revision` values than older versions.
+   * The `revision` can only
+   * be used to compare different versions of the same object,
+   * but cannot reliably be used to compare different objects.
+   * In cases where comparing different objects by time is useful,
+   * you could instead add `createdAt` or `lastModified` timestamp properties
+   * to an object's {@link value | `value`}.
    *
-   * It is possible to use this value to sort objects in a user's interface but in many cases it would be better to
-   * use a [`published`](https://www.w3.org/TR/activitystreams-vocabulary/#dfn-published)
-   * property in the object's {@link value | `value`} to indicate when the object was created
-   * rather than when it was modified.
+   * Depending on the implementation, the revision may be a timestamp,
+   * an incremental counter, may include randomness for obfuscation, and so on.
+   * Be careful not to rely on any of these specific `revision` instantiations
+   * as they may not be consistent across different implementations.
    */
   lastModified: number;
 }
@@ -140,14 +146,14 @@ export const GraffitiObjectJSONSchema = {
 /**
  * This is an object containing only the {@link GraffitiObjectBase.url | `url`}
  * property of a {@link GraffitiObjectBase | GraffitiObject}.
- * It is used as a utility type so that users can call {@link Graffiti.get},
+ * It is used as a utility type so that applications can call {@link Graffiti.get},
  * {@link Graffiti.patch}, or {@link Graffiti.delete} directly on an object
  * rather than on `object.url`.
  */
 export type GraffitiObjectUrl = Pick<GraffitiObjectBase, "url">;
 
 /**
- * This object is a subset of {@link GraffitiObjectBase} that a user must construct locally before calling {@link Graffiti.put}.
+ * This object is a subset of {@link GraffitiObjectBase} that must be constructed locally before calling {@link Graffiti.put}.
  * This local copy does not require system-generated properties and may be statically typed with
  * a [JSON schema](https://json-schema.org/) to prevent the accidental creation of erroneous objects.
  *
@@ -179,13 +185,12 @@ export const GraffitiPutObjectJSONSchema = {
 
 /**
  * This object contains information that the underlying implementation can
- * use to verify that a user has permission to operate a
- * particular {@link GraffitiObjectBase.actor | `actor`}.
+ * use to authenticate a particular {@link GraffitiObjectBase.actor | `actor`}.
  * This object is required of all {@link Graffiti} methods
  * that modify objects and is optional for methods that read objects.
  *
  * At a minimum the `session` object must contain the
- * {@link GraffitiSession.actor | `actor`} URI the user wants to authenticate with.
+ * {@link GraffitiSession.actor | `actor`} URI to authenticate with.
  * However it is likely that the `session` object must contain other
  * implementation-specific properties.
  * For example, a Solid implementation might include a
@@ -196,7 +201,7 @@ export const GraffitiPutObjectJSONSchema = {
  * As to why the `session` object is passed as an argument to every method
  * rather than being an internal property of the {@link Graffiti} instance,
  * this is primarily for type-checking to catch bugs related to login state.
- * Graffiti applications can expose some functionality to users who are not logged in
+ * Graffiti applications can expose some functionality to people who are not logged in
  * with {@link Graffiti.get} and {@link Graffiti.discover} but without type-checking
  * the `session` it can be easy to forget to hide buttons that trigger
  * other methods that require login.
@@ -210,14 +215,14 @@ export const GraffitiPutObjectJSONSchema = {
  */
 export interface GraffitiSession {
   /**
-   * The {@link GraffitiObjectBase.actor | `actor`} a user wants to authenticate with.
+   * The {@link GraffitiObjectBase.actor | `actor`} to authenticate with.
    */
   actor: string;
   /**
    * A yet undefined property detailing what operations the session
-   * grants the user to perform. For example, to allow a user to
+   * grants the actor to perform. For example, to allow a actor to
    * read private messages from a particular set of channels or
-   * to allow the user to write object matching a particular schema.
+   * to allow the actor to write object matching a particular schema.
    */
   scope?: {};
 }
@@ -323,7 +328,7 @@ export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
  * A result from a {@link GraffitiObjectStreamContinue} that indicated
  * an object has been deleted since the original stream was run.
  * Only sparse metadata about the deleted object is returned to respect
- * the deleting user's privacy.
+ * the deleting actor's privacy.
  *
  * @internal
  */
@@ -339,7 +344,7 @@ export interface GraffitiObjectStreamContinueTombstone {
   tombstone: true;
   /**
    * Sparse metadata about the deleted object. The full object is not returned
-   * to respect a user's privacy.
+   * to respect a actor's privacy.
    */
   object: {
     /**
@@ -376,7 +381,7 @@ export type GraffitiObjectStreamContinueEntry<Schema extends JSONSchema> =
  * that allows the stream to be continued from where it left off.
  *
  * The {@link continue} function preserves the typing of the original stream,
- * where as the {@link cursor} string can be serialized for use after a user
+ * where as the {@link cursor} string can be serialized for use after a person
  * has closed and reopened an application.
  *
  * The continued stream may include `tombstone`s of objects that have been
@@ -454,7 +459,7 @@ export type GraffitiChannelStatsStream = AsyncGenerator<
 
 /**
  * The event type produced in {@link Graffiti.sessionEvents}
- * when a user logs in manually from {@link Graffiti.login}
+ * when a actor logs in manually from {@link Graffiti.login}
  * or when their session is restored from a previous login.
  * The event name to listen for is `login`.
  */
@@ -471,7 +476,7 @@ export type GraffitiLoginEvent = CustomEvent<
 
 /**
  * The event type produced in {@link Graffiti.sessionEvents}
- * when a user logs out either manually with {@link Graffiti.logout}
+ * when a actor logs out either manually with {@link Graffiti.logout}
  * or when their session times out or otherwise becomes invalid.
  * The event name to listen for is `logout`.
  */
@@ -494,8 +499,8 @@ export type GraffitiLogoutEvent = CustomEvent<
  * their own {@link GraffitiLoginEvent} events.
  *
  * This event optionally returns an `href` property
- * representing the URL the user originated a login request
- * from, which may be useful for redirecting the user back to
+ * representing the URL that originated a login request,
+ * which may be useful for redirecting the user back to
  * the page they were on after login.
  * The event name to listen for is `initialized`.
  */
