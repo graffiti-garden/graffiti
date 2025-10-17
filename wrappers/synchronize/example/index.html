@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti Synchronize Example</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script type="importmap">
+            {
+                "imports": {
+                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
+                    "@graffiti-garden/wrapper-synchronize": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-synchronize/dist/browser/index.js"
+                }
+            }
+        </script>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
+        />
+    </head>
+    <body>
+        <header>
+            <h1>Graffiti Synchronize Example</h1>
+            <p>
+                <a download href
+                    >Download the source code and make it your own!</a
+                >
+            </p>
+            <button id="loading" disabled>Loading...</button>
+            <div id="login-logout" style="display: none">
+                <button id="login">Login</button>
+                <button id="logout" style="display: none">Logout</button>
+            </div>
+        </header>
+        <main id="main" style="display: none">
+            <form id="post-form">
+                <label for="post-content">Write a message:</label>
+                <input
+                    type="text"
+                    name="content"
+                    id="post-content"
+                    placeholder="Hello..."
+                />
+                <input type="submit" value="Post" />
+            </form>
+            <ul id="posts"></ul>
+        </main>
+        <script type="module">
+            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
+            import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
+
+            const graffiti = new GraffitiSynchronize(new GraffitiLocal());
+
+            // Where to listen for messages
+            const channel = "graffiti-synchronize";
+
+            // Login/logout logic
+            let session = null;
+            let clear = null;
+            const loginButton = document.getElementById("login");
+            const logoutButton = document.getElementById("logout");
+            loginButton.addEventListener("click", () => {
+                graffiti.login();
+            });
+            logoutButton.addEventListener("click", () => {
+                graffiti.logout(session);
+            });
+            graffiti.sessionEvents.addEventListener("initialized", () => {
+                document.getElementById("loading").style.display = "none";
+                document.getElementById("login-logout").style.display = "block";
+            });
+            graffiti.sessionEvents.addEventListener(
+                "login",
+                async ({ detail: e }) => {
+                    if (e.session && !e.error) {
+                        session = e.session;
+                        document.getElementById("logout").style.display =
+                            "block";
+                        document.getElementById("login").style.display = "none";
+                        document.getElementById("main").style.display = "block";
+                    }
+                    clear = listenForPosts();
+                },
+            );
+            graffiti.sessionEvents.addEventListener(
+                "logout",
+                ({ detail: e }) => {
+                    if (
+                        e.actor &&
+                        !e.error &&
+                        session &&
+                        session.actor === e.actor
+                    ) {
+                        session = null;
+                        document.getElementById("logout").style.display =
+                            "none";
+                        document.getElementById("login").style.display =
+                            "block";
+                        document.getElementById("main").style.display = "none";
+                        if (clear) clear();
+                    }
+                },
+            );
+
+            // Add a listener to the form
+            document
+                .getElementById("post-form")
+                .addEventListener("submit", async (event) => {
+                    event.preventDefault();
+                    const content =
+                        document.getElementById("post-content").value;
+                    if (!content.length) return;
+
+                    await graffiti.put(
+                        {
+                            value: { content },
+                            channels: [channel],
+                        },
+                        session,
+                    );
+
+                    document.getElementById("post-content").value = "";
+                });
+
+            // Stream new posts
+            function listenForPosts() {
+                const discoverArgs = [
+                    [channel],
+                    {
+                        properties: {
+                            value: {
+                                properties: {
+                                    content: { type: "string" },
+                                },
+                                required: ["content"],
+                            },
+                        },
+                    },
+                    session,
+                ];
+
+                const syncedIterator = graffiti.synchronizeDiscover(
+                    ...discoverArgs,
+                );
+                const iterator = graffiti.discover(...discoverArgs);
+
+                // Make the actual query
+                (async () => {
+                    for await (const p of iterator) {
+                    }
+                })();
+
+                // Listen for posts, either from the query (above)
+                // or from posts made in the form or changes made
+                // through the buttons, etc. thanks to the "synchronized"
+                // discover call
+                (async () => {
+                    for await (const {
+                        tombstone,
+                        object: post,
+                    } of syncedIterator) {
+                        const existingPost = document.querySelector(
+                            `[data-url="${post.url}"]`,
+                        );
+
+                        if (tombstone) {
+                            if (existingPost) {
+                                existingPost.remove();
+                            }
+                        } else {
+                            if (!existingPost) {
+                                const li = document.createElement("li");
+                                li.dataset.url = post.url;
+                                li.dataset.lastModified = post.lastModified;
+
+                                const article =
+                                    document.createElement("article");
+                                const header = document.createElement("header");
+                                const main = document.createElement("main");
+                                const footer = document.createElement("footer");
+                                const content = document.createElement("p");
+                                const author = document.createElement("p");
+                                author.textContent = `Author: ${post.actor}`;
+                                content.textContent = `Message: ${post.value.content}`;
+                                main.appendChild(content);
+                                header.appendChild(author);
+                                article.appendChild(header);
+                                article.appendChild(main);
+                                article.appendChild(footer);
+                                li.appendChild(article);
+
+                                if (post.actor === session.actor) {
+                                    const deleteButton =
+                                        document.createElement("button");
+                                    deleteButton.textContent = "Delete";
+                                    deleteButton.addEventListener(
+                                        "click",
+                                        async () => {
+                                            await graffiti.delete(
+                                                post.url,
+                                                session,
+                                            );
+                                        },
+                                    );
+                                    footer.appendChild(deleteButton);
+
+                                    const editButton =
+                                        document.createElement("button");
+                                    editButton.textContent = "Edit";
+                                    editButton.addEventListener(
+                                        "click",
+                                        async () => {
+                                            const newContent = prompt(
+                                                "Enter a different message:",
+                                            );
+                                            if (newContent) {
+                                                await graffiti.patch(
+                                                    {
+                                                        value: [
+                                                            {
+                                                                op: "replace",
+                                                                path: "/content",
+                                                                value: newContent,
+                                                            },
+                                                        ],
+                                                    },
+                                                    post.url,
+                                                    session,
+                                                );
+                                            }
+                                        },
+                                    );
+                                    footer.appendChild(editButton);
+                                }
+
+                                document.getElementById("posts").prepend(li);
+                            } else {
+                                const lastModified =
+                                    existingPost.dataset.lastModified;
+                                if (lastModified < post.lastModified) {
+                                    existingPost.dataset.lastModified =
+                                        post.lastModified;
+                                    const contentEl =
+                                        existingPost.querySelector("main > p");
+                                    contentEl.textContent = `Message: ${post.value.content}`;
+                                }
+                            }
+                        }
+                    }
+                })();
+
+                function clear() {
+                    syncedIterator.return();
+                    iterator.return();
+                    document.getElementById("posts").innerHTML = "";
+                }
+
+                return clear;
+            }
+        </script>
+    </body>
+</html>
