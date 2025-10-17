@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-synchronize",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Internal synchronization for the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -24,7 +24,7 @@
     "test:coverage": "vitest --coverage",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
-    "build:docs": "typedoc --options typedoc.json",
+    "build:docs": "typedoc --options typedoc.json && cp -r example docs",
     "build": "rm -rf dist && npm run build:types && npm run build:js && npm run build:docs",
     "prepublishOnly": "npm update && npm test && npm run build"
   },
@@ -45,19 +45,19 @@
   },
   "homepage": "https://sync.graffiti.garden/classes/GraffitiSynchronize.html",
   "devDependencies": {
-    "@types/node": "^22.13.1",
-    "@vitest/coverage-v8": "^3.0.6",
-    "tsx": "^4.19.2",
-    "typedoc": "^0.27.6",
-    "typescript": "^5.7.3",
-    "vitest": "^3.0.5"
+    "@types/node": "^24.7.2",
+    "@vitest/coverage-v8": "^3.2.4",
+    "esbuild-plugin-polyfill-node": "^0.3.0",
+    "tsx": "^4.20.6",
+    "typedoc": "^0.28.14",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^0.6.2",
-    "@graffiti-garden/implementation-local": "^0.6.2",
+    "@graffiti-garden/api": "^0.6.4",
+    "@graffiti-garden/implementation-local": "^0.6.4",
     "@repeaterjs/repeater": "^3.0.6",
     "ajv": "^8.17.1",
-    "esbuild-plugin-polyfill-node": "^0.3.0",
     "fast-json-patch": "^3.1.1"
   }
 }

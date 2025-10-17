@@ -24,7 +24,7 @@ In the browser, you can use a CDN like jsDelivr. Add an import map the the `<hea
     <script type="importmap">
         {
             "imports": {
-                "@graffiti-garden/wrapper-synchronize": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-synchronize/dist/index.browser.js"
+                "@graffiti-garden/wrapper-synchronize": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-synchronize/dist/browser/index.js"
             }
         }
     </script>

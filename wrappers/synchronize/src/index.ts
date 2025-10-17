@@ -48,8 +48,10 @@ export interface GraffitiSynchronizeOptions {
  * the [Graffiti Vue Plugin](https://vue.graffiti.garden/variables/GraffitiPlugin.html)
  * and possibly other front-end libraries in the future.
  *
- * Specifically, it provides the following *synchronize*
- * methods for each of the following API methods:
+ * [See a live example](/example).
+ *
+ * Specifically, this library provides the following *synchronize*
+ * methods to correspond with each of the following Graffiti API methods:
  *
  * | API Method | Synchronize Method |
  * |------------|--------------------|
@@ -75,6 +77,8 @@ export interface GraffitiSynchronizeOptions {
  * all instance's of that friend's name in the user's application instantly,
  * providing a consistent user experience.
  *
+ * The source code for this library is [available on GitHub](https://github.com/graffiti-garden/wrapper-synchronize/).
+ *
  * @groupDescription Synchronize Methods
  * This group contains methods that listen for changes made via
  * {@link put}, {@link patch}, and {@link delete} or fetched from
@@ -93,7 +97,7 @@ export class GraffitiSynchronize extends Graffiti {
   logout: Graffiti["logout"];
   sessionEvents: Graffiti["sessionEvents"];
 
-  get ajv() {
+  protected get ajv() {
     if (!this.ajv_) {
       this.ajv_ = (async () => {
         const { default: Ajv } = await import("ajv");
@@ -103,7 +107,7 @@ export class GraffitiSynchronize extends Graffiti {
     return this.ajv_;
   }
 
-  get applyPatch() {
+  protected get applyPatch() {
     if (!this.applyPatch_) {
       this.applyPatch_ = (async () => {
         const { applyPatch } = await import("fast-json-patch");
@@ -183,7 +187,9 @@ export class GraffitiSynchronize extends Graffiti {
       },
     );
 
-    return repeater;
+    return (async function* () {
+      for await (const i of repeater) yield i;
+    })();
   }
 
   /**
@@ -264,6 +270,8 @@ export class GraffitiSynchronize extends Graffiti {
    *
    * Be careful using this method. Without additional filters it can
    * expose the user to content out of context.
+   *
+   * @group Synchronize Methods
    */
   synchronizeAll<Schema extends JSONSchema>(
     schema: Schema,
@@ -414,7 +422,7 @@ export class GraffitiSynchronize extends Graffiti {
   };
 
   continueObjectStream: Graffiti["continueObjectStream"] = (...args) => {
-    // TODO!!
-    return this.graffiti.continueObjectStream(...args);
+    const iterator = this.graffiti.continueObjectStream(...args);
+    return this.objectStreamContinue<{}>(iterator);
   };
 }
