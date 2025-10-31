@@ -1,0 +1,30 @@
+{
+  "name": "@graffiti-garden/implementation-worker",
+  "author": "Theia Henderson",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev:web": "vite --config web/vite.config.mts",
+    "dev:api": "wrangler dev --config wrangler.toml",
+    "dev": "concurrently --kill-others \"npm run dev:web\" \"npm run dev:api\"",
+    "build:web": "vite build --config web/vite.config.mts",
+    "deploy": "npm run build:web && wrangler deploy --config wrangler.toml"
+  },
+  "dependencies": {
+    "@picocss/pico": "^2.1.1",
+    "@simplewebauthn/browser": "^13.2.2",
+    "@simplewebauthn/server": "^9.0.3",
+    "arctic": "^3.7.0",
+    "hono": "^4.9.10",
+    "vue": "^3.5.22"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251004.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/typescript-plugin": "^3.1.0",
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "wrangler": "^4.42.2"
+  }
+}
