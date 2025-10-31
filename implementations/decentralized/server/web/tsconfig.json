@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "plugins": [{ "name": "@vue/typescript-plugin" }]
+  },
+  "include": ["src", "vite.config.mts"]
+}
