@@ -9,10 +9,11 @@ type Bindings = {
 const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
 const COOKIE_NAME = "session";
+const TEMP_USER_ID = "temp";
 
 export async function createSession(
-  userId: string,
   context: Context<{ Bindings: Bindings }>,
+  userId: string,
 ) {
   // Create a session for the corresponding user
   const sessionId = crypto.randomUUID();
@@ -30,9 +31,22 @@ export async function createSession(
   // Store the session as a cookie
   const token = sessionId + "." + secret;
   setTokenCookie(context, token);
+
+  return sessionId;
 }
 
-export async function verifySession(context: Context<{ Bindings: Bindings }>) {
+export async function createTempSession(
+  context: Context<{ Bindings: Bindings }>,
+) {
+  return await createSession(context, TEMP_USER_ID);
+}
+
+export async function verifySession(
+  context: Context<{ Bindings: Bindings }>,
+  options?: {
+    allowTemp?: boolean;
+  },
+) {
   const token = getCookie(context, COOKIE_NAME);
   if (!token) {
     throw new HTTPException(401, { message: "Not logged in" });
@@ -72,7 +86,12 @@ export async function verifySession(context: Context<{ Bindings: Bindings }>) {
     setTokenCookie(context, token);
   }
 
-  return result.user_id;
+  const userId = result.user_id;
+  if (userId === TEMP_USER_ID && !options?.allowTemp) {
+    throw new HTTPException(403, { message: "Temporary user not allowed" });
+  }
+
+  return { userId, sessionId };
 }
 
 function setTokenCookie(

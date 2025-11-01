@@ -10,7 +10,7 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "graffiti-db"
-database_id = "f3b55f39-1d30-4d26-b6e0-acabe3814cd3"
+database_id = "daa06266-f640-4bd6-b243-cbc71e454cd0"
 
 [observability]
 enabled = true
