@@ -94,6 +94,14 @@ export async function verifySession(
   return { userId, sessionId };
 }
 
+export async function deleteSession(context: Context<{ Bindings: Bindings }>) {
+  const { sessionId, userId } = await verifySession(context);
+  await context.env.DB.prepare(`DELETE FROM sessions WHERE session_id = ?`)
+    .bind(sessionId)
+    .run();
+  return { sessionId, userId };
+}
+
 function setTokenCookie(
   context: Context<{ Bindings: Bindings }>,
   token: string,
