@@ -86,7 +86,7 @@ router.post("/register/verify", async (c) => {
     .first<{ challenge: string; user_id: string; created_at: number }>();
 
   if (!registrationOptions) {
-    return c.json({ error: "Challenge not found." }, 404);
+    return c.text("Challenge not found.", 404);
   }
 
   const {
@@ -96,7 +96,7 @@ router.post("/register/verify", async (c) => {
   } = registrationOptions;
 
   if (Date.now() - createdAt > CHALLENGE_MAX_AGE) {
-    return c.json({ error: "Challenge expired." }, 400);
+    return c.text("Challenge expired.", 400);
   }
 
   const { rpId, origin } = getRp(c.req);
@@ -112,7 +112,7 @@ router.post("/register/verify", async (c) => {
       requireUserVerification: false,
     });
   } catch (error) {
-    return c.json({ error: "Passkey verification failed." }, 400);
+    return c.text("Passkey verification failed.", 400);
   }
 
   if (!verification.verified || !verification.registrationInfo) {
@@ -191,12 +191,12 @@ router.post("/authenticate/verify", async (c) => {
     .first<{ challenge: string; created_at: number }>();
 
   if (!result) {
-    return c.json({ error: "Challenge not found." }, 404);
+    return c.text("Challenge not found.", 404);
   }
 
   const { challenge, created_at: createdAt } = result;
   if (Date.now() - createdAt > CHALLENGE_MAX_AGE) {
-    return c.json({ error: "Challenge expired." }, 400);
+    return c.text("Challenge expired.", 400);
   }
 
   const { rpId, origin } = getRp(c.req);
@@ -214,7 +214,7 @@ router.post("/authenticate/verify", async (c) => {
     }>();
 
   if (!userPasskey) {
-    return c.json({ error: "User not found." }, 404);
+    return c.text("User not found.", 404);
   }
 
   const verification = await verifyAuthenticationResponse({
@@ -231,7 +231,7 @@ router.post("/authenticate/verify", async (c) => {
   });
 
   if (!verification.verified || !verification.authenticationInfo) {
-    return c.json({ error: "Invalid authentication response." }, 400);
+    return c.text("Invalid authentication response.", 400);
   }
 
   const { newCounter } = verification.authenticationInfo;

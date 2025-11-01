@@ -22,9 +22,9 @@ async function handleLogin() {
 
     const challengeResponse = await fetch(
         "/api/webauthn/authenticate/challenge",
-    );
+    ).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
     if (!challengeResponse.ok) {
-        const { error } = await challengeResponse.json();
+        const error = await challengeResponse.text();
         alert(`Failed to log in. ${error}`);
         loggingIn.value = false;
         return;
@@ -40,7 +40,6 @@ async function handleLogin() {
         loggingIn.value = false;
         return;
     }
-    console.log(authenticationResponse);
 
     const verificationResponse = await fetch(
         "/api/webauthn/authenticate/verify",
@@ -51,9 +50,9 @@ async function handleLogin() {
             },
             body: JSON.stringify(authenticationResponse),
         },
-    );
+    ).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
     if (!verificationResponse.ok) {
-        const { error } = await verificationResponse.json();
+        const error = await verificationResponse.text();
         alert(`Failed to log in. ${error}`);
         loggingIn.value = false;
         return;
