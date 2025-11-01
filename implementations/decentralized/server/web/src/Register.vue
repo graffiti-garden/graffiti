@@ -1,14 +1,7 @@
 <template>
-    <section>
-        <header>
-            <h2>New Graffiti Account</h2>
-        </header>
-        <form @submit.prevent="handleSubmit">
-            <button v-focus type="submit" :disabled="registering">
-                {{ registering ? "Registering..." : "Register with Passkey" }}
-            </button>
-        </form>
-    </section>
+    <button @click="handleRegister" :disabled="registering">
+        {{ registering ? "Registering..." : "Register" }}
+    </button>
 </template>
 
 <script setup lang="ts">
@@ -20,7 +13,11 @@ import {
 
 const registering = ref(false);
 
-async function handleSubmit() {
+const isLoggedIn = defineModel<boolean | undefined>("isLoggedIn", {
+    required: true,
+});
+
+async function handleRegister() {
     registering.value = true;
 
     // Register a passkey
@@ -58,8 +55,7 @@ async function handleSubmit() {
         return;
     }
 
-    // TODO: Navigate to a new page
-    alert("Registered!");
     registering.value = false;
+    isLoggedIn.value = true;
 }
 </script>

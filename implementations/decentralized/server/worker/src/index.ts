@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import username from "./username";
+import actors from "./actors";
 import webauthn from "./webauthn";
 
 type Bindings = {
@@ -17,7 +17,7 @@ app.use("*", async (c, next) => {
 
 // Apply the APIs
 app.route("/api/webauthn", webauthn);
-app.route("/api/username", username);
+app.route("/api/actors", actors);
 
 // Route static assets
 app.all("*", async (c) => {

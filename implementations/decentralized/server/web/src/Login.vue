@@ -1,14 +1,7 @@
 <template>
-    <section>
-        <header>
-            <h2>New Graffiti Account</h2>
-        </header>
-        <form @submit.prevent="handleLogin">
-            <button v-focus type="submit" :disabled="loggingIn">
-                {{ loggingIn ? "Logging in..." : "Log In" }}
-            </button>
-        </form>
-    </section>
+    <button @click="handleLogin" :disabled="loggingIn">
+        {{ loggingIn ? "Logging in..." : "Log In" }}
+    </button>
 </template>
 
 <script setup lang="ts">
@@ -19,6 +12,10 @@ import {
 } from "@simplewebauthn/browser";
 
 const loggingIn = ref(false);
+
+const isLoggedIn = defineModel<boolean | undefined>("isLoggedIn", {
+    required: true,
+});
 
 async function handleLogin() {
     loggingIn.value = true;
@@ -62,8 +59,7 @@ async function handleLogin() {
         return;
     }
 
-    // TODO: Navigate to a new page
-    alert("Logged in!");
     loggingIn.value = false;
+    isLoggedIn.value = true;
 }
 </script>

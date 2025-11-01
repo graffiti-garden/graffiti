@@ -6,7 +6,12 @@ import {
   verifyAuthenticationResponse,
   type VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
-import { createSession, createTempSession, verifySession } from "./session";
+import {
+  createSession,
+  createTempSession,
+  deleteSession,
+  verifySession,
+} from "./session";
 
 type Bindings = {
   DB: D1Database;
@@ -239,6 +244,16 @@ router.post("/authenticate/verify", async (c) => {
 
   await createSession(c, userPasskey.user_id);
   return c.json({ message: "Passkey authenticated successfully." });
+});
+
+router.get("/logged-in", async (c) => {
+  await verifySession(c);
+  return c.json({ message: "Logged in." });
+});
+
+router.post("/logout", async (c) => {
+  await deleteSession(c);
+  return c.json({ message: "Logged out." });
 });
 
 export default router;
