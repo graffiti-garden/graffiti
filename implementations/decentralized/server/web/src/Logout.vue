@@ -15,9 +15,11 @@ const isLoggedIn = defineModel<boolean | undefined>("isLoggedIn", {
 
 async function handleLogout() {
     loggingOut.value = true;
-    const result = await fetch("/api/webauthn/logout", { method: "POST" });
+    const result = await fetch("/api/webauthn/logout", {
+        method: "POST",
+    }).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
     if (!result.ok) {
-        const { error } = await result.json();
+        const error = await result.text();
         alert(`Error logging out. ${error}`);
     } else {
         isLoggedIn.value = false;

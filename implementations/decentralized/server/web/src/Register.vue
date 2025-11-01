@@ -21,9 +21,11 @@ async function handleRegister() {
     registering.value = true;
 
     // Register a passkey
-    const challengeResponse = await fetch("/api/webauthn/register/challenge");
+    const challengeResponse = await fetch(
+        "/api/webauthn/register/challenge",
+    ).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
     if (!challengeResponse.ok) {
-        const { error } = await challengeResponse.json();
+        const error = await challengeResponse.text();
         alert(`Failed to register passkey. ${error}`);
         registering.value = false;
         return;
@@ -47,9 +49,9 @@ async function handleRegister() {
             "Content-Type": "application/json",
         },
         body: JSON.stringify(registrationResponse),
-    });
+    }).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
     if (!verificationResp.ok) {
-        const { error } = await verificationResp.json();
+        const error = await verificationResp.text();
         alert(`Failed to register passkey. ${error}`);
         registering.value = false;
         return;

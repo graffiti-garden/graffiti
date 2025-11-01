@@ -36,5 +36,7 @@ import { ref } from "vue";
 const isLoggedIn = ref<boolean | undefined>(undefined);
 fetch("/api/webauthn/logged-in").then(
     (result) => (isLoggedIn.value = result.ok),
-);
+).catch((error) => {
+    console.error("Failed to fetch logged-in status:", error);
+});
 </script>

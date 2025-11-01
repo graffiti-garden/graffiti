@@ -33,18 +33,13 @@ router.post("/register", async (c) => {
   } catch (error: any) {
     const msg = String(error?.message || "");
     if (msg.includes("max_actors_reached")) {
-      return c.json(
-        {
-          error: "You have reached the maximum number of actors.",
-        },
-        400,
-      );
+      return c.text("You have reached the maximum number of actors.", 400);
     } else if (msg.includes("UNIQUE")) {
-      return c.json({ error: "Actor already exists." }, 400);
+      return c.text("Actor already exists.", 400);
     } else if (msg.includes("CHECK")) {
-      return c.json({ error: "Actor is invalid." }, 400);
+      return c.text("Actor is invalid.", 400);
     }
-    return c.json({ error: "Unknown error." }, 500);
+    return c.text("Unknown error.", 500);
   }
 
   return c.json({ registered: true });
