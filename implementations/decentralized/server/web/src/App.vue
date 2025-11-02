@@ -8,7 +8,7 @@
 
         <main>
             <p>Logged in!</p>
-            <Logout v-model:isLoggedIn="isLoggedIn"/>
+            <Logout />
         </main>
     </template>
     <template v-else-if="isLoggedIn === false">
@@ -17,8 +17,8 @@
         </header>
 
         <main>
-            <Login v-model:isLoggedIn="isLoggedIn"/>
-            <Register v-model:isLoggedIn="isLoggedIn"/>
+            <Login />
+            <Register />
         </main>
     </template>
     <template v-else>
@@ -30,13 +30,20 @@
 import Register from "./Register.vue";
 import Login from "./Login.vue";
 import Logout from "./Logout.vue";
+import { fetchFromAPI, isLoggedIn } from "./utils";
 
-import { ref } from "vue";
-
-const isLoggedIn = ref<boolean | undefined>(undefined);
-fetch("/api/webauthn/logged-in").then(
-    (result) => (isLoggedIn.value = result.ok),
-).catch((error) => {
-    console.error("Failed to fetch logged-in status:", error);
-});
+function checkLoggedInStatus() {
+  fetchFromAPI("webauthn/logged-in")
+    .then(()=> { isLoggedIn.value = true })
+    .catch(() => {
+      // Any 401 will automatically set isLoggedIn to false,
+      // but if its a different error, retry after 1 second
+      if (isLoggedIn.value === undefined) {
+        setTimeout(() => {
+          checkLoggedInStatus();
+        }, 1000);
+      }
+    });
+}
+checkLoggedInStatus();
 </script>

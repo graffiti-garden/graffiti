@@ -6,24 +6,22 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { isLoggedIn, fetchFromAPI } from "./utils";
 
 const loggingOut = ref(false);
 
-const isLoggedIn = defineModel<boolean | undefined>("isLoggedIn", {
-    required: true,
-});
-
 async function handleLogout() {
     loggingOut.value = true;
-    const result = await fetch("/api/webauthn/logout", {
-        method: "POST",
-    }).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
-    if (!result.ok) {
-        const error = await result.text();
-        alert(`Error logging out. ${error}`);
-    } else {
+
+    try {
+        await fetchFromAPI("webauthn/logout", {
+            method: "POST",
+        });
         isLoggedIn.value = false;
+    } catch (error: any) {
+        alert(`Error logging out. ${error.message}`);
     }
+
     loggingOut.value = false;
 }
 </script>

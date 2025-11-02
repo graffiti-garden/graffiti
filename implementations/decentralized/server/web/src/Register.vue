@@ -10,27 +10,21 @@ import {
     startRegistration,
     type RegistrationResponseJSON,
 } from "@simplewebauthn/browser";
+import { isLoggedIn, fetchFromAPI } from "./utils";
 
 const registering = ref(false);
-
-const isLoggedIn = defineModel<boolean | undefined>("isLoggedIn", {
-    required: true,
-});
 
 async function handleRegister() {
     registering.value = true;
 
-    // Register a passkey
-    const challengeResponse = await fetch(
-        "/api/webauthn/register/challenge",
-    ).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
-    if (!challengeResponse.ok) {
-        const error = await challengeResponse.text();
-        alert(`Failed to register passkey. ${error}`);
+    let optionsJSON: any;
+    try {
+        optionsJSON = await fetchFromAPI("webauthn/register/challenge");
+    } catch (error: any) {
+        alert(`Failed to register passkey. ${error.message}`);
         registering.value = false;
         return;
     }
-    const optionsJSON = await challengeResponse.json();
 
     let registrationResponse: RegistrationResponseJSON;
     try {
@@ -43,16 +37,16 @@ async function handleRegister() {
     }
 
     // Verify the passkey registration
-    const verificationResp = await fetch("/api/webauthn/register/verify", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(registrationResponse),
-    }).catch(({ message: m }) => ({ ok: false, text: () => m }) as const);
-    if (!verificationResp.ok) {
-        const error = await verificationResp.text();
-        alert(`Failed to register passkey. ${error}`);
+    try {
+        await fetch("/api/webauthn/register/verify", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(registrationResponse),
+        });
+    } catch (error: any) {
+        alert(`Failed to register passkey. ${error.message}`);
         registering.value = false;
         return;
     }
