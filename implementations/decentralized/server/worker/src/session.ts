@@ -49,7 +49,7 @@ export async function verifySession(
 ) {
   const token = getCookie(context, COOKIE_NAME);
   if (!token) {
-    throw new HTTPException(401, { message: "Not logged in" });
+    throw new HTTPException(401, { message: "Not logged in." });
   }
 
   const [sessionId, secret] = token.split(".");
@@ -63,7 +63,7 @@ export async function verifySession(
 
   if (!result) {
     deleteCookie(context, COOKIE_NAME);
-    throw new HTTPException(401, { message: "Invalid session" });
+    throw new HTTPException(401, { message: "Invalid session." });
   }
 
   const now = Date.now();
@@ -74,7 +74,7 @@ export async function verifySession(
       .bind(sessionId)
       .run();
     deleteCookie(context, COOKIE_NAME);
-    throw new HTTPException(401, { message: "Session expired" });
+    throw new HTTPException(401, { message: "Session expired." });
   }
 
   if (now - lastVerifiedAt >= ACTIVITY_CHECK_INTERVAL_MS) {
@@ -88,7 +88,7 @@ export async function verifySession(
 
   const userId = result.user_id;
   if (userId === TEMP_USER_ID && !options?.allowTemp) {
-    throw new HTTPException(403, { message: "Temporary user not allowed" });
+    throw new HTTPException(401, { message: "Temporary user not allowed." });
   }
 
   return { userId, sessionId };
