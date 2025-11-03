@@ -10,7 +10,7 @@ import {
     startRegistration,
     type RegistrationResponseJSON,
 } from "@simplewebauthn/browser";
-import { isLoggedIn, fetchFromAPI } from "./utils";
+import { isLoggedIn, fetchFromAPI } from "./globals";
 
 const registering = ref(false);
 
