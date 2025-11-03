@@ -30,7 +30,7 @@
 import Register from "./Register.vue";
 import Login from "./Login.vue";
 import Logout from "./Logout.vue";
-import { fetchFromAPI, isLoggedIn } from "./utils";
+import { fetchFromAPI, isLoggedIn } from "./globals";
 
 function checkLoggedInStatus() {
   fetchFromAPI("webauthn/logged-in")
