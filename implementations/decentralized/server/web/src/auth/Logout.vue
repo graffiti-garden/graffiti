@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { isLoggedIn, fetchFromAPI } from "./globals";
+import { isLoggedIn, fetchFromAPI } from "../globals";
 
 const loggingOut = ref(false);
 
