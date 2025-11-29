@@ -10,7 +10,7 @@ import {
     startAuthentication,
     type AuthenticationResponseJSON,
 } from "@simplewebauthn/browser";
-import { isLoggedIn, fetchFromAPI } from "./globals";
+import { isLoggedIn, fetchFromAPI } from "../globals";
 
 const loggingIn = ref(false);
 

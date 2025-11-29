@@ -19,11 +19,6 @@ oauth.get("/authorize", async (c) => {
   }
 
   const url = new URL(redirect_uri);
-  if (!state) {
-    url.searchParams.set("error", "invalid_request");
-    url.searchParams.set("error_description", "Missing state");
-    return c.redirect(url.toString());
-  }
 
   let userId: string;
   try {

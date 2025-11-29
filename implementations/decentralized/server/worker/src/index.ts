@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Bindings } from "./env";
 import actors from "./actors";
 import webauthn from "./auth/webauthn";
+import oauth from "./auth/oauth";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -13,6 +14,7 @@ app.use("*", async (c, next) => {
 
 // Apply the APIs
 app.route("/api/webauthn", webauthn);
+app.route("/api/oauth", oauth);
 app.route("/api/actors", actors);
 
 // Route static assets
