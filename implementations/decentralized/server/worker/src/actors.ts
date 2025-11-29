@@ -1,10 +1,7 @@
 import { Hono, type Context } from "hono";
-import { createSession, verifySession } from "./session";
+import type { Bindings } from "./env";
+import { verifySessionCookie } from "./auth/session";
 import { HTTPException } from "hono/http-exception";
-
-type Bindings = {
-  DB: D1Database;
-};
 
 const router = new Hono<{ Bindings: Bindings }>();
 
@@ -19,7 +16,7 @@ router.get("/available/:actor", async (c) => {
 });
 
 router.post("/register", async (c) => {
-  const { userId } = await verifySession(c);
+  const { userId } = await verifySessionCookie(c);
 
   const actor = c.req.query("actor");
 
@@ -46,7 +43,7 @@ router.post("/register", async (c) => {
 });
 
 router.get("/list", async (c) => {
-  const userId = await verifySession(c);
+  const userId = await verifySessionCookie(c);
   const result = await c.env.DB.prepare(
     "SELECT actor FROM actors WHERE user_id = ?",
   )
