@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Bindings } from "../env";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -12,10 +13,6 @@ import {
   deleteSession,
   verifySession,
 } from "./session";
-
-type Bindings = {
-  DB: D1Database;
-};
 
 const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 const router = new Hono<{ Bindings: Bindings }>();

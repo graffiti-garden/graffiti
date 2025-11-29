@@ -1,11 +1,7 @@
 import { Hono } from "hono";
+import type { Bindings } from "./env";
 import actors from "./actors";
-import webauthn from "./webauthn";
-
-type Bindings = {
-  // Wrangler binds the static asset service here
-  ASSETS: Fetcher;
-};
+import webauthn from "./auth/webauthn";
 
 const app = new Hono<{ Bindings: Bindings }>();
 

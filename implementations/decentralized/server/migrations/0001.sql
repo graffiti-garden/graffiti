@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS passkeys (
     created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS oauth_codes (
+    code TEXT PRIMARY KEY,
+    redirect_uri TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS actors (
     actor TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,

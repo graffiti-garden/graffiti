@@ -1,10 +1,7 @@
-import { type Context } from "hono";
+import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import type { Bindings } from "../env";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
-
-type Bindings = {
-  DB: D1Database;
-};
 
 const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
