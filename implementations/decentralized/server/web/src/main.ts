@@ -1,10 +1,11 @@
 import { createApp } from "vue";
-import Home from "./Home.vue";
-import Oauth from "./auth/Oauth.vue";
 import "@picocss/pico/css/pico.classless.fuchsia.css";
 import { createRouter, createWebHistory } from "vue-router";
 import { fetchFromAPI, isLoggedIn } from "./globals";
 import { RouterView } from "vue-router";
+import Navigation from "./Navigation.vue";
+import Oauth from "./auth/Oauth.vue";
+import Home from "./Home.vue";
 
 // See if we are logged in
 function checkLoggedInStatus() {
@@ -25,7 +26,11 @@ function checkLoggedInStatus() {
 checkLoggedInStatus();
 
 const routes = [
-  { path: "/", component: Home },
+  {
+    path: "/",
+    component: Navigation,
+    children: [{ path: "/", component: Home }],
+  },
   { path: "/oauth", component: Oauth },
 ];
 const router = createRouter({
