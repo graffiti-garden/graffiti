@@ -2,19 +2,21 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Bindings } from "../env";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
+import { randomBase64, randomBytes } from "./utils";
+import { decodeBase64Url, encodeBase64Url } from "hono/utils/encode";
 
 const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
 const COOKIE_NAME = "session";
 const TEMP_USER_ID = "temp";
 
-export async function createSession(
+export async function createSessionToken(
   context: Context<{ Bindings: Bindings }>,
   userId: string,
 ) {
   // Create a session for the corresponding user
-  const sessionId = crypto.randomUUID();
-  const secret = crypto.randomUUID();
+  const sessionId = randomBase64();
+  const secret = randomBytes();
   const secretHash = await hashSecret(secret);
   const createdAt = Date.now();
 
@@ -25,32 +27,24 @@ export async function createSession(
     .bind(sessionId, userId, secretHash, createdAt, createdAt)
     .run();
 
+  const secretBase64 = encodeBase64Url(secret);
+
   // Store the session as a cookie
-  const token = sessionId + "." + secret;
-  setTokenCookie(context, token);
+  const token = sessionId + "." + secretBase64;
 
-  return sessionId;
+  return { sessionId, token };
 }
 
-export async function createTempSession(
+export async function verifySessionToken(
   context: Context<{ Bindings: Bindings }>,
-) {
-  return await createSession(context, TEMP_USER_ID);
-}
-
-export async function verifySession(
-  context: Context<{ Bindings: Bindings }>,
+  token: string,
   options?: {
     allowTemp?: boolean;
   },
 ) {
-  const token = getCookie(context, COOKIE_NAME);
-  if (!token) {
-    throw new HTTPException(401, { message: "Not logged in." });
-  }
-
-  const [sessionId, secret] = token.split(".");
-  const secretHash = await hashSecret(secret);
+  const [sessionId, secretBase64] = token.split(".");
+  const secret = decodeBase64Url(secretBase64);
+  const secretHash = await hashSecret(secret.buffer);
 
   const result = await context.env.DB.prepare(
     `SELECT * FROM sessions WHERE session_id = ? AND secret_hash = ?`,
@@ -59,7 +53,6 @@ export async function verifySession(
     .first<{ user_id: string; last_verified_at: number }>();
 
   if (!result) {
-    deleteCookie(context, COOKIE_NAME);
     throw new HTTPException(401, { message: "Invalid session." });
   }
 
@@ -70,7 +63,6 @@ export async function verifySession(
     await context.env.DB.prepare(`DELETE FROM sessions WHERE session_id = ?`)
       .bind(sessionId)
       .run();
-    deleteCookie(context, COOKIE_NAME);
     throw new HTTPException(401, { message: "Session expired." });
   }
 
@@ -80,7 +72,6 @@ export async function verifySession(
     )
       .bind(now, sessionId)
       .run();
-    setTokenCookie(context, token);
   }
 
   const userId = result.user_id;
@@ -91,8 +82,11 @@ export async function verifySession(
   return { userId, sessionId };
 }
 
-export async function deleteSession(context: Context<{ Bindings: Bindings }>) {
-  const { sessionId, userId } = await verifySession(context);
+export async function deleteSessionToken(
+  context: Context<{ Bindings: Bindings }>,
+  token: string,
+) {
+  const { sessionId, userId } = await verifySessionToken(context, token);
   await context.env.DB.prepare(`DELETE FROM sessions WHERE session_id = ?`)
     .bind(sessionId)
     .run();
@@ -112,8 +106,57 @@ function setTokenCookie(
   });
 }
 
-async function hashSecret(secret: string) {
-  const secretBytes = new TextEncoder().encode(secret);
-  const secretHash = await crypto.subtle.digest("SHA-256", secretBytes);
+export async function createSessionCookie(
+  ...args: Parameters<typeof createSessionToken>
+) {
+  const { sessionId, token } = await createSessionToken(...args);
+  setTokenCookie(args[0], token);
+  return sessionId;
+}
+
+export async function createTempSessionCookie(
+  context: Context<{ Bindings: Bindings }>,
+) {
+  return await createSessionCookie(context, TEMP_USER_ID);
+}
+
+export async function verifySessionCookie(
+  context: Context<{ Bindings: Bindings }>,
+  options?: {
+    allowTemp?: boolean;
+  },
+) {
+  const token = getCookie(context, COOKIE_NAME);
+  if (!token) {
+    throw new HTTPException(401, { message: "Not logged in." });
+  }
+
+  let result: Awaited<ReturnType<typeof verifySessionToken>>;
+  try {
+    result = await verifySessionToken(context, token, options);
+  } catch (error) {
+    deleteCookie(context, COOKIE_NAME);
+    throw error;
+  }
+
+  setTokenCookie(context, token);
+
+  return result;
+}
+
+export async function deleteSessionCookie(
+  context: Context<{ Bindings: Bindings }>,
+) {
+  const token = getCookie(context, COOKIE_NAME);
+  if (!token) {
+    throw new HTTPException(401, { message: "Not logged in." });
+  }
+  const result = await deleteSessionToken(context, token);
+  deleteCookie(context, COOKIE_NAME);
+  return result;
+}
+
+async function hashSecret(secret: ArrayBuffer) {
+  const secretHash = await crypto.subtle.digest("SHA-256", secret);
   return secretHash;
 }

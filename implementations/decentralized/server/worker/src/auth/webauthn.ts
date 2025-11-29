@@ -8,10 +8,10 @@ import {
   type VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
 import {
-  createSession,
-  createTempSession,
-  deleteSession,
-  verifySession,
+  createSessionCookie,
+  createTempSessionCookie,
+  deleteSessionCookie,
+  verifySessionCookie,
 } from "./session";
 
 const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
@@ -36,11 +36,11 @@ router.get("/register/challenge", async (c) => {
   try {
     // If adding a registration to an existing user,
     // we get the existing session
-    const result = await verifySession(c);
+    const result = await verifySessionCookie(c);
     sessionId = result.sessionId;
     userId = result.userId;
   } catch (error) {
-    sessionId = await createTempSession(c);
+    sessionId = await createTempSessionCookie(c);
     userId = crypto.randomUUID();
   }
 
@@ -71,7 +71,7 @@ router.get("/register/challenge", async (c) => {
 });
 
 router.post("/register/verify", async (c) => {
-  const { sessionId } = await verifySession(c, { allowTemp: true });
+  const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
 
   // Fetch and delete the challenge
   const registrationOptions = await c.env.DB.prepare(
@@ -152,12 +152,12 @@ router.post("/register/verify", async (c) => {
     .run();
 
   // Store a proper session for the user
-  await createSession(c, userId);
+  await createSessionCookie(c, userId);
   return c.json({ message: "Passkey registered successfully." });
 });
 
 router.get("/authenticate/challenge", async (c) => {
-  const sessionId = await createTempSession(c);
+  const sessionId = await createTempSessionCookie(c);
 
   const { rpId } = getRp(c.req);
 
@@ -178,7 +178,7 @@ router.get("/authenticate/challenge", async (c) => {
 });
 
 router.post("/authenticate/verify", async (c) => {
-  const { sessionId } = await verifySession(c, { allowTemp: true });
+  const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
 
   // Find and delete the challenge
   const result = await c.env.DB.prepare(
@@ -239,17 +239,17 @@ router.post("/authenticate/verify", async (c) => {
     .bind(newCounter, credentialId)
     .run();
 
-  await createSession(c, userPasskey.user_id);
+  await createSessionCookie(c, userPasskey.user_id);
   return c.json({ message: "Passkey authenticated successfully." });
 });
 
 router.get("/logged-in", async (c) => {
-  await verifySession(c);
+  await verifySessionCookie(c);
   return c.json({ message: "Logged in." });
 });
 
 router.post("/logout", async (c) => {
-  await deleteSession(c);
+  await deleteSessionCookie(c);
   return c.json({ message: "Logged out." });
 });
 
