@@ -2,8 +2,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Bindings } from "../env";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
-import { randomBase64, randomBytes } from "./utils";
-import { decodeBase64Url, encodeBase64Url } from "hono/utils/encode";
+import { randomBase64, randomBytes, encodeBase64, decodeBase64 } from "./utils";
 
 const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
@@ -27,7 +26,7 @@ export async function createSessionToken(
     .bind(sessionId, userId, secretHash, createdAt, createdAt)
     .run();
 
-  const secretBase64 = encodeBase64Url(secret);
+  const secretBase64 = encodeBase64(secret);
 
   // Store the session as a cookie
   const token = sessionId + "." + secretBase64;
@@ -43,8 +42,8 @@ export async function verifySessionToken(
   },
 ) {
   const [sessionId, secretBase64] = token.split(".");
-  const secret = decodeBase64Url(secretBase64);
-  const secretHash = await hashSecret(secret.buffer);
+  const secret = decodeBase64(secretBase64);
+  const secretHash = await hashSecret(secret);
 
   const result = await context.env.DB.prepare(
     `SELECT * FROM sessions WHERE session_id = ? AND secret_hash = ?`,
@@ -156,7 +155,7 @@ export async function deleteSessionCookie(
   return result;
 }
 
-async function hashSecret(secret: ArrayBuffer) {
+async function hashSecret(secret: Uint8Array<ArrayBuffer>) {
   const secretHash = await crypto.subtle.digest("SHA-256", secret);
   return secretHash;
 }

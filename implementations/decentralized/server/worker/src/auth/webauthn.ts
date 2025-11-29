@@ -13,9 +13,10 @@ import {
   deleteSessionCookie,
   verifySessionCookie,
 } from "./session";
+import { randomBase64 } from "./utils";
 
 const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
-const router = new Hono<{ Bindings: Bindings }>();
+const webauthn = new Hono<{ Bindings: Bindings }>();
 
 const rpName = "Graffiti";
 function getRp(req: { url: string }) {
@@ -30,7 +31,7 @@ function getRp(req: { url: string }) {
   return { rpId, origin };
 }
 
-router.get("/register/challenge", async (c) => {
+webauthn.get("/register/challenge", async (c) => {
   let sessionId: string;
   let userId: string;
   try {
@@ -41,7 +42,7 @@ router.get("/register/challenge", async (c) => {
     userId = result.userId;
   } catch (error) {
     sessionId = await createTempSessionCookie(c);
-    userId = crypto.randomUUID();
+    userId = randomBase64();
   }
 
   const { rpId } = getRp(c.req);
@@ -70,7 +71,7 @@ router.get("/register/challenge", async (c) => {
   return c.json(options);
 });
 
-router.post("/register/verify", async (c) => {
+webauthn.post("/register/verify", async (c) => {
   const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
 
   // Fetch and delete the challenge
@@ -156,7 +157,7 @@ router.post("/register/verify", async (c) => {
   return c.json({ message: "Passkey registered successfully." });
 });
 
-router.get("/authenticate/challenge", async (c) => {
+webauthn.get("/authenticate/challenge", async (c) => {
   const sessionId = await createTempSessionCookie(c);
 
   const { rpId } = getRp(c.req);
@@ -177,7 +178,7 @@ router.get("/authenticate/challenge", async (c) => {
   return c.json({ challenge });
 });
 
-router.post("/authenticate/verify", async (c) => {
+webauthn.post("/authenticate/verify", async (c) => {
   const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
 
   // Find and delete the challenge
@@ -243,14 +244,14 @@ router.post("/authenticate/verify", async (c) => {
   return c.json({ message: "Passkey authenticated successfully." });
 });
 
-router.get("/logged-in", async (c) => {
+webauthn.get("/logged-in", async (c) => {
   await verifySessionCookie(c);
   return c.json({ message: "Logged in." });
 });
 
-router.post("/logout", async (c) => {
+webauthn.post("/logout", async (c) => {
   await deleteSessionCookie(c);
   return c.json({ message: "Logged out." });
 });
 
-export default router;
+export default webauthn;
