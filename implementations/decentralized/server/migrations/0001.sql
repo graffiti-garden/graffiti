@@ -1,3 +1,6 @@
+---------------------------------------
+-- vvvvvvvvv Authentication vvvvvvvvvvv
+---------------------------------------
 CREATE TABLE IF NOT EXISTS sessions (
     session_id TEXT PRIMARY KEY, -- random id for session
     user_id TEXT NOT NULL,
@@ -34,6 +37,17 @@ CREATE TABLE IF NOT EXISTS oauth_codes (
     code TEXT PRIMARY KEY,
     redirect_uri TEXT NOT NULL,
     user_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+---------------------------------------
+-- ^^^^^^^^^ Authentication ^^^^^^^^^^^
+---------------------------------------
+
+CREATE TABLE IF NOT EXISTS storage_instances (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
 

@@ -3,12 +3,14 @@ import type { Bindings } from "./env";
 import actors from "./actors";
 import webauthn from "./auth/webauthn";
 import oauth from "./auth/oauth";
+import storageInstances from "./storage/instances";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 // Do not allow iframe for security
 app.use("*", async (c, next) => {
   c.header("X-Frame-Options", "DENY");
+  c.header("Access-Control-Allow-Origin", "none");
   await next();
 });
 
@@ -16,6 +18,7 @@ app.use("*", async (c, next) => {
 app.route("/api/webauthn", webauthn);
 app.route("/api/oauth", oauth);
 app.route("/api/actors", actors);
+app.route("/api/storage-instances", storageInstances);
 
 // Route static assets
 app.all("*", async (c) => {
