@@ -2,6 +2,17 @@
     <template v-if="isLoggedIn">
         <header>
             <h1>Graffiti</h1>
+            <nav>
+                <ul>
+                    <li><RouterLink to="/">Home</RouterLink></li>
+                    <li><RouterLink to="/actors">Actors</RouterLink></li>
+                    <li><RouterLink to="/storage">Storage</RouterLink></li>
+                    <li><RouterLink to="/indexers">Indexers</RouterLink></li>
+                    <li>
+                        <Logout />
+                    </li>
+                </ul>
+            </nav>
         </header>
 
         <main>
@@ -9,21 +20,14 @@
         </main>
     </template>
     <template v-else-if="isLoggedIn === false">
-        <header>
-            <h1>Welcome to Graffiti</h1>
-        </header>
-
-        <main>
-            <Login />
-            <Register />
-        </main>
+        <LoginGuard />
     </template>
     <template v-else>Loading...</template>
 </template>
 
 <script setup lang="ts">
-import Register from "./auth/Register.vue";
-import Login from "./auth/Login.vue";
-import { isLoggedIn } from "./globals";
 import { RouterView } from "vue-router";
+import { isLoggedIn } from "./globals";
+import LoginGuard from "./auth/LoginGuard.vue";
+import Logout from "./auth/Logout.vue";
 </script>

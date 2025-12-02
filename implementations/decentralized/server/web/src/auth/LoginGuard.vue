@@ -1,0 +1,23 @@
+<template>
+    <dialog open>
+        <header>
+            <h1>Welcome to Pigment</h1>
+            <h2>
+                A
+                <a href="https://graffiti.garden" target="_blank">Graffiti</a>
+                Provider
+            </h2>
+        </header>
+
+        <main>
+            <Login />
+            <Register />
+        </main>
+    </dialog>
+</template>
+
+<script setup lang="ts">
+import Register from "./Register.vue";
+import Login from "./Login.vue";
+import "./floating-panel.css";
+</script>
