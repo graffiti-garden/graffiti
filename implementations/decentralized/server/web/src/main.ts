@@ -6,6 +6,8 @@ import { RouterView } from "vue-router";
 import Navigation from "./Navigation.vue";
 import Oauth from "./auth/Oauth.vue";
 import Home from "./Home.vue";
+import Storage from "./storage/Storage.vue";
+import Actors from "./Actors.vue";
 
 // See if we are logged in
 function checkLoggedInStatus() {
@@ -29,7 +31,20 @@ const routes = [
   {
     path: "/",
     component: Navigation,
-    children: [{ path: "/", component: Home }],
+    children: [
+      {
+        path: "/",
+        component: Home,
+      },
+      {
+        path: "/actors",
+        component: Actors,
+      },
+      {
+        path: "/storage",
+        component: Storage,
+      },
+    ],
   },
   { path: "/oauth", component: Oauth },
 ];

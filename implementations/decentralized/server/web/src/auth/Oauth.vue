@@ -1,25 +1,42 @@
 <template>
-    An app at {{ redirectUriObject?.hostname }} is requesting access to your
-    Graffiti data.
+    <dialog open>
+        <header>
+            <h1>
+                Authorize
+                <code>{{ redirectUriObject?.hostname }}</code>
+                to access your data?
+            </h1>
+        </header>
 
-    <template v-if="isLoggedIn === false">
-        <Register />
-        <Login />
-    </template>
-    <template v-else-if="isLoggedIn === true">
-        <button @click="handleApprove">Approve</button>
-        <button @click="handleDeny">Deny</button>
-        <LogOut />
-    </template>
-    <template v-else> Loading... </template>
+        <main>
+            <p>
+                <code>{{ redirectUriObject?.hostname }}</code>
+                is requesting access to:
+            </p>
+            <ul>
+                <li>Todo</li>
+                <li>Todo</li>
+            </ul>
+            <template v-if="isLoggedIn === false">
+                <Login />
+            </template>
+            <template v-else-if="isLoggedIn === true">
+                <button @click="handleApprove">Approve</button>
+                <button @click="handleDeny">Deny</button>
+                <RouterLink to="/" target="_blank">Go to account</RouterLink>
+                <LogOut />
+            </template>
+            <template v-else> Loading... </template>
+        </main>
+    </dialog>
 </template>
 
 <script setup lang="ts">
-import Register from "./Register.vue";
 import Login from "./Login.vue";
 import LogOut from "./Logout.vue";
 import { isLoggedIn } from "../globals";
 import { useRouter } from "vue-router";
+import "./floating-panel.css";
 
 // Extract the redirectUri from the search params
 const redirectUri = new URLSearchParams(window.location.search).get(

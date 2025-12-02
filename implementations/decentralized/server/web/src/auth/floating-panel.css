@@ -1,0 +1,44 @@
+dialog {
+    display: block;
+    max-width: 95dvw;
+    max-height: 95dvh;
+    min-width: 0;
+    min-height: 0;
+    width: 30rem;
+    height: fit-content;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    border-radius: 1rem;
+    border: 2px solid white;
+    box-shadow: 0 0 2rem black;
+    background: darkslategrey;
+    overflow: auto;
+    margin: 0;
+    padding-top: 4dvh;
+    padding-bottom: 4dvh;
+    padding-left: 4dvw;
+    padding-right: 4dvw;
+    gap: 2rem;
+
+    h1,
+    h2 {
+        margin: 0;
+        padding: 0;
+    }
+
+    main,
+    header {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: center;
+        text-align: center;
+        gap: 1rem;
+        width: 100%;
+    }
+}
