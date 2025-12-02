@@ -18,7 +18,7 @@ import { randomBase64 } from "./utils";
 const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 const webauthn = new Hono<{ Bindings: Bindings }>();
 
-const rpName = "Graffiti";
+const rpName = "Pigment";
 function getRp(req: { url: string }) {
   const url = new URL(req.url);
   if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
@@ -47,12 +47,13 @@ webauthn.get("/register/challenge", async (c) => {
 
   const { rpId } = getRp(c.req);
 
+  const displayName = `Pigment User ${userId.slice(0, 6)}`;
   const options = await generateRegistrationOptions({
     rpName,
     rpID: rpId,
     attestationType: "none",
-    userDisplayName: `Graffiti User ${userId}`,
-    userName: `Graffiti User ${userId}`,
+    userDisplayName: displayName,
+    userName: displayName,
     userID: userId,
   });
 
@@ -132,9 +133,9 @@ webauthn.post("/register/verify", async (c) => {
     `INSERT INTO passkeys (
       credential_id,
       user_id,
-      credential_type,
       public_key,
       counter,
+      credential_type,
       device_type,
       backed_up,
       created_at
@@ -143,9 +144,10 @@ webauthn.post("/register/verify", async (c) => {
     .bind(
       credentialId,
       userId,
-      credentialType,
       credentialPublicKey,
       counter,
+      // Are the values below necessary?
+      credentialType,
       credentialDeviceType,
       credentialBackedUp,
       Date.now(),
