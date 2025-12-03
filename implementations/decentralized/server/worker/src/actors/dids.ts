@@ -5,7 +5,9 @@ const dids = new Hono<{ Bindings: Bindings }>();
 
 dids.get("/:actor/.well-known/did.json", (c) => {
   const actor = c.req.param("actor");
-  return c.text(actor);
+  return c.json({
+    id: `did:web:${actor}`,
+  });
 });
 
 dids.get("/:actor/", (c) => {

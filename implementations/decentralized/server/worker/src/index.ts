@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { getPath } from "hono/utils/url";
 import type { Bindings } from "./env";
 import actors from "./actors/management";
 import webauthn from "./auth/webauthn";
@@ -7,23 +6,9 @@ import oauth from "./auth/oauth";
 import storageInstances from "./storage/instances";
 import dids from "./actors/dids";
 
-const app = new Hono<{ Bindings: Bindings }>({
-  // Subdomains are used for specific actor DIDs.
-  // Create an internal path for those subdomains.
-  getPath: (req) => {
-    const path = getPath(req);
-    const url = new URL(req.url);
-    const hostname = url.hostname;
-    // TODO: make this work for more than just localhost
-    if (hostname !== "localhost") {
-      const subdomain = hostname.split(".")[0];
-      // TODO: Account for conflict here to prevent
-      // going to example.com/did/
-      return `/did/${subdomain}${path}`;
-    }
-    return path;
-  },
-});
+const app = new Hono<{ Bindings: Bindings }>();
+
+const BASE_HOST = "graffiti.theiahenderson.workers.dev";
 
 // Do not allow iframe for security
 app.use("*", async (c, next) => {
@@ -31,9 +16,6 @@ app.use("*", async (c, next) => {
   c.header("Access-Control-Allow-Origin", "none");
   await next();
 });
-
-// Route the DIDs
-app.route("/did/", dids);
 
 // Apply the APIs
 app.route("/api/webauthn", webauthn);
@@ -63,4 +45,25 @@ app.all("*", async (c) => {
   return assetRes;
 });
 
-export default app;
+// Subdomains are used for specific actor DIDs.
+// Route those directly to the DID router
+const hostRouter = new Hono<{ Bindings: Bindings }>({
+  getPath: (req) => {
+    const url = new URL(req.url);
+    const hostname = url.hostname;
+    for (const base_host of [BASE_HOST, "localhost"]) {
+      if (hostname !== base_host && hostname.endsWith(`.${base_host}`)) {
+        const subdomain = hostname.slice(
+          0,
+          hostname.length - base_host.length - 1,
+        );
+        return `/subdomain/${subdomain}${url.pathname}`;
+      }
+    }
+    return `/domain${url.pathname}`;
+  },
+});
+hostRouter.route("/subdomain", dids);
+hostRouter.route("/domain", app);
+
+export default hostRouter;
