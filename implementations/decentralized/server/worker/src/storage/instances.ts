@@ -25,7 +25,7 @@ storageInstances.post("/create", async (c) => {
   return c.json({ id, createdAt });
 });
 
-storageInstances.post("/rename", async (c) => {
+storageInstances.put("/rename", async (c) => {
   const { userId } = await verifySessionCookie(c);
 
   const id = c.req.query("id");
