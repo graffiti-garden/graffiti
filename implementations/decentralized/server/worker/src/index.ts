@@ -1,11 +1,29 @@
 import { Hono } from "hono";
+import { getPath } from "hono/utils/url";
 import type { Bindings } from "./env";
-import actors from "./actors";
+import actors from "./actors/management";
 import webauthn from "./auth/webauthn";
 import oauth from "./auth/oauth";
 import storageInstances from "./storage/instances";
+import dids from "./actors/dids";
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<{ Bindings: Bindings }>({
+  // Subdomains are used for specific actor DIDs.
+  // Create an internal path for those subdomains.
+  getPath: (req) => {
+    const path = getPath(req);
+    const url = new URL(req.url);
+    const hostname = url.hostname;
+    // TODO: make this work for more than just localhost
+    if (hostname !== "localhost") {
+      const subdomain = hostname.split(".")[0];
+      // TODO: Account for conflict here to prevent
+      // going to example.com/did/
+      return `/did/${subdomain}${path}`;
+    }
+    return path;
+  },
+});
 
 // Do not allow iframe for security
 app.use("*", async (c, next) => {
@@ -13,6 +31,9 @@ app.use("*", async (c, next) => {
   c.header("Access-Control-Allow-Origin", "none");
   await next();
 });
+
+// Route the DIDs
+app.route("/did/", dids);
 
 // Apply the APIs
 app.route("/api/webauthn", webauthn);
