@@ -8,14 +8,14 @@ import type {
 import {
   randomString,
   nextStreamValue,
-  randomPutObject,
+  randomPostObject,
   continueStream,
 } from "./utils";
 
 export const graffitiDiscoverTests = (
   useGraffiti: () => Pick<
     Graffiti,
-    "discover" | "put" | "delete" | "patch" | "continueObjectStream"
+    "discover" | "post" | "delete" | "continueDiscover"
   >,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
@@ -38,33 +38,33 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover single", async () => {
-      const object = randomPutObject();
+      const object = randomPostObject();
 
-      const putted = await graffiti.put<{}>(object, session);
+      const posted = await graffiti.post<{}>(object, session);
 
       const queryChannels = [randomString(), object.channels[0]];
       const iterator = graffiti.discover<{}>(queryChannels, {});
       const value = await nextStreamValue<{}>(iterator);
+      expect(value.url).toEqual(posted.url);
       expect(value.value).toEqual(object.value);
       expect(value.channels).toEqual([object.channels[0]]);
       expect(value.allowed).toBeUndefined();
       expect(value.actor).toEqual(session.actor);
-      expect(value.lastModified).toEqual(putted.lastModified);
       const result2 = await iterator.next();
       expect(result2.done).toBe(true);
     });
 
     it("discover wrong channel", async () => {
-      const object = randomPutObject();
-      await graffiti.put<{}>(object, session);
+      const object = randomPostObject();
+      await graffiti.post<{}>(object, session);
       const iterator = graffiti.discover([randomString()], {});
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
 
     it("discover not allowed", async () => {
-      const object = randomPutObject();
+      const object = randomPostObject();
       object.allowed = [randomString(), randomString()];
-      const putted = await graffiti.put<{}>(object, session1);
+      const posted = await graffiti.post<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover<{}>(
         object.channels,
@@ -72,11 +72,11 @@ export const graffitiDiscoverTests = (
         session1,
       );
       const value = await nextStreamValue<{}>(iteratorSession1);
+      expect(value.url).toEqual(posted.url);
       expect(value.value).toEqual(object.value);
       expect(value.channels).toEqual(object.channels);
       expect(value.allowed).toEqual(object.allowed);
       expect(value.actor).toEqual(session1.actor);
-      expect(value.lastModified).toEqual(putted.lastModified);
 
       const iteratorSession2 = graffiti.discover(object.channels, {}, session2);
       expect(await iteratorSession2.next()).toHaveProperty("done", true);
@@ -86,9 +86,9 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover allowed", async () => {
-      const object = randomPutObject();
+      const object = randomPostObject();
       object.allowed = [randomString(), session2.actor, randomString()];
-      const putted = await graffiti.put<{}>(object, session1);
+      const posted = await graffiti.post<{}>(object, session1);
 
       const iteratorSession2 = graffiti.discover<{}>(
         object.channels,
@@ -96,133 +96,38 @@ export const graffitiDiscoverTests = (
         session2,
       );
       const value = await nextStreamValue<{}>(iteratorSession2);
+      expect(value.url).toEqual(posted.url);
       expect(value.value).toEqual(object.value);
       expect(value.allowed).toEqual([session2.actor]);
       expect(value.channels).toEqual(object.channels);
       expect(value.actor).toEqual(session1.actor);
-      expect(value.lastModified).toEqual(putted.lastModified);
     });
 
-    for (const prop of ["actor", "lastModified"] as const) {
-      it(`discover for ${prop}`, async () => {
-        const object1 = randomPutObject();
-        const putted1 = await graffiti.put<{}>(object1, session1);
+    it("discover for actor", async () => {
+      const object1 = randomPostObject();
+      const posted1 = await graffiti.post<{}>(object1, session1);
 
-        const object2 = randomPutObject();
-        object2.channels = object1.channels;
-        // Make sure the lastModified is different for the query
-        await new Promise((r) => setTimeout(r, 20));
-        const putted2 = await graffiti.put<{}>(object2, session2);
+      const object2 = randomPostObject();
+      object2.channels = object1.channels;
+      const posted2 = await graffiti.post<{}>(object2, session2);
 
-        const iterator = graffiti.discover<{}>(object1.channels, {
-          properties: {
-            [prop]: {
-              enum: [putted1[prop]],
-            },
-          },
-        });
-
-        const value = await nextStreamValue<{}>(iterator);
-        expect(value.url).toEqual(putted1.url);
-        expect(value.url).not.toEqual(putted2.url);
-        expect(value.value).toEqual(object1.value);
-        await expect(iterator.next()).resolves.toHaveProperty("done", true);
-      });
-    }
-
-    it("discover with lastModified range", async () => {
-      const object = randomPutObject();
-      const putted1 = await graffiti.put<{}>(object, session);
-      // Make sure the lastModified is different
-      await new Promise((r) => setTimeout(r, 20));
-      const putted2 = await graffiti.put<{}>(object, session);
-
-      expect(putted1.url).not.toEqual(putted2.url);
-      expect(putted1.lastModified).toBeLessThan(putted2.lastModified);
-
-      const gtIterator = graffiti.discover([object.channels[0]], {
+      const iterator = graffiti.discover<{}>(object1.channels, {
         properties: {
-          lastModified: {
-            exclusiveMinimum: putted2.lastModified,
-          },
+          actor: { const: posted1.actor },
         },
       });
-      expect(await gtIterator.next()).toHaveProperty("done", true);
-      const gtIteratorEpsilon = graffiti.discover<{}>([object.channels[0]], {
-        properties: {
-          lastModified: {
-            exclusiveMinimum: putted2.lastModified - 0.1,
-          },
-        },
-      });
-      const value1 = await nextStreamValue<{}>(gtIteratorEpsilon);
-      expect(value1.url).toEqual(putted2.url);
-      expect(await gtIteratorEpsilon.next()).toHaveProperty("done", true);
-      const gteIterator = graffiti.discover<{}>(object.channels, {
-        properties: {
-          value: {},
-          lastModified: {
-            minimum: putted2.lastModified,
-          },
-        },
-      });
-      const value = await nextStreamValue<{}>(gteIterator);
-      expect(value.url).toEqual(putted2.url);
-      expect(await gteIterator.next()).toHaveProperty("done", true);
-      const gteIteratorEpsilon = graffiti.discover(object.channels, {
-        properties: {
-          lastModified: {
-            minimum: putted2.lastModified + 0.1,
-          },
-        },
-      });
-      expect(await gteIteratorEpsilon.next()).toHaveProperty("done", true);
 
-      const ltIterator = graffiti.discover(object.channels, {
-        properties: {
-          lastModified: {
-            exclusiveMaximum: putted1.lastModified,
-          },
-        },
-      });
-      expect(await ltIterator.next()).toHaveProperty("done", true);
-
-      const ltIteratorEpsilon = graffiti.discover<{}>(object.channels, {
-        properties: {
-          lastModified: {
-            exclusiveMaximum: putted1.lastModified + 0.1,
-          },
-        },
-      });
-      const value3 = await nextStreamValue<{}>(ltIteratorEpsilon);
-      expect(value3.url).toEqual(putted1.url);
-      expect(await ltIteratorEpsilon.next()).toHaveProperty("done", true);
-
-      const lteIterator = graffiti.discover<{}>(object.channels, {
-        properties: {
-          lastModified: {
-            maximum: putted1.lastModified,
-          },
-        },
-      });
-      const value2 = await nextStreamValue<{}>(lteIterator);
-      expect(value2.url).toEqual(putted1.url);
-      expect(await lteIterator.next()).toHaveProperty("done", true);
-
-      const lteIteratorEpsilon = graffiti.discover(object.channels, {
-        properties: {
-          lastModified: {
-            maximum: putted1.lastModified - 0.1,
-          },
-        },
-      });
-      expect(await lteIteratorEpsilon.next()).toHaveProperty("done", true);
+      const value = await nextStreamValue<{}>(iterator);
+      expect(value.url).toEqual(posted1.url);
+      expect(value.url).not.toEqual(posted2.url);
+      expect(value.value).toEqual(object1.value);
+      await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
 
     it("discover schema allowed, as and not as owner", async () => {
-      const object = randomPutObject();
+      const object = randomPostObject();
       object.allowed = [randomString(), session2.actor, randomString()];
-      await graffiti.put<{}>(object, session1);
+      await graffiti.post<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover<{}>(
         object.channels,
@@ -233,9 +138,7 @@ export const graffitiDiscoverTests = (
               // Make sure session2.actor is in the allow list
               not: {
                 items: {
-                  not: {
-                    enum: [session2.actor],
-                  },
+                  not: { const: session2.actor },
                 },
               },
             },
@@ -272,9 +175,7 @@ export const graffitiDiscoverTests = (
             allowed: {
               not: {
                 items: {
-                  not: {
-                    enum: [object.channels[0]],
-                  },
+                  not: { const: object.allowed[0] },
                 },
               },
             },
@@ -294,9 +195,7 @@ export const graffitiDiscoverTests = (
               maxItems: 1,
               not: {
                 items: {
-                  not: {
-                    enum: [session2.actor],
-                  },
+                  not: { const: session2.actor },
                 },
               },
             },
@@ -314,9 +213,9 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover schema channels, as and not as owner", async () => {
-      const object = randomPutObject();
+      const object = randomPostObject();
       object.channels = [randomString(), randomString(), randomString()];
-      await graffiti.put<{}>(object, session1);
+      await graffiti.post<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover<{}>(
         [object.channels[0], object.channels[2]],
@@ -324,12 +223,10 @@ export const graffitiDiscoverTests = (
           properties: {
             channels: {
               minItems: 3,
-              // Make sure session2.actor is in the allow list
+              // Make sure channel 1 is in the allow list
               not: {
                 items: {
-                  not: {
-                    enum: [object.channels[1]],
-                  },
+                  not: { const: object.channels[1] },
                 },
               },
             },
@@ -366,9 +263,7 @@ export const graffitiDiscoverTests = (
             channels: {
               not: {
                 items: {
-                  not: {
-                    enum: [object.channels[1]],
-                  },
+                  not: { const: object.channels[1] },
                 },
               },
             },
@@ -388,9 +283,7 @@ export const graffitiDiscoverTests = (
               maxItems: 2,
               not: {
                 items: {
-                  not: {
-                    enum: [object.channels[2]],
-                  },
+                  not: { const: object.channels[2] },
                 },
               },
             },
@@ -408,7 +301,7 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover query for empty allowed", async () => {
-      const publicO = randomPutObject();
+      const publicO = randomPostObject();
 
       const publicSchema = {
         not: {
@@ -416,7 +309,7 @@ export const graffitiDiscoverTests = (
         },
       } satisfies JSONSchema;
 
-      await graffiti.put<{}>(publicO, session1);
+      await graffiti.post<{}>(publicO, session1);
       const iterator = graffiti.discover<{}>(
         publicO.channels,
         publicSchema,
@@ -427,9 +320,9 @@ export const graffitiDiscoverTests = (
       expect(value.allowed).toBeUndefined();
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
 
-      const restricted = randomPutObject();
+      const restricted = randomPostObject();
       restricted.allowed = [];
-      await graffiti.put<{}>(restricted, session1);
+      await graffiti.post<{}>(restricted, session1);
       const iterator2 = graffiti.discover(
         restricted.channels,
         publicSchema,
@@ -439,19 +332,19 @@ export const graffitiDiscoverTests = (
     });
 
     it("discover query for values", async () => {
-      const object1 = randomPutObject();
+      const object1 = randomPostObject();
       object1.value = { test: randomString() };
-      await graffiti.put<{}>(object1, session);
+      await graffiti.post<{}>(object1, session);
 
-      const object2 = randomPutObject();
+      const object2 = randomPostObject();
       object2.channels = object1.channels;
       object2.value = { test: randomString(), something: randomString() };
-      await graffiti.put<{}>(object2, session);
+      await graffiti.post<{}>(object2, session);
 
-      const object3 = randomPutObject();
+      const object3 = randomPostObject();
       object3.channels = object1.channels;
       object3.value = { other: randomString(), something: randomString() };
-      await graffiti.put<{}>(object3, session);
+      await graffiti.post<{}>(object3, session);
 
       const counts = new Map<string, number>();
       for (const property of ["test", "something", "other"] as const) {
@@ -479,9 +372,9 @@ export const graffitiDiscoverTests = (
     for (const continueType of ["cursor", "continue"] as const) {
       describe(`continue discover with ${continueType}`, () => {
         it("discover for deleted content", async () => {
-          const object = randomPutObject();
+          const object = randomPostObject();
 
-          const putted = await graffiti.put<{}>(object, session);
+          const posted = await graffiti.post<{}>(object, session);
 
           const iterator1 = graffiti.discover<{}>(object.channels, {});
           const value1 = await nextStreamValue<{}>(iterator1);
@@ -489,7 +382,7 @@ export const graffitiDiscoverTests = (
           const returnValue = await iterator1.next();
           assert(returnValue.done, "value2 is not done");
 
-          const deleted = await graffiti.delete(putted, session);
+          await graffiti.delete(posted, session);
 
           const iterator = graffiti.discover(object.channels, {});
           await expect(iterator.next()).resolves.toHaveProperty("done", true);
@@ -502,202 +395,11 @@ export const graffitiDiscoverTests = (
           const value = await tombIterator.next();
           assert(!value.done && !value.value.error, "value is done");
           assert(value.value.tombstone, "value is not tombstone");
-          expect(value.value.object.url).toEqual(putted.url);
+          expect(value.value.object.url).toEqual(posted.url);
           await expect(tombIterator.next()).resolves.toHaveProperty(
             "done",
             true,
           );
-        });
-
-        it("discover for replaced channels", async () => {
-          // Do this a bunch to check for concurrency issues
-          async function runTest() {
-            const object1 = randomPutObject();
-            const putted = await graffiti.put<{}>(object1, session);
-
-            const iterator3 = graffiti.discover<{}>(object1.channels, {});
-            const value3 = await nextStreamValue<{}>(iterator3);
-            expect(value3.value).toEqual(object1.value);
-            const returnValue = await iterator3.next();
-            assert(returnValue.done, "value2 is not done");
-
-            const object2 = randomPutObject();
-            const replaced = await graffiti.put<{}>(
-              {
-                ...object2,
-                url: putted.url,
-              },
-              session,
-            );
-
-            const iterator1 = graffiti.discover<{}>(object1.channels, {});
-            const iterator2 = graffiti.discover<{}>(object2.channels, {});
-            const tombIterator = continueStream<{}>(
-              graffiti,
-              returnValue.value,
-              continueType,
-            );
-
-            if (putted.lastModified === replaced.lastModified) {
-              const value1 = await iterator1.next();
-              const value2 = await iterator2.next();
-              const value3 = await tombIterator.next();
-
-              // Only one should be done
-              expect(value1.done || value2.done).toBe(true);
-              expect(value1.done && value2.done).toBe(false);
-
-              assert(!value3.done && !value3.value.error, "value is done");
-              expect(value3.value.tombstone || value2.done).toBe(true);
-              expect(value3.value.tombstone && value2.done).toBe(false);
-              return;
-            }
-
-            // Otherwise 1 should be done and 2 should not
-            const value5 = await iterator1.next();
-            assert(value5.done, "value5 is not done");
-
-            const value4 = await tombIterator.next();
-            assert(!value4.done && !value4.value.error, "value is done");
-
-            assert(value4.value.tombstone, "value is not tombstone");
-            expect(value4.value.object.url).toEqual(putted.url);
-            expect(value4.value.object.lastModified).toEqual(
-              replaced.lastModified,
-            );
-
-            const value2 = await nextStreamValue<{}>(iterator2);
-            await expect(iterator2.next()).resolves.toHaveProperty(
-              "done",
-              true,
-            );
-
-            expect(value2.value).toEqual(object2.value);
-            expect(value2.channels).toEqual(object2.channels);
-            expect(value2.lastModified).toEqual(replaced.lastModified);
-
-            // Replace the channels back
-            const patched = await graffiti.patch(
-              {
-                channels: [
-                  { op: "replace", path: "", value: object1.channels },
-                ],
-              },
-              replaced,
-              session,
-            );
-
-            const tombIterator2 = continueStream<{}>(
-              graffiti,
-              value5.value,
-              continueType,
-            );
-
-            let result:
-              | {
-                  tombstone: true;
-                  object: {
-                    url: string;
-                    lastModified: number;
-                  };
-                }
-              | {
-                  tombstone?: undefined;
-                  object: GraffitiObjectBase;
-                }
-              | undefined;
-            for await (const value of tombIterator2) {
-              if (value.error) continue;
-              if (!result) {
-                result = value;
-                continue;
-              }
-              if (
-                value.object.lastModified > result.object.lastModified ||
-                (value.object.lastModified === result.object.lastModified &&
-                  !value.tombstone &&
-                  result.tombstone)
-              ) {
-                result = value;
-              }
-            }
-
-            assert(result, "result is not defined");
-            assert(!result.tombstone, "result is tombstone");
-            expect(result.object.url).toEqual(replaced.url);
-            expect(result.object.lastModified).toEqual(patched.lastModified);
-            expect(result.object.channels).toEqual(object1.channels);
-            expect(result.object.value).toEqual(object2.value);
-          }
-
-          // Run the test 20 times in parallel to check for concurrency issues
-          await Promise.allSettled(Array.from({ length: 20 }, () => runTest()));
-        });
-
-        it("discover for patched allowed", async () => {
-          const object = randomPutObject();
-          const putted = await graffiti.put<{}>(object, session);
-
-          const iterator1 = graffiti.discover<{}>(object.channels, {});
-          const value1 = await nextStreamValue<{}>(iterator1);
-          expect(value1.value).toEqual(object.value);
-          const returnValue = await iterator1.next();
-          assert(returnValue.done, "value2 is not done");
-
-          await graffiti.patch(
-            {
-              allowed: [{ op: "add", path: "", value: [] }],
-            },
-            putted,
-            session,
-          );
-          const iterator2 = graffiti.discover(object.channels, {});
-          expect(await iterator2.next()).toHaveProperty("done", true);
-
-          const iterator = continueStream<{}>(
-            graffiti,
-            returnValue.value,
-            continueType,
-          );
-          const value = await iterator.next();
-          assert(!value.done && !value.value.error, "value is done");
-          assert(value.value.tombstone, "value is not tombstone");
-          expect(value.value.object.url).toEqual(putted.url);
-          await expect(iterator.next()).resolves.toHaveProperty("done", true);
-        });
-
-        it("put concurrently and discover one", async () => {
-          const object = randomPutObject();
-
-          // Put a first one to get a URI
-          const putted = await graffiti.put<{}>(object, session);
-
-          const putPromises = Array(99)
-            .fill(0)
-            .map(() =>
-              graffiti.put<{}>(
-                {
-                  ...object,
-                  url: putted.url,
-                },
-                session,
-              ),
-            );
-          await Promise.all(putPromises);
-
-          const iterator = graffiti.discover(object.channels, {});
-          let tombstoneCount = 0;
-          let valueCount = 0;
-          for await (const result of iterator) {
-            assert(!result.error, "result has error");
-            if (result.tombstone) {
-              tombstoneCount++;
-            } else {
-              valueCount++;
-            }
-          }
-          expect(tombstoneCount).toBe(0);
-          expect(valueCount).toBe(1);
         });
       });
     }

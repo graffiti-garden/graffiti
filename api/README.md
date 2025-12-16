@@ -65,10 +65,3 @@ Then run a local server to view the documentation:
 cd docs
 npx http-server
 ```
-
-## TODO
-
-### Login Scopes
-
-One known vulnerability of the API as it currently exists is that an application has full permission to act on behalf of a user once they are logged in. If a user logs in to a malicious application, that application could read all of their personal data, post impersonated messages, or delete their data. One solution would be to add OAuth-like scopes to the login method.
-TODO.

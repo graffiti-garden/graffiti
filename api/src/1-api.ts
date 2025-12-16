@@ -2,12 +2,9 @@ import type {
   GraffitiObjectUrl,
   GraffitiObject,
   GraffitiObjectBase,
-  GraffitiPatch,
   GraffitiSession,
-  GraffitiPutObject,
+  GraffitiPostObject,
   GraffitiObjectStream,
-  ChannelStats,
-  GraffitiChannelStatsStream,
   GraffitiObjectStreamContinue,
 } from "./2-types";
 import type { JSONSchema } from "json-schema-to-ts";
@@ -44,14 +41,13 @@ import type { JSONSchema } from "json-schema-to-ts";
  * ## API Overview
  *
  * The Graffiti API provides applications with methods for {@link login} and {@link logout},
- * methods to store data objects using standard database operations ({@link put}, {@link get}, {@link patch}, and {@link delete}),
- * and a method to {@link discover} data objects from other people.
+ * methods to interact with data objects using standard database operations ({@link post}, {@link get}, and {@link delete}),
+ * and a method to {@link discover} data objects created by others.
  * These data objects have a couple structured properties:
  * - {@link GraffitiObjectBase.url | `url`} (string): A globally unique identifier and locator for the object.
  * - {@link GraffitiObjectBase.actor | `actor`} (string): An unforgeable identifier for the creator of the object.
- * - {@link GraffitiObjectBase.allowed | `allowed`} (string[] | undefined): An array of the identities who are allowed to access the object (undefined for public objects).
+ * - {@link GraffitiObjectBase.allowed | `allowed`} (string[] | undefined): An array of the actors who are allowed to access the object (undefined for public objects).
  * - {@link GraffitiObjectBase.channels | `channels`} (string[]): An array of the *contexts* in which the object should appear.
- * - {@link GraffitiObjectBase.lastModified | `revision`} (number): A number to compare different versions of an object.
  *
  * All other data is stored in the object's unstructured {@link GraffitiObjectBase.value | `value`} property.
  * This data can be used to represent social artifacts (e.g. posts, profiles) and activities (e.g. likes, follows).
@@ -99,59 +95,45 @@ import type { JSONSchema } from "json-schema-to-ts";
  * which are Graffiti's means of organizing data contextually, and a concept called "total reification",
  * which handles explains how moderation, collaboration, and other interactions are managed.
  *
- * @groupDescription CRUD Methods
- * Methods for {@link put | creating}, {@link get | reading}, {@link patch | updating},
+ * @groupDescription 1 - Single-Object Methods
+ * Methods for {@link post | creating}, {@link get | reading},
  * and {@link delete | deleting} {@link GraffitiObjectBase | Graffiti objects}.
- * @groupDescription Query Methods
+ * @groupDescription 2 - Multi-Object Methods
  * Methods that retrieve or accumulate information about multiple {@link GraffitiObjectBase | Graffiti objects} at a time.
- * @groupDescription Session Management
+ * @groupDescription 3 - Media Methods
+ * Methods for {@link postMedia | creating}, {@link getMedia | reading},
+ * and {@link deleteMedia | deleting} media data.
+ * @groupDescription 4 - Session Management
  * Methods and properties for logging in and out.
  */
 export abstract class Graffiti {
   /**
-   * Creates a new {@link GraffitiObjectBase | object} or replaces an existing object.
-   * An object can only be replaced by the same {@link GraffitiObjectBase.actor | `actor`}
-   * that created it.
+   * Creates a new {@link GraffitiObjectBase | object}.
    *
-   * Replacement occurs when the {@link GraffitiObjectBase.url | `url`} of
-   * the replaced object exactly matches an existing object's URL.
+   * @returns Returns the object that has been posted, complete with its
+   * assigned {@link GraffitiObjectBase.url | `url`} and
+   * {@link GraffitiObjectBase.actor | `actor`}.
    *
-   * @throws {@link GraffitiErrorNotFound} if a {@link GraffitiObjectBase.url | `url`}
-   * is provided that has not been created yet or the {@link GraffitiObjectBase.actor | `actor`}
-   * is not {@link GraffitiObjectBase.allowed | `allowed`} to see it.
-   *
-   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
-   * is not the same `actor` as the one who created the object.
-   *
-   * @returns Returns the object that was replaced if one one exists, otherwise returns an object with
-   * with an empty {@link GraffitiObjectBase.value | `value`},
-   * {@link GraffitiObjectBase.channels | `channels`}, and {@link GraffitiObjectBase.allowed | `allowed`}
-   * list.
-   * The {@link GraffitiObjectBase.lastModified | `lastModified`} property of the returned object
-   * will be updated to the time of replacement/creation.
-   *
-   * @group CRUD Methods
+   * @group 1 - Single-Object Methods
    */
-  abstract put<Schema extends JSONSchema>(
+  abstract post<Schema extends JSONSchema>(
     /**
-     * The object to be put. This object is statically type-checked against the [JSON schema](https://json-schema.org/) that can be optionally provided
-     * as the generic type parameter. We highly recommend providing a schema to
-     * ensure that the put object matches subsequent {@link get} or {@link discover}
+     * An object to post. This object is statically type-checked against the [JSON schema](https://json-schema.org/) that can be optionally provided
+     * as the generic type parameter. It is recommended to a schema to
+     * ensure that the posted object matches subsequent {@link get} or {@link discover}
      * methods.
      */
-    object: GraffitiPutObject<Schema>,
+    object: GraffitiPostObject<Schema>,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): Promise<GraffitiObjectBase>;
+  ): Promise<GraffitiObject<Schema>>;
 
   /**
-   * Retrieves an object from a given {@link GraffitiObjectBase.url | `url`}.
-   *
-   * The retrieved object is type-checked against the provided [JSON schema](https://json-schema.org/)
-   * otherwise a {@link GraffitiErrorSchemaMismatch} is thrown.
+   * Retrieves an object from a given {@link GraffitiObjectBase.url | `url`} matching
+   * the provided `schema`.
    *
    * If the retreiving {@link GraffitiObjectBase.actor | `actor`} is not
    * the object's `actor`,
@@ -166,7 +148,7 @@ export abstract class Graffiti {
    *
    * @throws {@link GraffitiErrorSchemaMismatch} if the retrieved object does not match the provided schema.
    *
-   * @group CRUD Methods
+   * @group 1 - Single-Object Methods
    */
   abstract get<Schema extends JSONSchema>(
     /**
@@ -187,13 +169,10 @@ export abstract class Graffiti {
   ): Promise<GraffitiObject<Schema>>;
 
   /**
-   * Patches an existing object at a given {@link GraffitiObjectBase.url | `url`}.
-   * The patching {@link GraffitiObjectBase.actor | `actor`} must be the same as the
+   * Deletes an object from a given {@link GraffitiObjectBase.url | `url`}
+   * that had previously been {@link post | `post`ed}.
+   * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
-   *
-   * @returns Returns the original object prior to the patch with its
-   * {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * property updated to the time of patching.
    *
    * @throws {@link GraffitiErrorNotFound} if the object does not exist, has already been deleted,
    * or the actor is not {@link GraffitiObjectBase.allowed | `allowed`} to access it.
@@ -201,47 +180,7 @@ export abstract class Graffiti {
    * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
    * is not the same `actor` as the one who created the object.
    *
-   * @group CRUD Methods
-   */
-  abstract patch(
-    /**
-     * A collection of [JSON Patch](https://jsonpatch.com) operations
-     * to apply to the object. See {@link GraffitiPatch} for more information.
-     */
-    patch: GraffitiPatch,
-    /**
-     * The location of the object to patch.
-     */
-    url: string | GraffitiObjectUrl,
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
-     */
-    session: GraffitiSession,
-  ): Promise<GraffitiObjectBase>;
-
-  /**
-   * Deletes an object from a given {@link GraffitiObjectBase.url | `url`}.
-   * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
-   * `actor` that created the object.
-   *
-   * It is not possible to re-{@link put} an object that has been deleted
-   * to ensure a person's [right to be forgotten](https://en.wikipedia.org/wiki/Right_to_be_forgotten).
-   * In cases where deleting and restoring an object is useful, an object's
-   * {@link GraffitiObjectBase.allowed | `allowed`} property can be set to
-   * an empty list to hide it from all actors except the creator.
-   *
-   * @returns Returns the object that was deleted with its
-   * {@link GraffitiObjectBase.lastModified | `lastModified`}
-   * property updated to the time of deletion.
-   *
-   * @throws {@link GraffitiErrorNotFound} if the object does not exist,  has already been deleted,
-   * or the actor is not {@link GraffitiObjectBase.allowed | `allowed`} to access it.
-   *
-   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
-   * is not the same `actor` as the one who created the object.
-   *
-   * @group CRUD Methods
+   * @group 1 - Single-Object Methods
    */
   abstract delete(
     /**
@@ -253,7 +192,7 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): Promise<GraffitiObjectBase>;
+  ): Promise<void>;
 
   /**
    * Discovers objects created by any actor that are contained
@@ -270,7 +209,7 @@ export abstract class Graffiti {
    * string can be serialized to continue the stream after an application is closed
    * and reopened.
    *
-   * `discover` will not return objects that the {@link GraffitiObjectBase.actor | `actor`}
+   * `discover` will not return objects that the querying {@link GraffitiObjectBase.actor | `actor`}
    * is not {@link GraffitiObjectBase.allowed | `allowed`} to access.
    * If the `actor` is not the creator of a discovered object,
    * the allowed list will be masked to only contain the querying actor if the
@@ -281,14 +220,11 @@ export abstract class Graffiti {
    *
    * Since different implementations may fetch data from multiple sources there is
    * no guarentee on the order that objects are returned in.
-   * It is also possible that duplicate objects are returned and their
-   * {@link GraffitiObjectBase.lastModified | `lastModified`} fields must be used
-   * to determine which object is the most recent.
    *
    * @returns Returns a stream of objects that match the given {@link GraffitiObjectBase.channels | `channels`}
    * and [JSON Schema](https://json-schema.org).
    *
-   * @group Query Methods
+   * @group 2 - Multi-Object Methods
    */
   abstract discover<Schema extends JSONSchema>(
     /**
@@ -309,75 +245,12 @@ export abstract class Graffiti {
   ): GraffitiObjectStream<Schema>;
 
   /**
-   * Discovers objects **not** contained in any
-   * {@link GraffitiObjectBase.channels | `channels`}
-   * that were created by the querying {@link GraffitiObjectBase.actor | `actor`}
-   * and match the given [JSON Schema](https://json-schema.org).
-   * Unlike {@link discover}, this method will not return objects created by other actors.
-   *
-   * Like {@link channelStats}, this method is not useful for most applications,
-   * but necessary for getting a global view of all an actor's Graffiti data
-   * to implement something like Facebook's Activity Log or a debugging interface.
-   *
-   * Like {@link discover}, objects are returned asynchronously as they are discovered,
-   * the stream will end once all leads have been exhausted, and the stream
-   * can be continued using the {@link GraffitiObjectStreamReturn.continue | `continue`}
-   * method or {@link GraffitiObjectStreamReturn.cursor | `cursor`} string.
-   *
-   * @returns Returns a stream of objects created by the querying {@link GraffitiObjectBase.actor | `actor`}
-   * that do not belong to any {@link GraffitiObjectBase.channels | `channels`}
-   * and match the given [JSON Schema](https://json-schema.org).
-   *
-   * @group Query Methods
-   */
-  abstract recoverOrphans<Schema extends JSONSchema>(
-    /**
-     * A [JSON Schema](https://json-schema.org) that orphaned objects must satisfy.
-     */
-    schema: Schema,
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
-     */
-    session: GraffitiSession,
-  ): GraffitiObjectStream<Schema>;
-
-  /**
-   * Returns statistics about all the {@link GraffitiObjectBase.channels | `channels`}
-   * that an {@link GraffitiObjectBase.actor | `actor`} has posted to.
-   * This method will not return statistics related to any other actor's channel usage.
-   *
-   * Like {@link recoverOrphans}, this method is not useful for most applications,
-   * but necessary for getting a global view of all an actor's Graffiti data
-   * to implement something like Facebook's Activity Log or a debugging interface.
-   *
-   * Like {@link discover}, objects are returned asynchronously as they are discovered and
-   * the stream will end once all leads have been exhausted.
-   *
-   * @group Query Methods
-   *
-   * @returns Returns a stream of statistics for each {@link GraffitiObjectBase.channels | `channel`}
-   * that the {@link GraffitiObjectBase.actor | `actor`} has posted to.
-   */
-  abstract channelStats(
-    /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
-     */
-    session: GraffitiSession,
-  ): GraffitiChannelStatsStream;
-
-  /**
    * Continues a {@link GraffitiObjectStream} from a given
    * {@link GraffitiObjectStreamReturn.cursor | `cursor`} string.
-   * The continuation will return new objects that have been created
+   * The continuation will return new objects that have been {@link post | `post`ed}
    * that match the original stream, and also returns the
    * {@link GraffitiObjectBase.url | `url`}s of objects that
-   * have been deleted, as marked by a `tombstone`.
-   *
-   * The continuation may also include duplicates of objects that
-   * were already returned by the original stream. This is dependent
-   * on how much state the underlying implementation maintains.
+   * have been {@link delete | `delete`d}, as marked by a `tombstone`.
    *
    * The `cursor` allows the client to
    * serialize the state of the stream and continue it later.
@@ -392,12 +265,99 @@ export abstract class Graffiti {
    * provided in the `session` is not the same as the `actor`
    * that initiated the original stream.
    *
-   * @group Query Methods
+   * @group 2 - Multi-Object Methods
    */
-  abstract continueObjectStream(
+  abstract continueDiscover(
     cursor: string,
     session?: GraffitiSession | null,
   ): GraffitiObjectStreamContinue<{}>;
+
+  /**
+   * Uploads media data, such as an image or video.
+   *
+   * Unlike structured {@link GraffitiObjectBase | objects},
+   * media is not indexed for {@link discover | `discover`y} and
+   * must be retrieved by its exact URL using {@link getMedia}
+   *
+   * @returns The URL that the media was posted to.
+   *
+   * @group 3 - Media Methods
+   */
+  abstract postMedia(
+    /**
+     * The binary data of the media to be uploaded,
+     * along with its [media type](https://www.iana.org/assignments/media-types/media-types.xhtml),
+     * formatted as a [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob).
+     */
+    media: Blob,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession,
+  ): Promise<string>;
+
+  /**
+   * Deletes media previously {@link postMedia | `post`ed} to a given URL.
+   *
+   * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
+   *
+   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
+   * provided in the `session` is not the same as the `actor` that {@link postMedia | `post`ed}
+   * the media.
+   *
+   * @group 3 - Media Methods
+   */
+  abstract deleteMedia(
+    /**
+     * A globally unique identifier and locator for the media.
+     */
+    mediaUrl: string,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession,
+  ): Promise<void>;
+
+  /**
+   * Retrieves media from the given media URL, adhering to the given requirements.
+   *
+   * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
+   *
+   * @throws {@link GraffitiErrorTooLarge} if the media exceeds the given `maxBytes`.
+   *
+   * @throws {@link GraffitiErrorNotAcceptable} if the media does not match the given
+   * `accept` specification.
+   *
+   * @returns The URL of the retrieved media, as a [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob)
+   * and the {@link GraffitiObjectBase.actor | `actor`} that posted it.
+   *
+   * @group 3 - Media Methods
+   */
+  abstract getMedia(
+    /**
+     * A globally unique identifier and locator for the media.
+     */
+    mediaUrl: string,
+    /**
+     * An optional set of requirements the retrieved media must meet.
+     */
+    requirements?: {
+      /**
+       * A list of acceptable media types for the retrieved media,
+       * formatted as like an [HTTP Accept header](https://httpwg.org/specs/rfc9110.html#field.accept)
+       */
+      accept?: string;
+      /**
+       * The maximum size, in bytes, of the media.
+       */
+      maxBytes?: number;
+    },
+  ): Promise<{
+    media: Blob;
+    actor: string;
+  }>;
 
   /**
    * Begins the login process. Depending on the implementation, this may
@@ -409,38 +369,19 @@ export abstract class Graffiti {
    * asynchronously via {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLoginEvent} with event type `login`.
    *
-   * @group Session Management
+   * @group 4 - Session Management
    */
   abstract login(
     /**
-     * Suggestions for the permissions that the
-     * login process should grant. The login process may not
-     * provide the exact proposed permissions.
+     * A suggested actor to login as. For example, if a user tries to
+     * edit a post but are not logged in, the interface can infer that
+     * they might want to log in as the actor who created the post
+     * they are attempting to edit.
+     *
+     * Even if provided, the implementation should allow the user
+     * to log in as a different actor if they choose.
      */
-    proposal?: {
-      /**
-       * A suggested actor to login as. For example, if a user tries to
-       * edit a post but are not logged in, the interface can infer that
-       * they might want to log in as the actor who created the post
-       * they are attempting to edit.
-       *
-       * Even if provided, the implementation should allow the user
-       * to log in as a different actor if they choose.
-       */
-      actor?: string;
-      /**
-       * A yet to be defined permissions scope. An application may use
-       * this to indicate the minimum necessary scope needed to
-       * operate. For example, it may need to be able read private
-       * messages from a certain set of channels, or write messages that
-       * follow a particular schema.
-       *
-       * The login process should make it clear what scope an application
-       * is requesting and allow the user to enhance or reduce that
-       * scope as necessary.
-       */
-      scope?: {};
-    },
+    actor?: string,
   ): Promise<void>;
 
   /**
@@ -453,7 +394,7 @@ export abstract class Graffiti {
    * {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLogoutEvent} as event type `logout`.
    *
-   * @group Session Management
+   * @group 4 - Session Management
    */
   abstract logout(
     /**
@@ -469,7 +410,7 @@ export abstract class Graffiti {
    * - `logout` - {@link GraffitiLogoutEvent}
    * - `initialized` - {@link GraffitiSessionInitializedEvent}
    *
-   * @group Session Management
+   * @group 4 - Session Management
    */
   abstract readonly sessionEvents: EventTarget;
 }

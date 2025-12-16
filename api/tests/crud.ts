@@ -2,7 +2,6 @@ import { it, expect, describe, beforeAll } from "vitest";
 import type {
   Graffiti,
   GraffitiSession,
-  GraffitiPatch,
   JSONSchema,
 } from "@graffiti-garden/api";
 import {
@@ -10,13 +9,11 @@ import {
   GraffitiErrorSchemaMismatch,
   GraffitiErrorInvalidSchema,
   GraffitiErrorForbidden,
-  GraffitiErrorPatchTestFailed,
-  GraffitiErrorPatchError,
 } from "@graffiti-garden/api";
-import { randomPutObject, randomString } from "./utils";
+import { randomPostObject, randomString } from "./utils";
 
 export const graffitiCRUDTests = (
-  useGraffiti: () => Pick<Graffiti, "put" | "get" | "delete" | "patch">,
+  useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete">,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
@@ -37,17 +34,17 @@ export const graffitiCRUDTests = (
         session2 = await useSession2();
       });
 
-      it("put, get, delete", async () => {
+      it("post, get, delete", async () => {
         const value = {
           something: "hello, world~ c:",
         };
         const channels = [randomString(), randomString()];
 
-        // Put the object
-        const previous = await graffiti.put<{}>({ value, channels }, session);
-        expect(previous.value).toEqual({});
-        expect(previous.channels).toEqual([]);
-        expect(previous.allowed).toEqual([]);
+        // Post the object
+        const previous = await graffiti.post<{}>({ value, channels }, session);
+        expect(previous.value).toEqual(value);
+        expect(previous.channels).toEqual(channels);
+        expect(previous.allowed).toEqual(undefined);
         expect(previous.actor).toEqual(session.actor);
 
         // Get it back
@@ -57,93 +54,34 @@ export const graffitiCRUDTests = (
         expect(gotten.allowed).toBeUndefined();
         expect(gotten.url).toEqual(previous.url);
         expect(gotten.actor).toEqual(previous.actor);
-        expect(gotten.lastModified).toEqual(previous.lastModified);
-
-        // Replace it
-        const newValue = {
-          something: "goodbye, world~ :c",
-        };
-        const beforeReplaced = await graffiti.put<{}>(
-          {
-            url: previous.url,
-            value: newValue,
-            channels: [],
-          },
-          session,
-        );
-        expect(beforeReplaced.value).toEqual(value);
-        expect(beforeReplaced.url).toEqual(previous.url);
-        expect(beforeReplaced.actor).toEqual(previous.actor);
-        expect(beforeReplaced.lastModified).toBeGreaterThanOrEqual(
-          gotten.lastModified,
-        );
-
-        // Get it again
-        const afterReplaced = await graffiti.get(previous, {});
-        expect(afterReplaced.value).toEqual(newValue);
-        expect(afterReplaced.lastModified).toEqual(beforeReplaced.lastModified);
 
         // Delete it
-        const beforeDeleted = await graffiti.delete(afterReplaced, session);
-        expect(beforeDeleted.value).toEqual(newValue);
-        expect(beforeDeleted.lastModified).toBeGreaterThanOrEqual(
-          beforeReplaced.lastModified,
-        );
+        await graffiti.delete(gotten, session);
 
         // Get is not found
-        await expect(graffiti.get(afterReplaced, {})).rejects.toBeInstanceOf(
+        await expect(graffiti.get(gotten, {})).rejects.toBeInstanceOf(
           GraffitiErrorNotFound,
         );
 
         // Delete it again
-        await expect(graffiti.delete(beforeDeleted, session)).rejects.toThrow(
+        await expect(graffiti.delete(gotten, session)).rejects.toThrow(
           GraffitiErrorNotFound,
         );
-
-        // Try to re-put it
-        await expect(
-          graffiti.put(
-            { url: beforeDeleted.url, value: {}, channels: [] },
-            session,
-          ),
-        ).rejects.toThrow(GraffitiErrorNotFound);
       });
 
-      it("put, delete, patch with wrong actor", async () => {
-        await expect(
-          graffiti.put<{}>(
-            { value: {}, channels: [], actor: session2.actor },
-            session1,
-          ),
-        ).rejects.toThrow(GraffitiErrorForbidden);
-
-        const putted = await graffiti.put<{}>(
+      it("post then delete with wrong actor", async () => {
+        const posted = await graffiti.post<{}>(
           { value: {}, channels: [] },
           session2,
         );
 
-        await expect(
-          graffiti.put<{}>(
-            {
-              url: putted.url,
-              value: {},
-              channels: [],
-            },
-            session1,
-          ),
-        ).rejects.toThrow(GraffitiErrorForbidden);
-
-        await expect(graffiti.delete(putted, session1)).rejects.toThrow(
-          GraffitiErrorForbidden,
-        );
-
-        await expect(graffiti.patch({}, putted, session1)).rejects.toThrow(
+        await expect(graffiti.delete(posted, session1)).rejects.toThrow(
           GraffitiErrorForbidden,
         );
       });
 
-      it("put, patch, delete object that is not allowed", async () => {
-        const putted = await graffiti.put<{}>(
+      it("post then delete object that is not allowed", async () => {
+        const posted = await graffiti.post<{}>(
           {
             value: {},
             channels: [],
@@ -152,27 +90,12 @@ export const graffitiCRUDTests = (
           session1,
         );
 
-        await expect(
-          graffiti.put(
-            {
-              url: putted.url,
-              value: {},
-              channels: [],
-            },
-            session2,
-          ),
-        ).rejects.toThrow(GraffitiErrorNotFound);
-
-        await expect(graffiti.patch({}, putted, session2)).rejects.toThrow(
-          GraffitiErrorNotFound,
-        );
-
-        await expect(graffiti.delete(putted, session2)).rejects.toThrow(
+        await expect(graffiti.delete(posted, session2)).rejects.toThrow(
           GraffitiErrorNotFound,
         );
       });
 
-      it("put and get with schema", async () => {
+      it("post and get with schema", async () => {
         const schema = {
           properties: {
             value: {
@@ -209,14 +132,14 @@ export const graffitiCRUDTests = (
           },
         };
 
-        const putted = await graffiti.put<typeof schema>(
+        const posted = await graffiti.post<typeof schema>(
           {
             value: goodValue,
             channels: [],
           },
           session,
         );
-        const gotten = await graffiti.get(putted, schema);
+        const gotten = await graffiti.get(posted, schema);
 
         expect(gotten.value.something).toEqual(goodValue.something);
         expect(gotten.value.another).toEqual(goodValue.another);
@@ -224,13 +147,13 @@ export const graffitiCRUDTests = (
         expect(gotten.value.deeper.deepProp).toEqual(goodValue.deeper.deepProp);
       });
 
-      it("put and get with invalid schema", async () => {
-        const putted = await graffiti.put<{}>(
+      it("post and get with invalid schema", async () => {
+        const posted = await graffiti.post<{}>(
           { value: {}, channels: [] },
           session,
         );
         await expect(
-          graffiti.get(putted, {
+          graffiti.get(posted, {
             properties: {
               value: {
                 //@ts-ignore
@@ -241,8 +164,8 @@ export const graffitiCRUDTests = (
         ).rejects.toThrow(GraffitiErrorInvalidSchema);
       });
 
-      it("put and get with wrong schema", async () => {
-        const putted = await graffiti.put<{}>(
+      it("post and get with wrong schema", async () => {
+        const posted = await graffiti.post<{}>(
           {
             value: {
               hello: "world",
@@ -253,7 +176,7 @@ export const graffitiCRUDTests = (
         );
 
         await expect(
-          graffiti.get(putted, {
+          graffiti.get(posted, {
             properties: {
               value: {
                 properties: {
@@ -267,41 +190,43 @@ export const graffitiCRUDTests = (
         ).rejects.toThrow(GraffitiErrorSchemaMismatch);
       });
 
-      it("put and get with empty access control", async () => {
+      it("post and get with empty access control", async () => {
         const value = {
           um: "hi",
         };
         const allowed = [randomString()];
         const channels = [randomString()];
-        const putted = await graffiti.put<{}>(
+        const posted = await graffiti.post<{}>(
           { value, allowed, channels },
           session1,
         );
 
         // Get it with authenticated session
-        const gotten = await graffiti.get(putted, {}, session1);
+        const gotten = await graffiti.get(posted, {}, session1);
+        expect(gotten.url).toEqual(posted.url);
+        expect(gotten.actor).toEqual(session1.actor);
         expect(gotten.value).toEqual(value);
         expect(gotten.allowed).toEqual(allowed);
         expect(gotten.channels).toEqual(channels);
 
         // But not without session
-        await expect(graffiti.get(putted, {})).rejects.toBeInstanceOf(
+        await expect(graffiti.get(posted, {})).rejects.toBeInstanceOf(
           GraffitiErrorNotFound,
         );
 
         // Or the wrong session
-        await expect(graffiti.get(putted, {}, session2)).rejects.toBeInstanceOf(
+        await expect(graffiti.get(posted, {}, session2)).rejects.toBeInstanceOf(
           GraffitiErrorNotFound,
         );
       });
 
-      it("put and get with specific access control", async () => {
+      it("post and get with specific access control", async () => {
         const value = {
           um: "hi",
         };
         const allowed = [randomString(), session2.actor, randomString()];
         const channels = [randomString()];
-        const putted = await graffiti.put<{}>(
+        const posted = await graffiti.post<{}>(
           {
             value,
             allowed,
@@ -311,229 +236,26 @@ export const graffitiCRUDTests = (
         );
 
         // Get it with authenticated session
-        const gotten = await graffiti.get(putted, {}, session1);
+        const gotten = await graffiti.get(posted, {}, session1);
+        expect(gotten.url).toEqual(posted.url);
+        expect(gotten.actor).toEqual(session1.actor);
         expect(gotten.value).toEqual(value);
         expect(gotten.allowed).toEqual(allowed);
         expect(gotten.channels).toEqual(channels);
 
         // But not without session
-        await expect(graffiti.get(putted, {})).rejects.toBeInstanceOf(
+        await expect(graffiti.get(posted, {})).rejects.toBeInstanceOf(
           GraffitiErrorNotFound,
         );
 
-        const gotten2 = await graffiti.get(putted, {}, session2);
+        const gotten2 = await graffiti.get(posted, {}, session2);
+        expect(gotten.url).toEqual(posted.url);
+        expect(gotten.actor).toEqual(session1.actor);
         expect(gotten2.value).toEqual(value);
         // They should only see that is is private to them
         expect(gotten2.allowed).toEqual([session2.actor]);
         // And not see any channels
         expect(gotten2.channels).toEqual([]);
-      });
-
-      it("patch value", async () => {
-        const value = {
-          something: "hello, world~ c:",
-        };
-        const putted = await graffiti.put<{}>({ value, channels: [] }, session);
-
-        // Wait just a bit to make sure the lastModified is different
-        await new Promise((resolve) => setTimeout(resolve, 10));
-
-        const patch: GraffitiPatch = {
-          value: [
-            { op: "replace", path: "/something", value: "goodbye, world~ :c" },
-          ],
-        };
-        const beforePatched = await graffiti.patch(patch, putted, session);
-        expect(beforePatched.value).toEqual(value);
-        expect(beforePatched.lastModified).toBeGreaterThan(putted.lastModified);
-
-        const gotten = await graffiti.get(putted, {});
-        expect(gotten.value).toEqual({
-          something: "goodbye, world~ :c",
-        });
-        expect(beforePatched.lastModified).toBe(gotten.lastModified);
-
-        await graffiti.delete(putted, session);
-      });
-
-      it("patch deleted object", async () => {
-        const putted = await graffiti.put<{}>(randomPutObject(), session);
-        const deleted = await graffiti.delete(putted, session);
-        await expect(
-          graffiti.patch({}, putted, session),
-        ).rejects.toBeInstanceOf(GraffitiErrorNotFound);
-      });
-
-      it("deep patch", async () => {
-        const value = {
-          something: {
-            another: {
-              somethingElse: "hello",
-            },
-          },
-        };
-        const putted = await graffiti.put<{}>(
-          { value: value, channels: [] },
-          session,
-        );
-
-        const beforePatch = await graffiti.patch(
-          {
-            value: [
-              {
-                op: "replace",
-                path: "/something/another/somethingElse",
-                value: "goodbye",
-              },
-            ],
-          },
-          putted,
-          session,
-        );
-        const gotten = await graffiti.get(putted, {});
-
-        expect(beforePatch.value).toEqual(value);
-        expect(gotten.value).toEqual({
-          something: {
-            another: {
-              somethingElse: "goodbye",
-            },
-          },
-        });
-      });
-
-      it("patch channels", async () => {
-        const channelsBefore = [randomString()];
-        const channelsAfter = [randomString()];
-
-        const putted = await graffiti.put<{}>(
-          { value: {}, channels: channelsBefore },
-          session,
-        );
-
-        const patch: GraffitiPatch = {
-          channels: [{ op: "replace", path: "/0", value: channelsAfter[0] }],
-        };
-        const patched = await graffiti.patch(patch, putted, session);
-        expect(patched.channels).toEqual(channelsBefore);
-        const gotten = await graffiti.get(putted, {}, session);
-        expect(gotten.channels).toEqual(channelsAfter);
-        await graffiti.delete(putted, session);
-      });
-
-      it("patch 'increment' with test", async () => {
-        const putted = await graffiti.put<{}>(
-          {
-            value: {
-              counter: 1,
-            },
-            channels: [],
-          },
-          session,
-        );
-
-        const previous = await graffiti.patch(
-          {
-            value: [
-              { op: "test", path: "/counter", value: 1 },
-              { op: "replace", path: "/counter", value: 2 },
-            ],
-          },
-          putted,
-          session,
-        );
-        expect(previous.value).toEqual({ counter: 1 });
-        const result = await graffiti.get(previous, {
-          properties: {
-            value: {
-              properties: {
-                counter: {
-                  type: "integer",
-                },
-              },
-            },
-          },
-        });
-        expect(result.value.counter).toEqual(2);
-
-        await expect(
-          graffiti.patch(
-            {
-              value: [
-                { op: "test", path: "/counter", value: 1 },
-                { op: "replace", path: "/counter", value: 3 },
-              ],
-            },
-            putted,
-            session,
-          ),
-        ).rejects.toThrow(GraffitiErrorPatchTestFailed);
-      });
-
-      it("invalid patch", async () => {
-        const object = randomPutObject();
-        const putted = await graffiti.put<{}>(object, session);
-
-        await expect(
-          graffiti.patch(
-            {
-              value: [
-                { op: "add", path: "/root", value: [] },
-                { op: "add", path: "/root/2", value: 2 }, // out of bounds
-              ],
-            },
-            putted,
-            session,
-          ),
-        ).rejects.toThrow(GraffitiErrorPatchError);
-      });
-
-      it("patch channels to be wrong", async () => {
-        const object = randomPutObject();
-        object.allowed = [randomString()];
-        const putted = await graffiti.put<{}>(object, session);
-
-        const patches: GraffitiPatch[] = [
-          {
-            channels: [{ op: "replace", path: "", value: null }],
-          },
-          {
-            channels: [{ op: "replace", path: "", value: {} }],
-          },
-          {
-            channels: [{ op: "replace", path: "", value: ["hello", ["hi"]] }],
-          },
-          {
-            channels: [{ op: "add", path: "/0", value: 1 }],
-          },
-          {
-            value: [{ op: "replace", path: "", value: "not an object" }],
-          },
-          {
-            value: [{ op: "replace", path: "", value: null }],
-          },
-          {
-            value: [{ op: "replace", path: "", value: [] }],
-          },
-          {
-            allowed: [{ op: "replace", path: "", value: {} }],
-          },
-          {
-            allowed: [{ op: "replace", path: "", value: ["hello", ["hi"]] }],
-          },
-        ];
-
-        for (const patch of patches) {
-          await expect(graffiti.patch(patch, putted, session)).rejects.toThrow(
-            GraffitiErrorPatchError,
-          );
-        }
-
-        const gotten = await graffiti.get(putted, {}, session);
-        expect(gotten.value).toEqual(object.value);
-        expect(gotten.channels).toEqual(object.channels);
-        expect(gotten.allowed).toEqual(object.allowed);
-        expect(gotten.lastModified).toEqual(putted.lastModified);
       });
     },
   );
