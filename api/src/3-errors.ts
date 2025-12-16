@@ -38,19 +38,19 @@ export class GraffitiErrorSchemaMismatch extends Error {
   }
 }
 
-export class GraffitiErrorPatchTestFailed extends Error {
+export class GraffitiErrorTooLarge extends Error {
   constructor(message?: string) {
     super(message);
-    this.name = "GraffitiErrorPatchTestFailed";
-    Object.setPrototypeOf(this, GraffitiErrorPatchTestFailed.prototype);
+    this.name = "GraffitiErrorTooLarge";
+    Object.setPrototypeOf(this, GraffitiErrorTooLarge.prototype);
   }
 }
 
-export class GraffitiErrorPatchError extends Error {
+export class GraffitiErrorNotAcceptable extends Error {
   constructor(message?: string) {
     super(message);
-    this.name = "GraffitiErrorPatchError";
-    Object.setPrototypeOf(this, GraffitiErrorPatchError.prototype);
+    this.name = "GraffitiErrorNotAcceptable";
+    Object.setPrototypeOf(this, GraffitiErrorNotAcceptable.prototype);
   }
 }
 

@@ -1,6 +1,6 @@
 import { assert } from "vitest";
 import type {
-  GraffitiPutObject,
+  GraffitiPostObject,
   GraffitiObjectStream,
   JSONSchema,
   GraffitiObject,
@@ -27,7 +27,7 @@ export function randomValue() {
   };
 }
 
-export function randomPutObject(): GraffitiPutObject<{}> {
+export function randomPostObject(): GraffitiPostObject<{}> {
   return {
     value: randomValue(),
     channels: [randomString(), randomString()],
@@ -44,13 +44,13 @@ export async function nextStreamValue<Schema extends JSONSchema>(
 }
 
 export function continueStream<Schema extends JSONSchema>(
-  graffiti: Pick<Graffiti, "continueObjectStream">,
+  graffiti: Pick<Graffiti, "continueDiscover">,
   streamReturn: GraffitiObjectStreamReturn<Schema>,
   type: "cursor" | "continue",
   session?: GraffitiSession | null,
 ): GraffitiObjectStreamContinue<Schema> {
   if (type === "cursor") {
-    return graffiti.continueObjectStream(
+    return graffiti.continueDiscover(
       streamReturn.cursor,
       session,
     ) as unknown as GraffitiObjectStreamContinue<Schema>;

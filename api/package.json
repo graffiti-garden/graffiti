@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "0.6.4",
+  "version": "1.0.0",
   "description": "The heart of Graffiti",
   "types": "./dist/src/index.d.ts",
   "module": "./dist/index.mjs",
@@ -48,14 +48,13 @@
   },
   "homepage": "https://api.graffiti.garden/classes/Graffiti.html",
   "devDependencies": {
-    "@types/node": "^24.7.2",
-    "tsx": "^4.20.6",
-    "typedoc": "^0.28.14",
+    "@types/node": "^25.0.2",
+    "tsx": "^4.21.0",
+    "typedoc": "^0.28.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "fast-json-patch": "^3.1.1",
     "json-schema-to-ts": "^3.1.1"
   }
 }

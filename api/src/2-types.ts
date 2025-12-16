@@ -1,23 +1,23 @@
 import type { JSONSchema, FromSchema } from "json-schema-to-ts";
-import type { Operation as JSONPatchOperation } from "fast-json-patch";
 
 /**
  * Objects are the atomic unit in Graffiti that can represent both data (*e.g.* a social media post or profile)
  * and activities (*e.g.* a like or follow).
- * Objects are created and modified by a single {@link actor | `actor`}.
  *
- * Most of an object's content is stored in its {@link value | `value`} property, which can be any JSON
- * object. However, we recommend using properties from the
+ * Each object embeds the {@link actor | `actor`} that created it.
+ * Object content and metadata are static but an object may be deleted by
+ * its creating {@link actor | `actor`}.
+ *
+ * An object's content is stored in its {@link value | `value`} property, which can be any JSON
+ * object. However, it is recommended to use properties from the
  * [Activity Vocabulary](https://www.w3.org/TR/activitystreams-vocabulary/)
  * or properties that emerge in the Graffiti [folksonomy](https://en.wikipedia.org/wiki/Folksonomy)
  * to promote interoperability.
  *
- * The object is globally addressable via its {@link url | `url`}.
+ * Each object is globally addressable via its {@link url | `url`}.
  *
- * The {@link channels | `channels`} and {@link allowed | `allowed`} properties
- * enable the object's creator to shape the visibility of and access to their object.
- *
- * The {@link lastModified | `lastModified`} property can be used to compare object versions.
+ * An object's {@link channels | `channels`} and {@link allowed | `allowed`} properties
+ * are set by an objects creator to shape the visibility of and access to their object.
  */
 export interface GraffitiObjectBase {
   /**
@@ -34,11 +34,11 @@ export interface GraffitiObjectBase {
    * {@link Graffiti.discover} method. This allows creators to express the intended audience of their object
    * which helps to prevent [context collapse](https://en.wikipedia.org/wiki/Context_collapse) even
    * in the highly interoperable ecosystem that Graffiti envisions. For example, channel URIs may be:
-   * - A actor's own {@link actor | `actor`} URI. Putting an object in this channel is a way to broadcast
+   * - A actor's own {@link actor | `actor`} URI. Posting an object to this channel is a way to broadcast
    * the object to the actor's followers, like posting a tweet.
-   * - The URL of a Graffiti post. Putting an object in this channel is a way to broadcast to anyone viewing
+   * - The URL of a Graffiti post. Posting an object to this channel is a way to broadcast to anyone viewing
    * the post, like commenting on a tweet.
-   * - A URI representing a topic. Putting an object in this channel is a way to broadcast to anyone interested
+   * - A URI representing a topic. Posting an object to this channel is a way to broadcast to anyone interested
    * in that topic, like posting in a subreddit.
    */
   channels: string[];
@@ -54,14 +54,15 @@ export interface GraffitiObjectBase {
    * other recipients, however this is not enforced by Graffiti and may not accurately reflect the actual `allowed` array.
    *
    * `allowed` can be combined with {@link channels | `channels`}. For example, to send someone a direct message
-   * the sender should put their object in the channel of the recipient's {@link actor | `actor`} URI to notify them of the message and also add
+   * the sender should post their object to the channel of the recipient's {@link actor | `actor`} URI to notify them of the message and also add
    * the recipient's {@link actor | `actor`} URI to the `allowed` array to prevent others from seeing the message.
    */
   allowed?: string[] | null;
 
   /**
-   * The URI of the `actor` that {@link Graffiti.put | created } the object. This `actor` also has the unique permission to
-   * {@link Graffiti.patch | modify} or {@link Graffiti.delete | delete} the object.
+   * The URI of the `actor` that {@link Graffiti.post | created } the object.
+   * This `actor`  has the unique permission to
+   * {@link Graffiti.delete | delete} the object.
    *
    * We borrow the term actor from the ActivityPub because
    * [like in ActivityPub](https://www.w3.org/TR/activitypub/#h-note-0)
@@ -77,8 +78,6 @@ export interface GraffitiObjectBase {
   /**
    * A globally unique identifier and locator for the object. It can be used to point to
    * an object or to retrieve the object directly with {@link Graffiti.get}.
-   * If an object is {@link Graffiti.put | put} with the same URL
-   * as an existing object, the existing object will be replaced with the new object.
    *
    * An object's URL is generated when the object is first created and
    * should include sufficient randomness to prevent collisions
@@ -92,25 +91,6 @@ export interface GraffitiObjectBase {
    * or `graffiti:p2p:` for objects stored on a peer-to-peer network.
    */
   url: string;
-
-  /**
-   * A number used to compare different versions of an object that has been
-   * updated via replacement (see {@link Graffiti.put}) or
-   * patch (see {@link Graffiti.patch}). Newer versions of
-   * an object have larger `revision` values than older versions.
-   * The `revision` can only
-   * be used to compare different versions of the same object,
-   * but cannot reliably be used to compare different objects.
-   * In cases where comparing different objects by time is useful,
-   * you could instead add `createdAt` or `lastModified` timestamp properties
-   * to an object's {@link value | `value`}.
-   *
-   * Depending on the implementation, the revision may be a timestamp,
-   * an incremental counter, may include randomness for obfuscation, and so on.
-   * Be careful not to rely on any of these specific `revision` instantiations
-   * as they may not be consistent across different implementations.
-   */
-  lastModified: number;
 }
 
 /**
@@ -137,48 +117,43 @@ export const GraffitiObjectJSONSchema = {
     allowed: { type: "array", items: { type: "string" }, nullable: true },
     url: { type: "string" },
     actor: { type: "string" },
-    lastModified: { type: "number" },
   },
   additionalProperties: false,
-  required: ["value", "channels", "actor", "url", "lastModified"],
+  required: ["value", "channels", "actor", "url"],
 } as const satisfies JSONSchema;
 
 /**
  * This is an object containing only the {@link GraffitiObjectBase.url | `url`}
  * property of a {@link GraffitiObjectBase | GraffitiObject}.
- * It is used as a utility type so that applications can call {@link Graffiti.get},
- * {@link Graffiti.patch}, or {@link Graffiti.delete} directly on an object
+ * It is used as a utility type so that applications can call
+ * {@link Graffiti.delete} directly on an object
  * rather than on `object.url`.
  */
 export type GraffitiObjectUrl = Pick<GraffitiObjectBase, "url">;
 
 /**
- * This object is a subset of {@link GraffitiObjectBase} that must be constructed locally before calling {@link Graffiti.put}.
- * This local copy does not require system-generated properties and may be statically typed with
+ * This object is a subset of {@link GraffitiObjectBase} that must be constructed locally before calling {@link Graffiti.post}.
+ * This local copy ignores system-generated properties
+ * ({@link GraffitiObjectBase.url | `url`} and {@link GraffitiObjectBase.actor | `actor`}),
+ * and may be statically typed with
  * a [JSON schema](https://json-schema.org/) to prevent the accidental creation of erroneous objects.
  *
  * This local object must have a {@link GraffitiObjectBase.value | `value`} and {@link GraffitiObjectBase.channels | `channels`}
  * and may optionally have an {@link GraffitiObjectBase.allowed | `allowed`} property.
- *
- * It may also include a {@link GraffitiObjectBase.url | `url`} property to specify the
- * URL of an existing object to replace. If no `url` is provided, one will be generated during object creation.
- *
- * This object does not need a {@link GraffitiObjectBase.lastModified | `lastModified`}
- * property since it will be automatically generated by the Graffiti system.
  */
-export type GraffitiPutObject<Schema extends JSONSchema> = Pick<
+export type GraffitiPostObject<Schema extends JSONSchema> = Pick<
   GraffitiObjectBase,
   "value" | "channels" | "allowed"
 > &
   Partial<GraffitiObjectBase> &
-  FromSchema<Schema & typeof GraffitiPutObjectJSONSchema>;
+  FromSchema<Schema & typeof GraffitiPostObjectJSONSchema>;
 
 /**
- * A JSON Schema equivalent to the {@link GraffitiPutObject} type.
+ * A JSON Schema equivalent to the {@link GraffitiPostObject} type.
  * Needed internally for type inference of JSON Schemas, but can
  * be used by implementations to validate objects.
  */
-export const GraffitiPutObjectJSONSchema = {
+export const GraffitiPostObjectJSONSchema = {
   ...GraffitiObjectJSONSchema,
   required: ["value", "channels"],
 } as const satisfies JSONSchema;
@@ -187,7 +162,7 @@ export const GraffitiPutObjectJSONSchema = {
  * This object contains information that the underlying implementation can
  * use to authenticate a particular {@link GraffitiObjectBase.actor | `actor`}.
  * This object is required of all {@link Graffiti} methods
- * that modify objects and is optional for methods that read objects.
+ * that modify objects or media and is optional for methods that read objects.
  *
  * At a minimum the `session` object must contain the
  * {@link GraffitiSession.actor | `actor`} URI to authenticate with.
@@ -205,9 +180,6 @@ export const GraffitiPutObjectJSONSchema = {
  * with {@link Graffiti.get} and {@link Graffiti.discover} but without type-checking
  * the `session` it can be easy to forget to hide buttons that trigger
  * other methods that require login.
- * In the future, `session` object may be updated to include scope information
- * and passing the `session` to each method can type-check whether the session provides the
- * necessary permissions.
  *
  * Passing the `session` object per-method also allows for multiple sessions
  * to be used within the same application, like an Email client fetching from
@@ -218,58 +190,17 @@ export interface GraffitiSession {
    * The {@link GraffitiObjectBase.actor | `actor`} to authenticate with.
    */
   actor: string;
-  /**
-   * A yet undefined property detailing what operations the session
-   * grants the actor to perform. For example, to allow a actor to
-   * read private messages from a particular set of channels or
-   * to allow the actor to write object matching a particular schema.
-   */
-  scope?: {};
 }
 
 /**
- * This is the format for patches that modify {@link GraffitiObjectBase} objects
- * using the {@link Graffiti.patch} method. The patches must
- * be an array of [JSON Patch](https://jsonpatch.com) operations.
- * Patches can only be applied to the
- * {@link GraffitiObjectBase.value | `value`}, {@link GraffitiObjectBase.channels | `channels`},
- * and {@link GraffitiObjectBase.allowed | `allowed`} properties since the other
- * properties either describe the object's location or are automatically generated.
- * (See also {@link GraffitiPutObject}).
- */
-export interface GraffitiPatch {
-  /**
-   * An array of [JSON Patch](https://jsonpatch.com) operations to
-   * modify the object's {@link GraffitiObjectBase.value | `value`}. The resulting
-   * `value` must still be a JSON object.
-   */
-  value?: JSONPatchOperation[];
-
-  /**
-   * An array of [JSON Patch](https://jsonpatch.com) operations to
-   * modify the object's {@link GraffitiObjectBase.channels | `channels`}. The resulting
-   * `channels` must still be an array of strings.
-   */
-  channels?: JSONPatchOperation[];
-
-  /**
-   * An array of [JSON Patch](https://jsonpatch.com) operations to
-   * modify the object's {@link GraffitiObjectBase.allowed | `allowed`} property. The resulting
-   * `allowed` property must still be an array of strings or `undefined`.
-   */
-  allowed?: JSONPatchOperation[];
-}
-
-/**
- * A stream of data that are returned by Graffiti's query-like operations
- * {@link Graffiti.discover} and {@link Graffiti.recoverOrphans}.
+ * A stream of data that are returned by {@link Graffiti.discover}.
  *
  * Errors are returned within the stream rather than as
  * exceptions that would halt the entire stream. This is because
  * some implementations may pull data from multiple sources
  * including some that may be unreliable. In many cases,
  * these errors can be safely ignored.
- * See {@link GraffitiStreamError}.
+ * See {@link GraffitiObjectStreamError}.
  *
  * The stream is an [`AsyncGenerator`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function)
  * that can be iterated over using `for await` loops or calling `next` on the generator.
@@ -280,17 +211,16 @@ export interface GraffitiPatch {
  * each of which can be used to resume the stream from where it left off.
  */
 export type GraffitiObjectStream<Schema extends JSONSchema> = AsyncGenerator<
-  GraffitiStreamError | GraffitiObjectStreamEntry<Schema>,
+  GraffitiObjectStreamError | GraffitiObjectStreamEntry<Schema>,
   GraffitiObjectStreamReturn<Schema>
 >;
 
 /**
- * An error that can occur in either the
- * {@link GraffitiObjectStream} or {@link GraffitiChannelStatsStream}.
+ * An error that can occur in a {@link GraffitiObjectStream}.
  *
  * @internal
  */
-export interface GraffitiStreamError {
+export interface GraffitiObjectStreamError {
   /**
    * The error that occurred while streaming data.
    */
@@ -311,7 +241,7 @@ export interface GraffitiStreamError {
  */
 export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
   /**
-   * Empty property for compatibility with {@link GraffitiStreamError}
+   * Empty property for compatibility with {@link GraffitiObjectStreamError}
    */
   error?: undefined;
   /**
@@ -334,7 +264,7 @@ export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
  */
 export interface GraffitiObjectStreamContinueTombstone {
   /**
-   * Empty property for compatibility with {@link GraffitiStreamError}
+   * Empty property for compatibility with {@link GraffitiObjectStreamError}
    */
   error?: undefined;
   /**
@@ -344,25 +274,13 @@ export interface GraffitiObjectStreamContinueTombstone {
   tombstone: true;
   /**
    * Sparse metadata about the deleted object. The full object is not returned
-   * to respect a actor's privacy.
+   * to respect an actor's privacy.
    */
   object: {
     /**
      * The {@link GraffitiObjectBase.url | `url`} of the deleted object.
      */
     url: string;
-    /**
-     * The time at which the object was deleted, comparable to
-     * {@link GraffitiObjectBase.lastModified | `lastModified`}.
-     *
-     * While it is not possible to re-{@link Graffiti.put | put} objects that have been
-     * {@link Graffiti.delete | deleted}, objects may appear deleted if
-     * an {@link GraffitiObjectBase.actor | `actor`} is no longer
-     * {@link GraffitiObjectBase.allowed | `allowed`} to access them.
-     * Therefore the {@link GraffitiObjectBase.lastModified | `lastModified`} property
-     * is necessary to compare object versions.
-     */
-    lastModified: number;
   };
 }
 
@@ -400,7 +318,7 @@ export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
   continue: () => GraffitiObjectStreamContinue<Schema>;
   /**
    * A string that can be serialized and stored to resume the stream later.
-   * It must be passed to the {@link Graffiti.continueObjectStream} method
+   * It must be passed to the {@link Graffiti.continueDiscover} method
    * to resume the stream.
    */
   cursor: string;
@@ -409,7 +327,7 @@ export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
 /**
  * A continutation of the {@link GraffitiObjectStream} type, as returned by
  * the {@link GraffitiObjectStreamReturn.continue} or by using
- * {@link GraffitiObjectStreamReturn.cursor} with {@link Graffiti.continueObjectStream}.
+ * {@link GraffitiObjectStreamReturn.cursor} with {@link Graffiti.continueDiscover}.
  *
  * The continued stream may include `tombstone`s of objects that have been
  * deleted since the original stream was run. See {@link GraffitiObjectStreamContinueTombstone}.
@@ -418,44 +336,9 @@ export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
  */
 export type GraffitiObjectStreamContinue<Schema extends JSONSchema> =
   AsyncGenerator<
-    GraffitiStreamError | GraffitiObjectStreamContinueEntry<Schema>,
+    GraffitiObjectStreamError | GraffitiObjectStreamContinueEntry<Schema>,
     GraffitiObjectStreamReturn<Schema>
   >;
-
-/**
- * Statistic about single channel returned by {@link Graffiti.channelStats}.
- * These statistics only account for contributions made by the
- * querying actor.
- */
-export type ChannelStats = {
-  /**
-   * The URI of the channel.
-   */
-  channel: string;
-  /**
-   * The number of objects that the actor has {@link Graffiti.put | put}
-   * and not {@link Graffiti.delete | deleted} in the channel.
-   */
-  count: number;
-  /**
-   * The time that the actor {@link GraffitiObjectBase.lastModified | last modified} an object in the channel,
-   * measured in milliseconds since January 1, 1970.
-   * {@link Graffiti.delete | Deleted} objects do not effect this modification time.
-   */
-  lastModified: number;
-};
-
-/**
- * A stream of data that are returned by Graffiti's {@link Graffiti.channelStats} method.
- * See {@link GraffitiObjectStream} for more information on streams.
- */
-export type GraffitiChannelStatsStream = AsyncGenerator<
-  | GraffitiStreamError
-  | {
-      error?: undefined;
-      value: ChannelStats;
-    }
->;
 
 /**
  * The event type produced in {@link Graffiti.sessionEvents}
