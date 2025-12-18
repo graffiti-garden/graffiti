@@ -102,7 +102,7 @@ export interface GraffitiObjectBase {
  * Schema-aware objects are returned by {@link Graffiti.get} and {@link Graffiti.discover}.
  */
 export type GraffitiObject<Schema extends JSONSchema> = GraffitiObjectBase &
-  FromSchema<Schema & typeof GraffitiObjectJSONSchema>;
+  FromSchema<Schema & typeof GraffitiPostObjectJSONSchema>;
 
 /**
  * A JSON Schema equivalent to the {@link GraffitiObjectBase} type.
@@ -145,7 +145,6 @@ export type GraffitiPostObject<Schema extends JSONSchema> = Pick<
   GraffitiObjectBase,
   "value" | "channels" | "allowed"
 > &
-  Partial<GraffitiObjectBase> &
   FromSchema<Schema & typeof GraffitiPostObjectJSONSchema>;
 
 /**
