@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/implementation-local",
-  "version": "0.6.4",
+  "version": "1.0.0",
   "description": "A local implementation of the Graffiti API using PouchDB",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -49,8 +49,8 @@
     }
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run src/tests.spec.ts",
+    "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
@@ -73,16 +73,20 @@
     "url": "https://github.com/graffiti-garden/implementation-local/issues"
   },
   "devDependencies": {
+    "@types/negotiator": "^0.6.4",
+    "@types/node": "^25.0.3",
     "@types/pouchdb": "^6.4.2",
-    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/coverage-v8": "^4.0.16",
     "esbuild": "^0.27.2",
     "esbuild-plugin-polyfill-node": "^0.3.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.16"
   },
   "dependencies": {
+    "@graffiti-garden/api": "^1.0.1",
     "ajv": "^8.17.1",
+    "negotiator": "^1.0.0",
     "pouchdb": "^9.0.0"
   }
 }
