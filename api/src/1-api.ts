@@ -103,7 +103,7 @@ import type { JSONSchema } from "json-schema-to-ts";
  * @groupDescription 3 - Media Methods
  * Methods for {@link postMedia | creating}, {@link getMedia | reading},
  * and {@link deleteMedia | deleting} media data.
- * @groupDescription 4 - Session Management
+ * @groupDescription 4 - Identity Methods
  * Methods and properties for logging in and out.
  */
 export abstract class Graffiti {
@@ -369,7 +369,7 @@ export abstract class Graffiti {
    * asynchronously via {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLoginEvent} with event type `login`.
    *
-   * @group 4 - Session Management
+   * @group 4 - Identity Methods
    */
   abstract login(
     /**
@@ -394,7 +394,7 @@ export abstract class Graffiti {
    * {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLogoutEvent} as event type `logout`.
    *
-   * @group 4 - Session Management
+   * @group 4 - Identity Methods
    */
   abstract logout(
     /**
@@ -410,7 +410,37 @@ export abstract class Graffiti {
    * - `logout` - {@link GraffitiLogoutEvent}
    * - `initialized` - {@link GraffitiSessionInitializedEvent}
    *
-   * @group 4 - Session Management
+   * @group 4 - Identity Methods
    */
   abstract readonly sessionEvents: EventTarget;
+
+  /**
+   * Retrieves the human-readable handle associated
+   * with the given actor. The handle may change over time
+   * and so it should be used for display purposes only.
+   *
+   * The inverse of {@link handleToActor}.
+   *
+   * @throws {@link GraffitiErrorNotFound} if a handle cannot be
+   * found for the given actor.
+   *
+   * @returns A human-readable handle for the given actor.
+   *
+   * @group 4 - Identity Methods
+   */
+  abstract actorToHandle(actor: string): Promise<string>;
+
+  /**
+   * Retrieves the actor ID associated with the given handle.
+   *
+   * The inverse of {@link actorToHandle}.
+   *
+   * @throws {@link GraffitiErrorNotFound} if there is no actor
+   * with the given handle.
+   *
+   * @returns The actor ID for the given handle.
+   *
+   * @group 4 - Identity Methods
+   */
+  abstract handleToActor(handle: string): Promise<string>;
 }
