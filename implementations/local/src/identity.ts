@@ -19,7 +19,7 @@ const DID_LOCAL_PREFIX = "did:local:";
  * It can be used in node.js but will not persist
  * login state and a proposed username must be provided.
  */
-export class GraffitiLocalSessionManager {
+export class GraffitiLocalIdentity {
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
 
   handleToActor: Graffiti["handleToActor"] = async (handle: string) => {

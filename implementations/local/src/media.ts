@@ -4,7 +4,6 @@ import {
   type Graffiti,
   type JSONSchema,
 } from "@graffiti-garden/api";
-import type { GraffitiLocalObjects } from "./database";
 import {
   decodeObjectUrl,
   encodeObjectUrl,
@@ -29,10 +28,10 @@ const MEDIA_OBJECT_SCHEMA = {
 } as const satisfies JSONSchema;
 
 export class GraffitiLocalMedia {
-  protected localDb: GraffitiLocalObjects;
+  protected db: Pick<Graffiti, "post" | "get" | "delete">;
 
-  constructor(localDb: GraffitiLocalObjects) {
-    this.localDb = localDb;
+  constructor(db: Pick<Graffiti, "post" | "get" | "delete">) {
+    this.db = db;
   }
 
   postMedia: Graffiti["postMedia"] = async (...args) => {
@@ -41,7 +40,7 @@ export class GraffitiLocalMedia {
     const dataBase64 = await blobToBase64(media.data);
     const type = media.data.type;
 
-    const { url } = await this.localDb.post<typeof MEDIA_OBJECT_SCHEMA>(
+    const { url } = await this.db.post<typeof MEDIA_OBJECT_SCHEMA>(
       {
         value: {
           dataBase64,
@@ -63,7 +62,7 @@ export class GraffitiLocalMedia {
     const { actor, id } = decodeMediaUrl(mediaUrl);
     const objectUrl = encodeObjectUrl(actor, id);
 
-    const object = await this.localDb.get<typeof MEDIA_OBJECT_SCHEMA>(
+    const object = await this.db.get<typeof MEDIA_OBJECT_SCHEMA>(
       objectUrl,
       MEDIA_OBJECT_SCHEMA,
       session,
@@ -102,6 +101,6 @@ export class GraffitiLocalMedia {
     const { actor, id } = decodeMediaUrl(mediaUrl);
     const objectUrl = encodeObjectUrl(actor, id);
 
-    await this.localDb.delete(objectUrl, session);
+    await this.db.delete(objectUrl, session);
   };
 }

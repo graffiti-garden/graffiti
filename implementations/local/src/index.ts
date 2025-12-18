@@ -1,7 +1,7 @@
 import { Graffiti, type GraffitiSession } from "@graffiti-garden/api";
-import { GraffitiLocalSessionManager } from "./session-manager.js";
-import { GraffitiLocalObjects, type GraffitiLocalOptions } from "./database.js";
-import { GraffitiLocalMedia } from "./media.js";
+import { GraffitiLocalIdentity } from "./identity";
+import { GraffitiLocalObjects, type GraffitiLocalOptions } from "./objects";
+import { GraffitiLocalMedia } from "./media";
 
 export type { GraffitiLocalOptions };
 
@@ -13,16 +13,16 @@ export type { GraffitiLocalOptions };
  * although using it with a remote server will not be secure.
  */
 export class GraffitiLocal implements Graffiti {
-  protected sessionManagerLocal = new GraffitiLocalSessionManager();
-  login = this.sessionManagerLocal.login.bind(this.sessionManagerLocal);
-  logout = this.sessionManagerLocal.logout.bind(this.sessionManagerLocal);
-  handleToActor = this.sessionManagerLocal.handleToActor.bind(
-    this.sessionManagerLocal,
+  protected graffitiLocalIdentity = new GraffitiLocalIdentity();
+  login = this.graffitiLocalIdentity.login.bind(this.graffitiLocalIdentity);
+  logout = this.graffitiLocalIdentity.logout.bind(this.graffitiLocalIdentity);
+  handleToActor = this.graffitiLocalIdentity.handleToActor.bind(
+    this.graffitiLocalIdentity,
   );
-  actorToHandle = this.sessionManagerLocal.actorToHandle.bind(
-    this.sessionManagerLocal,
+  actorToHandle = this.graffitiLocalIdentity.actorToHandle.bind(
+    this.graffitiLocalIdentity,
   );
-  sessionEvents = this.sessionManagerLocal.sessionEvents;
+  sessionEvents = this.graffitiLocalIdentity.sessionEvents;
 
   protected graffitiLocalObjects: GraffitiLocalObjects;
   post: Graffiti["post"];
