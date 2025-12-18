@@ -5,7 +5,6 @@ import type {
   GraffitiSession,
   GraffitiObjectStreamContinue,
   GraffitiObjectStreamContinueEntry,
-  GraffitiPostObject,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
@@ -55,10 +54,7 @@ type ContinueDiscoverParams = {
  * An implementation of only the database operations of the
  * GraffitiAPI without synchronization or session management.
  */
-export class GraffitiLocalDatabase
-  implements
-    Pick<Graffiti, "post" | "get" | "delete" | "discover" | "continueDiscover">
-{
+export class GraffitiLocalObjects {
   protected db_: Promise<PouchDB.Database<GraffitiObjectData>> | undefined;
   protected ajv_: Promise<Ajv> | undefined;
   protected readonly options: GraffitiLocalOptions;
@@ -132,7 +128,6 @@ export class GraffitiLocalDatabase
 
   get: Graffiti["get"] = async (...args) => {
     const [urlObject, schema, session] = args;
-
     const url = unpackObjectUrl(urlObject);
 
     let doc: GraffitiObjectData;
@@ -212,15 +207,9 @@ export class GraffitiLocalDatabase
     return;
   };
 
-  async post<Schema extends JSONSchema>(
-    objectPartial: GraffitiPostObject<Schema>,
-    session: GraffitiSession,
-  ): Promise<
-    GraffitiPostObject<Schema> & {
-      actor: string;
-      url: string;
-    }
-  > {
+  post: Graffiti["post"] = async (...args) => {
+    const [objectPartial, session] = args;
+
     const actor = session.actor;
     const id = randomBase64();
     const url = encodeObjectUrl(actor, id);
@@ -402,7 +391,8 @@ export class GraffitiLocalDatabase
     })();
   };
 
-  continueDiscover: Graffiti["continueDiscover"] = (cursor, session) => {
+  continueDiscover: Graffiti["continueDiscover"] = (...args) => {
+    const [cursor, session] = args;
     if (cursor.startsWith("discover:")) {
       const { channels, schema, actor, continueParams } = JSON.parse(
         cursor.slice("discover:".length),
