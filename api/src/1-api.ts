@@ -291,12 +291,24 @@ export abstract class Graffiti {
    * @group 3 - Media Methods
    */
   abstract postMedia(
-    /**
-     * The binary data of the media to be uploaded,
-     * along with its [media type](https://www.iana.org/assignments/media-types/media-types.xhtml),
-     * formatted as a [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob).
-     */
-    media: Blob,
+    media: {
+      /**
+       * The binary data of the media to be uploaded,
+       * along with its [media type](https://www.iana.org/assignments/media-types/media-types.xhtml),
+       * formatted as a [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob).
+       */
+      data: Blob;
+      /**
+       * An optional list, identical in function to an object's
+       * {@link GraffitiObjectBase.allowed | `allowed`} property,
+       * that specifies the {@link GraffitiObjectBase.actor | `actor`}s
+       * who are allowed to access the media. If the list is `undefined`
+       * or `null`, anyone with the URL can access the media. If the list
+       * is empty, only the {@link GraffitiObjectBase.actor | `actor`}
+       * who {@link postMedia | `post`ed} the media can access it.
+       */
+      allowed?: string[] | null;
+    },
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
@@ -348,22 +360,28 @@ export abstract class Graffiti {
      */
     mediaUrl: string,
     /**
-     * An optional set of requirements the retrieved media must meet.
+     * A set of requirements the retrieved media must meet.
      */
-    requirements?: {
+    requirements: {
       /**
        * A list of acceptable media types for the retrieved media,
        * formatted as like an [HTTP Accept header](https://httpwg.org/specs/rfc9110.html#field.accept)
        */
       accept?: string;
       /**
-       * The maximum size, in bytes, of the media.
+       * The maximum acceptable size, in bytes, of the media.
        */
       maxBytes?: number;
     },
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session?: GraffitiSession | null,
   ): Promise<{
-    media: Blob;
+    data: Blob;
     actor: string;
+    allowed?: string[] | null;
   }>;
 
   /**
