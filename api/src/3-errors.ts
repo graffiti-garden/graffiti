@@ -1,11 +1,3 @@
-export class GraffitiErrorUnauthorized extends Error {
-  constructor(message?: string) {
-    super(message);
-    this.name = "GraffitiErrorUnauthorized";
-    Object.setPrototypeOf(this, GraffitiErrorUnauthorized.prototype);
-  }
-}
-
 export class GraffitiErrorForbidden extends Error {
   constructor(message?: string) {
     super(message);

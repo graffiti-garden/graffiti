@@ -121,7 +121,7 @@ export abstract class Graffiti {
      * An object to post, minus its {@link GraffitiObjectBase.url | `url`} and
      * {@link GraffitiObjectBase.actor | `actor`}, which will be assigned once posted.
      * This object is statically type-checked against the [JSON schema](https://json-schema.org/) that can be optionally provided
-     * as the generic type parameter. It is recommended to a schema to
+     * as the generic type parameter. It is recommended to use a schema to
      * ensure that the posted object matches subsequent {@link get} or {@link discover}
      * methods.
      */
@@ -131,12 +131,7 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): Promise<
-    GraffitiPostObject<Schema> & {
-      url: string;
-      actor: string;
-    }
-  >;
+  ): Promise<GraffitiObject<Schema>>;
 
   /**
    * Retrieves an object from a given {@link GraffitiObjectBase.url | `url`} matching
