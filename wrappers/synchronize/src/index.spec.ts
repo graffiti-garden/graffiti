@@ -118,7 +118,7 @@ describe.concurrent("synchronizeDiscover", () => {
     await graffiti2.delete(posted, session);
 
     // Call get in the original instance
-    await expect(graffiti.get(posted, session)).rejects.toThrow(
+    await expect(graffiti.get(posted, {})).rejects.toThrow(
       GraffitiErrorNotFound,
     );
 
