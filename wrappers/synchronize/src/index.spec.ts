@@ -1,8 +1,16 @@
 import { it, expect, describe, assert, beforeAll } from "vitest";
-import type { GraffitiSession } from "@graffiti-garden/api";
+import {
+  GraffitiErrorNotFound,
+  type GraffitiSession,
+} from "@graffiti-garden/api";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
-import { randomPutObject, randomString } from "@graffiti-garden/api/tests";
+import { randomPostObject, randomString } from "@graffiti-garden/api/tests";
 import { GraffitiSynchronize } from "./index";
+import {
+  graffitiCRUDTests,
+  graffitiDiscoverTests,
+  graffitiMediaTests,
+} from "@graffiti-garden/api/tests";
 
 const useGraffiti = () => new GraffitiSynchronize(new GraffitiLocal());
 const graffiti = useGraffiti();
@@ -31,14 +39,13 @@ describe.concurrent("synchronizeDiscover", () => {
   it("get", async () => {
     const graffiti1 = useGraffiti();
 
-    const object = randomPutObject();
+    const object = randomPostObject();
     const channels = object.channels.slice(1);
-    const putted = await graffiti1.put<{}>(object, session);
+    const posted = await graffiti1.post<{}>(object, session);
 
     const graffiti2 = useGraffiti();
     const next = graffiti2.synchronizeDiscover(channels, {}).next();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const gotten = await graffiti2.get(putted, {}, session);
+    const gotten = await graffiti2.get(posted, {}, session);
 
     const result = await next;
     if (result.done || result.value.error) {
@@ -47,173 +54,6 @@ describe.concurrent("synchronizeDiscover", () => {
     assert(!result.value.tombstone);
     expect(result.value.object.value).toEqual(object.value);
     expect(result.value.object.channels).toEqual(channels);
-    expect(result.value.object.lastModified).toEqual(gotten.lastModified);
-  });
-
-  it("put", async () => {
-    const beforeChannel = randomString();
-    const afterChannel = randomString();
-    const sharedChannel = randomString();
-
-    // Start listening for changes...
-    const beforeIterator = graffiti.synchronizeDiscover([beforeChannel], {});
-    // Skip the first result
-    beforeIterator.next();
-
-    const oldValue = { hello: "world" };
-    const oldChannels = [beforeChannel, sharedChannel];
-    const putted = await graffiti.put<{}>(
-      {
-        value: oldValue,
-        channels: oldChannels,
-      },
-      session,
-    );
-
-    const beforeButAfter = graffiti
-      .synchronizeDiscover([beforeChannel], {})
-      .next();
-    const before = beforeIterator.next();
-    const after = graffiti.synchronizeDiscover([afterChannel], {}).next();
-    const shared = graffiti.synchronizeDiscover([sharedChannel], {}).next();
-
-    // Replace the object
-    const newValue = { goodbye: "world" };
-    const newChannels = [afterChannel, sharedChannel];
-    const putted2 = await graffiti.put<{}>(
-      {
-        url: putted.url,
-        value: newValue,
-        channels: newChannels,
-      },
-      session,
-    );
-
-    // If you just start synchronizing after the first put,
-    // it won't show the deletion because it never saw the object.
-    await expect(
-      // @ts-ignore
-      Promise.race([
-        beforeButAfter,
-        new Promise((resolve, reject) => setTimeout(reject, 100, "Timeout")),
-      ]),
-    ).rejects.toThrow("Timeout");
-
-    const beforeResult = await before;
-    const afterResult = await after;
-    const sharedResult = await shared;
-    assert(!beforeResult.done && !beforeResult.value.error, "Error in before");
-    assert(!afterResult.done && !afterResult.value.error, "Error in after");
-    assert(!sharedResult.done && !sharedResult.value.error, "Error in shared");
-
-    assert(beforeResult.value.tombstone, "Before is not tombstone");
-    assert(!afterResult.value.tombstone, "After is tombstone");
-    assert(!sharedResult.value.tombstone, "Shared is tombstone");
-
-    expect(beforeResult.value.object.url).toEqual(putted.url);
-    expect(beforeResult.value.object.lastModified).toEqual(
-      putted2.lastModified,
-    );
-    expect(afterResult.value.object.value).toEqual(newValue);
-    expect(afterResult.value.object.channels).toEqual([afterChannel]);
-    expect(sharedResult.value.object.value).toEqual(newValue);
-    expect(sharedResult.value.object.channels).toEqual([sharedChannel]);
-    expect(beforeResult.value.object.lastModified).toEqual(
-      afterResult.value.object.lastModified,
-    );
-    expect(sharedResult.value.object.lastModified).toEqual(
-      afterResult.value.object.lastModified,
-    );
-  });
-
-  it("patch", async () => {
-    const beforeChannel = randomString();
-    const afterChannel = randomString();
-    const sharedChannel = randomString();
-
-    // Start listening for changes...
-    const beforeIterator = graffiti.synchronizeDiscover([beforeChannel], {});
-    // Skip the first result
-    beforeIterator.next();
-
-    const oldValue = { hello: "world" };
-    const oldChannels = [beforeChannel, sharedChannel];
-    const putted = await graffiti.put<{}>(
-      {
-        value: oldValue,
-        channels: oldChannels,
-      },
-      session,
-    );
-
-    const beforeButAfter = graffiti
-      .synchronizeDiscover([beforeChannel], {})
-      .next();
-    const before = beforeIterator.next();
-    const after = graffiti.synchronizeDiscover([afterChannel], {}).next();
-    const shared = graffiti.synchronizeDiscover([sharedChannel], {}).next();
-
-    const patched = await graffiti.patch(
-      {
-        value: [
-          {
-            op: "add",
-            path: "/something",
-            value: "new value",
-          },
-        ],
-        channels: [
-          {
-            op: "add",
-            path: "/-",
-            value: afterChannel,
-          },
-          {
-            op: "remove",
-            path: `/${oldChannels.indexOf(beforeChannel)}`,
-          },
-        ],
-      },
-      putted,
-      session,
-    );
-
-    // If you just start synchronizing after the first put,
-    // it won't show the deletion because it never saw the object.
-    await expect(
-      // @ts-ignore
-      Promise.race([
-        beforeButAfter,
-        new Promise((resolve, reject) => setTimeout(reject, 100, "Timeout")),
-      ]),
-    ).rejects.toThrow("Timeout");
-
-    const beforeResult = await before;
-    const afterResult = await after;
-    const sharedResult = await shared;
-    assert(!beforeResult.done && !beforeResult.value.error, "Error in before");
-    assert(!afterResult.done && !afterResult.value.error, "Error in after");
-    assert(!sharedResult.done && !sharedResult.value.error, "Error in shared");
-
-    assert(beforeResult.value.tombstone, "Before is not tombstone");
-    assert(!afterResult.value.tombstone, "After is tombstone");
-    assert(!sharedResult.value.tombstone, "Shared is tombstone");
-
-    const newValue = { ...oldValue, something: "new value" };
-    expect(beforeResult.value.object.url).toEqual(putted.url);
-    expect(beforeResult.value.object.lastModified).toEqual(
-      patched.lastModified,
-    );
-    expect(afterResult.value.object.value).toEqual(newValue);
-    expect(afterResult.value.object.channels).toEqual([afterChannel]);
-    expect(sharedResult.value.object.value).toEqual(newValue);
-    expect(sharedResult.value.object.channels).toEqual([sharedChannel]);
-    expect(beforeResult.value.object.lastModified).toEqual(
-      afterResult.value.object.lastModified,
-    );
-    expect(sharedResult.value.object.lastModified).toEqual(
-      afterResult.value.object.lastModified,
-    );
   });
 
   it("delete", async () => {
@@ -226,7 +66,7 @@ describe.concurrent("synchronizeDiscover", () => {
 
     const oldValue = { hello: "world" };
     const oldChannels = [randomString(), ...channels.slice(1)];
-    const putted = await graffiti.put<{}>(
+    const posted = await graffiti.post<{}>(
       {
         value: oldValue,
         channels: oldChannels,
@@ -237,9 +77,9 @@ describe.concurrent("synchronizeDiscover", () => {
     const beforeButAfter = graffiti.synchronizeDiscover(channels, {}).next();
     const next = beforeIterator.next();
 
-    const deleted = await graffiti.delete(putted, session);
+    await graffiti.delete(posted, session);
 
-    // If you just start synchronizing after the first put,
+    // If you just start synchronizing after the first post,
     // it won't show the deletion because it never saw the object.
     await expect(
       // @ts-ignore
@@ -252,44 +92,63 @@ describe.concurrent("synchronizeDiscover", () => {
     const result = await next;
     assert(!result.done && !result.value.error, "Error in before");
     assert(result.value.tombstone, "Before is not tombstone");
-    expect(result.value.object.url).toEqual(putted.url);
-    expect(result.value.object.lastModified).toEqual(deleted.lastModified);
+    expect(result.value.object.url).toEqual(posted.url);
   });
 
-  it("synchronize happens before putters", async () => {
-    const object = randomPutObject();
+  it("get deletion in another instance", async () => {
+    // Begin discovering and find nothing
+    const object = randomPostObject();
+    const posted = await graffiti.post<{}>(object, session);
+
+    // Now sync a get
+    const getIterator = graffiti.synchronizeGet(posted, {});
+    const next = getIterator.next();
+
+    // The sync will not pick up on it since it is not
+    // actively listening
+    await expect(
+      Promise.race([
+        next,
+        new Promise((resolve, rejects) => setTimeout(rejects, 100, "Timeout")),
+      ]),
+    ).rejects.toThrow("Timeout");
+
+    // Delete the object in another graffiti instance
+    const graffiti2 = useGraffiti();
+    await graffiti2.delete(posted, session);
+
+    // Call get in the original instance
+    await expect(graffiti.get(posted, session)).rejects.toThrow(
+      GraffitiErrorNotFound,
+    );
+
+    // And then the sync will pick up on it from the continue
+    const syncResult = await next;
+    assert(!syncResult.done && !syncResult.value.error);
+    expect(syncResult.value.tombstone).toBe(true);
+    expect(syncResult.value.object.url).toEqual(posted.url);
+  });
+
+  it("synchronize happens before posters", async () => {
+    const object = randomPostObject();
     const iterator = graffiti.synchronizeDiscover(object.channels, {});
 
     for (let i = 0; i < 10; i++) {
       const next = iterator.next();
-      const putted = graffiti.put<{}>(object, session);
+      const posted = graffiti.post<{}>(object, session);
 
       let first: undefined | string = undefined;
       next.then(() => {
         if (!first) first = "synchronize";
       });
-      putted.then(() => {
-        if (!first) first = "put";
+      posted.then(() => {
+        if (!first) first = "post";
       });
-      await putted;
+      await posted;
 
       expect(first).toBe("synchronize");
 
-      const patched = graffiti.patch({}, await putted, session);
-      const next2 = iterator.next();
-
-      let second: undefined | string = undefined;
-      next2.then(() => {
-        if (!second) second = "synchronize";
-      });
-      patched.then(() => {
-        if (!second) second = "patch";
-      });
-      await patched;
-
-      expect(second).toBe("synchronize");
-
-      const deleted = graffiti.delete(await putted, session);
+      const deleted = graffiti.delete(await posted, session);
       const next3 = iterator.next();
 
       let third: undefined | string = undefined;
@@ -327,7 +186,10 @@ describe.concurrent("synchronizeDiscover", () => {
       hello: "world",
     };
     const allowed = [randomString(), session2.actor];
-    await graffiti.put<{}>({ value, channels: allChannels, allowed }, session1);
+    await graffiti.post<{}>(
+      { value, channels: allChannels, allowed },
+      session1,
+    );
 
     // Expect no session to time out!
     await expect(
@@ -377,92 +239,59 @@ describe.concurrent("synchronizeGet", () => {
     session2 = await useSession2();
   });
 
-  it("replace, delete", async () => {
-    const object = randomPutObject();
-    const putted = await graffiti.put<{}>(object, session);
+  it("delete", async () => {
+    const object = randomPostObject();
+    const posted = await graffiti.post<{}>(object, session);
 
-    const iterator = graffiti.synchronizeGet(putted, {});
+    const iterator = graffiti.synchronizeGet(posted, {});
     const next = iterator.next();
 
-    // Change the object
-    const newValue = { goodbye: "world" };
-    const putted2 = await graffiti.put<{}>(
-      {
-        url: putted.url,
-        channels: object.channels,
-        value: newValue,
-      },
-      session,
-    );
-
-    const result = await next;
-    assert(!result.done && !result.value.error && !result.value.tombstone);
-
-    expect(result.value.object.value).toEqual(newValue);
-    expect(result.value.object.actor).toEqual(session.actor);
-    expect(result.value.object.channels).toEqual([]);
-    expect(result.value.object.lastModified).toEqual(putted2.lastModified);
-    expect(result.value.object.allowed).toBeUndefined();
-
     // Delete the object
-    const deleted = await graffiti.delete(putted2, session);
-    const result2 = await iterator.next();
+    const deleted = await graffiti.delete(posted, session);
+    const result2 = await next;
     assert(!result2.done && !result2.value.error);
     expect(result2.value.tombstone).toBe(true);
-    expect(result2.value.object.lastModified).toEqual(deleted.lastModified);
-
-    // Put something else
-    await graffiti.put<{}>(randomPutObject(), session);
-    await expect(
-      // @ts-ignore - otherwise you might get
-      // "Type instantiation is excessively deep
-      //  and possibly infinite."
-      Promise.race([
-        iterator.next(),
-        new Promise((resolve, reject) => setTimeout(reject, 100, "Timeout")),
-      ]),
-    ).rejects.toThrow("Timeout");
+    expect(result2.value.object.url).toEqual(posted.url);
   });
 
-  it("not allowed", async () => {
-    const object = randomPutObject();
-    const putted = await graffiti.put<{}>(object, session1);
+  it("delete in different instance and discover", async () => {
+    // Begin discovering and find nothing
+    const object = randomPostObject();
+    const discoverIterator = graffiti.discover(object.channels, {});
+    const nullDiscoverResult = await discoverIterator.next();
+    assert(nullDiscoverResult.done, "discover is not done");
 
-    const iterator1 = graffiti.synchronizeGet(putted, {}, session1);
-    const iterator2 = graffiti.synchronizeGet(putted, {}, session2);
+    // Post to the channel
+    const posted = await graffiti.post<{}>(object, session);
 
-    // Do a get to trigger the synchronize
-    graffiti.get<{}>(putted, {}, session1);
-    iterator1.next();
-    iterator2.next();
+    // Now sync a get
+    const getIterator = graffiti.synchronizeGet(posted, {});
+    const next = getIterator.next();
 
-    const next1 = iterator1.next();
-    const next2 = iterator2.next();
+    // Delete the object in another graffiti instance
+    const graffiti2 = useGraffiti();
+    await graffiti2.delete(posted, session);
 
-    const newValue = { goodbye: "world" };
-    const putted2 = await graffiti.put<{}>(
-      {
-        ...putted,
-        ...object,
-        allowed: [],
-        value: newValue,
-      },
-      session1,
-    );
+    // The sync will not pick up on it since it is not
+    // actively listening
+    await expect(
+      Promise.race([
+        next,
+        new Promise((resolve, rejects) => setTimeout(rejects, 100, "Timeout")),
+      ]),
+    ).rejects.toThrow("Timeout");
 
-    const result1 = await next1;
-    const result2 = await next2;
-    assert(!result1.done && !result1.value.error);
-    assert(!result2.done && !result2.value.error);
-    assert(!result1.value.tombstone);
-    assert(result2.value.tombstone);
+    // However, the continue will pick up on it
+    const continueResult = await nullDiscoverResult.value.continue().next();
+    assert(!continueResult.done && !continueResult.value.error);
+    expect(continueResult.value.tombstone).toBe(true);
+    expect(continueResult.value.object.url).toEqual(posted.url);
 
-    expect(result1.value.object.value).toEqual(newValue);
-    expect(result1.value.object.actor).toEqual(session1.actor);
-    expect(result1.value.object.channels).toEqual(object.channels);
-    expect(result1.value.object.lastModified).toEqual(putted2.lastModified);
-    expect(result2.value.object.url).toEqual(putted.url);
-    expect(result2.value.object.lastModified).toEqual(putted2.lastModified);
+    // And then the sync will pick up on it from the continue
+    const syncResult = await next;
+    assert(!syncResult.done && !syncResult.value.error);
+    expect(syncResult.value.tombstone).toBe(true);
+    expect(syncResult.value.object.url).toEqual(posted.url);
   });
 });
 
@@ -478,8 +307,8 @@ describe("synchronizeAll", () => {
   });
 
   it("sync from multiple channels and actors", async () => {
-    const object1 = randomPutObject();
-    const object2 = randomPutObject();
+    const object1 = randomPostObject();
+    const object2 = randomPostObject();
 
     expect(object1.channels).not.toEqual(object2.channels);
 
@@ -488,8 +317,8 @@ describe("synchronizeAll", () => {
     const next1 = iterator.next();
     const next2 = iterator.next();
 
-    await graffiti.put<{}>(object1, session1);
-    await graffiti.put<{}>(object2, session2);
+    await graffiti.post<{}>(object1, session1);
+    await graffiti.post<{}>(object2, session2);
 
     const result1 = await next1;
     const result2 = await next2;
@@ -506,13 +335,13 @@ describe("synchronizeAll", () => {
       omniscient: true,
     });
 
-    const object1 = randomPutObject();
+    const object1 = randomPostObject();
     object1.allowed = [randomString()];
 
     const iterator = graffiti.synchronizeAll({});
     const next = iterator.next();
 
-    await graffiti.put<{}>(object1, session1);
+    await graffiti.post<{}>(object1, session1);
 
     const result = await next;
     assert(!result.done && !result.value.error && !result.value.tombstone);
@@ -521,3 +350,7 @@ describe("synchronizeAll", () => {
     expect(result.value.object.allowed).toEqual(object1.allowed);
   });
 });
+
+graffitiCRUDTests(useGraffiti, useSession1, useSession2);
+graffitiDiscoverTests(useGraffiti, useSession1, useSession2);
+graffitiMediaTests(useGraffiti, useSession1, useSession2);
