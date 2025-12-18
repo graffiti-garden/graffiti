@@ -4,6 +4,9 @@ import type {
   GraffitiLogoutEvent,
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
+import { decodeBase64, encodeBase64 } from "./utilities";
+
+const DID_LOCAL_PREFIX = "did:local:";
 
 /**
  * A class that implements the login methods
@@ -19,6 +22,21 @@ import type {
 export class GraffitiLocalSessionManager {
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
 
+  handleToActor: Graffiti["handleToActor"] = async (handle: string) => {
+    const bytes = new TextEncoder().encode(handle);
+    const base64 = encodeBase64(bytes);
+    return `${DID_LOCAL_PREFIX}${base64}`;
+  };
+
+  actorToHandle: Graffiti["actorToHandle"] = async (actor: string) => {
+    if (!actor.startsWith(DID_LOCAL_PREFIX)) {
+      throw new Error(`actor must start with ${DID_LOCAL_PREFIX}`);
+    }
+    const base64 = actor.slice(DID_LOCAL_PREFIX.length);
+    const bytes = decodeBase64(base64);
+    return new TextDecoder().decode(bytes);
+  };
+
   constructor() {
     // Look for any existing sessions
     const sessionRestorer = async () => {
@@ -26,9 +44,9 @@ export class GraffitiLocalSessionManager {
       await Promise.resolve();
 
       // Restore previous sessions
-      for (const actor of this.getLoggedInActors()) {
+      for (const handle of this.getLoggedInHandles()) {
         const event: GraffitiLoginEvent = new CustomEvent("login", {
-          detail: { session: { actor } },
+          detail: { session: { actor: await this.handleToActor(handle) } },
         });
         this.sessionEvents.dispatchEvent(event);
       }
@@ -42,27 +60,24 @@ export class GraffitiLocalSessionManager {
     sessionRestorer();
   }
 
-  loggedInActors: string[] = [];
+  loggedInHandles: string[] = [];
 
-  protected getLoggedInActors(): string[] {
+  protected getLoggedInHandles(): string[] {
     if (typeof window !== "undefined") {
-      const actorsString = window.localStorage.getItem("graffiti-actor");
-      return actorsString
-        ? actorsString.split(",").map(decodeURIComponent)
+      const handlesString = window.localStorage.getItem("graffiti-handles");
+      return handlesString
+        ? handlesString.split(",").map(decodeURIComponent)
         : [];
     } else {
-      return this.loggedInActors;
+      return this.loggedInHandles;
     }
   }
 
-  protected setLoggedInActors(actors: string[]) {
+  protected setLoggedInHandles(handles: string[]) {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        "graffiti-actor",
-        actors.map(encodeURIComponent).join(","),
-      );
+      window.localStorage.setItem("graffiti-handles", handles.join(","));
     } else {
-      this.loggedInActors = actors;
+      this.loggedInHandles = handles;
     }
   }
 
@@ -70,21 +85,23 @@ export class GraffitiLocalSessionManager {
     // Wait a tick for the browser to update the UI
     await new Promise((resolve) => setTimeout(resolve, 0));
 
+    let handle = actor ? await this.actorToHandle(actor) : undefined;
+
     if (typeof window !== "undefined") {
-      const response = window.prompt("Choose a username to log in.", actor);
-      actor = response ?? undefined;
+      const response = window.prompt("Choose a username to log in.", handle);
+      handle = response ?? undefined;
     }
 
-    if (!actor) {
+    if (!handle) {
       const detail: GraffitiLoginEvent["detail"] = {
-        error: new Error("No username provided to login"),
+        error: new Error("No handle provided to login"),
       };
       const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
       this.sessionEvents.dispatchEvent(event);
     } else {
-      const existingActors = this.getLoggedInActors();
-      if (!existingActors.includes(actor)) {
-        this.setLoggedInActors([...existingActors, actor]);
+      const existingHandles = this.getLoggedInHandles();
+      if (!existingHandles.includes(handle)) {
+        this.setLoggedInHandles([...existingHandles, handle]);
       }
       // Refresh the page to simulate oauth
       window.location.reload();
@@ -92,12 +109,11 @@ export class GraffitiLocalSessionManager {
   };
 
   logout: Graffiti["logout"] = async (session) => {
-    const existingActors = this.getLoggedInActors();
-    const exists = existingActors.includes(session.actor);
+    const handle = await this.actorToHandle(session.actor);
+    const existingHandles = this.getLoggedInHandles();
+    const exists = existingHandles.includes(handle);
     if (exists) {
-      this.setLoggedInActors(
-        existingActors.filter((actor) => actor !== session.actor),
-      );
+      this.setLoggedInHandles(existingHandles.filter((h) => h !== handle));
     }
 
     const detail: GraffitiLogoutEvent["detail"] = exists
