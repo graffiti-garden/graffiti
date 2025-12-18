@@ -32,7 +32,7 @@ export interface GraffitiLocalOptions {
   pouchDBOptions?: PouchDB.Configuration.DatabaseConfiguration;
   /**
    * Wait at least this long (in milliseconds) before continuing a stream.
-   * A basic form of rate limiting. Defaults to 1 seconds.
+   * A basic form of rate limiting. Defaults to 2 seconds.
    */
   continueBuffer?: number;
 }
@@ -236,7 +236,7 @@ export class GraffitiLocalObjects {
       actor,
       url,
     };
-  }
+  };
 
   protected async *discoverMeta<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
@@ -249,9 +249,9 @@ export class GraffitiLocalObjects {
     ContinueDiscoverParams
   > {
     // If we are continuing a discover, make sure to wait at
-    // least 1 second since the last poll to start a new one.
+    // least 2 seconds since the last poll to start a new one.
     if (continueParams) {
-      const continueBuffer = this.options.continueBuffer ?? 1000;
+      const continueBuffer = this.options.continueBuffer ?? 2000;
       const timeElapsedSinceLastDiscover =
         Date.now() - continueParams.lastDiscovered;
       if (timeElapsedSinceLastDiscover < continueBuffer) {
@@ -338,13 +338,14 @@ export class GraffitiLocalObjects {
       ifModifiedSince: number;
     },
   ): string {
+    const [channels, schema, session] = args;
     return (
       "discover:" +
       JSON.stringify({
-        channels: args[0],
-        schema: args[1],
-        actor: args[2]?.actor,
+        channels,
+        schema,
         continueParams,
+        actor: session?.actor,
       })
     );
   }
@@ -355,14 +356,21 @@ export class GraffitiLocalObjects {
       lastDiscovered: number;
       ifModifiedSince: number;
     },
+    session?: GraffitiSession | null,
   ): GraffitiObjectStreamContinue<Schema> {
-    const iterator = this.discoverMeta(args, continueParams);
+    if (session?.actor !== args[2]?.actor) {
+      throw new GraffitiErrorForbidden(
+        "Cannot continue a cursor started by another actor",
+      );
+    }
+    const iterator = this.discoverMeta<Schema>(args, continueParams);
 
     while (true) {
       const result = await iterator.next();
       if (result.done) {
         return {
-          continue: () => this.discoverContinue<Schema>(args, result.value),
+          continue: (session) =>
+            this.discoverContinue<Schema>(args, result.value, session),
           cursor: this.discoverCursor(args, result.value),
         };
       }
@@ -371,7 +379,12 @@ export class GraffitiLocalObjects {
   }
 
   discover: Graffiti["discover"] = (...args) => {
-    const iterator = this.discoverMeta(args);
+    const [channels, schema, session] = args;
+    const iterator = this.discoverMeta<(typeof args)[1]>([
+      channels,
+      schema,
+      session,
+    ]);
 
     const this_ = this;
     return (async function* () {
@@ -379,8 +392,12 @@ export class GraffitiLocalObjects {
         const result = await iterator.next();
         if (result.done) {
           return {
-            continue: () =>
-              this_.discoverContinue<(typeof args)[1]>(args, result.value),
+            continue: (session) =>
+              this_.discoverContinue<(typeof args)[1]>(
+                args,
+                result.value,
+                session,
+              ),
             cursor: this_.discoverCursor(args, result.value),
           };
         }
@@ -394,12 +411,13 @@ export class GraffitiLocalObjects {
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
     const [cursor, session] = args;
     if (cursor.startsWith("discover:")) {
+      // TODO: use AJV here
       const { channels, schema, actor, continueParams } = JSON.parse(
         cursor.slice("discover:".length),
       );
       if (actor && actor !== session?.actor) {
         throw new GraffitiErrorForbidden(
-          "Cannot continue a cursor for another actor",
+          "Cannot continue a cursor started by another actor",
         );
       }
       return this.discoverContinue<{}>(
