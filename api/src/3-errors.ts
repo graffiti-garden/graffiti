@@ -53,19 +53,3 @@ export class GraffitiErrorNotAcceptable extends Error {
     Object.setPrototypeOf(this, GraffitiErrorNotAcceptable.prototype);
   }
 }
-
-export class GraffitiErrorInvalidUrl extends Error {
-  constructor(message?: string) {
-    super(message);
-    this.name = "GraffitiErrorInvalidUrl";
-    Object.setPrototypeOf(this, GraffitiErrorInvalidUrl.prototype);
-  }
-}
-
-export class GraffitiErrorUnrecognizedUrlScheme extends Error {
-  constructor(message?: string) {
-    super(message);
-    this.name = "GraffitiErrorUnrecognizedUriScheme";
-    Object.setPrototypeOf(this, GraffitiErrorUnrecognizedUrlScheme.prototype);
-  }
-}
