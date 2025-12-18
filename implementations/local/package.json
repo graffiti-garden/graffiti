@@ -17,24 +17,34 @@
         "default": "./dist/cjs/index.js"
       }
     },
-    "./database": {
+    "./objects": {
       "import": {
-        "types": "./dist/database.d.ts",
-        "default": "./dist/esm/database.js"
+        "types": "./dist/objects.d.ts",
+        "default": "./dist/esm/objects.js"
       },
       "require": {
-        "types": "./dist/database.d.ts",
-        "default": "./dist/cjs/database.js"
+        "types": "./dist/objects.d.ts",
+        "default": "./dist/cjs/objects.js"
       }
     },
-    "./session-manager": {
+    "./identity": {
       "import": {
-        "types": "./dist/session-manager.d.ts",
-        "default": "./dist/esm/session-manager.js"
+        "types": "./dist/identity.d.ts",
+        "default": "./dist/esm/identity.js"
       },
       "require": {
-        "types": "./dist/session-manager.d.ts",
-        "default": "./dist/cjs/session-manager.js"
+        "types": "./dist/identity.d.ts",
+        "default": "./dist/cjs/identity.js"
+      }
+    },
+    "./media": {
+      "import": {
+        "types": "./dist/media.d.ts",
+        "default": "./dist/esm/media.js"
+      },
+      "require": {
+        "types": "./dist/media.d.ts",
+        "default": "./dist/cjs/media.js"
       }
     },
     "./utilities": {
