@@ -1,24 +1,17 @@
 import {
   GraffitiErrorInvalidSchema,
-  GraffitiErrorPatchError,
-  GraffitiErrorPatchTestFailed,
+  GraffitiErrorInvalidUrl,
 } from "@graffiti-garden/api";
 import type {
   GraffitiObject,
   GraffitiObjectBase,
-  GraffitiPatch,
   JSONSchema,
   GraffitiSession,
   GraffitiObjectUrl,
 } from "@graffiti-garden/api";
 import type { Ajv } from "ajv";
-import type { applyPatch } from "fast-json-patch";
 
-export function unpackObjectUrl(url: string | GraffitiObjectUrl) {
-  return typeof url === "string" ? url : url.url;
-}
-
-export function randomBase64(numBytes: number = 24) {
+export function randomBase64(numBytes: number = 32) {
   const bytes = new Uint8Array(numBytes);
   crypto.getRandomValues(bytes);
   // Convert it to base64
@@ -27,76 +20,23 @@ export function randomBase64(numBytes: number = 24) {
   return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/\=+$/, "");
 }
 
-export function applyGraffitiPatch<Prop extends keyof GraffitiPatch>(
-  apply: typeof applyPatch,
-  prop: Prop,
-  patch: GraffitiPatch,
-  object: GraffitiObjectBase,
-): void {
-  const ops = patch[prop];
-  if (!ops || !ops.length) return;
-  try {
-    object[prop] = apply(object[prop], ops, true, false).newDocument;
-  } catch (e) {
-    if (
-      typeof e === "object" &&
-      e &&
-      "name" in e &&
-      typeof e.name === "string" &&
-      "message" in e &&
-      typeof e.message === "string"
-    ) {
-      if (e.name === "TEST_OPERATION_FAILED") {
-        throw new GraffitiErrorPatchTestFailed(e.message);
-      } else {
-        throw new GraffitiErrorPatchError(e.name + ": " + e.message);
-      }
-    } else {
-      throw e;
-    }
-  }
+const OBJECT_URL_PREFIX = "graffiti:object:";
+export function encodeObjectUrl(actor: string, id: string) {
+  return `${OBJECT_URL_PREFIX}${encodeURIComponent(actor)}:${encodeURIComponent(id)}`;
 }
 
-export function compileGraffitiObjectSchema<Schema extends JSONSchema>(
-  ajv: Ajv,
-  schema: Schema,
-) {
-  try {
-    // Force the validation guard because
-    // it is too big for the type checker.
-    // Fortunately json-schema-to-ts is
-    // well tested against ajv.
-    return ajv.compile(schema) as (
-      data: GraffitiObjectBase,
-    ) => data is GraffitiObject<Schema>;
-  } catch (error) {
-    throw new GraffitiErrorInvalidSchema(
-      error instanceof Error ? error.message : undefined,
+export function decodeObjectUrl(url: string) {
+  if (!url.startsWith(OBJECT_URL_PREFIX)) {
+    throw new GraffitiErrorInvalidUrl(
+      `Object URL does not start with ${OBJECT_URL_PREFIX}`,
     );
   }
-}
-
-export function maskGraffitiObject(
-  object: GraffitiObjectBase,
-  channels: string[],
-  session?: GraffitiSession | null,
-): void {
-  if (object.actor !== session?.actor) {
-    object.allowed = object.allowed && session ? [session.actor] : undefined;
-    object.channels = object.channels.filter((channel) =>
-      channels.includes(channel),
+  const slices = url.slice(OBJECT_URL_PREFIX.length).split(":");
+  if (slices.length !== 2) {
+    throw new GraffitiErrorInvalidUrl(
+      "Object has too many colon-seperated parts",
     );
   }
-}
-export function isActorAllowedGraffitiObject(
-  object: GraffitiObjectBase,
-  session?: GraffitiSession | null,
-) {
-  return (
-    object.allowed === undefined ||
-    object.allowed === null ||
-    (!!session?.actor &&
-      (object.actor === session.actor ||
-        object.allowed.includes(session.actor)))
-  );
+  const [actor, id] = slices.map(decodeURIComponent);
+  return { actor, id };
 }

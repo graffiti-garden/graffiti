@@ -1,28 +1,23 @@
 import type {
   Graffiti,
   GraffitiObjectBase,
-  GraffitiObjectUrl,
   JSONSchema,
   GraffitiSession,
   GraffitiObjectStreamContinue,
   GraffitiObjectStreamContinueEntry,
+  GraffitiPostObject,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorForbidden,
-  GraffitiErrorPatchError,
-} from "@graffiti-garden/api";
-import {
-  randomBase64,
-  applyGraffitiPatch,
+  unpackObjectUrl,
   maskGraffitiObject,
   isActorAllowedGraffitiObject,
   compileGraffitiObjectSchema,
-  unpackObjectUrl,
-} from "./utilities.js";
+} from "@graffiti-garden/api";
+import { randomBase64, decodeObjectUrl, encodeObjectUrl } from "./utilities.js";
 import type Ajv from "ajv";
-import type { applyPatch } from "fast-json-patch";
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -37,61 +32,37 @@ export interface GraffitiLocalOptions {
    */
   pouchDBOptions?: PouchDB.Configuration.DatabaseConfiguration;
   /**
-   * Includes the scheme and other information (possibly domain name)
-   * to prefix prefixes all URLs put in the system. Defaults to `graffiti:local`.
-   */
-  origin?: string;
-  /**
-   * Whether to allow putting objects at arbtirary URLs, i.e.
-   * URLs that are *not* prefixed with the origin or not generated
-   * by the system. Defaults to `false`.
-   *
-   * Allows this implementation to be used as a client-side cache
-   * for remote sources.
-   */
-  allowSettingArbitraryUrls?: boolean;
-  /**
-   * Whether to allow the user to set the lastModified field
-   * when putting objects. Defaults to `false`.
-   *
-   * Allows this implementation to be used as a client-side cache
-   * for remote sources.
-   */
-  allowSettinngLastModified?: boolean;
-  /**
-   * An optional Ajv instance to use for schema validation.
-   * If not provided, an internal instance will be created.
-   */
-  ajv?: Ajv;
-  /**
    * Wait at least this long (in milliseconds) before continuing a stream.
    * A basic form of rate limiting. Defaults to 1 seconds.
    */
   continueBuffer?: number;
 }
 
-const DEFAULT_ORIGIN = "graffiti:local:";
+type GraffitiObjectData = {
+  tombstone: boolean;
+  value: {};
+  channels: string[];
+  allowed?: string[] | null;
+  lastModified: number;
+};
 
-// During stream continuations, return objects
-// that have possibly already been seen over this window
-const LAST_MODIFIED_BUFFER = 60000;
-
-type GraffitiObjectWithTombstone = GraffitiObjectBase & { tombstone: boolean };
+type ContinueDiscoverParams = {
+  lastDiscovered: number;
+  ifModifiedSince: number;
+};
 
 /**
  * An implementation of only the database operations of the
  * GraffitiAPI without synchronization or session management.
  */
 export class GraffitiLocalDatabase
-  implements Omit<Graffiti, "login" | "logout" | "sessionEvents">
+  implements
+    Pick<Graffiti, "post" | "get" | "delete" | "discover" | "continueDiscover">
 {
-  protected db_:
-    | Promise<PouchDB.Database<GraffitiObjectWithTombstone>>
-    | undefined;
-  protected applyPatch_: Promise<typeof applyPatch> | undefined;
+  protected db_: Promise<PouchDB.Database<GraffitiObjectData>> | undefined;
   protected ajv_: Promise<Ajv> | undefined;
   protected readonly options: GraffitiLocalOptions;
-  protected readonly origin: string;
+  protected operationClock: number = 0;
 
   get db() {
     if (!this.db_) {
@@ -101,7 +72,7 @@ export class GraffitiLocalDatabase
           name: "graffitiDb",
           ...this.options.pouchDBOptions,
         };
-        const db = new PouchDB<GraffitiObjectWithTombstone>(
+        const db = new PouchDB<GraffitiObjectData>(
           pouchDbOptions.name,
           pouchDbOptions,
         );
@@ -111,7 +82,7 @@ export class GraffitiLocalDatabase
             _id: "_design/indexes",
             views: {
               objectsPerChannelAndLastModified: {
-                map: function (object: GraffitiObjectWithTombstone) {
+                map: function (object: GraffitiObjectData) {
                   const paddedLastModified = object.lastModified
                     .toString()
                     .padStart(15, "0");
@@ -122,35 +93,6 @@ export class GraffitiLocalDatabase
                     emit(id);
                   });
                 }.toString(),
-              },
-              orphansPerActorAndLastModified: {
-                map: function (object: GraffitiObjectWithTombstone) {
-                  if (object.channels.length === 0) {
-                    const paddedLastModified = object.lastModified
-                      .toString()
-                      .padStart(15, "0");
-                    const id =
-                      encodeURIComponent(object.actor) +
-                      "/" +
-                      paddedLastModified;
-                    //@ts-ignore
-                    emit(id);
-                  }
-                }.toString(),
-              },
-              channelStatsPerActor: {
-                map: function (object: GraffitiObjectWithTombstone) {
-                  if (object.tombstone) return;
-                  object.channels.forEach(function (channel) {
-                    const id =
-                      encodeURIComponent(object.actor) +
-                      "/" +
-                      encodeURIComponent(channel);
-                    //@ts-ignore
-                    emit(id, object.lastModified);
-                  });
-                }.toString(),
-                reduce: "_stats",
               },
             },
           })
@@ -174,101 +116,33 @@ export class GraffitiLocalDatabase
     return this.db_;
   }
 
-  protected get applyPatch() {
-    if (!this.applyPatch_) {
-      this.applyPatch_ = (async () => {
-        const imported = await import("fast-json-patch");
-        return imported.applyPatch || imported.default.applyPatch;
-      })();
-    }
-    return this.applyPatch_;
-  }
-
   protected get ajv() {
     if (!this.ajv_) {
-      this.ajv_ = this.options.ajv
-        ? Promise.resolve(this.options.ajv)
-        : (async () => {
-            const { default: Ajv } = await import("ajv");
-            return new Ajv({ strict: false });
-          })();
+      this.ajv_ = (async () => {
+        const { default: Ajv } = await import("ajv");
+        return new Ajv({ strict: false });
+      })();
     }
     return this.ajv_;
   }
 
-  protected extractGraffitiObject(
-    object: GraffitiObjectWithTombstone,
-  ): GraffitiObjectBase {
-    const { value, channels, allowed, url, actor, lastModified } = object;
-    return {
-      value,
-      channels,
-      allowed,
-      url,
-      actor,
-      lastModified,
-    };
-  }
-
   constructor(options?: GraffitiLocalOptions) {
     this.options = options ?? {};
-    this.origin = this.options.origin ?? DEFAULT_ORIGIN;
-    if (!this.origin.endsWith(":") && !this.origin.endsWith("/")) {
-      this.origin += "/";
-    }
-  }
-
-  protected async allDocsAtLocation(objectUrl: string | GraffitiObjectUrl) {
-    const url = unpackObjectUrl(objectUrl) + "/";
-    const results = await (
-      await this.db
-    ).allDocs({
-      startkey: url,
-      endkey: url + "\uffff", // \uffff is the last unicode character
-      include_docs: true,
-    });
-    const docs = results.rows
-      .map((row) => row.doc)
-      // Remove undefined docs
-      .reduce<
-        PouchDB.Core.ExistingDocument<
-          GraffitiObjectWithTombstone & PouchDB.Core.AllDocsMeta
-        >[]
-      >((acc, doc) => {
-        if (doc) acc.push(doc);
-        return acc;
-      }, []);
-    return docs;
-  }
-
-  protected docId(objectUrl: GraffitiObjectUrl) {
-    return objectUrl.url + "/" + randomBase64();
   }
 
   get: Graffiti["get"] = async (...args) => {
     const [urlObject, schema, session] = args;
 
-    // TODO: Rate limit getting the same object
-    // over and over
+    const url = unpackObjectUrl(urlObject);
 
-    const docsAll = await this.allDocsAtLocation(urlObject);
-
-    // Filter out ones not allowed
-    const docs = docsAll.filter((doc) =>
-      isActorAllowedGraffitiObject(doc, session),
-    );
-    if (!docs.length)
+    let doc: GraffitiObjectData;
+    try {
+      doc = await (await this.db).get(url);
+    } catch (error) {
       throw new GraffitiErrorNotFound(
         "The object you are trying to get either does not exist or you are not allowed to see it",
       );
-
-    // Get the most recent document
-    const doc = docs.reduce((a, b) =>
-      a.lastModified > b.lastModified ||
-      (a.lastModified === b.lastModified && !a.tombstone && b.tombstone)
-        ? a
-        : b,
-    );
+    }
 
     if (doc.tombstone) {
       throw new GraffitiErrorNotFound(
@@ -276,7 +150,21 @@ export class GraffitiLocalDatabase
       );
     }
 
-    const object = this.extractGraffitiObject(doc);
+    const { actor } = decodeObjectUrl(url);
+    const { value, channels, allowed } = doc;
+    const object: GraffitiObjectBase = {
+      value,
+      channels,
+      allowed,
+      url,
+      actor,
+    };
+
+    if (!isActorAllowedGraffitiObject(object, session)) {
+      throw new GraffitiErrorNotFound(
+        "The object you are trying to get either does not exist or you are not allowed to see it",
+      );
+    }
 
     // Mask out the allowed list and channels
     // if the user is not the owner
@@ -289,462 +177,177 @@ export class GraffitiLocalDatabase
     return object;
   };
 
-  /**
-   * Deletes all docs at a particular location.
-   * If the `keepLatest` flag is set to true,
-   * the doc with the most recent timestamp will be
-   * spared. If there are multiple docs with the same
-   * timestamp, the one with the highest `_id` will be
-   * spared.
-   */
-  protected async deleteAtLocation(
-    url: GraffitiObjectUrl | string,
-    options: {
-      keepLatest?: boolean;
-      session?: GraffitiSession;
-    } = {
-      keepLatest: false,
-    },
-  ) {
-    const docsAtLocationAll = await this.allDocsAtLocation(url);
-    const docsAtLocationAllowed = options.session
-      ? docsAtLocationAll.filter((doc) =>
-          isActorAllowedGraffitiObject(doc, options.session),
-        )
-      : docsAtLocationAll;
-    if (!docsAtLocationAllowed.length) {
-      throw new GraffitiErrorNotFound(
-        "The object you are trying to delete either does not exist or you are not allowed to see it",
-      );
-    } else if (
-      options.session &&
-      docsAtLocationAllowed.some((doc) => doc.actor !== options.session?.actor)
-    ) {
-      throw new GraffitiErrorForbidden(
-        "You cannot delete an object owned by another actor",
-      );
-    }
-    const docsAtLocation = docsAtLocationAllowed.filter(
-      (doc) => !doc.tombstone,
-    );
-    if (!docsAtLocation.length) return undefined;
-
-    // Get the most recent lastModified timestamp.
-    const latestModified = docsAtLocation
-      .map((doc) => doc.lastModified)
-      .reduce((a, b) => (a > b ? a : b));
-
-    // Delete all old docs
-    const docsToDelete = docsAtLocation.filter(
-      (doc) => !options.keepLatest || doc.lastModified < latestModified,
-    );
-
-    // For docs with the same timestamp,
-    // keep the one with the highest _id
-    // to break concurrency ties
-    const concurrentDocsAll = docsAtLocation.filter(
-      (doc) => options.keepLatest && doc.lastModified === latestModified,
-    );
-    if (concurrentDocsAll.length) {
-      const keepDocId = concurrentDocsAll
-        .map((doc) => doc._id)
-        .reduce((a, b) => (a > b ? a : b));
-      const concurrentDocsToDelete = concurrentDocsAll.filter(
-        (doc) => doc._id !== keepDocId,
-      );
-      docsToDelete.push(...concurrentDocsToDelete);
-    }
-
-    const lastModified = options.keepLatest
-      ? latestModified
-      : new Date().getTime();
-
-    const deleteResults = await (
-      await this.db
-    ).bulkDocs<GraffitiObjectBase>(
-      docsToDelete.map((doc) => ({
-        ...doc,
-        tombstone: true,
-        lastModified,
-      })),
-    );
-
-    // Get one of the docs that was deleted
-    let deletedObject: GraffitiObjectBase | undefined = undefined;
-    for (const resultOrError of deleteResults) {
-      if ("ok" in resultOrError) {
-        const { id } = resultOrError;
-        const deletedDoc = docsToDelete.find((doc) => doc._id === id);
-        if (deletedDoc) {
-          deletedObject = {
-            ...this.extractGraffitiObject(deletedDoc),
-            lastModified,
-          };
-          break;
-        }
-      }
-    }
-
-    return deletedObject;
-  }
-
   delete: Graffiti["delete"] = async (...args) => {
-    const [url, session] = args;
-    const deletedObject = await this.deleteAtLocation(url, {
-      session,
-    });
-    if (!deletedObject) {
-      throw new GraffitiErrorNotFound("The object has already been deleted");
+    const [urlObject, session] = args;
+
+    const url = unpackObjectUrl(urlObject);
+    const { actor } = decodeObjectUrl(url);
+    if (actor !== session.actor) {
+      throw new GraffitiErrorForbidden(
+        "You cannot delete an object that you did not create.",
+      );
     }
-    return deletedObject;
+
+    let doc: GraffitiObjectData & PouchDB.Core.IdMeta & PouchDB.Core.GetMeta;
+    try {
+      doc = await (await this.db).get(url);
+    } catch {
+      throw new GraffitiErrorNotFound("Object not found.");
+    }
+
+    if (doc.tombstone) {
+      throw new GraffitiErrorNotFound("Object not found.");
+    }
+
+    // Set the tombstone and update lastModified
+    doc.tombstone = true;
+    doc.lastModified = this.operationClock;
+    try {
+      await (await this.db).put(doc);
+    } catch {
+      throw new GraffitiErrorNotFound("Object not found.");
+    }
+    this.operationClock++;
+
+    return;
   };
 
-  put: Graffiti["put"] = async (...args) => {
-    const [objectPartial, session] = args;
-    if (objectPartial.actor && objectPartial.actor !== session.actor) {
-      throw new GraffitiErrorForbidden(
-        "Cannot put an object with a different actor than the session actor",
-      );
+  async post<Schema extends JSONSchema>(
+    objectPartial: GraffitiPostObject<Schema>,
+    session: GraffitiSession,
+  ): Promise<
+    GraffitiPostObject<Schema> & {
+      actor: string;
+      url: string;
     }
+  > {
+    const actor = session.actor;
+    const id = randomBase64();
+    const url = encodeObjectUrl(actor, id);
 
-    if (objectPartial.url) {
-      let oldObject: GraffitiObjectBase | undefined;
-      try {
-        oldObject = await this.get(objectPartial.url, {}, session);
-      } catch (e) {
-        if (e instanceof GraffitiErrorNotFound) {
-          if (!this.options.allowSettingArbitraryUrls) {
-            throw new GraffitiErrorNotFound(
-              "The object you are trying to replace does not exist or you are not allowed to see it",
-            );
-          }
-        } else {
-          throw e;
-        }
-      }
-      if (oldObject?.actor !== session.actor) {
-        throw new GraffitiErrorForbidden(
-          "The object you are trying to replace is owned by another actor",
-        );
-      }
-    }
-
-    const lastModified =
-      ((this.options.allowSettinngLastModified ?? false) &&
-        objectPartial.lastModified) ||
-      new Date().getTime();
-
-    const object: GraffitiObjectWithTombstone = {
-      value: objectPartial.value,
-      channels: objectPartial.channels,
-      allowed: objectPartial.allowed,
-      url: objectPartial.url ?? this.origin + randomBase64(),
-      actor: session.actor,
+    const { value, channels, allowed } = objectPartial;
+    const object: GraffitiObjectData = {
+      value,
+      channels,
+      allowed,
+      lastModified: this.operationClock,
       tombstone: false,
-      lastModified,
     };
 
     await (
       await this.db
     ).put({
-      _id: this.docId(object),
+      _id: url,
       ...object,
     });
-
-    // Delete the old object
-    const previousObject = await this.deleteAtLocation(object, {
-      keepLatest: true,
-    });
-    if (previousObject) {
-      return previousObject;
-    } else {
-      return {
-        ...object,
-        value: {},
-        channels: [],
-        allowed: [],
-        tombstone: true,
-      };
-    }
-  };
-
-  patch: Graffiti["patch"] = async (...args) => {
-    const [patch, url, session] = args;
-    let originalObject: GraffitiObjectBase;
-    try {
-      originalObject = await this.get(url, {}, session);
-    } catch (e) {
-      if (e instanceof GraffitiErrorNotFound) {
-        throw new GraffitiErrorNotFound(
-          "The object you are trying to patch does not exist or you are not allowed to see it",
-        );
-      } else {
-        throw e;
-      }
-    }
-    if (originalObject.actor !== session.actor) {
-      throw new GraffitiErrorForbidden(
-        "The object you are trying to patch is owned by another actor",
-      );
-    }
-
-    // Patch it outside of the database
-    const patchObject: GraffitiObjectBase = { ...originalObject };
-    for (const prop of ["value", "channels", "allowed"] as const) {
-      applyGraffitiPatch(await this.applyPatch, prop, patch, patchObject);
-    }
-
-    // Make sure the value is an object
-    if (
-      typeof patchObject.value !== "object" ||
-      Array.isArray(patchObject.value) ||
-      !patchObject.value
-    ) {
-      throw new GraffitiErrorPatchError("value is no longer an object");
-    }
-
-    // Make sure the channels are an array of strings
-    if (
-      !Array.isArray(patchObject.channels) ||
-      !patchObject.channels.every((channel) => typeof channel === "string")
-    ) {
-      throw new GraffitiErrorPatchError(
-        "channels are no longer an array of strings",
-      );
-    }
-
-    // Make sure the allowed list is an array of strings or undefined
-    if (
-      patchObject.allowed &&
-      (!Array.isArray(patchObject.allowed) ||
-        !patchObject.allowed.every((allowed) => typeof allowed === "string"))
-    ) {
-      throw new GraffitiErrorPatchError(
-        "allowed list is not an array of strings",
-      );
-    }
-
-    patchObject.lastModified = new Date().getTime();
-    await (
-      await this.db
-    ).put({
-      ...patchObject,
-      tombstone: false,
-      _id: this.docId(patchObject),
-    });
-
-    // Delete the old object
-    await this.deleteAtLocation(patchObject, {
-      keepLatest: true,
-    });
+    this.operationClock++;
 
     return {
-      ...originalObject,
-      lastModified: patchObject.lastModified,
+      ...objectPartial,
+      actor,
+      url,
     };
-  };
-
-  protected queryLastModifiedSuffixes(
-    schema: JSONSchema,
-    lastModified?: number,
-  ) {
-    // Use the index for queries over ranges of lastModified
-    let startKeySuffix = "";
-    let endKeySuffix = "\uffff";
-    if (
-      typeof schema === "object" &&
-      schema.properties?.lastModified &&
-      typeof schema.properties.lastModified === "object"
-    ) {
-      const lastModifiedSchema = schema.properties.lastModified;
-
-      const minimum =
-        lastModified && lastModifiedSchema.minimum
-          ? Math.max(lastModified, lastModifiedSchema.minimum)
-          : (lastModified ?? lastModifiedSchema.minimum);
-      const exclusiveMinimum = lastModifiedSchema.exclusiveMinimum;
-
-      let intMinimum: number | undefined;
-      if (exclusiveMinimum !== undefined) {
-        intMinimum = Math.ceil(exclusiveMinimum);
-        intMinimum === exclusiveMinimum && intMinimum++;
-      } else if (minimum !== undefined) {
-        intMinimum = Math.ceil(minimum);
-      }
-
-      if (intMinimum !== undefined) {
-        startKeySuffix = intMinimum.toString().padStart(15, "0");
-      }
-
-      const maximum = lastModifiedSchema.maximum;
-      const exclusiveMaximum = lastModifiedSchema.exclusiveMaximum;
-
-      let intMaximum: number | undefined;
-      if (exclusiveMaximum !== undefined) {
-        intMaximum = Math.floor(exclusiveMaximum);
-        intMaximum === exclusiveMaximum && intMaximum--;
-      } else if (maximum !== undefined) {
-        intMaximum = Math.floor(maximum);
-      }
-
-      if (intMaximum !== undefined) {
-        endKeySuffix = intMaximum.toString().padStart(15, "0");
-      }
-    }
-    return {
-      startKeySuffix,
-      endKeySuffix,
-    };
-  }
-
-  protected async *streamObjects<Schema extends JSONSchema>(
-    index: string,
-    startkey: string,
-    endkey: string,
-    validate: ReturnType<typeof compileGraffitiObjectSchema<Schema>>,
-    session: GraffitiSession | undefined | null,
-    ifModifiedSince: number | undefined,
-    channels?: string[],
-    processedIds?: Set<string>,
-  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
-    if (ifModifiedSince !== undefined) {
-      // Subtract a minute to make sure we don't miss any objects
-      ifModifiedSince -= LAST_MODIFIED_BUFFER;
-    }
-
-    const result = await (
-      await this.db
-    ).query<GraffitiObjectWithTombstone>(index, {
-      startkey,
-      endkey,
-      include_docs: true,
-    });
-
-    for (const row of result.rows) {
-      const doc = row.doc;
-      if (!doc) continue;
-
-      if (processedIds?.has(doc._id)) continue;
-      processedIds?.add(doc._id);
-
-      // If this is not a continuation, skip tombstones
-      if (ifModifiedSince === undefined && doc.tombstone) continue;
-
-      const object = this.extractGraffitiObject(doc);
-
-      if (channels) {
-        if (!isActorAllowedGraffitiObject(object, session)) continue;
-        maskGraffitiObject(object, channels, session);
-      }
-
-      if (!validate(object)) continue;
-
-      yield doc.tombstone
-        ? {
-            tombstone: true,
-            object: {
-              url: object.url,
-              lastModified: object.lastModified,
-            },
-          }
-        : { object };
-    }
-  }
-
-  protected async waitToContinue(ifModifiedSince: number | undefined) {
-    if (ifModifiedSince === undefined) return;
-    const continueBuffer = this.options.continueBuffer ?? 1000;
-    const timeElapsedSinceContinue = Date.now() - ifModifiedSince;
-    if (timeElapsedSinceContinue < continueBuffer) {
-      // Continue was called too soon,
-      // wait a bit before continuing
-      await new Promise((resolve) =>
-        setTimeout(resolve, continueBuffer - timeElapsedSinceContinue),
-      );
-    }
   }
 
   protected async *discoverMeta<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
-    ifModifiedSince?: number,
+    continueParams?: {
+      lastDiscovered: number;
+      ifModifiedSince: number;
+    },
   ): AsyncGenerator<
     GraffitiObjectStreamContinueEntry<Schema>,
-    number | undefined
+    ContinueDiscoverParams
   > {
-    await this.waitToContinue(ifModifiedSince);
+    // If we are continuing a discover, make sure to wait at
+    // least 1 second since the last poll to start a new one.
+    if (continueParams) {
+      const continueBuffer = this.options.continueBuffer ?? 1000;
+      const timeElapsedSinceLastDiscover =
+        Date.now() - continueParams.lastDiscovered;
+      if (timeElapsedSinceLastDiscover < continueBuffer) {
+        // Continue was called too soon,
+        // wait a bit before continuing
+        await new Promise((resolve) =>
+          setTimeout(resolve, continueBuffer - timeElapsedSinceLastDiscover),
+        );
+      }
+    }
 
-    const [channels, schema, session] = args;
+    const [discoverChannels, schema, session] = args;
     const validate = compileGraffitiObjectSchema(await this.ajv, schema);
-    const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
-      schema,
-      ifModifiedSince,
-    );
+    const startKeySuffix = continueParams
+      ? continueParams.ifModifiedSince.toString().padStart(15, "0")
+      : "";
+    const endKeySuffix = "\uffff";
 
-    const processedIds = new Set<string>();
+    const processedUrls = new Set<string>();
 
-    const startTime = new Date().getTime();
+    const startTime = this.operationClock;
 
-    for (const channel of channels) {
+    for (const channel of discoverChannels) {
       const keyPrefix = encodeURIComponent(channel) + "/";
       const startkey = keyPrefix + startKeySuffix;
       const endkey = keyPrefix + endKeySuffix;
 
-      const iterator = this.streamObjects<Schema>(
-        "indexes/objectsPerChannelAndLastModified",
+      const result = await (
+        await this.db
+      ).query<GraffitiObjectData>("indexes/objectsPerChannelAndLastModified", {
         startkey,
         endkey,
-        validate,
-        session,
-        ifModifiedSince,
-        channels,
-        processedIds,
-      );
+        include_docs: true,
+      });
 
-      for await (const result of iterator) yield result;
+      for (const row of result.rows) {
+        const doc = row.doc;
+        if (!doc) continue;
+
+        const url = doc._id;
+
+        if (processedUrls.has(url)) continue;
+        processedUrls.add(url);
+
+        // If this is not a continuation, skip tombstones
+        if (!continueParams && doc.tombstone) continue;
+
+        const { tombstone, value, channels, allowed } = doc;
+        const { actor } = decodeObjectUrl(url);
+
+        const object: GraffitiObjectBase = {
+          url,
+          value,
+          allowed,
+          channels,
+          actor,
+        };
+
+        if (!isActorAllowedGraffitiObject(object, session)) continue;
+
+        maskGraffitiObject(object, discoverChannels, session);
+
+        if (!validate(object)) continue;
+
+        yield tombstone
+          ? {
+              tombstone: true,
+              object: { url },
+            }
+          : { object };
+      }
     }
 
-    return startTime;
-  }
-
-  protected async *recoverOrphansMeta<Schema extends JSONSchema>(
-    args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>,
-    ifModifiedSince?: number,
-  ): AsyncGenerator<
-    GraffitiObjectStreamContinueEntry<Schema>,
-    number | undefined
-  > {
-    await this.waitToContinue(ifModifiedSince);
-
-    const [schema, session] = args;
-    const { startKeySuffix, endKeySuffix } = this.queryLastModifiedSuffixes(
-      schema,
-      ifModifiedSince,
-    );
-    const keyPrefix = encodeURIComponent(session.actor) + "/";
-    const startkey = keyPrefix + startKeySuffix;
-    const endkey = keyPrefix + endKeySuffix;
-
-    const validate = compileGraffitiObjectSchema(await this.ajv, schema);
-
-    const startTime = new Date().getTime();
-
-    const iterator = this.streamObjects<Schema>(
-      "indexes/orphansPerActorAndLastModified",
-      startkey,
-      endkey,
-      validate,
-      session,
-      ifModifiedSince,
-    );
-
-    for await (const result of iterator) yield result;
-
-    return startTime;
+    return {
+      lastDiscovered: Date.now(),
+      ifModifiedSince: startTime,
+    };
   }
 
   protected discoverCursor(
     args: Parameters<typeof Graffiti.prototype.discover<{}>>,
-    ifModifiedSince?: number,
+    continueParams: {
+      lastDiscovered: number;
+      ifModifiedSince: number;
+    },
   ): string {
     return (
       "discover:" +
@@ -752,24 +355,26 @@ export class GraffitiLocalDatabase
         channels: args[0],
         schema: args[1],
         actor: args[2]?.actor,
-        ifModifiedSince: ifModifiedSince,
+        continueParams,
       })
     );
   }
 
   protected async *discoverContinue<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
-    ifModifiedSince?: number,
+    continueParams: {
+      lastDiscovered: number;
+      ifModifiedSince: number;
+    },
   ): GraffitiObjectStreamContinue<Schema> {
-    const iterator = this.discoverMeta(args, ifModifiedSince);
+    const iterator = this.discoverMeta(args, continueParams);
 
     while (true) {
       const result = await iterator.next();
       if (result.done) {
-        const ifModifiedSince = result.value;
         return {
-          continue: () => this.discoverContinue<Schema>(args, ifModifiedSince),
-          cursor: this.discoverCursor(args, ifModifiedSince),
+          continue: () => this.discoverContinue<Schema>(args, result.value),
+          cursor: this.discoverCursor(args, result.value),
         };
       }
       yield result.value;
@@ -797,99 +402,9 @@ export class GraffitiLocalDatabase
     })();
   };
 
-  protected recoverOrphansCursor(
-    args: Parameters<typeof Graffiti.prototype.recoverOrphans<{}>>,
-    ifModifiedSince?: number,
-  ): string {
-    return (
-      "orphans:" +
-      JSON.stringify({
-        schema: args[0],
-        actor: args[1]?.actor,
-        ifModifiedSince,
-      })
-    );
-  }
-
-  protected async *recoverOrphansContinue<Schema extends JSONSchema>(
-    args: Parameters<typeof Graffiti.prototype.recoverOrphans<Schema>>,
-    ifModifiedSince?: number,
-  ): GraffitiObjectStreamContinue<Schema> {
-    const iterator = this.recoverOrphansMeta(args, ifModifiedSince);
-
-    while (true) {
-      const result = await iterator.next();
-      if (result.done) {
-        const ifModifiedSince = result.value;
-        return {
-          continue: () =>
-            this.recoverOrphansContinue<Schema>(args, ifModifiedSince),
-          cursor: this.recoverOrphansCursor(args, ifModifiedSince),
-        };
-      }
-      yield result.value;
-    }
-  }
-
-  recoverOrphans: Graffiti["recoverOrphans"] = (...args) => {
-    const iterator = this.recoverOrphansMeta(args);
-
-    const this_ = this;
-    return (async function* () {
-      while (true) {
-        const result = await iterator.next();
-        if (result.done) {
-          return {
-            continue: () =>
-              this_.recoverOrphansContinue<(typeof args)[0]>(
-                args,
-                result.value,
-              ),
-            cursor: this_.recoverOrphansCursor(args, result.value),
-          };
-        }
-        // Make sure to filter out tombstones
-        if (result.value.tombstone) continue;
-        yield result.value;
-      }
-    })();
-  };
-
-  channelStats: Graffiti["channelStats"] = (session) => {
-    const this_ = this;
-    return (async function* () {
-      const keyPrefix = encodeURIComponent(session.actor) + "/";
-      const result = await (
-        await this_.db
-      ).query("indexes/channelStatsPerActor", {
-        startkey: keyPrefix,
-        endkey: keyPrefix + "\uffff",
-        reduce: true,
-        group: true,
-      });
-      for (const row of result.rows) {
-        const channelEncoded = row.key.split("/")[1];
-        if (typeof channelEncoded !== "string") continue;
-        const { count, max: lastModified } = row.value;
-        if (typeof count !== "number" || typeof lastModified !== "number")
-          continue;
-        yield {
-          value: {
-            channel: decodeURIComponent(channelEncoded),
-            count,
-            lastModified,
-          },
-        };
-      }
-    })();
-  };
-
-  continueObjectStream: Graffiti["continueObjectStream"] = (
-    cursor,
-    session,
-  ) => {
+  continueDiscover: Graffiti["continueDiscover"] = (cursor, session) => {
     if (cursor.startsWith("discover:")) {
-      const { channels, schema, actor, ifModifiedSince } = JSON.parse(
+      const { channels, schema, actor, continueParams } = JSON.parse(
         cursor.slice("discover:".length),
       );
       if (actor && actor !== session?.actor) {
@@ -899,20 +414,7 @@ export class GraffitiLocalDatabase
       }
       return this.discoverContinue<{}>(
         [channels, schema, session],
-        ifModifiedSince,
-      );
-    } else if (cursor.startsWith("orphans:")) {
-      const { schema, actor, ifModifiedSince } = JSON.parse(
-        cursor.slice("orphans:".length),
-      );
-      if (!session || actor !== session?.actor) {
-        throw new GraffitiErrorForbidden(
-          "Cannot continue a cursor for another actor",
-        );
-      }
-      return this.recoverOrphansContinue<{}>(
-        [schema, session],
-        ifModifiedSince,
+        continueParams,
       );
     } else {
       throw new GraffitiErrorNotFound("Cursor not found");
