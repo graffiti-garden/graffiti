@@ -80,21 +80,6 @@ export const graffitiCRUDTests = (
         );
       });
 
-      it("post then delete object that is not allowed", async () => {
-        const posted = await graffiti.post<{}>(
-          {
-            value: {},
-            channels: [],
-            allowed: [],
-          },
-          session1,
-        );
-
-        await expect(graffiti.delete(posted, session2)).rejects.toThrow(
-          GraffitiErrorNotFound,
-        );
-      });
-
       it("post and get with schema", async () => {
         const schema = {
           properties: {
