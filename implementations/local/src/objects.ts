@@ -58,7 +58,6 @@ export class GraffitiLocalObjects {
   protected db_: Promise<PouchDB.Database<GraffitiObjectData>> | undefined;
   protected ajv_: Promise<Ajv> | undefined;
   protected readonly options: GraffitiLocalOptions;
-  protected operationClock: number = 0;
 
   get db() {
     if (!this.db_) {
@@ -120,6 +119,10 @@ export class GraffitiLocalObjects {
       })();
     }
     return this.ajv_;
+  }
+
+  protected async getOperationClock() {
+    return Number((await (await this.db).info()).update_seq);
   }
 
   constructor(options?: GraffitiLocalOptions) {
@@ -196,13 +199,12 @@ export class GraffitiLocalObjects {
 
     // Set the tombstone and update lastModified
     doc.tombstone = true;
-    doc.lastModified = this.operationClock;
+    doc.lastModified = await this.getOperationClock();
     try {
       await (await this.db).put(doc);
     } catch {
       throw new GraffitiErrorNotFound("Object not found.");
     }
-    this.operationClock++;
 
     return;
   };
@@ -219,7 +221,7 @@ export class GraffitiLocalObjects {
       value,
       channels,
       allowed,
-      lastModified: this.operationClock,
+      lastModified: await this.getOperationClock(),
       tombstone: false,
     };
 
@@ -229,7 +231,6 @@ export class GraffitiLocalObjects {
       _id: url,
       ...object,
     });
-    this.operationClock++;
 
     return {
       ...objectPartial,
@@ -272,7 +273,7 @@ export class GraffitiLocalObjects {
 
     const processedUrls = new Set<string>();
 
-    const startTime = this.operationClock;
+    const startTime = await this.getOperationClock();
 
     for (const channel of discoverChannels) {
       const keyPrefix = encodeURIComponent(channel) + "/";
