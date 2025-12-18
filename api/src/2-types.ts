@@ -315,7 +315,9 @@ export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
    * @returns A function that creates new stream that continues from where the original stream left off.
    * It preserves the typing of the original stream.
    */
-  continue: () => GraffitiObjectStreamContinue<Schema>;
+  continue: (
+    session?: GraffitiSession | null,
+  ) => GraffitiObjectStreamContinue<Schema>;
   /**
    * A string that can be serialized and stored to resume the stream later.
    * It must be passed to the {@link Graffiti.continueDiscover} method
