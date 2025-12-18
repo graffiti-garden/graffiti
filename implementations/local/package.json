@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/implementation-local",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A local implementation of the Graffiti API using PouchDB",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
