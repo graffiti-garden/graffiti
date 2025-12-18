@@ -110,7 +110,7 @@
                         document.getElementById("post-content").value;
                     if (!content.length) return;
 
-                    await graffiti.put(
+                    await graffiti.post(
                         {
                             value: { content },
                             channels: [channel],
@@ -179,7 +179,7 @@
                                 const footer = document.createElement("footer");
                                 const content = document.createElement("p");
                                 const author = document.createElement("p");
-                                author.textContent = `Author: ${post.actor}`;
+                                author.textContent = `Author: ${await graffiti.actorToHandle(post.actor)}`;
                                 content.textContent = `Message: ${post.value.content}`;
                                 main.appendChild(content);
                                 header.appendChild(author);
@@ -211,19 +211,21 @@
                                         async () => {
                                             const newContent = prompt(
                                                 "Enter a different message:",
+                                                post.value.content,
                                             );
                                             if (newContent) {
-                                                await graffiti.patch(
+                                                await graffiti.post(
                                                     {
-                                                        value: [
-                                                            {
-                                                                op: "replace",
-                                                                path: "/content",
-                                                                value: newContent,
-                                                            },
-                                                        ],
+                                                        ...post,
+                                                        value: {
+                                                            ...post.value,
+                                                            content: newContent,
+                                                        },
                                                     },
-                                                    post.url,
+                                                    session,
+                                                );
+                                                await graffiti.delete(
+                                                    post,
                                                     session,
                                                 );
                                             }
