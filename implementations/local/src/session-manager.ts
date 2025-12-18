@@ -66,37 +66,29 @@ export class GraffitiLocalSessionManager {
     }
   }
 
-  login: Graffiti["login"] = async (proposal) => {
-    let actor = proposal?.actor;
-    if (!actor && typeof window !== "undefined") {
-      const response = window.prompt(
-        `This is an insecure implementation of the Graffiti API \
-  for *demo purposes only*. Do not store any sensitive information \
-  here.\
-  \n\n\
-  Simply choose a username to log in.`,
-      );
-      if (response) actor = response;
+  login: Graffiti["login"] = async (actor) => {
+    // Wait a tick for the browser to update the UI
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    if (typeof window !== "undefined") {
+      const response = window.prompt("Choose a username to log in.", actor);
+      actor = response ?? undefined;
     }
 
-    let detail: GraffitiLoginEvent["detail"];
     if (!actor) {
-      detail = {
-        error: new Error("No actor ID provided to login"),
+      const detail: GraffitiLoginEvent["detail"] = {
+        error: new Error("No username provided to login"),
       };
+      const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
+      this.sessionEvents.dispatchEvent(event);
     } else {
       const existingActors = this.getLoggedInActors();
       if (!existingActors.includes(actor)) {
         this.setLoggedInActors([...existingActors, actor]);
       }
-
-      detail = {
-        session: { actor },
-      };
+      // Refresh the page to simulate oauth
+      window.location.reload();
     }
-
-    const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
-    this.sessionEvents.dispatchEvent(event);
   };
 
   logout: Graffiti["logout"] = async (session) => {

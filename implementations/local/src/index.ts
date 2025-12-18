@@ -14,36 +14,42 @@ export type { GraffitiLocalOptions };
  * It can also be configured to work with an external [CouchDB](https://couchdb.apache.org/) server,
  * although using it with a remote server will not be secure.
  */
-export class GraffitiLocal extends Graffiti {
+export class GraffitiLocal
+  implements
+    Omit<
+      Graffiti,
+      | "postMedia"
+      | "getMedia"
+      | "deleteMedia"
+      | "actorToHandle"
+      | "handleToActor"
+    >
+{
   protected sessionManagerLocal = new GraffitiLocalSessionManager();
   login = this.sessionManagerLocal.login.bind(this.sessionManagerLocal);
   logout = this.sessionManagerLocal.logout.bind(this.sessionManagerLocal);
   sessionEvents = this.sessionManagerLocal.sessionEvents;
+  protected graffitiPouchDbBase: GraffitiLocalDatabase;
 
-  put: Graffiti["put"];
+  post: Graffiti["post"];
   get: Graffiti["get"];
-  patch: Graffiti["patch"];
   delete: Graffiti["delete"];
   discover: Graffiti["discover"];
-  recoverOrphans: Graffiti["recoverOrphans"];
-  channelStats: Graffiti["channelStats"];
-  continueObjectStream: Graffiti["continueObjectStream"];
+  continueDiscover: Graffiti["continueDiscover"];
 
   constructor(options?: GraffitiLocalOptions) {
-    super();
+    this.graffitiPouchDbBase = new GraffitiLocalDatabase(options);
 
-    const graffitiPouchDbBase = new GraffitiLocalDatabase(options);
-
-    this.put = graffitiPouchDbBase.put.bind(graffitiPouchDbBase);
-    this.get = graffitiPouchDbBase.get.bind(graffitiPouchDbBase);
-    this.patch = graffitiPouchDbBase.patch.bind(graffitiPouchDbBase);
-    this.delete = graffitiPouchDbBase.delete.bind(graffitiPouchDbBase);
-    this.discover = graffitiPouchDbBase.discover.bind(graffitiPouchDbBase);
-    this.recoverOrphans =
-      graffitiPouchDbBase.recoverOrphans.bind(graffitiPouchDbBase);
-    this.channelStats =
-      graffitiPouchDbBase.channelStats.bind(graffitiPouchDbBase);
-    this.continueObjectStream =
-      graffitiPouchDbBase.continueObjectStream.bind(graffitiPouchDbBase);
+    this.post = this.graffitiPouchDbBase.post.bind(this.graffitiPouchDbBase);
+    this.get = this.graffitiPouchDbBase.get.bind(this.graffitiPouchDbBase);
+    this.delete = this.graffitiPouchDbBase.delete.bind(
+      this.graffitiPouchDbBase,
+    );
+    this.discover = this.graffitiPouchDbBase.discover.bind(
+      this.graffitiPouchDbBase,
+    );
+    this.continueDiscover = this.graffitiPouchDbBase.continueDiscover.bind(
+      this.graffitiPouchDbBase,
+    );
   }
 }
