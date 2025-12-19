@@ -33,7 +33,7 @@ async function postNote() {
         return;
     }
     posting.value = true;
-    await graffiti.put<typeof noteSchema>(
+    await graffiti.post<typeof noteSchema>(
         {
             channels: channels.value,
             value: {
@@ -61,13 +61,17 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         return;
     }
     savingEdits.value = true;
-    await graffiti.patch(
+    await graffiti.post(
         {
-            value: [{ op: "replace", path: "/content", value: editText.value }],
+            ...result,
+            value: {
+                ...result.value,
+                content: editText.value,
+            },
         },
-        result,
         session.value,
     );
+    await graffiti.delete(result, session.value);
     editText.value = "";
     editing.value = "";
     savingEdits.value = false;
@@ -81,8 +85,8 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         <a href="https://vuejs.org/guide/scaling-up/sfc.html"
             >Vue Single File Component</a
         >
-        and built with <a href="https://vitejs.dev/">Vite</a>.
-         It uses the <a href="https://github.com/graffiti-garden/wrapper-vue"
+        and built with <a href="https://vitejs.dev/">Vite</a>. It uses the
+        <a href="https://github.com/graffiti-garden/wrapper-vue"
             >Graffiti Vue.js wrapper</a
         >
         and the
@@ -90,7 +94,8 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
             >Remote implementation of Graffiti</a
         >. View the source code
         <a
-            href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/sfc">on Github</a
+            href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/sfc"
+            >on Github</a
         >.
     </p>
     <p v-if="$graffitiSession.value">
@@ -107,7 +112,7 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
         autopoll
         :channels="channels"
         :schema="noteSchema"
-        v-slot="{ objects, poll, isInitialPolling }"
+        v-slot="{ objects, poll, isFirstPoll }"
     >
         <div class="controls">
             <form @submit.prevent="postNote">
@@ -138,8 +143,9 @@ async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
             />
         </div>
         <ul>
-            <li v-if="isInitialPolling">Loading...</li>
+            <li v-if="isFirstPoll">Loading...</li>
             <li
+                v-else
                 v-for="object in objects.sort(
                     (a, b) => b.value.published - a.value.published,
                 )"

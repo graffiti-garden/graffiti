@@ -18,11 +18,11 @@ defineSlots<{
     default?(props: {
         objects: GraffitiObject<Schema>[];
         poll: () => void;
-        isInitialPolling: boolean;
+        isFirstPoll: boolean;
     }): any;
 }>();
 
-const { objects, poll, isInitialPolling } = useGraffitiDiscover<Schema>(
+const { objects, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
     toRef(props, "channels"),
     toRef(props, "schema"),
     toRef(props, "session"),
@@ -31,9 +31,11 @@ const { objects, poll, isInitialPolling } = useGraffitiDiscover<Schema>(
 </script>
 
 <template>
-    <slot
-        :objects="objects"
-        :poll="poll"
-        :isInitialPolling="isInitialPolling"
-    ></slot>
+    <slot :objects="objects" :poll="poll" :isFirstPoll="isFirstPoll">
+        <ul>
+            <li v-for="object in objects" :key="object.url">
+                <DisplayObject :object="object" />
+            </li>
+        </ul>
+    </slot>
 </template>

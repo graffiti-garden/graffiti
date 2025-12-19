@@ -2,10 +2,32 @@ import type { Ref } from "vue";
 import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
 import type { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 
-export const globals: {
+const globals: {
   graffitiSynchronize?: GraffitiSynchronize;
   graffitiSession?: Ref<GraffitiSession | undefined | null>;
 } = {};
+
+export function setGraffitiSession(
+  session: Ref<GraffitiSession | undefined | null>,
+) {
+  if (!globals.graffitiSession) {
+    globals.graffitiSession = session;
+  } else {
+    throw new Error(
+      "Graffiti session already set - plugin installed multiple times?",
+    );
+  }
+}
+
+export function setGraffitiSynchronize(synchronize: GraffitiSynchronize) {
+  if (!globals.graffitiSynchronize) {
+    globals.graffitiSynchronize = synchronize;
+  } else {
+    throw new Error(
+      "Graffiti synchronize already set - plugin installed multiple times?",
+    );
+  }
+}
 
 /**
  * Returns the global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance
