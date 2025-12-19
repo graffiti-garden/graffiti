@@ -417,16 +417,20 @@ export class GraffitiLocalObjects {
         cursor.slice("discover:".length),
       );
       if (actor && actor !== session?.actor) {
-        throw new GraffitiErrorForbidden(
-          "Cannot continue a cursor started by another actor",
-        );
+        return (async function* () {
+          throw new GraffitiErrorForbidden(
+            "Cannot continue a cursor started by another actor",
+          );
+        })();
       }
       return this.discoverContinue<{}>(
         [channels, schema, session],
         continueParams,
       );
     } else {
-      throw new GraffitiErrorNotFound("Cursor not found");
+      return (async function* () {
+        throw new GraffitiErrorNotFound("Cursor not found");
+      })();
     }
   };
 }
