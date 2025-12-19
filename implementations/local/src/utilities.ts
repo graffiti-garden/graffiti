@@ -1,3 +1,5 @@
+import { GraffitiErrorNotFound } from "@graffiti-garden/api";
+
 export function encodeBase64(bytes: Uint8Array): string {
   // Convert it to base64
   const base64 = btoa(String.fromCodePoint(...bytes));
@@ -36,11 +38,11 @@ export function encodeMediaUrl(actor: string, id: string) {
 
 export function decodeGraffitiUrl(url: string, prefix: string) {
   if (!url.startsWith(prefix)) {
-    throw new Error(`URL does not start with ${prefix}`);
+    throw new GraffitiErrorNotFound(`URL does not start with ${prefix}`);
   }
   const slices = url.slice(prefix.length).split(":");
   if (slices.length !== 2) {
-    throw new Error("URL has too many colon-seperated parts");
+    throw new GraffitiErrorNotFound("URL has too many colon-seperated parts");
   }
   const [actor, id] = slices.map(decodeURIComponent);
   return { actor, id };
