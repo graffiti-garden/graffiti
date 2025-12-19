@@ -2,7 +2,6 @@ import type { App, Plugin, Ref } from "vue";
 import { ref } from "vue";
 import Discover from "./Discover.vue";
 import Get from "./Get.vue";
-import RecoverOrphans from "./RecoverOrphans.vue";
 import type {
   Graffiti,
   GraffitiSession,
@@ -10,7 +9,7 @@ import type {
   GraffitiLogoutEvent,
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
-import { globals } from "./globals";
+import { setGraffitiSession, setGraffitiSynchronize } from "./globals";
 import type { Router } from "vue-router";
 import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 
@@ -49,7 +48,6 @@ declare module "vue" {
   export interface GlobalComponents {
     GraffitiDiscover: typeof Discover;
     GraffitiGet: typeof Get;
-    GraffitiRecoverOrphans: typeof RecoverOrphans;
   }
 }
 export type { ComponentCustomProperties } from "vue";
@@ -214,12 +212,11 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
       }
     });
 
-    globals.graffitiSynchronize = graffiti;
-    globals.graffitiSession = graffitiSession;
+    setGraffitiSynchronize(graffiti);
+    setGraffitiSession(graffitiSession);
 
     app.component("GraffitiDiscover", Discover);
     app.component("GraffitiGet", Get);
-    app.component("GraffitiRecoverOrphans", RecoverOrphans);
     app.config.globalProperties.$graffiti = graffiti;
     app.config.globalProperties.$graffitiSession = graffitiSession;
   },
@@ -250,12 +247,3 @@ export const GraffitiDiscover = Discover;
  * the composable {@link useGraffitiGet}.
  */
 export const GraffitiGet = Get;
-/**
- * The [Graffiti.recoverOrphans](https://api.graffiti.garden/classes/Graffiti.html#recoverorphans)
- * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
- * for use in Vue templates.
- *
- * Its props and slots are identical to the arguments and return values of
- * the composable {@link useGraffitiRecoverOrphans}.
- */
-export const GraffitiRecoverOrphans = RecoverOrphans;
