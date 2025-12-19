@@ -396,3 +396,41 @@ export type GraffitiSessionInitializedEvent = CustomEvent<
   | null
   | undefined
 >;
+
+export type GraffitiMedia = {
+  /**
+   * The binary data of the media to be uploaded,
+   * along with its [media type](https://www.iana.org/assignments/media-types/media-types.xhtml),
+   * formatted as a [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob).
+   */
+  data: Blob;
+  /**
+   * The {@link GraffitiObjectBase.actor | `actor`} that
+   * {@link Graffiti.postMedia | `post`ed} the media.
+   */
+  actor: string;
+  /**
+   * An optional list, identical in function to an object's
+   * {@link GraffitiObjectBase.allowed | `allowed`} property,
+   * that specifies the {@link GraffitiObjectBase.actor | `actor`}s
+   * who are allowed to access the media. If the list is `undefined`
+   * or `null`, anyone with the URL can access the media. If the list
+   * is empty, only the {@link GraffitiObjectBase.actor | `actor`}
+   * who {@link Graffiti.postMedia | `post`ed} the media can access it.
+   */
+  allowed?: string[] | null;
+};
+
+export type GraffitiPostMedia = Pick<GraffitiMedia, "data" | "allowed">;
+
+export type GraffitiMediaRequirements = {
+  /**
+   * A list of acceptable media types for the retrieved media,
+   * formatted as like an [HTTP Accept header](https://httpwg.org/specs/rfc9110.html#field.accept)
+   */
+  accept?: string;
+  /**
+   * The maximum acceptable size, in bytes, of the media.
+   */
+  maxBytes?: number;
+};

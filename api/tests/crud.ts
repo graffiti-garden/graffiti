@@ -34,6 +34,12 @@ export const graffitiCRUDTests = (
         session2 = await useSession2();
       });
 
+      it("get nonexistant object", async () => {
+        await expect(graffiti.get(randomString(), {})).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
+      });
+
       it("post, get, delete", async () => {
         const value = {
           something: "hello, world~ c:",

@@ -6,6 +6,9 @@ import type {
   GraffitiPostObject,
   GraffitiObjectStream,
   GraffitiObjectStreamContinue,
+  GraffitiMedia,
+  GraffitiPostMedia,
+  GraffitiMediaRequirements,
 } from "./2-types";
 import type { JSONSchema } from "json-schema-to-ts";
 
@@ -150,6 +153,8 @@ export abstract class Graffiti {
    *
    * @throws {@link GraffitiErrorSchemaMismatch} if the retrieved object does not match the provided schema.
    *
+   * @throws {@link GraffitiErrorInvalidSchema} If an invalid schema is provided.
+   *
    * @group 1 - Single-Object Methods
    */
   abstract get<Schema extends JSONSchema>(
@@ -223,6 +228,9 @@ export abstract class Graffiti {
    * Since different implementations may fetch data from multiple sources there is
    * no guarentee on the order that objects are returned in.
    *
+   * @throws {@link GraffitiErrorInvalidSchema} if an invalid schema is provided.
+   * Discovery is lazy and will not throw until the iterator is consumed.
+   *
    * @returns Returns a stream of objects that match the given {@link GraffitiObjectBase.channels | `channels`}
    * and [JSON Schema](https://json-schema.org).
    *
@@ -263,7 +271,11 @@ export abstract class Graffiti {
    * instead, which is returned along with the `cursor` at the
    * end of the original stream.
    *
-   * @throws {@link GraffitiErrorForbidden} if the {@link GraffitiObjectBase.actor | `actor`}
+   * @throws {@link GraffitiErrorNotFound} upon iteration
+   * if the cursor is invalid or expired.
+   *
+   * @throws {@link GraffitiErrorForbidden} upon iteration
+   * if the {@link GraffitiObjectBase.actor | `actor`}
    * provided in the `session` is not the same as the `actor`
    * that initiated the original stream.
    *
@@ -286,24 +298,12 @@ export abstract class Graffiti {
    * @group 3 - Media Methods
    */
   abstract postMedia(
-    media: {
-      /**
-       * The binary data of the media to be uploaded,
-       * along with its [media type](https://www.iana.org/assignments/media-types/media-types.xhtml),
-       * formatted as a [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob).
-       */
-      data: Blob;
-      /**
-       * An optional list, identical in function to an object's
-       * {@link GraffitiObjectBase.allowed | `allowed`} property,
-       * that specifies the {@link GraffitiObjectBase.actor | `actor`}s
-       * who are allowed to access the media. If the list is `undefined`
-       * or `null`, anyone with the URL can access the media. If the list
-       * is empty, only the {@link GraffitiObjectBase.actor | `actor`}
-       * who {@link postMedia | `post`ed} the media can access it.
-       */
-      allowed?: string[] | null;
-    },
+    /**
+     * The media data to upload, and optionally
+     * an {@link GraffitiObjectBase.allowed | `allowed`}
+     * list of actors that can view it.
+     */
+    media: GraffitiPostMedia,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
@@ -326,7 +326,7 @@ export abstract class Graffiti {
     /**
      * A globally unique identifier and locator for the media.
      */
-    mediaUrl: string,
+    url: string,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
@@ -357,27 +357,13 @@ export abstract class Graffiti {
     /**
      * A set of requirements the retrieved media must meet.
      */
-    requirements: {
-      /**
-       * A list of acceptable media types for the retrieved media,
-       * formatted as like an [HTTP Accept header](https://httpwg.org/specs/rfc9110.html#field.accept)
-       */
-      accept?: string;
-      /**
-       * The maximum acceptable size, in bytes, of the media.
-       */
-      maxBytes?: number;
-    },
+    requirements: GraffitiMediaRequirements,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session?: GraffitiSession | null,
-  ): Promise<{
-    data: Blob;
-    actor: string;
-    allowed?: string[] | null;
-  }>;
+  ): Promise<GraffitiMedia>;
 
   /**
    * Begins the login process. Depending on the implementation, this may

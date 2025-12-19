@@ -1,9 +1,13 @@
 import { it, expect, describe, assert, beforeAll } from "vitest";
 import type {
   Graffiti,
-  GraffitiObjectBase,
   GraffitiSession,
   JSONSchema,
+} from "@graffiti-garden/api";
+import {
+  GraffitiErrorForbidden,
+  GraffitiErrorInvalidSchema,
+  GraffitiErrorNotFound,
 } from "@graffiti-garden/api";
 import {
   randomString,
@@ -101,6 +105,19 @@ export const graffitiDiscoverTests = (
       expect(value.allowed).toEqual([session2.actor]);
       expect(value.channels).toEqual(object.channels);
       expect(value.actor).toEqual(session1.actor);
+    });
+
+    it("discover bad schema", async () => {
+      const iterator = graffiti.discover([], {
+        properties: {
+          value: {
+            //@ts-ignore
+            type: "asdf",
+          },
+        },
+      });
+
+      await expect(iterator.next()).rejects.toThrow(GraffitiErrorInvalidSchema);
     });
 
     it("discover for actor", async () => {
@@ -396,12 +413,47 @@ export const graffitiDiscoverTests = (
           assert(!value.done && !value.value.error, "value is done");
           assert(value.value.tombstone, "value is not tombstone");
           expect(value.value.object.url).toEqual(posted.url);
-          await expect(tombIterator.next()).resolves.toHaveProperty(
+          const returnValue2 = await tombIterator.next();
+          assert(returnValue2.done, "value2 is not done");
+
+          // Post another object
+          const posted2 = await graffiti.post<{}>(object, session);
+          const doubleContinueIterator = continueStream<{}>(
+            graffiti,
+            returnValue2.value,
+            continueType,
+          );
+          const value2 = await doubleContinueIterator.next();
+          assert(!value2.done && !value2.value.error, "value2 is done");
+          assert(!value2.value.tombstone, "value2 is tombstone");
+          expect(value2.value.object.url).toEqual(posted2.url);
+          await expect(doubleContinueIterator.next()).resolves.toHaveProperty(
             "done",
             true,
           );
         });
+
+        it("continue with wrong actor", async () => {
+          const iterator = graffiti.discover<{}>([], {}, session1);
+          const result = await iterator.next();
+          assert(result.done, "iterator is not done");
+
+          const continuation = continueStream<{}>(
+            graffiti,
+            result.value,
+            continueType,
+            session2,
+          );
+          await expect(continuation.next()).rejects.toThrow(
+            GraffitiErrorForbidden,
+          );
+        });
       });
     }
+
+    it("lookup non-existant cursor", async () => {
+      const iterator = graffiti.continueDiscover(randomString());
+      await expect(iterator.next()).rejects.toThrow(GraffitiErrorNotFound);
+    });
   });
 };
