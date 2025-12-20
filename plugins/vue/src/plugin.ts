@@ -1,7 +1,11 @@
 import type { App, Plugin, Ref } from "vue";
 import { ref } from "vue";
-import Discover from "./Discover.vue";
-import Get from "./Get.vue";
+import Discover from "./components/Discover.vue";
+import Get from "./components/Get.vue";
+import GetMedia from "./components/GetMedia.vue";
+import ActorToHandle from "./components/ActorToHandle.vue";
+import HandleToActor from "./components/HandleToActor.vue";
+import ObjectInfo from "./components/ObjectInfo.vue";
 import type {
   Graffiti,
   GraffitiSession,
@@ -48,6 +52,10 @@ declare module "vue" {
   export interface GlobalComponents {
     GraffitiDiscover: typeof Discover;
     GraffitiGet: typeof Get;
+    GraffitiGetMedia: typeof GetMedia;
+    GraffitiActorToHandle: typeof ActorToHandle;
+    GraffitiHandleToActor: typeof HandleToActor;
+    GraffitiObjectInfo: typeof ObjectInfo;
   }
 }
 export type { ComponentCustomProperties } from "vue";
@@ -88,18 +96,26 @@ export interface GraffitiPluginOptions {
  * | --- | --- | --- |
  * | [discover](https://api.graffiti.garden/classes/Graffiti.html#discover) | {@link useGraffitiDiscover} | {@link GraffitiDiscover} |
  * | [get](https://api.graffiti.garden/classes/Graffiti.html#get) | {@link useGraffitiGet} | {@link GraffitiGet} |
- * | [recoverOrphans](https://api.graffiti.garden/classes/Graffiti.html#recoverorphans) | {@link useGraffitiRecoverOrphans} | {@link GraffitiRecoverOrphans} |
+ * | [getMedia](https://api.graffiti.garden/classes/Graffiti.html#getmedia) | {@link useGraffitiGetMedia} | {@link GraffitiGetMedia} |
  *
  * The plugin also exposes a global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance
  * and keeps track of the global [GraffitiSession](https://api.graffiti.garden/interfaces/GraffitiSession.html)
  * state as a reactive variable.
  * They are available in templates as global variables or in setup functions as
- * composable functions.
+ * getter functions.
  *
  * | Global variabale | [Composable](https://vuejs.org/guide/reusability/composables.html) |
  * | --- | --- |
  * | {@link ComponentCustomProperties.$graffiti | $graffiti } | {@link useGraffiti} |
  * | {@link ComponentCustomProperties.$graffitiSession | $graffitiSession } | {@link useGraffitiSession} |
+ *
+ * Finally, there are two additional helper components for converting
+ * an "actor" to a handle and vice versa.
+ *
+ * | Component | Description |
+ * | --- | --- |
+ * | {@link GraffitiActorToHandle} | Converts an actor to a handle |
+ * | {@link GraffitiHandleToActor} | Converts a handle to an actor |
  *
  * [See the README for installation instructions](/).
  *
@@ -122,7 +138,7 @@ export interface GraffitiPluginOptions {
  * <template>
  *   <button
  *     v-if="$graffitiSession.value"
- *     @click="$graffiti.put({
+ *     @click="$graffiti.post({
  *       value: { content: 'Hello, world!' },
  *       channels: [ 'my-channel' ]
  *     }, $graffitiSession.value)"
@@ -134,7 +150,7 @@ export interface GraffitiPluginOptions {
  *   </button>
  *
  *   <GraffitiDiscover
- *     v-slot="{ results }"
+ *     v-slot="{ objects }"
  *     :channels="[ 'my-channel' ]"
  *     :schema="{
  *       properties: {
@@ -149,10 +165,10 @@ export interface GraffitiPluginOptions {
  *   >
  *     <ul>
  *       <li
- *         v-for="result in results"
- *         :key="$graffiti.objectToUri(result)"
+ *         v-for="object in objects"
+ *         :key="object.url"
  *       >
- *         {{ result.value.content }}
+ *         {{ object.value.content }}
  *       </li>
  *     </ul>
  *   </GraffitiDiscover>
@@ -217,12 +233,20 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
 
     app.component("GraffitiDiscover", Discover);
     app.component("GraffitiGet", Get);
+    app.component("GraffitiGetMedia", GetMedia);
+    app.component("GraffitiActorToHandle", ActorToHandle);
+    app.component("GraffitiHandleToActor", HandleToActor);
+    app.component("GraffitiObjectInfo", ObjectInfo);
     app.config.globalProperties.$graffiti = graffiti;
     app.config.globalProperties.$graffitiSession = graffitiSession;
   },
 };
 
-export * from "./composables";
+export { useGraffitiActorToHandle } from "./composables/actor-to-handle";
+export { useGraffitiHandleToActor } from "./composables/handle-to-actor";
+export { useGraffitiDiscover } from "./composables/discover";
+export { useGraffitiGet } from "./composables/get";
+export { useGraffitiGetMedia } from "./composables/get-media";
 export {
   useGraffiti,
   useGraffitiSynchronize,
@@ -247,3 +271,7 @@ export const GraffitiDiscover = Discover;
  * the composable {@link useGraffitiGet}.
  */
 export const GraffitiGet = Get;
+export const GraffitiGetMedia = GetMedia;
+export const GraffitiActorToHandle = ActorToHandle;
+export const GraffitiHandleToActor = HandleToActor;
+export const GraffitiObjectInfo = ObjectInfo;
