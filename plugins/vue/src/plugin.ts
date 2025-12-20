@@ -72,10 +72,6 @@ export interface GraffitiPluginOptions {
    * and in setup functions as {@link useGraffiti}.
    * You must interact with Graffiti through these wrapped instances
    * to enable reactivity.
-   *
-   * You'll likely want to use the [remote implementation](https://github.com/graffiti-garden/implementation-remote)
-   * However, you could also use the [local implementation](https://github.com/graffiti-garden/implementation-local)
-   * for testing. Other implementations may be available in the future.
    */
   graffiti: Graffiti;
 }
@@ -97,6 +93,8 @@ export interface GraffitiPluginOptions {
  * | [discover](https://api.graffiti.garden/classes/Graffiti.html#discover) | {@link useGraffitiDiscover} | {@link GraffitiDiscover} |
  * | [get](https://api.graffiti.garden/classes/Graffiti.html#get) | {@link useGraffitiGet} | {@link GraffitiGet} |
  * | [getMedia](https://api.graffiti.garden/classes/Graffiti.html#getmedia) | {@link useGraffitiGetMedia} | {@link GraffitiGetMedia} |
+ * | [actorToHandle](https://api.graffiti.garden/classes/Graffiti.html#actortohandle) | {@link useGraffitiActorToHandle} | {@link GraffitiActorToHandle} |
+ * | [handleToActor](https://api.graffiti.garden/classes/Graffiti.html#handletoactor) | {@link useGraffitiHandleToActor} | {@link GraffitiHandleToActor} |
  *
  * The plugin also exposes a global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance
  * and keeps track of the global [GraffitiSession](https://api.graffiti.garden/interfaces/GraffitiSession.html)
@@ -104,18 +102,16 @@ export interface GraffitiPluginOptions {
  * They are available in templates as global variables or in setup functions as
  * getter functions.
  *
- * | Global variabale | [Composable](https://vuejs.org/guide/reusability/composables.html) |
+ * | Global variabale | Getter |
  * | --- | --- |
  * | {@link ComponentCustomProperties.$graffiti | $graffiti } | {@link useGraffiti} |
  * | {@link ComponentCustomProperties.$graffitiSession | $graffitiSession } | {@link useGraffitiSession} |
  *
- * Finally, there are two additional helper components for converting
- * an "actor" to a handle and vice versa.
- *
- * | Component | Description |
- * | --- | --- |
- * | {@link GraffitiActorToHandle} | Converts an actor to a handle |
- * | {@link GraffitiHandleToActor} | Converts a handle to an actor |
+ * Finally, the plugin exposes an additional component, {@link GraffitiObjectInfo}
+ * that can be use to generically display a Graffiti object for debugging purposes.
+ * {@link GraffitiDiscover} and {@link GraffitiGet} show this output as
+ * [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
+ * if no template is provided
  *
  * [See the README for installation instructions](/).
  *
@@ -258,8 +254,11 @@ export {
  * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
  * for use in Vue templates.
  *
- * Its props and slots are identical to the arguments and return values of
- * the composable {@link useGraffitiDiscover}.
+ * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
+ * are identical to the arguments and return values of
+ * the composable {@link useGraffitiDiscover}. If no template is provided to
+ * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
+ * will display the objects using {@link GraffitiObjectInfo} for debugging.
  */
 export const GraffitiDiscover = Discover;
 /**
@@ -267,11 +266,51 @@ export const GraffitiDiscover = Discover;
  * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
  * for use in Vue templates.
  *
- * Its props and slots are identical to the arguments and return values of
- * the composable {@link useGraffitiGet}.
+ * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
+ * are identical to the arguments and return values of
+ * the composable {@link useGraffitiGet}. If no template is provided to
+ * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
+ * will display the object using {@link GraffitiObjectInfo} for debugging.
  */
 export const GraffitiGet = Get;
+/**
+ * The [Graffiti.getMedia](https://api.graffiti.garden/classes/Graffiti.html#getmedia)
+ * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
+ * for use in Vue templates.
+ *
+ * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
+ * are identical to the arguments and return values of
+ * the composable {@link useGraffitiGetMedia}. If no template is provided to
+ * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
+ * will display the media in an appropriate container based on its media type.
+ */
 export const GraffitiGetMedia = GetMedia;
+/**
+ * The [Graffiti.actorToHandle](https://api.graffiti.garden/classes/Graffiti.html#actortohandle)
+ * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
+ * for use in Vue templates.
+ *
+ * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
+ * are identical to the arguments and return values of
+ * the composable {@link useGraffitiActorToHandle}. If no template is provided to
+ * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
+ * will display the actor's handle.
+ */
 export const GraffitiActorToHandle = ActorToHandle;
+/**
+ * The [Graffiti.handleToActor](https://api.graffiti.garden/classes/Graffiti.html#handletoactor)
+ * method as a reactive [renderless component](https://vuejs.org/guide/components/slots#renderless-components)
+ * for use in Vue templates.
+ *
+ * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
+ * are identical to the arguments and return values of
+ * the composable {@link useGraffitiHandleToActor}. If no template is provided to
+ * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
+ * will display the actor DID.
+ */
 export const GraffitiHandleToActor = HandleToActor;
+/**
+ * Displays a Graffiti object and all of its properties for
+ * debugging purposes.
+ */
 export const GraffitiObjectInfo = ObjectInfo;

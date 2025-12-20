@@ -48,7 +48,7 @@ export function useGraffitiSynchronize() {
  * Returns the global [Graffiti](https://api.graffiti.garden/classes/Graffiti.html) instance.
  *
  * In Vue templates and the [options API](https://vuejs.org/guide/introduction.html#options-api)
- * use the global variable {@link ComponentCustomProperties.$graffiti | $graffiti} instead.
+ * use may use the global variable {@link ComponentCustomProperties.$graffiti | $graffiti} instead.
  *
  * This is the same Graffiti registered with the {@link GraffitiPlugin}
  * via {@link GraffitiPluginOptions.graffiti}, only it has been wrapped
