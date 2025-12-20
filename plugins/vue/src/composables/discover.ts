@@ -30,10 +30,11 @@ import { useGraffitiSynchronize } from "../globals";
  * @returns
  * - `objects`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
  * an array of Graffiti objects.
- * - `poll`: A function that can be called to manually check for for objects.
+ * - `poll`: A function that can be called to manually check for objects.
  * - `isFirstPoll`: A boolean [ref](https://vuejs.org/api/reactivity-core.html#ref)
  * that indicates if the *first* poll after a change of arguments is currently running.
- * Useful to show a loading spinner or disable a button.
+ * It may be used to show a loading spinner or disable a button, or it can be watched
+ * to know when the `objects` array is ready to use.
  */
 export function useGraffitiDiscover<Schema extends JSONSchema>(
   channels: MaybeRefOrGetter<string[]>,
@@ -96,8 +97,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
       // Start to synchronize in the background
       // (all polling results will go through here)
-      let batchFlattenTimer: ReturnType<typeof setTimeout> | undefined =
-        undefined;
+      let batchFlattenPromise: Promise<void> | undefined = undefined;
       (async () => {
         for await (const result of mySyncIterator) {
           if (!active) break;
@@ -106,12 +106,18 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           } else {
             objectsRaw.set(result.object.url, result.object);
           }
-          if (!batchFlattenTimer) {
-            batchFlattenTimer = setTimeout(() => {
-              if (!active) return;
-              objects.value = Array.from(objectsRaw.values());
-              batchFlattenTimer = undefined;
-            }, 50);
+          // Flatten objects in batches to prevent
+          // excessive re-rendering
+          if (!batchFlattenPromise) {
+            batchFlattenPromise = new Promise<void>((resolve) => {
+              setTimeout(() => {
+                if (active) {
+                  objects.value = Array.from(objectsRaw.values());
+                }
+                batchFlattenPromise = undefined;
+                resolve();
+              }, 50);
+            });
           }
         }
       })();
@@ -161,6 +167,13 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
             console.error(result.value.error);
           }
         }
+
+        // Wait for sync to receive updates
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        // And wait for pending results to be flattened
+        if (batchFlattenPromise) await batchFlattenPromise;
+
+        if (!active) return;
         polling = false;
         isFirstPoll.value = false;
         if (toValue(autopoll)) poll();
