@@ -17,7 +17,7 @@ import { useGraffitiSynchronize } from "../globals";
  *
  * Its corresponding renderless component is {@link GraffitiGet}.
  *
- * The arguments of this composable as the same as Graffiti.get,
+ * The arguments of this composable are the same as Graffiti.get,
  * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
  * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
  * As they change the output will automatically update.
@@ -25,11 +25,11 @@ import { useGraffitiSynchronize } from "../globals";
  * not when the elements or properties change.
  * If you need deep reactivity, wrap your argument in a getter.
  *
- * @returns:
+ * @returns
  * - `object`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
- * the retrieved Graffiti object, if it exists. If the object has been deleted,
+ * the retrieved Graffiti object, if it exists. If the object cannot be found,
  * the result is `null`. If the object is still being fetched, the result is `undefined`.
- * - `poll`: A function that can be called to manually refresh the object.
+ * - `poll`: A function that can be called to manually check if the object has changed.
  */
 export function useGraffitiGet<Schema extends JSONSchema>(
   url: MaybeRefOrGetter<GraffitiObjectUrl | string>,

@@ -19,10 +19,12 @@ import { useGraffitiSynchronize } from "../globals";
  *
  * Its corresponding renderless component is {@link GraffitiDiscover}.
  *
- * The arguments of this composable as the same as Graffiti.discover,
+ * The arguments of this composable are largely the same as Graffiti.discover,
  * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
  * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
- * As they change the output will automatically update.
+ * There is one additional optional argument `autopoll`, which when `true`,
+ * will automatically poll for new objects.
+ * As they change the arguments change, the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
  * If you need deep reactivity, wrap your argument in a getter.
@@ -40,6 +42,9 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   channels: MaybeRefOrGetter<string[]>,
   schema: MaybeRefOrGetter<Schema>,
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+  /**
+   * Whether to automatically poll for new objects.
+   */
   autopoll: MaybeRefOrGetter<boolean> = false,
 ) {
   const graffiti = useGraffitiSynchronize();
