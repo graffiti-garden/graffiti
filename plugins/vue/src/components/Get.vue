@@ -6,7 +6,8 @@ import type {
     GraffitiSession,
     JSONSchema,
 } from "@graffiti-garden/api";
-import { useGraffitiGet } from "./composables";
+import { useGraffitiGet } from "../composables/get";
+import ObjectInfo from "./ObjectInfo.vue";
 
 const props = defineProps<{
     url: string | GraffitiObjectUrl;
@@ -17,7 +18,7 @@ const props = defineProps<{
 defineSlots<{
     default?(props: {
         object: GraffitiObject<Schema> | undefined | null;
-        poll: () => void;
+        poll: () => Promise<void>;
     }): any;
 }>();
 
@@ -30,6 +31,6 @@ const { object, poll } = useGraffitiGet<Schema>(
 
 <template>
     <slot :object="object" :poll="poll">
-        <DisplayObject :object="object" />
+        <ObjectInfo :object="object" />
     </slot>
 </template>

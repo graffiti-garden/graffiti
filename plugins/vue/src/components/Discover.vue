@@ -5,7 +5,8 @@ import type {
     JSONSchema,
     GraffitiObject,
 } from "@graffiti-garden/api";
-import { useGraffitiDiscover } from "./composables";
+import { useGraffitiDiscover } from "../composables/discover";
+import ObjectInfo from "./ObjectInfo.vue";
 
 const props = defineProps<{
     channels: string[];
@@ -17,7 +18,7 @@ const props = defineProps<{
 defineSlots<{
     default?(props: {
         objects: GraffitiObject<Schema>[];
-        poll: () => void;
+        poll: () => Promise<void>;
         isFirstPoll: boolean;
     }): any;
 }>();
@@ -32,10 +33,13 @@ const { objects, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
 
 <template>
     <slot :objects="objects" :poll="poll" :isFirstPoll="isFirstPoll">
-        <ul>
+        <ul v-if="!isFirstPoll">
             <li v-for="object in objects" :key="object.url">
-                <DisplayObject :object="object" />
+                <ObjectInfo :object="object" />
             </li>
         </ul>
+        <p v-else>
+            <em> Loading... </em>
+        </p>
     </slot>
 </template>

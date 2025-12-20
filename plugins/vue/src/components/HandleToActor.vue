@@ -1,19 +1,16 @@
 <script setup lang="ts">
-import ResolveString from "./ResolveString.vue";
-import { useGraffiti } from "../globals";
+import { toRef } from "vue";
+import { displayOutput } from "../composables/resolve-string";
+import { useGraffitiHandleToActor } from "../composables/handle-to-actor";
 
 const props = defineProps<{ handle: string }>();
-const graffiti = useGraffiti();
+const handle = toRef(props, "handle");
+
+const { actor } = useGraffitiHandleToActor(handle);
 </script>
 
 <template>
-    <ResolveString
-        :input="props.handle"
-        :resolve="graffiti.handleToActor.bind(graffiti)"
-        v-slot="{ output, displayText }"
-    >
-        <slot :actor="output">
-            <span> {{ displayText(output) }} </span>
-        </slot>
-    </ResolveString>
+    <slot :actor="actor">
+        <span> {{ displayOutput(actor) }} </span>
+    </slot>
 </template>

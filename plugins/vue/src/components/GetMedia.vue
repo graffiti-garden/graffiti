@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, toRef, watch } from "vue";
+import { toRef } from "vue";
 import type {
     GraffitiSession,
     GraffitiMediaRequirements,
     GraffitiMedia,
 } from "@graffiti-garden/api";
-import { useGraffitiGetMedia } from "../composables";
+import { useGraffitiGetMedia } from "../composables/get-media";
 
 const props = defineProps<{
     url: string;
@@ -25,6 +25,12 @@ const { media, poll } = useGraffitiGetMedia(
     toRef(props, "requirements"),
     toRef(props, "session"),
 );
+
+function downloadMedia() {
+    if (media.value) {
+        window.location.href = media.value.dataUrl;
+    }
+}
 </script>
 
 <template>
@@ -36,11 +42,13 @@ const { media, poll } = useGraffitiGetMedia(
         />
         <video
             v-else-if="media?.data.type.startsWith('video/')"
+            controls
             :src="media.dataUrl"
             :alt="`A video by ${media.actor}`"
         />
         <audio
             v-else-if="media?.data.type.startsWith('audio/')"
+            controls
             :src="media.dataUrl"
             :alt="`Audio by ${media.actor}`"
         />
@@ -56,8 +64,12 @@ const { media, poll } = useGraffitiGetMedia(
             type="application/pdf"
             :alt="`PDF by ${media.actor}`"
         />
-        <p v-else-if="media">Unsupported media type</p>
-        <p v-else-if="media === null">Media not found</p>
-        <p v-else>Loading...</p>
+        <button v-else-if="media" @click="downloadMedia">Download</button>
+        <p v-else-if="media === null">
+            <em>Media not found</em>
+        </p>
+        <p v-else>
+            <em> Loading... </em>
+        </p>
     </slot>
 </template>

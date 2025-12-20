@@ -1,22 +1,30 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { useGraffiti, useGraffitiSession } from "../../src/plugin";
-import type { GraffitiObject, JSONSchema } from "@graffiti-garden/api";
+import { computed, ref } from "vue";
+import { useGraffiti } from "../../src/plugin";
+import type { GraffitiSession, JSONSchema } from "@graffiti-garden/api";
 
 const graffiti = useGraffiti();
-const session = useGraffitiSession();
 
-const channels = ref(["graffiti-client-demo"]);
+const channel = ref("graffiti-client-dem");
+const channels = computed(() => [channel.value]);
+const autopoll = ref(true);
+const polling = ref(false);
 
 const noteSchema = {
     properties: {
         value: {
             properties: {
-                content: {
-                    type: "string",
-                },
-                published: {
-                    type: "number",
+                content: { type: "string" },
+                published: { type: "number" },
+                attachments: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            url: { type: "string" },
+                        },
+                        required: ["url"],
+                    },
                 },
             },
             required: ["content", "published"],
@@ -26,12 +34,8 @@ const noteSchema = {
 
 const posting = ref(false);
 const myNote = ref("");
-async function postNote() {
+async function postNote(session: GraffitiSession) {
     if (!myNote.value.length) return;
-    if (!session.value) {
-        alert("You are not logged in!");
-        return;
-    }
     posting.value = true;
     await graffiti.post<typeof noteSchema>(
         {
@@ -39,209 +43,171 @@ async function postNote() {
             value: {
                 content: myNote.value,
                 published: Date.now(),
+                ...(fileToUpload.value
+                    ? {
+                          attachments: [
+                              {
+                                  url: await graffiti.postMedia(
+                                      { data: fileToUpload.value },
+                                      session,
+                                  ),
+                              },
+                          ],
+                      }
+                    : {}),
             },
         },
-        session.value,
+        session,
     );
     myNote.value = "";
+    fileToUpload.value = null;
     posting.value = false;
 }
 
-const editing = ref<string>("");
-const editText = ref<string>("");
-function startEditing(result: GraffitiObject<typeof noteSchema>) {
-    editing.value = result.url;
-    editText.value = result.value.content;
-}
-
-const savingEdits = ref(false);
-async function saveEdits(result: GraffitiObject<typeof noteSchema>) {
-    if (!session.value) {
-        alert("You are not logged in!");
-        return;
-    }
-    savingEdits.value = true;
-    await graffiti.post(
-        {
-            ...result,
-            value: {
-                ...result.value,
-                content: editText.value,
-            },
-        },
-        session.value,
-    );
-    await graffiti.delete(result, session.value);
-    editText.value = "";
-    editing.value = "";
-    savingEdits.value = false;
+const fileToUpload = ref<File | null>(null);
+function setFileToUpload(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (!target.files?.length) return;
+    fileToUpload.value = target.files[0];
 }
 </script>
 
 <template>
-    <h1>Graffiti Vue Wrapper Demo</h1>
-    <p>
-        This Graffiti application written as a
-        <a href="https://vuejs.org/guide/scaling-up/sfc.html"
-            >Vue Single File Component</a
-        >
-        and built with <a href="https://vitejs.dev/">Vite</a>. It uses the
-        <a href="https://github.com/graffiti-garden/wrapper-vue"
-            >Graffiti Vue.js wrapper</a
-        >
-        and the
-        <a href="https://github.com/graffiti-garden/implementation-remote"
-            >Remote implementation of Graffiti</a
-        >. View the source code
-        <a
-            href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/sfc"
-            >on Github</a
-        >.
-    </p>
-    <p v-if="$graffitiSession.value">
-        Logged in as: {{ $graffitiSession.value.actor }}
-        <button @click="graffiti.logout($graffitiSession.value)">
-            Log out
-        </button>
-    </p>
-    <p v-else-if="session === null">
-        <button @click="graffiti.login()">Log in</button>
-    </p>
-    <p v-else>Loading...</p>
-    <GraffitiDiscover
-        autopoll
-        :channels="channels"
-        :schema="noteSchema"
-        v-slot="{ objects, poll, isFirstPoll }"
-    >
-        <div class="controls">
-            <form @submit.prevent="postNote">
-                <label for="my-note">Note:</label>
-                <input
-                    type="text"
-                    id="my-note"
-                    name="my-note"
-                    v-model="myNote"
-                />
-                <input type="submit" value="Post" />
-                <span v-if="posting">Posting...</span>
-            </form>
-
-            <button @click="poll">Refresh</button>
-
-            Change the channel:
-            <input
-                type="text"
-                :value="channels[0]"
-                @input="
-                    (event) =>
-                        event.target &&
-                        'value' in event.target &&
-                        typeof event.target.value === 'string' &&
-                        (channels = [event.target.value])
-                "
-            />
-        </div>
-        <ul>
-            <li v-if="isFirstPoll">Loading...</li>
-            <li
-                v-else
-                v-for="object in objects.sort(
-                    (a, b) => b.value.published - a.value.published,
-                )"
-                :key="object.url"
-                class="post"
+    <header>
+        <h1>Graffiti Vue Wrapper Demo</h1>
+        <p>
+            This Graffiti application written as a
+            <a href="https://vuejs.org/guide/scaling-up/sfc.html"
+                >Vue Single File Component</a
             >
-                <div class="actor">
-                    {{ object.actor }}
-                </div>
-                <div class="timestamp">
-                    {{ new Date(object.value.published).toLocaleString() }}
-                </div>
+            and built with <a href="https://vitejs.dev/">Vite</a>. It uses the
+            <a href="https://github.com/graffiti-garden/wrapper-vue"
+                >Graffiti Vue.js wrapper</a
+            >
+            and the
+            <a href="https://github.com/graffiti-garden/implementation-remote"
+                >Remote implementation of Graffiti</a
+            >. View the source code
+            <a
+                href="https://github.com/graffiti-garden/wrapper-vue/tree/main/examples/sfc"
+                >on Github</a
+            >.
+        </p>
+    </header>
 
-                <div class="content" v-if="editing !== object.url">
-                    {{ object.value.content }}
-                </div>
-                <form
-                    v-else
-                    @submit.prevent="saveEdits(object)"
-                    class="content"
-                >
-                    <input type="text" v-model="editText" />
-                    <input type="submit" value="Save" />
-                    <span v-if="savingEdits">Saving...</span>
-                </form>
+    <section>
+        <h2>Account</h2>
 
-                <menu>
-                    <li v-if="object.actor === session?.actor">
-                        <button @click="$graffiti.delete(object, session)">
-                            Delete
+        <template v-if="$graffitiSession.value">
+            <p>
+                Logged in as
+                <code>
+                    <GraffitiActorToHandle
+                        :actor="$graffitiSession.value.actor"
+                    />
+                </code>
+            </p>
+
+            <button
+                type="button"
+                @click="graffiti.logout($graffitiSession.value)"
+            >
+                Log out
+            </button>
+        </template>
+
+        <template v-else-if="$graffitiSession.value === null">
+            <p>You are not logged in.</p>
+            <button type="button" @click="graffiti.login()">Log in</button>
+        </template>
+
+        <p v-else>
+            <em>Loading…</em>
+        </p>
+    </section>
+
+    <section>
+        <h2>Channel</h2>
+
+        <label for="channel">
+            Choose a channel to view posts from and write posts to.
+        </label>
+        <input type="text" v-model="channel" />
+    </section>
+
+    <section>
+        <h2>Post Creator</h2>
+        <form
+            v-if="$graffitiSession.value"
+            @submit.prevent="postNote($graffitiSession.value)"
+        >
+            <input
+                required
+                :disabled="posting"
+                v-model="myNote"
+                placeholder="Enter a message"
+            />
+            <label for="file-input"> Add a file to your post </label>
+            <input
+                id="file-input"
+                type="file"
+                accept="*"
+                @change="setFileToUpload"
+            />
+            <button :disabled="posting">
+                {{ posting ? "Posting..." : "Post" }}
+            </button>
+        </form>
+    </section>
+
+    <section>
+        <h2>Posts</h2>
+        <GraffitiDiscover
+            :autopoll="autopoll"
+            :channels="channels"
+            :schema="noteSchema"
+            v-slot="{ objects, poll, isFirstPoll }"
+        >
+            <nav>
+                <ul>
+                    <li>
+                        <label>
+                            <input type="checkbox" v-model="autopoll" />
+                            Enable autopoll
+                        </label>
+                    </li>
+                    <li v-if="!autopoll">
+                        <button
+                            @click="
+                                polling = true;
+                                poll().then(() => (polling = false));
+                            "
+                            :disabled="polling"
+                        >
+                            {{ polling ? "Polling..." : "Poll" }}
                         </button>
                     </li>
-                    <li v-if="object.actor === session?.actor">
-                        <button @click="startEditing(object)">Edit</button>
-                    </li>
-                    <li>
-                        <a target="_blank" :href="object.url"> 🔗 </a>
-                    </li>
-                </menu>
-            </li>
-        </ul>
-    </GraffitiDiscover>
+                </ul>
+            </nav>
+            <ul v-if="!isFirstPoll">
+                <li v-for="object in objects" :key="object.url">
+                    <GraffitiObjectInfo :object="object" />
+                    <ul v-if="object.value.attachments">
+                        <li
+                            v-for="attachment in object.value.attachments"
+                            :key="attachment.url"
+                        >
+                            <GraffitiGetMedia
+                                :url="attachment.url"
+                                :requirements="{}"
+                            />
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+            <p v-else>
+                <em> Loading... </em>
+            </p>
+        </GraffitiDiscover>
+    </section>
 </template>
-
-<style>
-:root {
-    font-family: Arial, sans-serif;
-}
-
-.graffiti-session-manager {
-    border-radius: 0.5rem;
-}
-
-ul {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: 0;
-}
-
-.post {
-    list-style: none;
-    border: 1px solid #ccc;
-    border-radius: 0.5rem;
-    margin: 0;
-    padding: 1rem;
-
-    .actor {
-        font-size: 1rem;
-        font-weight: bold;
-    }
-
-    .timestamp {
-        font-size: 0.8rem;
-        color: #666;
-    }
-
-    .content {
-        margin: 1rem;
-        margin-left: 0;
-        margin-right: 0;
-    }
-
-    menu {
-        display: flex;
-        padding: 0;
-        gap: 1rem;
-
-        li {
-            list-style: none;
-        }
-
-        a {
-            text-decoration: none;
-            color: #000;
-        }
-    }
-}
-</style>
