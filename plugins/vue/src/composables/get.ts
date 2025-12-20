@@ -91,9 +91,11 @@ export function useGraffitiGet<Schema extends JSONSchema>(
           if (!(e instanceof GraffitiErrorNotFound)) {
             console.error(e);
           }
-        } finally {
-          polling = false;
         }
+
+        // Wait for sync to receive the update
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        polling = false;
       };
       poll();
     },
