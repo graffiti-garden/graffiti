@@ -1,97 +1,163 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
+import { z } from "zod";
 import type { Bindings } from "../env";
-import { verifySessionCookie } from "../auth/session";
 import { HTTPException } from "hono/http-exception";
+import { verifySessionCookie } from "../auth/session";
+import {
+  deriveCid,
+  deriveDid,
+  generateRotationKeyPair,
+  signOperation,
+} from "./helpers";
 
-const router = new Hono<{ Bindings: Bindings }>();
+const actorManagement = new Hono<{ Bindings: Bindings }>();
 
-router.get("/available/:actor", async (c) => {
-  const actor = c.req.param("actor");
-
-  const info = await c.env.DB.prepare(
-    "SELECT created_at FROM actors WHERE actor = ?",
-  )
-    .bind(actor)
-    .first();
-
-  return c.json({ available: !info });
+const AlsoKnownAsSchema = z.array(z.string().url());
+const ServicesSchema = z.record(
+  z.string(),
+  z.object({
+    type: z.string(),
+    endpoint: z.string().url(),
+  }),
+);
+const CreateBodySchema = z.object({
+  alsoKnownAs: AlsoKnownAsSchema,
+  services: ServicesSchema,
+});
+const UpdateBodySchema = z.object({
+  did: z.string(),
+  alsoKnownAs: AlsoKnownAsSchema,
+  services: ServicesSchema,
 });
 
-router.post("/register/:actor", async (c) => {
+actorManagement.post("/create", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  const json = await c.req.json();
+  const parseResult = CreateBodySchema.safeParse(json);
+  if (!parseResult.success) {
+    throw new HTTPException(400, {
+      message: JSON.stringify(parseResult.error.flatten()),
+    });
+  }
+  const { alsoKnownAs, services } = parseResult.data;
 
-  const actor = c.req.param("actor");
+  // Generate a key pair
+  const { secretKey, rotationKey } = generateRotationKeyPair();
 
-  // Attempt to store the actor
-  try {
-    await c.env.DB.prepare(
-      "INSERT INTO actors (user_id, actor, created_at, data) VALUES (?, ?, ?, ?)",
-    )
-      .bind(userId, actor, Date.now(), "{}")
-      .run();
-  } catch (error: any) {
-    const msg = String(error?.message || "");
-    if (msg.includes("max_actors_reached")) {
-      throw new HTTPException(400, {
-        message: "You have reached the maximum number of actors.",
-      });
-    } else if (msg.includes("UNIQUE")) {
-      throw new HTTPException(400, { message: "Actor already exists." });
-    } else if (msg.includes("CHECK")) {
-      throw new HTTPException(400, { message: "Actor is invalid." });
-    }
-    return c.text("Unknown error.", 500);
+  // Construct the operation
+  const unsignedOperation = {
+    type: "plc_operation",
+    rotationKeys: [rotationKey],
+    verificationMethods: {
+      atproto: rotationKey,
+    },
+    alsoKnownAs,
+    services,
+    prev: null,
+  };
+
+  // Sign it
+  const signedOperation = await signOperation(unsignedOperation, secretKey);
+
+  // Derive the DID from it
+  const did = await deriveDid(signedOperation);
+  const cid = await deriveCid(signedOperation);
+
+  // Publish the DID to the directory
+  const result = await fetch(`https://plc.directory/${did}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(signedOperation),
+  });
+  if (!result.ok) {
+    const { message } = (await result.json()) as { message: string };
+    throw new HTTPException(500, { message });
   }
 
-  return c.json({ registered: true });
+  // Store the secret key in the database
+  await c.env.DB.prepare(
+    "INSERT INTO actors (did, user_id, secret_key, current_cid, created_at) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(did, userId, secretKey, cid, Date.now())
+    .run();
+
+  return c.json({ did });
 });
 
-router.put("/update/:actor", async (c) => {
+actorManagement.post("/update", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  const json = await c.req.json();
+  const parseResult = UpdateBodySchema.safeParse(json);
+  if (!parseResult.success) {
+    throw new HTTPException(400, {
+      message: JSON.stringify(parseResult.error.flatten()),
+    });
+  }
+  const { did, alsoKnownAs, services } = parseResult.data;
 
-  const actor = c.req.param("actor");
-  const data = c.req.query("data");
-
-  // Ensure that the data is a JSON object
-  // matching the Actor schema
-
-  // Attempt to update the actor
-  const result = await c.env.DB.prepare(
-    "UPDATE actors SET data = ? WHERE user_id = ? AND actor = ?",
+  const dbResult = await c.env.DB.prepare(
+    "SELECT secret_key, current_cid FROM actors WHERE did = ? AND user_id = ?",
   )
-    .bind(data, userId, actor)
-    .first();
-  if (!result) {
-    throw new HTTPException(404, { message: "Actor not found." });
+    .bind(did, userId)
+    .first<{ secret_key: Uint8Array; current_cid: string }>();
+  if (!dbResult) {
+    throw new HTTPException(404, {
+      message: "Actor not found.",
+    });
   }
 
+  const { secret_key: oldSecretKey, current_cid: prev } = dbResult;
+
+  // Generate a new secret key
+  const { secretKey, rotationKey } = generateRotationKeyPair();
+
+  // Create a new operation
+  const unsignedOperation = {
+    type: "plc_operation",
+    rotationKeys: [rotationKey],
+    verificationMethods: {},
+    alsoKnownAs,
+    services,
+    prev,
+  };
+
+  // Sign that operation
+  const signedOperation = await signOperation(unsignedOperation, oldSecretKey);
+  const cid = await deriveCid(signedOperation);
+
+  // Publish the new operation
+  const result = await fetch(`https://plc.directory/${did}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(signedOperation),
+  });
+  if (!result.ok) {
+    const { message } = (await result.json()) as { message: string };
+    throw new HTTPException(500, { message });
+  }
+
+  // Update the new secret key and cid
+  await c.env.DB.prepare(
+    "UPDATE actors SET secret_key = ?, current_cid = ? WHERE did = ? AND user_id = ?",
+  )
+    .bind(secretKey, cid, did, userId)
+    .run();
+
+  // Return the updated actor DID
   return c.json({ updated: true });
 });
 
-router.get("/list", async (c) => {
-  const userId = await verifySessionCookie(c);
-  const result = await c.env.DB.prepare(
-    "SELECT actor, created_at, data FROM actors WHERE user_id = ?",
-  )
-    .bind(userId)
-    .all<{ actor: string; created_at: number; data: string }>();
+// delete() {
+// }
 
-  // Convert the data to a JSON object
-  const actors = result.results.map((actor) => {
-    let parsedData;
-    try {
-      parsedData = JSON.parse(actor.data);
-    } catch {
-      parsedData = null;
-    }
-    return {
-      actor: actor.actor,
-      created_at: actor.created_at,
-      data: parsedData,
-    };
-  });
+// // Update
 
-  return c.json({ actors });
-});
+// export() {
+//   // Downloads recovery keys
+// }
 
-export default router;
+// import() {
+//   // Uploads a new actor
+// }
+
+export default actorManagement;
