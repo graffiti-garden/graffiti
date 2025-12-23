@@ -1,7 +1,7 @@
 <template>
     <form @submit.prevent="registerHandle">
         <input
-            v-model="handle"
+            v-model="handleName"
             placeholder="my-handle"
             required
             v-focus
@@ -31,9 +31,25 @@
 import { ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { fetchFromAPI } from "../globals";
+import {
+    OptionalAlsoKnownAsSchema,
+    OptionalServicesSchema,
+} from "../../../shared/did-schemas";
+import { z } from "zod";
+
+const props = withDefaults(
+    defineProps<{
+        alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
+        services: z.infer<typeof OptionalServicesSchema>;
+    }>(),
+    {
+        services: undefined,
+        alsoKnownAs: () => ["did:plc:12354"],
+    },
+);
 
 const router = useRouter();
-const handle = ref("");
+const handleName = ref("");
 
 // and disable the register button if checking/unavailable
 type AvailabilityStatus =
@@ -48,18 +64,17 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let requestSeq = 0;
 
 watch(
-    handle,
-    (newHandleRaw) => {
+    handleName,
+    (newHandleName) => {
         const mySeq = ++requestSeq;
         if (debounceTimer) clearTimeout(debounceTimer);
 
-        const newHandle = newHandleRaw.trim();
-        if (!newHandle) {
+        if (!newHandleName) {
             availabilityStatus.value = "idle";
-        } else if (newHandle.length > 64) {
+        } else if (newHandleName.length > 64) {
             errorStatus.value = "Handle is too long";
             availabilityStatus.value = "error";
-        } else if (!newHandle.match(/^[a-zA-Z0-9_-]+$/)) {
+        } else if (!newHandleName.match(/^[a-zA-Z0-9_-]+$/)) {
             errorStatus.value =
                 "Handle can only contain letters, numbers, underscores, and hyphens";
             availabilityStatus.value = "error";
@@ -67,17 +82,17 @@ watch(
             availabilityStatus.value = "checking";
             debounceTimer = setTimeout(() => {
                 if (mySeq !== requestSeq) return;
-                checkHandleAvailability(mySeq);
+                checkHandleAvailability(newHandleName, mySeq);
             }, 500);
         }
     },
     { flush: "post" },
 );
 
-async function checkHandleAvailability(mySeq: number) {
+async function checkHandleAvailability(handleName: string, mySeq: number) {
     try {
         const { available } = await fetchFromAPI(
-            `/handles/available/${handle.value}`,
+            `/handles/available/${handleName}`,
         );
         if (mySeq !== requestSeq) return;
         availabilityStatus.value = available ? "available" : "unavailable";
@@ -90,7 +105,6 @@ async function checkHandleAvailability(mySeq: number) {
 const registering = ref(false);
 async function registerHandle() {
     registering.value = true;
-    const handleValue = handle.value.trim();
     try {
         await fetchFromAPI("/handles/register", {
             method: "POST",
@@ -98,8 +112,9 @@ async function registerHandle() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                handle: handleValue,
-                data: {},
+                name: handleName.value,
+                services: props.services,
+                alsoKnownAs: props.alsoKnownAs,
             }),
         });
         router.push("/handles");
