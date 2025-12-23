@@ -1,25 +1,23 @@
 import { Hono } from "hono";
 import type { Bindings } from "../env";
-import { HandleSchema } from "./schemas";
 import { HTTPException } from "hono/http-exception";
+import {
+  OptionalAlsoKnownAsSchema,
+  OptionalServicesSchema,
+  constructDidDocument,
+  handleNameToDid,
+} from "../../../shared/did-schemas";
 
 const handleDids = new Hono<{ Bindings: Bindings }>();
 
-handleDids.get("/:handle/.well-known/did.json", async (c) => {
-  const handle = c.req.param("handle");
-  const parseResult = HandleSchema.safeParse(handle);
-  if (!parseResult.success) {
-    throw new HTTPException(400, {
-      message: "Invalid handle.",
-      cause: parseResult.error.flatten(),
-    });
-  }
+handleDids.get("/:handle-name/.well-known/did.json", async (c) => {
+  const handleName = c.req.param("handle-name");
 
   const result = await c.env.DB.prepare(
-    "SELECT data FROM handles WHERE handle = ?",
+    "SELECT services, also_known_as FROM handles WHERE handle = ?",
   )
-    .bind(handle)
-    .first<{ data: string }>();
+    .bind(handleName)
+    .first<{ services: string; also_known_as: string }>();
 
   if (!result) {
     throw new HTTPException(404, {
@@ -27,10 +25,16 @@ handleDids.get("/:handle/.well-known/did.json", async (c) => {
     });
   }
 
-  return c.json(JSON.parse(result.data));
+  const alsoKnownAs = OptionalAlsoKnownAsSchema.parse(
+    JSON.parse(result.also_known_as),
+  );
+  const services = OptionalServicesSchema.parse(JSON.parse(result.services));
+  const did = handleNameToDid(handleName);
+
+  return c.json(constructDidDocument({ did, services, alsoKnownAs }));
 });
 
-handleDids.get("/:handle/", (c) => {
+handleDids.get("/:handle-name/", (c) => {
   // Redirect to the DID document
   // TODO: replace this with a redirect to social.wiki
   return c.redirect("/.well-known/did.json");

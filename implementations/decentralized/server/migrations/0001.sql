@@ -44,27 +44,35 @@ CREATE TABLE IF NOT EXISTS oauth_codes (
 -- ^^^^^^^^^ Authentication ^^^^^^^^^^^
 ---------------------------------------
 
-CREATE TABLE IF NOT EXISTS storage_instances (
-    id TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS service_instances (
+    service_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    CHECK (type IN ('bucket', 'indexer'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_service_instances_by_user_id ON service_instances(user_id);
+
+CREATE TABLE IF NOT EXISTS handles (
+    name TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    services TEXT,
+    also_known_as TEXT,
+    created_at INTEGER NOT NULL,
+    CHECK (LENGTH(name) > 0 AND LENGTH(name) <= 64),
+    CHECK (name NOT GLOB '*[^a-zA-Z0-9_-]*')
+);
+
+CREATE INDEX IF NOT EXISTS idx_handles_by_user_id ON handles(user_id);
+
+CREATE TABLE IF NOT EXISTS actors (
+    did TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    secret_key BLOB NOT NULL,
+    current_cid TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS actors (
-    actor TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    CHECK (LENGTH(actor) > 0 AND LENGTH(actor) <= 255),
-    CHECK (actor NOT GLOB '*[^a-zA-Z0-9._~-]*')
-);
-
 CREATE INDEX IF NOT EXISTS idx_actors_by_user_id ON actors(user_id);
-
-CREATE TRIGGER IF NOT EXISTS trg_max5_actors_per_user
-BEFORE INSERT ON actors
-FOR EACH ROW
-WHEN (SELECT COUNT(*) FROM actors WHERE user_id = NEW.user_id) >= 5
-BEGIN
-  SELECT RAISE(ABORT, 'max_actors_reached');
-END;
