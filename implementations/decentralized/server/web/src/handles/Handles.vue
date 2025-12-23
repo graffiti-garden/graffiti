@@ -1,5 +1,11 @@
 <template>
-    <p v-if="handles === undefined">Loading...</p>
+    <p v-if="handles === undefined">
+        <em>Loading...</em>
+    </p>
+    <template v-else-if="handles === null">
+        <p><em>Error loading handles!</em></p>
+        <button @click="fetchHandles">Retry</button>
+    </template>
     <ul v-else>
         <li v-for="handle in handles" :key="handle.name">
             <article>
@@ -49,18 +55,26 @@ interface Handle {
     alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
     services: z.infer<typeof OptionalServicesSchema>;
 }
-const handles = ref<Array<Handle> | undefined>(undefined);
 
 function handleToLink(handleName: string) {
     return `${window.location.protocol}//${handleNameToHandle(handleName)}/.well-known/did.json`;
 }
 
-function fetchActors() {
-    fetchFromAPI("/handles/list").then((value: { handles: Array<Handle> }) => {
-        handles.value = value.handles.sort((a, b) => a.createdAt - b.createdAt);
-    });
+const handles = ref<Array<Handle> | undefined | null>(undefined);
+function fetchHandles() {
+    handles.value = undefined;
+    fetchFromAPI("/handles/list")
+        .then((value: { handles: Array<Handle> }) => {
+            handles.value = value.handles.sort(
+                (a, b) => a.createdAt - b.createdAt,
+            );
+        })
+        .catch((error) => {
+            console.error(error);
+            handles.value = null;
+        });
 }
-fetchActors();
+fetchHandles();
 
 const deleting = ref(false);
 function deleteHandle(handleName: string) {
@@ -77,7 +91,10 @@ function deleteHandle(handleName: string) {
         body: JSON.stringify({ name: handleName }),
     })
         .then(() => {
-            fetchActors();
+            handles.value?.splice(
+                handles.value.findIndex((h) => h.name === handleName),
+                1,
+            );
         })
         .catch((error) => {
             alert(error.message);
