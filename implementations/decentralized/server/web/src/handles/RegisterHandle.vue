@@ -37,16 +37,10 @@ import {
 } from "../../../shared/did-schemas";
 import { z } from "zod";
 
-const props = withDefaults(
-    defineProps<{
-        alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
-        services: z.infer<typeof OptionalServicesSchema>;
-    }>(),
-    {
-        services: undefined,
-        alsoKnownAs: () => ["did:plc:12354"],
-    },
-);
+const props = defineProps<{
+    alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
+    services: z.infer<typeof OptionalServicesSchema>;
+}>();
 
 const router = useRouter();
 const handleName = ref("");
