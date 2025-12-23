@@ -6,6 +6,11 @@ import { base64url } from "multiformats/bases/base64";
 import { CID } from "multiformats/cid";
 import { create as createDigest } from "multiformats/hashes/digest";
 import { sha256 } from "multiformats/hashes/sha2";
+import { z } from "zod";
+import {
+  OptionalAlsoKnownAsSchema,
+  OptionalServicesSchema,
+} from "../../../shared/did-schemas";
 
 export function generateRotationKeyPair() {
   const secretKey = secp.utils.randomSecretKey();
@@ -39,10 +44,7 @@ async function hashOperation(operation: {}) {
   return new Uint8Array(digest);
 }
 
-export async function signOperation(
-  unsignedOperation: {},
-  secretKey: Uint8Array,
-) {
+async function signOperation(unsignedOperation: {}, secretKey: Uint8Array) {
   // Encode the operation as bytes
   const operationHash = await hashOperation(unsignedOperation);
   // Signatures must be "low-S", "compact"
@@ -61,7 +63,7 @@ export async function signOperation(
   };
 }
 
-export async function deriveDid(signedOperation: {}) {
+async function deriveDid(signedOperation: {}) {
   // To derive the DID:
   // serialize the “signed” operation with DAG-CBOR,
   // take the SHA-256 hash of those bytes, and encode
@@ -74,9 +76,49 @@ export async function deriveDid(signedOperation: {}) {
   return `did:plc:${didSuffix}`;
 }
 
-export async function deriveCid(signedOperation: {}) {
+async function deriveCid(signedOperation: {}) {
   const operationHash = await hashOperation(signedOperation);
   const digest = createDigest(sha256.code, operationHash);
   const cid = CID.createV1(dagCbor.code, digest);
   return cid.toString();
+}
+
+export async function publishDid(args: {
+  did?: string;
+  alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
+  services: z.infer<typeof OptionalServicesSchema>;
+  oldSecretKey: Uint8Array;
+  newRotationKey: string;
+  prev?: string;
+}) {
+  let { alsoKnownAs, services, oldSecretKey, newRotationKey, did, prev } = args;
+  const unsignedOperation = {
+    type: "plc_operation",
+    rotationKeys: [newRotationKey],
+    verificationMethods: {},
+    alsoKnownAs: alsoKnownAs ?? [],
+    services: services ?? {},
+    prev: prev ?? null,
+  };
+
+  // Sign it
+  const signedOperation = await signOperation(unsignedOperation, oldSecretKey);
+
+  if (!did) {
+    did = await deriveDid(signedOperation);
+  }
+  const cid = await deriveCid(signedOperation);
+
+  // Publish the DID to the directory
+  const result = await fetch(`https://plc.directory/${did}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(signedOperation),
+  });
+  if (!result.ok) {
+    const { message } = (await result.json()) as { message: string };
+    throw new Error(message);
+  }
+
+  return { did, cid };
 }
