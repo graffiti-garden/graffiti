@@ -8,14 +8,6 @@ const router = new Hono<{ Bindings: Bindings }>();
 
 router.get("/available/:handle", async (c) => {
   const handle = c.req.param("handle");
-  const parseResult = HandleSchema.safeParse(handle);
-  if (!parseResult.success) {
-    throw new HTTPException(400, {
-      message: "Invalid handle.",
-      cause: parseResult.error.flatten(),
-    });
-  }
-
   const info = await c.env.DB.prepare(
     "SELECT created_at FROM handles WHERE handle = ?",
   )
@@ -27,15 +19,7 @@ router.get("/available/:handle", async (c) => {
 
 router.post("/register", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const json = await c.req.json();
-  const parseResult = HandleUpdateSchema.safeParse(json);
-  if (!parseResult.success) {
-    throw new HTTPException(400, {
-      message: "Invalid request body.",
-      cause: parseResult.error.flatten(),
-    });
-  }
-  const { handle, data } = parseResult.data;
+  const { handle, data } = await c.req.json();
 
   // Attempt to store the handle
   try {
@@ -63,17 +47,10 @@ router.post("/register", async (c) => {
 
 router.post("/delete", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const json = await c.req.json();
-  const parseResult = HandleBodySchema.safeParse(json);
-  if (!parseResult.success) {
-    throw new HTTPException(400, {
-      message: "Invalid request body.",
-      cause: parseResult.error.flatten(),
-    });
-  }
-  const { handle } = parseResult.data;
+  const { handle } = await c.req.json();
+
   const result = await c.env.DB.prepare(
-    "DELETE FROM handles WHERE user_id = ? AND handle = ?",
+    "DELETE FROM handles WHERE user_id = ? AND handle = ? RETURNING handle",
   )
     .bind(userId, handle)
     .first();
@@ -85,19 +62,11 @@ router.post("/delete", async (c) => {
 
 router.post("/update", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const json = await c.req.json();
-  const parseResult = HandleUpdateSchema.safeParse(json);
-  if (!parseResult.success) {
-    throw new HTTPException(400, {
-      message: "Invalid request body.",
-      cause: parseResult.error.flatten(),
-    });
-  }
-  const { handle, data } = parseResult.data;
+  const { handle, data } = await c.req.json();
 
   // Attempt to update the handle
   const result = await c.env.DB.prepare(
-    "UPDATE handles SET data = ? WHERE user_id = ? AND handle = ?",
+    "UPDATE handles SET data = ? WHERE user_id = ? AND handle = ? RETURNING handle",
   )
     .bind(data, userId, handle)
     .first();

@@ -45,6 +45,12 @@ fetchActors();
 
 const deleting = ref(false);
 function deleteHandle(handle: string) {
+    if (
+        !confirm(
+            `Are you sure you want to delete "${handle}"? It may be claimed by another person.`,
+        )
+    )
+        return;
     deleting.value = true;
     fetchFromAPI("/handles/delete", {
         method: "POST",

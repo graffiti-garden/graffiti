@@ -18,7 +18,7 @@
                 Unavailable
             </span>
             <span v-else-if="availabilityStatus === 'error'">
-                Error checking availability
+                {{ errorStatus }}
             </span>
         </output>
         <button :disabled="registering || availabilityStatus !== 'available'">
@@ -31,7 +31,6 @@
 import { ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { fetchFromAPI } from "../globals";
-import { WatchDirectoryFlags } from "typescript";
 
 const router = useRouter();
 const handle = ref("");
@@ -44,28 +43,33 @@ type AvailabilityStatus =
     | "unavailable"
     | "error";
 const availabilityStatus = ref<AvailabilityStatus>("idle");
+const errorStatus = ref<string | null>(null);
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let requestSeq = 0;
+
 watch(
     handle,
     (newHandleRaw) => {
+        const mySeq = ++requestSeq;
+        if (debounceTimer) clearTimeout(debounceTimer);
+
         const newHandle = newHandleRaw.trim();
         if (!newHandle) {
             availabilityStatus.value = "idle";
-            if (debounceTimer) clearTimeout(debounceTimer);
-            return;
+        } else if (newHandle.length > 64) {
+            errorStatus.value = "Handle is too long";
+            availabilityStatus.value = "error";
+        } else if (!newHandle.match(/^[a-zA-Z0-9_-]+$/)) {
+            errorStatus.value =
+                "Handle can only contain letters, numbers, underscores, and hyphens";
+            availabilityStatus.value = "error";
+        } else {
+            availabilityStatus.value = "checking";
+            debounceTimer = setTimeout(() => {
+                if (mySeq !== requestSeq) return;
+                checkHandleAvailability(mySeq);
+            }, 500);
         }
-
-        // show immediate feedback + debounce request
-        availabilityStatus.value = "checking";
-        if (debounceTimer) clearTimeout(debounceTimer);
-
-        const mySeq = ++requestSeq;
-        debounceTimer = setTimeout(() => {
-            // ignore if a newer change happened while we waited
-            if (mySeq !== requestSeq) return;
-            checkHandleAvailability(mySeq);
-        }, 500);
     },
     { flush: "post" },
 );
@@ -79,7 +83,7 @@ async function checkHandleAvailability(mySeq: number) {
         availabilityStatus.value = available ? "available" : "unavailable";
     } catch (error) {
         availabilityStatus.value = "error";
-        alert(error);
+        errorStatus.value = String(error);
     }
 }
 
