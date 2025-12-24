@@ -7,14 +7,18 @@ import { CID } from "multiformats/cid";
 import { create as createDigest } from "multiformats/hashes/digest";
 import { sha256 } from "multiformats/hashes/sha2";
 import { z } from "zod";
+import { HTTPException } from "hono/http-exception";
 import {
   OptionalAlsoKnownAsSchema,
   OptionalServicesSchema,
 } from "../../../shared/did-schemas";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 
-export function generateRotationKeyPair() {
-  const secretKey = secp.utils.randomSecretKey();
+function generateRotationSecretKey() {
+  return secp.utils.randomSecretKey();
+}
 
+export function deriveRotationPublicKey(secretKey: Uint8Array) {
   // Make sure the public key is compressed
   // with the right prefix and encodings according to:
   // https://atproto.com/specs/cryptography#public-key-encoding
@@ -30,8 +34,12 @@ export function generateRotationKeyPair() {
   prefixed.set(publicKeyCompressed, 2);
 
   const base58Encoded = base58btc.encode(prefixed); // includes leading 'z'
-  const rotationKey = `did:key:${base58Encoded}`;
+  return `did:key:${base58Encoded}`;
+}
 
+export function generateRotationKeyPair() {
+  const secretKey = generateRotationSecretKey();
+  const rotationKey = deriveRotationPublicKey(secretKey);
   return { secretKey, rotationKey };
 }
 
@@ -117,7 +125,9 @@ export async function publishDid(args: {
   });
   if (!result.ok) {
     const { message } = (await result.json()) as { message: string };
-    throw new Error(message);
+    throw new HTTPException((result.status ?? 500) as ContentfulStatusCode, {
+      message,
+    });
   }
 
   return { did, cid };
