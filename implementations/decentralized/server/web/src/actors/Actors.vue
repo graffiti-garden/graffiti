@@ -25,7 +25,10 @@
     </template>
     <ul v-else>
         <li v-for="actor in actors" :key="actor.did">
-            <DisplayActor :actor="actor" />
+            <DisplayActor
+                :actor="actor"
+                :onRemove="() => actors?.splice(actors.indexOf(actor), 1)"
+            />
         </li>
     </ul>
 </template>
