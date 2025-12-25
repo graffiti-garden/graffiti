@@ -14,7 +14,7 @@ handleDids.get("/:handle-name/.well-known/did.json", async (c) => {
   const handleName = c.req.param("handle-name");
 
   const result = await c.env.DB.prepare(
-    "SELECT services, also_known_as FROM handles WHERE handle = ?",
+    "SELECT services, also_known_as FROM handles WHERE name = ?",
   )
     .bind(handleName)
     .first<{ services: string; also_known_as: string }>();
@@ -26,9 +26,11 @@ handleDids.get("/:handle-name/.well-known/did.json", async (c) => {
   }
 
   const alsoKnownAs = OptionalAlsoKnownAsSchema.parse(
-    JSON.parse(result.also_known_as),
+    result.also_known_as ? JSON.parse(result.also_known_as) : undefined,
   );
-  const services = OptionalServicesSchema.parse(JSON.parse(result.services));
+  const services = OptionalServicesSchema.parse(
+    result.services ? JSON.parse(result.services) : undefined,
+  );
   const did = handleNameToDid(handleName);
 
   return c.json(constructDidDocument({ did, services, alsoKnownAs }));

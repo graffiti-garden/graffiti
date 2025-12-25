@@ -24,6 +24,7 @@
         <button :disabled="registering || availabilityStatus !== 'available'">
             {{ registering ? "Registering..." : "Register" }}
         </button>
+        <button type="button" @click="$router.back()">Cancel</button>
     </form>
 </template>
 
