@@ -84,7 +84,12 @@ router.post("/update", async (c) => {
   const result = await c.env.DB.prepare(
     "UPDATE handles SET services = ?, also_known_as = ? WHERE user_id = ? AND name = ? RETURNING name",
   )
-    .bind(services, alsoKnownAs, userId, handleName)
+    .bind(
+      services ? JSON.stringify(services) : null,
+      alsoKnownAs ? JSON.stringify(alsoKnownAs) : null,
+      userId,
+      handleName,
+    )
     .first();
   if (!result) {
     throw new HTTPException(404, { message: "Handle not found." });
@@ -110,7 +115,7 @@ router.get("/list", async (c) => {
   const handles = result.results.map((handle) => {
     return {
       name: handle.name,
-      created_at: handle.created_at,
+      createdAt: handle.created_at,
       services: OptionalServicesSchema.parse(
         handle.services ? JSON.parse(handle.services) : undefined,
       ),
