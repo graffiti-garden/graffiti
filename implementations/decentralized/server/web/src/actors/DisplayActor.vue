@@ -77,6 +77,7 @@ import { fetchFromAPI } from "../globals";
 
 const props = defineProps<{
     actor: Actor;
+    onRemove?: () => void;
 }>();
 let actor = props.actor;
 
@@ -232,7 +233,7 @@ function removeActor() {
         body: JSON.stringify({ did: actor.did }),
     })
         .then(() => {
-            // TODO: do something
+            props.onRemove?.();
         })
         .catch((error) => {
             alert(error);
