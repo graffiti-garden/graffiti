@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, toRef, watch } from "vue";
+import { ref, watch } from "vue";
 import {
     constructDidDocument,
     handleNameToDid,
@@ -72,8 +72,12 @@ const editingAlsoKnownAs = ref<OptionalAlsoKnownAs>(undefined);
 const editingServices = ref<OptionalServices>(undefined);
 watch(editing, () => {
     if (editing.value) {
-        editingAlsoKnownAs.value = handle.value.alsoKnownAs;
-        editingServices.value = handle.value.services;
+        editingAlsoKnownAs.value =
+            JSON.parse(JSON.stringify(handle.value.alsoKnownAs ?? null)) ??
+            undefined;
+        editingServices.value =
+            JSON.parse(JSON.stringify(handle.value.services ?? null)) ??
+            undefined;
     }
 });
 

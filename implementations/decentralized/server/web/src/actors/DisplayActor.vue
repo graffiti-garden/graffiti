@@ -133,8 +133,10 @@ const editingAlsoKnownAs = ref<OptionalAlsoKnownAs>(undefined);
 const editingServices = ref<OptionalServices>(undefined);
 watch(editing, () => {
     if (editing.value) {
-        editingAlsoKnownAs.value = alsoKnownAs.value;
-        editingServices.value = services.value;
+        editingAlsoKnownAs.value =
+            JSON.parse(JSON.stringify(alsoKnownAs.value ?? null)) ?? undefined;
+        editingServices.value =
+            JSON.parse(JSON.stringify(services.value ?? null)) ?? undefined;
     }
 });
 
