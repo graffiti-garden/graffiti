@@ -1,14 +1,15 @@
 import { Hono } from "hono";
 import type { Bindings } from "./env";
-import actors from "./actors/management";
 import webauthn from "./auth/webauthn";
 import oauth from "./auth/oauth";
-import storageInstances from "./storage/instances";
-import dids from "./actors/dids";
+import serviceInstanceManagement from "./service-instances/management";
+import handleManagement from "./handles/management";
+import actorManagement from "./actors/management";
+import handleDids from "./handles/dids";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-const BASE_HOST = "graffiti.theiahenderson.workers.dev";
+const BASE_HOST = "example.com";
 
 // Do not allow iframe for security
 app.use("*", async (c, next) => {
@@ -20,8 +21,9 @@ app.use("*", async (c, next) => {
 // Apply the APIs
 app.route("/api/webauthn", webauthn);
 app.route("/api/oauth", oauth);
-app.route("/api/actors", actors);
-app.route("/api/storage-instances", storageInstances);
+app.route("/api/handles", handleManagement);
+app.route("/api/actors", actorManagement);
+app.route("/api/service-instances", serviceInstanceManagement);
 
 // Route static assets
 app.all("*", async (c) => {
@@ -63,7 +65,7 @@ const hostRouter = new Hono<{ Bindings: Bindings }>({
     return `/domain${url.pathname}`;
   },
 });
-hostRouter.route("/subdomain", dids);
+hostRouter.route("/subdomain", handleDids);
 hostRouter.route("/domain", app);
 
 export default hostRouter;
