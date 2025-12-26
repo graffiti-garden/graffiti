@@ -4,62 +4,51 @@ import { verifySessionCookie } from "../auth/session";
 import { randomBase64 } from "../auth/utils";
 import { HTTPException } from "hono/http-exception";
 
-const storageInstances = new Hono<{ Bindings: Bindings }>();
+const serviceInstances = new Hono<{ Bindings: Bindings }>();
 
-storageInstances.post("/create", async (c) => {
+serviceInstances.post("/create", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const name = c.req.query("name");
-  if (!name) {
-    throw new HTTPException(400, { message: "Missing name" });
-  }
+  const { name, type } = await c.req.json();
 
-  const id = randomBase64();
+  const serviceId = randomBase64();
   const createdAt = Date.now();
 
   await c.env.DB.prepare(
-    `INSERT INTO storage_instances (id, name, user_id, created_at) VALUES (?, ?, ?, ?)`,
+    `INSERT INTO service_instances (service_id, type, name, user_id, created_at) VALUES (?, ?, ?, ?, ?)`,
   )
-    .bind(id, name, userId, createdAt)
+    .bind(serviceId, type, name, userId, createdAt)
     .run();
 
-  return c.json({ id, createdAt });
+  return c.json({ serviceId, createdAt });
 });
 
-storageInstances.put("/rename", async (c) => {
+serviceInstances.put("/service/:service-id", async (c) => {
   const { userId } = await verifySessionCookie(c);
-
-  const id = c.req.query("id");
-  const name = c.req.query("name");
-  if (!id || !name) {
-    throw new HTTPException(400, { message: "Missing id or name" });
-  }
+  const serviceId = c.req.param("service-id");
+  const { name } = await c.req.json();
 
   const result = await c.env.DB.prepare(
-    `UPDATE storage_instances SET name = ? WHERE id = ? AND user_id = ? RETURNING id`,
+    `UPDATE service_instances SET name = ? WHERE service_id = ? AND user_id = ? RETURNING service_id`,
   )
-    .bind(name, id, userId)
-    .first<{ id: string }>();
+    .bind(name, serviceId, userId)
+    .first();
   if (!result) {
     throw new HTTPException(404, { message: "Instance not found" });
   }
   return c.json({});
 });
 
-storageInstances.delete("/delete", async (c) => {
+serviceInstances.delete("/service/:service-id", async (c) => {
   const { userId } = await verifySessionCookie(c);
-
-  const id = c.req.query("id");
-  if (!id) {
-    throw new HTTPException(400, { message: "Missing id" });
-  }
+  const serviceId = c.req.param("service-id");
 
   const result = await c.env.DB.prepare(
-    `DELETE FROM storage_instances WHERE id = ? AND user_id = ? RETURNING id`,
+    `DELETE FROM service_instances WHERE service_id = ? AND user_id = ? RETURNING service_id`,
   )
-    .bind(id, userId)
+    .bind(serviceId, userId)
     .first<{ id: string }>();
 
-  // TODO: Delete associated storage items
+  // TODO: Delete all associated items in bucket/indexer
 
   if (!result) {
     throw new HTTPException(404, { message: "Instance not found" });
@@ -68,22 +57,23 @@ storageInstances.delete("/delete", async (c) => {
   return c.json({});
 });
 
-storageInstances.get("/list", async (c) => {
+serviceInstances.get("/list/:type", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  const type = c.req.param("type");
 
   const instances = await c.env.DB.prepare(
-    `SELECT id, name, created_at FROM storage_instances WHERE user_id = ?`,
+    `SELECT service_id, name, created_at FROM service_instances WHERE user_id = ? AND type = ?`,
   )
-    .bind(userId)
-    .all<{ id: string; name: string; created_at: number }>();
+    .bind(userId, type)
+    .all<{ service_id: string; name: string; created_at: number }>();
 
   return c.json(
-    instances.results.map(({ id, name, created_at }) => ({
-      id,
+    instances.results.map(({ service_id, name, created_at }) => ({
+      serviceId: service_id,
       name,
       createdAt: created_at,
     })),
   );
 });
 
-export default storageInstances;
+export default serviceInstances;
