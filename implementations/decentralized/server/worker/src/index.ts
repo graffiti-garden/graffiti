@@ -9,8 +9,6 @@ import handleDids from "./handles/dids";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-const BASE_HOST = "example.com";
-
 // Do not allow iframe for security
 app.use("*", async (c, next) => {
   c.header("X-Frame-Options", "DENY");
@@ -49,23 +47,33 @@ app.all("*", async (c) => {
 
 // Subdomains are used for specific actor DIDs.
 // Route those directly to the DID router
-const hostRouter = new Hono<{ Bindings: Bindings }>({
-  getPath: (req) => {
-    const url = new URL(req.url);
-    const hostname = url.hostname;
-    for (const base_host of [BASE_HOST, "localhost"]) {
-      if (hostname !== base_host && hostname.endsWith(`.${base_host}`)) {
-        const subdomain = hostname.slice(
-          0,
-          hostname.length - base_host.length - 1,
-        );
-        return `/subdomain/${subdomain}${url.pathname}`;
-      }
-    }
-    return `/domain${url.pathname}`;
-  },
-});
-hostRouter.route("/subdomain", handleDids);
-hostRouter.route("/domain", app);
+let hostRouter: Hono<{ Bindings: Bindings }> | undefined = undefined;
+function getHostRouter(baseHost: string): Hono<{ Bindings: Bindings }> {
+  if (!hostRouter) {
+    hostRouter = new Hono<{ Bindings: Bindings }>({
+      getPath: (req) => {
+        const url = new URL(req.url);
+        const hostname = url.hostname;
+        for (const host of [baseHost, "localhost"]) {
+          if (hostname !== host && hostname.endsWith(`.${host}`)) {
+            const subdomain = hostname.slice(
+              0,
+              hostname.length - host.length - 1,
+            );
+            return `/subdomain/${subdomain}${url.pathname}`;
+          }
+        }
+        return `/domain${url.pathname}`;
+      },
+    });
+    hostRouter.route("/subdomain", handleDids);
+    hostRouter.route("/domain", app);
+  }
+  return hostRouter;
+}
 
-export default hostRouter;
+export default {
+  fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
+    return getHostRouter(env.BASE_HOST).fetch(request, env, ctx);
+  },
+};
