@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS passkey_registration_challenges (
     user_id TEXT NOT NULL,
     challenge TEXT NOT NULL,
     created_at INTEGER NOT NULL
-);
+) STRICT;
 
 CREATE TABLE IF NOT EXISTS passkey_authentication_challenges (
     session_id TEXT PRIMARY KEY,

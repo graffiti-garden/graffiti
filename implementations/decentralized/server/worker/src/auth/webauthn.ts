@@ -13,12 +13,11 @@ import {
   deleteSessionCookie,
   verifySessionCookie,
 } from "./session";
-import { randomBase64 } from "./utils";
+import { randomBase64, decodeBase64 } from "./utils";
 
 const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 const webauthn = new Hono<{ Bindings: Bindings }>();
 
-const rpName = "Pigment";
 function getRp(req: { url: string }) {
   const url = new URL(req.url);
   if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
@@ -47,14 +46,14 @@ webauthn.get("/register/challenge", async (c) => {
 
   const { rpId } = getRp(c.req);
 
-  const displayName = `Pigment User ${userId.slice(0, 6)}`;
+  const displayName = `${c.env.BASE_HOST} user ${userId.slice(0, 6)}`;
   const options = await generateRegistrationOptions({
-    rpName,
+    rpName: c.env.BASE_HOST,
     rpID: rpId,
     attestationType: "none",
     userDisplayName: displayName,
     userName: displayName,
-    userID: userId,
+    userID: decodeBase64(userId),
   });
 
   // Store the challenge for later
@@ -122,8 +121,7 @@ webauthn.post("/register/verify", async (c) => {
   const {
     registrationInfo: {
       credentialType,
-      credentialPublicKey,
-      counter,
+      credential: { counter, publicKey },
       credentialDeviceType,
       credentialBackedUp,
     },
@@ -144,7 +142,7 @@ webauthn.post("/register/verify", async (c) => {
     .bind(
       credentialId,
       userId,
-      credentialPublicKey,
+      publicKey,
       counter,
       // Are the values below necessary?
       credentialType,
@@ -222,10 +220,10 @@ webauthn.post("/authenticate/verify", async (c) => {
     expectedOrigin: origin,
     expectedRPID: rpId,
     expectedChallenge: challenge,
-    authenticator: {
-      credentialID: credentialId,
-      credentialPublicKey: new Uint8Array(userPasskey.public_key),
+    credential: {
+      id: credentialId,
       counter: userPasskey.counter,
+      publicKey: new Uint8Array(userPasskey.public_key),
     },
     requireUserVerification: false,
   });
@@ -236,11 +234,14 @@ webauthn.post("/authenticate/verify", async (c) => {
 
   const { newCounter } = verification.authenticationInfo;
 
-  await c.env.DB.prepare(
-    `UPDATE passkeys SET counter = ? WHERE credential_id = ?`,
-  )
-    .bind(newCounter, credentialId)
-    .run();
+  // Update the counter if necessary
+  if (userPasskey.counter !== newCounter) {
+    await c.env.DB.prepare(
+      `UPDATE passkeys SET counter = ? WHERE credential_id = ?`,
+    )
+      .bind(newCounter, credentialId)
+      .run();
+  }
 
   await createSessionCookie(c, userPasskey.user_id);
   return c.json({ message: "Passkey authenticated successfully." });
