@@ -1,113 +1,106 @@
 <template>
-    <p>
-        Storage instances are where you store an actor's data. Each actor should
-        have one storage instance. They serve as verification and a backup. If
-        you are unhappy migrate your data somewhere else.
-    </p>
-    <h2>Your Storage Instances</h2>
-    <ul v-if="instances && instances.length > 0">
-        <li v-for="instance in instances" :key="instance.id">
-            <article>
-                <h2>
-                    <form
-                        v-if="renameId === instance.id"
-                        @submit.prevent="renameInstance()"
-                    >
-                        <input
-                            type="text"
-                            v-focus
-                            v-model="renameName"
-                            @focus="
-                                $nextTick().then(() =>
-                                    (
-                                        $event.target as HTMLInputElement
-                                    ).select(),
-                                )
-                            "
-                        />
-                        <button type="submit">Save</button>
-                        <button @click="renameId = null">Cancel</button>
-                    </form>
-                    <span v-else>
-                        {{ instance.name }}
-                        <button
-                            @click="
-                                renameId = instance.id;
-                                renameName = instance.name;
-                            "
+    <header>
+        <h2>Service Instances</h2>
+        <nav>
+            <ul>
+                <li>
+                    <button v-if="!createOpen" @click="createOpen = true">
+                        Create New Service Instance
+                    </button>
+                    <form v-else @submit.prevent="createService">
+                        <label for="new-service-name"
+                            >Choose a name for your new service instance:</label
                         >
-                            Rename
+                        <input
+                            v-focus
+                            type="text"
+                            id="new-service-name"
+                            v-model="newServiceName"
+                            placeholder="My Service Instance"
+                            required
+                            :disabled="creating"
+                        />
+                        <button type="submit" :disabled="creating">
+                            {{ creating ? "Creating..." : "Create" }}
                         </button>
-                    </span>
-                </h2>
-                <h3>
-                    {{ `graffiti:storage:wss:example.com/${instance.id}` }}
-                    <button>Copy URL</button>
-                </h3>
-                <button
-                    @click="deleteInstance(instance.id)"
-                    :disabled="deleting === instance.id"
-                >
-                    {{ deleting === instance.id ? "Deleting..." : "Delete" }}
-                </button>
-                <button>Download Data</button>
-            </article>
+                    </form>
+                </li>
+            </ul>
+        </nav>
+    </header>
+
+    <p v-if="services === undefined">
+        <em>Loading...</em>
+    </p>
+    <template v-else-if="services === null">
+        <p><em>Error loading services!</em></p>
+        <button @click="fetchServices">Retry</button>
+    </template>
+    <p v-else-if="services.length === 0">
+        <em>You have no service instances.</em>
+    </p>
+    <ul v-else>
+        <li v-for="service in services" :key="service.serviceId">
+            <DisplayService
+                :service="service"
+                :onDelete="() => services?.splice(services.indexOf(service), 1)"
+            />
         </li>
     </ul>
-    <p v-else>No instances found.</p>
-
-    <button v-if="!createOpen" @click="createOpen = true">
-        Create New Instance
-    </button>
-    <form v-else @submit.prevent="createInstance">
-        <label for="newInstance"
-            >Choose a name for your new storage instance:</label
-        >
-        <input
-            v-focus
-            type="text"
-            id="newinstance"
-            v-model="newInstance"
-            placeholder="My Storage Instance"
-            required
-            :disabled="creating"
-        />
-        <button type="submit" :disabled="creating">
-            {{ creating ? "Creating..." : "Create" }}
-        </button>
-    </form>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { fetchFromAPI } from "../globals";
+import type { Service } from "./types";
+import DisplayService from "./DisplayService.vue";
 
-const instances = ref<
-    | Array<{
-          id: string;
-          name: string;
-          createdAt: number;
-      }>
-    | undefined
->(undefined);
+const services = ref<Array<Service> | null | undefined>(undefined);
+
+const props = defineProps<{
+    type: "bucket" | "indexer";
+}>();
+
+function fetchServices() {
+    services.value = undefined;
+    fetchFromAPI(`/service-instances/list/${props.type}`)
+        .then((value: Array<Service>) => {
+            services.value = value.sort((a, b) => b.createdAt - a.createdAt);
+        })
+        .catch((error) => {
+            console.error(error);
+            services.value = null;
+        });
+}
+fetchServices();
+
+watch(
+    () => props.type,
+    () => {
+        fetchServices();
+    },
+);
 
 const createOpen = ref(false);
-
-const newInstance = ref("");
+const newServiceName = ref("");
 const creating = ref(false);
-function createInstance() {
-    const name = newInstance.value;
+function createService() {
+    const name = newServiceName.value;
     if (!name) return;
     creating.value = true;
-    fetchFromAPI("/storage-instances/create?name=" + name, {
+    fetchFromAPI("/service-instances/create", {
         method: "POST",
+        body: JSON.stringify({ name, type: props.type }),
+        headers: {
+            "Content-Type": "application/json",
+        },
     })
-        .then(({ id, createdAt }) => {
-            instances.value = [
-                ...(instances.value ?? []),
-                { id, name, createdAt },
+        .then(({ serviceId, createdAt }) => {
+            services.value = [
+                { serviceId, name, createdAt },
+                ...(services.value ?? []),
             ];
-            newInstance.value = "";
+            newServiceName.value = "";
             createOpen.value = false;
         })
         .catch((error) => {
@@ -117,79 +110,4 @@ function createInstance() {
             creating.value = false;
         });
 }
-
-const deleting = ref<false | string>(false);
-function deleteInstance(id: string) {
-    deleting.value = id;
-
-    if (
-        !confirm(
-            "Are you sure you want to delete this storage instance? It CANNOT be undone.",
-        )
-    ) {
-        deleting.value = false;
-        return;
-    }
-
-    fetchFromAPI("/storage-instances/delete?id=" + id, {
-        method: "DELETE",
-    })
-        .then(() => {
-            instances.value = instances.value?.filter(
-                (instance) => instance.id !== id,
-            );
-        })
-        .catch((error) => {
-            alert(error.message);
-        })
-        .finally(() => {
-            deleting.value = false;
-        });
-}
-
-const renameId = ref<string | null>(null);
-const renameName = ref("");
-const renaming = ref(false);
-function renameInstance() {
-    renaming.value = true;
-
-    fetchFromAPI(
-        "/storage-instances/rename?id=" +
-            renameId.value +
-            "&name=" +
-            renameName.value,
-        {
-            method: "PUT",
-        },
-    )
-        .then(() => {
-            instances.value = instances.value?.map((instance) =>
-                instance.id === renameId.value
-                    ? { ...instance, name: renameName.value }
-                    : instance,
-            );
-            renameId.value = null;
-        })
-        .catch((error) => {
-            alert(error.message);
-        })
-        .finally(() => {
-            renaming.value = false;
-        });
-}
-
-function fetchinstances() {
-    fetchFromAPI("/storage-instances/list").then(
-        (
-            value: Array<{
-                id: string;
-                name: string;
-                createdAt: number;
-            }>,
-        ) => {
-            instances.value = value.sort((a, b) => a.createdAt - b.createdAt);
-        },
-    );
-}
-fetchinstances();
 </script>
