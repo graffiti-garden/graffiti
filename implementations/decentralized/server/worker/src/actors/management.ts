@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import type { Bindings } from "../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionCookie } from "../auth/session";
@@ -165,7 +164,6 @@ actorManagement.post("/import", async (c) => {
   const { userId } = await verifySessionCookie(c);
   const body = await c.req.json();
   const { did, cid: prev, secretKey } = body;
-  console.log(body);
   const oldSecretKey = base64url.decode(secretKey);
 
   // Generate a new key pair
