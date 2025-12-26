@@ -17,11 +17,15 @@ function servicesToDidService(services: z.infer<typeof ServicesSchema>) {
     endpoint: service.endpoint,
   }));
 }
-export function handleNameToHandle(handleName: string) {
-  return `${handleName}.something.com`;
+
+export type OptionalAlsoKnownAs = z.infer<typeof OptionalAlsoKnownAsSchema>;
+export type OptionalServices = z.infer<typeof OptionalServicesSchema>;
+
+export function handleNameToHandle(handleName: string, baseHost: string) {
+  return `${handleName}.${baseHost}`;
 }
-export function handleNameToDid(handleName: string) {
-  return `did:web:${handleNameToHandle(handleName)}`;
+export function handleNameToDid(handleName: string, baseHost: string) {
+  return `did:web:${handleNameToHandle(handleName, baseHost)}`;
 }
 export function constructDidDocument(args: {
   did: string;

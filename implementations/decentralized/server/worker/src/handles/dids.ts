@@ -31,7 +31,7 @@ handleDids.get("/:handle-name/.well-known/did.json", async (c) => {
   const services = OptionalServicesSchema.parse(
     result.services ? JSON.parse(result.services) : undefined,
   );
-  const did = handleNameToDid(handleName);
+  const did = handleNameToDid(handleName, c.env.BASE_HOST);
 
   return c.json(constructDidDocument({ did, services, alsoKnownAs }));
 });

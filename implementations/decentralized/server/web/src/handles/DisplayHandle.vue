@@ -2,12 +2,12 @@
     <article>
         <a :href="handleToLink(handle.name)" target="_blank">
             <h2>
-                {{ handleNameToHandle(handle.name) }}
+                {{ handleNameToHandle(handle.name, baseHost) }}
             </h2>
         </a>
         <template v-if="!editing">
             <pre><code>{{ JSON.stringify(constructDidDocument({
-            did: handleNameToDid(handle.name),
+            did: handleNameToDid(handle.name, baseHost),
             services: handle.services,
             alsoKnownAs: handle.alsoKnownAs
             }), null, 2) }}</code></pre>
@@ -63,8 +63,10 @@ const props = defineProps<{
 }>();
 const handle = ref<Handle>(props.handle);
 
+const baseHost = window.location.host;
+
 function handleToLink(handleName: string) {
-    return `${window.location.protocol}//${handleNameToHandle(handleName)}/.well-known/did.json`;
+    return `${window.location.protocol}//${handleNameToHandle(handleName, baseHost)}/.well-known/did.json`;
 }
 
 const editing = ref(false);
@@ -116,7 +118,7 @@ function unregisterHandle() {
     const name = handle.value.name;
     if (
         !confirm(
-            `Are you sure you want to unregister "${handleNameToHandle(name)}"? It may be registered by another person.`,
+            `Are you sure you want to unregister "${handleNameToHandle(name, baseHost)}"? It may be registered by another person.`,
         )
     )
         return;
