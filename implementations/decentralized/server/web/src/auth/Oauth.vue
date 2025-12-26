@@ -9,22 +9,21 @@
         </header>
 
         <main>
-            <p>
-                <code>{{ redirectUriObject?.hostname }}</code>
-                is requesting access to:
-            </p>
-            <ul>
-                <li>Todo</li>
-                <li>Todo</li>
-            </ul>
             <template v-if="isLoggedIn === false">
                 <Login />
             </template>
             <template v-else-if="isLoggedIn === true">
+                <p>
+                    <code>{{ redirectUriObject?.hostname }}</code>
+                    is requesting access to:
+                </p>
+                <ul>
+                    <li>TODO</li>
+                    <li>TODO</li>
+                </ul>
                 <button @click="handleApprove">Approve</button>
                 <button @click="handleDeny">Deny</button>
                 <RouterLink to="/" target="_blank">Go to account</RouterLink>
-                <LogOut />
             </template>
             <template v-else> Loading... </template>
         </main>
@@ -37,6 +36,14 @@ import LogOut from "./Logout.vue";
 import { isLoggedIn } from "../globals";
 import { useRouter } from "vue-router";
 import "./floating-panel.css";
+
+// TODO:
+// work out if this is my storage/indexer/etc.
+// if not ask to switch accounts
+// - Extract the requested services from the scope search parameter
+// - List services of logged in user
+// - If they are all the user's services, display the correct names for them
+// - Otherwise, ask them to switch accounts
 
 // Extract the redirectUri from the search params
 const redirectUri = new URLSearchParams(window.location.search).get(

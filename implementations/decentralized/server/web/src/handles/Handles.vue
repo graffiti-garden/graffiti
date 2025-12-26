@@ -4,8 +4,8 @@
         <nav>
             <ul>
                 <li>
-                    <RouterLink to="/register-handle"
-                        >Register New Handle
+                    <RouterLink :to="{ name: 'register-handle' }">
+                        Register New Handle
                     </RouterLink>
                 </li>
             </ul>

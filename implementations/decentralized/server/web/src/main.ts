@@ -7,7 +7,9 @@ import Navigation from "./Navigation.vue";
 import Oauth from "./auth/Oauth.vue";
 import Home from "./Home.vue";
 import Storage from "./storage/Storage.vue";
-import Actors from "./Actors.vue";
+import Handles from "./handles/Handles.vue";
+import Actors from "./actors/Actors.vue";
+import RegisterHandle from "./handles/RegisterHandle.vue";
 
 // See if we are logged in
 function checkLoggedInStatus() {
@@ -33,16 +35,40 @@ const routes = [
     component: Navigation,
     children: [
       {
+        name: "home",
         path: "/",
         component: Home,
       },
       {
+        name: "handles",
+        path: "/handles",
+        component: Handles,
+      },
+      {
+        name: "actors",
         path: "/actors",
         component: Actors,
       },
       {
+        name: "register-handle",
+        path: "/handles/register",
+        component: RegisterHandle,
+      },
+      {
+        name: "storage",
         path: "/storage",
         component: Storage,
+        props: {
+          type: "bucket",
+        },
+      },
+      {
+        name: "indexers",
+        path: "/indexers",
+        component: Storage,
+        props: {
+          type: "indexer",
+        },
       },
     ],
   },

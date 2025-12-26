@@ -1,7 +1,7 @@
 <template>
     <dialog open>
         <header>
-            <h1>Welcome to Pigment</h1>
+            <h1>Welcome to {{ host }}</h1>
             <h2>
                 A
                 <a href="https://graffiti.garden" target="_blank">Graffiti</a>
@@ -20,4 +20,6 @@
 import Register from "./Register.vue";
 import Login from "./Login.vue";
 import "./floating-panel.css";
+
+const host = window.location.host;
 </script>
