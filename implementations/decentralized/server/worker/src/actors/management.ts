@@ -48,10 +48,10 @@ actorManagement.post("/create", async (c) => {
   });
 });
 
-actorManagement.post("/update", async (c) => {
+actorManagement.put("/actor/:did", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  const did = c.req.param("did");
   const body = await c.req.json();
-  const did = body.did;
   const services = OptionalServicesSchema.parse(body.services);
   const alsoKnownAs = OptionalAlsoKnownAsSchema.parse(body.alsoKnownAs);
 
@@ -91,10 +91,9 @@ actorManagement.post("/update", async (c) => {
   return c.json({ rotationKey: newRotationKey });
 });
 
-actorManagement.post("/remove", async (c) => {
+actorManagement.delete("/actor/:did", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const body = await c.req.json();
-  const did = body.did;
+  const did = c.req.param("did");
 
   // Delete the actor
   const result = await c.env.DB.prepare(
@@ -131,10 +130,10 @@ actorManagement.get("/list", async (c) => {
   });
 });
 
-actorManagement.post("/export", async (c) => {
+// export
+actorManagement.get("/actor/:did", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const body = await c.req.json();
-  const { did } = body;
+  const did = c.req.param("did");
 
   // Export the actor
   const result = await c.env.DB.prepare(

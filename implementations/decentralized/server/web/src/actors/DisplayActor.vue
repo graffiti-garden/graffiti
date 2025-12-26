@@ -77,7 +77,7 @@ import { fetchFromAPI } from "../globals";
 
 const props = defineProps<{
     actor: Actor;
-    onRemove?: () => void;
+    onRemove: () => void;
 }>();
 let actor = props.actor;
 
@@ -145,13 +145,12 @@ function saveActor() {
     if (!editing.value) return;
     saving.value = true;
 
-    fetchFromAPI("/actors/update", {
-        method: "POST",
+    fetchFromAPI(`/actors/actor/${actor.did}`, {
+        method: "PUT",
         headers: {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            did: actor.did,
             alsoKnownAs: editingAlsoKnownAs.value,
             services: editingServices.value,
         }),
@@ -187,13 +186,7 @@ function exportActor() {
         return;
     }
 
-    fetchFromAPI("/actors/export", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ did: actor.did }),
-    })
+    fetchFromAPI(`/actors/actor/${actor.did}`)
         .then((result) => {
             // Turn the result into a json file and download it
             const blob = new Blob([JSON.stringify(result)], {
@@ -227,15 +220,11 @@ function removeActor() {
         return;
     }
 
-    fetchFromAPI("/actors/remove", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ did: actor.did }),
+    fetchFromAPI(`/actors/actor/${actor.did}`, {
+        method: "DELETE",
     })
         .then(() => {
-            props.onRemove?.();
+            props.onRemove();
         })
         .catch((error) => {
             alert(error);

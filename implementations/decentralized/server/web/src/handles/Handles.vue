@@ -18,6 +18,9 @@
         <p><em>Error loading handles!</em></p>
         <button @click="fetchHandles">Retry</button>
     </template>
+    <p v-else-if="handles.length === 0">
+        <em>You have no handles.</em>
+    </p>
     <ul v-else>
         <li v-for="handle in handles" :key="handle.name">
             <DisplayHandle

@@ -59,7 +59,7 @@ import EditDid from "../actors/EditDid.vue";
 
 const props = defineProps<{
     handle: Handle;
-    onUnregister?: () => void;
+    onUnregister: () => void;
 }>();
 const handle = ref<Handle>(props.handle);
 
@@ -88,9 +88,12 @@ function saveHandle() {
     const name = handle.value.name;
     const alsoKnownAs = editingAlsoKnownAs.value;
     const services = editingServices.value;
-    fetchFromAPI("/handles/update", {
-        method: "POST",
-        body: JSON.stringify({ name, alsoKnownAs, services }),
+    fetchFromAPI(`/handles/handle/${name}`, {
+        method: "PUT",
+        body: JSON.stringify({ alsoKnownAs, services }),
+        headers: {
+            "Content-Type": "application/json",
+        },
     })
         .then(() => {
             editing.value = false;
@@ -118,12 +121,11 @@ function unregisterHandle() {
     )
         return;
     unregistering.value = true;
-    fetchFromAPI("/handles/delete", {
-        method: "POST",
-        body: JSON.stringify({ name }),
+    fetchFromAPI(`/handles/handle/${name}`, {
+        method: "DELETE",
     })
         .then(() => {
-            props.onUnregister?.();
+            props.onUnregister();
         })
         .catch((error) => {
             alert(error.message);

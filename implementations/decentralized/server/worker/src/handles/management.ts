@@ -58,9 +58,10 @@ router.post("/register", async (c) => {
   return c.json({ registered: true });
 });
 
-router.post("/delete", async (c) => {
+// Unregister
+router.delete("/handle/:handle-name", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const { name: handleName } = await c.req.json();
+  const handleName = c.req.param("handle-name");
 
   const result = await c.env.DB.prepare(
     "DELETE FROM handles WHERE user_id = ? AND name = ? RETURNING name",
@@ -73,10 +74,10 @@ router.post("/delete", async (c) => {
   return c.json({ deleted: true });
 });
 
-router.post("/update", async (c) => {
+router.put("/handle/:handle-name", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  const handleName = c.req.param("handle-name");
   const body = await c.req.json();
-  const handleName = body.name;
   const services = OptionalServicesSchema.parse(body.services);
   const alsoKnownAs = OptionalAlsoKnownAsSchema.parse(body.alsoKnownAs);
 
