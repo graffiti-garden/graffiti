@@ -1,16 +1,37 @@
 <template>
     <template v-if="isLoggedIn">
         <header>
-            <h1>Graffiti</h1>
+            <h1>
+                {{ host }}: A
+                <a href="https://graffiti.garden" target="_blank">Graffiti</a>
+                Provider
+            </h1>
             <nav>
                 <ul>
-                    <li><RouterLink to="/">Home</RouterLink></li>
-                    <li><RouterLink to="/actors">Actors</RouterLink></li>
-                    <li><RouterLink to="/storage">Storage</RouterLink></li>
-                    <li><RouterLink to="/indexers">Indexers</RouterLink></li>
                     <li>
-                        <Logout />
+                        <RouterLink :to="{ name: 'home' }"> Home </RouterLink>
                     </li>
+                    <li>
+                        <RouterLink :to="{ name: 'handles' }">
+                            Handles
+                        </RouterLink>
+                    </li>
+                    <li>
+                        <RouterLink :to="{ name: 'actors' }">
+                            Actors
+                        </RouterLink>
+                    </li>
+                    <li>
+                        <RouterLink :to="{ name: 'storage' }">
+                            Storage
+                        </RouterLink>
+                    </li>
+                    <li>
+                        <RouterLink :to="{ name: 'indexers' }">
+                            Indexers
+                        </RouterLink>
+                    </li>
+                    <li><Logout /></li>
                 </ul>
             </nav>
         </header>
@@ -30,4 +51,6 @@ import { RouterView } from "vue-router";
 import { isLoggedIn } from "./globals";
 import LoginGuard from "./auth/LoginGuard.vue";
 import Logout from "./auth/Logout.vue";
+
+const host = window.location.host;
 </script>

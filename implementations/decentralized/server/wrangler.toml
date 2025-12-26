@@ -2,18 +2,31 @@ name = "graffiti"
 compatibility_date = "2025-12-26"
 main = "worker/src/index.ts"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "graffiti-db"
+database_id = "53d812bd-b0f4-41fa-a144-55b67e0fd759"
+
+[vars]
+BASE_HOST = "graffiti.actor"
+
+[[routes]]
+pattern = "*graffiti.actor/*"
+zone_name = "graffiti.actor"
+
 [assets]
 directory = "web/dist"
 binding = "ASSETS"
 run_worker_first = ["/", "/api/*"]
 
 [observability]
+[observability.logs]
 enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
 
-[[d1_databases]]
-binding = "DB"
-database_name = "graffiti-db"
-database_id = "17573271-a739-4f0b-ac63-41c8a0650093"
-
-[vars]
-BASE_HOST = "graffiti.actor"
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
+persist = true
