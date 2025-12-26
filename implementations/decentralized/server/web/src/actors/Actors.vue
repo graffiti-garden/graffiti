@@ -5,7 +5,11 @@
             <ul>
                 <li>
                     <button @click="createActor" :disabled="creating">
-                        {{ creating ? "Creating New Actor..." : "New Actor" }}
+                        {{
+                            creating
+                                ? "Creating New Actor..."
+                                : "Create New Actor"
+                        }}
                     </button>
                 </li>
                 <li>
@@ -23,6 +27,9 @@
         <p><em>Error loading actors!</em></p>
         <button @click="fetchActors">Retry</button>
     </template>
+    <p v-else-if="actors.length === 0">
+        <em>You have no actors.</em>
+    </p>
     <ul v-else>
         <li v-for="actor in actors" :key="actor.did">
             <DisplayActor
