@@ -72,7 +72,7 @@ const state = new URLSearchParams(window.location.search).get("state") ?? "";
 function handleApprove() {
     // On approval, redirect to the authorize endpoint
     if (!redirectUriObject) return router.push("/");
-    const url = new URL("/api/oauth/authorize", window.location.origin);
+    const url = new URL("/app/oauth/authorize", window.location.origin);
     url.searchParams.set("redirect_uri", redirectUriObject.toString());
     url.searchParams.set("state", state);
     window.location.href = url.toString();

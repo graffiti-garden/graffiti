@@ -1,7 +1,7 @@
 import { createApp } from "vue";
 import "@picocss/pico/css/pico.classless.fuchsia.css";
 import { createRouter, createWebHistory } from "vue-router";
-import { fetchFromAPI, isLoggedIn } from "./globals";
+import { fetchFromSelf, isLoggedIn } from "./globals";
 import { RouterView } from "vue-router";
 import Navigation from "./Navigation.vue";
 import Oauth from "./auth/Oauth.vue";
@@ -13,7 +13,8 @@ import RegisterHandle from "./handles/RegisterHandle.vue";
 
 // See if we are logged in
 function checkLoggedInStatus() {
-  fetchFromAPI("webauthn/logged-in")
+  console.log("hey!");
+  fetchFromSelf("/app/webauthn/logged-in")
     .then(() => {
       isLoggedIn.value = true;
     })

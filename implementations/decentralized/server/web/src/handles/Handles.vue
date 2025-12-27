@@ -33,14 +33,14 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { fetchFromAPI } from "../globals";
+import { fetchFromSelf } from "../globals";
 import type { Handle } from "./types";
 import DisplayHandle from "./DisplayHandle.vue";
 
 const handles = ref<Array<Handle> | undefined | null>(undefined);
 function fetchHandles() {
     handles.value = undefined;
-    fetchFromAPI("/handles/list")
+    fetchFromSelf("/app/handles/list")
         .then((value: { handles: Array<Handle> }) => {
             handles.value = value.handles.sort(
                 (a, b) => b.createdAt - a.createdAt,

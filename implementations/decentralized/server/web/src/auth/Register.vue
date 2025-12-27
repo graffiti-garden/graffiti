@@ -10,7 +10,7 @@ import {
     startRegistration,
     type RegistrationResponseJSON,
 } from "@simplewebauthn/browser";
-import { isLoggedIn, fetchFromAPI } from "../globals";
+import { isLoggedIn, fetchFromSelf } from "../globals";
 
 const registering = ref(false);
 
@@ -19,7 +19,7 @@ async function handleRegister() {
 
     let optionsJSON: any;
     try {
-        optionsJSON = await fetchFromAPI("webauthn/register/challenge");
+        optionsJSON = await fetchFromSelf("/app/webauthn/register/challenge");
     } catch (error: any) {
         alert(`Failed to register passkey. ${error.message}`);
         registering.value = false;
@@ -38,7 +38,7 @@ async function handleRegister() {
 
     // Verify the passkey registration
     try {
-        await fetch("/api/webauthn/register/verify", {
+        await fetchFromSelf("/app/webauthn/register/verify", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

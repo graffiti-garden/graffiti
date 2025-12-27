@@ -51,7 +51,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { fetchFromAPI } from "../globals";
+import { fetchFromSelf } from "../globals";
 import type { Service } from "./types";
 import DisplayService from "./DisplayService.vue";
 
@@ -63,7 +63,7 @@ const props = defineProps<{
 
 function fetchServices() {
     services.value = undefined;
-    fetchFromAPI(`/service-instances/list/${props.type}`)
+    fetchFromSelf(`/app/service-instances/list/${props.type}`)
         .then((value: Array<Service>) => {
             services.value = value.sort((a, b) => b.createdAt - a.createdAt);
         })
@@ -88,7 +88,7 @@ function createService() {
     const name = newServiceName.value;
     if (!name) return;
     creating.value = true;
-    fetchFromAPI("/service-instances/create", {
+    fetchFromSelf("/app/service-instances/create", {
         method: "POST",
         body: JSON.stringify({ name, type: props.type }),
         headers: {

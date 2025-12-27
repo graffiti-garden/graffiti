@@ -42,7 +42,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { fetchFromAPI } from "../globals";
+import { fetchFromSelf } from "../globals";
 import type { Service } from "./types";
 
 const props = defineProps<{
@@ -64,7 +64,7 @@ function deleteService() {
         return;
     }
 
-    fetchFromAPI(`/service-instances/service/${service.serviceId}`, {
+    fetchFromSelf(`/app/service-instances/service/${service.serviceId}`, {
         method: "DELETE",
     })
         .then(() => {
@@ -86,7 +86,7 @@ function renameService() {
 
     const name = renameName.value;
 
-    fetchFromAPI(`/service-instances/service/${service.serviceId}`, {
+    fetchFromSelf(`/app/service-instances/service/${service.serviceId}`, {
         method: "PUT",
         body: JSON.stringify({ name }),
         headers: {

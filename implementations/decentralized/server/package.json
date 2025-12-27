@@ -8,7 +8,7 @@
     "dev:api": "wrangler dev --config wrangler.toml",
     "dev": "concurrently --kill-others \"npm run dev:web\" \"npm run dev:api\"",
     "build:web": "vite build --config web/vite.config.mts",
-    "deploy": "npm run build:web && wrangler deploy --config wrangler.toml"
+    "deploy": "npm run build:web && wrangler deploy --env production --config wrangler.toml"
   },
   "dependencies": {
     "@ipld/dag-cbor": "^9.2.5",

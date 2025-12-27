@@ -31,7 +31,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { fetchFromAPI } from "../globals";
+import { fetchFromSelf } from "../globals";
 import {
     OptionalAlsoKnownAsSchema,
     OptionalServicesSchema,
@@ -86,8 +86,8 @@ watch(
 
 async function checkHandleAvailability(handleName: string, mySeq: number) {
     try {
-        const { available } = await fetchFromAPI(
-            `/handles/available/${handleName}`,
+        const { available } = await fetchFromSelf(
+            `/app/handles/available/${handleName}`,
         );
         if (mySeq !== requestSeq) return;
         availabilityStatus.value = available ? "available" : "unavailable";
@@ -101,7 +101,7 @@ const registering = ref(false);
 async function registerHandle() {
     registering.value = true;
     try {
-        await fetchFromAPI("/handles/register", {
+        await fetchFromSelf("/app/handles/register", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

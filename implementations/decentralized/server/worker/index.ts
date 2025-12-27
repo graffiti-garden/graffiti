@@ -1,34 +1,23 @@
 import { Hono } from "hono";
 import type { Bindings } from "./env";
-import webauthn from "./auth/webauthn";
-import oauth from "./auth/oauth";
-import serviceInstanceManagement from "./service-instances/management";
-import handleManagement from "./handles/management";
-import actorManagement from "./actors/management";
-import handleDids from "./handles/dids";
+import app from "./app/app";
+import storageBuckets from "./storage-buckets/index";
+import handleDids from "./app/handles/dids";
 
-const app = new Hono<{ Bindings: Bindings }>();
-
-// Do not allow iframe for security
-app.use("*", async (c, next) => {
-  c.header("X-Frame-Options", "DENY");
-  c.header("Access-Control-Allow-Origin", "none");
-  await next();
-});
-
-// Apply the APIs
-app.route("/api/webauthn", webauthn);
-app.route("/api/oauth", oauth);
-app.route("/api/handles", handleManagement);
-app.route("/api/actors", actorManagement);
-app.route("/api/service-instances", serviceInstanceManagement);
+const router = new Hono<{ Bindings: Bindings }>();
+router.route("/app", app);
+router.route("/s", storageBuckets);
 
 // Route static assets
-app.all("*", async (c) => {
+router.all("*", async (c) => {
   const url = new URL(c.req.url);
-  if (url.pathname.startsWith("/api")) {
+  if (url.pathname.startsWith("/app") || url.pathname.startsWith("/s")) {
     return c.notFound();
   }
+
+  // Disable cross origin for static assets
+  c.header("X-Frame-Options", "DENY");
+  c.header("Access-Control-Allow-Origin", "none");
 
   // Try to serve a static asset first.
   const assetRes = await c.env.ASSETS.fetch(c.req.raw);
@@ -67,7 +56,7 @@ function getHostRouter(baseHost: string): Hono<{ Bindings: Bindings }> {
       },
     });
     hostRouter.route("/subdomain", handleDids);
-    hostRouter.route("/domain", app);
+    hostRouter.route("/domain", router);
   }
   return hostRouter;
 }

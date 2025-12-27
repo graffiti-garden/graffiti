@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { Bindings } from "../env";
+import type { Bindings } from "../../env";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,

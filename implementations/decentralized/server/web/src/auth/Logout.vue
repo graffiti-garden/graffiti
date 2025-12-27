@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { isLoggedIn, fetchFromAPI } from "../globals";
+import { isLoggedIn, fetchFromSelf } from "../globals";
 
 const loggingOut = ref(false);
 
@@ -14,7 +14,7 @@ async function handleLogout() {
     loggingOut.value = true;
 
     try {
-        await fetchFromAPI("webauthn/logout", {
+        await fetchFromSelf("/app/webauthn/logout", {
             method: "POST",
         });
         isLoggedIn.value = false;

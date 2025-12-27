@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { Bindings } from "../env";
+import type { Bindings } from "../../env";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { randomBase64, randomBytes, encodeBase64, decodeBase64 } from "./utils";
 

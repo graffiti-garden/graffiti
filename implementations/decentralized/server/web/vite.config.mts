@@ -4,6 +4,7 @@ import httpProxy from "http-proxy";
 
 const proxy = httpProxy.createProxyServer();
 const WRANGLER_PORT = "8787";
+const SERVER_PREFIXES = ["/app/", "/s/", "/i/"];
 
 export default defineConfig({
   root: "web",
@@ -15,7 +16,7 @@ export default defineConfig({
   plugins: [
     vue(),
     {
-      // During dev, proxy "/api" and all
+      // During dev, proxy "/app", "/s", "/i" and all
       // subdomain requests to the worker.
       name: "proxy",
       configureServer(server: ViteDevServer) {
@@ -32,7 +33,9 @@ export default defineConfig({
                 host: `${subdomain}.localhost:${WRANGLER_PORT}`,
               },
             });
-          } else if (path?.startsWith("/api/")) {
+          } else if (
+            SERVER_PREFIXES.some((prefix) => path?.startsWith(prefix))
+          ) {
             // If it is an API request, send it to localhost:8787
             proxy.web(req, res, {
               target: `http://localhost:${WRANGLER_PORT}`,
