@@ -10,7 +10,7 @@ import {
     startAuthentication,
     type AuthenticationResponseJSON,
 } from "@simplewebauthn/browser";
-import { isLoggedIn, fetchFromAPI } from "../globals";
+import { isLoggedIn, fetchFromSelf } from "../globals";
 
 const loggingIn = ref(false);
 
@@ -19,7 +19,9 @@ async function handleLogin() {
 
     let optionsJSON: any;
     try {
-        optionsJSON = await fetchFromAPI("webauthn/authenticate/challenge");
+        optionsJSON = await fetchFromSelf(
+            "/app/webauthn/authenticate/challenge",
+        );
     } catch (error: any) {
         alert(`Failed to log in. ${error.message}`);
         loggingIn.value = false;
@@ -37,7 +39,7 @@ async function handleLogin() {
     }
 
     try {
-        await fetchFromAPI("webauthn/authenticate/verify", {
+        await fetchFromSelf("/app/webauthn/authenticate/verify", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

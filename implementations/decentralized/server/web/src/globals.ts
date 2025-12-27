@@ -2,14 +2,11 @@ import { ref } from "vue";
 
 export const isLoggedIn = ref<boolean | undefined>(undefined);
 
-export async function fetchFromAPI(
+export async function fetchFromSelf(
   path: string,
   options?: RequestInit | undefined,
 ) {
-  let url = path.startsWith("/") ? path : `/${path}`;
-  url = url.startsWith("/api") ? url : `/api${url}`;
-
-  const response = await fetch(url, options);
+  const response = await fetch(path, options);
   if (!response.ok) {
     // If we hit an unauthorized error,
     // we must have been logged out

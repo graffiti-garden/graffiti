@@ -1,5 +1,5 @@
-import { Hono, type Context } from "hono";
-import type { Bindings } from "../env";
+import { Hono } from "hono";
+import type { Bindings } from "../../env";
 import { verifySessionCookie } from "../auth/session";
 import { HTTPException } from "hono/http-exception";
 import {

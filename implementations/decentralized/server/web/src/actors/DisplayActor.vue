@@ -73,7 +73,7 @@ import {
     type OptionalServices,
 } from "../../../shared/did-schemas";
 import EditDid from "./EditDid.vue";
-import { fetchFromAPI } from "../globals";
+import { fetchFromSelf } from "../globals";
 
 const props = defineProps<{
     actor: Actor;
@@ -145,7 +145,7 @@ function saveActor() {
     if (!editing.value) return;
     saving.value = true;
 
-    fetchFromAPI(`/actors/actor/${actor.did}`, {
+    fetchFromSelf(`/app/actors/actor/${actor.did}`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
@@ -186,7 +186,7 @@ function exportActor() {
         return;
     }
 
-    fetchFromAPI(`/actors/actor/${actor.did}`)
+    fetchFromSelf(`/app/actors/actor/${actor.did}`)
         .then((result) => {
             // Turn the result into a json file and download it
             const blob = new Blob([JSON.stringify(result)], {
@@ -220,7 +220,7 @@ function removeActor() {
         return;
     }
 
-    fetchFromAPI(`/actors/actor/${actor.did}`, {
+    fetchFromSelf(`/app/actors/actor/${actor.did}`, {
         method: "DELETE",
     })
         .then(() => {

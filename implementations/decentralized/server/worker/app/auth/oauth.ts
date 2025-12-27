@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { Bindings } from "../env";
+import type { Bindings } from "../../env";
 import { createSessionToken, verifySessionCookie } from "./session";
 import { HTTPException } from "hono/http-exception";
 import { randomBase64 } from "./utils";

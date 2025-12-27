@@ -42,14 +42,14 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { fetchFromAPI } from "../globals";
+import { fetchFromSelf } from "../globals";
 import type { Actor } from "./types";
 import DisplayActor from "./DisplayActor.vue";
 
 const actors = ref<Array<Actor> | undefined | null>(undefined);
 function fetchActors() {
     actors.value = undefined;
-    fetchFromAPI("/actors/list")
+    fetchFromSelf("/app/actors/list")
         .then((value: { actors: Array<Actor> }) => {
             actors.value = value.actors.sort(
                 (a, b) => b.createdAt - a.createdAt,
@@ -66,7 +66,7 @@ const creating = ref(false);
 async function createActor() {
     creating.value = true;
     try {
-        const result = await fetchFromAPI("/actors/create", {
+        const result = await fetchFromSelf("/app/actors/create", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
@@ -133,7 +133,7 @@ async function importActor() {
             }
 
             try {
-                const result = await fetchFromAPI("/actors/import", {
+                const result = await fetchFromSelf("/app/actors/import", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(json),

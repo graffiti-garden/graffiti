@@ -4,5 +4,5 @@
     "lib": ["esnext", "webworker"],
     "types": ["@cloudflare/workers-types"],
   },
-  "include": ["src", "../shared/"],
+  "include": ["index.ts", "env.ts", "app", "storage-buckets", "../shared/"],
 }

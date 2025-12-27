@@ -54,7 +54,7 @@ import {
     type OptionalServices,
 } from "../../../shared/did-schemas";
 import type { Handle } from "./types";
-import { fetchFromAPI } from "../globals";
+import { fetchFromSelf } from "../globals";
 import EditDid from "../actors/EditDid.vue";
 
 const props = defineProps<{
@@ -90,7 +90,7 @@ function saveHandle() {
     const name = handle.value.name;
     const alsoKnownAs = editingAlsoKnownAs.value;
     const services = editingServices.value;
-    fetchFromAPI(`/handles/handle/${name}`, {
+    fetchFromSelf(`/app/handles/handle/${name}`, {
         method: "PUT",
         body: JSON.stringify({ alsoKnownAs, services }),
         headers: {
@@ -123,7 +123,7 @@ function unregisterHandle() {
     )
         return;
     unregistering.value = true;
-    fetchFromAPI(`/handles/handle/${name}`, {
+    fetchFromSelf(`/app/handles/handle/${name}`, {
         method: "DELETE",
     })
         .then(() => {
