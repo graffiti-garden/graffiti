@@ -2,16 +2,22 @@ import { Hono } from "hono";
 import type { Bindings } from "./env";
 import app from "./app/app";
 import storageBuckets from "./storage-buckets/index";
+import indexers from "./indexers/index";
 import handleDids from "./app/handles/dids";
 
 const router = new Hono<{ Bindings: Bindings }>();
 router.route("/app", app);
 router.route("/s", storageBuckets);
+router.route("/i", indexers);
 
 // Route static assets
 router.all("*", async (c) => {
   const url = new URL(c.req.url);
-  if (url.pathname.startsWith("/app") || url.pathname.startsWith("/s")) {
+  if (
+    url.pathname.startsWith("/app") ||
+    url.pathname.startsWith("/s") ||
+    url.pathname.startsWith("/i")
+  ) {
     return c.notFound();
   }
 
