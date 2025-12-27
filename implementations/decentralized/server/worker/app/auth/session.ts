@@ -143,6 +143,19 @@ export async function verifySessionCookie(
   return result;
 }
 
+export async function verifySessionHeader(
+  context: Context<{ Bindings: Bindings }>,
+  options?: {
+    allowTemp?: boolean;
+  },
+) {
+  const token = context.req.header("Authorization");
+  if (!token) {
+    throw new HTTPException(401, { message: "Not logged in." });
+  }
+  return await verifySessionToken(context, token, options);
+}
+
 export async function deleteSessionCookie(
   context: Context<{ Bindings: Bindings }>,
 ) {
