@@ -2,17 +2,35 @@ import { Hono, type Context } from "hono";
 import type { Bindings } from "../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../app/auth/session";
+import { z } from "zod";
+
+const MAX_SIZE = 25 * 1024 * 1024; // 25mb
+
+const bucketIdSchema = z
+  .string()
+  .length(44)
+  .regex(/^[a-zA-Z0-9_-]+$/);
+function verifyBucketId(bucketId: string) {
+  const result = bucketIdSchema.safeParse(bucketId);
+  if (!result.success) {
+    throw new HTTPException(400, {
+      message: `Invalid bucket ID: ${result.error.issues.map((i) => i.message).join(", ")}`,
+    });
+  }
+}
 
 async function verifyBucketControl(
   context: Context<{ Bindings: Bindings }>,
-  bucket: string,
+  bucketId: string,
 ) {
+  verifyBucketId(bucketId);
+
   const { userId } = await verifySessionHeader(context);
 
   const result = await context.env.DB.prepare(
     `SELECT created_at FROM service_instances WHERE service_id = ? AND user_id = ? AND type = ?`,
   )
-    .bind(bucket, userId, "bucket")
+    .bind(bucketId, userId, "bucket")
     .first();
 
   if (!result) {
@@ -28,56 +46,135 @@ const storageBuckets = new Hono<{ Bindings: Bindings }>();
 storageBuckets.use("*", async (c, next) => {
   // Disable CORs
   c.header("Access-Control-Allow-Origin", "*");
-  c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE");
-  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  c.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, If-None-Match",
+  );
   await next();
 });
 
-storageBuckets.get("/:bucket/:key", async (c) => {
-  const bucket = c.req.param("bucket");
+storageBuckets.get("/:bucket-id/:key", async (c) => {
+  const bucketId = c.req.param("bucket-id");
+  verifyBucketId(bucketId);
+
   const key = c.req.param("key");
+  const bucketKey = `${bucketId}/${key}`;
 
-  const bucketKey = `${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`;
+  const ifNoneMatch = c.req.header("If-None-Match");
+  const result = await c.env.BUCKET.get(bucketKey, {
+    onlyIf: {
+      etagDoesNotMatch: ifNoneMatch,
+    },
+  });
 
-  // Return the result straight from the bucket
-  const result = await c.env.BUCKET.get(bucketKey);
   if (!result) {
     throw new HTTPException(404, {
       message: "File not found",
     });
   }
-  return new Response(result.body);
+
+  const headers = new Headers();
+  headers.set("ETag", result.etag);
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  if (!("body" in result)) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  return new Response(result.body, {
+    headers,
+  });
 });
 
-storageBuckets.put("/:bucket/:key", async (c) => {
-  const bucket = c.req.param("bucket");
-  await verifyBucketControl(c, bucket);
+storageBuckets.put("/:bucket-id/:key", async (c) => {
+  const bucketId = c.req.param("bucket-id");
+  await verifyBucketControl(c, bucketId);
 
   const key = c.req.param("key");
-  const bucketKey = `${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`;
-  const body = await c.req.blob();
+  const bucketKey = `${bucketId}/${key}`;
+  const body = c.req.raw.body;
+  if (!body) {
+    throw new HTTPException(400, {
+      message: "Missing body",
+    });
+  }
 
-  await c.env.BUCKET.put(bucketKey, body);
+  // Reject anything too big
+  const contentLengthHeader = c.req.header("Content-Length");
+  if (contentLengthHeader) {
+    const contentLength = Number(contentLengthHeader);
+    if (!Number.isFinite(contentLength)) {
+      throw new HTTPException(400, { message: "Invalid Content-Length" });
+    }
+    if (contentLength > MAX_SIZE) {
+      throw new HTTPException(413, { message: "Body is too large" });
+    }
+  }
+
+  // Just in case the content length header is
+  // inaccurate, limit the body size manually
+  const reader = body.getReader();
+  let totalBytes = 0;
+  let tooLarge = false;
+  const limitedBody = new ReadableStream({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) return controller.close();
+
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_SIZE) {
+        tooLarge = true;
+        controller.error(new Error("Body is too large"));
+        void reader.cancel("Body is too large").catch(() => {});
+        return;
+      }
+
+      controller.enqueue(value);
+    },
+    async cancel(reason) {
+      return reader.cancel(reason).catch(() => {});
+    },
+  });
+
+  try {
+    await c.env.BUCKET.put(bucketKey, limitedBody);
+  } catch (e: any) {
+    if (tooLarge) {
+      throw new HTTPException(413, { message: "Body is too large" });
+    }
+    throw e;
+  }
   return c.json({ uploaded: true });
 });
 
-storageBuckets.delete("/:bucket/:key", async (c) => {
-  const bucket = c.req.param("bucket");
-  await verifyBucketControl(c, bucket);
+storageBuckets.delete("/:bucket-id/:key", async (c) => {
+  const bucketId = c.req.param("bucket-id");
+  await verifyBucketControl(c, bucketId);
 
   const key = c.req.param("key");
-  const bucketKey = `${encodeURIComponent(bucket)}/${encodeURIComponent(key)}`;
+  const bucketKey = `${bucketId}/${key}`;
   await c.env.BUCKET.delete(bucketKey);
   return c.json({ deleted: true });
 });
 
-storageBuckets.get("/:bucket/", async (c) => {
-  const bucket = c.req.param("bucket");
-  await verifyBucketControl(c, bucket);
+// List all keys in the bucket
+storageBuckets.get("/:bucket-id", async (c) => {
+  const bucketId = c.req.param("bucket-id");
+  await verifyBucketControl(c, bucketId);
 
-  const listed = await c.env.BUCKET.list({ prefix: bucket });
-  const keys = listed.objects.map((o) => o.key);
-  return c.json({ keys });
+  const cursor = c.req.query("cursor");
+
+  const listed = await c.env.BUCKET.list({ prefix: `${bucketId}/`, cursor });
+  const keys = listed.objects.map((o) => o.key.slice(bucketId.length + 1));
+
+  return c.json({
+    keys,
+    cursor: listed.truncated ? listed.cursor : null,
+  });
+});
+
+storageBuckets.get("/auth", async (c) => {
+  return c.text(`gf:a:oauth:${c.env.BASE_HOST}/oauth`);
 });
 
 export default storageBuckets;
