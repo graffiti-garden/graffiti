@@ -1,5 +1,4 @@
 import type { Context } from "hono";
-import { encodeBase64 } from "../app/auth/utils";
 import type { Bindings } from "../env";
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { HTTPException } from "hono/http-exception";
@@ -21,25 +20,6 @@ async function isIndexerController(
   return !!result;
 }
 
-async function getClock(
-  context: Context<{ Bindings: Bindings }>,
-): Promise<number> {
-  const result = await context.env.DB.prepare(
-    "SELECT value FROM announcement_clock WHERE id = 1",
-  ).first<{ value: number }>();
-
-  return result?.value ?? 0;
-}
-
-async function deriveAnnounceId(announcement: unknown) {
-  const operationBytes = dagCborEncode(announcement);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new Uint8Array(operationBytes),
-  );
-  return encodeBase64(new Uint8Array(digest));
-}
-
 export async function announce(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
@@ -50,76 +30,85 @@ export async function announce(
   },
   userId: string | undefined,
 ) {
-  // Derive a stable announcement ID
-  const announcementId = await deriveAnnounceId({ indexerId, ...announcement });
-  const clock = await getClock(context);
-
-  const statements: string[] = [];
-  const bindings: any[] = [];
-
-  statements.push(`INSERT OR IGNORE INTO announcements (
-      announcement_id,
-      indexer_id,
-      tombstone,
-      data,
-      tags
-    ) VALUES (?, ?, ?, ?, ?);
-  `);
-  bindings.push(
-    announcementId,
-    indexerId,
-    announcement.tombstone ? 1 : 0,
-    JSON.stringify(announcement.data),
-    JSON.stringify(announcement.tags),
+  // Hash the announcement to prevent inserting duplicates
+  const operationBytes = dagCborEncode({ indexerId, ...announcement });
+  const announcementHash = await crypto.subtle.digest(
+    "SHA-256",
+    new Uint8Array(operationBytes),
   );
 
-  for (const tag of announcement.tags) {
-    statements.push(`
-      INSERT OR IGNORE INTO announcement_tags (
-        announcement_id,
-        indexer_id,
-        tag,
-        created_at
-      )
-      SELECT ?, ?, ?, ?
-      WHERE changes() = 1;
-    `);
-    bindings.push(announcementId, indexerId, tag, clock);
-  }
-
-  // If the indexer is the user's own
-  // or the indexer is public, label it as "OK" (1)
+  // Determine if the indexer is under the user's control,
+  // which we will later use to determine if we can label the announcement
   const isController = await isIndexerController(context, indexerId, userId);
-  if (isController) {
-    statements.push(`
-      INSERT INTO announcement_labels (
-        announcement_id,
-        user_id,
-        label
-      ) VALUES (?, ?, 1)
-      ON CONFLICT (announcement_id, user_id) DO UPDATE SET label = 1;
-    `);
-    bindings.push(announcementId, userId);
+
+  const inserted = await context.env.DB.prepare(
+    `
+      INSERT INTO announcements (
+        hash,
+        indexer_id,
+        tombstone,
+        data,
+        tags
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(hash) DO NOTHING
+      RETURNING seq;
+    `,
+  )
+    .bind(
+      announcementHash,
+      indexerId,
+      announcement.tombstone ? 1 : 0,
+      JSON.stringify(announcement.data),
+      JSON.stringify(announcement.tags),
+    )
+    .first<{ seq: number }>();
+
+  if (!inserted) {
+    throw new Error("Duplicate announcement");
   }
 
-  const sql = `
-    BEGIN;
-    ${statements.join("\n")}
-    COMMIT;
-  `;
+  const statements: D1PreparedStatement[] = [];
 
-  await context.env.DB.prepare(sql)
-    .bind(...bindings)
-    .run();
+  const announcementSeq = inserted.seq;
 
-  return announcementId;
+  for (const tag of announcement.tags) {
+    statements.push(
+      context.env.DB.prepare(
+        `
+        INSERT INTO announcement_tags (
+          announcement_seq,
+          indexer_id,
+          tag
+        ) VALUES (?, ?, ?);
+      `,
+      ).bind(announcementSeq, indexerId, tag),
+    );
+  }
+
+  if (isController) {
+    statements.push(
+      context.env.DB.prepare(
+        `
+        INSERT INTO announcement_labels (
+          announcement_seq,
+          user_id,
+          label
+        ) VALUES (?, ?, 1);
+      `,
+      ).bind(announcementSeq, userId),
+    );
+  }
+
+  await context.env.DB.batch(statements);
+
+  return announcementSeq;
 }
 
 export async function query(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
   tags: string[],
-  ifCreatedSince?: number,
+  ifCreatedSinceSeq?: number,
   userId?: string,
 ) {
   const isController = await isIndexerController(context, indexerId, userId);
@@ -127,39 +116,37 @@ export async function query(
     throw new HTTPException(403, { message: "Forbidden" });
   }
 
-  const queryTime = await getClock(context);
-
   const sql = [
     `
     WITH matched AS (
-      SELECT DISTINCT at.announcement_id
+      SELECT DISTINCT at.announcement_seq
       FROM announcement_tags at
       WHERE at.indexer_id = ? AND at.tag IN (${tags.map(() => "?").join(", ")})
-        AND at.created_at > ?
+        AND at.announcement_seq > ?
     )
     SELECT
-      a.announcement_id,
+      a.seq,
       a.tombstone,
       a.data,
       a.tags,
       al.label AS label
     FROM matched m
     JOIN announcements a
-      ON a.announcement_id = m.announcement_id
+      ON a.seq = m.announcement_seq
     LEFT JOIN announcement_labels al
-      ON al.announcement_id = a.announcement_id
+      ON a.seq = al.announcement_seq
      AND al.user_id = ?
     `,
     // Only return if the data is "OK" (label = 1) or no label yet
     userId ? ` AND (al.label = 1 OR al.label IS NULL)` : ``,
   ].join("\n");
 
-  const bindings = [indexerId, ...tags, ifCreatedSince ?? 0, userId];
+  const bindings = [indexerId, ...tags, ifCreatedSinceSeq ?? 0, userId];
 
   const res = await context.env.DB.prepare(sql)
     .bind(...bindings)
     .all<{
-      announcement_id: string;
+      seq: number;
       tombstone: number;
       data: string;
       tags: string;
@@ -167,7 +154,7 @@ export async function query(
     }>();
 
   const results = res.results.map((r) => ({
-    announcementId: r.announcement_id,
+    announcementId: r.seq.toString(),
     announcement: {
       tombstone: r.tombstone !== 0,
       tags: JSON.parse(r.tags) as string[],
@@ -176,9 +163,14 @@ export async function query(
     label: r.label ?? 0,
   }));
 
+  const querySeq = res.results.reduce(
+    (maxSeq, r) => Math.max(maxSeq, r.seq),
+    0,
+  );
+
   return {
     results,
-    queryTime,
+    querySeq,
   };
 }
 
@@ -196,11 +188,11 @@ export async function labelAnnouncement(
     });
   }
 
-  // Make sure the announcement_id is in the indexer_id
+  // Make sure the announcement is in the indexer
   const result = await context.env.DB.prepare(
-    `SELECT announcement_id FROM announcements WHERE announcement_id = ? AND indexer_id = ?`,
+    `SELECT seq FROM announcements WHERE seq = ? AND indexer_id = ?`,
   )
-    .bind(announcementId, indexerId)
+    .bind(Number(announcementId), indexerId)
     .first();
   if (!result) {
     throw new HTTPException(404, {
@@ -211,18 +203,18 @@ export async function labelAnnouncement(
   await context.env.DB.prepare(
     `
     INSERT INTO announcement_labels (
-      announcement_id,
+      announcement_seq,
       user_id,
       label
     ) VALUES (?, ?, ?)
-    ON CONFLICT (announcement_id, user_id) DO UPDATE SET label = EXCLUDED.label;
+    ON CONFLICT (announcement_seq, user_id) DO UPDATE SET label = EXCLUDED.label;
   `,
   )
-    .bind(announcementId, userId, label)
+    .bind(Number(announcementId), userId, label)
     .run();
 }
 
-export async function export_(
+export async function exportAll(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
   userId: string,
@@ -242,34 +234,23 @@ export async function export_(
   const results = await context.env.DB.prepare(
     `
     SELECT
-      announcement_id,
       tombstone,
       data,
       tags,
-      al.label AS label
-    FROM announcements a
-    LEFT JOIN announcement_labels al
-      ON al.announcement_id = a.announcement_id
-     AND al.user_id = ?
+    FROM announcements
     WHERE indexer_id = ?
   `,
   )
     .bind(userId, indexerId)
     .all<{
-      announcement_id: string;
       tombstone: number;
       data: string;
       tags: string;
-      label: number | null;
     }>();
 
   return results.results.map((r) => ({
-    announcementId: r.announcement_id,
-    announcement: {
-      tombstone: r.tombstone !== 0,
-      tags: JSON.parse(r.tags) as string[],
-      data: JSON.parse(r.data),
-    },
-    label: r.label ?? 0,
+    tombstone: r.tombstone !== 0,
+    tags: JSON.parse(r.tags) as string[],
+    data: JSON.parse(r.data),
   }));
 }

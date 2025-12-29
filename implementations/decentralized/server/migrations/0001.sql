@@ -94,8 +94,9 @@ CREATE TABLE IF NOT EXISTS indexers (
 CREATE INDEX IF NOT EXISTS idx_indexers_by_user_id ON indexers(user_id, indexer_id);
 
 CREATE TABLE IF NOT EXISTS announcements (
-  announcement_id TEXT PRIMARY KEY,
+  seq             INTEGER PRIMARY KEY,
   indexer_id      TEXT NOT NULL,
+  hash            BLOB NOT NULL UNIQUE,
   tombstone       INTEGER NOT NULL CHECK (tombstone IN (0, 1)),
   data            TEXT NOT NULL,
   tags            TEXT NOT NULL,
@@ -105,44 +106,27 @@ CREATE TABLE IF NOT EXISTS announcements (
 
 CREATE INDEX IF NOT EXISTS idx_announcements_by_indexer_id ON announcements(indexer_id);
 
--- Maintain a logical clock that increments with each announcement.
--- This means we will not miss any announements if we attempt to get
--- all announcements after a particular one.
-CREATE TABLE IF NOT EXISTS announcement_clock (
-    id    INTEGER PRIMARY KEY CHECK (id = 1),
-    value INTEGER NOT NULL
-) STRICT;
-INSERT OR IGNORE INTO announcement_clock (id, value) VALUES (1, 0);
-CREATE TRIGGER IF NOT EXISTS bump_announcement_clock
-AFTER INSERT ON announcements
-BEGIN
-    UPDATE announcement_clock
-        SET value = value + 1
-        WHERE id = 1;
-END;
-
 CREATE TABLE IF NOT EXISTS announcement_tags (
-    announcement_id   TEXT NOT NULL,
+    announcement_seq  INTEGER NOT NULL,
     tag               TEXT NOT NULL,
     indexer_id        TEXT NOT NULL,
-    created_at        INTEGER NOT NULL,
 
-    PRIMARY KEY (announcement_id, tag),
-    FOREIGN KEY (announcement_id) REFERENCES announcements(announcement_id) ON DELETE CASCADE
+    PRIMARY KEY (announcement_seq, tag),
+    FOREIGN KEY (announcement_seq) REFERENCES announcements(seq) ON DELETE CASCADE
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_announcement_tags
-    ON announcement_tags(indexer_id, tag, created_at DESC, announcement_id);
-CREATE INDEX IF NOT EXISTS idx_announcement_tags_by_announcement_id
-    ON announcement_tags(announcement_id, tag);
+    ON announcement_tags(indexer_id, tag, announcement_seq DESC);
+CREATE INDEX IF NOT EXISTS idx_announcement_tags_by_announcement_seq
+    ON announcement_tags(announcement_seq, tag);
 
 CREATE TABLE IF NOT EXISTS announcement_labels (
-    announcement_id TEXT NOT NULL,
-    user_id         TEXT NOT NULL,
-    label           INTEGER NOT NULL CHECK (label > 0),
+    announcement_seq INTEGER NOT NULL,
+    user_id          TEXT NOT NULL,
+    label            INTEGER NOT NULL CHECK (label > 0),
 
-    PRIMARY KEY (announcement_id, user_id),
-    FOREIGN KEY (announcement_id) REFERENCES announcements(announcement_id) ON DELETE CASCADE
+    PRIMARY KEY (announcement_seq, user_id),
+    FOREIGN KEY (announcement_seq) REFERENCES announcements(seq) ON DELETE CASCADE
 ) STRICT;
 
 ---------------------------------------
