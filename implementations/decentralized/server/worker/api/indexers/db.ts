@@ -24,7 +24,6 @@ export async function announce(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
   announcement: {
-    tombstone: boolean;
     tags: string[];
     data: {};
   },
@@ -50,7 +49,6 @@ export async function announce(
       INSERT INTO announcements (
         hash,
         indexer_id,
-        tombstone,
         data,
         tags
       ) VALUES (?, ?, ?, ?, ?)
@@ -61,7 +59,6 @@ export async function announce(
     .bind(
       announcementHash,
       indexerId,
-      announcement.tombstone ? 1 : 0,
       JSON.stringify(announcement.data),
       JSON.stringify(announcement.tags),
     )
@@ -132,7 +129,6 @@ export async function queryAnnouncements(
     )
     SELECT
       a.seq,
-      a.tombstone,
       a.data,
       a.tags,
       al.label AS label
@@ -157,7 +153,6 @@ export async function queryAnnouncements(
     .bind(...bindings)
     .all<{
       seq: number;
-      tombstone: number;
       data: string;
       tags: string;
       label: number | null;
@@ -169,7 +164,6 @@ export async function queryAnnouncements(
   const results = resultsRaw.map((r) => ({
     announcementId: r.seq.toString(),
     announcement: {
-      tombstone: r.tombstone !== 0,
       tags: JSON.parse(r.tags) as string[],
       data: JSON.parse(r.data) as unknown,
     },
@@ -246,7 +240,6 @@ export async function exportAnnouncements(
     `
     SELECT
       seq,
-      tombstone,
       data,
       tags,
     FROM announcements
@@ -258,7 +251,6 @@ export async function exportAnnouncements(
     .bind(userId, indexerId, QUERY_LIMIT + 1, sinceSeq)
     .all<{
       seq: number;
-      tombstone: number;
       data: string;
       tags: string;
     }>();
@@ -267,7 +259,6 @@ export async function exportAnnouncements(
   const resultsRaw = res.results.slice(0, QUERY_LIMIT);
 
   const results = resultsRaw.map((r) => ({
-    tombstone: r.tombstone !== 0,
     tags: JSON.parse(r.tags) as string[],
     data: JSON.parse(r.data),
   }));

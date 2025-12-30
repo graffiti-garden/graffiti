@@ -20,7 +20,6 @@ const TagsSchema = z
   });
 
 const AnnouncementSchema = z.object({
-  tombstone: z.boolean(),
   tags: TagsSchema,
   data: z.record(z.string(), z.any()),
 });
