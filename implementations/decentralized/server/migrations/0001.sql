@@ -95,7 +95,6 @@ CREATE TABLE IF NOT EXISTS announcements (
   seq             INTEGER PRIMARY KEY,
   indexer_id      TEXT NOT NULL,
   hash            BLOB NOT NULL UNIQUE,
-  tombstone       INTEGER NOT NULL CHECK (tombstone IN (0, 1)),
   data            TEXT NOT NULL,
   tags            TEXT NOT NULL,
 
