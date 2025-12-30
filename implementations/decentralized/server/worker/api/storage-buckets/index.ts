@@ -35,7 +35,7 @@ const getValueRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Returns the binary file data",
+      description: "Successfully retrieved the value",
       content: {
         "application/octet-stream": {
           schema: BinaryDataSchema,
@@ -45,11 +45,9 @@ const getValueRoute = createRoute({
         ETag: z.string(),
       }),
     },
-    304: {
-      description: "File not modified",
-    },
+    304: { description: "Not modified" },
     404: {
-      description: "File not found",
+      description: "Not found",
       content: {
         "text/plain": { schema: z.string() },
       },
@@ -89,27 +87,16 @@ const putValueRoute = createRoute({
   security: [{ oauth2: [] }],
   responses: {
     200: {
-      description: "Upload succeeded",
+      description: "Successfully uploaded value",
       content: {
         "application/json": {
           schema: z.object({ uploaded: z.literal(true) }),
         },
       },
     },
-    400: {
-      description: "Bad request (missing body / invalid Content-Length)",
-      content: {
-        "application/json": { schema: z.object({ message: z.string() }) },
-      },
-    },
-    413: {
-      description: "Body is too large",
-      content: {
-        "application/json": { schema: z.object({ message: z.string() }) },
-      },
-    },
-    401: { description: "Unauthorized" },
-    403: { description: "Forbidden" },
+    401: { description: "Invalid authorization" },
+    403: { description: "Cannot upload to someone else's bucket" },
+    413: { description: "Body is too large" },
   },
 });
 storageBuckets.openapi(putValueRoute, async (c) => {
@@ -150,15 +137,15 @@ const deleteValueRoute = createRoute({
   security: [{ oauth2: [] }],
   responses: {
     200: {
-      description: "Delete succeeded",
+      description: "Successfully deleted value",
       content: {
         "application/json": {
           schema: z.object({ deleted: z.literal(true) }),
         },
       },
     },
-    401: { description: "Unauthorized" },
-    403: { description: "Forbidden" },
+    401: { description: "Invalid authorization" },
+    403: { description: "Cannot delete from someone else's bucket" },
   },
 });
 storageBuckets.openapi(deleteValueRoute, async (c) => {
@@ -180,14 +167,14 @@ storageBuckets.openapi(
       query: z.object({
         cursor: z.string().optional().openapi({
           description:
-            "An optional cursor to continue receiving keys, returned from a previous request",
+            "An optional cursor to continue receiving keys. A cursor is returned from a previous request if there are more keys to export.",
         }),
       }),
     },
     security: [{ oauth2: [] }],
     responses: {
       200: {
-        description: "Exported keys successfully",
+        description: "Successfully exported keys",
         content: {
           "application/json": {
             schema: z.object({
@@ -197,8 +184,8 @@ storageBuckets.openapi(
           },
         },
       },
-      401: { description: "Unauthorized" },
-      403: { description: "Forbidden" },
+      401: { description: "Invalid authorization" },
+      403: { description: "Cannot export from someone else's bucket" },
     },
   }),
   async (c) => {

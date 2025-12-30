@@ -64,9 +64,12 @@ function deleteService() {
         return;
     }
 
-    fetchFromSelf(`/app/service-instances/service/${service.serviceId}`, {
-        method: "DELETE",
-    })
+    fetchFromSelf(
+        `/app/service-instances/${service.type}/service/${service.serviceId}`,
+        {
+            method: "DELETE",
+        },
+    )
         .then(() => {
             props.onDelete();
         })
@@ -86,13 +89,16 @@ function renameService() {
 
     const name = renameName.value;
 
-    fetchFromSelf(`/app/service-instances/service/${service.serviceId}`, {
-        method: "PUT",
-        body: JSON.stringify({ name }),
-        headers: {
-            "Content-Type": "application/json",
+    fetchFromSelf(
+        `/app/service-instances/${service.type}/service/${service.serviceId}`,
+        {
+            method: "PUT",
+            body: JSON.stringify({ name }),
+            headers: {
+                "Content-Type": "application/json",
+            },
         },
-    })
+    )
         .then(() => {
             service.name = name;
             renameOpen.value = false;
