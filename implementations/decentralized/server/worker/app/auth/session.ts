@@ -149,10 +149,15 @@ export async function verifySessionHeader(
     allowTemp?: boolean;
   },
 ) {
-  const token = context.req.header("Authorization");
-  if (!token) {
+  const bearerToken = context.req.header("Authorization");
+  if (!bearerToken) {
     throw new HTTPException(401, { message: "Not logged in." });
   }
+  const bearerPrefix = "Bearer ";
+  if (!bearerToken.startsWith(bearerPrefix)) {
+    throw new HTTPException(400, { message: "Invalid token format" });
+  }
+  const token = bearerToken.slice(bearerPrefix.length);
   return await verifySessionToken(context, token, options);
 }
 

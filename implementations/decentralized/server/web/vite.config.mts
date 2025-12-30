@@ -4,7 +4,14 @@ import httpProxy from "http-proxy";
 
 const proxy = httpProxy.createProxyServer();
 const WRANGLER_PORT = "8787";
-const SERVER_PREFIXES = ["/app/", "/s/", "/i/"];
+const SERVER_PREFIXES = [
+  "/app/",
+  "/s/",
+  "/i/",
+  "/docs",
+  "/openapi.json",
+  "/oauth2-redirect.html",
+];
 
 export default defineConfig({
   root: "web",

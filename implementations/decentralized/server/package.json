@@ -11,6 +11,8 @@
     "deploy": "npm run build:web && wrangler deploy --env production --config wrangler.toml"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.5.3",
+    "@hono/zod-openapi": "^1.2.0",
     "@ipld/dag-cbor": "^9.2.5",
     "@noble/secp256k1": "^3.0.0",
     "@picocss/pico": "^2.1.1",
