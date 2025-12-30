@@ -4,8 +4,8 @@ import { compress } from "hono/compress";
 import { swaggerUI } from "@hono/swagger-ui";
 import type { Bindings } from "./env";
 import app from "./app/app";
-import storageBuckets from "./storage-buckets/index";
-import indexers from "./indexers/index";
+import storageBuckets from "./api/storage-buckets/index";
+import indexers from "./api/indexers/index";
 import handleDids from "./app/handles/dids";
 
 const router = new OpenAPIHono<{ Bindings: Bindings }>();

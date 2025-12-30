@@ -1,6 +1,6 @@
-import type { Bindings } from "../env";
+import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
-import { verifySessionHeader } from "../app/auth/session";
+import { verifySessionHeader } from "../../app/auth/session";
 import {
   announce,
   labelAnnouncement,
@@ -9,7 +9,7 @@ import {
 } from "./db";
 import Ajv, { type ValidateFunction } from "ajv";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { addAuthRoute, Base64IdSchema, disableCors } from "../api/shared";
+import { addAuthRoute, Base64IdSchema, disableCors } from "../shared";
 
 const IndexerIdSchema = z.union([Base64IdSchema, z.literal("public")]);
 

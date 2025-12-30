@@ -1,9 +1,9 @@
 import type { Context } from "hono";
-import type { Bindings } from "../env";
+import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
-import { verifySessionHeader } from "../app/auth/session";
+import { verifySessionHeader } from "../../app/auth/session";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { addAuthRoute, disableCors } from "../api/shared";
+import { addAuthRoute, disableCors } from "../shared";
 import { getValue, putValue, deleteValue, exportKeys } from "./db";
 
 const BucketIdSchema = z.base64url().length(43);
