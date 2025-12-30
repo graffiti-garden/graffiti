@@ -3,6 +3,8 @@ import type { Bindings } from "../env";
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { HTTPException } from "hono/http-exception";
 
+const QUERY_LIMIT = 100;
+
 async function isIndexerController(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
@@ -26,7 +28,7 @@ export async function announce(
   announcement: {
     tombstone: boolean;
     tags: string[];
-    data: unknown;
+    data: {};
   },
   userId: string | undefined,
 ) {
@@ -101,15 +103,15 @@ export async function announce(
 
   await context.env.DB.batch(statements);
 
-  return announcementSeq;
+  return announcementSeq.toString();
 }
 
-export async function query(
+export async function queryAnnouncements(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
   tags: string[],
-  ifCreatedSinceSeq?: number,
   userId?: string,
+  sinceSeq: number = 0,
 ) {
   const isController = await isIndexerController(context, indexerId, userId);
   if (!isController) {
@@ -139,9 +141,13 @@ export async function query(
     `,
     // Only return if the data is "OK" (label = 1) or no label yet
     userId ? ` AND (al.label = 1 OR al.label IS NULL)` : ``,
+    `
+    ORDER BY a.seq ASC
+    LIMIT ?
+    `,
   ].join("\n");
 
-  const bindings = [indexerId, ...tags, ifCreatedSinceSeq ?? 0, userId];
+  const bindings = [indexerId, ...tags, sinceSeq, userId, QUERY_LIMIT + 1];
 
   const res = await context.env.DB.prepare(sql)
     .bind(...bindings)
@@ -153,7 +159,10 @@ export async function query(
       label: number | null;
     }>();
 
-  const results = res.results.map((r) => ({
+  const hasMore = res.results.length === QUERY_LIMIT + 1;
+  const resultsRaw = res.results.slice(0, QUERY_LIMIT);
+
+  const results = resultsRaw.map((r) => ({
     announcementId: r.seq.toString(),
     announcement: {
       tombstone: r.tombstone !== 0,
@@ -163,14 +172,12 @@ export async function query(
     label: r.label ?? 0,
   }));
 
-  const querySeq = res.results.reduce(
-    (maxSeq, r) => Math.max(maxSeq, r.seq),
-    0,
-  );
+  const lastSeq = resultsRaw.reduce((maxSeq, r) => Math.max(maxSeq, r.seq), 0);
 
   return {
     results,
-    querySeq,
+    hasMore,
+    lastSeq,
   };
 }
 
@@ -214,10 +221,11 @@ export async function labelAnnouncement(
     .run();
 }
 
-export async function exportAll(
+export async function exportAnnouncements(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
   userId: string,
+  sinceSeq: number = 0,
 ) {
   if (indexerId === "public") {
     throw new HTTPException(403, {
@@ -231,26 +239,41 @@ export async function exportAll(
     });
   }
 
-  const results = await context.env.DB.prepare(
+  const res = await context.env.DB.prepare(
     `
     SELECT
+      seq,
       tombstone,
       data,
       tags,
     FROM announcements
-    WHERE indexer_id = ?
+    WHERE indexer_id = ? AND seq > ?
+    ORDER BY seq ASC
+    LIMIT ?
   `,
   )
-    .bind(userId, indexerId)
+    .bind(userId, indexerId, QUERY_LIMIT + 1, sinceSeq)
     .all<{
+      seq: number;
       tombstone: number;
       data: string;
       tags: string;
     }>();
 
-  return results.results.map((r) => ({
+  const hasMore = res.results.length === QUERY_LIMIT + 1;
+  const resultsRaw = res.results.slice(0, QUERY_LIMIT);
+
+  const results = resultsRaw.map((r) => ({
     tombstone: r.tombstone !== 0,
     tags: JSON.parse(r.tags) as string[],
     data: JSON.parse(r.data),
   }));
+
+  const lastSeq = resultsRaw.reduce((maxSeq, r) => Math.max(maxSeq, r.seq), 0);
+
+  return {
+    results,
+    lastSeq,
+    hasMore,
+  };
 }
