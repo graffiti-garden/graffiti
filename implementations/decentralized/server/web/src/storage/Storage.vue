@@ -63,7 +63,7 @@ const props = defineProps<{
 
 function fetchServices() {
     services.value = undefined;
-    fetchFromSelf(`/app/service-instances/list/${props.type}`)
+    fetchFromSelf(`/app/service-instances/${props.type}/list`)
         .then((value: Array<Service>) => {
             services.value = value.sort((a, b) => b.createdAt - a.createdAt);
         })
@@ -88,16 +88,16 @@ function createService() {
     const name = newServiceName.value;
     if (!name) return;
     creating.value = true;
-    fetchFromSelf("/app/service-instances/create", {
+    fetchFromSelf(`/app/service-instances/${props.type}/create`, {
         method: "POST",
-        body: JSON.stringify({ name, type: props.type }),
+        body: JSON.stringify({ name }),
         headers: {
             "Content-Type": "application/json",
         },
     })
         .then(({ serviceId, createdAt }) => {
             services.value = [
-                { serviceId, name, createdAt },
+                { serviceId, name, createdAt, type: props.type },
                 ...(services.value ?? []),
             ];
             newServiceName.value = "";

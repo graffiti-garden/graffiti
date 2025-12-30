@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS storage_buckets (
     bucket_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_storage_buckets_by_user_id ON storage_buckets(user_id, bucket_id);

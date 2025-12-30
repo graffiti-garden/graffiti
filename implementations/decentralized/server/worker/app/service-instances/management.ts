@@ -6,29 +6,44 @@ import { HTTPException } from "hono/http-exception";
 
 const serviceInstances = new Hono<{ Bindings: Bindings }>();
 
-serviceInstances.post("/create", async (c) => {
+function tableFromType(type: string) {
+  return type === "bucket" ? "storage_buckets" : "indexers";
+}
+
+function idNameFromType(type: string) {
+  return type === "bucket" ? "bucket_id" : "indexer_id";
+}
+
+serviceInstances.post("/:type/create", async (c) => {
   const { userId } = await verifySessionCookie(c);
-  const { name, type } = await c.req.json();
+  const type = c.req.param("type");
+  const { name } = await c.req.json();
+  const table = tableFromType(type);
+  const idName = idNameFromType(type);
 
   const serviceId = randomBase64();
   const createdAt = Date.now();
 
   await c.env.DB.prepare(
-    `INSERT INTO service_instances (service_id, type, name, user_id, created_at) VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO ${table} (${idName}, name, user_id, created_at) VALUES (?, ?, ?, ?)`,
   )
-    .bind(serviceId, type, name, userId, createdAt)
+    .bind(serviceId, name, userId, createdAt)
     .run();
 
   return c.json({ serviceId, createdAt });
 });
 
-serviceInstances.put("/service/:service-id", async (c) => {
+// rename
+serviceInstances.put("/:type/service/:service-id", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  const type = c.req.param("type");
   const serviceId = c.req.param("service-id");
   const { name } = await c.req.json();
+  const table = tableFromType(type);
+  const idName = idNameFromType(type);
 
   const result = await c.env.DB.prepare(
-    `UPDATE service_instances SET name = ? WHERE service_id = ? AND user_id = ? RETURNING service_id`,
+    `UPDATE ${table} SET name = ? WHERE ${idName} = ? AND user_id = ? RETURNING user_id`,
   )
     .bind(name, serviceId, userId)
     .first();
@@ -38,17 +53,20 @@ serviceInstances.put("/service/:service-id", async (c) => {
   return c.json({});
 });
 
-serviceInstances.delete("/service/:service-id", async (c) => {
+serviceInstances.delete("/:type/service/:service-id", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  const type = c.req.param("type");
   const serviceId = c.req.param("service-id");
+  const table = tableFromType(type);
+  const idName = idNameFromType(type);
 
   const result = await c.env.DB.prepare(
-    `DELETE FROM service_instances WHERE service_id = ? AND user_id = ? RETURNING service_id`,
+    `DELETE FROM ${table} WHERE ${idName} = ? AND user_id = ? RETURNING user_id`,
   )
     .bind(serviceId, userId)
-    .first<{ id: string }>();
+    .first();
 
-  // TODO: Delete all associated items in bucket/indexer
+  // TODO: If it is a bucket, delete all the items in storage
 
   if (!result) {
     throw new HTTPException(404, { message: "Instance not found" });
@@ -57,19 +75,21 @@ serviceInstances.delete("/service/:service-id", async (c) => {
   return c.json({});
 });
 
-serviceInstances.get("/list/:type", async (c) => {
+serviceInstances.get("/:type/list", async (c) => {
   const { userId } = await verifySessionCookie(c);
   const type = c.req.param("type");
+  const table = tableFromType(type);
+  const idName = idNameFromType(type);
 
   const instances = await c.env.DB.prepare(
-    `SELECT service_id, name, created_at FROM service_instances WHERE user_id = ? AND type = ?`,
+    `SELECT ${idName}, name, created_at FROM ${table} WHERE user_id = ?`,
   )
-    .bind(userId, type)
-    .all<{ service_id: string; name: string; created_at: number }>();
+    .bind(userId)
+    .all<{ [idName]: string; name: string; created_at: number }>();
 
   return c.json(
-    instances.results.map(({ service_id, name, created_at }) => ({
-      serviceId: service_id,
+    instances.results.map(({ [idName]: serviceId, name, created_at }) => ({
+      serviceId,
       name,
       createdAt: created_at,
     })),
