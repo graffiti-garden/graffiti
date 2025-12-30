@@ -48,7 +48,25 @@ oauth.get("/authorize", async (c) => {
 });
 
 oauth.post("/token", async (c) => {
-  const { code, redirect_uri } = c.req.query();
+  // Disable CORS
+  const headers = new Headers();
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "POST");
+  headers.set("Access-Control-Allow-Headers", "Content-Type");
+
+  const params = new URLSearchParams(await c.req.text());
+  const code = params.get("code");
+  const redirect_uri = params.get("redirect_uri");
+  if (!code) {
+    throw new HTTPException(400, {
+      message: "Missing code parameter",
+    });
+  }
+  if (!redirect_uri) {
+    throw new HTTPException(400, {
+      message: "Missing redirect_uri parameter",
+    });
+  }
 
   // Fetch and delete the code from the database
   const result = await c.env.DB.prepare(

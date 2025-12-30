@@ -1,4 +1,3 @@
-import { Hono } from "hono";
 import type { Bindings } from "../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../app/auth/session";
@@ -8,25 +7,11 @@ import {
   queryAnnouncements,
   exportAnnouncements,
 } from "./db";
-import { z } from "zod";
 import Ajv, { type ValidateFunction } from "ajv";
+import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
+import { addAuthRoute, Base64IdSchema, disableCors } from "../api/shared";
 
-const ajv = new Ajv({ strict: false });
-const indexers = new Hono<{ Bindings: Bindings }>();
-
-indexers.use("*", async (c, next) => {
-  // Disable CORs
-  c.header("Access-Control-Allow-Origin", "*");
-  c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  c.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  await next();
-});
-
-indexers.get("/auth", async (c) => {
-  const headers = new Headers();
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
-  return c.text(`gf:a:oauth:${c.env.BASE_HOST}/oauth`, { headers });
-});
+const IndexerIdSchema = z.union([Base64IdSchema, z.literal("public")]);
 
 const TagsSchema = z
   .array(z.string())
@@ -40,90 +25,182 @@ const AnnouncementSchema = z.object({
   data: z.record(z.string(), z.any()),
 });
 
-indexers.post("/:indexer-id/announce", async (c) => {
+const LabelSchema = z.int().min(0).openapi({
+  description:
+    "An integer label for the announcement, 0 for undefined, 1 for ok, 2 for expired, 3 for incorrect, 4 for junk",
+  example: 1,
+});
+
+const QueryCursorSchema = z.object({
+  sinceSeq: z.int().min(0),
+  tags: TagsSchema,
+  dataSchema: z.record(z.string(), z.any()),
+});
+
+const ExportCursorSchema = z.object({
+  sinceSeq: z.int().min(0),
+});
+
+const ajv = new Ajv({ strict: false });
+const indexers = new OpenAPIHono<{ Bindings: Bindings }>();
+
+disableCors(indexers);
+addAuthRoute(indexers, "Indexers", "indexerId");
+
+const announceRoute = createRoute({
+  method: "post",
+  description: "Announce ",
+  tags: ["Indexers"],
+  path: "/{indexerId}/announce",
+  request: {
+    params: z.object({
+      indexerId: IndexerIdSchema,
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: AnnouncementSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  security: [{ oauth2: [] }],
+  responses: {
+    200: {
+      description: "Announcement created successfully",
+      content: {
+        "application/json": {
+          schema: z.object({
+            announcementId: z.string(),
+          }),
+        },
+      },
+    },
+    401: { description: "Invalid authorization" },
+    404: { description: "Indexer not found" },
+    409: { description: "Duplicate announcement" },
+  },
+});
+indexers.openapi(announceRoute, async (c) => {
   let userId: string | undefined = undefined;
   try {
     const verification = await verifySessionHeader(c);
     userId = verification.userId;
   } catch {} // Not to worry if not logged in
 
-  const indexerId = c.req.param("indexer-id");
-
-  const body = await c.req.json();
-  const parsed = AnnouncementSchema.safeParse(body);
-  if (!parsed.success) {
-    throw new HTTPException(400, {
-      message: `Invalid announcement: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
-    });
-  }
-  const announcement = parsed.data;
-
+  const { indexerId } = c.req.valid("param");
+  const announcement = c.req.valid("json");
   const announcementId = await announce(c, indexerId, announcement, userId);
 
   return c.json({ announcementId });
 });
 
-const LabelSchema = z.object({
-  announcementId: z.string(),
-  label: z.int().min(0),
+const labelAnnouncementRoute = createRoute({
+  method: "put",
+  description:
+    "Label an announcement as 'ok', 'expired', 'incorrect' or 'junk'",
+  tags: ["Indexers"],
+  path: "/{indexerId}/label/{announcementId}",
+  request: {
+    params: z.object({
+      indexerId: IndexerIdSchema,
+      announcementId: z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            label: LabelSchema,
+          }),
+        },
+      },
+      required: true,
+    },
+  },
+  security: [{ oauth2: [] }],
+  responses: {
+    200: {
+      description: "Announcement labeled successfully",
+      content: {
+        "application/json": {
+          schema: z.object({
+            labeled: z.literal(true),
+          }),
+        },
+      },
+    },
+    401: { description: "Invalid authorization" },
+    403: {
+      description: "Cannot label an announcement in someone else's indexer",
+    },
+    404: { description: "Announcement not found" },
+  },
 });
-indexers.post("/:indexer-id/label", async (c) => {
+
+indexers.openapi(labelAnnouncementRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
-  const indexerId = c.req.param("indexer-id");
-
-  const body = await c.req.json();
-  const parsed = LabelSchema.safeParse(body);
-  if (!parsed.success) {
-    throw new HTTPException(400, {
-      message: `Invalid label: ${parsed.error.issues.map((i) => i.message).join(", ")}`,
-    });
-  }
-  const { announcementId, label } = parsed.data;
-
+  const { indexerId, announcementId } = c.req.valid("param");
+  const { label } = c.req.valid("json");
   await labelAnnouncement(c, indexerId, announcementId, label, userId);
-
   return c.json({ labeled: true });
 });
 
-const QueryParamsSchema = z.union([
-  z.object({
-    cursor: z.string(),
-  }),
-  z.object({
-    tags: TagsSchema,
-    dataSchema: z.object({}),
-  }),
-]);
-
-const QueryCursorSchema = z.object({
-  sinceSeq: z.int().min(0),
-  tags: TagsSchema,
-  dataSchema: z.object({}),
+const queryAnnouncementsRoute = createRoute({
+  method: "get",
+  path: "/{indexerId}/query",
+  tags: ["Indexers"],
+  description: "Query data that has been announced to the indexer",
+  request: {
+    params: z.object({
+      indexerId: IndexerIdSchema,
+    }),
+    query: z.object({
+      cursor: z.string().optional(),
+      tags: TagsSchema.optional(),
+      dataSchema: z.record(z.string(), z.any()).optional(),
+    }),
+  },
+  security: [{ oauth2: [] }],
+  responses: {
+    200: {
+      description: "Announcements queried successfully",
+      content: {
+        "application/json": {
+          schema: z.object({
+            results: z.array(
+              z.object({
+                announcementId: z.string(),
+                announcement: AnnouncementSchema,
+                label: LabelSchema,
+              }),
+            ),
+            hasMore: z.boolean(),
+            cursor: z.string(),
+          }),
+        },
+      },
+    },
+    401: { description: "Invalid authorization" },
+    403: {
+      description: "Cannot query announcements in someone else's indexer",
+    },
+  },
 });
 
-indexers.get("/:indexer-id/query", async (c) => {
+indexers.openapi(queryAnnouncementsRoute, async (c) => {
   let userId: string | undefined = undefined;
   try {
     const verification = await verifySessionHeader(c);
     userId = verification.userId;
   } catch {} // Not to worry if not logged in
 
-  const indexerId = c.req.param("indexer-id");
+  const { indexerId } = c.req.valid("param");
 
-  const paramsRaw = c.req.query();
-  const paramsParsed = QueryParamsSchema.safeParse(paramsRaw);
-  if (!paramsParsed.success) {
-    throw new HTTPException(400, {
-      message: `Invalid parameters: ${paramsParsed.error.issues.map((i) => i.message).join(", ")}`,
-    });
-  }
-  const params = paramsParsed.data;
+  let { cursor, tags, dataSchema } = c.req.valid("query");
 
-  let tags: string[];
-  let dataSchema: {};
   let sinceSeq: number | undefined = undefined;
-  if ("cursor" in params) {
-    const cursor = params.cursor;
+  if (cursor) {
     let cursorJSON: unknown;
     try {
       cursorJSON = JSON.parse(cursor);
@@ -137,9 +214,10 @@ indexers.get("/:indexer-id/query", async (c) => {
     tags = cursorParsed.data.tags;
     dataSchema = cursorParsed.data.dataSchema;
     sinceSeq = cursorParsed.data.sinceSeq;
-  } else {
-    tags = params.tags;
-    dataSchema = params.dataSchema;
+  } else if (!tags || !dataSchema) {
+    throw new HTTPException(400, {
+      message: "Must have cursor or both tags and dataSchema",
+    });
   }
 
   let validate: ValidateFunction;
@@ -162,12 +240,12 @@ indexers.get("/:indexer-id/query", async (c) => {
   const validResults = results.filter((r) => validate(r.announcement.data));
 
   // Construct a cursor
-  const cursorJSON: z.infer<typeof QueryCursorSchema> = {
+  const resultCursorJSON: z.infer<typeof QueryCursorSchema> = {
     tags,
     dataSchema,
     sinceSeq: lastSeq,
   };
-  const cursor = JSON.stringify(cursorJSON);
+  const resultCursor = JSON.stringify(resultCursorJSON);
 
   const headers = new Headers();
   headers.set("Vary", "Authorization");
@@ -192,23 +270,59 @@ indexers.get("/:indexer-id/query", async (c) => {
     {
       results: validResults,
       hasMore,
-      cursor,
+      cursor: resultCursor,
     },
     { headers },
   );
 });
 
-const ExportCursorSchema = z.object({
-  sinceSeq: z.int().min(0),
+const exportAnnouncementsRoute = createRoute({
+  method: "get",
+  path: "/{indexerId}",
+  tags: ["Indexers"],
+  description: "Export all data announced to an indexer",
+  request: {
+    params: z.object({
+      indexerId: IndexerIdSchema,
+    }),
+    query: z.object({
+      cursor: z.string().optional(),
+    }),
+  },
+  security: [{ oauth2: [] }],
+  responses: {
+    200: {
+      description: "Exported successfully",
+      content: {
+        "application/json": {
+          schema: z.object({
+            results: z.array(
+              z.object({
+                announcementId: z.string(),
+                announcement: AnnouncementSchema,
+                label: LabelSchema,
+              }),
+            ),
+            hasMore: z.boolean(),
+            cursor: z.string(),
+          }),
+        },
+      },
+    },
+    401: { description: "Invalid authorization" },
+    403: {
+      description: "Cannot export from someone else's indexer",
+    },
+  },
 });
 
 // Export announcements
-indexers.get("/:indexer-id", async (c) => {
+indexers.openapi(exportAnnouncementsRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
-  const indexerId = c.req.param("indexer-id");
+  const { indexerId } = c.req.valid("param");
+  const { cursor: cursorParam } = c.req.valid("query");
 
   let sinceSeq: number | undefined = undefined;
-  const cursorParam = c.req.query("cursor");
   if (cursorParam) {
     let cursorJSON: unknown;
     try {

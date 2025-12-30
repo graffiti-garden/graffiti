@@ -1,14 +1,55 @@
 import { Hono } from "hono";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import { compress } from "hono/compress";
+import { swaggerUI } from "@hono/swagger-ui";
 import type { Bindings } from "./env";
 import app from "./app/app";
 import storageBuckets from "./storage-buckets/index";
 import indexers from "./indexers/index";
 import handleDids from "./app/handles/dids";
 
-const router = new Hono<{ Bindings: Bindings }>();
+const router = new OpenAPIHono<{ Bindings: Bindings }>();
+
+router.openAPIRegistry.registerComponent("securitySchemes", "oauth2", {
+  type: "oauth2",
+  flows: {
+    authorizationCode: {
+      authorizationUrl: "/oauth",
+      tokenUrl: "/app/oauth/token",
+      scopes: {},
+    },
+  },
+});
+
+router.doc("/openapi.json", {
+  openapi: "3.1.0",
+  info: {
+    title: "Graffiti HTTPS API",
+    version: "1.0.0",
+    description: "An implementation of the Graffiti meta API over HTTPS",
+  },
+});
+
+router.get(
+  "/docs",
+  swaggerUI({
+    url: "/openapi.json",
+    persistAuthorization: true,
+  }),
+);
+
+router.get("/oauth2-redirect.html", (c) =>
+  c.html(`<!doctype html>
+  <html lang="en-US">
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.31.0/oauth2-redirect.js"></script>
+  </body>
+</html>`),
+);
+
 router.route("/app", app);
-router.route("/s", storageBuckets);
 router.route("/i", indexers);
+router.route("/s", storageBuckets);
 
 // Route static assets
 router.all("*", async (c) => {
@@ -63,6 +104,7 @@ function getHostRouter(baseHost: string): Hono<{ Bindings: Bindings }> {
     });
     hostRouter.route("/subdomain", handleDids);
     hostRouter.route("/domain", router);
+    hostRouter.use(compress());
   }
   return hostRouter;
 }

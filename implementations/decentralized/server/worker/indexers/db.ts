@@ -5,21 +5,19 @@ import { HTTPException } from "hono/http-exception";
 
 const QUERY_LIMIT = 100;
 
-async function isIndexerController(
+async function getIndexerController(
   context: Context<{ Bindings: Bindings }>,
   indexerId: string,
-  userId: string | undefined,
-): Promise<boolean> {
-  if (!userId) return false;
-  if (indexerId === "public") return true;
+): Promise<string | undefined> {
+  if (indexerId === "public") return "public";
 
   const result = await context.env.DB.prepare(
-    "SELECT indexer_id FROM indexers WHERE indexer_id = ? AND user_id = ?",
+    "SELECT user_id FROM indexers WHERE indexer_id = ?",
   )
-    .bind(indexerId, userId)
-    .first();
+    .bind(indexerId)
+    .first<{ user_id: string }>();
 
-  return !!result;
+  return result?.user_id;
 }
 
 export async function announce(
@@ -41,7 +39,11 @@ export async function announce(
 
   // Determine if the indexer is under the user's control,
   // which we will later use to determine if we can label the announcement
-  const isController = await isIndexerController(context, indexerId, userId);
+  const controller = await getIndexerController(context, indexerId);
+  if (!controller) {
+    throw new HTTPException(404, { message: "Indexer not found" });
+  }
+  const isController = controller === "public" || controller === userId;
 
   const inserted = await context.env.DB.prepare(
     `
@@ -66,7 +68,7 @@ export async function announce(
     .first<{ seq: number }>();
 
   if (!inserted) {
-    throw new Error("Duplicate announcement");
+    throw new HTTPException(409, { message: "Duplicate announcement" });
   }
 
   const statements: D1PreparedStatement[] = [];
@@ -113,9 +115,11 @@ export async function queryAnnouncements(
   userId?: string,
   sinceSeq: number = 0,
 ) {
-  const isController = await isIndexerController(context, indexerId, userId);
-  if (!isController) {
-    throw new HTTPException(403, { message: "Forbidden" });
+  const controller = await getIndexerController(context, indexerId);
+  if (controller !== "public" && controller !== userId) {
+    throw new HTTPException(403, {
+      message: "Cannot query someone else's indexer",
+    });
   }
 
   const sql = [
@@ -188,8 +192,8 @@ export async function labelAnnouncement(
   label: number,
   userId: string,
 ) {
-  const isController = await isIndexerController(context, indexerId, userId);
-  if (!isController) {
+  const controller = await getIndexerController(context, indexerId);
+  if (controller !== "public" && controller !== userId) {
     throw new HTTPException(403, {
       message: "Cannot label an announcement in someone else's indexer",
     });
@@ -227,13 +231,12 @@ export async function exportAnnouncements(
   userId: string,
   sinceSeq: number = 0,
 ) {
-  if (indexerId === "public") {
+  const controller = await getIndexerController(context, indexerId);
+  if (controller === "public") {
     throw new HTTPException(403, {
       message: "Cannot export from the public indexer",
     });
-  }
-  const isController = await isIndexerController(context, indexerId, userId);
-  if (!isController) {
+  } else if (controller !== userId) {
     throw new HTTPException(403, {
       message: "Cannot export from someone else's indexer",
     });
