@@ -6,10 +6,7 @@ import { z } from "zod";
 
 const MAX_SIZE = 25 * 1024 * 1024; // 25mb
 
-const bucketIdSchema = z
-  .string()
-  .length(44)
-  .regex(/^[a-zA-Z0-9_-]+$/);
+const bucketIdSchema = z.base64url().length(44);
 function verifyBucketId(bucketId: string) {
   const result = bucketIdSchema.safeParse(bucketId);
   if (!result.success) {
@@ -28,7 +25,7 @@ async function verifyBucketControl(
   const { userId } = await verifySessionHeader(context);
 
   const result = await context.env.DB.prepare(
-    `SELECT created_at FROM service_instances WHERE service_id = ? AND user_id = ? AND type = ?`,
+    `SELECT service_id FROM service_instances WHERE service_id = ? AND user_id = ? AND type = ?`,
   )
     .bind(bucketId, userId, "bucket")
     .first();
@@ -54,6 +51,12 @@ storageBuckets.use("*", async (c, next) => {
   await next();
 });
 
+storageBuckets.get("/auth", async (c) => {
+  const headers = new Headers();
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  return c.text(`gf:a:oauth:${c.env.BASE_HOST}/oauth`, { headers });
+});
+
 storageBuckets.get("/:bucket-id/:key", async (c) => {
   const bucketId = c.req.param("bucket-id");
   verifyBucketId(bucketId);
@@ -62,7 +65,7 @@ storageBuckets.get("/:bucket-id/:key", async (c) => {
   const bucketKey = `${bucketId}/${key}`;
 
   const ifNoneMatch = c.req.header("If-None-Match");
-  const result = await c.env.BUCKET.get(bucketKey, {
+  const result = await c.env.STORAGE.get(bucketKey, {
     onlyIf: {
       etagDoesNotMatch: ifNoneMatch,
     },
@@ -76,14 +79,11 @@ storageBuckets.get("/:bucket-id/:key", async (c) => {
 
   const headers = new Headers();
   headers.set("ETag", result.etag);
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
   if (!("body" in result)) {
     return new Response(null, { status: 304, headers });
   }
 
-  return new Response(result.body, {
-    headers,
-  });
+  return new Response(result.body, { headers });
 });
 
 storageBuckets.put("/:bucket-id/:key", async (c) => {
@@ -137,7 +137,7 @@ storageBuckets.put("/:bucket-id/:key", async (c) => {
   });
 
   try {
-    await c.env.BUCKET.put(bucketKey, limitedBody);
+    await c.env.STORAGE.put(bucketKey, limitedBody);
   } catch (e: any) {
     if (tooLarge) {
       throw new HTTPException(413, { message: "Body is too large" });
@@ -153,7 +153,7 @@ storageBuckets.delete("/:bucket-id/:key", async (c) => {
 
   const key = c.req.param("key");
   const bucketKey = `${bucketId}/${key}`;
-  await c.env.BUCKET.delete(bucketKey);
+  await c.env.STORAGE.delete(bucketKey);
   return c.json({ deleted: true });
 });
 
@@ -164,17 +164,13 @@ storageBuckets.get("/:bucket-id", async (c) => {
 
   const cursor = c.req.query("cursor");
 
-  const listed = await c.env.BUCKET.list({ prefix: `${bucketId}/`, cursor });
+  const listed = await c.env.STORAGE.list({ prefix: `${bucketId}/`, cursor });
   const keys = listed.objects.map((o) => o.key.slice(bucketId.length + 1));
 
   return c.json({
     keys,
     cursor: listed.truncated ? listed.cursor : null,
   });
-});
-
-storageBuckets.get("/auth", async (c) => {
-  return c.text(`gf:a:oauth:${c.env.BASE_HOST}/oauth`);
 });
 
 export default storageBuckets;

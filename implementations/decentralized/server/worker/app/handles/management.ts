@@ -64,9 +64,9 @@ router.delete("/handle/:handle-name", async (c) => {
   const handleName = c.req.param("handle-name");
 
   const result = await c.env.DB.prepare(
-    "DELETE FROM handles WHERE user_id = ? AND name = ? RETURNING name",
+    "DELETE FROM handles WHERE name = ? AND user_id = ? RETURNING name",
   )
-    .bind(userId, handleName)
+    .bind(handleName, userId)
     .first();
   if (!result) {
     throw new HTTPException(404, { message: "Handle not found." });
@@ -83,13 +83,13 @@ router.put("/handle/:handle-name", async (c) => {
 
   // Attempt to update the handle
   const result = await c.env.DB.prepare(
-    "UPDATE handles SET services = ?, also_known_as = ? WHERE user_id = ? AND name = ? RETURNING name",
+    "UPDATE handles SET services = ?, also_known_as = ? WHERE name = ? AND user_id = ? RETURNING name",
   )
     .bind(
       services ? JSON.stringify(services) : null,
       alsoKnownAs ? JSON.stringify(alsoKnownAs) : null,
-      userId,
       handleName,
+      userId,
     )
     .first();
   if (!result) {

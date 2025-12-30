@@ -1,6 +1,6 @@
 <template>
     <header>
-        <h1>Actors</h1>
+        <h2>Actors</h2>
         <nav>
             <ul>
                 <li>
