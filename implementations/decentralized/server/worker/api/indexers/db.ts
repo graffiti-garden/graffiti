@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { Bindings } from "../env";
+import type { Bindings } from "../../env";
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { HTTPException } from "hono/http-exception";
 

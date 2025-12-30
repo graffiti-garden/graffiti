@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { Bindings } from "../env";
+import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 
 const MAX_SIZE = 25 * 1024 * 1024; // 25mb
