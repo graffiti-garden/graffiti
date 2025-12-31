@@ -42,7 +42,7 @@ export async function announce(
   if (!controller) {
     throw new HTTPException(404, { message: "Indexer not found" });
   }
-  const isController = controller === "public" || controller === userId;
+  const isController = controller === userId;
 
   const inserted = await context.env.DB.prepare(
     `
@@ -51,7 +51,7 @@ export async function announce(
         indexer_id,
         data,
         tags
-      ) VALUES (?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?)
       ON CONFLICT(hash) DO NOTHING
       RETURNING seq;
     `,
@@ -120,8 +120,7 @@ export async function queryAnnouncements(
   }
 
   const sql = [
-    `
-    WITH matched AS (
+    `WITH matched AS (
       SELECT DISTINCT at.announcement_seq
       FROM announcement_tags at
       WHERE at.indexer_id = ? AND at.tag IN (${tags.map(() => "?").join(", ")})
@@ -130,24 +129,28 @@ export async function queryAnnouncements(
     SELECT
       a.seq,
       a.data,
-      a.tags,
-      al.label AS label
-    FROM matched m
+      a.tags,`,
+    userId ? `al.label AS label` : `NULL as label`,
+    `FROM matched m
     JOIN announcements a
-      ON a.seq = m.announcement_seq
-    LEFT JOIN announcement_labels al
-      ON a.seq = al.announcement_seq
-     AND al.user_id = ?
-    `,
+      ON a.seq = m.announcement_seq`,
     // Only return if the data is "OK" (label = 1) or no label yet
-    userId ? ` AND (al.label = 1 OR al.label IS NULL)` : ``,
-    `
-    ORDER BY a.seq ASC
-    LIMIT ?
-    `,
+    userId
+      ? `LEFT JOIN announcement_labels al
+      ON m.announcement_seq = al.announcement_seq AND al.user_id = ?
+    WHERE al.label = 1 OR al.label IS NULL`
+      : ``,
+    `ORDER BY a.seq ASC
+    LIMIT ?`,
   ].join("\n");
 
-  const bindings = [indexerId, ...tags, sinceSeq, userId, QUERY_LIMIT + 1];
+  const bindings = [
+    indexerId,
+    ...tags,
+    sinceSeq,
+    ...(userId ? [userId] : []),
+    QUERY_LIMIT + 1,
+  ];
 
   const res = await context.env.DB.prepare(sql)
     .bind(...bindings)
@@ -241,14 +244,14 @@ export async function exportAnnouncements(
     SELECT
       seq,
       data,
-      tags,
+      tags
     FROM announcements
     WHERE indexer_id = ? AND seq > ?
     ORDER BY seq ASC
     LIMIT ?
   `,
   )
-    .bind(userId, indexerId, QUERY_LIMIT + 1, sinceSeq)
+    .bind(indexerId, sinceSeq, QUERY_LIMIT + 1)
     .all<{
       seq: number;
       data: string;

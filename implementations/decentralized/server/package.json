@@ -11,6 +11,7 @@
     "deploy": "npm run build:web && wrangler deploy --env production --config wrangler.toml"
   },
   "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
     "@hono/swagger-ui": "^0.5.3",
     "@hono/zod-openapi": "^1.2.0",
     "@ipld/dag-cbor": "^9.2.5",
@@ -18,7 +19,6 @@
     "@picocss/pico": "^2.1.1",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
-    "ajv": "^8.17.1",
     "hono": "^4.11.3",
     "multiformats": "^13.4.2",
     "vue": "^3.5.26",

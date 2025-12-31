@@ -7,7 +7,7 @@ import {
   queryAnnouncements,
   exportAnnouncements,
 } from "./db";
-import Ajv, { type ValidateFunction } from "ajv";
+import { Validator } from "@cfworker/json-schema";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { addAuthRoute, Base64IdSchema, disableCors } from "../shared";
 
@@ -19,9 +19,11 @@ const TagsSchema = z
     message: "All tags must be unique, no duplicate values allowed",
   });
 
+const DataSchemaSchema = z.record(z.string(), z.any());
+
 const AnnouncementSchema = z.object({
   tags: TagsSchema,
-  data: z.record(z.string(), z.any()),
+  data: DataSchemaSchema,
 });
 
 const LabelSchema = z.int().min(0).openapi({
@@ -30,17 +32,18 @@ const LabelSchema = z.int().min(0).openapi({
   example: 1,
 });
 
+const SinceSeqSchema = z.int().min(0);
+
 const QueryCursorSchema = z.object({
-  sinceSeq: z.int().min(0),
+  sinceSeq: SinceSeqSchema,
   tags: TagsSchema,
-  dataSchema: z.record(z.string(), z.any()),
+  dataSchema: DataSchemaSchema,
 });
 
 const ExportCursorSchema = z.object({
-  sinceSeq: z.int().min(0),
+  sinceSeq: SinceSeqSchema,
 });
 
-const ajv = new Ajv({ strict: false });
 const indexers = new OpenAPIHono<{ Bindings: Bindings }>();
 
 disableCors(indexers);
@@ -110,7 +113,7 @@ const labelAnnouncementRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            label: LabelSchema,
+            label: LabelSchema.min(1),
           }),
         },
       },
@@ -156,8 +159,11 @@ const queryAnnouncementsRoute = createRoute({
     }),
     query: z.object({
       cursor: z.string().optional(),
-      tags: TagsSchema.optional(),
-      dataSchema: z.record(z.string(), z.any()).optional(),
+      tag: z.preprocess((v) => {
+        if (!v) return v;
+        return Array.isArray(v) ? v : [v];
+      }, TagsSchema.optional()),
+      dataSchema: z.string().optional(),
     }),
   },
   security: [{ oauth2: [] }],
@@ -196,8 +202,13 @@ indexers.openapi(queryAnnouncementsRoute, async (c) => {
 
   const { indexerId } = c.req.valid("param");
 
-  let { cursor, tags, dataSchema } = c.req.valid("query");
+  let {
+    cursor,
+    tag: tags,
+    dataSchema: dataSchemaString,
+  } = c.req.valid("query");
 
+  let dataSchema: {};
   let sinceSeq: number | undefined = undefined;
   if (cursor) {
     let cursorJSON: unknown;
@@ -213,15 +224,27 @@ indexers.openapi(queryAnnouncementsRoute, async (c) => {
     tags = cursorParsed.data.tags;
     dataSchema = cursorParsed.data.dataSchema;
     sinceSeq = cursorParsed.data.sinceSeq;
-  } else if (!tags || !dataSchema) {
+  } else if (tags && dataSchemaString) {
+    let dataSchemaJSON: unknown;
+    try {
+      dataSchemaJSON = JSON.parse(dataSchemaString);
+    } catch {
+      throw new HTTPException(400, { message: "Invalid dataSchema" });
+    }
+    const dataSchemaParsed = DataSchemaSchema.safeParse(dataSchemaJSON);
+    if (!dataSchemaParsed.success) {
+      throw new HTTPException(400, { message: "Invalid dataSchema" });
+    }
+    dataSchema = dataSchemaParsed.data;
+  } else {
     throw new HTTPException(400, {
       message: "Must have cursor or both tags and dataSchema",
     });
   }
 
-  let validate: ValidateFunction;
+  let validator: Validator;
   try {
-    validate = ajv.compile(dataSchema);
+    validator = new Validator(dataSchema, "2020-12");
   } catch (error) {
     throw new HTTPException(400, {
       message: `Error compiling schema: ${error instanceof Error ? error.message : "unknown"}`,
@@ -236,7 +259,9 @@ indexers.openapi(queryAnnouncementsRoute, async (c) => {
     sinceSeq,
   );
 
-  const validResults = results.filter((r) => validate(r.announcement.data));
+  const validResults = results.filter(
+    (r) => validator.validate(r.announcement.data).valid,
+  );
 
   // Construct a cursor
   const resultCursorJSON: z.infer<typeof QueryCursorSchema> = {
