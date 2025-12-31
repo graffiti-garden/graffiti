@@ -91,6 +91,9 @@ CREATE TABLE IF NOT EXISTS indexers (
 
 CREATE INDEX IF NOT EXISTS idx_indexers_by_user_id ON indexers(user_id, indexer_id);
 
+INSERT OR IGNORE INTO indexers (indexer_id, user_id, name, created_at)
+    VALUES ('public', 'root', 'The public indexer', 0);
+
 CREATE TABLE IF NOT EXISTS announcements (
   seq             INTEGER PRIMARY KEY,
   indexer_id      TEXT NOT NULL,
