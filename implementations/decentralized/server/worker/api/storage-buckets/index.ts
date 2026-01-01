@@ -1,10 +1,12 @@
-import type { Context } from "hono";
 import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../../app/auth/session";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { addAuthRoute, disableCors } from "../shared";
 import { getValue, putValue, deleteValue, exportKeys } from "./db";
+import { bodyLimit } from "hono/body-limit";
+
+const MAX_VALUE_SIZE = 25 * 1024 * 1024; // 25mb
 
 const BucketIdSchema = z.base64url().length(43);
 const KeySchema = z.string().min(1).max(255);
@@ -99,6 +101,15 @@ const putValueRoute = createRoute({
     413: { description: "Body is too large" },
   },
 });
+storageBuckets.use(
+  "/:bucketId/:key",
+  bodyLimit({
+    maxSize: MAX_VALUE_SIZE,
+    onError: (c) => {
+      throw new HTTPException(413, { message: "Body is too large." });
+    },
+  }),
+);
 storageBuckets.openapi(putValueRoute, async (c) => {
   const { bucketId, key } = c.req.valid("param");
   const body = c.req.raw.body;
@@ -107,20 +118,8 @@ storageBuckets.openapi(putValueRoute, async (c) => {
       message: "Missing body",
     });
   }
-  const { "Content-Length": contentLengthString } = c.req.valid("header");
-  const contentLength = contentLengthString
-    ? Number(contentLengthString)
-    : undefined;
-  // If it is nan or infinite, filter it out
-  if (
-    Number.isNaN(contentLength) ||
-    contentLength === Infinity ||
-    contentLength === -Infinity
-  ) {
-    throw new HTTPException(400, { message: "Content length is not a number" });
-  }
   const { userId } = await verifySessionHeader(c);
-  return await putValue(c, bucketId, key, body, userId, contentLength);
+  return await putValue(c, bucketId, key, body, userId);
 });
 
 const deleteValueRoute = createRoute({

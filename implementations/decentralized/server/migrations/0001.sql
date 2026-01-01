@@ -75,7 +75,6 @@ CREATE TABLE IF NOT EXISTS actors (
 
 CREATE INDEX IF NOT EXISTS idx_actors_by_user_id ON actors(user_id);
 
-
 ---------------------------------------
 -- vvvvvvvvv Announcements vvvvvvvvvvv
 ---------------------------------------

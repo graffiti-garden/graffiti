@@ -7,6 +7,10 @@ binding = "DB"
 database_name = "graffiti-db"
 database_id = "53d812bd-b0f4-41fa-a144-55b67e0fd759"
 
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "graffiti-bucket"
+
 [vars]
 BASE_HOST = "graffiti.actor"
 
