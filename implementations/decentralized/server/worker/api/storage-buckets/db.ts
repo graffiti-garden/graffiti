@@ -2,8 +2,6 @@ import type { Context } from "hono";
 import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 
-const MAX_SIZE = 25 * 1024 * 1024; // 25mb
-
 async function verifyBucketControl(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
@@ -59,49 +57,12 @@ export async function putValue(
   key: string,
   body: ReadableStream<Uint8Array<ArrayBuffer>>,
   userId: string,
-  contentLength: number | undefined,
 ) {
   const bucketKey = getBucketKey(bucketId, key);
 
-  if (contentLength && contentLength > MAX_SIZE) {
-    throw new HTTPException(413, { message: "Body is too large" });
-  }
-
   await verifyBucketControl(context, bucketId, userId);
 
-  // Just in case the content length header is
-  // inaccurate, limit the body size manually
-  const reader = body.getReader();
-  let totalBytes = 0;
-  let tooLarge = false;
-  const limitedBody = new ReadableStream({
-    async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) return controller.close();
-
-      totalBytes += value.byteLength;
-      if (totalBytes > MAX_SIZE) {
-        tooLarge = true;
-        controller.error(new Error("Body is too large"));
-        void reader.cancel("Body is too large").catch(() => {});
-        return;
-      }
-
-      controller.enqueue(value);
-    },
-    async cancel(reason) {
-      return reader.cancel(reason).catch(() => {});
-    },
-  });
-
-  try {
-    await context.env.STORAGE.put(bucketKey, limitedBody);
-  } catch (e: any) {
-    if (tooLarge) {
-      throw new HTTPException(413, { message: "Body is too large" });
-    }
-    throw e;
-  }
+  await context.env.STORAGE.put(bucketKey, body);
 
   return context.json({ uploaded: true });
 }
