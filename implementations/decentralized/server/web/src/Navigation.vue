@@ -27,7 +27,7 @@
                         </RouterLink>
                     </li>
                     <li>
-                        <RouterLink :to="{ name: 'indexers' }">
+                        <RouterLink :to="{ name: 'inboxes' }">
                             Indexers
                         </RouterLink>
                     </li>

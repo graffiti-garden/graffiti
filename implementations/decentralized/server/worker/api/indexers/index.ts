@@ -1,34 +1,35 @@
 import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../../app/auth/session";
-import {
-  announce,
-  labelAnnouncement,
-  queryAnnouncements,
-  exportAnnouncements,
-} from "./db";
+import { sendMessage, labelMessage, queryMessages, exportMessages } from "./db";
 import { Validator } from "@cfworker/json-schema";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { addAuthRoute, Base64IdSchema, disableCors } from "../shared";
 
-const IndexerIdSchema = z.union([Base64IdSchema, z.literal("public")]);
+const inboxIdSchema = z.union([Base64IdSchema, z.literal("public")]);
 
 const TagsSchema = z
   .array(z.string())
   .refine((tags) => new Set(tags).size === tags.length, {
     message: "All tags must be unique, no duplicate values allowed",
+  })
+  .openapi({
+    description:
+      "A set of unique per-message tags. A message can only be queried by specifying one of its tags",
   });
 
-const DataSchemaSchema = z.record(z.string(), z.any());
+const DataSchemaSchema = z.record(z.string(), z.any()).openapi({
+  description: "A JSON Schema to filter the message data by.",
+});
 
-const AnnouncementSchema = z.object({
+const MessageSchema = z.object({
   tags: TagsSchema,
   data: DataSchemaSchema,
 });
 
 const LabelSchema = z.int().min(0).openapi({
   description:
-    "An integer label for the announcement, 0 for undefined, 1 for ok, 2 for expired, 3 for incorrect, 4 for junk",
+    "An integer label for the message indicating whether it is worth keeping",
   example: 1,
 });
 
@@ -44,70 +45,71 @@ const ExportCursorSchema = z.object({
   sinceSeq: SinceSeqSchema,
 });
 
-const indexers = new OpenAPIHono<{ Bindings: Bindings }>();
+const inboxes = new OpenAPIHono<{ Bindings: Bindings }>();
 
-disableCors(indexers);
-addAuthRoute(indexers, "Indexers", "indexerId");
+disableCors(inboxes);
+addAuthRoute(inboxes, "Inboxes", "inboxId");
 
-const announceRoute = createRoute({
-  method: "post",
-  description: "Announce ",
-  tags: ["Indexers"],
-  path: "/{indexerId}/announce",
+const sendRoute = createRoute({
+  method: "put",
+  description: "Sends a message to a particular inbox",
+  tags: ["Inboxes"],
+  path: "/{inboxId}/send",
   request: {
     params: z.object({
-      indexerId: IndexerIdSchema,
+      inboxId: inboxIdSchema,
     }),
     body: {
       content: {
         "application/json": {
-          schema: AnnouncementSchema,
+          schema: MessageSchema,
         },
       },
       required: true,
     },
   },
-  security: [{ oauth2: [] }],
   responses: {
     200: {
-      description: "Announcement created successfully",
+      description: "Message already sent",
       content: {
         "application/json": {
           schema: z.object({
-            announcementId: z.string(),
+            messageId: z.string(),
           }),
         },
       },
     },
-    401: { description: "Invalid authorization" },
-    404: { description: "Indexer not found" },
-    409: { description: "Duplicate announcement" },
+    201: {
+      description: "Message sent successfully",
+      content: {
+        "application/json": {
+          schema: z.object({
+            messageId: z.string(),
+          }),
+        },
+      },
+    },
+    404: { description: "Inbox not found" },
   },
 });
-indexers.openapi(announceRoute, async (c) => {
-  let userId: string | undefined = undefined;
-  try {
-    const verification = await verifySessionHeader(c);
-    userId = verification.userId;
-  } catch {} // Not to worry if not logged in
-
-  const { indexerId } = c.req.valid("param");
+inboxes.openapi(sendRoute, async (c) => {
+  const { inboxId } = c.req.valid("param");
   const announcement = c.req.valid("json");
-  const announcementId = await announce(c, indexerId, announcement, userId);
+  const { messageId, created } = await sendMessage(c, inboxId, announcement);
 
-  return c.json({ announcementId });
+  return c.json({ messageId }, created ? 201 : 200);
 });
 
-const labelAnnouncementRoute = createRoute({
+const labelRoute = createRoute({
   method: "put",
   description:
-    "Label an announcement as 'ok', 'expired', 'incorrect' or 'junk'",
-  tags: ["Indexers"],
-  path: "/{indexerId}/label/{announcementId}",
+    "Label an message in an inbox as 'ok', 'expired', 'incorrect', 'junk', etc.",
+  tags: ["Inboxes"],
+  path: "/{inboxId}/label/{messageId}",
   request: {
     params: z.object({
-      indexerId: IndexerIdSchema,
-      announcementId: z.string(),
+      inboxId: inboxIdSchema,
+      messageId: z.string(),
     }),
     body: {
       content: {
@@ -123,7 +125,7 @@ const labelAnnouncementRoute = createRoute({
   security: [{ oauth2: [] }],
   responses: {
     200: {
-      description: "Announcement labeled successfully",
+      description: "Message labeled successfully",
       content: {
         "application/json": {
           schema: z.object({
@@ -134,28 +136,28 @@ const labelAnnouncementRoute = createRoute({
     },
     401: { description: "Invalid authorization" },
     403: {
-      description: "Cannot label an announcement in someone else's indexer",
+      description: "Cannot label an message in someone else's inbox",
     },
-    404: { description: "Announcement not found" },
+    404: { description: "Message not found" },
   },
 });
 
-indexers.openapi(labelAnnouncementRoute, async (c) => {
+inboxes.openapi(labelRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
-  const { indexerId, announcementId } = c.req.valid("param");
+  const { inboxId, messageId } = c.req.valid("param");
   const { label } = c.req.valid("json");
-  await labelAnnouncement(c, indexerId, announcementId, label, userId);
+  await labelMessage(c, inboxId, messageId, label, userId);
   return c.json({ labeled: true });
 });
 
-const queryAnnouncementsRoute = createRoute({
+const queryRoute = createRoute({
   method: "get",
-  path: "/{indexerId}/query",
-  tags: ["Indexers"],
-  description: "Query data that has been announced to the indexer",
+  path: "/{inboxId}/query",
+  tags: ["Inboxes"],
+  description: "Query messages that have been sent to an inbox",
   request: {
     params: z.object({
-      indexerId: IndexerIdSchema,
+      inboxId: inboxIdSchema,
     }),
     query: z.object({
       cursor: z.string().optional(),
@@ -169,14 +171,14 @@ const queryAnnouncementsRoute = createRoute({
   security: [{ oauth2: [] }],
   responses: {
     200: {
-      description: "Announcements queried successfully",
+      description: "Messages queried successfully",
       content: {
         "application/json": {
           schema: z.object({
             results: z.array(
               z.object({
-                announcementId: z.string(),
-                announcement: AnnouncementSchema,
+                messageId: z.string(),
+                message: MessageSchema,
                 label: LabelSchema,
               }),
             ),
@@ -188,19 +190,18 @@ const queryAnnouncementsRoute = createRoute({
     },
     401: { description: "Invalid authorization" },
     403: {
-      description: "Cannot query announcements in someone else's indexer",
+      description: "Cannot query messages in someone else's inbox",
     },
   },
 });
-
-indexers.openapi(queryAnnouncementsRoute, async (c) => {
+inboxes.openapi(queryRoute, async (c) => {
   let userId: string | undefined = undefined;
   try {
     const verification = await verifySessionHeader(c);
     userId = verification.userId;
   } catch {} // Not to worry if not logged in
 
-  const { indexerId } = c.req.valid("param");
+  const { inboxId } = c.req.valid("param");
 
   let {
     cursor,
@@ -251,16 +252,16 @@ indexers.openapi(queryAnnouncementsRoute, async (c) => {
     });
   }
 
-  const { results, hasMore, lastSeq } = await queryAnnouncements(
+  const { results, hasMore, lastSeq } = await queryMessages(
     c,
-    indexerId,
+    inboxId,
     tags,
     userId,
     sinceSeq,
   );
 
   const validResults = results.filter(
-    (r) => validator.validate(r.announcement.data).valid,
+    (r) => validator.validate(r.message.data).valid,
   );
 
   // Construct a cursor
@@ -300,14 +301,14 @@ indexers.openapi(queryAnnouncementsRoute, async (c) => {
   );
 });
 
-const exportAnnouncementsRoute = createRoute({
+const exportRoute = createRoute({
   method: "get",
-  path: "/{indexerId}",
-  tags: ["Indexers"],
-  description: "Export all data announced to an indexer",
+  path: "/{inboxId}",
+  tags: ["Inboxes"],
+  description: "Export all messages sent to an inbox",
   request: {
     params: z.object({
-      indexerId: IndexerIdSchema,
+      inboxId: inboxIdSchema,
     }),
     query: z.object({
       cursor: z.string().optional(),
@@ -316,14 +317,14 @@ const exportAnnouncementsRoute = createRoute({
   security: [{ oauth2: [] }],
   responses: {
     200: {
-      description: "Exported successfully",
+      description: "Exported messages successfully",
       content: {
         "application/json": {
           schema: z.object({
             results: z.array(
               z.object({
-                announcementId: z.string(),
-                announcement: AnnouncementSchema,
+                messageId: z.string(),
+                message: MessageSchema,
                 label: LabelSchema,
               }),
             ),
@@ -335,15 +336,15 @@ const exportAnnouncementsRoute = createRoute({
     },
     401: { description: "Invalid authorization" },
     403: {
-      description: "Cannot export from someone else's indexer",
+      description: "Cannot export from someone else's inbox",
     },
   },
 });
 
-// Export announcements
-indexers.openapi(exportAnnouncementsRoute, async (c) => {
+// Export messages
+inboxes.openapi(exportRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
-  const { indexerId } = c.req.valid("param");
+  const { inboxId } = c.req.valid("param");
   const { cursor: cursorParam } = c.req.valid("query");
 
   let sinceSeq: number | undefined = undefined;
@@ -362,9 +363,9 @@ indexers.openapi(exportAnnouncementsRoute, async (c) => {
     sinceSeq = cursorParsed.data.sinceSeq;
   }
 
-  const { results, lastSeq, hasMore } = await exportAnnouncements(
+  const { results, lastSeq, hasMore } = await exportMessages(
     c,
-    indexerId,
+    inboxId,
     userId,
     sinceSeq,
   );
@@ -386,4 +387,4 @@ indexers.openapi(exportAnnouncementsRoute, async (c) => {
   return c.json({ results, hasMore, cursor }, { headers });
 });
 
-export default indexers;
+export default inboxes;

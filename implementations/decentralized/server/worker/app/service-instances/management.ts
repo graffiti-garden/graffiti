@@ -7,11 +7,11 @@ import { HTTPException } from "hono/http-exception";
 const serviceInstances = new Hono<{ Bindings: Bindings }>();
 
 function tableFromType(type: string) {
-  return type === "bucket" ? "storage_buckets" : "indexers";
+  return type === "bucket" ? "storage_buckets" : "inboxes";
 }
 
 function idNameFromType(type: string) {
-  return type === "bucket" ? "bucket_id" : "indexer_id";
+  return type === "bucket" ? "bucket_id" : "inbox_id";
 }
 
 serviceInstances.post("/:type/create", async (c) => {

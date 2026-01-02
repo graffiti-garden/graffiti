@@ -13,7 +13,6 @@ import RegisterHandle from "./handles/RegisterHandle.vue";
 
 // See if we are logged in
 function checkLoggedInStatus() {
-  console.log("hey!");
   fetchFromSelf("/app/webauthn/logged-in")
     .then(() => {
       isLoggedIn.value = true;
@@ -64,11 +63,11 @@ const routes = [
         },
       },
       {
-        name: "indexers",
-        path: "/indexers",
+        name: "inboxes",
+        path: "/inboxes",
         component: Storage,
         props: {
-          type: "indexer",
+          type: "inbox",
         },
       },
     ],
