@@ -5,7 +5,7 @@ import { swaggerUI } from "@hono/swagger-ui";
 import type { Bindings } from "./env";
 import app from "./app/app";
 import storageBuckets from "./api/storage-buckets/index";
-import indexers from "./api/indexers/index";
+import indexers from "./api/inboxes/index";
 import handleDids from "./app/handles/dids";
 
 const router = new OpenAPIHono<{ Bindings: Bindings }>();
