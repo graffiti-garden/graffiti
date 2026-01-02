@@ -3,52 +3,50 @@ import type { Bindings } from "../../env";
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { HTTPException } from "hono/http-exception";
 
-const QUERY_LIMIT = 100;
+const INBOX_QUERY_LIMIT = 100;
 
-async function getIndexerController(
+async function getInboxController(
   context: Context<{ Bindings: Bindings }>,
-  indexerId: string,
+  inboxId: string,
 ): Promise<string | undefined> {
-  if (indexerId === "public") return "public";
+  if (inboxId === "public") return "public";
 
   const result = await context.env.DB.prepare(
-    "SELECT user_id FROM indexers WHERE indexer_id = ?",
+    "SELECT user_id FROM inboxes WHERE inbox_id = ?",
   )
-    .bind(indexerId)
+    .bind(inboxId)
     .first<{ user_id: string }>();
 
   return result?.user_id;
 }
 
-export async function announce(
+export async function sendMessage(
   context: Context<{ Bindings: Bindings }>,
-  indexerId: string,
-  announcement: {
+  inboxId: string,
+  message: {
     tags: string[];
     data: {};
   },
-  userId: string | undefined,
 ) {
-  // Hash the announcement to prevent inserting duplicates
-  const operationBytes = dagCborEncode({ indexerId, ...announcement });
-  const announcementHash = await crypto.subtle.digest(
+  // Hash the message to prevent inserting duplicates
+  const operationBytes = dagCborEncode({ inboxId, ...message });
+  const messageHash = await crypto.subtle.digest(
     "SHA-256",
     new Uint8Array(operationBytes),
   );
 
-  // Determine if the indexer is under the user's control,
-  // which we will later use to determine if we can label the announcement
-  const controller = await getIndexerController(context, indexerId);
+  // Determine if the inbox is under the user's control,
+  // which we will later use to determine if we can label the message
+  const controller = await getInboxController(context, inboxId);
   if (!controller) {
-    throw new HTTPException(404, { message: "Indexer not found" });
+    throw new HTTPException(404, { message: "Inbox not found" });
   }
-  const isController = controller === userId;
 
   const inserted = await context.env.DB.prepare(
     `
-      INSERT INTO announcements (
+      INSERT INTO inbox_messages (
         hash,
-        indexer_id,
+        inbox_id,
         data,
         tags
       ) VALUES (?, ?, ?, ?)
@@ -57,99 +55,101 @@ export async function announce(
     `,
   )
     .bind(
-      announcementHash,
-      indexerId,
-      JSON.stringify(announcement.data),
-      JSON.stringify(announcement.tags),
+      messageHash,
+      inboxId,
+      JSON.stringify(message.data),
+      JSON.stringify(message.tags),
     )
     .first<{ seq: number }>();
 
-  if (!inserted) {
-    throw new HTTPException(409, { message: "Duplicate announcement" });
+  let created: boolean;
+  let messageSeq: number;
+  if (inserted) {
+    created = true;
+    messageSeq = inserted.seq;
+  } else {
+    created = false;
+    const result = await context.env.DB.prepare(
+      `SELECT seq FROM inbox_messages WHERE inbox_id = ? AND hash = ?`,
+    )
+      .bind(inboxId, messageHash)
+      .first<{ seq: number }>();
+    if (!result) {
+      throw new HTTPException(500, {
+        message: "Duplicate message deleted during send?",
+      });
+    }
+    messageSeq = result.seq;
   }
 
   const statements: D1PreparedStatement[] = [];
 
-  const announcementSeq = inserted.seq;
-
-  for (const tag of announcement.tags) {
-    statements.push(
-      context.env.DB.prepare(
-        `
-        INSERT INTO announcement_tags (
-          announcement_seq,
-          indexer_id,
-          tag
-        ) VALUES (?, ?, ?);
-      `,
-      ).bind(announcementSeq, indexerId, tag),
-    );
+  if (created) {
+    for (const tag of message.tags) {
+      statements.push(
+        context.env.DB.prepare(
+          `
+          INSERT INTO inbox_message_tags (
+            message_seq,
+            inbox_id,
+            tag
+          ) VALUES (?, ?, ?);
+        `,
+        ).bind(messageSeq, inboxId, tag),
+      );
+    }
+    await context.env.DB.batch(statements);
   }
 
-  if (isController) {
-    statements.push(
-      context.env.DB.prepare(
-        `
-        INSERT INTO announcement_labels (
-          announcement_seq,
-          user_id,
-          label
-        ) VALUES (?, ?, 1);
-      `,
-      ).bind(announcementSeq, userId),
-    );
-  }
-
-  await context.env.DB.batch(statements);
-
-  return announcementSeq.toString();
+  return { messageId: messageSeq.toString(), created };
 }
 
-export async function queryAnnouncements(
+export async function queryMessages(
   context: Context<{ Bindings: Bindings }>,
-  indexerId: string,
+  inboxId: string,
   tags: string[],
   userId?: string,
   sinceSeq: number = 0,
 ) {
-  const controller = await getIndexerController(context, indexerId);
+  const controller = await getInboxController(context, inboxId);
   if (controller !== "public" && controller !== userId) {
     throw new HTTPException(403, {
-      message: "Cannot query someone else's indexer",
+      message: "Cannot query someone else's inbox",
     });
   }
 
   const sql = [
-    `WITH matched AS (
-      SELECT DISTINCT at.announcement_seq
-      FROM announcement_tags at
-      WHERE at.indexer_id = ? AND at.tag IN (${tags.map(() => "?").join(", ")})
-        AND at.announcement_seq > ?
+    `WITH message_candidates AS (
+      SELECT DISTINCT t.message_seq
+      FROM inbox_message_tags t
+      WHERE t.inbox_id = ? AND t.tag IN (${tags.map(() => "?").join(", ")})
+        AND t.message_seq > ?
+      ORDER BY t.message_seq ASC
     )
     SELECT
-      a.seq,
-      a.data,
-      a.tags,`,
-    userId ? `al.label AS label` : `NULL as label`,
-    `FROM matched m
-    JOIN announcements a
-      ON a.seq = m.announcement_seq`,
+      m.seq,
+      m.data,
+      m.tags,`,
+    userId ? `l.label AS label` : `NULL as label`,
+    `FROM message_candidates c
+    JOIN inbox_messages m
+      ON m.seq = c.message_seq`,
     // Only return if the data is "OK" (label = 1) or no label yet
     userId
-      ? `LEFT JOIN announcement_labels al
-      ON m.announcement_seq = al.announcement_seq AND al.user_id = ?
-    WHERE al.label = 1 OR al.label IS NULL`
+      ? `LEFT JOIN inbox_message_labels l
+      ON c.message_seq = l.message_seq AND l.user_id = ?
+    WHERE l.label = 1 OR l.label IS NULL`
       : ``,
-    `ORDER BY a.seq ASC
+    `ORDER BY m.seq ASC
     LIMIT ?`,
   ].join("\n");
 
   const bindings = [
-    indexerId,
+    inboxId,
     ...tags,
     sinceSeq,
     ...(userId ? [userId] : []),
-    QUERY_LIMIT + 1,
+    INBOX_QUERY_LIMIT + 1,
   ];
 
   const res = await context.env.DB.prepare(sql)
@@ -161,12 +161,12 @@ export async function queryAnnouncements(
       label: number | null;
     }>();
 
-  const hasMore = res.results.length === QUERY_LIMIT + 1;
-  const resultsRaw = res.results.slice(0, QUERY_LIMIT);
+  const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
+  const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
   const results = resultsRaw.map((r) => ({
-    announcementId: r.seq.toString(),
-    announcement: {
+    messageId: r.seq.toString(),
+    message: {
       tags: JSON.parse(r.tags) as string[],
       data: JSON.parse(r.data) as unknown,
     },
@@ -182,60 +182,60 @@ export async function queryAnnouncements(
   };
 }
 
-export async function labelAnnouncement(
+export async function labelMessage(
   context: Context<{ Bindings: Bindings }>,
-  indexerId: string,
-  announcementId: string,
+  inboxId: string,
+  messageId: string,
   label: number,
   userId: string,
 ) {
-  const controller = await getIndexerController(context, indexerId);
+  const controller = await getInboxController(context, inboxId);
   if (controller !== "public" && controller !== userId) {
     throw new HTTPException(403, {
-      message: "Cannot label an announcement in someone else's indexer",
+      message: "Cannot label a message in someone else's inbox",
     });
   }
 
-  // Make sure the announcement is in the indexer
+  // Make sure the message is in the indbox
   const result = await context.env.DB.prepare(
-    `SELECT seq FROM announcements WHERE seq = ? AND indexer_id = ?`,
+    `SELECT seq FROM inbox_messages WHERE seq = ? AND inbox_id = ?`,
   )
-    .bind(Number(announcementId), indexerId)
+    .bind(Number(messageId), inboxId)
     .first();
   if (!result) {
     throw new HTTPException(404, {
-      message: "Announcement not found",
+      message: "Message not found",
     });
   }
 
   await context.env.DB.prepare(
     `
-    INSERT INTO announcement_labels (
-      announcement_seq,
+    INSERT INTO inbox_message_labels (
+      message_seq,
       user_id,
       label
     ) VALUES (?, ?, ?)
-    ON CONFLICT (announcement_seq, user_id) DO UPDATE SET label = EXCLUDED.label;
+    ON CONFLICT (message_seq, user_id) DO UPDATE SET label = EXCLUDED.label;
   `,
   )
-    .bind(Number(announcementId), userId, label)
+    .bind(Number(messageId), userId, label)
     .run();
 }
 
-export async function exportAnnouncements(
+export async function exportMessages(
   context: Context<{ Bindings: Bindings }>,
-  indexerId: string,
+  inboxId: string,
   userId: string,
   sinceSeq: number = 0,
 ) {
-  const controller = await getIndexerController(context, indexerId);
+  const controller = await getInboxController(context, inboxId);
   if (controller === "public") {
     throw new HTTPException(403, {
-      message: "Cannot export from the public indexer",
+      message: "Cannot export from the public inbox",
     });
   } else if (controller !== userId) {
     throw new HTTPException(403, {
-      message: "Cannot export from someone else's indexer",
+      message: "Cannot export from someone else's inbox",
     });
   }
 
@@ -245,21 +245,21 @@ export async function exportAnnouncements(
       seq,
       data,
       tags
-    FROM announcements
-    WHERE indexer_id = ? AND seq > ?
+    FROM inbox_messages
+    WHERE inbox_id = ? AND seq > ?
     ORDER BY seq ASC
     LIMIT ?
   `,
   )
-    .bind(indexerId, sinceSeq, QUERY_LIMIT + 1)
+    .bind(inboxId, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
       seq: number;
       data: string;
       tags: string;
     }>();
 
-  const hasMore = res.results.length === QUERY_LIMIT + 1;
-  const resultsRaw = res.results.slice(0, QUERY_LIMIT);
+  const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
+  const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
   const results = resultsRaw.map((r) => ({
     tags: JSON.parse(r.tags) as string[],

@@ -58,7 +58,7 @@ import DisplayService from "./DisplayService.vue";
 const services = ref<Array<Service> | null | undefined>(undefined);
 
 const props = defineProps<{
-    type: "bucket" | "indexer";
+    type: "bucket" | "inbox";
 }>();
 
 function fetchServices() {

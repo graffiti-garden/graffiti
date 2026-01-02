@@ -76,58 +76,58 @@ CREATE TABLE IF NOT EXISTS actors (
 CREATE INDEX IF NOT EXISTS idx_actors_by_user_id ON actors(user_id);
 
 ---------------------------------------
--- vvvvvvvvv Announcements vvvvvvvvvvv
+-- vvvvvvvvv Inboxes vvvvvvvvvvv
 ---------------------------------------
 
 PRAGMA foreign_keys=ON;
 
-CREATE TABLE IF NOT EXISTS indexers (
-    indexer_id TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS inboxes (
+    inbox_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     created_at INTEGER NOT NULL
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS idx_indexers_by_user_id ON indexers(user_id, indexer_id);
+CREATE INDEX IF NOT EXISTS idx_inboxes_by_user_id ON inboxes(user_id, inbox_id);
 
-INSERT OR IGNORE INTO indexers (indexer_id, user_id, name, created_at)
-    VALUES ('public', 'root', 'The public indexer', 0);
+INSERT OR IGNORE INTO inboxes (inbox_id, user_id, name, created_at)
+    VALUES ('public', 'root', 'The public inbox', 0);
 
-CREATE TABLE IF NOT EXISTS announcements (
+CREATE TABLE IF NOT EXISTS inbox_messages (
   seq             INTEGER PRIMARY KEY,
-  indexer_id      TEXT NOT NULL,
+  inbox_id        TEXT NOT NULL,
   hash            BLOB NOT NULL UNIQUE,
   data            TEXT NOT NULL,
   tags            TEXT NOT NULL,
 
-  FOREIGN KEY (indexer_id) REFERENCES indexers(indexer_id) ON DELETE CASCADE
+  FOREIGN KEY (inbox_id) REFERENCES inboxes(inbox_id) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS idx_announcements_by_indexer_id ON announcements(indexer_id, seq ASC);
+CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_seq ON inbox_messages(inbox_id, seq ASC);
+CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_hash ON inbox_messages(inbox_id, hash);
 
-CREATE TABLE IF NOT EXISTS announcement_tags (
-    announcement_seq  INTEGER NOT NULL,
-    tag               TEXT NOT NULL,
-    indexer_id        TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS inbox_message_tags (
+    message_seq     INTEGER NOT NULL,
+    tag             TEXT NOT NULL,
+    inbox_id        TEXT NOT NULL,
 
-    PRIMARY KEY (announcement_seq, tag),
-    FOREIGN KEY (announcement_seq) REFERENCES announcements(seq) ON DELETE CASCADE
+    PRIMARY KEY (message_seq, tag),
+    FOREIGN KEY (message_seq) REFERENCES inbox_messages(seq) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS idx_announcement_tags
-    ON announcement_tags(indexer_id, tag, announcement_seq ASC);
-CREATE INDEX IF NOT EXISTS idx_announcement_tags_by_announcement_seq
-    ON announcement_tags(announcement_seq, tag);
+CREATE INDEX IF NOT EXISTS idx_inbox_message_tags
+    ON inbox_message_tags(inbox_id, tag, message_seq ASC);
+CREATE INDEX IF NOT EXISTS idx_inbox_message_tags_by_message_seq
+    ON inbox_message_tags(message_seq, tag);
 
-CREATE TABLE IF NOT EXISTS announcement_labels (
-    announcement_seq INTEGER NOT NULL,
-    user_id          TEXT NOT NULL,
-    label            INTEGER NOT NULL CHECK (label > 0),
+CREATE TABLE IF NOT EXISTS inbox_message_labels (
+    message_seq     INTEGER NOT NULL,
+    user_id         TEXT NOT NULL,
+    label           INTEGER NOT NULL CHECK (label > 0),
 
-    PRIMARY KEY (announcement_seq, user_id),
-    FOREIGN KEY (announcement_seq) REFERENCES announcements(seq) ON DELETE CASCADE
+    PRIMARY KEY (message_seq, user_id),
+    FOREIGN KEY (message_seq) REFERENCES inbox_messages(seq) ON DELETE CASCADE
 ) STRICT;
-
 ---------------------------------------
--- ^^^^^^^^^ Announcements ^^^^^^^^^^^
+-- ^^^^^^^^^ Inboxes ^^^^^^^^^^^
 ---------------------------------------
