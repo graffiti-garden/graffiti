@@ -1,11 +1,12 @@
 <template>
     <header>
-        <h2>Service Instances</h2>
+        <h2>{{ type === "inbox" ? "Inboxes" : "Storage Buckets" }}</h2>
         <nav>
             <ul>
                 <li>
                     <button v-if="!createOpen" @click="createOpen = true">
-                        Create New Service Instance
+                        Create New
+                        {{ type === "inbox" ? "Inbox" : "Storage Bucket" }}
                     </button>
                     <form v-else @submit.prevent="createService">
                         <label for="new-service-name"
@@ -65,7 +66,20 @@ function fetchServices() {
     services.value = undefined;
     fetchFromSelf(`/app/service-instances/${props.type}/list`)
         .then((value: Array<Service>) => {
-            services.value = value.sort((a, b) => b.createdAt - a.createdAt);
+            services.value = value
+                .sort((a, b) => b.createdAt - a.createdAt)
+                .map((s) => ({ ...s, type: props.type }));
+            if (props.type === "inbox") {
+                services.value = [
+                    ...services.value,
+                    {
+                        createdAt: 0,
+                        name: "The public inbox",
+                        serviceId: "public",
+                        type: "inbox",
+                    },
+                ];
+            }
         })
         .catch((error) => {
             console.error(error);

@@ -1,55 +1,46 @@
 <template>
     <article>
         <h2>
-            <form v-if="renameOpen" @submit.prevent="renameService">
-                <input
-                    type="text"
-                    v-focus
-                    v-model="renameName"
-                    @focus="
-                        $nextTick().then(() =>
-                            ($event.target as HTMLInputElement).select(),
-                        )
-                    "
-                />
-                <button type="submit">Save</button>
-                <button @click="renameOpen = false">Cancel</button>
-            </form>
-            <span v-else>
-                {{ service.name }}
-                <button
-                    @click="
-                        renameOpen = true;
-                        renameName = service.name;
-                    "
-                >
-                    Rename
-                </button>
-            </span>
+            {{ url }}
+            <CopyButton :text="url" />
         </h2>
-        <h3>
-            <code>
-                {{ `gf:s:https://example.com/s/${service.serviceId}` }}
-            </code>
-            <button>Copy URL</button>
-        </h3>
-        <button @click="deleteService" :disabled="deleting">
-            {{ deleting ? "Deleting..." : "Delete" }}
-        </button>
-        <button>Download Data</button>
+        <p>
+            <a
+                :href="`/${service.type === 'inbox' ? 'i' : 's'}/${service.serviceId}/docs`"
+                target="_blank"
+            >
+                Go to API Docs
+            </a>
+        </p>
+        <nav v-if="service.serviceId !== 'public'">
+            <ul>
+                <li>
+                    <button @click="deleteService" :disabled="deleting">
+                        {{ deleting ? "Deleting..." : "Delete" }}
+                    </button>
+                </li>
+            </ul>
+        </nav>
     </article>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { fetchFromSelf } from "../globals";
 import type { Service } from "./types";
+import CopyButton from "../utils/CopyButton.vue";
+import { serviceIdToUrl } from "../../../shared/service-urls";
 
 const props = defineProps<{
     service: Service;
     onDelete: () => void;
 }>();
 const service = props.service;
+
+const baseHost = window.location.host;
+const url = computed(() =>
+    serviceIdToUrl(props.service.serviceId, props.service.type, baseHost),
+);
 
 const deleting = ref(false);
 function deleteService() {
@@ -78,36 +69,6 @@ function deleteService() {
         })
         .finally(() => {
             deleting.value = false;
-        });
-}
-
-const renameOpen = ref(false);
-const renameName = ref("");
-const renaming = ref(false);
-function renameService() {
-    renaming.value = true;
-
-    const name = renameName.value;
-
-    fetchFromSelf(
-        `/app/service-instances/${service.type}/service/${service.serviceId}`,
-        {
-            method: "PUT",
-            body: JSON.stringify({ name }),
-            headers: {
-                "Content-Type": "application/json",
-            },
-        },
-    )
-        .then(() => {
-            service.name = name;
-            renameOpen.value = false;
-        })
-        .catch((error) => {
-            alert(error.message);
-        })
-        .finally(() => {
-            renaming.value = false;
         });
 }
 </script>

@@ -1,12 +1,15 @@
+import { Hono, type Context } from "hono";
 import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../../app/auth/session";
 import { sendMessage, labelMessage, queryMessages, exportMessages } from "./db";
 import { Validator } from "@cfworker/json-schema";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { addAuthRoute, Base64IdSchema, disableCors } from "../shared";
+import { augmentService, getId } from "../shared";
 
-const inboxIdSchema = z.union([Base64IdSchema, z.literal("public")]);
+function getInboxId(context: Context<{ Bindings: Bindings }>) {
+  return getId(context, "inbox");
+}
 
 const TagsSchema = z
   .array(z.string())
@@ -45,20 +48,17 @@ const ExportCursorSchema = z.object({
   sinceSeq: SinceSeqSchema,
 });
 
-const inboxes = new OpenAPIHono<{ Bindings: Bindings }>();
+const inboxes = new Hono<{ Bindings: Bindings }>();
 
-disableCors(inboxes);
-addAuthRoute(inboxes, "Inboxes", "inboxId");
+const inbox = new OpenAPIHono<{ Bindings: Bindings }>();
+augmentService(inbox, "inbox");
 
 const sendRoute = createRoute({
   method: "put",
-  description: "Sends a message to a particular inbox",
-  tags: ["Inboxes"],
-  path: "/{inboxId}/send",
+  description: "Sends a message to the inbox, returning the message ID",
+  tags: ["Inbox"],
+  path: "/send",
   request: {
-    params: z.object({
-      inboxId: inboxIdSchema,
-    }),
     body: {
       content: {
         "application/json": {
@@ -92,8 +92,8 @@ const sendRoute = createRoute({
     404: { description: "Inbox not found" },
   },
 });
-inboxes.openapi(sendRoute, async (c) => {
-  const { inboxId } = c.req.valid("param");
+inbox.openapi(sendRoute, async (c) => {
+  const inboxId = getInboxId(c);
   const announcement = c.req.valid("json");
   const { messageId, created } = await sendMessage(c, inboxId, announcement);
 
@@ -103,12 +103,11 @@ inboxes.openapi(sendRoute, async (c) => {
 const labelRoute = createRoute({
   method: "put",
   description:
-    "Label an message in an inbox as 'ok', 'expired', 'incorrect', 'junk', etc.",
-  tags: ["Inboxes"],
-  path: "/{inboxId}/label/{messageId}",
+    "Label an message in the inbox as 'ok', 'expired', 'incorrect', 'junk', etc.",
+  tags: ["Inbox"],
+  path: "/label/{messageId}",
   request: {
     params: z.object({
-      inboxId: inboxIdSchema,
       messageId: z.string(),
     }),
     body: {
@@ -142,9 +141,10 @@ const labelRoute = createRoute({
   },
 });
 
-inboxes.openapi(labelRoute, async (c) => {
+inbox.openapi(labelRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
-  const { inboxId, messageId } = c.req.valid("param");
+  const inboxId = getInboxId(c);
+  const { messageId } = c.req.valid("param");
   const { label } = c.req.valid("json");
   await labelMessage(c, inboxId, messageId, label, userId);
   return c.json({ labeled: true });
@@ -152,13 +152,10 @@ inboxes.openapi(labelRoute, async (c) => {
 
 const queryRoute = createRoute({
   method: "get",
-  path: "/{inboxId}/query",
-  tags: ["Inboxes"],
-  description: "Query messages that have been sent to an inbox",
+  path: "/query",
+  tags: ["Inbox"],
+  description: "Query messages that have been sent to the inbox",
   request: {
-    params: z.object({
-      inboxId: inboxIdSchema,
-    }),
     query: z.object({
       cursor: z.string().optional(),
       tag: z.preprocess((v) => {
@@ -194,14 +191,14 @@ const queryRoute = createRoute({
     },
   },
 });
-inboxes.openapi(queryRoute, async (c) => {
+inbox.openapi(queryRoute, async (c) => {
   let userId: string | undefined = undefined;
   try {
     const verification = await verifySessionHeader(c);
     userId = verification.userId;
   } catch {} // Not to worry if not logged in
 
-  const { inboxId } = c.req.valid("param");
+  const inboxId = getInboxId(c);
 
   let {
     cursor,
@@ -303,13 +300,10 @@ inboxes.openapi(queryRoute, async (c) => {
 
 const exportRoute = createRoute({
   method: "get",
-  path: "/{inboxId}",
-  tags: ["Inboxes"],
-  description: "Export all messages sent to an inbox",
+  path: "/export",
+  tags: ["Inbox"],
+  description: "Export all messages sent to the inbox",
   request: {
-    params: z.object({
-      inboxId: inboxIdSchema,
-    }),
     query: z.object({
       cursor: z.string().optional(),
     }),
@@ -342,9 +336,9 @@ const exportRoute = createRoute({
 });
 
 // Export messages
-inboxes.openapi(exportRoute, async (c) => {
+inbox.openapi(exportRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
-  const { inboxId } = c.req.valid("param");
+  const inboxId = getInboxId(c);
   const { cursor: cursorParam } = c.req.valid("query");
 
   let sinceSeq: number | undefined = undefined;
@@ -386,5 +380,7 @@ inboxes.openapi(exportRoute, async (c) => {
 
   return c.json({ results, hasMore, cursor }, { headers });
 });
+
+inboxes.route("/:inboxId", inbox);
 
 export default inboxes;

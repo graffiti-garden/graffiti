@@ -1,10 +1,12 @@
 <template>
     <article>
-        <a :href="handleToLink(handle.name)" target="_blank">
-            <h2>
+        <h2>
+            <a :href="handleToLink(handle.name)" target="_blank">
                 {{ handleNameToHandle(handle.name, baseHost) }}
-            </h2>
-        </a>
+            </a>
+            <CopyButton :text="handle.name" />
+        </h2>
+
         <template v-if="!editing">
             <pre><code>{{ JSON.stringify(constructDidDocument({
             did: handleNameToDid(handle.name, baseHost),
@@ -56,6 +58,7 @@ import {
 import type { Handle } from "./types";
 import { fetchFromSelf } from "../globals";
 import EditDid from "../actors/EditDid.vue";
+import CopyButton from "../utils/CopyButton.vue";
 
 const props = defineProps<{
     handle: Handle;

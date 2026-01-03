@@ -4,7 +4,7 @@
         <nav>
             <ul>
                 <li>
-                    <RouterLink :to="{ name: 'register-handle' }">
+                    <RouterLink :to="{ name: 'register-handle' }" role="button">
                         Register New Handle
                     </RouterLink>
                 </li>

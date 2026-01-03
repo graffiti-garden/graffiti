@@ -15,12 +15,8 @@
             <template v-else-if="isLoggedIn === true">
                 <p>
                     <code>{{ redirectUriObject?.hostname }}</code>
-                    is requesting access to:
+                    is requesting access your Graffiti data.
                 </p>
-                <ul>
-                    <li>TODO</li>
-                    <li>TODO</li>
-                </ul>
                 <button @click="handleApprove">Approve</button>
                 <button @click="handleDeny">Deny</button>
                 <RouterLink to="/" target="_blank">Go to account</RouterLink>

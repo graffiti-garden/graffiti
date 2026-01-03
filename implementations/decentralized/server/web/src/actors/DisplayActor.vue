@@ -1,10 +1,14 @@
 <template>
     <article>
-        <a :href="`https://plc.directory/${actor.did}`" target="_blank">
-            <h2>
-                {{ actor.did }}
-            </h2>
-        </a>
+        <h2>
+            <a :href="`https://plc.directory/${actor.did}`" target="_blank">
+                <h2>
+                    {{ actor.did }}
+                </h2>
+            </a>
+            <CopyButton :text="actor.did" />
+        </h2>
+
         <p v-if="documentStatus === 'loading'">
             <em>Loading...</em>
         </p>
@@ -74,6 +78,7 @@ import {
 } from "../../../shared/did-schemas";
 import EditDid from "./EditDid.vue";
 import { fetchFromSelf } from "../globals";
+import CopyButton from "../utils/CopyButton.vue";
 
 const props = defineProps<{
     actor: Actor;
