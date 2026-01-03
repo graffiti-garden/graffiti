@@ -2,15 +2,10 @@
     <template v-if="isLoggedIn">
         <header>
             <h1>
-                {{ host }}: A
-                <a href="https://graffiti.garden" target="_blank">Graffiti</a>
-                Provider
+                <RouterLink :to="{ name: 'home' }"> {{ host }} </RouterLink>
             </h1>
             <nav>
                 <ul>
-                    <li>
-                        <RouterLink :to="{ name: 'home' }"> Home </RouterLink>
-                    </li>
                     <li>
                         <RouterLink :to="{ name: 'handles' }">
                             Handles
@@ -23,12 +18,12 @@
                     </li>
                     <li>
                         <RouterLink :to="{ name: 'storage' }">
-                            Storage
+                            Storage Buckets
                         </RouterLink>
                     </li>
                     <li>
                         <RouterLink :to="{ name: 'inboxes' }">
-                            Indexers
+                            Inboxes
                         </RouterLink>
                     </li>
                     <li><Logout /></li>
@@ -54,3 +49,9 @@ import Logout from "./auth/Logout.vue";
 
 const host = window.location.host;
 </script>
+
+<style>
+nav li a.router-link-exact-active {
+    text-decoration: underline;
+}
+</style>

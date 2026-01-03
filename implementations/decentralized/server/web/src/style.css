@@ -1,0 +1,76 @@
+#app {
+    > header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+        background: color-mix(
+            in srgb,
+            var(--pico-background-color) 85%,
+            transparent
+        );
+        border-bottom: 1px solid var(--pico-muted-border-color);
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 1rem;
+            margin-bottom: 0;
+        }
+    }
+    > :is(header, main) {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+.router-link-active {
+    text-decoration: none;
+}
+
+.router-link-exact-active {
+    text-decoration: underline;
+}
+
+main > h2 {
+    font-size: 2rem;
+}
+
+header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+article header {
+    justify-content: flex-start;
+}
+
+main {
+    > ul {
+        padding-left: 0;
+        li {
+            list-style: none;
+        }
+    }
+}
+
+* :is(button, a[role="button"]) {
+    padding: calc(
+            var(--pico-nav-link-spacing-vertical) - var(--pico-border-width) * 2
+        )
+        var(--pico-nav-link-spacing-horizontal);
+}
+
+pre {
+    margin-bottom: 0;
+}
+
+h2 {
+    a {
+        color: inherit;
+    }
+    display: flex;
+    gap: 1rem;
+}

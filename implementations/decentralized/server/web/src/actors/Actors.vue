@@ -1,7 +1,7 @@
 <template>
     <header>
         <h2>Actors</h2>
-        <nav>
+        <nav aria-label="Actor actions">
             <ul>
                 <li>
                     <button @click="createActor" :disabled="creating">

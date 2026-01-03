@@ -10,6 +10,7 @@ import Storage from "./storage/Storage.vue";
 import Handles from "./handles/Handles.vue";
 import Actors from "./actors/Actors.vue";
 import RegisterHandle from "./handles/RegisterHandle.vue";
+import "./style.css";
 
 // See if we are logged in
 function checkLoggedInStatus() {

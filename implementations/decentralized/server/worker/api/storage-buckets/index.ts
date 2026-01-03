@@ -1,34 +1,36 @@
+import { Hono, type Context } from "hono";
 import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../../app/auth/session";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { addAuthRoute, disableCors } from "../shared";
+import { augmentService, getId } from "../shared";
 import { getValue, putValue, deleteValue, exportKeys } from "./db";
 import { bodyLimit } from "hono/body-limit";
 
 const MAX_VALUE_SIZE = 25 * 1024 * 1024; // 25mb
 
-const BucketIdSchema = z.base64url().length(43);
 const KeySchema = z.string().min(1).max(255);
 const BinaryDataSchema = z.string().openapi({
   type: "string",
   format: "binary",
 });
+function getBucketId(context: Context<{ Bindings: Bindings }>) {
+  return getId(context, "bucket");
+}
 
-const storageBuckets = new OpenAPIHono<{ Bindings: Bindings }>();
+const storageBuckets = new Hono<{ Bindings: Bindings }>();
+const storageBucket = new OpenAPIHono<{ Bindings: Bindings }>();
 
-disableCors(storageBuckets);
-addAuthRoute(storageBuckets, "Storage Buckets", "bucketId");
+augmentService(storageBucket, "bucket");
 
 const getValueRoute = createRoute({
   method: "get",
   description:
-    "Gets the binary data value associated with a key from a bucket.",
-  tags: ["Storage Buckets"],
-  path: "/{bucketId}/{key}",
+    "Gets the binary data value associated with a key from the bucket.",
+  tags: ["Storage Bucket"],
+  path: "/v/{key}",
   request: {
     params: z.object({
-      bucketId: BucketIdSchema,
       key: KeySchema,
     }),
     headers: z.object({
@@ -57,20 +59,20 @@ const getValueRoute = createRoute({
   },
 });
 
-storageBuckets.openapi(getValueRoute, async (c) => {
-  const { bucketId, key } = c.req.valid("param");
+storageBucket.openapi(getValueRoute, async (c) => {
+  const { key } = c.req.valid("param");
+  const bucketId = getBucketId(c);
   const ifNoneMatch = c.req.header("If-None-Match");
   return await getValue(c, bucketId, key, ifNoneMatch);
 });
 
 const putValueRoute = createRoute({
   method: "put",
-  description: "Puts a binary data value in a bucket associated with a key.",
-  tags: ["Storage Buckets"],
-  path: "/{bucketId}/{key}",
+  description: "Puts a binary data value in the bucket associated with a key.",
+  tags: ["Storage Bucket"],
+  path: "/v/{key}",
   request: {
     params: z.object({
-      bucketId: BucketIdSchema,
       key: KeySchema,
     }),
     body: {
@@ -82,9 +84,6 @@ const putValueRoute = createRoute({
       },
       required: true,
     },
-    headers: z.object({
-      "Content-Length": z.string().optional(),
-    }),
   },
   security: [{ oauth2: [] }],
   responses: {
@@ -101,8 +100,8 @@ const putValueRoute = createRoute({
     413: { description: "Body is too large" },
   },
 });
-storageBuckets.use(
-  "/:bucketId/:key",
+storageBucket.use(
+  "/v/:key",
   bodyLimit({
     maxSize: MAX_VALUE_SIZE,
     onError: (c) => {
@@ -110,8 +109,9 @@ storageBuckets.use(
     },
   }),
 );
-storageBuckets.openapi(putValueRoute, async (c) => {
-  const { bucketId, key } = c.req.valid("param");
+storageBucket.openapi(putValueRoute, async (c) => {
+  const { key } = c.req.valid("param");
+  const bucketId = getBucketId(c);
   const body = c.req.raw.body;
   if (!body) {
     throw new HTTPException(400, {
@@ -124,12 +124,11 @@ storageBuckets.openapi(putValueRoute, async (c) => {
 
 const deleteValueRoute = createRoute({
   method: "delete",
-  description: "Deletes the binary value associated with a key from a bucket",
-  tags: ["Storage Buckets"],
-  path: "/{bucketId}/{key}",
+  description: "Deletes the binary value associated with a key from the bucket",
+  tags: ["Storage Bucket"],
+  path: "/v/{key}",
   request: {
     params: z.object({
-      bucketId: BucketIdSchema,
       key: KeySchema,
     }),
   },
@@ -147,22 +146,20 @@ const deleteValueRoute = createRoute({
     403: { description: "Cannot delete from someone else's bucket" },
   },
 });
-storageBuckets.openapi(deleteValueRoute, async (c) => {
-  const { bucketId, key } = c.req.valid("param");
+storageBucket.openapi(deleteValueRoute, async (c) => {
+  const { key } = c.req.valid("param");
+  const bucketId = getBucketId(c);
   const { userId } = await verifySessionHeader(c);
   return await deleteValue(c, bucketId, key, userId);
 });
 
-storageBuckets.openapi(
+storageBucket.openapi(
   createRoute({
     method: "get",
     description: "Export all keys that have values within a bucket",
-    tags: ["Storage Buckets"],
-    path: "/{bucketId}",
+    tags: ["Storage Bucket"],
+    path: "/export",
     request: {
-      params: z.object({
-        bucketId: BucketIdSchema,
-      }),
       query: z.object({
         cursor: z.string().optional().openapi({
           description:
@@ -188,11 +185,13 @@ storageBuckets.openapi(
     },
   }),
   async (c) => {
-    const { bucketId } = c.req.valid("param");
     const { cursor } = c.req.valid("query");
+    const bucketId = getBucketId(c);
     const { userId } = await verifySessionHeader(c);
     return exportKeys(c, bucketId, cursor, userId);
   },
 );
+
+storageBuckets.route("/:bucketId", storageBucket);
 
 export default storageBuckets;

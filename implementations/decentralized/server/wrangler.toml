@@ -14,7 +14,7 @@ bucket_name = "graffiti-bucket"
 [vars]
 BASE_HOST = "graffiti.actor"
 
-[[env.production.routes]]
+[[routes]]
 pattern = "*graffiti.actor/*"
 zone_name = "graffiti.actor"
 
