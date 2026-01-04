@@ -18,7 +18,7 @@
                     is requesting access your Graffiti data.
                 </p>
                 <button @click="handleApprove">Approve</button>
-                <button @click="handleDeny">Deny</button>
+                <button class="secondary" @click="handleDeny">Deny</button>
                 <RouterLink to="/" target="_blank">Go to account</RouterLink>
             </template>
             <template v-else> Loading... </template>

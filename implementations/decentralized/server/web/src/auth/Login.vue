@@ -1,6 +1,6 @@
 <template>
     <button @click="handleLogin" :disabled="loggingIn">
-        {{ loggingIn ? "Logging in..." : "Log In" }}
+        {{ loggingIn ? "Logging in…" : "Log In" }}
     </button>
 </template>
 

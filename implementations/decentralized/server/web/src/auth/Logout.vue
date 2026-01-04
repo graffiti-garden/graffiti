@@ -1,9 +1,7 @@
 <template>
-    <form @submit.prevent="handleLogout">
-        <button :disabled="loggingOut">
-            {{ loggingOut ? "Logging out..." : "Log Out" }}
-        </button>
-    </form>
+    <button :disabled="loggingOut" @click="handleLogout">
+        {{ loggingOut ? "Logging out…" : "Log Out" }}
+    </button>
 </template>
 
 <script setup lang="ts">

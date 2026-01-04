@@ -16,7 +16,7 @@ dialog {
     border-radius: var(--pico-border-radius);
     border: 1px solid var(--pico-muted-border-color);
     box-shadow: 0 0 2rem black;
-    background: var(--pico-secondary-background);
+    background: var(--pico-form-element-background-color);
     overflow: auto;
     margin: 0;
     padding-top: 4dvh;
@@ -40,5 +40,9 @@ dialog {
         text-align: center;
         gap: 1rem;
         width: 100%;
+    }
+
+    button {
+        font-size: 1.5rem;
     }
 }
