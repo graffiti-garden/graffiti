@@ -47,7 +47,6 @@ CREATE TABLE IF NOT EXISTS oauth_codes (
 CREATE TABLE IF NOT EXISTS storage_buckets (
     bucket_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
-    name TEXT NOT NULL,
     created_at INTEGER NOT NULL
 ) STRICT;
 
@@ -84,14 +83,13 @@ PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS inboxes (
     inbox_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
-    name TEXT NOT NULL,
     created_at INTEGER NOT NULL
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_inboxes_by_user_id ON inboxes(user_id, inbox_id);
 
-INSERT OR IGNORE INTO inboxes (inbox_id, user_id, name, created_at)
-    VALUES ('public', 'root', 'The public inbox', 0);
+INSERT OR IGNORE INTO inboxes (inbox_id, user_id, created_at)
+    VALUES ('public', 'root', 0);
 
 CREATE TABLE IF NOT EXISTS inbox_messages (
   seq             INTEGER PRIMARY KEY,
