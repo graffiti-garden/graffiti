@@ -32,8 +32,9 @@ li a.router-link-exact-active {
     text-decoration: underline;
 }
 
-main > h2 {
-    font-size: 2rem;
+main h2 {
+    margin-top: 1rem;
+    margin-bottom: 0;
 }
 
 header {
