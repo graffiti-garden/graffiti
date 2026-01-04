@@ -1,7 +1,10 @@
 <template>
+    <header>
+        <h2>Choose your handle</h2>
+        <aside>Handles can always be changed later.</aside>
+    </header>
     <form @submit.prevent="registerHandle">
         <label>
-            Choose a handle (it can always be changed):
             <div class="handle-control" :data-status="availabilityStatus">
                 <span class="prefix">@</span>
 
@@ -292,5 +295,10 @@ button[type="submit"] {
 .secondary:hover {
     background: var(--pico-secondary-hover-background);
     border-color: var(--pico-secondary-hover-border);
+}
+
+aside {
+    color: var(--pico-muted-color);
+    font-style: italic;
 }
 </style>
