@@ -5,7 +5,7 @@
         provider.
     </p>
 
-    <button>Create New Profile</button>
+    <button>Create New Graffiti Identity</button>
 </template>
 
 <script setup lang="ts">

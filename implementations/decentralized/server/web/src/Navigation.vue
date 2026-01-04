@@ -4,31 +4,42 @@
             <h1>
                 <RouterLink :to="{ name: 'home' }"> {{ host }} </RouterLink>
             </h1>
-            <nav>
-                <ul>
-                    <li>
-                        <RouterLink :to="{ name: 'handles' }">
-                            Handles
-                        </RouterLink>
-                    </li>
-                    <li>
-                        <RouterLink :to="{ name: 'actors' }">
-                            Actors
-                        </RouterLink>
-                    </li>
-                    <li>
-                        <RouterLink :to="{ name: 'storage' }">
-                            Storage Buckets
-                        </RouterLink>
-                    </li>
-                    <li>
-                        <RouterLink :to="{ name: 'inboxes' }">
-                            Inboxes
-                        </RouterLink>
-                    </li>
-                    <li><Logout /></li>
-                </ul>
-            </nav>
+
+            <details
+                :open="navOpen"
+                @toggle="
+                    navOpen =
+                        ($event.target as HTMLDetailsElement)?.open ?? false
+                "
+            >
+                <summary>Menu</summary>
+
+                <nav :class="{ open: navOpen }">
+                    <ul>
+                        <li>
+                            <RouterLink :to="{ name: 'handles' }">
+                                Handles
+                            </RouterLink>
+                        </li>
+                        <li>
+                            <RouterLink :to="{ name: 'actors' }">
+                                Actors
+                            </RouterLink>
+                        </li>
+                        <li>
+                            <RouterLink :to="{ name: 'storage' }">
+                                Storage Buckets
+                            </RouterLink>
+                        </li>
+                        <li>
+                            <RouterLink :to="{ name: 'inboxes' }">
+                                Inboxes
+                            </RouterLink>
+                        </li>
+                        <li><Logout @click="navOpen = false" /></li>
+                    </ul>
+                </nav>
+            </details>
         </header>
 
         <main>
@@ -46,12 +57,93 @@ import { RouterView } from "vue-router";
 import { isLoggedIn } from "./globals";
 import LoginGuard from "./auth/LoginGuard.vue";
 import Logout from "./auth/Logout.vue";
+import { onMounted, onUnmounted, ref, watchEffect } from "vue";
+import { useRouter } from "vue-router";
+
+const router = useRouter();
+
+const navOpen = ref(false);
+router.afterEach(() => {
+    navOpen.value = false;
+});
+
+const mq = window.matchMedia("(min-width: 800px)");
+const syncNav = () => {
+    navOpen.value = mq.matches;
+};
+onMounted(() => {
+    syncNav();
+    mq.addEventListener("change", syncNav);
+});
+onUnmounted(() => {
+    mq.removeEventListener("change", syncNav);
+});
 
 const host = window.location.host;
 </script>
 
-<style>
-nav li a.router-link-exact-active {
-    text-decoration: underline;
+<style scoped>
+details {
+    display: contents;
+}
+details[open]::details-content {
+    display: contents;
+}
+
+@media (min-width: 800px) {
+    summary {
+        display: none;
+    }
+}
+
+@media (max-width: 799px) {
+    header {
+        display: grid;
+        grid-template-columns: auto auto;
+        grid-template-areas:
+            "title menu"
+            "nav nav";
+    }
+
+    h1 {
+        grid-area: title;
+    }
+
+    details summary {
+        text-align: right;
+        user-select: none;
+        grid-area: menu;
+        margin-bottom: 0.5rem;
+    }
+
+    nav {
+        transition:
+            opacity 0.3s ease,
+            transform 0.3s ease,
+            filter 0.2s ease;
+        opacity: 0;
+        transform: translateY(-0.5rem) scaleY(0.95);
+        filter: blur(2px);
+        grid-area: nav;
+        justify-content: flex-end;
+        margin-bottom: 1rem;
+
+        ul {
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 0.5rem;
+
+            li {
+                padding-top: 0;
+                padding-bottom: 0;
+            }
+        }
+    }
+
+    nav.open {
+        opacity: 1;
+        transform: translateY(0) scaleY(1);
+        filter: blur(0);
+    }
 }
 </style>

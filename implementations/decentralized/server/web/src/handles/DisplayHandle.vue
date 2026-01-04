@@ -4,7 +4,7 @@
             <a :href="handleToLink(handle.name)" target="_blank">
                 {{ handleNameToHandle(handle.name, baseHost) }}
             </a>
-            <CopyButton :text="handle.name" />
+            <CopyButton :text="handleNameToHandle(handle.name, baseHost)" />
         </h2>
 
         <template v-if="!editing">

@@ -27,7 +27,8 @@
     text-decoration: none;
 }
 
-.router-link-exact-active {
+.router-link-exact-active,
+li a.router-link-exact-active {
     text-decoration: underline;
 }
 
@@ -61,6 +62,10 @@ main {
             var(--pico-nav-link-spacing-vertical) - var(--pico-border-width) * 2
         )
         var(--pico-nav-link-spacing-horizontal);
+}
+
+a[role="button"] {
+    margin-top: 0;
 }
 
 pre {
