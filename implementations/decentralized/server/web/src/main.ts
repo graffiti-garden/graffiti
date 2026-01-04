@@ -1,15 +1,7 @@
 import { createApp } from "vue";
 import "@picocss/pico/css/pico.classless.fuchsia.css";
-import { createRouter, createWebHistory } from "vue-router";
+import { createRouter, createWebHistory, RouterView } from "vue-router";
 import { fetchFromSelf, isLoggedIn } from "./globals";
-import { RouterView } from "vue-router";
-import Navigation from "./Navigation.vue";
-import Oauth from "./auth/Oauth.vue";
-import Home from "./Home.vue";
-import Storage from "./storage/Storage.vue";
-import Handles from "./handles/Handles.vue";
-import Actors from "./actors/Actors.vue";
-import RegisterHandle from "./handles/RegisterHandle.vue";
 import "./style.css";
 
 // See if we are logged in
@@ -33,47 +25,39 @@ checkLoggedInStatus();
 const routes = [
   {
     path: "/",
-    component: Navigation,
+    component: () => import("./Navigation.vue"),
     children: [
-      {
-        name: "home",
-        path: "/",
-        component: Home,
-      },
+      { name: "home", path: "/", component: () => import("./Home.vue") },
       {
         name: "handles",
         path: "/handles",
-        component: Handles,
+        component: () => import("./handles/Handles.vue"),
       },
       {
         name: "actors",
         path: "/actors",
-        component: Actors,
+        component: () => import("./actors/Actors.vue"),
       },
       {
         name: "register-handle",
         path: "/handles/register",
-        component: RegisterHandle,
+        component: () => import("./handles/RegisterHandle.vue"),
       },
       {
         name: "storage",
         path: "/storage",
-        component: Storage,
-        props: {
-          type: "bucket",
-        },
+        component: () => import("./storage/Storage.vue"),
+        props: { type: "bucket" },
       },
       {
         name: "inboxes",
         path: "/inboxes",
-        component: Storage,
-        props: {
-          type: "inbox",
-        },
+        component: () => import("./storage/Storage.vue"),
+        props: { type: "inbox" },
       },
     ],
   },
-  { path: "/oauth", component: Oauth },
+  { path: "/oauth", component: () => import("./auth/Oauth.vue") },
 ];
 const router = createRouter({
   history: createWebHistory(),
