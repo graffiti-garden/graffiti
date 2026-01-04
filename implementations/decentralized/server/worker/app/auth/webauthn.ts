@@ -46,7 +46,7 @@ webauthn.get("/register/challenge", async (c) => {
 
   const { rpId } = getRp(c.req);
 
-  const displayName = `${c.env.BASE_HOST} user ${userId.slice(0, 6)}`;
+  const displayName = `${c.env.BASE_HOST} account ${userId.slice(0, 6)}`;
   const options = await generateRegistrationOptions({
     rpName: c.env.BASE_HOST,
     rpID: rpId,

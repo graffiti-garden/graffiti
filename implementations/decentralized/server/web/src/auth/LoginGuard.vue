@@ -10,8 +10,8 @@
         </header>
 
         <main>
-            <Login />
             <Register />
+            <Login class="secondary" />
         </main>
     </dialog>
 </template>

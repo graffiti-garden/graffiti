@@ -288,15 +288,6 @@ button[type="submit"] {
     width: auto;
 }
 
-.secondary {
-    background: var(--pico-secondary-background);
-    border: 1px solid var(--pico-form-element-border-color);
-}
-.secondary:hover {
-    background: var(--pico-secondary-hover-background);
-    border-color: var(--pico-secondary-hover-border);
-}
-
 aside {
     color: var(--pico-muted-color);
     font-style: italic;

@@ -1,6 +1,6 @@
 <template>
     <button @click="handleRegister" :disabled="registering">
-        {{ registering ? "Registering..." : "Register" }}
+        {{ registering ? "Creating Account…" : "Create Account" }}
     </button>
 </template>
 
