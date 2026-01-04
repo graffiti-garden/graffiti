@@ -1,7 +1,9 @@
 <template>
     <article>
         <h2>
-            {{ url }}
+            <span>
+                {{ url }}
+            </span>
             <CopyButton :text="url" />
         </h2>
         <p>

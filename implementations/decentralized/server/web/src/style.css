@@ -67,10 +67,14 @@ pre {
     margin-bottom: 0;
 }
 
-h2 {
+main h2 {
     a {
         color: inherit;
     }
     display: flex;
     gap: 1rem;
+    span,
+    a {
+        word-break: break-all;
+    }
 }

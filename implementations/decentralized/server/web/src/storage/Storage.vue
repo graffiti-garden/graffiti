@@ -4,25 +4,13 @@
         <nav>
             <ul>
                 <li>
-                    <button v-if="!createOpen" @click="createOpen = true">
-                        Create New
-                        {{ type === "inbox" ? "Inbox" : "Storage Bucket" }}
-                    </button>
-                    <form v-else @submit.prevent="createService">
-                        <label for="new-service-name"
-                            >Choose a name for your new service instance:</label
-                        >
-                        <input
-                            v-focus
-                            type="text"
-                            id="new-service-name"
-                            v-model="newServiceName"
-                            placeholder="My Service Instance"
-                            required
-                            :disabled="creating"
-                        />
-                        <button type="submit" :disabled="creating">
-                            {{ creating ? "Creating..." : "Create" }}
+                    <form @submit.prevent="createService">
+                        <button :disabled="creating">
+                            {{
+                                creating
+                                    ? "Creating..."
+                                    : `Create New ${type === "inbox" ? "Inbox" : "Storage Bucket"}`
+                            }}
                         </button>
                     </form>
                 </li>
@@ -38,7 +26,10 @@
         <button @click="fetchServices">Retry</button>
     </template>
     <p v-else-if="services.length === 0">
-        <em>You have no service instances.</em>
+        <em
+            >You have no
+            {{ type === "inbox" ? "inboxes" : "storage buckets" }}.</em
+        >
     </p>
     <ul v-else>
         <li v-for="service in services" :key="service.serviceId">
@@ -74,7 +65,6 @@ function fetchServices() {
                     ...services.value,
                     {
                         createdAt: 0,
-                        name: "The public inbox",
                         serviceId: "public",
                         type: "inbox",
                     },
@@ -95,27 +85,17 @@ watch(
     },
 );
 
-const createOpen = ref(false);
-const newServiceName = ref("");
 const creating = ref(false);
 function createService() {
-    const name = newServiceName.value;
-    if (!name) return;
     creating.value = true;
     fetchFromSelf(`/app/service-instances/${props.type}/create`, {
         method: "POST",
-        body: JSON.stringify({ name }),
-        headers: {
-            "Content-Type": "application/json",
-        },
     })
         .then(({ serviceId, createdAt }) => {
             services.value = [
-                { serviceId, name, createdAt, type: props.type },
+                { serviceId, createdAt, type: props.type },
                 ...(services.value ?? []),
             ];
-            newServiceName.value = "";
-            createOpen.value = false;
         })
         .catch((error) => {
             alert(error.message);
