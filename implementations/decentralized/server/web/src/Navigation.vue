@@ -50,7 +50,16 @@
     <template v-else-if="isLoggedIn === false">
         <LoginGuard />
     </template>
-    <template v-else>Loading...</template>
+    <template v-else>
+        <dialog open>
+            <header>
+                <h1>Loading {{ host }}...</h1>
+            </header>
+            <main>
+                <StatusIcon status="loading" />
+            </main>
+        </dialog>
+    </template>
 </template>
 
 <script setup lang="ts">
@@ -60,6 +69,8 @@ import LoginGuard from "./auth/LoginGuard.vue";
 import Logout from "./auth/Logout.vue";
 import { onMounted, onUnmounted, ref, watchEffect } from "vue";
 import { useRouter } from "vue-router";
+import StatusIcon from "./utils/StatusIcon.vue";
+import "./auth/floating-panel.css";
 
 const router = useRouter();
 

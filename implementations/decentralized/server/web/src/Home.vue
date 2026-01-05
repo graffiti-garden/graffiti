@@ -1,20 +1,21 @@
 <template>
     <h2>A Graffiti Provider</h2>
     <p>
-        {{ baseHost }} provides all the services you need to participate in the
+        {{ baseHost }} provides everything you need to create a
         <a href="https://graffiti.garden" target="_blank">Graffiti</a>
-        ecosystem.
+        identity and participate in the Graffiti ecosystem.
     </p>
 
     <p>
-        <RouterLink :to="{ name: 'create' }">
-            Click here to create a complete Graffiti identity
+        <RouterLink :to="{ name: 'create' }" role="button">
+            Create a Graffiti identity
         </RouterLink>
     </p>
 
     <p>
-        Alternatively you may create or manage individual services of the
-        following types:
+        Alternatively you may create or manage the individual components that
+        make up a Graffiti identity. An identity is comprised of the following
+        components:
     </p>
 
     <ul>
@@ -32,12 +33,12 @@
             that permanently represent you, even if you change your handle.
         </li>
         <li>
-            <RouterLink :to="{ name: 'storage' }"> Storage Bucket </RouterLink>:
-            A simple file hosting service where your posts, images, and other
+            <RouterLink :to="{ name: 'storage' }">Storage Bucket</RouterLink>: A
+            simple file hosting service where your posts, images, and other
             media are stored.
         </li>
         <li>
-            <RouterLink :to="{ name: 'inboxes' }"> Inbox </RouterLink>: An
+            <RouterLink :to="{ name: 'inboxes' }">Inbox</RouterLink>: An
             email-like inbox where you can receive messages from other Graffiti
             users.
         </li>

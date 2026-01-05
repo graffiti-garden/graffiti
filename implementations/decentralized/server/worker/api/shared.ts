@@ -42,7 +42,7 @@ function addAuthRoute(
   router.openapi(authRoute, async (c) => {
     const headers = new Headers();
     headers.set("Cache-Control", "public, max-age=31536000, immutable");
-    return c.text(`gf:a:oauth2:${c.env.BASE_HOST}`, { headers });
+    return c.text(`oauth2:${c.env.BASE_HOST}`, { headers });
   });
 }
 

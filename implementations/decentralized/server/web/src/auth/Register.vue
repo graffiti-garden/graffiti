@@ -1,6 +1,7 @@
 <template>
     <button @click="handleRegister" :disabled="registering">
         {{ registering ? "Creating Account…" : "Create Account" }}
+        <StatusIcon v-if="registering" status="loading" />
     </button>
 </template>
 
@@ -11,6 +12,7 @@ import {
     type RegistrationResponseJSON,
 } from "@simplewebauthn/browser";
 import { isLoggedIn, fetchFromSelf } from "../globals";
+import StatusIcon from "../utils/StatusIcon.vue";
 
 const registering = ref(false);
 
