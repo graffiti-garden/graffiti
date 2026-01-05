@@ -99,6 +99,7 @@ details[open]::details-content {
 @media (max-width: 799px) {
     header {
         display: grid;
+        gap: 0;
         grid-template-columns: auto auto;
         grid-template-areas:
             "title menu"

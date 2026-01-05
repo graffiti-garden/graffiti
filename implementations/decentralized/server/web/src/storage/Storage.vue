@@ -31,7 +31,7 @@
             {{ type === "inbox" ? "inboxes" : "storage buckets" }}.</em
         >
     </p>
-    <ul v-else>
+    <ul v-else class="cards">
         <li v-for="service in services" :key="service.serviceId">
             <DisplayService
                 :service="service"

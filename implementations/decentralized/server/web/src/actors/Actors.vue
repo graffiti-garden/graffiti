@@ -30,7 +30,7 @@
     <p v-else-if="actors.length === 0">
         <em>You have no actors.</em>
     </p>
-    <ul v-else>
+    <ul v-else class="cards">
         <li v-for="actor in actors" :key="actor.did">
             <DisplayActor
                 :actor="actor"

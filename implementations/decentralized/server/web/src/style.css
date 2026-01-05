@@ -32,11 +32,6 @@ li a.router-link-exact-active {
     text-decoration: underline;
 }
 
-main h2 {
-    margin-top: 1rem;
-    margin-bottom: 0;
-}
-
 header {
     display: flex;
     flex-wrap: wrap;
@@ -49,13 +44,21 @@ article header {
     justify-content: flex-start;
 }
 
-main {
-    > ul {
-        padding-left: 0;
-        li {
-            list-style: none;
-        }
+#app > main {
+    padding-bottom: 2rem;
+    padding-top: 1rem;
+}
+
+ul.cards {
+    padding-left: 0;
+    li {
+        list-style: none;
     }
+}
+
+nav li {
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 * :is(button, a[role="button"]) {
@@ -67,10 +70,6 @@ main {
 
 a[role="button"] {
     margin-top: 0;
-}
-
-pre {
-    margin-bottom: 0;
 }
 
 main h2 {
