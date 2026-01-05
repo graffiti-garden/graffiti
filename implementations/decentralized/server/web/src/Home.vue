@@ -12,27 +12,40 @@
         </RouterLink>
     </p>
 
-    <p>Alternatively you may create or manage the individual services below.</p>
+    <p>
+        Alternatively you may create or manage individual services of the
+        following types:
+    </p>
 
     <ul>
         <li>
-            <RouterLink :to="{ name: 'handles' }"> Handles </RouterLink>:
-            Human-readable usernames like <code>example.{{ baseHost }}</code>
-        </li>
-        <li><RouterLink :to="{ name: 'actors' }"> Actors </RouterLink>:</li>
-        <li>
-            <RouterLink :to="{ name: 'storage' }"> Storage Buckets </RouterLink
-            >: A place where your
+            <RouterLink :to="{ name: 'handles' }">Handle</RouterLink>: A
+            human-readable and globally unique username, such as
+            <code>example.{{ baseHost }}</code
+            >.
         </li>
         <li>
-            <RouterLink :to="{ name: 'inboxes' }"> Inboxes </RouterLink>:
-            Receive messages from other Graffiti users.
+            <RouterLink :to="{ name: 'actors' }">Actor</RouterLink>: A
+            <a href="https://www.w3.org/TR/did-1.0/"
+                >decentralized identifier</a
+            >
+            that permanently represent you, even if you change your handle.
+        </li>
+        <li>
+            <RouterLink :to="{ name: 'storage' }"> Storage Bucket </RouterLink>:
+            A simple file hosting service where your posts, images, and other
+            media are stored.
+        </li>
+        <li>
+            <RouterLink :to="{ name: 'inboxes' }"> Inbox </RouterLink>: An
+            email-like inbox where you can receive messages from other Graffiti
+            users.
         </li>
     </ul>
 
     <aside>
-        If you are unhappy with {{ baseHost }} you may migrate to another
-        provider at any time.
+        If you are unhappy with {{ baseHost }} you may migrate any and all
+        services to another provider at any time.
     </aside>
 </template>
 

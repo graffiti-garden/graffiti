@@ -1,5 +1,5 @@
 <template>
-    <h2>Create Graffiti Identity</h2>
+    <h2>Create a Graffiti identity</h2>
     <ol>
         <li>
             <RegisterHandle :onRegister="onRegister" :onCancel="() => {}" />
@@ -7,45 +7,73 @@
         <li v-if="handleName && !bucketId" v-scroll-into-view>
             <span v-if="errorString === null">
                 Creating storage bucket...
+                <StatusIcon status="loading" />
             </span>
             <span v-else>
-                Error creating storage bucket: {{ errorString }}
+                Error creating storage bucket
+                <StatusIcon status="error" />
+                {{ errorString }}
                 <button @click="createBucket">Retry</button>
             </span>
         </li>
-        <li v-else-if="bucketId">Created storage bucket</li>
+        <li v-else-if="bucketId">
+            Created storage bucket
+            <StatusIcon status="ok" />
+        </li>
         <li v-if="handleName && bucketId && !inboxId" v-scroll-into-view>
-            <span v-if="errorString === null"> Creating inbox... </span>
+            <span v-if="errorString === null">
+                Creating inbox...
+                <StatusIcon status="loading" />
+            </span>
             <span v-else>
-                Error creating inbox: {{ errorString }}
+                Error creating inbox
+                <StatusIcon status="error" />
+                {{ errorString }}
                 <button @click="createInbox">Retry</button>
             </span>
         </li>
-        <li v-else-if="inboxId">Created inbox</li>
+        <li v-else-if="inboxId">
+            Created inbox
+            <StatusIcon status="ok" />
+        </li>
         <li
             v-if="handleName && bucketId && inboxId && !actor"
             v-scroll-into-view
         >
-            <span v-if="errorString === null"> Creating actor... </span>
+            <span v-if="errorString === null">
+                Creating actor...
+                <StatusIcon status="loading" />
+            </span>
             <span v-else>
-                Error creating actor: {{ errorString }}
+                Error creating actor
+                <StatusIcon status="error" />
+                {{ errorString }}
                 <button @click="createActor">Retry</button>
             </span>
         </li>
-        <li v-else-if="actor">Created actor</li>
+        <li v-else-if="actor">
+            Created actor
+            <StatusIcon status="ok" />
+        </li>
         <li
             v-if="handleName && bucketId && inboxId && actor && !linked"
             v-scroll-into-view
         >
             <span v-if="errorString === null">
                 Linking actor to handle...
+                <StatusIcon status="loading" />
             </span>
             <span v-else>
-                Error linking actor to handle: {{ errorString }}
+                Error linking actor to handle
+                <StatusIcon status="error" />
+                {{ errorString }}
                 <button @click="linkActorToHandle">Retry</button>
             </span>
         </li>
-        <li v-else-if="linked">Linked actor to handle</li>
+        <li v-else-if="linked">
+            Linked actor to handle
+            <StatusIcon status="ok" />
+        </li>
     </ol>
 
     <template v-if="linked">
@@ -59,8 +87,7 @@
         </a>
         <aside v-scroll-into-view>
             You may return to <a :href="baseOrigin">{{ baseHost }}</a>
-            at any time to manage your identity or migrate it to another
-            provider.
+            at any time to manage your identity or migrate to another provider.
         </aside>
     </template>
 </template>
@@ -70,6 +97,7 @@ import { ref } from "vue";
 import RegisterHandle from "./handles/RegisterHandle.vue";
 import { fetchFromSelf } from "./globals";
 import { serviceIdToUrl } from "../../shared/service-urls";
+import StatusIcon from "./utils/StatusIcon.vue";
 
 const baseOrigin = window.location.origin;
 const baseHost = window.location.host;
@@ -123,37 +151,36 @@ async function createInbox() {
 async function createActor() {
     errorString.value = null;
 
-    actor.value = "asdf:Asdf";
-    //   await fetchFromSelf("/app/actors/create", {
-    //     method: "POST",
-    //     headers: { "Content-Type": "application/json" },
-    //     body: JSON.stringify({
-    //         alsoKnownAs: [`did:web:${handleName.value}.${baseHost}`],
-    //         services: {
-    //             graffitiStorageBucket: {
-    //                 type: "GraffitiStorageBucket",
-    //                 endpoint: serviceIdToUrl(
-    //                     bucketId.value!,
-    //                     "bucket",
-    //                     baseHost,
-    //                 ),
-    //             },
-    //             graffitiPersonalInbox: {
-    //                 type: "GraffitiInbox",
-    //                 endpoint: serviceIdToUrl(inboxId.value!, "inbox", baseHost),
-    //             },
-    //             graffitiPublicInbox0: {
-    //                 type: "GraffitiInbox",
-    //                 endpoint: serviceIdToUrl("public", "inbox", baseHost),
-    //             },
-    //         },
-    //     }),
-    // })
-    //     .then(({ did }) => did as string)
-    //     .catch((error) => {
-    //         errorString.value = error.message;
-    //         throw error;
-    //     });
+    actor.value = await fetchFromSelf("/app/actors/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            alsoKnownAs: [`did:web:${handleName.value}.${baseHost}`],
+            services: {
+                graffitiStorageBucket: {
+                    type: "GraffitiStorageBucket",
+                    endpoint: serviceIdToUrl(
+                        bucketId.value!,
+                        "bucket",
+                        baseHost,
+                    ),
+                },
+                graffitiPersonalInbox: {
+                    type: "GraffitiInbox",
+                    endpoint: serviceIdToUrl(inboxId.value!, "inbox", baseHost),
+                },
+                graffitiPublicInbox0: {
+                    type: "GraffitiInbox",
+                    endpoint: serviceIdToUrl("public", "inbox", baseHost),
+                },
+            },
+        }),
+    })
+        .then(({ did }) => did as string)
+        .catch((error) => {
+            errorString.value = error.message;
+            throw error;
+        });
 
     linkActorToHandle();
 }

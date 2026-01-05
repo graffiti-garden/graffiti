@@ -2,9 +2,7 @@
     <article>
         <h2>
             <a :href="`https://plc.directory/${actor.did}`" target="_blank">
-                <h2>
-                    {{ actor.did }}
-                </h2>
+                {{ actor.did }}
             </a>
             <CopyButton :text="actor.did" />
         </h2>

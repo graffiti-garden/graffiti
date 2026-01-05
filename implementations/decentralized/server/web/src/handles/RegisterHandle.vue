@@ -26,7 +26,18 @@
 
                 <span class="suffix" aria-hidden="true">.{{ baseHost }}</span>
 
-                <span class="status" aria-hidden="true"></span>
+                <StatusIcon
+                    :status="
+                        availabilityStatus === 'available'
+                            ? 'ok'
+                            : availabilityStatus === 'unavailable' ||
+                                availabilityStatus === 'error'
+                              ? 'error'
+                              : availabilityStatus === 'checking'
+                                ? 'loading'
+                                : null
+                    "
+                />
             </div>
 
             <output id="handle-status" role="status" aria-live="polite">
@@ -78,6 +89,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
 import { fetchFromSelf } from "../globals";
+import StatusIcon from "../utils/StatusIcon.vue";
 
 const props = defineProps<{
     onRegister: (handle: string) => void;
@@ -199,6 +211,7 @@ watch(handleName, () => {
         padding: 0;
         background: transparent;
         outline: none;
+        min-width: 0;
     }
 
     input:focus {
@@ -233,45 +246,6 @@ watch(handleName, () => {
 .handle-control[data-status="unavailable"],
 .handle-control[data-status="error"] {
     border-color: var(--pico-form-element-invalid-border-color);
-}
-
-/* Status icon slot */
-.status {
-    width: 1.25rem;
-    height: 1.25rem;
-    place-items: center;
-    flex: 0 0 auto;
-}
-.status::before {
-    content: "";
-    width: 1.25rem;
-    height: 1.25rem;
-    display: block;
-}
-
-/* Icons (purely presentational) */
-.handle-control[data-status="available"] .status::before {
-    background: var(--pico-icon-valid) no-repeat center/contain;
-}
-.handle-control[data-status="error"] .status::before,
-.handle-control[data-status="unavailable"] .status::before {
-    background: var(--pico-icon-invalid) no-repeat center/contain;
-}
-
-/* “Checking” spinner */
-@media (prefers-reduced-motion: no-preference) {
-    .handle-control[data-status="checking"] .status {
-        border-radius: 999px;
-        border: 2px solid
-            color-mix(in srgb, var(--pico-muted-color) 35%, transparent);
-        border-top-color: var(--pico-muted-color);
-        animation: spin 0.9s linear infinite;
-    }
-}
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 .controls {
