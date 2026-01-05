@@ -29,6 +29,11 @@ const routes = [
     children: [
       { name: "home", path: "/", component: () => import("./Home.vue") },
       {
+        name: "create",
+        path: "/create",
+        component: () => import("./CreateIdentity.vue"),
+      },
+      {
         name: "handles",
         path: "/handles",
         component: () => import("./handles/Handles.vue"),
@@ -42,6 +47,10 @@ const routes = [
         name: "register-handle",
         path: "/handles/register",
         component: () => import("./handles/RegisterHandle.vue"),
+        props: {
+          onRegister: () => router.push({ name: "handles" }),
+          onCancel: () => router.push({ name: "handles" }),
+        },
       },
       {
         name: "storage",
@@ -67,4 +76,7 @@ const router = createRouter({
 createApp(RouterView)
   .use(router)
   .directive("focus", { mounted: (e) => e.focus() })
+  .directive("scroll-into-view", {
+    mounted: (e) => e.scrollIntoView({ behavior: "smooth" }),
+  })
   .mount("#app");

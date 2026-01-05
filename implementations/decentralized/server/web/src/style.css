@@ -14,7 +14,7 @@
         h1 {
             font-size: 1.5rem;
             margin-top: 1rem;
-            margin-bottom: 0;
+            margin-bottom: 1rem;
         }
     }
     > :is(header, main) {
@@ -92,4 +92,9 @@ main h2 {
 .secondary:hover {
     background: var(--pico-secondary-hover-background);
     border-color: var(--pico-secondary-hover-border);
+}
+
+aside {
+    color: var(--pico-muted-color);
+    font-style: italic;
 }

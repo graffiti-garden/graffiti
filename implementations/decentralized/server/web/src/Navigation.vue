@@ -6,6 +6,7 @@
             </h1>
 
             <details
+                v-if="$route.name !== 'create'"
                 :open="navOpen"
                 @toggle="
                     navOpen =
@@ -63,9 +64,6 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 
 const navOpen = ref(false);
-router.afterEach(() => {
-    navOpen.value = false;
-});
 
 const mq = window.matchMedia("(min-width: 800px)");
 const syncNav = () => {
@@ -78,6 +76,8 @@ onMounted(() => {
 onUnmounted(() => {
     mq.removeEventListener("change", syncNav);
 });
+
+router.afterEach(syncNav);
 
 const host = window.location.host;
 </script>
