@@ -1,6 +1,7 @@
 <template>
     <button @click="handleLogin" :disabled="loggingIn">
         {{ loggingIn ? "Logging in…" : "Log In" }}
+        <StatusIcon v-if="loggingIn" status="loading" />
     </button>
 </template>
 
@@ -11,6 +12,7 @@ import {
     type AuthenticationResponseJSON,
 } from "@simplewebauthn/browser";
 import { isLoggedIn, fetchFromSelf } from "../globals";
+import StatusIcon from "../utils/StatusIcon.vue";
 
 const loggingIn = ref(false);
 

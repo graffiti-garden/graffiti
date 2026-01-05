@@ -28,7 +28,7 @@ const getValueRoute = createRoute({
   description:
     "Gets the binary data value associated with a key from the bucket.",
   tags: ["Storage Bucket"],
-  path: "/v/{key}",
+  path: "/value/{key}",
   request: {
     params: z.object({
       key: KeySchema,
@@ -70,7 +70,7 @@ const putValueRoute = createRoute({
   method: "put",
   description: "Puts a binary data value in the bucket associated with a key.",
   tags: ["Storage Bucket"],
-  path: "/v/{key}",
+  path: "/value/{key}",
   request: {
     params: z.object({
       key: KeySchema,
@@ -101,7 +101,7 @@ const putValueRoute = createRoute({
   },
 });
 storageBucket.use(
-  "/v/:key",
+  "/value/:key",
   bodyLimit({
     maxSize: MAX_VALUE_SIZE,
     onError: (c) => {
@@ -126,7 +126,7 @@ const deleteValueRoute = createRoute({
   method: "delete",
   description: "Deletes the binary value associated with a key from the bucket",
   tags: ["Storage Bucket"],
-  path: "/v/{key}",
+  path: "/value/{key}",
   request: {
     params: z.object({
       key: KeySchema,
