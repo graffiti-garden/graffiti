@@ -1,6 +1,6 @@
 <template>
     <header>
-        <h2>Choose your handle</h2>
+        <h3>Choose your handle</h3>
         <aside>Handles can always be changed later.</aside>
     </header>
     <form @submit.prevent="registerHandle">
@@ -13,7 +13,7 @@
                     :style="{ width: Math.max(inputHandleWidth, 1) + 'px' }"
                     required
                     v-focus
-                    :disabled="registering"
+                    :disabled="registering || registered"
                     autocapitalize="none"
                     autocomplete="off"
                     spellcheck="false"
@@ -46,14 +46,30 @@
         </label>
 
         <div class="controls">
-            <button type="button" class="secondary" @click="$router.back()">
+            <button
+                type="button"
+                class="secondary"
+                @click="() => onCancel()"
+                :class="{ hidden: registered }"
+                :disabled="registering || registered"
+            >
                 Cancel
             </button>
             <button
-                :disabled="registering || availabilityStatus !== 'available'"
+                :disabled="
+                    registering ||
+                    availabilityStatus !== 'available' ||
+                    registered
+                "
                 type="submit"
             >
-                {{ registering ? "Registering..." : "Register" }}
+                {{
+                    registering
+                        ? "Registering..."
+                        : registered
+                          ? "Registered"
+                          : "Register"
+                }}
             </button>
         </div>
     </form>
@@ -61,22 +77,17 @@
 
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
-import { useRouter } from "vue-router";
 import { fetchFromSelf } from "../globals";
-import {
-    OptionalAlsoKnownAsSchema,
-    OptionalServicesSchema,
-} from "../../../shared/did-schemas";
-import { z } from "zod";
 
 const props = defineProps<{
-    alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
-    services: z.infer<typeof OptionalServicesSchema>;
+    onRegister: (handle: string) => void;
+    onCancel: () => void;
 }>();
+
+const registered = ref(false);
 
 const baseHost = window.location.host;
 
-const router = useRouter();
 const handleName = ref("");
 
 // and disable the register button if checking/unavailable
@@ -133,19 +144,17 @@ async function checkHandleAvailability(handleName: string, mySeq: number) {
 const registering = ref(false);
 async function registerHandle() {
     registering.value = true;
+    const name = handleName.value;
     try {
         await fetchFromSelf("/app/handles/register", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                name: handleName.value,
-                services: props.services,
-                alsoKnownAs: props.alsoKnownAs,
-            }),
+            body: JSON.stringify({ name }),
         });
-        router.push("/handles");
+        registered.value = true;
+        props.onRegister(name);
     } catch (error) {
         alert(error);
     } finally {
@@ -270,6 +279,10 @@ watch(handleName, () => {
     justify-content: space-between;
 }
 
+.hidden {
+    opacity: 0;
+}
+
 output {
     display: block;
     text-align: center;
@@ -286,10 +299,5 @@ output {
 
 button[type="submit"] {
     width: auto;
-}
-
-aside {
-    color: var(--pico-muted-color);
-    font-style: italic;
 }
 </style>
