@@ -30,7 +30,7 @@
             <a href="https://www.w3.org/TR/did-1.0/"
                 >decentralized identifier</a
             >
-            that permanently represent you, even if you change your handle.
+            that permanently represents you, even if you change your handle.
         </li>
         <li>
             <RouterLink :to="{ name: 'storage' }">Storage Bucket</RouterLink>: A
