@@ -82,6 +82,7 @@
                           ? "Registered"
                           : "Register"
                 }}
+                <StatusIcon v-if="registering" status="loading" />
             </button>
         </div>
     </form>
