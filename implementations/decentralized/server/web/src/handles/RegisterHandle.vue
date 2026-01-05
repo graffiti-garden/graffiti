@@ -27,6 +27,7 @@
                 <span class="suffix" aria-hidden="true">.{{ baseHost }}</span>
 
                 <StatusIcon
+                    class="status"
                     :status="
                         availabilityStatus === 'available'
                             ? 'ok'
@@ -178,7 +179,7 @@ const mirrorHandleEl = ref<HTMLElement | null>(null);
 const inputHandleWidth = ref(0);
 watch(handleName, () => {
     nextTick(() => {
-        inputHandleWidth.value = mirrorHandleEl.value?.offsetWidth ?? 0;
+        inputHandleWidth.value = (mirrorHandleEl.value?.offsetWidth ?? 0) + 2;
     });
 });
 </script>
@@ -212,6 +213,7 @@ watch(handleName, () => {
         background: transparent;
         outline: none;
         min-width: 0;
+        text-align: right;
     }
 
     input:focus {
@@ -232,11 +234,14 @@ watch(handleName, () => {
 }
 
 .prefix {
-    margin-right: 0.5rem;
+    margin-right: 0.2rem;
 }
 
 .suffix {
     flex: 1 1 auto;
+}
+.status {
+    margin-left: 0.3rem;
 }
 
 /* Border feedback */

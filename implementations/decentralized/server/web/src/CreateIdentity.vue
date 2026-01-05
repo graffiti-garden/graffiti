@@ -1,8 +1,8 @@
 <template>
     <h2>Create a Graffiti identity</h2>
-    <ol>
+    <ol start="2">
         <li>
-            <RegisterHandle :onRegister="onRegister" :onCancel="() => {}" />
+            <RegisterHandle :onRegister="onRegister" :onCancel="onCancel" />
         </li>
         <li v-if="handleName && !bucketId" v-scroll-into-view>
             <span v-if="errorString === null">
@@ -82,22 +82,57 @@
             <code>{{ `${handleName}.${baseHost}` }}</code>
         </p>
 
-        <a class="return" role="button" href="https://google.com" v-focus>
-            Return to application
-        </a>
-        <aside v-scroll-into-view>
-            You may return to <a :href="baseOrigin">{{ baseHost }}</a>
-            at any time to manage your identity or migrate to another provider.
-        </aside>
+        <template v-if="redirect">
+            <a class="return" role="button" :href="redirect" v-focus>
+                Return to application
+            </a>
+            <aside v-scroll-into-view>
+                You may return to <a :href="baseOrigin">{{ baseHost }}</a>
+                at any time to manage your identity or migrate to another
+                provider.
+            </aside>
+        </template>
+        <RouterLink
+            v-else
+            class="return"
+            role="button"
+            :to="{ name: 'home' }"
+            v-focus
+            v-scroll-into-view
+        >
+            Return to home page
+        </RouterLink>
     </template>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import RegisterHandle from "./handles/RegisterHandle.vue";
 import { fetchFromSelf } from "./globals";
 import { serviceIdToUrl } from "../../shared/service-urls";
 import StatusIcon from "./utils/StatusIcon.vue";
+import { useRouter } from "vue-router";
+
+const redirectUri = new URLSearchParams(window.location.search).get(
+    "redirect_uri",
+);
+const redirect = computed(() => {
+    if (redirectUri) {
+        try {
+            const url = new URL(redirectUri);
+            if (handleName.value) {
+                url.searchParams.set(
+                    "handle",
+                    `${handleName.value}.${baseHost}`,
+                );
+            }
+            return url.toString();
+        } catch (e) {
+            return null;
+        }
+    }
+    return null;
+});
 
 const baseOrigin = window.location.origin;
 const baseHost = window.location.host;
@@ -113,6 +148,15 @@ const linked = ref<boolean>(false);
 async function onRegister(name: string) {
     handleName.value = name;
     createBucket();
+}
+
+const router = useRouter();
+async function onCancel() {
+    if (redirect.value) {
+        window.location.href = redirect.value;
+    } else {
+        router.push({ name: "home" });
+    }
 }
 
 async function createBucket() {
@@ -204,9 +248,17 @@ async function linkActorToHandle() {
 </script>
 
 <style>
+ol > li:has(> header) {
+    display: contents;
+}
+
+ol > li > header > h3::before {
+    content: "1. ";
+}
+
 ol {
-    padding-left: 2rem;
-    padding-right: 2rem;
+    list-style-position: inside;
+    padding-left: 0;
     margin-top: 2rem;
 }
 
