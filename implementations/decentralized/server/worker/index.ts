@@ -28,9 +28,9 @@ router.get("/.well-known/oauth-authorization-server", async (c) => {
 router.all("*", async (c) => {
   const url = new URL(c.req.url);
   if (
-    url.pathname.startsWith("/app") ||
-    url.pathname.startsWith("/s") ||
-    url.pathname.startsWith("/i")
+    url.pathname.startsWith("/app/") ||
+    url.pathname.startsWith("/s/") ||
+    url.pathname.startsWith("/i/")
   ) {
     return c.notFound();
   }
