@@ -36,10 +36,4 @@ handleDids.get("/:handle-name/.well-known/did.json", async (c) => {
   return c.json(constructDidDocument({ did, services, alsoKnownAs }));
 });
 
-handleDids.get("/:handle-name/", (c) => {
-  // Redirect to the DID document
-  // TODO: replace this with a redirect to social.wiki
-  return c.redirect("/.well-known/did.json");
-});
-
 export default handleDids;
