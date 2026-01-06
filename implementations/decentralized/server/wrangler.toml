@@ -5,7 +5,7 @@ main = "worker/index.ts"
 [[d1_databases]]
 binding = "DB"
 database_name = "graffiti-db"
-database_id = "53d812bd-b0f4-41fa-a144-55b67e0fd759"
+database_id = "cc3d977a-c3b9-43f2-aab6-3386e3324614"
 
 [[r2_buckets]]
 binding = "STORAGE"
@@ -21,16 +21,8 @@ zone_name = "graffiti.actor"
 [assets]
 directory = "web/dist"
 binding = "ASSETS"
-run_worker_first = ["/", "/app/*", "/s/*", "/i/*", "/docs", "/openapi.json", "/oauth2-redirect.html"]
+run_worker_first = ["/app/*", "/s/*", "/i/*", "/.well-known/*"]
 
 [observability]
-[observability.logs]
 enabled = true
 head_sampling_rate = 1
-persist = true
-invocation_logs = true
-
-[observability.traces]
-enabled = true
-head_sampling_rate = 1
-persist = true
