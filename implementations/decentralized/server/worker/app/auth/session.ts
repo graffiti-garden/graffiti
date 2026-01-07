@@ -3,11 +3,18 @@ import { HTTPException } from "hono/http-exception";
 import type { Bindings } from "../../env";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { randomBase64, randomBytes, encodeBase64, decodeBase64 } from "./utils";
+import { LRUCache } from "lru-cache";
 
+const CACHE_CAPACITY = 1000;
 const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
 const COOKIE_NAME = "session";
 const TEMP_USER_ID = "temp";
+
+const sessionCache = new LRUCache<
+  string,
+  { userId: string; lastVerifiedAt: number }
+>({ max: CACHE_CAPACITY, ttl: INACTIVITY_TIMEOUT_MS });
 
 export async function createSessionToken(
   context: Context<{ Bindings: Bindings }>,
@@ -31,6 +38,9 @@ export async function createSessionToken(
   // Store the session as a cookie
   const token = sessionId + "." + secretBase64;
 
+  // Store the session in the cache
+  sessionCache.set(token, { userId, lastVerifiedAt: createdAt });
+
   return { sessionId, token };
 }
 
@@ -41,27 +51,45 @@ export async function verifySessionToken(
     allowTemp?: boolean;
   },
 ) {
+  let userId: string;
+  let lastVerifiedAt: number;
   const [sessionId, secretBase64] = token.split(".");
-  const secret = decodeBase64(secretBase64);
-  const secretHash = await hashSecret(secret);
 
-  const result = await context.env.DB.prepare(
-    `SELECT * FROM sessions WHERE session_id = ? AND secret_hash = ?`,
-  )
-    .bind(sessionId, secretHash)
-    .first<{ user_id: string; last_verified_at: number }>();
+  // First, check if the token is in the cache
+  const cached = sessionCache.get(token);
+  if (cached) {
+    userId = cached.userId;
+    lastVerifiedAt = cached.lastVerifiedAt;
+  } else {
+    const secret = decodeBase64(secretBase64);
+    const secretHash = await hashSecret(secret);
 
-  if (!result) {
-    throw new HTTPException(401, { message: "Invalid session." });
+    const result = await context.env.DB.prepare(
+      `SELECT user_id, last_verified_at FROM sessions WHERE session_id = ? AND secret_hash = ?`,
+    )
+      .bind(sessionId, secretHash)
+      .first<{ user_id: string; last_verified_at: number }>();
+
+    if (!result) {
+      throw new HTTPException(401, { message: "Invalid session." });
+    }
+    lastVerifiedAt = result.last_verified_at;
+    userId = result.user_id;
+
+    // Store in the cache
+    sessionCache.set(token, { userId, lastVerifiedAt });
   }
 
   const now = Date.now();
-  const lastVerifiedAt = result.last_verified_at;
 
   if (now - lastVerifiedAt >= INACTIVITY_TIMEOUT_MS) {
     await context.env.DB.prepare(`DELETE FROM sessions WHERE session_id = ?`)
       .bind(sessionId)
       .run();
+
+    // Remove from the cache
+    sessionCache.delete(token);
+
     throw new HTTPException(401, { message: "Session expired." });
   }
 
@@ -71,9 +99,11 @@ export async function verifySessionToken(
     )
       .bind(now, sessionId)
       .run();
+
+    // Update the cache
+    sessionCache.set(token, { userId, lastVerifiedAt: now });
   }
 
-  const userId = result.user_id;
   if (userId === TEMP_USER_ID && !options?.allowTemp) {
     throw new HTTPException(401, { message: "Temporary user not allowed." });
   }
