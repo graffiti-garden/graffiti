@@ -5,7 +5,7 @@ main = "worker/index.ts"
 [[d1_databases]]
 binding = "DB"
 database_name = "graffiti-db"
-database_id = "cc3d977a-c3b9-43f2-aab6-3386e3324614"
+database_id = "9b0f6062-5479-4d8e-8fba-5322a150b690"
 
 [[r2_buckets]]
 binding = "STORAGE"
