@@ -130,11 +130,12 @@ function setTokenCookie(
   context: Context<{ Bindings: Bindings }>,
   token: string,
 ) {
+  const url = new URL(context.req.url);
   setCookie(context, COOKIE_NAME, token, {
     maxAge: INACTIVITY_TIMEOUT_MS / 1000,
     path: "/",
     sameSite: "lax",
-    secure: true,
+    secure: url.hostname !== "localhost",
     httpOnly: true,
   });
 }
