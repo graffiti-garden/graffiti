@@ -2,8 +2,15 @@ import type { Context } from "hono";
 import type { Bindings } from "../../env";
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { HTTPException } from "hono/http-exception";
+import { LRUCache } from "lru-cache";
 
 const INBOX_QUERY_LIMIT = 100;
+const INBOX_INFO_CACHE_CAPACITY = 1000;
+
+const inboxInfoCache = new LRUCache<
+  string,
+  { value: { userId: number; inboxSeq: number } | null }
+>({ max: INBOX_INFO_CACHE_CAPACITY });
 
 async function getInboxInfo(
   context: Context<{ Bindings: Bindings }>,
@@ -15,18 +22,29 @@ async function getInboxInfo(
       inboxSeq: 0,
     };
 
-  const result = await context.env.DB.prepare(
-    "SELECT user_id, inbox_seq FROM inboxes WHERE inbox_id = ?",
-  )
-    .bind(inboxId)
-    .first<{ user_id: number; inbox_seq: number }>();
+  const cached = inboxInfoCache.get(inboxId);
 
-  return result
-    ? {
-        userId: result.user_id,
-        inboxSeq: result.inbox_seq,
-      }
-    : null;
+  if (cached) {
+    console.log("cached inbox info");
+    return cached.value;
+  } else {
+    const result = await context.env.DB.prepare(
+      "SELECT user_id, inbox_seq FROM inboxes WHERE inbox_id = ?",
+    )
+      .bind(inboxId)
+      .first<{ user_id: number; inbox_seq: number }>();
+
+    const output = result
+      ? {
+          userId: result.user_id,
+          inboxSeq: result.inbox_seq,
+        }
+      : null;
+
+    inboxInfoCache.set(inboxId, { value: output });
+
+    return output;
+  }
 }
 
 export async function sendMessage(
