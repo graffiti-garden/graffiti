@@ -1,0 +1,7 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "sort": ["source-order"],
+  "cname": "decentralized.graffiti.garden",
+  "searchInDocuments": true,
+  "searchInComments": true
+}
