@@ -65,7 +65,7 @@ function fetchServices() {
                     ...services.value,
                     {
                         createdAt: 0,
-                        serviceId: "public",
+                        serviceId: "shared",
                         type: "inbox",
                     },
                 ];
