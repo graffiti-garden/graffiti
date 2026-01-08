@@ -5,15 +5,8 @@
                 <RouterLink :to="{ name: 'home' }"> {{ host }} </RouterLink>
             </h1>
 
-            <details
-                v-if="$route.name !== 'create'"
-                :open="navOpen"
-                @toggle="
-                    navOpen =
-                        ($event.target as HTMLDetailsElement)?.open ?? false
-                "
-            >
-                <summary>Menu</summary>
+            <details v-if="$route.name !== 'create'" :open="navOpen">
+                <summary @click.prevent="navOpen = !navOpen">Menu</summary>
 
                 <nav :class="{ open: navOpen }">
                     <ul>
@@ -37,7 +30,7 @@
                                 Inboxes
                             </RouterLink>
                         </li>
-                        <li><Logout @click="navOpen = false" /></li>
+                        <li><Logout /></li>
                     </ul>
                 </nav>
             </details>
@@ -67,19 +60,24 @@ import { RouterView } from "vue-router";
 import { isLoggedIn } from "./globals";
 import LoginGuard from "./auth/LoginGuard.vue";
 import Logout from "./auth/Logout.vue";
-import { onMounted, onUnmounted, ref, watchEffect } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import StatusIcon from "./utils/StatusIcon.vue";
 import "./auth/floating-panel.css";
 
 const router = useRouter();
 
-const navOpen = ref(false);
+const navOpen = ref(true);
 
 const mq = window.matchMedia("(min-width: 800px)");
 const syncNav = () => {
     navOpen.value = mq.matches;
 };
+
+// On login, mount, or route change sync the nav state
+watch(isLoggedIn, (newVal) => {
+    if (newVal) syncNav();
+});
 onMounted(() => {
     syncNav();
     mq.addEventListener("change", syncNav);
@@ -87,7 +85,6 @@ onMounted(() => {
 onUnmounted(() => {
     mq.removeEventListener("change", syncNav);
 });
-
 router.afterEach(syncNav);
 
 const host = window.location.host;
