@@ -5,10 +5,10 @@ import { HTTPException } from "hono/http-exception";
 async function verifyBucketControl(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
-  userId: string,
+  userId: number,
 ) {
   const result = await context.env.DB.prepare(
-    "SELECT bucket_id FROM storage_buckets WHERE bucket_id = ? AND user_id = ?",
+    "SELECT bucket_seq FROM storage_buckets WHERE bucket_id = ? AND user_id = ?",
   )
     .bind(bucketId, userId)
     .first();
@@ -56,7 +56,7 @@ export async function putValue(
   bucketId: string,
   key: string,
   body: ReadableStream<Uint8Array<ArrayBuffer>>,
-  userId: string,
+  userId: number,
 ) {
   const bucketKey = getBucketKey(bucketId, key);
 
@@ -71,7 +71,7 @@ export async function deleteValue(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
   key: string,
-  userId: string,
+  userId: number,
 ) {
   await verifyBucketControl(context, bucketId, userId);
 
@@ -85,7 +85,7 @@ export async function exportKeys(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
   cursor: string | undefined,
-  userId: string,
+  userId: number,
 ) {
   await verifyBucketControl(context, bucketId, userId);
 

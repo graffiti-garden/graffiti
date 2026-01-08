@@ -2,36 +2,39 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Bindings } from "../../env";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
-import { randomBase64, randomBytes, encodeBase64, decodeBase64 } from "./utils";
+import { randomBytes, encodeBase64, decodeBase64 } from "./utils";
 import { LRUCache } from "lru-cache";
 
 const CACHE_CAPACITY = 1000;
 const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
 const COOKIE_NAME = "session";
-const TEMP_USER_ID = "temp";
+const TEMP_USER_ID = -1;
 
 const sessionCache = new LRUCache<
   string,
-  { userId: string; lastVerifiedAt: number }
+  { userId: number; lastVerifiedAt: number }
 >({ max: CACHE_CAPACITY, ttl: INACTIVITY_TIMEOUT_MS });
 
 export async function createSessionToken(
   context: Context<{ Bindings: Bindings }>,
-  userId: string,
+  userId: number,
 ) {
   // Create a session for the corresponding user
-  const sessionId = randomBase64();
   const secret = randomBytes();
   const secretHash = await hashSecret(secret);
   const createdAt = Date.now();
 
   // Store the session for verification
-  await context.env.DB.prepare(
-    `INSERT INTO sessions (session_id, user_id, secret_hash, created_at, last_verified_at) VALUES (?, ?, ?, ?, ?)`,
+  const result = await context.env.DB.prepare(
+    `INSERT INTO sessions (user_id, secret_hash, created_at, last_verified_at) VALUES (?, ?, ?, ?) RETURNING session_id`,
   )
-    .bind(sessionId, userId, secretHash, createdAt, createdAt)
-    .run();
+    .bind(userId, secretHash, createdAt, createdAt)
+    .first<{ session_id: number }>();
+  const sessionId = result?.session_id;
+  if (!sessionId) {
+    throw new HTTPException(500, { message: "Failed to create session." });
+  }
 
   const secretBase64 = encodeBase64(secret);
 
@@ -51,9 +54,10 @@ export async function verifySessionToken(
     allowTemp?: boolean;
   },
 ) {
-  let userId: string;
+  let userId: number;
   let lastVerifiedAt: number;
-  const [sessionId, secretBase64] = token.split(".");
+  const [sessionIdString, secretBase64] = token.split(".");
+  const sessionId = Number(sessionIdString);
 
   // First, check if the token is in the cache
   const cached = sessionCache.get(token);
@@ -68,7 +72,7 @@ export async function verifySessionToken(
       `SELECT user_id, last_verified_at FROM sessions WHERE session_id = ? AND secret_hash = ?`,
     )
       .bind(sessionId, secretHash)
-      .first<{ user_id: string; last_verified_at: number }>();
+      .first<{ user_id: number; last_verified_at: number }>();
 
     if (!result) {
       throw new HTTPException(401, { message: "Invalid session." });
@@ -173,12 +177,7 @@ export async function verifySessionCookie(
   return result;
 }
 
-export async function verifySessionHeader(
-  context: Context<{ Bindings: Bindings }>,
-  options?: {
-    allowTemp?: boolean;
-  },
-) {
+export async function getHeaderToken(context: Context<{ Bindings: Bindings }>) {
   const bearerToken = context.req.header("Authorization");
   if (!bearerToken) {
     throw new HTTPException(401, { message: "Not logged in." });
@@ -187,7 +186,16 @@ export async function verifySessionHeader(
   if (!bearerToken.startsWith(bearerPrefix)) {
     throw new HTTPException(400, { message: "Invalid token format" });
   }
-  const token = bearerToken.slice(bearerPrefix.length);
+  return bearerToken.slice(bearerPrefix.length);
+}
+
+export async function verifySessionHeader(
+  context: Context<{ Bindings: Bindings }>,
+  options?: {
+    allowTemp?: boolean;
+  },
+) {
+  const token = await getHeaderToken(context);
   return await verifySessionToken(context, token, options);
 }
 

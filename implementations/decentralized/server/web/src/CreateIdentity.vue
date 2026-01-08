@@ -213,9 +213,9 @@ async function createActor() {
                     type: "GraffitiInbox",
                     endpoint: serviceIdToUrl(inboxId.value!, "inbox", baseHost),
                 },
-                graffitiPublicInbox0: {
+                graffitiSharedInbox_0: {
                     type: "GraffitiInbox",
-                    endpoint: serviceIdToUrl("public", "inbox", baseHost),
+                    endpoint: serviceIdToUrl("shared", "inbox", baseHost),
                 },
             },
         }),
