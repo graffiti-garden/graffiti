@@ -19,6 +19,7 @@ router.get("/.well-known/oauth-authorization-server", async (c) => {
     issuer,
     authorization_endpoint: `${issuer}/oauth`,
     token_endpoint: `${issuer}/app/oauth/token`,
+    revocation_endpoint: `${issuer}/app/oauth/revoke`,
     token_endpoint_auth_methods_supported: ["none"],
     response_types_supported: ["code"],
   });
