@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { compress } from "hono/compress";
 import type { Bindings } from "./env";
 import app from "./app/app";
@@ -11,11 +11,11 @@ const router = new Hono<{ Bindings: Bindings }>();
 router.route("/app", app);
 router.route("/i", indexers);
 router.route("/s", storageBuckets);
-router.get("/.well-known/oauth-authorization-server", async (c) => {
-  const issuer = `https://${c.env.BASE_HOST}`;
+function oauthConfiguration(context: Context) {
+  const issuer = `https://${context.env.BASE_HOST}`;
   const headers = new Headers();
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
-  return c.json({
+  return context.json({
     issuer,
     authorization_endpoint: `${issuer}/oauth`,
     token_endpoint: `${issuer}/app/oauth/token`,
@@ -23,7 +23,9 @@ router.get("/.well-known/oauth-authorization-server", async (c) => {
     token_endpoint_auth_methods_supported: ["none"],
     response_types_supported: ["code"],
   });
-});
+}
+router.get("/.well-known/oauth-authorization-server", oauthConfiguration);
+router.get("/.well-known/openid-configuration", oauthConfiguration);
 
 // Route static assets
 router.all("*", async (c) => {
