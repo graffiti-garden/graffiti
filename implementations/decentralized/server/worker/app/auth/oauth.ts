@@ -105,11 +105,18 @@ oauth.post("/token", async (c) => {
   const { token } = await createSessionToken(c, result.user_id);
 
   // Return the access token
-  return c.json({ access_token: token });
+  return c.json({ access_token: token, token_type: "bearer" }, { headers });
 });
 
 oauth.post("/revoke", async (c) => {
-  const token = await getHeaderToken(c);
+  // Get the token from an "application/x-www-form-urlencoded" body
+  const params = new URLSearchParams(await c.req.text());
+  const token = params.get("token");
+  if (!token) {
+    throw new HTTPException(400, {
+      message: "Missing token parameter",
+    });
+  }
   await deleteSessionToken(c, token);
   return c.json({ revoked: true });
 });
