@@ -14,7 +14,7 @@
                 Go to API Docs
             </a>
         </p>
-        <nav v-if="service.serviceId !== 'public'">
+        <nav v-if="service.serviceId !== 'shared'">
             <ul>
                 <li>
                     <button @click="deleteService" :disabled="deleting">

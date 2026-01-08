@@ -192,7 +192,7 @@ const queryRoute = createRoute({
   },
 });
 inbox.openapi(queryRoute, async (c) => {
-  let userId: string | undefined = undefined;
+  let userId: number | undefined = undefined;
   try {
     const verification = await verifySessionHeader(c);
     userId = verification.userId;

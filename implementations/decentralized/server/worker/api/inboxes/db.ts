@@ -5,19 +5,28 @@ import { HTTPException } from "hono/http-exception";
 
 const INBOX_QUERY_LIMIT = 100;
 
-async function getInboxController(
+async function getInboxInfo(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
-): Promise<string | undefined> {
-  if (inboxId === "public") return "public";
+) {
+  if (inboxId === "shared")
+    return {
+      userId: 0,
+      inboxSeq: 0,
+    };
 
   const result = await context.env.DB.prepare(
-    "SELECT user_id FROM inboxes WHERE inbox_id = ?",
+    "SELECT user_id, inbox_seq FROM inboxes WHERE inbox_id = ?",
   )
     .bind(inboxId)
-    .first<{ user_id: string }>();
+    .first<{ user_id: number; inbox_seq: number }>();
 
-  return result?.user_id;
+  return result
+    ? {
+        userId: result.user_id,
+        inboxSeq: result.inbox_seq,
+      }
+    : null;
 }
 
 export async function sendMessage(
@@ -28,25 +37,26 @@ export async function sendMessage(
     data: {};
   },
 ) {
+  // Determine if the inbox is under the user's control,
+  // which we will later use to determine if we can label the message
+  const info = await getInboxInfo(context, inboxId);
+  if (!info) {
+    throw new HTTPException(404, { message: "Inbox not found" });
+  }
+  const inboxSeq = info.inboxSeq;
+
   // Hash the message to prevent inserting duplicates
-  const operationBytes = dagCborEncode({ inboxId, ...message });
+  const operationBytes = dagCborEncode({ inboxSeq, ...message });
   const messageHash = await crypto.subtle.digest(
     "SHA-256",
     new Uint8Array(operationBytes),
   );
 
-  // Determine if the inbox is under the user's control,
-  // which we will later use to determine if we can label the message
-  const controller = await getInboxController(context, inboxId);
-  if (!controller) {
-    throw new HTTPException(404, { message: "Inbox not found" });
-  }
-
   const inserted = await context.env.DB.prepare(
     `
       INSERT INTO inbox_messages (
         hash,
-        inbox_id,
+        inbox_seq,
         data,
         tags
       ) VALUES (?, ?, ?, ?)
@@ -56,7 +66,7 @@ export async function sendMessage(
   )
     .bind(
       messageHash,
-      inboxId,
+      inboxSeq,
       JSON.stringify(message.data),
       JSON.stringify(message.tags),
     )
@@ -70,9 +80,9 @@ export async function sendMessage(
   } else {
     created = false;
     const result = await context.env.DB.prepare(
-      `SELECT seq FROM inbox_messages WHERE inbox_id = ? AND hash = ?`,
+      `SELECT seq FROM inbox_messages WHERE inbox_seq = ? AND hash = ?`,
     )
-      .bind(inboxId, messageHash)
+      .bind(inboxSeq, messageHash)
       .first<{ seq: number }>();
     if (!result) {
       throw new HTTPException(500, {
@@ -91,11 +101,11 @@ export async function sendMessage(
           `
           INSERT INTO inbox_message_tags (
             message_seq,
-            inbox_id,
+            inbox_seq,
             tag
           ) VALUES (?, ?, ?);
         `,
-        ).bind(messageSeq, inboxId, tag),
+        ).bind(messageSeq, inboxSeq, tag),
       );
     }
     await context.env.DB.batch(statements);
@@ -108,21 +118,22 @@ export async function queryMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
   tags: string[],
-  userId?: string,
+  userId?: number,
   sinceSeq: number = 0,
 ) {
-  const controller = await getInboxController(context, inboxId);
-  if (controller !== "public" && controller !== userId) {
+  const info = await getInboxInfo(context, inboxId);
+  if (!info || !(info.userId === userId || info.userId === 0)) {
     throw new HTTPException(403, {
       message: "Cannot query someone else's inbox",
     });
   }
+  const inboxSeq = info.inboxSeq;
 
   const sql = [
     `WITH message_candidates AS (
       SELECT DISTINCT t.message_seq
       FROM inbox_message_tags t
-      WHERE t.inbox_id = ? AND t.tag IN (${tags.map(() => "?").join(", ")})
+      WHERE t.inbox_seq = ? AND t.tag IN (${tags.map(() => "?").join(", ")})
         AND t.message_seq > ?
       ORDER BY t.message_seq ASC
     )
@@ -134,18 +145,16 @@ export async function queryMessages(
     `FROM message_candidates c
     JOIN inbox_messages m
       ON m.seq = c.message_seq`,
-    // Only return if the data is "OK" (label = 1) or no label yet
     userId
       ? `LEFT JOIN inbox_message_labels l
-      ON c.message_seq = l.message_seq AND l.user_id = ?
-    WHERE l.label = 1 OR l.label IS NULL`
+      ON c.message_seq = l.message_seq AND l.user_id = ?`
       : ``,
     `ORDER BY m.seq ASC
     LIMIT ?`,
   ].join("\n");
 
   const bindings = [
-    inboxId,
+    inboxSeq,
     ...tags,
     sinceSeq,
     ...(userId ? [userId] : []),
@@ -187,20 +196,21 @@ export async function labelMessage(
   inboxId: string,
   messageId: string,
   label: number,
-  userId: string,
+  userId: number,
 ) {
-  const controller = await getInboxController(context, inboxId);
-  if (controller !== "public" && controller !== userId) {
+  const info = await getInboxInfo(context, inboxId);
+  if (!info || !(info.userId === userId || info.userId === 0)) {
     throw new HTTPException(403, {
       message: "Cannot label a message in someone else's inbox",
     });
   }
+  const inboxSeq = info.inboxSeq;
 
   // Make sure the message is in the indbox
   const result = await context.env.DB.prepare(
-    `SELECT seq FROM inbox_messages WHERE seq = ? AND inbox_id = ?`,
+    `SELECT seq FROM inbox_messages WHERE seq = ? AND inbox_seq = ?`,
   )
-    .bind(Number(messageId), inboxId)
+    .bind(Number(messageId), inboxSeq)
     .first();
   if (!result) {
     throw new HTTPException(404, {
@@ -225,19 +235,21 @@ export async function labelMessage(
 export async function exportMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
-  userId: string,
+  userId: number,
   sinceSeq: number = 0,
 ) {
-  const controller = await getInboxController(context, inboxId);
-  if (controller === "public") {
+  const info = await getInboxInfo(context, inboxId);
+  if (info?.inboxSeq === 0) {
     throw new HTTPException(403, {
-      message: "Cannot export from the public inbox",
+      message: "Cannot export from the shared inbox",
     });
-  } else if (controller !== userId) {
+  }
+  if (!info || info.userId !== userId) {
     throw new HTTPException(403, {
       message: "Cannot export from someone else's inbox",
     });
   }
+  const inboxSeq = info.inboxSeq;
 
   const res = await context.env.DB.prepare(
     `
@@ -246,12 +258,12 @@ export async function exportMessages(
       data,
       tags
     FROM inbox_messages
-    WHERE inbox_id = ? AND seq > ?
+    WHERE inbox_seq = ? AND seq > ?
     ORDER BY seq ASC
     LIMIT ?
   `,
   )
-    .bind(inboxId, sinceSeq, INBOX_QUERY_LIMIT + 1)
+    .bind(inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
       seq: number;
       data: string;

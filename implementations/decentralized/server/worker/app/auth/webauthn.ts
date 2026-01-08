@@ -13,7 +13,7 @@ import {
   deleteSessionCookie,
   verifySessionCookie,
 } from "./session";
-import { randomBase64, decodeBase64 } from "./utils";
+import { HTTPException } from "hono/http-exception";
 
 const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 const webauthn = new Hono<{ Bindings: Bindings }>();
@@ -31,8 +31,8 @@ function getRp(req: { url: string }) {
 }
 
 webauthn.get("/register/challenge", async (c) => {
-  let sessionId: string;
-  let userId: string;
+  let sessionId: number;
+  let userId: number;
   try {
     // If adding a registration to an existing user,
     // we get the existing session
@@ -40,20 +40,30 @@ webauthn.get("/register/challenge", async (c) => {
     sessionId = result.sessionId;
     userId = result.userId;
   } catch (error) {
+    // Create a user
+    const result = await c.env.DB.prepare(
+      `INSERT INTO users (created_at) VALUES (?) RETURNING user_id`,
+    )
+      .bind(Date.now())
+      .first<{ user_id: number }>();
+    if (!result) {
+      throw new HTTPException(500, { message: "Failed to create user." });
+    }
+
+    userId = result.user_id;
     sessionId = await createTempSessionCookie(c);
-    userId = randomBase64();
   }
 
   const { rpId } = getRp(c.req);
 
-  const displayName = `${c.env.BASE_HOST} account ${userId.slice(0, 6)}`;
+  const displayName = `${c.env.BASE_HOST} account #${userId}`;
   const options = await generateRegistrationOptions({
     rpName: c.env.BASE_HOST,
     rpID: rpId,
     attestationType: "none",
     userDisplayName: displayName,
     userName: displayName,
-    userID: decodeBase64(userId),
+    userID: new TextEncoder().encode(userId.toString()),
   });
 
   // Store the challenge for later
@@ -81,7 +91,7 @@ webauthn.post("/register/verify", async (c) => {
      RETURNING challenge, user_id, created_at`,
   )
     .bind(sessionId)
-    .first<{ challenge: string; user_id: string; created_at: number }>();
+    .first<{ challenge: string; user_id: number; created_at: number }>();
 
   if (!registrationOptions) {
     return c.text("Challenge not found.", 404);
@@ -206,7 +216,7 @@ webauthn.post("/authenticate/verify", async (c) => {
   )
     .bind(credentialId)
     .first<{
-      user_id: string;
+      user_id: number;
       public_key: ArrayBuffer;
       counter: number;
     }>();
@@ -243,6 +253,8 @@ webauthn.post("/authenticate/verify", async (c) => {
       .run();
   }
 
+  // Delete the temp cookie
+  deleteSessionCookie(c);
   await createSessionCookie(c, userPasskey.user_id);
   return c.json({ message: "Passkey authenticated successfully." });
 });

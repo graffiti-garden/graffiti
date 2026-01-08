@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import type { Bindings } from "../../env";
-import { createSessionToken, verifySessionCookie } from "./session";
+import {
+  createSessionToken,
+  deleteSessionToken,
+  getHeaderToken,
+  verifySessionCookie,
+} from "./session";
 import { HTTPException } from "hono/http-exception";
 import { randomBase64 } from "./utils";
 
@@ -20,7 +25,7 @@ oauth.get("/authorize", async (c) => {
 
   const url = new URL(redirect_uri);
 
-  let userId: string;
+  let userId: number;
   try {
     const ids = await verifySessionCookie(c);
     userId = ids.userId;
@@ -73,7 +78,7 @@ oauth.post("/token", async (c) => {
     "DELETE FROM oauth_codes WHERE code = ? RETURNING user_id, redirect_uri, created_at",
   )
     .bind(code)
-    .first<{ user_id: string; redirect_uri: string; created_at: number }>();
+    .first<{ user_id: number; redirect_uri: string; created_at: number }>();
 
   if (!result) {
     throw new HTTPException(401, {
@@ -101,6 +106,12 @@ oauth.post("/token", async (c) => {
 
   // Return the access token
   return c.json({ access_token: token });
+});
+
+oauth.post("/revoke", async (c) => {
+  const token = await getHeaderToken(c);
+  await deleteSessionToken(c, token);
+  return c.json({ revoked: true });
 });
 
 export default oauth;
