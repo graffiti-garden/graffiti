@@ -372,7 +372,7 @@ export class Authorization {
   }
 }
 
-const LoginEventDetailSchema = z
+export const LoginEventDetailSchema = z
   .object({
     loginId: z.string(),
   })
@@ -383,12 +383,12 @@ const LoginEventDetailSchema = z
     ]),
   );
 
-const LogoutEventDetailSchema = z.object({
+export const LogoutEventDetailSchema = z.object({
   token: z.string(),
   error: z.instanceof(Error).optional(),
 });
 
-const InitializedEventDetailSchema = z
+export const InitializedEventDetailSchema = z
   .object({
     error: z.instanceof(Error).optional(),
   })
@@ -437,11 +437,11 @@ async function test() {
     if (parsed.error) {
       console.error("logout error:", parsed.error);
     } else {
-      console.log("logout success:", parsed);
+      console.log("logout success!");
     }
   });
   await auth.login("oauth2:https://graffiti.actor", "test-login", []);
 
   await new Promise((resolve) => setTimeout(resolve, 10000));
 }
-test();
+// test();
