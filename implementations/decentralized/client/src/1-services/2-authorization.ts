@@ -57,7 +57,7 @@ export class Authorization {
       const data: z.infer<typeof OAuth2LoginDataSchema> = {
         loginId,
         redirectUri,
-        configuration,
+        authorizationEndpoint,
         state,
         serviceEndpoints,
       };
@@ -210,8 +210,13 @@ export class Authorization {
       return;
     }
 
-    const { loginId, redirectUri, configuration, state, serviceEndpoints } =
-      parseResult.data;
+    const {
+      loginId,
+      redirectUri,
+      authorizationEndpoint,
+      state,
+      serviceEndpoints,
+    } = parseResult.data;
 
     // Make sure that we redirected back to the correct page
     const expectedUrl = new URL(redirectUri);
@@ -229,8 +234,17 @@ export class Authorization {
     // Restore the query parameters to the expected URL,
     // removing the code, state, and error parameters
     window.history.replaceState({}, document.title, expectedUrl.toString());
-
     window.localStorage.removeItem(LOCAL_STORAGE_OAUTH2_KEY);
+
+    let configuration: any;
+    try {
+      configuration = await this.getAuthorizationConfiguration(
+        authorizationEndpoint,
+      );
+    } catch (e) {
+      return this.dispatchError("login", e, loginId);
+    }
+
     await this.onCallbackUrl({
       loginId,
       callbackUrl,
@@ -390,7 +404,7 @@ export type InitializedEvent = CustomEvent<
 const OAuth2LoginDataSchema = z.object({
   loginId: z.string(),
   redirectUri: z.url(),
-  configuration: z.any(),
+  authorizationEndpoint: z.url(),
   state: z.string(),
   serviceEndpoints: z.array(z.url()),
 });
