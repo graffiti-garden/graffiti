@@ -4,7 +4,6 @@ import {
   buildAuthorizationUrl,
   authorizationCodeGrant,
   tokenRevocation,
-  type TokenEndpointResponse,
 } from "openid-client";
 import { z } from "zod";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -30,19 +29,23 @@ export class Authorization {
     })();
   }
 
-  async login(
+  async login(...args: Parameters<typeof this.login_>): Promise<void> {
+    try {
+      this.login_(...args);
+    } catch (e) {
+      const error = e instanceof Error ? e : new Error("Unknown error");
+      const detail: LoginEvent["detail"] = { loginId: args[1], error };
+      this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
+    }
+  }
+  protected async login_(
     authorizationEndpoint: string,
     loginId: string,
     serviceEndpoints: string[],
   ): Promise<void> {
-    let configuration: any;
-    try {
-      configuration = await this.getAuthorizationConfiguration(
-        authorizationEndpoint,
-      );
-    } catch (e) {
-      return this.dispatchError("login", e, loginId);
-    }
+    const configuration = await this.getAuthorizationConfiguration(
+      authorizationEndpoint,
+    );
 
     const scope = serviceEndpoints.map(encodeURIComponent).join(" ");
     const state = randomState();
@@ -79,11 +82,7 @@ export class Authorization {
         try {
           server.close();
         } catch {}
-        return this.dispatchError(
-          "login",
-          new Error("Failed to start local oauth callback server."),
-          loginId,
-        );
+        throw new Error("Failed to start local oauth callback server.");
       }
 
       const address = server.address();
@@ -91,11 +90,7 @@ export class Authorization {
         try {
           server.close();
         } catch {}
-        return this.dispatchError(
-          "login",
-          new Error("Failed to get local oauth callback server address."),
-          loginId,
-        );
+        throw new Error("Failed to get local oauth callback server address.");
       }
       redirectUri =
         typeof address === "string"
@@ -103,18 +98,13 @@ export class Authorization {
           : `http://${address.family === "IPv6" ? `[${address.address}]` : address.address}:${address.port}`;
 
       // Wait for a callback request
-      waitForCallback = new Promise<void>((resolve) => {
+      waitForCallback = new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(
           () => {
             try {
               server.close();
             } catch {}
-            this.dispatchError(
-              "login",
-              new Error("OAuth callback timed out."),
-              loginId,
-            );
-            resolve();
+            reject("Oauth callback timed out.");
           },
           5 * 60 * 1000, // 5 minutes
         );
@@ -128,10 +118,10 @@ export class Authorization {
         });
 
         // Set up the actual request handler
-        const onRequest = (req: IncomingMessage, res: ServerResponse) => {
+        const onRequest = async (req: IncomingMessage, res: ServerResponse) => {
           try {
             const callbackUrl = new URL(req.url ?? "/", redirectUri);
-            this.onCallbackUrl({
+            await this.onCallbackUrl({
               loginId,
               callbackUrl,
               configuration,
@@ -146,6 +136,8 @@ export class Authorization {
             res.statusCode = 500;
             res.setHeader("Content-Type", "text/plain");
             res.end("Error processing OAuth callback.");
+
+            throw e;
           } finally {
             clearTimeout(timeout);
             server.off("request", onRequest);
@@ -163,16 +155,11 @@ export class Authorization {
     }
 
     // Construct the authorization URL
-    let redirectTo: URL;
-    try {
-      redirectTo = buildAuthorizationUrl(configuration, {
-        scope,
-        redirect_uri: redirectUri,
-        state,
-      });
-    } catch (e) {
-      return this.dispatchError("login", e, loginId);
-    }
+    const redirectTo = buildAuthorizationUrl(configuration, {
+      scope,
+      redirect_uri: redirectUri,
+      state,
+    });
 
     // Either redirect (browser) or print the URL and wait (node)
     if (typeof window !== "undefined") {
@@ -218,40 +205,41 @@ export class Authorization {
       serviceEndpoints,
     } = parseResult.data;
 
-    // Make sure that we redirected back to the correct page
-    const expectedUrl = new URL(redirectUri);
-    const callbackUrl = new URL(window.location.href);
-    if (
-      expectedUrl.pathname !== callbackUrl.pathname ||
-      expectedUrl.hash !== callbackUrl.hash
-    )
-      return;
-
-    // Make sure it is actually an oauth call
-    const params = callbackUrl.searchParams;
-    if (!params.has("code") && !params.has("error")) return;
-
-    // Restore the query parameters to the expected URL,
-    // removing the code, state, and error parameters
-    window.history.replaceState({}, document.title, expectedUrl.toString());
-    window.localStorage.removeItem(LOCAL_STORAGE_OAUTH2_KEY);
-
-    let configuration: any;
     try {
-      configuration = await this.getAuthorizationConfiguration(
+      // Make sure that we redirected back to the correct page
+      const expectedUrl = new URL(redirectUri);
+      const callbackUrl = new URL(window.location.href);
+      if (
+        expectedUrl.pathname !== callbackUrl.pathname ||
+        expectedUrl.hash !== callbackUrl.hash
+      )
+        return;
+
+      // Make sure it is actually an oauth call
+      const params = callbackUrl.searchParams;
+      if (!params.has("code") && !params.has("error")) return;
+
+      // Restore the query parameters to the expected URL,
+      // removing the code, state, and error parameters
+      window.history.replaceState({}, document.title, expectedUrl.toString());
+      window.localStorage.removeItem(LOCAL_STORAGE_OAUTH2_KEY);
+
+      const configuration = await this.getAuthorizationConfiguration(
         authorizationEndpoint,
       );
-    } catch (e) {
-      return this.dispatchError("login", e, loginId);
-    }
 
-    await this.onCallbackUrl({
-      loginId,
-      callbackUrl,
-      configuration,
-      expectedState: state,
-      serviceEndpoints,
-    });
+      await this.onCallbackUrl({
+        loginId,
+        callbackUrl,
+        configuration,
+        expectedState: state,
+        serviceEndpoints,
+      });
+    } catch (e) {
+      const error = e instanceof Error ? e : new Error("Unknown error");
+      const detail: LoginEvent["detail"] = { loginId, error };
+      this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
+    }
   }
 
   protected async onCallbackUrl(args: {
@@ -268,14 +256,10 @@ export class Authorization {
       expectedState,
       serviceEndpoints,
     } = args;
-    let response: TokenEndpointResponse;
-    try {
-      response = await authorizationCodeGrant(configuration, callbackUrl, {
-        expectedState,
-      });
-    } catch (e) {
-      return this.dispatchError("login", e, loginId);
-    }
+
+    const response = await authorizationCodeGrant(configuration, callbackUrl, {
+      expectedState,
+    });
 
     const token = response.access_token;
     const scope = response.scope;
@@ -286,11 +270,7 @@ export class Authorization {
     if (
       !serviceEndpoints.every((endpoint) => grantedEndpoints.includes(endpoint))
     ) {
-      return this.dispatchError(
-        "login",
-        new Error("Not all requested service endpoints were granted."),
-        loginId,
-      );
+      throw new Error("Not all requested service endpoints were granted.");
     }
 
     // Send a logged in event
@@ -304,43 +284,25 @@ export class Authorization {
   }
 
   async logout(authorizationEndpoint: string, token: string): Promise<void> {
-    let configuration: any;
     try {
-      configuration = await this.getAuthorizationConfiguration(
-        authorizationEndpoint,
-      );
+      this.logout_(authorizationEndpoint, token);
     } catch (e) {
-      return this.dispatchError("logout", e, token);
+      const error = e instanceof Error ? e : new Error("Unknown error");
+      const detail: LogoutEvent["detail"] = { token, error };
+      this.eventTarget.dispatchEvent(new CustomEvent("logout", { detail }));
     }
-
-    try {
-      await tokenRevocation(configuration, token);
-    } catch (e) {
-      return this.dispatchError("logout", e, token);
-    }
-
+  }
+  protected async logout_(
+    authorizationEndpoint: string,
+    token: string,
+  ): Promise<void> {
+    const configuration = await this.getAuthorizationConfiguration(
+      authorizationEndpoint,
+    );
+    await tokenRevocation(configuration, token);
     this.eventTarget.dispatchEvent(
       new CustomEvent("logout", { detail: { token } }),
     );
-  }
-
-  protected dispatchError(type: "login" | "logout", e: unknown, id: string) {
-    let detail: LoginEvent["detail"] | LogoutEvent["detail"];
-    const error = e instanceof Error ? e : new Error("Unknown error");
-    if (type === "login") {
-      const loginDetail: LoginEvent["detail"] = {
-        loginId: id,
-        error,
-      };
-      detail = loginDetail;
-    } else {
-      const logoutDetail: LogoutEvent["detail"] = {
-        token: id,
-        error,
-      };
-      detail = logoutDetail;
-    }
-    this.eventTarget.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
   protected async getAuthorizationConfiguration(
@@ -411,6 +373,7 @@ const OAuth2LoginDataSchema = z.object({
 
 async function test() {
   const auth = new Authorization();
+  const authorizationEndpoint = "oauth2:https://graffiti.actor";
   auth.eventTarget.addEventListener("initialized", (e) => {
     if (!(e instanceof CustomEvent)) return;
     const parsed = InitializedEventDetailSchema.parse(e.detail);
@@ -428,7 +391,7 @@ async function test() {
     } else {
       console.log("login success:", parsed);
       console.log("logging out...");
-      await auth.logout("oauth2:https://graffiti.actor", parsed.token);
+      await auth.logout(authorizationEndpoint, parsed.token);
     }
   });
   auth.eventTarget.addEventListener("logout", (e) => {
@@ -440,8 +403,8 @@ async function test() {
       console.log("logout success!");
     }
   });
-  await auth.login("oauth2:https://graffiti.actor", "test-login", []);
+  await auth.login(authorizationEndpoint, "test-login", []);
 
   await new Promise((resolve) => setTimeout(resolve, 10000));
 }
-// test();
+test();
