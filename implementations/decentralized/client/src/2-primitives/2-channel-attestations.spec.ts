@@ -66,6 +66,12 @@ for (const method of allowedAttestationMethods) {
         channelPublicId,
       );
       expect(isValid).toBe(true);
+
+      const channelPublicIdSeperate = await channelAttestations.register(
+        method,
+        channel,
+      );
+      expect(channelPublicId).toEqual(channelPublicIdSeperate);
     });
 
     test("Invalid attestation with wrong actor", async () => {
