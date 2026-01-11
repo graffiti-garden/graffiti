@@ -5,21 +5,22 @@ import {
 } from "./0-string-encoding";
 import { randomBytes } from "@noble/hashes/utils.js";
 
-console.log(STRING_ENCODER_METHOD_BASE64URL);
 const stringEncodingMethods = [STRING_ENCODER_METHOD_BASE64URL];
 const stringEncoder = new StringEncoder();
 
-test("Invalid string decoding method", () => {
+test("Invalid string decoding method", async () => {
   const bytes = randomBytes();
-  expect(() => stringEncoder.encode("invalid-method", bytes)).toThrow();
+  await expect(() =>
+    stringEncoder.encode("invalid-method", bytes),
+  ).rejects.toThrow();
 });
 
 for (const method of stringEncodingMethods) {
   describe(`String Encoding Method: ${method}`, () => {
-    test("encodes and decodes strings correctly", () => {
+    test("encodes and decodes strings correctly", async () => {
       const bytes = randomBytes();
-      const encoded = stringEncoder.encode(method, bytes);
-      const decoded = stringEncoder.decode(encoded);
+      const encoded = await stringEncoder.encode(method, bytes);
+      const decoded = await stringEncoder.decode(encoded);
 
       expect(decoded).toEqual(bytes);
       expect(decoded).not.toEqual(randomBytes());
