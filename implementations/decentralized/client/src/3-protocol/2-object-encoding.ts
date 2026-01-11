@@ -1,8 +1,4 @@
-import {
-  type GraffitiObjectBase,
-  type GraffitiPostObject,
-} from "@graffiti-garden/api";
-import { StorageBuckets } from "../1-services/3-storage-buckets";
+import { type GraffitiPostObject } from "@graffiti-garden/api";
 import type { ChannelAttestations } from "../2-primitives/2-channel-attestations";
 import type { AllowedAttestations } from "../2-primitives/3-allowed-attestations";
 import {
@@ -12,7 +8,6 @@ import {
 import { randomBytes } from "@noble/hashes/utils.js";
 import { encode, decode } from "@ipld/dag-cbor";
 import { z } from "zod";
-import type { DecentralizedIdentifiers } from "../1-services/1-dids";
 import { CHANNEL_ATTESTATION_METHOD_SHA256_ED25519 } from "../2-primitives/2-channel-attestations";
 import { ALLOWED_ATTESTATION_METHOD_HMAC_SHA256 } from "../2-primitives/3-allowed-attestations";
 import {
@@ -29,12 +24,8 @@ import {
 // signal's group chat limit of 1000
 const MAX_OBJECT_SIZE_BYTES = 32 * 1024;
 
-export class ObjectStorage {
+export class ObjectEncoding {
   constructor(
-    readonly services: {
-      readonly dids: DecentralizedIdentifiers;
-      readonly storageBuckets: StorageBuckets;
-    },
     readonly primitives: {
       readonly stringEncoder: StringEncoder;
       readonly channelAttestations: ChannelAttestations;
@@ -43,7 +34,7 @@ export class ObjectStorage {
     },
   ) {}
 
-  async encodeObject(partialObject: GraffitiPostObject<{}>, actor: string) {
+  async encode(partialObject: GraffitiPostObject<{}>, actor: string) {
     // Create a verifiable attestation that the actor
     // knows the included channels without
     // directly revealing any channel to anyone who doesn't
@@ -127,7 +118,7 @@ export class ObjectStorage {
     };
   }
 
-  async validateObject(
+  async validate(
     objectValue: {},
     objectUrl: string,
     objectBytes: Uint8Array,
@@ -172,7 +163,12 @@ export class ObjectStorage {
     const channelAttestations = objectData[CHANNEL_ATTESTATIONS_PROPERTY];
     const allowedAttestations = objectData[ALLOWED_ATTESTATIONS_PROPERTY];
 
-    if (JSON.stringify(objectValue) !== JSON.stringify(value)) {
+    const valueBytes = encode(value);
+    const expectedValueBytes = encode(objectValue);
+    if (
+      valueBytes.length !== expectedValueBytes.length ||
+      !valueBytes.every((b, i) => b === expectedValueBytes[i])
+    ) {
       throw new Error("Object value does not match storage value");
     }
 
