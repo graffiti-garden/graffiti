@@ -3,7 +3,7 @@ export const STRING_ENCODER_METHOD_BASE64URL = "base64url";
 const STRING_ENCODER_PREFIX_BASE64URL = "u";
 
 export class StringEncoder {
-  encode(method: string, bytes: Uint8Array): string {
+  async encode(method: string, bytes: Uint8Array): Promise<string> {
     if (method !== STRING_ENCODER_METHOD_BASE64URL) {
       throw new Error(`Unsupported string encoding method: ${method}`);
     }
@@ -18,7 +18,7 @@ export class StringEncoder {
     return STRING_ENCODER_PREFIX_BASE64URL + encoded;
   }
 
-  decode(base64Url: string): Uint8Array {
+  async decode(base64Url: string): Promise<Uint8Array> {
     if (!base64Url.startsWith(STRING_ENCODER_PREFIX_BASE64URL)) {
       throw new Error(`Unsupported string encoding prefix: ${base64Url[0]}`);
     }

@@ -1,6 +1,6 @@
 import { sha256 } from "@noble/hashes/webcrypto.js";
 
-const CONTENT_ADDRESS_METHOD_SHA256 = "sha2-256";
+export const CONTENT_ADDRESS_METHOD_SHA256 = "sha2-256";
 
 // Multihash code and length for SHA2-256
 // https://multiformats.io/multihash/#sha2-256---256-bits-aka-sha256
