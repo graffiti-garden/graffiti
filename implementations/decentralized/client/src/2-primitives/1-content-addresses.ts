@@ -4,8 +4,8 @@ export const CONTENT_ADDRESS_METHOD_SHA256 = "sha2-256";
 
 // Multihash code and length for SHA2-256
 // https://multiformats.io/multihash/#sha2-256---256-bits-aka-sha256
-const MULTIHASH_CODE_SHA256 = 0x12;
-const MULTIHASH_LENGTH_SHA256 = 32;
+export const MULTIHASH_CODE_SHA256 = 0x12;
+export const MULTIHASH_LENGTH_SHA256 = 32;
 
 export class ContentAddresses {
   async register(
