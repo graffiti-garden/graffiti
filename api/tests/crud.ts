@@ -62,7 +62,12 @@ export const graffitiCRUDTests = (
         expect(gotten.actor).toEqual(previous.actor);
 
         // Delete it
-        await graffiti.delete(gotten, session);
+        const deleted = await graffiti.delete(gotten, session);
+        expect(deleted.value).toEqual(value);
+        expect(deleted.channels).toEqual(channels);
+        expect(deleted.allowed).toBeUndefined();
+        expect(deleted.actor).toEqual(session.actor);
+        expect(deleted.url).toEqual(previous.url);
 
         // Get is not found
         await expect(graffiti.get(gotten, {})).rejects.toBeInstanceOf(

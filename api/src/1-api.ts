@@ -199,7 +199,7 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session: GraffitiSession,
-  ): Promise<void>;
+  ): Promise<GraffitiObjectBase>;
 
   /**
    * Discovers objects created by any actor that are contained
