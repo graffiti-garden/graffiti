@@ -1,8 +1,4 @@
 import {
-  GraffitiErrorNotFound,
-  GraffitiErrorTooLarge,
-} from "@graffiti-garden/api";
-import {
   fetchWithErrorHandling,
   getAuthorizationEndpoint,
   verifyHTTPSEndpoint,
@@ -123,7 +119,7 @@ export class StorageBuckets {
     let cursor: string | undefined = undefined;
     while (true) {
       const response = await fetchWithErrorHandling(
-        cursor ? `${url}?cursor=${cursor}` : url,
+        cursor ? `${url}?cursor=${encodeURIComponent(cursor)}` : url,
         {
           headers: {
             Authorization: `Bearer ${authorizationToken}`,
