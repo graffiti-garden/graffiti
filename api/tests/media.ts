@@ -58,7 +58,7 @@ export const graffitiMediaTests = (
         const mediaUrl = await graffiti.postMedia({ data }, session);
 
         const media = await graffiti.getMedia(mediaUrl, {
-          accept: "text/*",
+          types: ["application/json", "text/*"],
         });
         expect(await media.data.text()).toEqual(text);
         expect(media.data.type).toEqual("text/plain");
@@ -73,7 +73,7 @@ export const graffitiMediaTests = (
 
         await expect(
           graffiti.getMedia(mediaUrl, {
-            accept: "image/*",
+            types: ["image/*"],
           }),
         ).rejects.toThrow(GraffitiErrorNotAcceptable);
       });

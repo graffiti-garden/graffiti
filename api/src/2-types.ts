@@ -423,12 +423,14 @@ export type GraffitiMedia = {
 
 export type GraffitiPostMedia = Pick<GraffitiMedia, "data" | "allowed">;
 
-export type GraffitiMediaRequirements = {
+export type GraffitiMediaAccept = {
   /**
-   * A list of acceptable media types for the retrieved media,
-   * formatted as like an [HTTP Accept header](https://httpwg.org/specs/rfc9110.html#field.accept)
+   * A list of acceptable media types for the retrieved media.
+   * Each type in the list may be of the form `<type>/<subtype>`,
+   * `<type>/*`, or `&#42;/*`, just as types are formatted in
+   * an [HTTP Accept header](https://httpwg.org/specs/rfc9110.html#field.accept).
    */
-  accept?: string;
+  types?: string[];
   /**
    * The maximum acceptable size, in bytes, of the media.
    */
