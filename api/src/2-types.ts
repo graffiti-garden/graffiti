@@ -350,7 +350,7 @@ export type GraffitiObjectStreamContinue<Schema extends JSONSchema> =
 export type GraffitiLoginEvent = CustomEvent<
   | {
       error: Error;
-      session?: undefined;
+      session?: GraffitiSession;
     }
   | {
       error?: undefined;
