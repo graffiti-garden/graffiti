@@ -8,10 +8,11 @@ import type {
   GraffitiObjectStreamContinueEntry,
   GraffitiObjectStreamContinue,
   GraffitiObjectUrl,
+  GraffitiObject,
 } from "@graffiti-garden/api";
 import {
+  GraffitiErrorInvalidSchema,
   GraffitiErrorNotFound,
-  compileGraffitiObjectSchema,
   isActorAllowedGraffitiObject,
   maskGraffitiObject,
   unpackObjectUrl,
@@ -158,11 +159,11 @@ export class GraffitiSynchronize implements Graffiti {
               isActorAllowedGraffitiObject(objectUpdate.object, session))
           ) {
             // Deep clone the object to prevent mutation
-            const object = JSON.parse(
+            let object = JSON.parse(
               JSON.stringify(objectUpdate.object),
             ) as GraffitiObjectBase;
             if (!this.options.omniscient) {
-              maskGraffitiObject(object, channels, session);
+              object = maskGraffitiObject(object, channels, session?.actor);
             }
             if (validate(object)) {
               push({ object });
@@ -373,4 +374,23 @@ export class GraffitiSynchronize implements Graffiti {
     const iterator = this.graffiti.continueDiscover(...args);
     return this.objectStreamContinue<{}>(iterator);
   };
+}
+
+function compileGraffitiObjectSchema<Schema extends JSONSchema>(
+  ajv: Ajv,
+  schema: Schema,
+) {
+  try {
+    // Force the validation guard because
+    // it is too big for the type checker.
+    // Fortunately json-schema-to-ts is
+    // well tested against ajv.
+    return ajv.compile(schema) as (
+      data: GraffitiObjectBase,
+    ) => data is GraffitiObject<Schema>;
+  } catch (error) {
+    throw new GraffitiErrorInvalidSchema(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
