@@ -1,34 +1,11 @@
-import type { JSONSchema } from "json-schema-to-ts";
-import type { Ajv } from "ajv";
-import { GraffitiErrorInvalidSchema } from "./3-errors";
 import type {
   GraffitiObjectBase,
-  GraffitiObject,
   GraffitiObjectUrl,
   GraffitiSession,
 } from "./2-types";
 
 export function unpackObjectUrl(url: string | GraffitiObjectUrl) {
   return typeof url === "string" ? url : url.url;
-}
-
-export function compileGraffitiObjectSchema<Schema extends JSONSchema>(
-  ajv: Ajv,
-  schema: Schema,
-) {
-  try {
-    // Force the validation guard because
-    // it is too big for the type checker.
-    // Fortunately json-schema-to-ts is
-    // well tested against ajv.
-    return ajv.compile(schema) as (
-      data: GraffitiObjectBase,
-    ) => data is GraffitiObject<Schema>;
-  } catch (error) {
-    throw new GraffitiErrorInvalidSchema(
-      error instanceof Error ? error.message : undefined,
-    );
-  }
 }
 
 export function isActorAllowedGraffitiObject(
