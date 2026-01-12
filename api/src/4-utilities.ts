@@ -50,16 +50,43 @@ export function isActorAllowedGraffitiObject(
 export function maskGraffitiObject(
   object: GraffitiObjectBase,
   channels: string[],
-  session?: GraffitiSession | null,
-): void {
-  // If the actor is not the creator, mask the object.
-  if (object.actor !== session?.actor) {
-    // If there is an allowed list, mask it to only include the actor
-    // (This assumes the actor is already allowed to access the object)
-    object.allowed = object.allowed && session ? [session.actor] : undefined;
-    // Mask the channels to only include the channels that are being queried
-    object.channels = object.channels.filter((channel) =>
-      channels.includes(channel),
+  actor?: string | null,
+): GraffitiObjectBase {
+  // If the actor is the creator, return the object as is
+  if (actor === object.actor) return object;
+
+  // If there is an allowed list, mask it to only include the actor
+  // (This assumes the actor is already allowed to access the object)
+  const allowedMasked = object.allowed && actor ? [actor] : undefined;
+  // Mask the channels to only include the channels that are being queried
+  const channelsMasked = object.channels.filter((c) => channels.includes(c));
+
+  return {
+    ...object,
+    allowed: allowedMasked,
+    channels: channelsMasked,
+  };
+}
+
+export function isMediaAcceptable(
+  mediaType: string,
+  acceptableMediaTypes: string[],
+): boolean {
+  const [type, subtype] = mediaType.toLowerCase().split(";")[0].split("/");
+
+  if (!type || !subtype) return false;
+
+  return acceptableMediaTypes.some((acceptable) => {
+    const [accType, accSubtype] = acceptable
+      .toLowerCase()
+      .split(";")[0]
+      .split("/");
+
+    if (!accType || !accSubtype) return false;
+
+    return (
+      (accType === type || accType === "*") &&
+      (accSubtype === subtype || accSubtype === "*")
     );
-  }
+  });
 }

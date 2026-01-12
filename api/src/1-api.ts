@@ -8,7 +8,7 @@ import type {
   GraffitiObjectStreamContinue,
   GraffitiMedia,
   GraffitiPostMedia,
-  GraffitiMediaRequirements,
+  GraffitiMediaAccept,
 } from "./2-types";
 import type { JSONSchema } from "json-schema-to-ts";
 
@@ -355,9 +355,9 @@ export abstract class Graffiti {
      */
     mediaUrl: string,
     /**
-     * A set of requirements the retrieved media must meet.
+     * A specification for what types and sizes of media are acceptable.
      */
-    requirements: GraffitiMediaRequirements,
+    accept: GraffitiMediaAccept,
     /**
      * An implementation-specific object with information to authenticate the
      * {@link GraffitiObjectBase.actor | `actor`}.
