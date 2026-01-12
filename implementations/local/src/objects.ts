@@ -13,9 +13,13 @@ import {
   unpackObjectUrl,
   maskGraffitiObject,
   isActorAllowedGraffitiObject,
-  compileGraffitiObjectSchema,
 } from "@graffiti-garden/api";
-import { randomBase64, decodeObjectUrl, encodeObjectUrl } from "./utilities.js";
+import {
+  randomBase64,
+  decodeObjectUrl,
+  encodeObjectUrl,
+  compileGraffitiObjectSchema,
+} from "./utilities.js";
 import type Ajv from "ajv";
 
 /**
@@ -166,13 +170,13 @@ export class GraffitiLocalObjects {
 
     // Mask out the allowed list and channels
     // if the user is not the owner
-    maskGraffitiObject(object, [], session);
+    const masked = maskGraffitiObject(object, [], session?.actor);
 
     const validate = compileGraffitiObjectSchema(await this.ajv, schema);
-    if (!validate(object)) {
+    if (!validate(masked)) {
       throw new GraffitiErrorSchemaMismatch();
     }
-    return object;
+    return masked;
   };
 
   delete: Graffiti["delete"] = async (...args) => {
@@ -206,7 +210,16 @@ export class GraffitiLocalObjects {
       throw new GraffitiErrorNotFound("Object not found.");
     }
 
-    return;
+    // Return the output
+    const { value, channels, allowed } = doc;
+    const object: GraffitiObjectBase = {
+      value,
+      channels,
+      allowed,
+      url,
+      actor,
+    };
+    return object;
   };
 
   post: Graffiti["post"] = async (...args) => {
@@ -313,16 +326,20 @@ export class GraffitiLocalObjects {
 
         if (!isActorAllowedGraffitiObject(object, session)) continue;
 
-        maskGraffitiObject(object, discoverChannels, session);
+        const masked = maskGraffitiObject(
+          object,
+          discoverChannels,
+          session?.actor,
+        );
 
-        if (!validate(object)) continue;
+        if (!validate(masked)) continue;
 
         yield tombstone
           ? {
               tombstone: true,
               object: { url },
             }
-          : { object };
+          : { object: masked };
       }
     }
 

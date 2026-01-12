@@ -1,6 +1,7 @@
 import {
   GraffitiErrorNotAcceptable,
   GraffitiErrorTooLarge,
+  isMediaAcceptable,
   type Graffiti,
   type JSONSchema,
 } from "@graffiti-garden/api";
@@ -12,7 +13,6 @@ import {
   blobToBase64,
   base64ToBlob,
 } from "./utilities";
-import Negotiator from "negotiator";
 
 const MEDIA_OBJECT_SCHEMA = {
   properties: {
@@ -58,7 +58,7 @@ export class GraffitiLocalMedia {
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
-    const [mediaUrl, requirements, session] = args;
+    const [mediaUrl, accept, session] = args;
     const { actor, id } = decodeMediaUrl(mediaUrl);
     const objectUrl = encodeObjectUrl(actor, id);
 
@@ -70,17 +70,16 @@ export class GraffitiLocalMedia {
 
     const { dataBase64, type, size } = object.value;
 
-    if (requirements?.maxBytes && size > requirements.maxBytes) {
+    if (accept?.maxBytes && size > accept.maxBytes) {
       throw new GraffitiErrorTooLarge("File size exceeds limit");
     }
 
     // Make sure it adheres to requirements.accept
-    if (requirements?.accept) {
-      const negotiator = new Negotiator({
-        headers: { accept: requirements.accept },
-      });
-      if (negotiator.mediaType([type]) !== type) {
-        throw new GraffitiErrorNotAcceptable(`Unsupported media type, ${type}`);
+    if (accept?.types) {
+      if (!isMediaAcceptable(type, accept.types)) {
+        throw new GraffitiErrorNotAcceptable(
+          `Unacceptable media type, ${type}`,
+        );
       }
     }
 
