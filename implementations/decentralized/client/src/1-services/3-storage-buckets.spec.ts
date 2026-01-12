@@ -1,11 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { StorageBuckets } from "./3-storage-buckets";
-import {
-  GraffitiErrorForbidden,
-  GraffitiErrorUnauthorized,
-  testLogin,
-  testLogout,
-} from "./utilities";
+import { GraffitiErrorUnauthorized, testLogin, testLogout } from "./utilities";
 import { GraffitiErrorNotFound } from "@graffiti-garden/api";
 
 const storageBucketEndpoint =
