@@ -2,14 +2,14 @@
 import { toRef } from "vue";
 import type {
     GraffitiSession,
-    GraffitiMediaRequirements,
+    GraffitiMediaAccept,
     GraffitiMedia,
 } from "@graffiti-garden/api";
 import { useGraffitiGetMedia } from "../composables/get-media";
 
 const props = defineProps<{
     url: string;
-    requirements: GraffitiMediaRequirements;
+    accept: GraffitiMediaAccept;
     session?: GraffitiSession | null;
 }>();
 
@@ -22,7 +22,7 @@ defineSlots<{
 
 const { media, poll } = useGraffitiGetMedia(
     toRef(props, "url"),
-    toRef(props, "requirements"),
+    toRef(props, "accept"),
     toRef(props, "session"),
 );
 

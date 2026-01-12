@@ -1,6 +1,6 @@
 import type {
   GraffitiMedia,
-  GraffitiMediaRequirements,
+  GraffitiMediaAccept,
   GraffitiSession,
 } from "@graffiti-garden/api";
 import { GraffitiErrorNotFound } from "@graffiti-garden/api";
@@ -32,7 +32,7 @@ import { useGraffitiSynchronize } from "../globals";
  */
 export function useGraffitiGetMedia(
   url: MaybeRefOrGetter<string>,
-  requirements: MaybeRefOrGetter<GraffitiMediaRequirements>,
+  accept: MaybeRefOrGetter<GraffitiMediaAccept>,
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ): {
   media: Ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>;
@@ -63,7 +63,7 @@ export function useGraffitiGetMedia(
   }
   watch(
     () => ({
-      args: [toValue(url), toValue(requirements), toValue(session)] as const,
+      args: [toValue(url), toValue(accept), toValue(session)] as const,
       pollCounter: pollCounter.value,
     }),
     async ({ args }, _prev, onInvalidate) => {
