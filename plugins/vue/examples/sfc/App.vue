@@ -199,7 +199,7 @@ function setFileToUpload(event: Event) {
                         >
                             <GraffitiGetMedia
                                 :url="attachment.url"
-                                :requirements="{}"
+                                :accept="{}"
                             />
                         </li>
                     </ul>
