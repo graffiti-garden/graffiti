@@ -283,26 +283,30 @@ export class Authorization {
     this.eventTarget.dispatchEvent(loginEvent);
   }
 
-  async logout(authorizationEndpoint: string, token: string): Promise<void> {
+  async logout(
+    authorizationEndpoint: string,
+    logoutId: string,
+    token: string,
+  ): Promise<void> {
     try {
-      this.logout_(authorizationEndpoint, token);
+      this.logout_(authorizationEndpoint, logoutId, token);
     } catch (e) {
       const error = e instanceof Error ? e : new Error("Unknown error");
-      const detail: LogoutEvent["detail"] = { token, error };
+      const detail: LogoutEvent["detail"] = { logoutId, error };
       this.eventTarget.dispatchEvent(new CustomEvent("logout", { detail }));
     }
   }
   protected async logout_(
     authorizationEndpoint: string,
+    logoutId: string,
     token: string,
   ): Promise<void> {
     const configuration = await this.getAuthorizationConfiguration(
       authorizationEndpoint,
     );
     await tokenRevocation(configuration, token);
-    this.eventTarget.dispatchEvent(
-      new CustomEvent("logout", { detail: { token } }),
-    );
+    const detail: LogoutEvent["detail"] = { logoutId };
+    this.eventTarget.dispatchEvent(new CustomEvent("logout", { detail }));
   }
 
   protected async getAuthorizationConfiguration(
@@ -346,7 +350,7 @@ export const LoginEventDetailSchema = z
   );
 
 export const LogoutEventDetailSchema = z.object({
-  token: z.string(),
+  logoutId: z.string(),
   error: z.instanceof(Error).optional(),
 });
 
