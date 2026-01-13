@@ -1,7 +1,6 @@
 import { afterAll, assert, describe, expect, test } from "vitest";
 import { Inboxes } from "./4-inboxes";
 import { GraffitiErrorUnauthorized, testLogin, testLogout } from "./utilities";
-import { GraffitiErrorNotFound } from "@graffiti-garden/api";
 import type { JSONSchema } from "json-schema-to-ts";
 
 const inboxEndpoint =

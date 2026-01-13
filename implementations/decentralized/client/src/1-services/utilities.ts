@@ -128,6 +128,6 @@ export async function testLogout(serviceEndpoint: string, token: string) {
       5 * 60 * 1000,
     ); // 5 minutes timeout
 
-    auth.logout(authorizationEndpoint, token);
+    auth.logout(authorizationEndpoint, "", token);
   });
 }
