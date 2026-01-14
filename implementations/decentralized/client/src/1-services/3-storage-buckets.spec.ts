@@ -4,7 +4,7 @@ import { GraffitiErrorUnauthorized, testLogin, testLogout } from "./utilities";
 import { GraffitiErrorNotFound } from "@graffiti-garden/api";
 
 const storageBucketEndpoint =
-  "https://graffiti.actor/s/uM2tE1r8c2rWMcvK05TXTwtyGkFn4n6yCK49rPIBWpw";
+  "https://localhost:5173/s/tpshccdtjLFRo8n-t415F_W2uYLCzjeXa601ZU6OUWE";
 
 describe("Storage buckets", async () => {
   const token = await testLogin(storageBucketEndpoint);
@@ -68,10 +68,10 @@ describe("Storage buckets", async () => {
     ).rejects.toThrow(GraffitiErrorUnauthorized);
   });
 
-  test.skip("export", async () => {
+  test("export", async () => {
     // Put a whole bunch of stuff so the export needs to page
     const keys = new Set<string>();
-    for (let i = 0; i < 111; i++) {
+    for (let i = 0; i < 256; i++) {
       const key = Math.random().toString(36).substring(2, 15);
       keys.add(key);
 

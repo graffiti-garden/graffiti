@@ -53,60 +53,92 @@ export class StorageBuckets {
 
     const response = await fetchWithErrorHandling(url);
 
-    const contentLengthHeader = response.headers.get("Content-Length");
-    if (!contentLengthHeader) {
-      throw new Error("Missing Content-Length header in response");
-    }
-    const contentLength = contentLengthHeader
-      ? Number(contentLengthHeader)
-      : undefined;
-    if (
-      !contentLength ||
-      !Number.isFinite(contentLength) ||
-      contentLength < 0
-    ) {
-      throw new Error("Invalid Content-Length header in response");
-    }
-    if (maxBytes && contentLength > maxBytes) {
-      throw new Error("Value exceeds maximum byte limit");
-    }
-
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error("Failed to read value from storage bucket");
     }
 
-    // Stream the bytes
-    const out = new Uint8Array(contentLength);
-    let offset = 0;
-    let completed = false;
+    const contentLengthHeader = response.headers.get("Content-Length");
+    const parsedContentLength = contentLengthHeader
+      ? Number(contentLengthHeader)
+      : undefined;
+
+    const hasValidContentLength =
+      !!parsedContentLength &&
+      !!Number.isFinite(parsedContentLength) &&
+      parsedContentLength >= 0;
+
+    // Fast path: Content-Length exists and is valid
+    if (hasValidContentLength) {
+      const contentLength = parsedContentLength!;
+      if (maxBytes !== undefined && contentLength > maxBytes) {
+        throw new Error("Value exceeds maximum byte limit");
+      }
+
+      const out = new Uint8Array(contentLength);
+      let offset = 0;
+      let completed = false;
+
+      try {
+        while (offset <= out.length) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            completed = true;
+            break;
+          }
+          if (!value || value.length === 0) continue;
+
+          const nextOffset = offset + value.length;
+          if (nextOffset > out.length) {
+            throw new Error("Received more data than expected");
+          }
+
+          out.set(value, offset);
+          offset = nextOffset;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      if (!completed) {
+        throw new Error("Failed to read complete value from storage bucket");
+      }
+
+      return offset === contentLength ? out : out.slice(0, offset);
+    }
+
+    // Fallback path: no (usable) Content-Length
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+
     try {
-      while (offset <= out.length) {
+      while (true) {
         const { done, value } = await reader.read();
 
-        if (done) {
-          completed = true;
-          break;
-        }
-        if (!value) continue;
+        if (done) break;
+        if (!value || value.length === 0) continue;
 
-        offset += value.length;
-        if (offset > out.length) {
-          throw new Error("Received more data than expected");
+        total += value.length;
+        if (maxBytes !== undefined && total > maxBytes) {
+          throw new Error("Value exceeds maximum byte limit");
         }
 
-        out.set(value, offset - value.length);
+        // Copy because some implementations reuse the underlying buffer
+        chunks.push(value.slice());
       }
     } finally {
-      // Make sure we release the stream lock promptly
       reader.releaseLock();
     }
 
-    if (!completed) {
-      throw new Error("Failed to read complete value from storage bucket");
+    // Concatenate chunks into one Uint8Array
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      out.set(c, offset);
+      offset += c.length;
     }
-
-    return offset === contentLength ? out : out.slice(0, offset);
+    return out;
   }
 
   async *export(
