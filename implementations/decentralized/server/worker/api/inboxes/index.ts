@@ -1,33 +1,34 @@
 import { Hono, type Context } from "hono";
 import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
-import { verifySessionHeader } from "../../app/auth/session";
-import { sendMessage, labelMessage, queryMessages, exportMessages } from "./db";
-import { Validator } from "@cfworker/json-schema";
+import { getHeaderToken, verifySessionHeader } from "../../app/auth/session";
+import {
+  sendMessage,
+  labelMessage,
+  queryMessages,
+  exportMessages,
+  MessageSchema,
+  LabeledMessageSchema,
+} from "./db";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { augmentService, getId } from "../shared";
+import {
+  encode as dagCborEncode,
+  decode as dagCborDecode,
+} from "@ipld/dag-cbor";
+import { bodyLimit } from "hono/body-limit";
+import { TagsSchema } from "./db";
+import { encodeBase64, decodeBase64 } from "../../app/auth/utils";
+
+const MESSAGE_RETENTION_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAX_MESSAGE_SIZE_BYTES = 32 * 1024; // 32 KiB
 
 function getInboxId(context: Context<{ Bindings: Bindings }>) {
   return getId(context, "inbox");
 }
 
-const TagsSchema = z
-  .array(z.string())
-  .refine((tags) => new Set(tags).size === tags.length, {
-    message: "All tags must be unique, no duplicate values allowed",
-  })
-  .openapi({
-    description:
-      "A set of unique per-message tags. A message can only be queried by specifying one of its tags",
-  });
-
-const DataSchemaSchema = z.record(z.string(), z.any()).openapi({
+const ObjectSchemaSchema = z.looseObject({}).openapi({
   description: "A JSON Schema to filter the message data by.",
-});
-
-const MessageSchema = z.object({
-  tags: TagsSchema,
-  data: DataSchemaSchema,
 });
 
 const LabelSchema = z.int().min(0).openapi({
@@ -38,14 +39,27 @@ const LabelSchema = z.int().min(0).openapi({
 
 const SinceSeqSchema = z.int().min(0);
 
+const QueryBodySchema = z.object({
+  tags: TagsSchema,
+  objectSchema: ObjectSchemaSchema,
+});
+
 const QueryCursorSchema = z.object({
   sinceSeq: SinceSeqSchema,
   tags: TagsSchema,
-  dataSchema: DataSchemaSchema,
+  objectSchema: ObjectSchemaSchema,
+  createdAt: z.number(),
+});
+
+const QueryResultsSchema = z.object({
+  results: z.array(LabeledMessageSchema),
+  hasMore: z.boolean(),
+  cursor: z.string(),
 });
 
 const ExportCursorSchema = z.object({
   sinceSeq: SinceSeqSchema,
+  createdAt: z.number(),
 });
 
 const inboxes = new Hono<{ Bindings: Bindings }>();
@@ -61,7 +75,7 @@ const sendRoute = createRoute({
   request: {
     body: {
       content: {
-        "application/json": {
+        "application/cbor": {
           schema: MessageSchema,
         },
       },
@@ -74,7 +88,7 @@ const sendRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            messageId: z.string(),
+            id: z.string(),
           }),
         },
       },
@@ -84,7 +98,7 @@ const sendRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            messageId: z.string(),
+            id: z.string(),
           }),
         },
       },
@@ -92,12 +106,28 @@ const sendRoute = createRoute({
     404: { description: "Inbox not found" },
   },
 });
+inbox.use(
+  "/send",
+  bodyLimit({
+    maxSize: MAX_MESSAGE_SIZE_BYTES,
+    onError: (c) => {
+      throw new HTTPException(413, { message: "Body is too large." });
+    },
+  }),
+);
 inbox.openapi(sendRoute, async (c) => {
   const inboxId = getInboxId(c);
-  const announcement = c.req.valid("json");
-  const { messageId, created } = await sendMessage(c, inboxId, announcement);
-
-  return c.json({ messageId }, created ? 201 : 200);
+  const messageBlob = await c.req.blob();
+  const messageBytes = await messageBlob.arrayBuffer();
+  let message: z.infer<typeof MessageSchema>;
+  try {
+    const messageDecoded = dagCborDecode(messageBytes);
+    message = MessageSchema.parse(messageDecoded);
+  } catch (e) {
+    throw new HTTPException(400, { message: "Invalid message format" });
+  }
+  const { messageId, created } = await sendMessage(c, inboxId, message);
+  return c.json({ id: messageId }, created ? 201 : 200);
 });
 
 const labelRoute = createRoute({
@@ -114,7 +144,7 @@ const labelRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({
-            label: LabelSchema.min(1),
+            l: LabelSchema.min(1),
           }),
         },
       },
@@ -123,16 +153,7 @@ const labelRoute = createRoute({
   },
   security: [{ oauth2: [] }],
   responses: {
-    200: {
-      description: "Message labeled successfully",
-      content: {
-        "application/json": {
-          schema: z.object({
-            labeled: z.literal(true),
-          }),
-        },
-      },
-    },
+    200: { description: "Message labeled successfully" },
     401: { description: "Invalid authorization" },
     403: {
       description: "Cannot label an message in someone else's inbox",
@@ -145,43 +166,35 @@ inbox.openapi(labelRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
   const inboxId = getInboxId(c);
   const { messageId } = c.req.valid("param");
-  const { label } = c.req.valid("json");
+  const { l: label } = c.req.valid("json");
   await labelMessage(c, inboxId, messageId, label, userId);
-  return c.json({ labeled: true });
+  return c.body(null, 200);
 });
 
 const queryRoute = createRoute({
-  method: "get",
+  method: "post",
   path: "/query",
   tags: ["Inbox"],
   description: "Query messages that have been sent to the inbox",
   request: {
     query: z.object({
       cursor: z.string().optional(),
-      tag: z.preprocess((v) => {
-        if (!v) return v;
-        return Array.isArray(v) ? v : [v];
-      }, TagsSchema.optional()),
-      dataSchema: z.string().optional(),
     }),
+    body: {
+      content: {
+        "application/cbor": {
+          schema: QueryBodySchema,
+        },
+      },
+    },
   },
   security: [{ oauth2: [] }],
   responses: {
     200: {
       description: "Messages queried successfully",
       content: {
-        "application/json": {
-          schema: z.object({
-            results: z.array(
-              z.object({
-                messageId: z.string(),
-                message: MessageSchema,
-                label: LabelSchema,
-              }),
-            ),
-            hasMore: z.boolean(),
-            cursor: z.string(),
-          }),
+        "application/cbor": {
+          schema: QueryResultsSchema,
         },
       },
     },
@@ -192,114 +205,84 @@ const queryRoute = createRoute({
   },
 });
 inbox.openapi(queryRoute, async (c) => {
-  let userId: number | undefined = undefined;
+  let token: string | undefined = undefined;
   try {
-    const verification = await verifySessionHeader(c);
-    userId = verification.userId;
-  } catch {} // Not to worry if not logged in
+    token = await getHeaderToken(c);
+  } catch {} // Not to worry if not present
+
+  const userId = token ? (await verifySessionHeader(c)).userId : undefined;
 
   const inboxId = getInboxId(c);
 
-  let {
-    cursor,
-    tag: tags,
-    dataSchema: dataSchemaString,
-  } = c.req.valid("query");
+  const { cursor: cursorParam } = c.req.valid("query");
 
-  let dataSchema: {};
+  let objectSchema: {};
+  let tags: Uint8Array[] | undefined = undefined;
   let sinceSeq: number | undefined = undefined;
-  if (cursor) {
-    let cursorJSON: unknown;
+  if (cursorParam) {
+    let createdAt: number;
     try {
-      cursorJSON = JSON.parse(cursor);
+      const cursorBytes = decodeBase64(cursorParam);
+      const cursorDecoded = dagCborDecode(cursorBytes);
+      const cursorParsed = QueryCursorSchema.parse(cursorDecoded);
+      sinceSeq = cursorParsed.sinceSeq;
+      tags = cursorParsed.tags;
+      objectSchema = cursorParsed.objectSchema;
+      createdAt = cursorParsed.createdAt;
     } catch {
-      throw new HTTPException(400, { message: "Invalid cursor" });
+      throw new HTTPException(404, { message: "Invalid cursor" });
     }
-    const cursorParsed = QueryCursorSchema.safeParse(cursorJSON);
-    if (!cursorParsed.success) {
-      throw new HTTPException(400, { message: "Invalid cursor" });
+    if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
+      throw new HTTPException(404, { message: "Cursor expired" });
     }
-    tags = cursorParsed.data.tags;
-    dataSchema = cursorParsed.data.dataSchema;
-    sinceSeq = cursorParsed.data.sinceSeq;
-  } else if (tags && dataSchemaString) {
-    let dataSchemaJSON: unknown;
-    try {
-      dataSchemaJSON = JSON.parse(dataSchemaString);
-    } catch {
-      throw new HTTPException(400, { message: "Invalid dataSchema" });
-    }
-    const dataSchemaParsed = DataSchemaSchema.safeParse(dataSchemaJSON);
-    if (!dataSchemaParsed.success) {
-      throw new HTTPException(400, { message: "Invalid dataSchema" });
-    }
-    dataSchema = dataSchemaParsed.data;
   } else {
-    throw new HTTPException(400, {
-      message: "Must have cursor or both tags and dataSchema",
-    });
+    const queryParamsBlob = await c.req.blob();
+    const queryParamsBytes = await queryParamsBlob.arrayBuffer();
+    let queryParams: z.infer<typeof QueryBodySchema>;
+    try {
+      const queryParamsDecoded = dagCborDecode(queryParamsBytes);
+      queryParams = QueryBodySchema.parse(queryParamsDecoded);
+    } catch (e) {
+      throw new HTTPException(400, { message: "Invalid query body" });
+    }
+    tags = queryParams.tags;
+    objectSchema = queryParams.objectSchema;
   }
 
-  let validator: Validator;
-  try {
-    validator = new Validator(dataSchema, "2020-12");
-  } catch (error) {
-    throw new HTTPException(400, {
-      message: `Error compiling schema: ${error instanceof Error ? error.message : "unknown"}`,
-    });
-  }
+  const createdAt = Date.now();
 
   const { results, hasMore, lastSeq } = await queryMessages(
     c,
     inboxId,
     tags,
+    objectSchema,
     userId,
     sinceSeq,
   );
 
-  const validResults = results.filter(
-    (r) => validator.validate(r.message.data).valid,
-  );
-
   // Construct a cursor
-  const resultCursorJSON: z.infer<typeof QueryCursorSchema> = {
+  const cursorCBOR: z.infer<typeof QueryCursorSchema> = {
     tags,
-    dataSchema,
+    objectSchema,
     sinceSeq: lastSeq,
+    createdAt,
   };
-  const resultCursor = JSON.stringify(resultCursorJSON);
+  const cursorBytes = dagCborEncode(cursorCBOR);
+  const cursor = encodeBase64(cursorBytes);
 
-  const headers = new Headers();
-  headers.set("Vary", "Authorization");
-  if (hasMore) {
-    // If there are more announcements to return,
-    // the only thing that may happen to the results in *this*
-    // return, is that some of the announcements may be deleted,
-    // and their deletions may expire. Therefore, the cache can
-    // stay fresh as long as the expiration time, which is currently
-    // unlimited until a CRON job is set up to periodically remove
-    // expired announcements.
-    headers.set("Cache-Control", "private, max-age=604800");
-  } else {
-    // If this is not a "full" result, then fetching
-    // again will possibly return more results.
-    // However, the results may be used in a pinch as long
-    // as the expiration window above.
-    headers.set("Cache-Control", "private, max-age=0, stale-if-error=604800");
-  }
+  const queryResults: z.infer<typeof QueryResultsSchema> = {
+    results,
+    hasMore,
+    cursor,
+  };
 
-  return c.json(
-    {
-      results: validResults,
-      hasMore,
-      cursor: resultCursor,
-    },
-    { headers },
-  );
+  return c.body(dagCborEncode(queryResults).slice(), 200, {
+    "Content-Type": "application/cbor",
+  });
 });
 
 const exportRoute = createRoute({
-  method: "get",
+  method: "post",
   path: "/export",
   tags: ["Inbox"],
   description: "Export all messages sent to the inbox",
@@ -313,18 +296,8 @@ const exportRoute = createRoute({
     200: {
       description: "Exported messages successfully",
       content: {
-        "application/json": {
-          schema: z.object({
-            results: z.array(
-              z.object({
-                messageId: z.string(),
-                message: MessageSchema,
-                label: LabelSchema,
-              }),
-            ),
-            hasMore: z.boolean(),
-            cursor: z.string(),
-          }),
+        "application/cbor": {
+          schema: QueryResultsSchema,
         },
       },
     },
@@ -343,20 +316,22 @@ inbox.openapi(exportRoute, async (c) => {
 
   let sinceSeq: number | undefined = undefined;
   if (cursorParam) {
-    let cursorJSON: unknown;
+    let createdAt: number;
     try {
-      cursorJSON = JSON.parse(cursorParam);
+      const cursorBytes = decodeBase64(cursorParam);
+      const cursorDecoded = dagCborDecode(cursorBytes);
+      const cursorParsed = ExportCursorSchema.parse(cursorDecoded);
+      sinceSeq = cursorParsed.sinceSeq;
+      createdAt = cursorParsed.createdAt;
     } catch (error) {
-      throw new HTTPException(400, { message: "Invalid cursor." });
+      throw new HTTPException(404, { message: "Invalid cursor." });
     }
-
-    const cursorParsed = ExportCursorSchema.safeParse(cursorJSON);
-    if (!cursorParsed.success) {
-      throw new HTTPException(400, { message: "Invalid cursor." });
+    if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
+      throw new HTTPException(404, { message: "Cursor expired" });
     }
-    sinceSeq = cursorParsed.data.sinceSeq;
   }
 
+  const createdAt = Date.now();
   const { results, lastSeq, hasMore } = await exportMessages(
     c,
     inboxId,
@@ -364,21 +339,22 @@ inbox.openapi(exportRoute, async (c) => {
     sinceSeq,
   );
 
-  const cursorJSON: z.infer<typeof ExportCursorSchema> = {
+  const cursorCBOR: z.infer<typeof ExportCursorSchema> = {
     sinceSeq: lastSeq,
+    createdAt,
   };
-  const cursor = JSON.stringify(cursorJSON);
+  const cursorBytes = dagCborEncode(cursorCBOR);
+  const cursor = encodeBase64(cursorBytes);
 
-  // See above
-  const headers = new Headers();
-  headers.set("Vary", "Authorization");
-  if (hasMore) {
-    headers.set("Cache-Control", "private, max-age=604800");
-  } else {
-    headers.set("Cache-Control", "private, max-age=0, stale-if-error=604800");
-  }
+  const exportResults: z.infer<typeof QueryResultsSchema> = {
+    results,
+    hasMore,
+    cursor,
+  };
 
-  return c.json({ results, hasMore, cursor }, { headers });
+  return c.body(dagCborEncode(exportResults).slice(), 200, {
+    "Content-Type": "application/cbor",
+  });
 });
 
 inboxes.route("/:inboxId", inbox);

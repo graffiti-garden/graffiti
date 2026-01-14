@@ -28,7 +28,6 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260114.0",
-    "@graffiti-garden/api": "^1.0.4",
     "@types/http-proxy": "^1.17.17",
     "@vitejs/plugin-vue": "^6.0.3",
     "@vue/typescript-plugin": "^3.2.2",

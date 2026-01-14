@@ -1,11 +1,48 @@
 import type { Context } from "hono";
 import type { Bindings } from "../../env";
-import { encode as dagCborEncode } from "@ipld/dag-cbor";
+import {
+  encode as dagCborEncode,
+  decode as dagCborDecode,
+} from "@ipld/dag-cbor";
 import { HTTPException } from "hono/http-exception";
 import { LRUCache } from "lru-cache";
+import z from "zod";
+import { Validator } from "@cfworker/json-schema";
 
 const INBOX_QUERY_LIMIT = 100;
 const INBOX_INFO_CACHE_CAPACITY = 1000;
+
+const GraffitiObjectSchema = z
+  .object({
+    value: z.looseObject({}),
+    channels: z.array(z.string()),
+    allowed: z.array(z.url()).nullable().optional(),
+    url: z.url(),
+    actor: z.url(),
+  })
+  .strict();
+export const Uint8ArraySchema = z
+  .custom<Uint8Array>((v): v is Uint8Array => v instanceof Uint8Array)
+  .openapi({
+    type: "string",
+    description: "A byte array",
+  });
+export const TagsSchema = z.array(Uint8ArraySchema).openapi({
+  description:
+    "A set of per-message tags. A message can only be queried by specifying one of its tags",
+});
+export const MessageSchema = z
+  .object({
+    t: TagsSchema,
+    o: GraffitiObjectSchema,
+    m: Uint8ArraySchema,
+  })
+  .strict();
+export const LabeledMessageSchema = z.object({
+  id: z.string(),
+  m: MessageSchema,
+  l: z.number(),
+});
 
 const inboxInfoCache = new LRUCache<
   string,
@@ -50,10 +87,7 @@ async function getInboxInfo(
 export async function sendMessage(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
-  message: {
-    tags: string[];
-    data: {};
-  },
+  message: z.infer<typeof MessageSchema>,
 ) {
   // Determine if the inbox is under the user's control,
   // which we will later use to determine if we can label the message
@@ -75,9 +109,10 @@ export async function sendMessage(
       INSERT INTO inbox_messages (
         hash,
         inbox_seq,
-        data,
-        tags
-      ) VALUES (?, ?, ?, ?)
+        tags,
+        object,
+        metadata
+      ) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(hash) DO NOTHING
       RETURNING seq;
     `,
@@ -85,8 +120,9 @@ export async function sendMessage(
     .bind(
       messageHash,
       inboxSeq,
-      JSON.stringify(message.data),
-      JSON.stringify(message.tags),
+      dagCborEncode(message.t).buffer,
+      JSON.stringify(message.o),
+      dagCborEncode(message.m).buffer,
     )
     .first<{ seq: number }>();
 
@@ -113,7 +149,7 @@ export async function sendMessage(
   const statements: D1PreparedStatement[] = [];
 
   if (created) {
-    for (const tag of message.tags) {
+    for (const tag of message.t) {
       statements.push(
         context.env.DB.prepare(
           `
@@ -135,10 +171,23 @@ export async function sendMessage(
 export async function queryMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
-  tags: string[],
+  tags: Uint8Array[],
+  objectSchema: {},
   userId?: number,
   sinceSeq: number = 0,
 ) {
+  if (tags.length === 0)
+    return { results: [], hasMore: false, lastSeq: sinceSeq };
+
+  let objectValidator: Validator;
+  try {
+    objectValidator = new Validator(objectSchema, "2020-12");
+  } catch (error) {
+    throw new HTTPException(400, {
+      message: `Error compiling schema: ${error instanceof Error ? error.message : "unknown"}`,
+    });
+  }
+
   const info = await getInboxInfo(context, inboxId);
   if (!info || !(info.userId === userId || info.userId === 0)) {
     throw new HTTPException(403, {
@@ -157,8 +206,9 @@ export async function queryMessages(
     )
     SELECT
       m.seq,
-      m.data,
-      m.tags,`,
+      m.tags,
+      m.object,
+      m.metadata,`,
     userId ? `l.label AS label` : `NULL as label`,
     `FROM message_candidates c
     JOIN inbox_messages m
@@ -183,24 +233,33 @@ export async function queryMessages(
     .bind(...bindings)
     .all<{
       seq: number;
-      data: string;
-      tags: string;
+      tags: ArrayBuffer;
+      object: string;
+      metadata: ArrayBuffer;
       label: number | null;
     }>();
 
   const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
   const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
-  const results = resultsRaw.map((r) => ({
-    messageId: r.seq.toString(),
-    message: {
-      tags: JSON.parse(r.tags) as string[],
-      data: JSON.parse(r.data) as unknown,
-    },
-    label: r.label ?? 0,
-  }));
-
   const lastSeq = resultsRaw.reduce((maxSeq, r) => Math.max(maxSeq, r.seq), 0);
+
+  const results = resultsRaw
+    .map((r) => {
+      const messageRaw = {
+        t: dagCborDecode(r.tags),
+        o: JSON.parse(r.object),
+        m: dagCborDecode(r.metadata),
+      };
+      const message = MessageSchema.parse(messageRaw);
+      const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
+        id: r.seq.toString(),
+        m: message,
+        l: r.label ?? 0,
+      };
+      return messageWithLabel;
+    })
+    .filter((r) => objectValidator.validate(r.m.o).valid);
 
   return {
     results,
@@ -273,30 +332,46 @@ export async function exportMessages(
     `
     SELECT
       seq,
-      data,
-      tags
+      tags,
+      object,
+      metadata,
+      l.label AS label
     FROM inbox_messages
+    LEFT JOIN inbox_message_labels l
+      ON seq = l.message_seq AND l.user_id = ?
     WHERE inbox_seq = ? AND seq > ?
     ORDER BY seq ASC
     LIMIT ?
   `,
   )
-    .bind(inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
+    .bind(userId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
       seq: number;
-      data: string;
-      tags: string;
+      tags: ArrayBuffer;
+      object: string;
+      metadata: ArrayBuffer;
+      label: number | null;
     }>();
 
   const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
   const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
-  const results = resultsRaw.map((r) => ({
-    tags: JSON.parse(r.tags) as string[],
-    data: JSON.parse(r.data),
-  }));
-
   const lastSeq = resultsRaw.reduce((maxSeq, r) => Math.max(maxSeq, r.seq), 0);
+
+  const results = resultsRaw.map((r) => {
+    const messageRaw = {
+      t: dagCborDecode(r.tags),
+      o: JSON.parse(r.object),
+      m: dagCborDecode(r.metadata),
+    };
+    const message = MessageSchema.parse(messageRaw);
+    const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
+      id: r.seq.toString(),
+      m: message,
+      l: r.label ?? 0,
+    };
+    return messageWithLabel;
+  });
 
   return {
     results,
