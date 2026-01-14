@@ -129,8 +129,9 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
   seq             INTEGER PRIMARY KEY,
   inbox_seq       INTEGER NOT NULL,
   hash            BLOB NOT NULL UNIQUE,
-  data            TEXT NOT NULL,
-  tags            TEXT NOT NULL,
+  tags            BLOB NOT NULL,
+  object          TEXT NOT NULL,
+  metadata        BLOB NOT NULL,
 
   FOREIGN KEY (inbox_seq) REFERENCES inboxes(inbox_seq) ON DELETE CASCADE
 ) STRICT;
@@ -140,7 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_hash ON inbox_messages(inbox_se
 
 CREATE TABLE IF NOT EXISTS inbox_message_tags (
     message_seq     INTEGER NOT NULL,
-    tag             TEXT NOT NULL,
+    tag             BLOB NOT NULL,
     inbox_seq       INTEGER NOT NULL,
 
     PRIMARY KEY (message_seq, tag),
