@@ -19,7 +19,7 @@
     "@picocss/pico": "^2.1.1",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
-    "hono": "^4.11.3",
+    "hono": "^4.11.4",
     "lru-cache": "^11.2.4",
     "multiformats": "^13.4.2",
     "vue": "^3.5.26",
@@ -27,7 +27,8 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260107.1",
+    "@cloudflare/workers-types": "^4.20260114.0",
+    "@graffiti-garden/api": "^1.0.4",
     "@types/http-proxy": "^1.17.17",
     "@vitejs/plugin-vue": "^6.0.3",
     "@vue/typescript-plugin": "^3.2.2",
@@ -35,6 +36,6 @@
     "http-proxy": "^1.18.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "wrangler": "^4.57.0"
+    "wrangler": "^4.59.1"
   }
 }
