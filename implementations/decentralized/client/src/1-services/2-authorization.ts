@@ -31,7 +31,7 @@ export class Authorization {
 
   async login(...args: Parameters<typeof this.login_>): Promise<void> {
     try {
-      this.login_(...args);
+      await this.login_(...args);
     } catch (e) {
       const error = e instanceof Error ? e : new Error("Unknown error");
       const detail: LoginEvent["detail"] = { loginId: args[1], error };
@@ -289,7 +289,7 @@ export class Authorization {
     token: string,
   ): Promise<void> {
     try {
-      this.logout_(authorizationEndpoint, logoutId, token);
+      await this.logout_(authorizationEndpoint, logoutId, token);
     } catch (e) {
       const error = e instanceof Error ? e : new Error("Unknown error");
       const detail: LogoutEvent["detail"] = { logoutId, error };
