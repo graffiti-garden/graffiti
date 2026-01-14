@@ -1,5 +1,5 @@
-import { Hono } from "hono";
-import type { Bindings } from "../../env";
+import { Hono, type Context } from "hono";
+import { getOrigin, type Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import {
   OptionalAlsoKnownAsSchema,
@@ -10,7 +10,7 @@ import {
 
 const handleDids = new Hono<{ Bindings: Bindings }>();
 
-handleDids.get("/:handle-name/.well-known/did.json", async (c) => {
+export async function getDid(c: Context<{ Bindings: Bindings }>) {
   const handleName = c.req.param("handle-name");
 
   const result = await c.env.DB.prepare(
@@ -31,9 +31,13 @@ handleDids.get("/:handle-name/.well-known/did.json", async (c) => {
   const services = OptionalServicesSchema.parse(
     result.services ? JSON.parse(result.services) : undefined,
   );
-  const did = handleNameToDid(handleName, c.env.BASE_HOST);
+  const origin = getOrigin(c);
+  const host = new URL(origin).host;
+  const did = handleNameToDid(handleName, host);
 
   return c.json(constructDidDocument({ did, services, alsoKnownAs }));
-});
+}
+
+handleDids.get("/:handle-name/.well-known/did.json", getDid);
 
 export default handleDids;

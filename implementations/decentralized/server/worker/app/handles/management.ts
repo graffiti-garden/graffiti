@@ -6,6 +6,7 @@ import {
   OptionalAlsoKnownAsSchema,
   OptionalServicesSchema,
 } from "../../../shared/did-schemas";
+import { getDid } from "./dids";
 
 const router = new Hono<{ Bindings: Bindings }>();
 
@@ -98,6 +99,8 @@ router.put("/handle/:handle-name", async (c) => {
 
   return c.json({ updated: true });
 });
+
+router.get("/handle/:handle-name/.well-known/did.json", getDid);
 
 router.get("/list", async (c) => {
   const { userId } = await verifySessionCookie(c);

@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { Bindings } from "../../env";
+import { getOrigin, type Bindings } from "../../env";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { randomBytes, encodeBase64, decodeBase64 } from "./utils";
 import { LRUCache } from "lru-cache";
@@ -135,12 +135,11 @@ function setTokenCookie(
   context: Context<{ Bindings: Bindings }>,
   token: string,
 ) {
-  const url = new URL(context.req.url);
   setCookie(context, COOKIE_NAME, token, {
     maxAge: INACTIVITY_TIMEOUT_MS / 1000,
     path: "/",
     sameSite: "lax",
-    secure: url.hostname !== "localhost",
+    secure: true,
     httpOnly: true,
   });
 }

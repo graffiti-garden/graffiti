@@ -79,7 +79,7 @@
     <template v-if="linked">
         <p>
             Graffiti identity created with handle
-            <code>{{ `${handleName}.${baseHost}` }}</code>
+            <code>{{ handleNameToHandle(handleName!, baseHost) }}</code>
         </p>
 
         <template v-if="redirect">
@@ -112,6 +112,7 @@ import { fetchFromSelf } from "./globals";
 import { serviceIdToUrl } from "../../shared/service-urls";
 import StatusIcon from "./utils/StatusIcon.vue";
 import { useRouter } from "vue-router";
+import { handleNameToHandle, handleNameToDid } from "../../shared/did-schemas";
 
 const redirectUri = new URLSearchParams(window.location.search).get(
     "redirect_uri",
@@ -123,7 +124,7 @@ const redirect = computed(() => {
             if (handleName.value) {
                 url.searchParams.set(
                     "handle",
-                    `${handleName.value}.${baseHost}`,
+                    handleNameToHandle(handleName.value, baseHost),
                 );
             }
             return url.toString();
@@ -199,7 +200,7 @@ async function createActor() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            alsoKnownAs: [`did:web:${handleName.value}.${baseHost}`],
+            alsoKnownAs: [handleNameToDid(handleName.value!, baseHost)],
             services: {
                 graffitiStorageBucket: {
                     type: "GraffitiStorageBucket",
