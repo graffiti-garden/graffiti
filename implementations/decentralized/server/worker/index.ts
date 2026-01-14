@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { compress } from "hono/compress";
-import type { Bindings } from "./env";
+import { getOrigin, type Bindings } from "./env";
 import app from "./app/app";
 import storageBuckets from "./api/storage-buckets/index";
 import indexers from "./api/inboxes/index";
@@ -12,7 +12,7 @@ router.route("/app", app);
 router.route("/i", indexers);
 router.route("/s", storageBuckets);
 function oauthConfiguration(context: Context) {
-  const issuer = `https://${context.env.BASE_HOST}`;
+  const issuer = getOrigin(context);
   const headers = new Headers();
   headers.set("Cache-Control", "public, max-age=31536000, immutable");
   return context.json({
@@ -66,14 +66,12 @@ function getHostRouter(baseHost: string): Hono<{ Bindings: Bindings }> {
       getPath: (req) => {
         const url = new URL(req.url);
         const hostname = url.hostname;
-        for (const host of [baseHost, "localhost"]) {
-          if (hostname !== host && hostname.endsWith(`.${host}`)) {
-            const subdomain = hostname.slice(
-              0,
-              hostname.length - host.length - 1,
-            );
-            return `/subdomain/${subdomain}${url.pathname}`;
-          }
+        if (hostname.endsWith(`.${baseHost}`)) {
+          const subdomain = hostname.slice(
+            0,
+            hostname.length - baseHost.length - 1,
+          );
+          return `/subdomain/${subdomain}${url.pathname}`;
         }
         return `/domain${url.pathname}`;
       },

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { Bindings } from "../env";
+import { getOrigin, type Bindings } from "../env";
 import { type OpenAPIHono, z, createRoute } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { HTTPException } from "hono/http-exception";
@@ -40,9 +40,10 @@ function addAuthRoute(
     },
   });
   router.openapi(authRoute, async (c) => {
+    const issuer = getOrigin(c);
     const headers = new Headers();
     headers.set("Cache-Control", "public, max-age=31536000, immutable");
-    return c.text(`oauth2:https://${c.env.BASE_HOST}`, { headers });
+    return c.text(`oauth2:${issuer}`, { headers });
   });
 }
 
@@ -73,7 +74,9 @@ function addOpenAPI(router: OpenAPIHono<{ Bindings: Bindings }>, type: string) {
 
   router.get("/openapi.json", (c) => {
     const id = getId(c, type);
-    const serviceUrl = serviceIdToUrl(id, type, c.env.BASE_HOST);
+    const origin = getOrigin(c);
+    const host = new URL(origin).host;
+    const serviceUrl = serviceIdToUrl(id, type, host);
 
     const doc = router.getOpenAPIDocument({
       openapi: "3.1.0",

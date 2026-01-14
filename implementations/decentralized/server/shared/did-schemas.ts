@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-const AlsoKnownAsSchema = z.array(z.string().url());
+const AlsoKnownAsSchema = z.array(z.url());
 const ServicesSchema = z.record(
   z.string(),
   z.object({
     type: z.string(),
-    endpoint: z.string().url(),
+    endpoint: z.url(),
   }),
 );
 export const OptionalAlsoKnownAsSchema = z.optional(AlsoKnownAsSchema);
@@ -22,7 +22,11 @@ export type OptionalAlsoKnownAs = z.infer<typeof OptionalAlsoKnownAsSchema>;
 export type OptionalServices = z.infer<typeof OptionalServicesSchema>;
 
 export function handleNameToHandle(handleName: string, baseHost: string) {
-  return `${handleName}.${baseHost}`;
+  if (baseHost.startsWith("localhost:")) {
+    return `${baseHost}/app/handles/handle/${handleName}`;
+  } else {
+    return `${handleName}.${baseHost}`;
+  }
 }
 export function handleNameToDid(handleName: string, baseHost: string) {
   return `did:web:${handleNameToHandle(handleName, baseHost)}`;

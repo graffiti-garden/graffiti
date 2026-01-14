@@ -1,5 +1,5 @@
-import { Hono } from "hono";
-import type { Bindings } from "../../env";
+import { Hono, type Context } from "hono";
+import { getOrigin, type Bindings } from "../../env";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -18,15 +18,9 @@ import { HTTPException } from "hono/http-exception";
 const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 const webauthn = new Hono<{ Bindings: Bindings }>();
 
-function getRp(req: { url: string }) {
-  const url = new URL(req.url);
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-    // In dev the worker is proxied into the vite web server,
-    // so make sure to use the vite web server's port
-    return { rpId: "localhost", origin: "http://localhost:5173" };
-  }
-  const rpId = url.hostname;
-  const origin = url.origin;
+function getRp(context: Context) {
+  const origin = getOrigin(context);
+  const rpId = new URL(origin).hostname;
   return { rpId, origin };
 }
 
@@ -54,11 +48,13 @@ webauthn.get("/register/challenge", async (c) => {
     sessionId = await createTempSessionCookie(c);
   }
 
-  const { rpId } = getRp(c.req);
+  const { rpId } = getRp(c);
 
-  const displayName = `${c.env.BASE_HOST} account #${userId}`;
+  const origin = new URL(getOrigin(c));
+  const host = origin.host;
+  const displayName = `${host} account #${userId}`;
   const options = await generateRegistrationOptions({
-    rpName: c.env.BASE_HOST,
+    rpName: host,
     rpID: rpId,
     attestationType: "none",
     userDisplayName: displayName,
@@ -107,7 +103,7 @@ webauthn.post("/register/verify", async (c) => {
     return c.text("Challenge expired.", 400);
   }
 
-  const { rpId, origin } = getRp(c.req);
+  const { rpId, origin } = getRp(c);
 
   const response = await c.req.json();
   let verification: VerifiedRegistrationResponse;
@@ -170,7 +166,7 @@ webauthn.post("/register/verify", async (c) => {
 webauthn.get("/authenticate/challenge", async (c) => {
   const sessionId = await createTempSessionCookie(c);
 
-  const { rpId } = getRp(c.req);
+  const { rpId } = getRp(c);
 
   const { challenge } = await generateAuthenticationOptions({ rpID: rpId });
 
@@ -207,7 +203,7 @@ webauthn.post("/authenticate/verify", async (c) => {
     return c.text("Challenge expired.", 400);
   }
 
-  const { rpId, origin } = getRp(c.req);
+  const { rpId, origin } = getRp(c);
   const response = await c.req.json();
   const credentialId = response.id;
 
