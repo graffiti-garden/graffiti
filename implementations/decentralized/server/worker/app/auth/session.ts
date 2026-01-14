@@ -65,7 +65,12 @@ export async function verifySessionToken(
     userId = cached.userId;
     lastVerifiedAt = cached.lastVerifiedAt;
   } else {
-    const secret = decodeBase64(secretBase64);
+    let secret: Uint8Array;
+    try {
+      secret = decodeBase64(secretBase64);
+    } catch {
+      throw new HTTPException(401, { message: "Invalid session." });
+    }
     const secretHash = await hashSecret(secret);
 
     const result = await context.env.DB.prepare(
@@ -212,7 +217,10 @@ export async function deleteSessionCookie(
   return result;
 }
 
-async function hashSecret(secret: Uint8Array<ArrayBuffer>) {
-  const secretHash = await crypto.subtle.digest("SHA-256", secret);
+async function hashSecret(secret: Uint8Array) {
+  const secretHash = await crypto.subtle.digest(
+    "SHA-256",
+    new Uint8Array(secret),
+  );
   return secretHash;
 }
