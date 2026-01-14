@@ -97,7 +97,7 @@ export async function putValue(
 
   await context.env.STORAGE.put(bucketKey, body);
 
-  return context.json({ uploaded: true });
+  return context.body(null, 201);
 }
 
 export async function deleteValue(
@@ -111,7 +111,7 @@ export async function deleteValue(
   const bucketKey = getBucketKey(bucketId, key);
   await context.env.STORAGE.delete(bucketKey);
 
-  return context.json({ deleted: true });
+  return context.body(null, 204);
 }
 
 export async function exportKeys(

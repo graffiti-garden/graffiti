@@ -87,14 +87,7 @@ const putValueRoute = createRoute({
   },
   security: [{ oauth2: [] }],
   responses: {
-    200: {
-      description: "Successfully uploaded value",
-      content: {
-        "application/json": {
-          schema: z.object({ uploaded: z.literal(true) }),
-        },
-      },
-    },
+    201: { description: "Successfully uploaded value" },
     401: { description: "Invalid authorization" },
     403: { description: "Cannot upload to someone else's bucket" },
     413: { description: "Body is too large" },
@@ -134,14 +127,7 @@ const deleteValueRoute = createRoute({
   },
   security: [{ oauth2: [] }],
   responses: {
-    200: {
-      description: "Successfully deleted value",
-      content: {
-        "application/json": {
-          schema: z.object({ deleted: z.literal(true) }),
-        },
-      },
-    },
+    204: { description: "Successfully deleted value" },
     401: { description: "Invalid authorization" },
     403: { description: "Cannot delete from someone else's bucket" },
   },
