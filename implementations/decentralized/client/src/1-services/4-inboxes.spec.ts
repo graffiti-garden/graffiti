@@ -1,12 +1,13 @@
 import { afterAll, assert, describe, expect, test } from "vitest";
 import { Inboxes } from "./4-inboxes";
 import { GraffitiErrorUnauthorized, testLogin, testLogout } from "./utilities";
-import type { JSONSchema } from "json-schema-to-ts";
+import { randomBytes } from "@noble/hashes/utils.js";
+import type { GraffitiObjectBase } from "@graffiti-garden/api";
 
 const inboxEndpoint =
-  "https://graffiti.actor/i/Nt1p97ela7MOhIBEF1cEYtXFupT8gkELFSWRxKQUVOM";
+  "https://localhost:5173/i/Z8CoqNP4gbvV3Quf-NXvKzuvlykupbVVAjCy-bPqA4I";
 
-describe("Storage buckets", async () => {
+describe("Inboxes", async () => {
   const token = await testLogin(inboxEndpoint);
   const inboxes = new Inboxes();
 
@@ -15,39 +16,37 @@ describe("Storage buckets", async () => {
   });
 
   test("send, get", async () => {
-    const message = "Hello, inbox!";
-
-    const dataSchema = {
-      type: "object",
-      properties: {
-        message: { type: "string" },
+    const tags = [randomBytes(), randomBytes()];
+    const metadata = randomBytes();
+    const object: GraffitiObjectBase = {
+      url: "url:example",
+      actor: "did:example",
+      channels: ["example", "something"],
+      value: {
+        nested: {
+          property: [1, "askdfj", null],
+        },
       },
-      required: ["message"],
-    } as const satisfies JSONSchema;
+      allowed: ["did:example2"],
+    };
 
-    const tags = [Math.random().toString(36).substring(2)];
-
-    const messageId = await inboxes.send<typeof dataSchema>(inboxEndpoint, {
-      tags,
-      data: { message },
+    const messageId = await inboxes.send(inboxEndpoint, {
+      m: metadata,
+      o: object,
+      t: tags,
     });
 
-    const iterator = inboxes.query<typeof dataSchema>(
-      inboxEndpoint,
-      tags,
-      dataSchema,
-      token,
-    );
+    const iterator = inboxes.query<{}>(inboxEndpoint, tags, {}, token);
 
     const result = await iterator.next();
     assert(!result.done);
 
     // No label yet so it must be zero
-    expect(result.value.label).toEqual(0);
+    expect(result.value.l).toEqual(0);
 
-    expect(result.value.message.tags).toEqual(tags);
-    expect(result.value.message.data.message).toEqual(message);
-    expect(result.value.messageId).toEqual(messageId);
+    expect(result.value.m.t).toEqual(tags);
+    expect(result.value.m.o).toEqual(object);
+    expect(result.value.id).toEqual(messageId);
 
     const endResult = await iterator.next();
     expect(endResult.done).toBe(true);
@@ -55,22 +54,17 @@ describe("Storage buckets", async () => {
     // Label the message
     await inboxes.label(inboxEndpoint, messageId, 42, token);
 
-    const iterator2 = inboxes.query<typeof dataSchema>(
-      inboxEndpoint,
-      tags,
-      dataSchema,
-      token,
-    );
+    const iterator2 = inboxes.query<{}>(inboxEndpoint, tags, {}, token);
 
     const result2 = await iterator2.next();
     assert(!result2.done);
-    expect(result2.value.label).toEqual(42);
+    expect(result2.value.l).toEqual(42);
     const endResult2 = await iterator.next();
     expect(endResult2.done).toBe(true);
   });
 
   test("query with continue", async () => {
-    const tags = [Math.random().toString(36).substring(2)];
+    const tags = [randomBytes(), randomBytes()];
 
     const nullResult = await inboxes
       .query<{}>(inboxEndpoint, tags, {}, token)
@@ -78,22 +72,31 @@ describe("Storage buckets", async () => {
     assert(nullResult.done);
     const continue_ = nullResult.value.continue;
 
-    const message = "Hello, inbox with continue!";
-    const messageId = await inboxes.send<{}>(inboxEndpoint, {
-      tags,
-      data: { message },
+    const metadata = randomBytes();
+
+    const messageId = await inboxes.send(inboxEndpoint, {
+      o: {
+        url: "url:example",
+        actor: "did:example",
+        channels: ["example", "something"],
+        value: {
+          nested: {
+            property: [1, "askdfj", null],
+          },
+        },
+        allowed: ["did:example2"],
+      },
+      t: [randomBytes(), tags[0]],
+      m: metadata,
     });
 
     const result = await continue_(token).next();
     assert(!result.done);
-    expect(result.value.message.data).toHaveProperty("message", message);
-    expect(result.value.message.tags).toEqual(tags);
-    expect(result.value.messageId).toEqual(messageId);
-    expect(result.value.label).toEqual(0);
+    expect(result.value.id).toEqual(messageId);
   });
 
   test("unauthorized access", async () => {
-    const tags = [Math.random().toString(36).substring(2)];
+    const tags = [randomBytes()];
 
     await expect(
       inboxes.query(inboxEndpoint, tags, {}, "invalid-token").next(),
@@ -106,24 +109,40 @@ describe("Storage buckets", async () => {
     ).rejects.toThrowError(GraffitiErrorUnauthorized);
   });
 
-  test.skip("query paged", async () => {
-    const tags = [Math.random().toString(36).substring(2)];
+  test("query paged", async () => {
+    const tags = [randomBytes(), randomBytes()];
 
-    for (let i = 0; i < 111; i++) {
-      console.log(i);
-      await inboxes.send<{}>(inboxEndpoint, {
-        tags,
-        data: { index: i },
+    const numSends = 211;
+    for (let i = 0; i < numSends; i++) {
+      await inboxes.send(inboxEndpoint, {
+        t: tags,
+        m: randomBytes(),
+        o: {
+          url: "url:example",
+          actor: "did:example",
+          channels: ["example", "something"],
+          value: {
+            nested: {
+              property: [1, "askdfj", null],
+            },
+          },
+          allowed: ["did:example2"],
+        },
       });
     }
 
-    const iterator = inboxes.query(inboxEndpoint, tags, {}, token);
+    const iterator = inboxes.query(
+      inboxEndpoint,
+      [randomBytes(), tags[1], randomBytes()],
+      {},
+      token,
+    );
 
     let count = 0;
     for await (const _ of iterator) {
       count++;
     }
 
-    expect(count).toBe(111);
+    expect(count).toBe(numSends);
   }, 100000);
 });
