@@ -166,6 +166,7 @@ function setFileToUpload(event: Event) {
             :autopoll="autopoll"
             :channels="channels"
             :schema="noteSchema"
+            :session="$graffitiSession.value"
             v-slot="{ objects, poll, isFirstPoll }"
         >
             <nav>
