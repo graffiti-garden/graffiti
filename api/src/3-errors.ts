@@ -45,3 +45,11 @@ export class GraffitiErrorNotAcceptable extends Error {
     Object.setPrototypeOf(this, GraffitiErrorNotAcceptable.prototype);
   }
 }
+
+export class GraffitiErrorCursorExpired extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "GraffitiErrorCursorExpired";
+    Object.setPrototypeOf(this, GraffitiErrorCursorExpired.prototype);
+  }
+}
