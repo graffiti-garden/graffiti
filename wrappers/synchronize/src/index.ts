@@ -1,4 +1,3 @@
-import type Ajv from "ajv";
 import type {
   Graffiti,
   GraffitiSession,
@@ -8,10 +7,9 @@ import type {
   GraffitiObjectStreamContinueEntry,
   GraffitiObjectStreamContinue,
   GraffitiObjectUrl,
-  GraffitiObject,
 } from "@graffiti-garden/api";
 import {
-  GraffitiErrorInvalidSchema,
+  compileGraffitiObjectSchema,
   GraffitiErrorNotFound,
   isActorAllowedGraffitiObject,
   maskGraffitiObject,
@@ -88,7 +86,6 @@ export interface GraffitiSynchronizeOptions {
  * streams appropriate changes to provide a responsive and consistent user experience.
  */
 export class GraffitiSynchronize implements Graffiti {
-  protected ajv_: Promise<Ajv> | undefined;
   protected readonly graffiti: Graffiti;
   protected readonly callbacks = new Set<GraffitiSynchronizeCallback>();
   protected readonly options: GraffitiSynchronizeOptions;
@@ -101,16 +98,6 @@ export class GraffitiSynchronize implements Graffiti {
   deleteMedia: Graffiti["deleteMedia"];
   actorToHandle: Graffiti["actorToHandle"];
   handleToActor: Graffiti["handleToActor"];
-
-  protected get ajv() {
-    if (!this.ajv_) {
-      this.ajv_ = (async () => {
-        const { default: Ajv } = await import("ajv");
-        return new Ajv({ strict: false });
-      })();
-    }
-    return this.ajv_;
-  }
 
   /**
    * Wraps a Graffiti API instance to provide the synchronize methods.
@@ -146,7 +133,7 @@ export class GraffitiSynchronize implements Graffiti {
   ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
     const repeater = new Repeater<GraffitiObjectStreamContinueEntry<Schema>>(
       async (push, stop) => {
-        const validate = compileGraffitiObjectSchema(await this.ajv, schema);
+        const validate = await compileGraffitiObjectSchema(schema);
         const callback: GraffitiSynchronizeCallback = (objectUpdate) => {
           if (objectUpdate?.tombstone) {
             if (seenUrls.has(objectUpdate.object.url)) {
@@ -374,23 +361,4 @@ export class GraffitiSynchronize implements Graffiti {
     const iterator = this.graffiti.continueDiscover(...args);
     return this.objectStreamContinue<{}>(iterator);
   };
-}
-
-function compileGraffitiObjectSchema<Schema extends JSONSchema>(
-  ajv: Ajv,
-  schema: Schema,
-) {
-  try {
-    // Force the validation guard because
-    // it is too big for the type checker.
-    // Fortunately json-schema-to-ts is
-    // well tested against ajv.
-    return ajv.compile(schema) as (
-      data: GraffitiObjectBase,
-    ) => data is GraffitiObject<Schema>;
-  } catch (error) {
-    throw new GraffitiErrorInvalidSchema(
-      error instanceof Error ? error.message : String(error),
-    );
-  }
 }
