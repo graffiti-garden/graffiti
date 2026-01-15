@@ -5,9 +5,9 @@ import type {
   JSONSchema,
 } from "@graffiti-garden/api";
 import {
+  GraffitiErrorCursorExpired,
   GraffitiErrorForbidden,
   GraffitiErrorInvalidSchema,
-  GraffitiErrorNotFound,
 } from "@graffiti-garden/api";
 import {
   randomString,
@@ -454,7 +454,7 @@ export const graffitiDiscoverTests = (
 
     it("lookup non-existant cursor", async () => {
       const iterator = graffiti.continueDiscover(randomString());
-      await expect(iterator.next()).rejects.toThrow(GraffitiErrorNotFound);
+      await expect(iterator.next()).rejects.toThrow(GraffitiErrorCursorExpired);
     });
   });
 };
