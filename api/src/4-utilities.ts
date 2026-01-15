@@ -1,8 +1,12 @@
 import type {
+  GraffitiObject,
   GraffitiObjectBase,
   GraffitiObjectUrl,
   GraffitiSession,
 } from "./2-types";
+import { GraffitiErrorInvalidSchema } from "./3-errors";
+import type { JSONSchema } from "json-schema-to-ts";
+import type Ajv from "ajv";
 
 export function unpackObjectUrl(url: string | GraffitiObjectUrl) {
   return typeof url === "string" ? url : url.url;
@@ -66,4 +70,28 @@ export function isMediaAcceptable(
       (accSubtype === subtype || accSubtype === "*")
     );
   });
+}
+
+let ajv: Ajv | undefined = undefined;
+export async function compileGraffitiObjectSchema<Schema extends JSONSchema>(
+  schema: Schema,
+) {
+  if (!ajv) {
+    const { default: Ajv } = await import("ajv");
+    ajv = new Ajv({ strict: false });
+  }
+
+  try {
+    // Force the validation guard because
+    // it is too big for the type checker.
+    // Fortunately json-schema-to-ts is
+    // well tested against ajv.
+    return ajv.compile(schema) as (
+      data: GraffitiObjectBase,
+    ) => data is GraffitiObject<Schema>;
+  } catch (error) {
+    throw new GraffitiErrorInvalidSchema(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
