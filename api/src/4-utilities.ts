@@ -77,7 +77,7 @@ export async function compileGraffitiObjectSchema<Schema extends JSONSchema>(
   schema: Schema,
 ) {
   if (!ajv) {
-    const { Ajv } = await import("ajv");
+    const { default: Ajv } = await import("ajv");
     ajv = new Ajv({ strict: false });
   }
 
