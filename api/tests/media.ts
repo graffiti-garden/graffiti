@@ -6,7 +6,7 @@ import {
   type GraffitiSession,
 } from "@graffiti-garden/api";
 import { it, expect, describe, beforeAll } from "vitest";
-import { randomString } from "./utils";
+import { randomString, randomUrl } from "./utils";
 
 export const graffitiMediaTests = (
   useGraffiti: () => Pick<Graffiti, "postMedia" | "getMedia" | "deleteMedia">,
@@ -131,7 +131,7 @@ export const graffitiMediaTests = (
       it("allowed", async () => {
         const text = randomString();
         const data = new Blob([text], { type: "text/plain" });
-        const allowed = [randomString(), session2.actor, randomString()];
+        const allowed = [randomUrl(), session2.actor, randomUrl()];
         const mediaUrl = await graffiti.postMedia({ data, allowed }, session1);
 
         // Get it with the authorized user

@@ -55,6 +55,8 @@
     "vitest": "^4.0.17"
   },
   "dependencies": {
-    "json-schema-to-ts": "^3.1.1"
+    "ajv": "^8.17.1",
+    "json-schema-to-ts": "^3.1.1",
+    "zod": "^4.3.5"
   }
 }

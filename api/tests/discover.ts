@@ -14,6 +14,7 @@ import {
   nextStreamValue,
   randomPostObject,
   continueStream,
+  randomUrl,
 } from "./utils";
 
 export const graffitiDiscoverTests = (
@@ -67,7 +68,7 @@ export const graffitiDiscoverTests = (
 
     it("discover not allowed", async () => {
       const object = randomPostObject();
-      object.allowed = [randomString(), randomString()];
+      object.allowed = [randomUrl(), randomUrl()];
       const posted = await graffiti.post<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover<{}>(
@@ -91,7 +92,7 @@ export const graffitiDiscoverTests = (
 
     it("discover allowed", async () => {
       const object = randomPostObject();
-      object.allowed = [randomString(), session2.actor, randomString()];
+      object.allowed = [randomUrl(), session2.actor, randomUrl()];
       const posted = await graffiti.post<{}>(object, session1);
 
       const iteratorSession2 = graffiti.discover<{}>(
@@ -143,7 +144,7 @@ export const graffitiDiscoverTests = (
 
     it("discover schema allowed, as and not as owner", async () => {
       const object = randomPostObject();
-      object.allowed = [randomString(), session2.actor, randomString()];
+      object.allowed = [randomUrl(), session2.actor, randomUrl()];
       await graffiti.post<{}>(object, session1);
 
       const iteratorSession1 = graffiti.discover<{}>(

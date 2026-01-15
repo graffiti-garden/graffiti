@@ -387,7 +387,7 @@ export abstract class Graffiti {
      * Even if provided, the implementation should allow the user
      * to log in as a different actor if they choose.
      */
-    actor?: string,
+    actor?: string | null,
   ): Promise<void>;
 
   /**

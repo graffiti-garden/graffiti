@@ -20,6 +20,9 @@ export function randomString(): string {
   // check for unicode support
   return str + "👩🏽‍❤️‍💋‍👩🏻🫱🏼‍🫲🏿";
 }
+export function randomUrl(): string {
+  return "test:" + randomString();
+}
 
 export function randomValue() {
   return {
