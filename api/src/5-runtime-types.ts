@@ -12,7 +12,7 @@ import {
   nonnegative,
   extend,
 } from "zod/mini";
-import { Graffiti } from "./1-api";
+import type { Graffiti } from "./1-api";
 import type {
   GraffitiObject,
   GraffitiObjectStream,
