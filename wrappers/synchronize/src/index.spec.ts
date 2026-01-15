@@ -4,7 +4,11 @@ import {
   type GraffitiSession,
 } from "@graffiti-garden/api";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
-import { randomPostObject, randomString } from "@graffiti-garden/api/tests";
+import {
+  randomPostObject,
+  randomString,
+  randomUrl,
+} from "@graffiti-garden/api/tests";
 import { GraffitiSynchronize } from "./index";
 import {
   graffitiCRUDTests,
@@ -12,17 +16,18 @@ import {
   graffitiMediaTests,
 } from "@graffiti-garden/api/tests";
 
+// @ts-ignore
 const useGraffiti = () => new GraffitiSynchronize(new GraffitiLocal());
 const graffiti = useGraffiti();
 
 const useSession1 = async () => {
   return {
-    actor: randomString(),
+    actor: randomUrl(),
   };
 };
 const useSession2 = async () => {
   return {
-    actor: randomString(),
+    actor: randomUrl(),
   };
 };
 
@@ -171,7 +176,7 @@ describe.concurrent("synchronizeDiscover", () => {
   });
 
   it("not allowed", async () => {
-    const allChannels = [randomString(), randomString(), randomString()];
+    const allChannels = [randomUrl(), randomUrl(), randomUrl()];
     const channels = allChannels.slice(1);
 
     const creatorNext = graffiti
@@ -185,7 +190,7 @@ describe.concurrent("synchronizeDiscover", () => {
     const value = {
       hello: "world",
     };
-    const allowed = [randomString(), session2.actor];
+    const allowed = [randomUrl(), session2.actor];
     await graffiti.post<{}>(
       { value, channels: allChannels, allowed },
       session1,
@@ -336,7 +341,7 @@ describe("synchronizeAll", () => {
     });
 
     const object1 = randomPostObject();
-    object1.allowed = [randomString()];
+    object1.allowed = [randomUrl()];
 
     const iterator = graffiti.synchronizeAll({});
     const next = iterator.next();
