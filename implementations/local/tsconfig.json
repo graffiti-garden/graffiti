@@ -2,7 +2,6 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",
-    "lib": ["es2023"],
     "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
@@ -11,7 +10,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
-    "declarationDir": "./dist"
+    "declarationDir": "./dist",
   },
-  "include": ["src"]
+  "include": ["src"],
 }
