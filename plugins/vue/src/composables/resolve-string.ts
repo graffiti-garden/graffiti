@@ -24,9 +24,8 @@ export function useResolveString(
       } catch (err) {
         if (!active) return;
 
-        if (err instanceof GraffitiErrorNotFound) {
-          output.value = null;
-        } else {
+        output.value = null;
+        if (!(err instanceof GraffitiErrorNotFound)) {
           console.error(err);
         }
       }

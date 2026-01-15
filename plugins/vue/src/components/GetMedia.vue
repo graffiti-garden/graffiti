@@ -64,12 +64,12 @@ function downloadMedia() {
             type="application/pdf"
             :alt="`PDF by ${media.actor}`"
         />
-        <button v-else-if="media" @click="downloadMedia">Download</button>
+        <button v-else-if="media" @click="downloadMedia">Download media</button>
         <p v-else-if="media === null">
             <em>Media not found</em>
         </p>
         <p v-else>
-            <em> Loading... </em>
+            <em> Media loading... </em>
         </p>
     </slot>
 </template>
