@@ -10,7 +10,7 @@ import {
   GraffitiErrorInvalidSchema,
   GraffitiErrorForbidden,
 } from "@graffiti-garden/api";
-import { randomPostObject, randomString } from "./utils";
+import { randomPostObject, randomString, randomUrl } from "./utils";
 
 export const graffitiCRUDTests = (
   useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete">,
@@ -35,7 +35,7 @@ export const graffitiCRUDTests = (
       });
 
       it("get nonexistant object", async () => {
-        await expect(graffiti.get(randomString(), {})).rejects.toThrow(
+        await expect(graffiti.get(randomUrl(), {})).rejects.toThrow(
           GraffitiErrorNotFound,
         );
       });
@@ -190,7 +190,7 @@ export const graffitiCRUDTests = (
         const value = {
           um: "hi",
         };
-        const allowed = [randomString()];
+        const allowed = [randomUrl()];
         const channels = [randomString()];
         const posted = await graffiti.post<{}>(
           { value, allowed, channels },
@@ -220,7 +220,7 @@ export const graffitiCRUDTests = (
         const value = {
           um: "hi",
         };
-        const allowed = [randomString(), session2.actor, randomString()];
+        const allowed = [randomUrl(), session2.actor, randomUrl()];
         const channels = [randomString()];
         const posted = await graffiti.post<{}>(
           {
