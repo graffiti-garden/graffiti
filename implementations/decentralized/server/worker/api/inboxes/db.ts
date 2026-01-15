@@ -62,7 +62,6 @@ async function getInboxInfo(
   const cached = inboxInfoCache.get(inboxId);
 
   if (cached) {
-    console.log("cached inbox info");
     return cached.value;
   } else {
     const result = await context.env.DB.prepare(
@@ -247,9 +246,9 @@ export async function queryMessages(
   const results = resultsRaw
     .map((r) => {
       const messageRaw = {
-        t: dagCborDecode(r.tags),
+        t: dagCborDecode(new Uint8Array(r.tags)),
         o: JSON.parse(r.object),
-        m: dagCborDecode(r.metadata),
+        m: dagCborDecode(new Uint8Array(r.metadata)),
       };
       const message = MessageSchema.parse(messageRaw);
       const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
