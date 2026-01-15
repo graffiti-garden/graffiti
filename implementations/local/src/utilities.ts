@@ -1,10 +1,4 @@
-import {
-  GraffitiErrorInvalidSchema,
-  GraffitiErrorNotFound,
-  type GraffitiObject,
-  type GraffitiObjectBase,
-  type JSONSchema,
-} from "@graffiti-garden/api";
+import { GraffitiErrorNotFound } from "@graffiti-garden/api";
 
 export function encodeBase64(bytes: Uint8Array): string {
   // Convert it to base64
@@ -29,17 +23,21 @@ export function randomBase64(numBytes: number = 32): string {
   return encodeBase64(bytes);
 }
 
-const OBJECT_URL_PREFIX = "graffiti:object:";
-const MEDIA_URL_PREFIX = "graffiti:media:";
+const OBJECT_URL_PREFIX = "graffiti:";
 
+export function encodeObjectUrlComponent(value: string) {
+  const replaced = value.replace(/:/g, "!").replace(/\//g, "~");
+  return encodeURIComponent(replaced);
+}
+export function decodeObjectUrlComponent(value: string) {
+  const decoded = decodeURIComponent(value);
+  return decoded.replace(/!/g, ":").replace(/~/g, "/");
+}
 export function encodeGraffitiUrl(actor: string, id: string, prefix: string) {
-  return `${prefix}${encodeURIComponent(actor)}:${encodeURIComponent(id)}`;
+  return `${prefix}${encodeObjectUrlComponent(actor)}:${encodeObjectUrlComponent(id)}`;
 }
 export function encodeObjectUrl(actor: string, id: string) {
   return encodeGraffitiUrl(actor, id, OBJECT_URL_PREFIX);
-}
-export function encodeMediaUrl(actor: string, id: string) {
-  return encodeGraffitiUrl(actor, id, MEDIA_URL_PREFIX);
 }
 
 export function decodeGraffitiUrl(url: string, prefix: string) {
@@ -50,14 +48,11 @@ export function decodeGraffitiUrl(url: string, prefix: string) {
   if (slices.length !== 2) {
     throw new GraffitiErrorNotFound("URL has too many colon-seperated parts");
   }
-  const [actor, id] = slices.map(decodeURIComponent);
+  const [actor, id] = slices.map(decodeObjectUrlComponent);
   return { actor, id };
 }
 export function decodeObjectUrl(url: string) {
   return decodeGraffitiUrl(url, OBJECT_URL_PREFIX);
-}
-export function decodeMediaUrl(url: string) {
-  return decodeGraffitiUrl(url, MEDIA_URL_PREFIX);
 }
 
 export async function blobToBase64(blob: Blob): Promise<string> {

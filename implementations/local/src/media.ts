@@ -5,14 +5,7 @@ import {
   type Graffiti,
   type JSONSchema,
 } from "@graffiti-garden/api";
-import {
-  decodeObjectUrl,
-  encodeObjectUrl,
-  decodeMediaUrl,
-  encodeMediaUrl,
-  blobToBase64,
-  base64ToBlob,
-} from "./utilities";
+import { blobToBase64, base64ToBlob } from "./utilities";
 
 const MEDIA_OBJECT_SCHEMA = {
   properties: {
@@ -53,17 +46,14 @@ export class GraffitiLocalMedia {
       session,
     );
 
-    const { actor, id } = decodeObjectUrl(url);
-    return encodeMediaUrl(actor, id);
+    return url;
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
     const [mediaUrl, accept, session] = args;
-    const { actor, id } = decodeMediaUrl(mediaUrl);
-    const objectUrl = encodeObjectUrl(actor, id);
 
     const object = await this.db.get<typeof MEDIA_OBJECT_SCHEMA>(
-      objectUrl,
+      mediaUrl,
       MEDIA_OBJECT_SCHEMA,
       session,
     );
@@ -97,9 +87,7 @@ export class GraffitiLocalMedia {
 
   deleteMedia: Graffiti["deleteMedia"] = async (...args) => {
     const [mediaUrl, session] = args;
-    const { actor, id } = decodeMediaUrl(mediaUrl);
-    const objectUrl = encodeObjectUrl(actor, id);
 
-    await this.db.delete(objectUrl, session);
+    await this.db.delete(mediaUrl, session);
   };
 }
