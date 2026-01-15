@@ -95,7 +95,6 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.0.4",
-    "ajv": "^8.17.1",
     "pouchdb": "^9.0.0"
   }
 }

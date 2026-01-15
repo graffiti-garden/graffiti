@@ -5,7 +5,6 @@ import {
   type GraffitiObjectBase,
   type JSONSchema,
 } from "@graffiti-garden/api";
-import type Ajv from "ajv";
 
 export function encodeBase64(bytes: Uint8Array): string {
   // Convert it to base64
@@ -88,23 +87,4 @@ export async function blobToBase64(blob: Blob): Promise<string> {
 export async function base64ToBlob(dataUrl: string) {
   const response = await fetch(dataUrl);
   return await response.blob();
-}
-
-export function compileGraffitiObjectSchema<Schema extends JSONSchema>(
-  ajv: Ajv,
-  schema: Schema,
-) {
-  try {
-    // Force the validation guard because
-    // it is too big for the type checker.
-    // Fortunately json-schema-to-ts is
-    // well tested against ajv.
-    return ajv.compile(schema) as (
-      data: GraffitiObjectBase,
-    ) => data is GraffitiObject<Schema>;
-  } catch (error) {
-    throw new GraffitiErrorInvalidSchema(
-      error instanceof Error ? error.message : undefined,
-    );
-  }
 }
