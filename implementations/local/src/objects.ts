@@ -14,6 +14,7 @@ import {
   maskGraffitiObject,
   isActorAllowedGraffitiObject,
   compileGraffitiObjectSchema,
+  GraffitiErrorCursorExpired,
 } from "@graffiti-garden/api";
 import { randomBase64, decodeObjectUrl, encodeObjectUrl } from "./utilities.js";
 
@@ -430,7 +431,7 @@ export class GraffitiLocalObjects {
       );
     } else {
       return (async function* () {
-        throw new GraffitiErrorNotFound("Cursor not found");
+        throw new GraffitiErrorCursorExpired("Cursor not found");
       })();
     }
   };
