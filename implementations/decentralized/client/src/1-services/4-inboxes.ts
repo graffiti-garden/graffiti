@@ -9,7 +9,10 @@ import {
   verifyHTTPSEndpoint,
 } from "./utilities";
 import z from "zod";
-import { GraffitiErrorInvalidSchema } from "@graffiti-garden/api";
+import {
+  GraffitiErrorInvalidSchema,
+  GraffitiErrorNotFound,
+} from "@graffiti-garden/api";
 import Ajv from "ajv";
 import {
   encode as dagCborEncode,
@@ -64,56 +67,144 @@ export class Inboxes {
       });
     }
 
-    // Update the cache
-    const result = await (await this.cache).messages.get(messageId);
+    // Update the cache, even if no token.
+    // Therefore people not logged in do not need to
+    // repeatedly re-validate objects.
+    const cache = await this.cache;
+    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
+    const result = await cache.messages.get(messageCacheKey);
     if (result) {
-      await (
-        await this.cache
-      ).messages.set(
-        // TODO:
-        // add the inboxUrl as well to disambiguate
-        messageId,
-        { ...result, l: label },
-      );
+      await cache.messages.set(messageCacheKey, {
+        ...result,
+        l: label,
+      });
     }
   }
 
+  protected fetchMessageBatch(
+    inboxUrl: string,
+    type: "query" | "export",
+    body: Uint8Array<ArrayBuffer> | undefined,
+    inboxToken?: string | null,
+    cursor?: string,
+  ) {
+    return fetchWithErrorHandling(
+      `${inboxUrl}/${type}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/cbor",
+          ...(inboxToken
+            ? {
+                Authorization: `Bearer ${inboxToken}`,
+              }
+            : {}),
+        },
+        body,
+      },
+    );
+  }
+
   protected async *messageStreamer<Schema extends JSONSchema>(
-    url: string,
-    cursor: string | undefined,
+    messageIdsCacheKey_: Promise<string>,
+    inboxUrl: string,
+    type: "export" | "query",
     body: Uint8Array<ArrayBuffer> | undefined,
     inboxToken?: string | null,
     objectSchema: Schema = {} as Schema,
+    cacheVersion?: string,
+    cacheNumSeen: number = 0,
   ): MessageStream<Schema> {
-    // TODO: get from the cache
-    // if it exists, try to get the first response with the cursor
-    // if it results in a GraffitiErrorNotFound, the cursor
-    // has expired... if so clear the cache.
-    // Otherwise, return all the cached results, then continue
-    // reading from the response
-    //
-    // Also store the queries under hash(url, body) and store that
-    // id in a cursor.
-
     const validator = compileGraffitiObjectSchema(this.ajv, objectSchema);
+    const messageIdsCacheKey = await messageIdsCacheKey_;
+    const cache = await this.cache;
 
-    while (true) {
-      const response = await fetchWithErrorHandling(
-        `${url}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/cbor",
-            ...(inboxToken
-              ? {
-                  Authorization: `Bearer ${inboxToken}`,
-                }
-              : {}),
-          },
-          body,
-        },
+    let cachedMessageIds = await cache.messageIds.get(messageIdsCacheKey);
+    if (
+      cacheVersion !== undefined &&
+      cacheVersion !== cachedMessageIds?.version
+    ) {
+      throw new GraffitiErrorNotFound("Cursor is stale");
+    }
+
+    // See if the cursor is still active by
+    // requesting an initial batch of messages
+    const cachedCursor = cachedMessageIds?.cursor;
+    let firstResponse: Response | undefined = undefined;
+    try {
+      firstResponse = await this.fetchMessageBatch(
+        inboxUrl,
+        type,
+        body,
+        inboxToken,
+        cachedCursor,
+      );
+    } catch (e) {
+      if (!(e instanceof GraffitiErrorNotFound && cachedCursor)) {
+        // Unexpected error
+        throw e;
+      }
+
+      // The cursor is stale
+      await cache.messageIds.del(messageIdsCacheKey);
+      if (cacheVersion === undefined) {
+        // The query is not a continuation
+        // so we can effectively ignore the error
+        cachedMessageIds = undefined;
+      } else {
+        // Otherwise propogate it up so the
+        // consumer can clear their message history
+        throw e;
+      }
+    }
+
+    if (firstResponse !== undefined && cachedMessageIds) {
+      // The cursor is valid!
+
+      // Filter out all messageIds before
+      // the number already seen
+      const messageIds = cachedMessageIds.messageIds.slice(cacheNumSeen);
+
+      // Get all the messages pointed to in the cache
+      const messages = await Promise.all(
+        messageIds.map(async (id) => {
+          const message = await cache.messages.get(
+            getMessageCacheKey(inboxUrl, id),
+          );
+          if (!message) {
+            // Something is very wrong with the cache,
+            // it refers to message IDs that are not cached
+            cache.messageIds.del(messageIdsCacheKey);
+            throw new Error(
+              "Cache out of sync - perhaps clear browser storage",
+            );
+          }
+          return message;
+        }),
       );
 
+      for (const message of messages) {
+        yield message as LabeledMessage<Schema>;
+      }
+    }
+
+    if (firstResponse === undefined) {
+      // The cursor was stale: try again
+      firstResponse = await this.fetchMessageBatch(
+        inboxUrl,
+        type,
+        body,
+        inboxToken,
+      );
+    }
+
+    // Continue streaming results
+    let response = firstResponse;
+    let cursor: string;
+    const version =
+      cacheVersion ?? (Math.random() + 1).toString(36).substring(2);
+    let messageIds = cachedMessageIds?.messageIds ?? [];
+    while (true) {
       const blob = await response.blob();
       const decoded = dagCborDecode(await blob.arrayBuffer());
       const {
@@ -140,19 +231,50 @@ export class Inboxes {
         },
       );
 
-      // TODO:
-      // Store the results in the cache
+      // First cache the messages with their labels
+      await Promise.all(
+        labeledMessages.map((m: LabeledMessageBase) =>
+          cache.messages.set(
+            getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
+            m,
+          ),
+        ),
+      );
+      // Then store all the messageids
+      messageIds = [
+        ...messageIds,
+        ...labeledMessages.map(
+          (m: LabeledMessageBase) => m[LABELED_MESSAGE_ID_KEY],
+        ),
+      ];
+      cache.messageIds.set(messageIdsCacheKey, {
+        cursor,
+        version,
+        messageIds,
+      });
 
+      // Update how many we've seen
+      cacheNumSeen += labeledMessages.length;
+
+      // Return the values
       for (const m of labeledMessages) yield m;
 
       if (!hasMore) break;
-    }
-    if (!cursor) {
-      throw new Error("There must be a cursor...");
+
+      // Otherwise get another response
+      response = await this.fetchMessageBatch(
+        inboxUrl,
+        type,
+        undefined, // Body is never past the first time
+        inboxToken,
+        cursor,
+      );
     }
 
     const outputCursor: z.infer<typeof CursorSchema> = {
-      cursor,
+      numSeen: cacheNumSeen,
+      version,
+      messageIdsCacheKey,
       objectSchema,
     };
 
@@ -160,11 +282,14 @@ export class Inboxes {
       cursor: JSON.stringify(outputCursor),
       continue: (inboxToken?: string | null) =>
         this.messageStreamer<Schema>(
-          url,
-          cursor,
-          body,
+          messageIdsCacheKey_,
+          inboxUrl,
+          type,
+          undefined,
           inboxToken,
           objectSchema,
+          version,
+          cacheNumSeen,
         ),
     };
   }
@@ -176,16 +301,17 @@ export class Inboxes {
     inboxToken?: string | null,
   ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
-    const url = `${inboxUrl}/query`;
 
     const body = dagCborEncode({
       tags,
       schema: objectSchema,
     });
 
+    const messageIdsCacheKey = getMessageIdsCacheKey(inboxUrl, "query", body);
     return this.messageStreamer<Schema>(
-      url,
-      undefined,
+      messageIdsCacheKey,
+      inboxUrl,
+      "query",
       new Uint8Array(body),
       inboxToken,
       objectSchema,
@@ -198,25 +324,33 @@ export class Inboxes {
     inboxToken?: string | null,
   ): MessageStream<{}> {
     verifyHTTPSEndpoint(inboxUrl);
-    const url = `${inboxUrl}/query`;
 
     const decodedCursor = JSON.parse(cursor);
-    const { cursor: actualCursor, objectSchema } =
+    const { messageIdsCacheKey, numSeen, objectSchema, version } =
       CursorSchema.parse(decodedCursor);
 
     return this.messageStreamer<{}>(
-      url,
-      actualCursor,
+      Promise.resolve(messageIdsCacheKey),
+      inboxUrl,
+      "query",
       undefined,
       inboxToken,
       objectSchema,
+      version,
+      numSeen,
     );
   }
 
   export(inboxUrl: string, inboxToken: string): MessageStream<{}> {
     verifyHTTPSEndpoint(inboxUrl);
-    const url = `${inboxUrl}/export`;
-    return this.messageStreamer<{}>(url, undefined, undefined, inboxToken);
+    const messageIdsCacheKey = getMessageIdsCacheKey(inboxUrl, "export");
+    return this.messageStreamer<{}>(
+      messageIdsCacheKey,
+      inboxUrl,
+      "export",
+      undefined,
+      inboxToken,
+    );
   }
 }
 
@@ -293,7 +427,9 @@ const MessageResultSchema = z.object({
 });
 
 const CursorSchema = z.object({
-  cursor: z.string(),
+  messageIdsCacheKey: z.string(),
+  version: z.string(),
+  numSeen: z.int().nonnegative(),
   objectSchema: z.any(),
 });
 
@@ -308,6 +444,7 @@ export interface MessageStream<
 
 type CacheQueryValue = {
   cursor: string;
+  version: string;
   messageIds: string[];
 };
 
@@ -318,21 +455,42 @@ const HAS_IDB =
 
 type Cache = {
   messages: {
-    get(messageId: string): Promise<LabeledMessageBase | undefined>;
-    set(messageId: string, value: LabeledMessageBase): Promise<void>;
-    del(messageId: string): Promise<void>;
+    get(k: string): Promise<LabeledMessageBase | undefined>;
+    set(k: string, value: LabeledMessageBase): Promise<void>;
+    del(k: string): Promise<void>;
   };
-  queries: {
-    get(queryUrl: string): Promise<CacheQueryValue | undefined>;
-    set(queryUrl: string, value: CacheQueryValue): Promise<void>;
-    del(queryUrl: string): Promise<void>;
+  messageIds: {
+    get(k: string): Promise<CacheQueryValue | undefined>;
+    set(k: string, value: CacheQueryValue): Promise<void>;
+    del(k: string): Promise<void>;
   };
 };
 
+function getMessageCacheKey(inboxUrl: string, messageId: string) {
+  return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
+}
+function getMessageIdsCacheKey(
+  inboxUrl: string,
+  type: "query" | "export",
+  body?: Uint8Array,
+) {
+  const cacheIdData = dagCborEncode({
+    inboxUrl,
+    type,
+    body: body ?? null,
+  });
+  return crypto.subtle
+    .digest("SHA-256", new Uint8Array(cacheIdData))
+    .then((bytes) =>
+      Array.from(new Uint8Array(bytes))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join(""),
+    );
+}
 async function createCache(): Promise<Cache> {
   if (HAS_IDB) {
     const { openDB } = await import("idb");
-    const db = await openDB("graffiti-inboc-cache", 1, {
+    const db = await openDB("graffiti-inbox-cache", 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("m")) db.createObjectStore("m");
         if (!db.objectStoreNames.contains("q")) db.createObjectStore("q");
@@ -341,18 +499,18 @@ async function createCache(): Promise<Cache> {
 
     return {
       messages: {
-        get: (id) => db.get("m", id),
-        set: async (id, v) => {
-          await db.put("m", v, id);
+        get: (k) => db.get("m", k),
+        set: async (k, v) => {
+          await db.put("m", v, k);
         },
-        del: (messageId) => db.delete("m", messageId),
+        del: (k) => db.delete("m", k),
       },
-      queries: {
-        get: async (url) => await db.get("q", url),
-        set: async (url, v) => {
-          await db.put("q", v, url);
+      messageIds: {
+        get: async (k) => await db.get("q", k),
+        set: async (k, v) => {
+          await db.put("q", v, k);
         },
-        del: (url) => db.delete("q", url),
+        del: (k) => db.delete("q", k),
       },
     };
   }
@@ -362,14 +520,14 @@ async function createCache(): Promise<Cache> {
 
   return {
     messages: {
-      get: async (id) => m.get(id),
-      set: async (id, v) => void m.set(id, v),
-      del: async (id) => void m.delete(id),
+      get: async (k) => m.get(k),
+      set: async (k, v) => void m.set(k, v),
+      del: async (k) => void m.delete(k),
     },
-    queries: {
-      get: async (url) => q.get(url),
-      set: async (url, v) => void q.set(url, v),
-      del: async (url) => void q.delete(url),
+    messageIds: {
+      get: async (k) => q.get(k),
+      set: async (k, v) => void q.set(k, v),
+      del: async (k) => void q.delete(k),
     },
   };
 }
