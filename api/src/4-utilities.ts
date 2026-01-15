@@ -3,8 +3,8 @@ import type {
   GraffitiObjectBase,
   GraffitiObjectUrl,
   GraffitiSession,
-} from "./2-types";
-import { GraffitiErrorInvalidSchema } from "./3-errors";
+} from "./2-types.js";
+import { GraffitiErrorInvalidSchema } from "./3-errors.js";
 import type { JSONSchema } from "json-schema-to-ts";
 import type Ajv from "ajv";
 
@@ -77,7 +77,7 @@ export async function compileGraffitiObjectSchema<Schema extends JSONSchema>(
   schema: Schema,
 ) {
   if (!ajv) {
-    const { default: Ajv } = await import("ajv");
+    const { Ajv } = await import("ajv");
     ajv = new Ajv({ strict: false });
   }
 

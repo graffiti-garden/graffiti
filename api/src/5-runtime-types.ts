@@ -12,14 +12,14 @@ import {
   nonnegative,
   extend,
 } from "zod/mini";
-import type { Graffiti } from "./1-api";
+import type { Graffiti } from "./1-api.js";
 import type {
   GraffitiObject,
   GraffitiObjectStream,
   GraffitiObjectStreamContinue,
   GraffitiPostObject,
   GraffitiSession,
-} from "./2-types";
+} from "./2-types.js";
 import type { JSONSchema } from "json-schema-to-ts";
 
 export const GraffitiPostObjectSchema = looseObject({

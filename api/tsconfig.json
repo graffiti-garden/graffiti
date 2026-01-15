@@ -10,7 +10,7 @@
     "declaration": true,
     "declarationMap": true,
     "declarationDir": "./dist/",
-    "rootDir": "."
+    "rootDir": ".",
   },
-  "include": ["src", "tests"]
+  "include": ["src", "tests"],
 }
