@@ -15,7 +15,7 @@ import {
   randomPostObject,
   continueStream,
   randomUrl,
-} from "./utils";
+} from "./utils.js";
 
 export const graffitiDiscoverTests = (
   useGraffiti: () => Pick<

@@ -9,7 +9,7 @@ import type {
   GraffitiMedia,
   GraffitiPostMedia,
   GraffitiMediaAccept,
-} from "./2-types";
+} from "./2-types.js";
 import type { JSONSchema } from "json-schema-to-ts";
 
 /**

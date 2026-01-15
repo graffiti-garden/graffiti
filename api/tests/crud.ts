@@ -10,7 +10,7 @@ import {
   GraffitiErrorInvalidSchema,
   GraffitiErrorForbidden,
 } from "@graffiti-garden/api";
-import { randomPostObject, randomString, randomUrl } from "./utils";
+import { randomString, randomUrl } from "./utils.js";
 
 export const graffitiCRUDTests = (
   useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete">,

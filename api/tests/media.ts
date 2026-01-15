@@ -6,7 +6,7 @@ import {
   type GraffitiSession,
 } from "@graffiti-garden/api";
 import { it, expect, describe, beforeAll } from "vitest";
-import { randomString, randomUrl } from "./utils";
+import { randomString, randomUrl } from "./utils.js";
 
 export const graffitiMediaTests = (
   useGraffiti: () => Pick<Graffiti, "postMedia" | "getMedia" | "deleteMedia">,
