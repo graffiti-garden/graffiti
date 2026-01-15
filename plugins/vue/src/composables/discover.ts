@@ -7,7 +7,7 @@ import type {
   GraffitiSession,
   JSONSchema,
 } from "@graffiti-garden/api";
-import { GraffitiErrorNotFound } from "@graffiti-garden/api";
+import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
 import { useGraffitiSynchronize } from "../globals";
@@ -155,11 +155,13 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           try {
             result = await myDiscoverIterator.next();
           } catch (e) {
-            if (e instanceof GraffitiErrorNotFound) {
+            if (e instanceof GraffitiErrorCursorExpired) {
               // The cursor has expired, we need to start from scratch.
               return restartWatch();
             } else {
               // If something else went wrong, wait a bit before retrying
+              console.error("Fatal error in discover");
+              console.error(e);
               return restartWatch(5000);
             }
           }
