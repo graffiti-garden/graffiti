@@ -53,8 +53,9 @@ export class Inboxes {
     label: number,
     inboxToken?: string | null,
   ): Promise<void> {
+    verifyHTTPSEndpoint(inboxUrl);
+
     if (inboxToken) {
-      verifyHTTPSEndpoint(inboxUrl);
       const url = `${inboxUrl}/label/${messageId}`;
 
       await fetchWithErrorHandling(url, {
@@ -174,7 +175,9 @@ export class Inboxes {
           if (!message) {
             // Something is very wrong with the cache,
             // it refers to message IDs that are not cached
-            cache.messageIds.del(messageIdsCacheKey);
+            try {
+              await cache.messageIds.del(messageIdsCacheKey);
+            } catch {}
             throw new Error(
               "Cache out of sync - perhaps clear browser storage",
             );
@@ -247,7 +250,7 @@ export class Inboxes {
           (m: LabeledMessageBase) => m[LABELED_MESSAGE_ID_KEY],
         ),
       ];
-      cache.messageIds.set(messageIdsCacheKey, {
+      await cache.messageIds.set(messageIdsCacheKey, {
         cursor,
         version,
         messageIds,
@@ -383,11 +386,13 @@ type MessageBase = z.infer<typeof MessageBaseSchema>;
 export const LABELED_MESSAGE_ID_KEY = "id";
 export const LABELED_MESSAGE_MESSAGE_KEY = "m";
 export const LABELED_MESSAGE_LABEL_KEY = "l";
-export const LabeledMessageBaseSchema = z.object({
-  [LABELED_MESSAGE_ID_KEY]: z.string(),
-  [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
-  [LABELED_MESSAGE_LABEL_KEY]: z.number(),
-});
+export const LabeledMessageBaseSchema = z
+  .object({
+    [LABELED_MESSAGE_ID_KEY]: z.string(),
+    [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
+    [LABELED_MESSAGE_LABEL_KEY]: z.number(),
+  })
+  .strict();
 type LabeledMessageBase = z.infer<typeof LabeledMessageBaseSchema>;
 
 export type Message<Schema extends JSONSchema> = MessageBase & {
@@ -418,20 +423,24 @@ export function compileGraffitiObjectSchema<Schema extends JSONSchema>(
   }
 }
 
-const SendResponseSchema = z.object({ id: z.string() });
+const SendResponseSchema = z.object({ id: z.string() }).strict();
 
-const MessageResultSchema = z.object({
-  results: z.array(LabeledMessageBaseSchema),
-  hasMore: z.boolean(),
-  cursor: z.string(),
-});
+const MessageResultSchema = z
+  .object({
+    results: z.array(LabeledMessageBaseSchema),
+    hasMore: z.boolean(),
+    cursor: z.string(),
+  })
+  .strict();
 
-const CursorSchema = z.object({
-  messageIdsCacheKey: z.string(),
-  version: z.string(),
-  numSeen: z.int().nonnegative(),
-  objectSchema: z.any(),
-});
+const CursorSchema = z
+  .object({
+    messageIdsCacheKey: z.string(),
+    version: z.string(),
+    numSeen: z.int().nonnegative(),
+    objectSchema: z.any(),
+  })
+  .strict();
 
 export interface MessageStreamReturn<Schema extends JSONSchema> {
   cursor: string;
@@ -469,11 +478,11 @@ type Cache = {
 function getMessageCacheKey(inboxUrl: string, messageId: string) {
   return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
 }
-function getMessageIdsCacheKey(
+async function getMessageIdsCacheKey(
   inboxUrl: string,
   type: "query" | "export",
   body?: Uint8Array,
-) {
+): Promise<string> {
   const cacheIdData = dagCborEncode({
     inboxUrl,
     type,
