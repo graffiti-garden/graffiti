@@ -41,7 +41,7 @@ const SinceSeqSchema = z.int().min(0);
 
 const QueryBodySchema = z.object({
   tags: TagsSchema,
-  objectSchema: ObjectSchemaSchema,
+  schema: ObjectSchemaSchema,
 });
 
 const QueryCursorSchema = z.object({
@@ -246,7 +246,7 @@ inbox.openapi(queryRoute, async (c) => {
       throw new HTTPException(400, { message: "Invalid query body" });
     }
     tags = queryParams.tags;
-    objectSchema = queryParams.objectSchema;
+    objectSchema = queryParams.schema;
   }
 
   const createdAt = Date.now();
