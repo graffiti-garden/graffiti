@@ -1,4 +1,8 @@
-import { Graffiti, type GraffitiSession } from "@graffiti-garden/api";
+import {
+  Graffiti,
+  type GraffitiSession,
+  GraffitiRuntimeTypes,
+} from "@graffiti-garden/api";
 import { GraffitiLocalIdentity } from "./identity";
 import { GraffitiLocalObjects, type GraffitiLocalOptions } from "./objects";
 import { GraffitiLocalMedia } from "./media";
@@ -12,7 +16,14 @@ export type { GraffitiLocalOptions };
  * It can also be configured to work with an external [CouchDB](https://couchdb.apache.org/) server,
  * although using it with a remote server will not be secure.
  */
-export class GraffitiLocal implements Graffiti {
+export class GraffitiLocal extends GraffitiRuntimeTypes {
+  constructor(options?: GraffitiLocalOptions) {
+    const graffiti = new GraffitiLocal_(options);
+    super(graffiti);
+  }
+}
+
+class GraffitiLocal_ implements Graffiti {
   protected graffitiLocalIdentity = new GraffitiLocalIdentity();
   login = this.graffitiLocalIdentity.login.bind(this.graffitiLocalIdentity);
   logout = this.graffitiLocalIdentity.logout.bind(this.graffitiLocalIdentity);

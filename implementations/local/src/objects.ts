@@ -13,14 +13,9 @@ import {
   unpackObjectUrl,
   maskGraffitiObject,
   isActorAllowedGraffitiObject,
-} from "@graffiti-garden/api";
-import {
-  randomBase64,
-  decodeObjectUrl,
-  encodeObjectUrl,
   compileGraffitiObjectSchema,
-} from "./utilities.js";
-import type Ajv from "ajv";
+} from "@graffiti-garden/api";
+import { randomBase64, decodeObjectUrl, encodeObjectUrl } from "./utilities.js";
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -60,7 +55,6 @@ type ContinueDiscoverParams = {
  */
 export class GraffitiLocalObjects {
   protected db_: Promise<PouchDB.Database<GraffitiObjectData>> | undefined;
-  protected ajv_: Promise<Ajv> | undefined;
   protected readonly options: GraffitiLocalOptions;
 
   get db() {
@@ -115,16 +109,6 @@ export class GraffitiLocalObjects {
     return this.db_;
   }
 
-  protected get ajv() {
-    if (!this.ajv_) {
-      this.ajv_ = (async () => {
-        const { default: Ajv } = await import("ajv");
-        return new Ajv({ strict: false });
-      })();
-    }
-    return this.ajv_;
-  }
-
   protected async getOperationClock() {
     return Number((await (await this.db).info()).update_seq);
   }
@@ -172,7 +156,7 @@ export class GraffitiLocalObjects {
     // if the user is not the owner
     const masked = maskGraffitiObject(object, [], session?.actor);
 
-    const validate = compileGraffitiObjectSchema(await this.ajv, schema);
+    const validate = await compileGraffitiObjectSchema(schema);
     if (!validate(masked)) {
       throw new GraffitiErrorSchemaMismatch();
     }
@@ -278,7 +262,7 @@ export class GraffitiLocalObjects {
     }
 
     const [discoverChannels, schema, session] = args;
-    const validate = compileGraffitiObjectSchema(await this.ajv, schema);
+    const validate = await compileGraffitiObjectSchema(schema);
     const startKeySuffix = continueParams
       ? continueParams.ifModifiedSince.toString().padStart(15, "0")
       : "";
