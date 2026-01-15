@@ -39,7 +39,7 @@ const { objects, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
             </li>
         </ul>
         <p v-else>
-            <em> Loading... </em>
+            <em> Graffiti discover loading... </em>
         </p>
     </slot>
 </template>

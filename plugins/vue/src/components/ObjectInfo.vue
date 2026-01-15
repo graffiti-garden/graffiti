@@ -29,8 +29,10 @@ async function deleteObject(
 
 <template>
     <article v-if="object" :data-url="object.url">
-        <header>
-            <h2>Graffiti Object</h2>
+        <p>@<ActorToHandle :actor="object.actor" /> posted:</p>
+        <pre>{{ object.value }}</pre>
+        <details>
+            <summary>Show object properties</summary>
 
             <dl>
                 <dt>Object URL</dt>
@@ -47,81 +49,63 @@ async function deleteObject(
                 <dd>
                     <ActorToHandle :actor="object.actor" />
                 </dd>
+
+                <dt>Content</dt>
+                <dd>
+                    <pre>{{ object.value }}</pre>
+                </dd>
+
+                <dt>Allowed actors</dt>
+                <dd>
+                    <p v-if="!Array.isArray(object.allowed)">
+                        <em>Public</em>
+                    </p>
+                    <p v-else-if="object.allowed.length === 0">
+                        <em>No one is allowed (except you)</em>
+                    </p>
+                    <ul>
+                        <li v-for="actor in object.allowed" :key="actor">
+                            <dl>
+                                <dt>Actor</dt>
+                                <dd>
+                                    <code>{{ actor }}</code>
+                                </dd>
+                                <dt>Handle</dt>
+                                <dd>
+                                    <ActorToHandle :actor="actor" />
+                                </dd>
+                            </dl>
+                        </li>
+                    </ul>
+                </dd>
+
+                <dt>Channels</dt>
+                <dd>
+                    <ul v-if="object.channels?.length">
+                        <li v-for="channel in object.channels" :key="channel">
+                            <code>{{ channel }}</code>
+                        </li>
+                    </ul>
+                    <p v-else>
+                        <em>No channels</em>
+                    </p>
+                </dd>
             </dl>
-        </header>
-
-        <section>
-            <h3>Content</h3>
-            <pre>{{ object.value }}</pre>
-        </section>
-
-        <section>
-            <h3>Allowed Actors</h3>
-
-            <p v-if="!Array.isArray(object.allowed)">
-                <em>Public</em>
-            </p>
-            <p v-else-if="object.allowed.length === 0">
-                <em>Noone</em>
-            </p>
-            <ul>
-                <li v-for="actor in object.allowed" :key="actor">
-                    <dl>
-                        <dt>Actor</dt>
-                        <dd>
-                            <code>{{ actor }}</code>
-                        </dd>
-                        <dt>Handle</dt>
-                        <dd>
-                            <ActorToHandle :actor="actor" />
-                        </dd>
-                    </dl>
-                </li>
-            </ul>
-        </section>
-
-        <section>
-            <h3>Channels</h3>
-
-            <ul v-if="object.channels?.length">
-                <li v-for="channel in object.channels" :key="channel">
-                    <code>{{ channel }}</code>
-                </li>
-            </ul>
-            <p v-else>
-                <em>No channels</em>
-            </p>
-        </section>
-
-        <footer>
-            <nav>
-                <ul>
-                    <li v-if="$graffitiSession.value?.actor === object.actor">
-                        <button
-                            :disabled="deleting"
-                            @click="
-                                deleteObject(object, $graffitiSession.value)
-                            "
-                        >
-                            {{ deleting ? "Deleting..." : "Delete" }}
-                        </button>
-                    </li>
-                </ul>
-            </nav>
-        </footer>
+        </details>
+        <button
+            v-if="$graffitiSession.value?.actor === object.actor"
+            :disabled="deleting"
+            @click="deleteObject(object, $graffitiSession.value)"
+        >
+            {{ deleting ? "Deleting..." : "Delete" }}
+        </button>
     </article>
 
     <article v-else-if="object === null">
-        <header>
-            <h2>Graffiti Object</h2>
-        </header>
-        <p><em>Object not found</em></p>
+        <p><em>Graffiti object not found</em></p>
     </article>
 
     <article v-else>
-        <header>
-            <h2>Graffiti Object</h2>
-        </header>
-        <p><em>Loading...</em></p>
+        <p><em>Graffiti object loading...</em></p>
     </article>
 </template>
