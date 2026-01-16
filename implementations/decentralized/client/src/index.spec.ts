@@ -11,7 +11,8 @@ import { Sessions } from "./3-protocol/1-sessions";
 import { afterAll, describe, test } from "vitest";
 import { Handles } from "./3-protocol/2-handles";
 import { didTests } from "./1-services/1-dids-tests";
-import { storageBucketTests } from "./1-services/3-storage-buckets.spec";
+import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
+import { inboxTests } from "./1-services/4-inboxes-tests";
 
 describe("GraffitiDecentralized Tests", async () => {
   // Initialize structures for log in/out
@@ -44,6 +45,10 @@ describe("GraffitiDecentralized Tests", async () => {
   storageBucketTests(
     resolvedSession1?.storageBucket.serviceEndpoint,
     resolvedSession1?.storageBucket.token,
+  );
+  inboxTests(
+    resolvedSession1?.personalInbox.serviceEndpoint,
+    resolvedSession1?.personalInbox.token,
   );
 
   // How to log in/out vvv
