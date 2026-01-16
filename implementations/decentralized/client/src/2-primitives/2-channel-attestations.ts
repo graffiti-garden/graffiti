@@ -26,6 +26,16 @@ export class ChannelAttestations {
     return await this.channelPublicIdFromPrivateKey(privateKey);
   }
 
+  async getMethod(channelPublicId: Uint8Array): Promise<string> {
+    if (
+      channelPublicId[0] === CHANNEL_ATTESTATION_METHOD_PREFIX_SHA256_ED25519
+    ) {
+      return CHANNEL_ATTESTATION_METHOD_SHA256_ED25519;
+    } else {
+      throw new Error(`Unrecognized channel attestation method.`);
+    }
+  }
+
   protected async channelToPrivateKey(channel: string): Promise<Uint8Array> {
     const channelBytes = new TextEncoder().encode(channel);
     return await sha256(channelBytes);
