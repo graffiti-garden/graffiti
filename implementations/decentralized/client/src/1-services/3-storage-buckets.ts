@@ -3,7 +3,8 @@ import {
   getAuthorizationEndpoint,
   verifyHTTPSEndpoint,
 } from "./utilities";
-import z from "zod";
+import { string, array, object, optional, nullable } from "zod/mini";
+import { decode as dagCborDecode } from "@ipld/dag-cbor";
 
 export class StorageBuckets {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
@@ -159,8 +160,9 @@ export class StorageBuckets {
         },
       );
 
-      const json = await response.json();
-      const data = ExportSchema.parse(json);
+      const blob = await response.blob();
+      const cbor = dagCborDecode(await blob.arrayBuffer());
+      const data = ExportSchema.parse(cbor);
 
       for (const key of data.keys) {
         yield { key };
@@ -175,7 +177,7 @@ export class StorageBuckets {
   }
 }
 
-const ExportSchema = z.object({
-  keys: z.array(z.string()),
-  cursor: z.string().nullable().optional(),
+const ExportSchema = object({
+  keys: array(string()),
+  cursor: optional(nullable(string())),
 });

@@ -5,7 +5,19 @@ import {
   authorizationCodeGrant,
   tokenRevocation,
 } from "openid-client";
-import { z } from "zod";
+import {
+  type infer as infer_,
+  string,
+  url,
+  array,
+  object,
+  optional,
+  nullable,
+  instanceof as instanceof_,
+  undefined as undefined_,
+  intersection,
+  union,
+} from "zod/mini";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Socket } from "node:net";
 
@@ -57,7 +69,7 @@ export class Authorization {
       // storing the configuration, expected state,
       // current URL, and endpoints in local storage
       redirectUri = window.location.href;
-      const data: z.infer<typeof OAuth2LoginDataSchema> = {
+      const data: infer_<typeof OAuth2LoginDataSchema> = {
         loginId,
         redirectUri,
         authorizationEndpoint,
@@ -70,7 +82,11 @@ export class Authorization {
       );
     } else {
       // Otherwise, in node, start a local server to receive the callback
-      const http = await import("node:http");
+      const http = await import("node:http").catch((e) => {
+        throw new Error(
+          "Unrecognized environment: cannot find window or node:http",
+        );
+      });
       const server = http.createServer();
 
       try {
@@ -338,39 +354,39 @@ export class Authorization {
   }
 }
 
-export const LoginEventDetailSchema = z
-  .object({
-    loginId: z.string(),
-  })
-  .and(
-    z.union([
-      z.object({ token: z.string(), error: z.undefined().optional() }),
-      z.object({ error: z.instanceof(Error) }),
-    ]),
-  );
+export const LoginEventDetailSchema = intersection(
+  object({
+    loginId: string(),
+  }),
+  union([
+    object({ token: string(), error: optional(undefined_()) }),
+    object({ error: instanceof_(Error) }),
+  ]),
+);
 
-export const LogoutEventDetailSchema = z.object({
-  logoutId: z.string(),
-  error: z.instanceof(Error).optional(),
+export const LogoutEventDetailSchema = object({
+  logoutId: string(),
+  error: optional(instanceof_(Error)),
 });
 
-export const InitializedEventDetailSchema = z
-  .object({
-    error: z.instanceof(Error).optional(),
-  })
-  .optional()
-  .nullable();
+export const InitializedEventDetailSchema = optional(
+  nullable(
+    object({
+      error: optional(instanceof_(Error)),
+    }),
+  ),
+);
 
-export type LoginEvent = CustomEvent<z.infer<typeof LoginEventDetailSchema>>;
-export type LogoutEvent = CustomEvent<z.infer<typeof LogoutEventDetailSchema>>;
+export type LoginEvent = CustomEvent<infer_<typeof LoginEventDetailSchema>>;
+export type LogoutEvent = CustomEvent<infer_<typeof LogoutEventDetailSchema>>;
 export type InitializedEvent = CustomEvent<
-  z.infer<typeof InitializedEventDetailSchema>
+  infer_<typeof InitializedEventDetailSchema>
 >;
 
-const OAuth2LoginDataSchema = z.object({
-  loginId: z.string(),
-  redirectUri: z.url(),
-  authorizationEndpoint: z.url(),
-  state: z.string(),
-  serviceEndpoints: z.array(z.url()),
+const OAuth2LoginDataSchema = object({
+  loginId: string(),
+  redirectUri: url(),
+  authorizationEndpoint: url(),
+  state: string(),
+  serviceEndpoints: array(url()),
 });

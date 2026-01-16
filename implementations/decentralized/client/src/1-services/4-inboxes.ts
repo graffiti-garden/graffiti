@@ -1,26 +1,36 @@
-import type {
-  JSONSchema,
-  GraffitiObject,
-  GraffitiObjectBase,
-} from "@graffiti-garden/api";
+import type { JSONSchema, GraffitiObject } from "@graffiti-garden/api";
 import {
   getAuthorizationEndpoint,
   fetchWithErrorHandling,
   verifyHTTPSEndpoint,
 } from "./utilities";
-import z from "zod";
 import {
-  GraffitiErrorInvalidSchema,
-  GraffitiErrorNotFound,
+  compileGraffitiObjectSchema,
+  GraffitiErrorCursorExpired,
 } from "@graffiti-garden/api";
-import Ajv from "ajv";
 import {
   encode as dagCborEncode,
   decode as dagCborDecode,
 } from "@ipld/dag-cbor";
+import {
+  type infer as infer_,
+  string,
+  url,
+  array,
+  object,
+  optional,
+  nullable,
+  strictObject,
+  looseObject,
+  nonnegative,
+  int,
+  boolean,
+  custom,
+  number,
+  union,
+} from "zod/mini";
 
 export class Inboxes {
-  protected readonly ajv = new Ajv({ strict: false });
   getAuthorizationEndpoint = getAuthorizationEndpoint;
   protected cache_: Promise<Cache> | null = null;
   protected get cache() {
@@ -42,8 +52,9 @@ export class Inboxes {
       body: new Uint8Array(dagCborEncode(message)),
     });
 
-    const json = await response.json();
-    const parsed = SendResponseSchema.parse(json);
+    const blob = await response.blob();
+    const cbor = dagCborDecode(await blob.arrayBuffer());
+    const parsed = SendResponseSchema.parse(cbor);
     return parsed.id;
   }
 
@@ -61,10 +72,10 @@ export class Inboxes {
       await fetchWithErrorHandling(url, {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/cbor",
           Authorization: `Bearer ${inboxToken}`,
         },
-        body: JSON.stringify({ l: label }),
+        body: new Uint8Array(dagCborEncode({ l: label })),
       });
     }
 
@@ -116,7 +127,7 @@ export class Inboxes {
     cacheVersion?: string,
     cacheNumSeen: number = 0,
   ): MessageStream<Schema> {
-    const validator = compileGraffitiObjectSchema(this.ajv, objectSchema);
+    const validator = await compileGraffitiObjectSchema(objectSchema);
     const messageIdsCacheKey = await messageIdsCacheKey_;
     const cache = await this.cache;
 
@@ -125,7 +136,7 @@ export class Inboxes {
       cacheVersion !== undefined &&
       cacheVersion !== cachedMessageIds?.version
     ) {
-      throw new GraffitiErrorNotFound("Cursor is stale");
+      throw new GraffitiErrorCursorExpired("Cursor is stale");
     }
 
     // See if the cursor is still active by
@@ -141,7 +152,7 @@ export class Inboxes {
         cachedCursor,
       );
     } catch (e) {
-      if (!(e instanceof GraffitiErrorNotFound && cachedCursor)) {
+      if (!(e instanceof GraffitiErrorCursorExpired && cachedCursor)) {
         // Unexpected error
         throw e;
       }
@@ -204,8 +215,7 @@ export class Inboxes {
     // Continue streaming results
     let response = firstResponse;
     let cursor: string;
-    const version =
-      cacheVersion ?? (Math.random() + 1).toString(36).substring(2);
+    const version = cacheVersion ?? crypto.randomUUID();
     let messageIds = cachedMessageIds?.messageIds ?? [];
     while (true) {
       const blob = await response.blob();
@@ -274,7 +284,7 @@ export class Inboxes {
       );
     }
 
-    const outputCursor: z.infer<typeof CursorSchema> = {
+    const outputCursor: infer_<typeof CursorSchema> = {
       numSeen: cacheNumSeen,
       version,
       messageIdsCacheKey,
@@ -357,43 +367,37 @@ export class Inboxes {
   }
 }
 
-const GraffitiObjectSchema = z
-  .object({
-    value: z.looseObject({}),
-    channels: z.array(z.string()),
-    allowed: z.array(z.url()).nullable().optional(),
-    url: z.url(),
-    actor: z.url(),
-  })
-  .strict();
-export const Uint8ArraySchema = z.custom<Uint8Array>(
+const GraffitiObjectSchema = strictObject({
+  value: looseObject({}),
+  channels: array(string()),
+  allowed: optional(nullable(array(url()))),
+  url: url(),
+  actor: url(),
+});
+export const Uint8ArraySchema = custom<Uint8Array>(
   (v): v is Uint8Array => v instanceof Uint8Array,
 );
-export const TagsSchema = z.array(Uint8ArraySchema);
+export const TagsSchema = array(Uint8ArraySchema);
 
 export const MESSAGE_TAGS_KEY = "t";
 export const MESSAGE_OBJECT_KEY = "o";
 export const MESSAGE_METADATA_KEY = "m";
-export const MessageBaseSchema = z
-  .object({
-    [MESSAGE_TAGS_KEY]: TagsSchema,
-    [MESSAGE_OBJECT_KEY]: GraffitiObjectSchema,
-    [MESSAGE_METADATA_KEY]: Uint8ArraySchema,
-  })
-  .strict();
-type MessageBase = z.infer<typeof MessageBaseSchema>;
+export const MessageBaseSchema = object({
+  [MESSAGE_TAGS_KEY]: TagsSchema,
+  [MESSAGE_OBJECT_KEY]: GraffitiObjectSchema,
+  [MESSAGE_METADATA_KEY]: Uint8ArraySchema,
+});
+type MessageBase = infer_<typeof MessageBaseSchema>;
 
 export const LABELED_MESSAGE_ID_KEY = "id";
 export const LABELED_MESSAGE_MESSAGE_KEY = "m";
 export const LABELED_MESSAGE_LABEL_KEY = "l";
-export const LabeledMessageBaseSchema = z
-  .object({
-    [LABELED_MESSAGE_ID_KEY]: z.string(),
-    [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
-    [LABELED_MESSAGE_LABEL_KEY]: z.number(),
-  })
-  .strict();
-type LabeledMessageBase = z.infer<typeof LabeledMessageBaseSchema>;
+export const LabeledMessageBaseSchema = strictObject({
+  [LABELED_MESSAGE_ID_KEY]: string(),
+  [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
+  [LABELED_MESSAGE_LABEL_KEY]: number(),
+});
+type LabeledMessageBase = infer_<typeof LabeledMessageBaseSchema>;
 
 export type Message<Schema extends JSONSchema> = MessageBase & {
   [MESSAGE_OBJECT_KEY]: GraffitiObject<Schema>;
@@ -404,43 +408,20 @@ export type LabeledMessage<Schema extends JSONSchema> = LabeledMessageBase & {
   };
 };
 
-export function compileGraffitiObjectSchema<Schema extends JSONSchema>(
-  ajv: Ajv,
-  schema: Schema,
-) {
-  try {
-    // Force the validation guard because
-    // it is too big for the type checker.
-    // Fortunately json-schema-to-ts is
-    // well tested against ajv.
-    return ajv.compile(schema) as (
-      data: GraffitiObjectBase,
-    ) => data is GraffitiObject<Schema>;
-  } catch (error) {
-    throw new GraffitiErrorInvalidSchema(
-      error instanceof Error ? error.message : undefined,
-    );
-  }
-}
+const SendResponseSchema = strictObject({ id: string() });
 
-const SendResponseSchema = z.object({ id: z.string() }).strict();
+const MessageResultSchema = strictObject({
+  results: array(LabeledMessageBaseSchema),
+  hasMore: boolean(),
+  cursor: string(),
+});
 
-const MessageResultSchema = z
-  .object({
-    results: z.array(LabeledMessageBaseSchema),
-    hasMore: z.boolean(),
-    cursor: z.string(),
-  })
-  .strict();
-
-const CursorSchema = z
-  .object({
-    messageIdsCacheKey: z.string(),
-    version: z.string(),
-    numSeen: z.int().nonnegative(),
-    objectSchema: z.any(),
-  })
-  .strict();
+const CursorSchema = strictObject({
+  messageIdsCacheKey: string(),
+  version: string(),
+  numSeen: int().check(nonnegative()),
+  objectSchema: union([looseObject({}), boolean()]),
+});
 
 export interface MessageStreamReturn<Schema extends JSONSchema> {
   cursor: string;
