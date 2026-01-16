@@ -8,52 +8,58 @@ import { Authorization } from "./1-services/2-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
 import { Sessions } from "./3-protocol/1-sessions";
-import { afterAll, describe, test } from "vitest";
+import { afterAll, describe } from "vitest";
 import { Handles } from "./3-protocol/2-handles";
 import { didTests } from "./1-services/1-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
 import { inboxTests } from "./1-services/4-inboxes-tests";
+import { handleTests } from "./3-protocol/2-handles-tests";
 
 describe("GraffitiDecentralized Tests", async () => {
   // Initialize structures for log in/out
   const dids = new DecentralizedIdentifiers();
-  const sessions = new Sessions({
+  const sessionMethods = new Sessions({
     dids,
     authorization: new Authorization(),
     inboxes: new Inboxes(),
     storageBuckets: new StorageBuckets(),
   });
-  const handles = new Handles({ dids });
+  const handleMethods = new Handles({ dids });
 
   // Login
-  const session1 = await login("localhost%3A5173:app:handles:handle:test1");
-  // const session2 = await login("localhost%3A5173:app:handles:handle:test2");
-  const resolvedSession1 = sessions.resolveSession(session1);
-  // const resolvedSession2 = sessions.resolveSession(session2)
-  if (!resolvedSession1) {
-    throw new Error("Not logged in");
+  const handles = [
+    "localhost%3A5173:app:handles:handle:test1",
+    // "localhost%3A5173:app:handles:handle:test2"
+  ];
+  let sessions: GraffitiSession[] = [];
+  for (const handle of handles) {
+    sessions.push(await login(handle));
   }
-
+  const resolvedSessions = sessions.map((s) => {
+    const resolved = sessionMethods.resolveSession(s);
+    if (!resolved) throw new Error("Error logging in");
+    return resolved;
+  });
   // Logout on cleanup
   afterAll(async () => {
-    await logout(session1.actor);
-    // await logout(session2.actor);
+    await Promise.all(sessions.map((s) => logout(s.actor)));
   });
 
   // Run the tests
   didTests();
   storageBucketTests(
-    resolvedSession1?.storageBucket.serviceEndpoint,
-    resolvedSession1?.storageBucket.token,
+    resolvedSessions[0].storageBucket.serviceEndpoint,
+    resolvedSessions[0].storageBucket.token,
   );
   inboxTests(
-    resolvedSession1?.personalInbox.serviceEndpoint,
-    resolvedSession1?.personalInbox.token,
+    resolvedSessions[0].personalInbox.serviceEndpoint,
+    resolvedSessions[0].personalInbox.token,
   );
+  handleTests(handles[0]);
 
   // How to log in/out vvv
   async function login(handle: string) {
-    const actor = await handles.handleToActor(handle);
+    const actor = await handleMethods.handleToActor(handle);
 
     return await new Promise<GraffitiSession>((resolve, reject) => {
       const listener = (e: unknown) => {
@@ -65,17 +71,17 @@ describe("GraffitiDecentralized Tests", async () => {
           resolve(detail.session);
         }
       };
-      sessions.sessionEvents.addEventListener("login", listener);
+      sessionMethods.sessionEvents.addEventListener("login", listener);
 
       setTimeout(
         () => {
-          sessions.sessionEvents.removeEventListener("login", listener);
+          sessionMethods.sessionEvents.removeEventListener("login", listener);
           reject(new Error("Authorization timed out"));
         },
         5 * 60 * 1000,
       ); // 5 minutes timeout
 
-      sessions.login(actor);
+      sessionMethods.login(actor);
     });
   }
 
@@ -91,17 +97,17 @@ describe("GraffitiDecentralized Tests", async () => {
           resolve();
         }
       };
-      sessions.sessionEvents.addEventListener("logout", listener);
+      sessionMethods.sessionEvents.addEventListener("logout", listener);
 
       setTimeout(
         () => {
-          sessions.sessionEvents.removeEventListener("logout", listener);
+          sessionMethods.sessionEvents.removeEventListener("logout", listener);
           reject(new Error("Logout timed out"));
         },
         5 * 60 * 1000,
       ); // 5 minutes timeout
 
-      sessions.logout(actor);
+      sessionMethods.logout(actor);
     });
   }
 });
