@@ -36,6 +36,9 @@ const LabelSchema = z.int().min(0).openapi({
     "An integer label for the message indicating whether it is worth keeping",
   example: 1,
 });
+const LabelBodySchema = z.object({
+  l: LabelSchema.min(1),
+});
 
 const SinceSeqSchema = z.int().min(0);
 
@@ -86,7 +89,7 @@ const sendRoute = createRoute({
     200: {
       description: "Message already sent",
       content: {
-        "application/json": {
+        "application/cbor": {
           schema: z.object({
             id: z.string(),
           }),
@@ -96,7 +99,7 @@ const sendRoute = createRoute({
     201: {
       description: "Message sent successfully",
       content: {
-        "application/json": {
+        "application/cbor": {
           schema: z.object({
             id: z.string(),
           }),
@@ -127,7 +130,10 @@ inbox.openapi(sendRoute, async (c) => {
     throw new HTTPException(400, { message: "Invalid message format" });
   }
   const { messageId, created } = await sendMessage(c, inboxId, message);
-  return c.json({ id: messageId }, created ? 201 : 200);
+  const output = { id: messageId };
+  return c.body(dagCborEncode(output).slice(), created ? 201 : 200, {
+    "Content-Type": "application/cbor",
+  });
 });
 
 const labelRoute = createRoute({
@@ -142,10 +148,8 @@ const labelRoute = createRoute({
     }),
     body: {
       content: {
-        "application/json": {
-          schema: z.object({
-            l: LabelSchema.min(1),
-          }),
+        "application/cbor": {
+          schema: LabelBodySchema,
         },
       },
       required: true,
@@ -166,8 +170,16 @@ inbox.openapi(labelRoute, async (c) => {
   const { userId } = await verifySessionHeader(c);
   const inboxId = getInboxId(c);
   const { messageId } = c.req.valid("param");
-  const { l: label } = c.req.valid("json");
-  await labelMessage(c, inboxId, messageId, label, userId);
+  const bodyBlob = await c.req.blob();
+  const bodyBytes = await bodyBlob.arrayBuffer();
+  let labelBody: z.infer<typeof LabelBodySchema>;
+  try {
+    const bodyDecoded = dagCborDecode(bodyBytes);
+    labelBody = LabelBodySchema.parse(bodyDecoded);
+  } catch (e) {
+    throw new HTTPException(400, { message: "Invalid label body format" });
+  }
+  await labelMessage(c, inboxId, messageId, labelBody.l, userId);
   return c.body(null, 200);
 });
 
@@ -202,6 +214,7 @@ const queryRoute = createRoute({
     403: {
       description: "Cannot query messages in someone else's inbox",
     },
+    410: { description: "Cursor expired or otherwise invalid" },
   },
 });
 inbox.openapi(queryRoute, async (c) => {
@@ -230,10 +243,10 @@ inbox.openapi(queryRoute, async (c) => {
       objectSchema = cursorParsed.objectSchema;
       createdAt = cursorParsed.createdAt;
     } catch {
-      throw new HTTPException(404, { message: "Invalid cursor" });
+      throw new HTTPException(410, { message: "Invalid cursor" });
     }
     if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
-      throw new HTTPException(404, { message: "Cursor expired" });
+      throw new HTTPException(410, { message: "Cursor expired" });
     }
   } else {
     const queryParamsBlob = await c.req.blob();
@@ -324,10 +337,10 @@ inbox.openapi(exportRoute, async (c) => {
       sinceSeq = cursorParsed.sinceSeq;
       createdAt = cursorParsed.createdAt;
     } catch (error) {
-      throw new HTTPException(404, { message: "Invalid cursor." });
+      throw new HTTPException(410, { message: "Invalid cursor." });
     }
     if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
-      throw new HTTPException(404, { message: "Cursor expired" });
+      throw new HTTPException(410, { message: "Cursor expired" });
     }
   }
 
