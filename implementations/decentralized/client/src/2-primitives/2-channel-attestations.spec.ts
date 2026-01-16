@@ -37,6 +37,13 @@ test("Invalid attestation method", async () => {
 
 for (const method of allowedAttestationMethods) {
   describe(`Attestation Method: ${method}`, () => {
+    test("get method", async () => {
+      const channel = await randomChannel();
+      const publicId = await channelAttestations.register(method, channel);
+      const methodReturned = await channelAttestations.getMethod(publicId);
+      expect(methodReturned).toEqual(method);
+    });
+
     test("Idempotent public Ids", async () => {
       const channel = await randomChannel();
       const publicId1 = await channelAttestations.register(method, channel);
