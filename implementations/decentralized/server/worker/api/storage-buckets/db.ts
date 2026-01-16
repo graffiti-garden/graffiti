@@ -126,8 +126,8 @@ export async function exportKeys(
   const listed = await context.env.STORAGE.list({ prefix, cursor });
   const keys = listed.objects.map((o) => o.key.slice(prefix.length));
 
-  return context.json({
+  return {
     keys,
     cursor: listed.truncated ? listed.cursor : null,
-  });
+  };
 }

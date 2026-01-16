@@ -6,6 +6,7 @@ import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { augmentService, getId } from "../shared";
 import { getValue, putValue, deleteValue, exportKeys } from "./db";
 import { bodyLimit } from "hono/body-limit";
+import { encode as dagCborEncode } from "@ipld/dag-cbor";
 
 const MAX_VALUE_SIZE = 25 * 1024 * 1024; // 25mb
 
@@ -158,7 +159,7 @@ storageBucket.openapi(
       200: {
         description: "Successfully exported keys",
         content: {
-          "application/json": {
+          "application/cbor": {
             schema: z.object({
               keys: z.array(z.string()),
               cursor: z.string().nullable(),
@@ -174,7 +175,10 @@ storageBucket.openapi(
     const { cursor } = c.req.valid("query");
     const bucketId = getBucketId(c);
     const { userId } = await verifySessionHeader(c);
-    return exportKeys(c, bucketId, cursor, userId);
+    const output = await exportKeys(c, bucketId, cursor, userId);
+    return c.body(dagCborEncode(output).slice(), 200, {
+      "Content-Type": "application/cbor",
+    });
   },
 );
 
