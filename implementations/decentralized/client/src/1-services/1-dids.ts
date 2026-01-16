@@ -28,9 +28,3 @@ export class DecentralizedIdentifiers {
     return didDocument;
   }
 }
-
-async function test() {
-  const didInstance = new DecentralizedIdentifiers();
-  console.log(await didInstance.resolve("did:plc:wpruhkft6tujbxnhnm6g6pbn"));
-}
-// test();
