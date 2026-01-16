@@ -11,6 +11,7 @@ import { Sessions } from "./3-protocol/1-sessions";
 import { afterAll, describe, test } from "vitest";
 import { Handles } from "./3-protocol/2-handles";
 import { didTests } from "./1-services/1-dids-tests";
+import { storageBucketTests } from "./1-services/3-storage-buckets.spec";
 
 describe("GraffitiDecentralized Tests", async () => {
   // Initialize structures for log in/out
@@ -25,7 +26,12 @@ describe("GraffitiDecentralized Tests", async () => {
 
   // Login
   const session1 = await login("localhost%3A5173:app:handles:handle:test1");
-  // const session2 = await login("localhost:5173/app/handles/handle/test2");
+  // const session2 = await login("localhost%3A5173:app:handles:handle:test2");
+  const resolvedSession1 = sessions.resolveSession(session1);
+  // const resolvedSession2 = sessions.resolveSession(session2)
+  if (!resolvedSession1) {
+    throw new Error("Not logged in");
+  }
 
   // Logout on cleanup
   afterAll(async () => {
@@ -35,6 +41,10 @@ describe("GraffitiDecentralized Tests", async () => {
 
   // Run the tests
   didTests();
+  storageBucketTests(
+    resolvedSession1?.storageBucket.serviceEndpoint,
+    resolvedSession1?.storageBucket.token,
+  );
 
   // How to log in/out vvv
   async function login(handle: string) {
