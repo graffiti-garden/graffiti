@@ -15,7 +15,14 @@ import {
   encode as dagCborEncode,
   decode as dagCborDecode,
 } from "@ipld/dag-cbor";
-import { z } from "zod";
+import {
+  type infer as infer_,
+  array,
+  custom,
+  looseObject,
+  optional,
+  strictObject,
+} from "zod/mini";
 import { CHANNEL_ATTESTATION_METHOD_SHA256_ED25519 } from "../2-primitives/3-channel-attestations";
 import { ALLOWED_ATTESTATION_METHOD_HMAC_SHA256 } from "../2-primitives/4-allowed-attestations";
 import {
@@ -72,7 +79,7 @@ export class ObjectEncoding {
       (c) => c.channelPublicId,
     );
 
-    const objectData: z.infer<typeof ObjectDataSchema> = {
+    const objectData: infer_<typeof ObjectDataSchema> = {
       [VALUE_PROPERTY]: partialObject.value,
       [CHANNEL_ATTESTATIONS_PROPERTY]: channelAttestations,
       [NONCE_PROPERTY]: randomBytes(32),
@@ -311,14 +318,14 @@ const CHANNEL_ATTESTATIONS_PROPERTY = "c";
 const ALLOWED_ATTESTATIONS_PROPERTY = "a";
 const NONCE_PROPERTY = "n";
 
-const Uint8ArraySchema = z.custom<Uint8Array>(
+const Uint8ArraySchema = custom<Uint8Array>(
   (v): v is Uint8Array => v instanceof Uint8Array,
 );
 
-const ObjectDataSchema = z.object({
-  [VALUE_PROPERTY]: z.record(z.string(), z.any()),
-  [CHANNEL_ATTESTATIONS_PROPERTY]: z.array(Uint8ArraySchema),
-  [ALLOWED_ATTESTATIONS_PROPERTY]: z.array(Uint8ArraySchema).optional(),
+const ObjectDataSchema = strictObject({
+  [VALUE_PROPERTY]: looseObject({}),
+  [CHANNEL_ATTESTATIONS_PROPERTY]: array(Uint8ArraySchema),
+  [ALLOWED_ATTESTATIONS_PROPERTY]: optional(array(Uint8ArraySchema)),
   [NONCE_PROPERTY]: Uint8ArraySchema,
 });
 
