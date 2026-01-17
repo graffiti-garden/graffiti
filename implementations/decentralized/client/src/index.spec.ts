@@ -14,6 +14,10 @@ import { didTests } from "./1-services/1-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
 import { inboxTests } from "./1-services/4-inboxes-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
+import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
+import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
+import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
+import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
 
 describe("GraffitiDecentralized Tests", async () => {
   // Initialize structures for log in/out
@@ -45,7 +49,7 @@ describe("GraffitiDecentralized Tests", async () => {
     await Promise.all(sessions.map((s) => logout(s.actor)));
   });
 
-  // Run the tests
+  // Service tests
   didTests();
   storageBucketTests(
     resolvedSessions[0].storageBucket.serviceEndpoint,
@@ -56,6 +60,12 @@ describe("GraffitiDecentralized Tests", async () => {
     resolvedSessions[0].personalInbox.token,
   );
   handleTests(handles[0]);
+
+  // Primitive tests
+  stringEncodingTests();
+  contentAddressesTests();
+  channelAttestationTests();
+  allowedAttestationTests();
 
   // How to log in/out vvv
   async function login(handle: string) {

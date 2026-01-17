@@ -3,7 +3,7 @@ import { randomBytes } from "@noble/hashes/utils.js";
 import {
   MULTIHASH_CODE_SHA256,
   MULTIHASH_LENGTH_SHA256,
-} from "./1-content-addresses";
+} from "./2-content-addresses";
 
 export const ALLOWED_ATTESTATION_METHOD_HMAC_SHA256 = "hmac:sha2-256";
 const ALLOWED_ATTESTATION_METHOD_PREFIX_HMAC = 0;
