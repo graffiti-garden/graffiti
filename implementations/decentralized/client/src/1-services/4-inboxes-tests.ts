@@ -52,7 +52,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       const result2 = await iterator2.next();
       assert(!result2.done);
       expect(result2.value.l).toEqual(42);
-      const endResult2 = await iterator.next();
+      const endResult2 = await iterator2.next();
       expect(endResult2.done).toBe(true);
     });
 
