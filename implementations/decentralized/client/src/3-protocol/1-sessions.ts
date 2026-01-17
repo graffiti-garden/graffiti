@@ -1,9 +1,9 @@
-import {
-  type Graffiti,
-  type GraffitiLoginEvent,
-  type GraffitiLogoutEvent,
-  type GraffitiSession,
-  type GraffitiSessionInitializedEvent,
+import type {
+  Graffiti,
+  GraffitiLoginEvent,
+  GraffitiLogoutEvent,
+  GraffitiSession,
+  GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
 import { DecentralizedIdentifiers } from "../1-services/1-dids";
 import {
@@ -15,7 +15,16 @@ import {
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import type { Inboxes } from "../1-services/4-inboxes";
 import type { Service } from "did-resolver";
-import { z } from "zod";
+import {
+  type infer as infer_,
+  extend,
+  array,
+  string,
+  object,
+  url,
+  tuple,
+  enum as enum_,
+} from "zod/mini";
 
 export const DID_SERVICE_TYPE_GRAFFITI_INBOX = "GraffitiInbox";
 export const DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET = "GraffitiStorageBucket";
@@ -78,9 +87,9 @@ export class Sessions {
     })();
   }
 
-  protected inProgressLogin: z.infer<typeof InProgressSchema> | undefined =
+  protected inProgressLogin: infer_<typeof InProgressSchema> | undefined =
     undefined;
-  protected inProgressLogout: z.infer<typeof InProgressSchema> | undefined =
+  protected inProgressLogout: infer_<typeof InProgressSchema> | undefined =
     undefined;
 
   async login(actor: string) {
@@ -193,7 +202,7 @@ export class Sessions {
 
     const session: GraffitiSession = { actor };
 
-    const inProgressLogin: z.infer<typeof InProgressSchema> = {
+    const inProgressLogin: infer_<typeof InProgressSchema> = {
       ...session,
       tokens: [],
       servicesByAuthorization,
@@ -238,16 +247,14 @@ export class Sessions {
       this.sessionEvents.dispatchEvent(LoginEvent);
     }
   }
-  protected async onLogin_(
-    loginDetail: z.infer<typeof LoginEventDetailSchema>,
-  ) {
+  protected async onLogin_(loginDetail: infer_<typeof LoginEventDetailSchema>) {
     if (loginDetail.error) throw loginDetail.error;
 
     const token = loginDetail.token;
     const actor = loginDetail.loginId;
 
     // Lookup the in-progress session
-    let inProgressLogin: z.infer<typeof InProgressSchema>;
+    let inProgressLogin: infer_<typeof InProgressSchema>;
     if (typeof window !== "undefined") {
       const inProgressLoginString = window.localStorage.getItem(
         LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY,
@@ -401,14 +408,14 @@ export class Sessions {
     }
   }
   protected async onLogout_(
-    logoutDetail: z.infer<typeof LogoutEventDetailSchema>,
+    logoutDetail: infer_<typeof LogoutEventDetailSchema>,
   ) {
     if (logoutDetail.error) throw logoutDetail.error;
 
     const actor = logoutDetail.logoutId;
 
     // Lookup the in-progress session
-    let inProgressLogout: z.infer<typeof InProgressSchema>;
+    let inProgressLogout: infer_<typeof InProgressSchema>;
     if (typeof window !== "undefined") {
       const inProgressLogoutString = window.localStorage.getItem(
         LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY,
@@ -487,7 +494,7 @@ export class Sessions {
       return [];
     }
 
-    const parsed = z.array(StoredSessionSchema).safeParse(json);
+    const parsed = array(StoredSessionSchema).safeParse(json);
     if (!parsed.success) {
       console.error("Stored session data is invalid");
       window.localStorage.removeItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
@@ -516,40 +523,40 @@ const LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY = "graffiti-login-in-progress";
 const LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY = "graffiti-logout-in-progress";
 const LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY = "graffiti-sessions-logged-in";
 
-const GraffitiSessionSchema = z.object({
-  actor: z.url(),
+const GraffitiSessionSchema = object({
+  actor: url(),
 });
 
-const ServiceSessionSchema = z.object({
-  token: z.string(),
-  serviceEndpoint: z.url(),
-  authorizationEndpoint: z.url(),
+const ServiceSessionSchema = object({
+  token: string(),
+  serviceEndpoint: url(),
+  authorizationEndpoint: url(),
 });
 
-const ServicesByAuthorizationSchema = z.array(
-  z.tuple([
-    z.url(), // Authorization endpoint
-    z.array(
-      z.object({
-        endpoint: z.url(), // Service endpoint
-        type: z.enum(["bucket", "personal-inbox", "shared-inbox"]),
+const ServicesByAuthorizationSchema = array(
+  tuple([
+    url(), // Authorization endpoint
+    array(
+      object({
+        endpoint: url(), // Service endpoint
+        type: enum_(["bucket", "personal-inbox", "shared-inbox"]),
       }),
     ),
   ]),
 );
 
-const InProgressSchema = GraffitiSessionSchema.extend({
-  tokens: z.array(z.string()),
+const InProgressSchema = extend(GraffitiSessionSchema, {
+  tokens: array(string()),
   servicesByAuthorization: ServicesByAuthorizationSchema,
 });
 
-const StoredSessionSchema = InProgressSchema.extend({
+const StoredSessionSchema = extend(InProgressSchema, {
   storageBucket: ServiceSessionSchema,
   personalInbox: ServiceSessionSchema,
-  sharedInboxes: z.array(ServiceSessionSchema),
+  sharedInboxes: array(ServiceSessionSchema),
 });
 
-type StoredSession = z.infer<typeof StoredSessionSchema>;
+type StoredSession = infer_<typeof StoredSessionSchema>;
 
 function serviceToEndpoint(service: Service): string {
   if (typeof service.serviceEndpoint === "string")
