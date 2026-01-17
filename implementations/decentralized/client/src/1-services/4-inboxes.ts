@@ -17,7 +17,6 @@ import {
   string,
   url,
   array,
-  object,
   optional,
   nullable,
   strictObject,
@@ -93,14 +92,14 @@ export class Inboxes {
     }
   }
 
-  protected fetchMessageBatch(
+  protected async fetchMessageBatch(
     inboxUrl: string,
     type: "query" | "export",
     body: Uint8Array<ArrayBuffer> | undefined,
     inboxToken?: string | null,
     cursor?: string,
   ) {
-    return fetchWithErrorHandling(
+    const response = await fetchWithErrorHandling(
       `${inboxUrl}/${type}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
       {
         method: "POST",
@@ -115,6 +114,26 @@ export class Inboxes {
         body,
       },
     );
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const retryAfter = retryAfterHeader
+      ? parseInt(retryAfterHeader)
+      : undefined;
+
+    const waitTil =
+      retryAfter && Number.isFinite(retryAfter)
+        ? Date.now() + retryAfter * 1000
+        : undefined;
+
+    return { response, waitTil };
+  }
+
+  protected async waitFor(waitTil?: number) {
+    if (waitTil !== undefined) {
+      const waitFor = waitTil - Date.now();
+      if (waitFor > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitFor));
+      }
+    }
   }
 
   protected async *messageStreamer<Schema extends JSONSchema>(
@@ -139,18 +158,24 @@ export class Inboxes {
       throw new GraffitiErrorCursorExpired("Cursor is stale");
     }
 
+    // If we are rate-limited, wait
+    let waitTil = cachedMessageIds?.waitTil;
+    await this.waitFor(waitTil);
+
     // See if the cursor is still active by
     // requesting an initial batch of messages
     const cachedCursor = cachedMessageIds?.cursor;
     let firstResponse: Response | undefined = undefined;
     try {
-      firstResponse = await this.fetchMessageBatch(
+      const out = await this.fetchMessageBatch(
         inboxUrl,
         type,
         body,
         inboxToken,
         cachedCursor,
       );
+      firstResponse = out.response;
+      waitTil = out.waitTil;
     } catch (e) {
       if (!(e instanceof GraffitiErrorCursorExpired && cachedCursor)) {
         // Unexpected error
@@ -204,12 +229,14 @@ export class Inboxes {
 
     if (firstResponse === undefined) {
       // The cursor was stale: try again
-      firstResponse = await this.fetchMessageBatch(
+      const out = await this.fetchMessageBatch(
         inboxUrl,
         type,
         body,
         inboxToken,
       );
+      firstResponse = out.response;
+      waitTil = out.waitTil;
     }
 
     // Continue streaming results
@@ -264,6 +291,7 @@ export class Inboxes {
         cursor,
         version,
         messageIds,
+        waitTil,
       });
 
       // Update how many we've seen
@@ -274,14 +302,17 @@ export class Inboxes {
 
       if (!hasMore) break;
 
-      // Otherwise get another response
-      response = await this.fetchMessageBatch(
+      // Otherwise get another response (after waiting for rate-limit)
+      await this.waitFor(waitTil);
+      const out = await this.fetchMessageBatch(
         inboxUrl,
         type,
         undefined, // Body is never past the first time
         inboxToken,
         cursor,
       );
+      response = out.response;
+      waitTil = out.waitTil;
     }
 
     const outputCursor: infer_<typeof CursorSchema> = {
@@ -382,7 +413,7 @@ export const TagsSchema = array(Uint8ArraySchema);
 export const MESSAGE_TAGS_KEY = "t";
 export const MESSAGE_OBJECT_KEY = "o";
 export const MESSAGE_METADATA_KEY = "m";
-export const MessageBaseSchema = object({
+export const MessageBaseSchema = strictObject({
   [MESSAGE_TAGS_KEY]: TagsSchema,
   [MESSAGE_OBJECT_KEY]: GraffitiObjectSchema,
   [MESSAGE_METADATA_KEY]: Uint8ArraySchema,
@@ -436,6 +467,7 @@ type CacheQueryValue = {
   cursor: string;
   version: string;
   messageIds: string[];
+  waitTil?: number;
 };
 
 const HAS_IDB =
