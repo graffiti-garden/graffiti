@@ -3,14 +3,14 @@ import type {
   GraffitiLogoutEvent,
   GraffitiSession,
 } from "@graffiti-garden/api";
-import { DecentralizedIdentifiers } from "./1-services/1-dids";
-import { Authorization } from "./1-services/2-authorization";
+import { DecentralizedIdentifiers } from "./1-services/2-dids";
+import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
 import { Sessions } from "./3-protocol/1-sessions";
 import { afterAll, describe } from "vitest";
 import { Handles } from "./3-protocol/2-handles";
-import { didTests } from "./1-services/1-dids-tests";
+import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
 import { inboxTests } from "./1-services/4-inboxes-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";

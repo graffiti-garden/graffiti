@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { DecentralizedIdentifiers } from "./1-dids";
+import { DecentralizedIdentifiers } from "./2-dids";
 
 export function didTests() {
   return describe("DecentralizedIdentifiers", () => {

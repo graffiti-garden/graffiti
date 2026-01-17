@@ -1,6 +1,6 @@
 import type { Graffiti } from "@graffiti-garden/api";
 import { GraffitiErrorNotFound } from "@graffiti-garden/api";
-import { DecentralizedIdentifiers } from "../1-services/1-dids";
+import { DecentralizedIdentifiers } from "../1-services/2-dids";
 
 // Handles used a fixed method
 const HANDLE_DID_PREFIX = "did:web:";
