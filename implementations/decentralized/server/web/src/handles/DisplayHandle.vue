@@ -1,7 +1,7 @@
 <template>
     <article>
         <h2>
-            <a :href="handleToLink(handle.name)" target="_blank">
+            <a :href="handleNameToLink(handle.name, baseHost)" target="_blank">
                 {{ handleNameToHandle(handle.name, baseHost) }}
             </a>
             <CopyButton :text="handleNameToHandle(handle.name, baseHost)" />
@@ -52,6 +52,7 @@ import {
     constructDidDocument,
     handleNameToDid,
     handleNameToHandle,
+    handleNameToLink,
     type OptionalAlsoKnownAs,
     type OptionalServices,
 } from "../../../shared/did-schemas";
@@ -67,10 +68,6 @@ const props = defineProps<{
 const handle = ref<Handle>(props.handle);
 
 const baseHost = window.location.host;
-
-function handleToLink(handleName: string) {
-    return `${window.location.protocol}//${handleNameToHandle(handleName, baseHost)}/.well-known/did.json`;
-}
 
 const editing = ref(false);
 const editingAlsoKnownAs = ref<OptionalAlsoKnownAs>(undefined);

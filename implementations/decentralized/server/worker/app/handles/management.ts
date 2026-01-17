@@ -100,7 +100,7 @@ router.put("/handle/:handle-name", async (c) => {
   return c.json({ updated: true });
 });
 
-router.get("/handle/:handle-name/.well-known/did.json", getDid);
+router.get("/handle/:handle-name/did.json", getDid);
 
 router.get("/list", async (c) => {
   const { userId } = await verifySessionCookie(c);
