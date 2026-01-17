@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { Handles } from "./2-handles";
-import { DecentralizedIdentifiers } from "../1-services/1-dids";
+import { DecentralizedIdentifiers } from "../1-services/2-dids";
 
 export function handleTests(handle: string) {
   describe("Handles", async () => {

@@ -5,13 +5,13 @@ import type {
   GraffitiSession,
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
-import { DecentralizedIdentifiers } from "../1-services/1-dids";
+import { DecentralizedIdentifiers } from "../1-services/2-dids";
 import {
   InitializedEventDetailSchema,
   LoginEventDetailSchema,
   LogoutEventDetailSchema,
   type Authorization,
-} from "../1-services/2-authorization";
+} from "../1-services/1-authorization";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import type { Inboxes } from "../1-services/4-inboxes";
 import type { Service } from "did-resolver";
