@@ -22,6 +22,7 @@ import { encodeBase64, decodeBase64 } from "../../app/auth/utils";
 
 const MESSAGE_RETENTION_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_MESSAGE_SIZE_BYTES = 32 * 1024; // 32 KiB
+const RATE_LIMIT_SECONDS = 1; // 1 second
 
 function getInboxId(context: Context<{ Bindings: Bindings }>) {
   return getId(context, "inbox");
@@ -52,6 +53,7 @@ const QueryCursorSchema = z.object({
   tags: TagsSchema,
   objectSchema: ObjectSchemaSchema,
   createdAt: z.number(),
+  waitTil: z.number().optional(),
 });
 
 const QueryResultsSchema = z.object({
@@ -63,6 +65,7 @@ const QueryResultsSchema = z.object({
 const ExportCursorSchema = z.object({
   sinceSeq: SinceSeqSchema,
   createdAt: z.number(),
+  waitTil: z.number().optional(),
 });
 
 const inboxes = new Hono<{ Bindings: Bindings }>();
@@ -234,6 +237,7 @@ inbox.openapi(queryRoute, async (c) => {
   let sinceSeq: number | undefined = undefined;
   if (cursorParam) {
     let createdAt: number;
+    let waitTil: number | undefined;
     try {
       const cursorBytes = decodeBase64(cursorParam);
       const cursorDecoded = dagCborDecode(cursorBytes);
@@ -242,11 +246,15 @@ inbox.openapi(queryRoute, async (c) => {
       tags = cursorParsed.tags;
       objectSchema = cursorParsed.objectSchema;
       createdAt = cursorParsed.createdAt;
+      waitTil = cursorParsed.waitTil;
     } catch {
       throw new HTTPException(410, { message: "Invalid cursor" });
     }
     if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
       throw new HTTPException(410, { message: "Cursor expired" });
+    }
+    if (waitTil && waitTil > Date.now()) {
+      throw new HTTPException(429, { message: "Rate limit exceeded" });
     }
   } else {
     const queryParamsBlob = await c.req.blob();
@@ -279,6 +287,11 @@ inbox.openapi(queryRoute, async (c) => {
     objectSchema,
     sinceSeq: lastSeq,
     createdAt,
+    ...(!hasMore
+      ? {
+          waitTil: Date.now() + RATE_LIMIT_SECONDS * 1000,
+        }
+      : {}),
   };
   const cursorBytes = dagCborEncode(cursorCBOR);
   const cursor = encodeBase64(cursorBytes);
@@ -291,6 +304,11 @@ inbox.openapi(queryRoute, async (c) => {
 
   return c.body(dagCborEncode(queryResults).slice(), 200, {
     "Content-Type": "application/cbor",
+    ...(!hasMore
+      ? {
+          "Retry-After": String(RATE_LIMIT_SECONDS),
+        }
+      : {}),
   });
 });
 
@@ -330,17 +348,22 @@ inbox.openapi(exportRoute, async (c) => {
   let sinceSeq: number | undefined = undefined;
   if (cursorParam) {
     let createdAt: number;
+    let waitTil: number | undefined;
     try {
       const cursorBytes = decodeBase64(cursorParam);
       const cursorDecoded = dagCborDecode(cursorBytes);
       const cursorParsed = ExportCursorSchema.parse(cursorDecoded);
       sinceSeq = cursorParsed.sinceSeq;
       createdAt = cursorParsed.createdAt;
+      waitTil = cursorParsed.waitTil;
     } catch (error) {
       throw new HTTPException(410, { message: "Invalid cursor." });
     }
     if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
       throw new HTTPException(410, { message: "Cursor expired" });
+    }
+    if (waitTil && waitTil > Date.now()) {
+      throw new HTTPException(429, { message: "Rate limit exceeded" });
     }
   }
 
@@ -355,6 +378,11 @@ inbox.openapi(exportRoute, async (c) => {
   const cursorCBOR: z.infer<typeof ExportCursorSchema> = {
     sinceSeq: lastSeq,
     createdAt,
+    ...(!hasMore
+      ? {
+          waitTil: Date.now() + RATE_LIMIT_SECONDS * 1000,
+        }
+      : {}),
   };
   const cursorBytes = dagCborEncode(cursorCBOR);
   const cursor = encodeBase64(cursorBytes);
@@ -367,6 +395,11 @@ inbox.openapi(exportRoute, async (c) => {
 
   return c.body(dagCborEncode(exportResults).slice(), 200, {
     "Content-Type": "application/cbor",
+    ...(!hasMore
+      ? {
+          "Retry-After": String(RATE_LIMIT_SECONDS),
+        }
+      : {}),
   });
 });
 
