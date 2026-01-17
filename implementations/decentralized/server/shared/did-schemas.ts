@@ -21,9 +21,16 @@ function servicesToDidService(services: z.infer<typeof ServicesSchema>) {
 export type OptionalAlsoKnownAs = z.infer<typeof OptionalAlsoKnownAsSchema>;
 export type OptionalServices = z.infer<typeof OptionalServicesSchema>;
 
+export function handleNameToLink(handleName: string, baseHost: string) {
+  if (baseHost.startsWith("localhost:")) {
+    return `https://${baseHost}/app/handles/handle/${handleName}/did.json`;
+  } else {
+    return `https://${handleName}.${baseHost}/.well-known/did.json`;
+  }
+}
 export function handleNameToHandle(handleName: string, baseHost: string) {
   if (baseHost.startsWith("localhost:")) {
-    return `${baseHost}/app/handles/handle/${handleName}`;
+    return `${encodeURIComponent(baseHost)}:app:handles:handle:${handleName}`;
   } else {
     return `${handleName}.${baseHost}`;
   }
