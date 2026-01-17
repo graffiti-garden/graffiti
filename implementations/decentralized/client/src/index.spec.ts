@@ -13,11 +13,12 @@ import { Handles } from "./3-protocol/2-handles";
 import { didTests } from "./1-services/1-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
 import { inboxTests } from "./1-services/4-inboxes-tests";
-import { handleTests } from "./3-protocol/2-handles-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
 import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
+import { handleTests } from "./3-protocol/2-handles-tests";
+import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 
 describe("GraffitiDecentralized Tests", async () => {
   // Initialize structures for log in/out
@@ -59,13 +60,16 @@ describe("GraffitiDecentralized Tests", async () => {
     resolvedSessions[0].personalInbox.serviceEndpoint,
     resolvedSessions[0].personalInbox.token,
   );
-  handleTests(handles[0]);
 
   // Primitive tests
   stringEncodingTests();
   contentAddressesTests();
   channelAttestationTests();
   allowedAttestationTests();
+
+  // Protocol tests
+  handleTests(handles[0]);
+  objectEncodingTests();
 
   // How to log in/out vvv
   async function login(handle: string) {
