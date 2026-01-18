@@ -3,6 +3,7 @@ import type {
   GraffitiLogoutEvent,
   GraffitiSession,
 } from "@graffiti-garden/api";
+import { graffitiCRUDTests } from "@graffiti-garden/api/tests";
 import { DecentralizedIdentifiers } from "./1-services/2-dids";
 import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
@@ -19,6 +20,7 @@ import { channelAttestationTests } from "./2-primitives/3-channel-attestations-t
 import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
+import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
 
 describe("GraffitiDecentralized Tests", async () => {
   // Initialize structures for log in/out
@@ -34,7 +36,7 @@ describe("GraffitiDecentralized Tests", async () => {
   // Login
   const handles = [
     "localhost%3A5173:app:handles:handle:test1",
-    // "localhost%3A5173:app:handles:handle:test2"
+    "localhost%3A5173:app:handles:handle:test2",
   ];
   let sessions: GraffitiSession[] = [];
   for (const handle of handles) {
@@ -47,7 +49,9 @@ describe("GraffitiDecentralized Tests", async () => {
   });
   // Logout on cleanup
   afterAll(async () => {
-    await Promise.all(sessions.map((s) => logout(s.actor)));
+    for (const session of sessions) {
+      await logout(session.actor);
+    }
   });
 
   // Service tests
@@ -70,6 +74,19 @@ describe("GraffitiDecentralized Tests", async () => {
   // Protocol tests
   handleTests(handles[0]);
   objectEncodingTests();
+
+  // @ts-ignore
+  graffitiCRUDTests(
+    () =>
+      new GraffitiDecentralized(
+        {
+          defaultInboxEndpoints: ["https://localhost:5173/i/shared"],
+        },
+        sessionMethods,
+      ),
+    () => sessions[0],
+    () => sessions[1],
+  );
 
   // How to log in/out vvv
   async function login(handle: string) {
