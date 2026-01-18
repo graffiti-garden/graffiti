@@ -458,7 +458,7 @@ export class GraffitiDecentralized implements Pick<
               `Recipient ${recipient} does not have a personal inbox`,
             );
           }
-          if (typeof personalInbox.endpoint !== "string") {
+          if (typeof personalInbox.serviceEndpoint !== "string") {
             throw new Error(
               `Recipient ${recipient} does not have a valid personal inbox endpoint`,
             );
@@ -470,7 +470,7 @@ export class GraffitiDecentralized implements Pick<
             [MESSAGE_DATA_ALLOWED_TICKET_KEY]: allowedTickets[recipientIndex],
             [MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY]: recipientIndex,
           };
-          await this.inboxes.send(personalInbox.endpoint, {
+          await this.inboxes.send(personalInbox.serviceEndpoint, {
             [MESSAGE_TAGS_KEY]: tags,
             [MESSAGE_OBJECT_KEY]: masked,
             [MESSAGE_METADATA_KEY]: dagCborEncode(privateMetadata),
