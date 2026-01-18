@@ -63,7 +63,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         .query<{}>(inboxEndpoint, tags, {}, inboxToken)
         .next();
       assert(nullResult.done);
-      const continue_ = nullResult.value.continue;
+      const cursor = nullResult.value;
 
       const metadata = randomBytes();
 
@@ -83,7 +83,9 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         m: metadata,
       });
 
-      const result = await continue_(inboxToken).next();
+      const result = await inboxes
+        .continueQuery(inboxEndpoint, cursor, inboxToken)
+        .next();
       assert(!result.done);
       expect(result.value.id).toEqual(messageId);
     });
