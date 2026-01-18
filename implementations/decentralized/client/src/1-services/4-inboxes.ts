@@ -127,15 +127,6 @@ export class Inboxes {
     return { response, waitTil };
   }
 
-  protected async waitFor(waitTil?: number) {
-    if (waitTil !== undefined) {
-      const waitFor = waitTil - Date.now();
-      if (waitFor > 0) {
-        await new Promise((resolve) => setTimeout(resolve, waitFor));
-      }
-    }
-  }
-
   protected async *messageStreamer<Schema extends JSONSchema>(
     messageIdsCacheKey_: Promise<string>,
     inboxUrl: string,
@@ -160,7 +151,7 @@ export class Inboxes {
 
     // If we are rate-limited, wait
     let waitTil = cachedMessageIds?.waitTil;
-    await this.waitFor(waitTil);
+    await waitFor(waitTil);
 
     // See if the cursor is still active by
     // requesting an initial batch of messages
@@ -303,7 +294,7 @@ export class Inboxes {
       if (!hasMore) break;
 
       // Otherwise get another response (after waiting for rate-limit)
-      await this.waitFor(waitTil);
+      await waitFor(waitTil);
       const out = await this.fetchMessageBatch(
         inboxUrl,
         type,
@@ -322,20 +313,7 @@ export class Inboxes {
       objectSchema,
     };
 
-    return {
-      cursor: JSON.stringify(outputCursor),
-      continue: (inboxToken?: string | null) =>
-        this.messageStreamer<Schema>(
-          messageIdsCacheKey_,
-          inboxUrl,
-          type,
-          undefined,
-          inboxToken,
-          objectSchema,
-          version,
-          cacheNumSeen,
-        ),
-    };
+    return JSON.stringify(outputCursor);
   }
 
   query<Schema extends JSONSchema>(
@@ -454,14 +432,9 @@ const CursorSchema = strictObject({
   objectSchema: union([looseObject({}), boolean()]),
 });
 
-export interface MessageStreamReturn<Schema extends JSONSchema> {
-  cursor: string;
-  continue: (inboxToken?: string | null) => MessageStream<Schema>;
-}
-
 export interface MessageStream<
   Schema extends JSONSchema,
-> extends AsyncGenerator<LabeledMessage<Schema>, MessageStreamReturn<Schema>> {}
+> extends AsyncGenerator<LabeledMessage<Schema>, string> {}
 
 type CacheQueryValue = {
   cursor: string;
@@ -552,4 +525,13 @@ async function createCache(): Promise<Cache> {
       del: async (k) => void q.delete(k),
     },
   };
+}
+
+async function waitFor(waitTil?: number) {
+  if (waitTil !== undefined) {
+    const waitFor = waitTil - Date.now();
+    if (waitFor > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitFor));
+    }
+  }
 }
