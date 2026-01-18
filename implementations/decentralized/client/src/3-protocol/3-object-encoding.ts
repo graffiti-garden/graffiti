@@ -136,10 +136,16 @@ export class ObjectEncoding {
     const tags = [new TextEncoder().encode(objectUrl), ...channelPublicIds];
 
     const object: GraffitiObject<Schema> = {
-      ...partialObject,
+      value: partialObject.value,
+      channels: partialObject.channels,
       url: objectUrl,
       actor,
-    };
+      ...(partialObject.allowed
+        ? {
+            allowed: partialObject.allowed,
+          }
+        : {}),
+    } as GraffitiObject<Schema>;
 
     // Return object URL and allowed secrets
     return {
