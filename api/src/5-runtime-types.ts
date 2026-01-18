@@ -13,13 +13,7 @@ import {
   extend,
 } from "zod/mini";
 import type { Graffiti } from "./1-api.js";
-import type {
-  GraffitiObject,
-  GraffitiObjectStream,
-  GraffitiObjectStreamContinue,
-  GraffitiPostObject,
-  GraffitiSession,
-} from "./2-types.js";
+import type { GraffitiObjectStream } from "./2-types.js";
 import type { JSONSchema } from "json-schema-to-ts";
 
 export const GraffitiPostObjectSchema = looseObject({
@@ -77,27 +71,7 @@ async function* wrapGraffitiStream<Schema extends JSONSchema>(
     }
   }
 }
-async function* wrapGraffitiContinueStream<Schema extends JSONSchema>(
-  stream: GraffitiObjectStreamContinue<Schema>,
-): GraffitiObjectStreamContinue<Schema> {
-  while (true) {
-    const next = await stream.next();
-    if (next.done) {
-      const { cursor, continue: continue_ } = next.value;
-      return {
-        cursor,
-        continue: (...args) => {
-          const typedArgs = tuple([GraffitiOptionalSessionSchema]).parse(args);
-          return continue_(...typedArgs);
-        },
-      };
-    } else {
-      yield next.value;
-    }
-  }
-}
 
-// @ts-ignore - infinite nesting issue
 export class GraffitiRuntimeTypes implements Graffiti {
   sessionEvents: Graffiti["sessionEvents"];
   constructor(protected readonly graffiti: Graffiti) {
@@ -124,19 +98,15 @@ export class GraffitiRuntimeTypes implements Graffiti {
     return this.graffiti.actorToHandle(...typedArgs);
   };
 
-  async post<Schema extends JSONSchema>(
-    partialObject: GraffitiPostObject<Schema>,
-    session: GraffitiSession,
-  ): Promise<GraffitiObject<Schema>> {
+  // @ts-ignore - inferred types on post do not effect output
+  post: Graffiti["post"] = (...args) => {
     const typedArgs = tuple([
       GraffitiPostObjectSchema,
       GraffitiSessionSchema,
-    ]).parse([partialObject, session]);
+    ]).parse(args);
 
-    return (await this.graffiti.post<{}>(
-      ...typedArgs,
-    )) as GraffitiObject<Schema>;
-  }
+    return this.graffiti.post<{}>(...typedArgs);
+  };
 
   get: Graffiti["get"] = (...args) => {
     const typedArgs = tuple([
@@ -145,9 +115,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
       GraffitiOptionalSessionSchema,
     ]).parse(args);
 
-    return this.graffiti.get(...typedArgs) as Promise<
-      GraffitiObject<(typeof args)[1]>
-    >;
+    return this.graffiti.get<(typeof args)[1]>(
+      typedArgs[0],
+      typedArgs[1] as (typeof args)[1],
+      typedArgs[2],
+    );
   };
 
   delete: Graffiti["delete"] = (...args) => {
@@ -188,10 +160,12 @@ export class GraffitiRuntimeTypes implements Graffiti {
       looseObject({}),
       GraffitiOptionalSessionSchema,
     ]).parse(args);
-    const stream = this.graffiti.discover(...typedArgs) as GraffitiObjectStream<
-      (typeof args)[1]
-    >;
-    return wrapGraffitiStream(stream);
+    const stream = this.graffiti.discover<(typeof args)[1]>(
+      typedArgs[0],
+      typedArgs[1] as (typeof args)[1],
+      typedArgs[2],
+    );
+    return wrapGraffitiStream<(typeof args)[1]>(stream);
   };
 
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
@@ -200,6 +174,6 @@ export class GraffitiRuntimeTypes implements Graffiti {
     );
 
     const stream = this.graffiti.continueDiscover(...typedArgs);
-    return wrapGraffitiContinueStream(stream);
+    return wrapGraffitiStream<{}>(stream);
   };
 }
