@@ -119,9 +119,9 @@ export async function sendMessage(
     .bind(
       messageHash,
       inboxSeq,
-      dagCborEncode(message.t).buffer,
+      dagCborEncode(message.t),
       JSON.stringify(message.o),
-      dagCborEncode(message.m).buffer,
+      dagCborEncode(message.m),
     )
     .first<{ seq: number }>();
 
@@ -359,9 +359,9 @@ export async function exportMessages(
 
   const results = resultsRaw.map((r) => {
     const messageRaw = {
-      t: dagCborDecode(r.tags),
+      t: dagCborDecode(new Uint8Array(r.tags)),
       o: JSON.parse(r.object),
-      m: dagCborDecode(r.metadata),
+      m: dagCborDecode(new Uint8Array(r.metadata)),
     };
     const message = MessageSchema.parse(messageRaw);
     const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
