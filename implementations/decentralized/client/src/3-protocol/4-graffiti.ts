@@ -12,6 +12,7 @@ import {
   type GraffitiObjectUrl,
   compileGraffitiObjectSchema,
   GraffitiErrorSchemaMismatch,
+  GraffitiErrorForbidden,
 } from "@graffiti-garden/api";
 import { randomBytes } from "@noble/hashes/utils.js";
 import {
@@ -46,7 +47,11 @@ import {
   DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET,
   DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
 } from "./1-sessions";
-import { MAX_OBJECT_SIZE_BYTES, ObjectEncoding } from "./3-object-encoding";
+import {
+  decodeObjectUrl,
+  MAX_OBJECT_SIZE_BYTES,
+  ObjectEncoding,
+} from "./3-object-encoding";
 import {
   type infer as infer_,
   custom,
@@ -333,6 +338,11 @@ export class GraffitiDecentralized implements Pick<
     if (!resolvedSession) throw new Error("Invalid session");
 
     const objectUrl = unpackObjectUrl(url);
+
+    const { actor } = decodeObjectUrl(objectUrl);
+    if (actor !== session.actor) {
+      throw new GraffitiErrorForbidden("Cannot delete someone else's actor");
+    }
 
     // Look in one's personal inbox for the object
     const iterator = this.querySingleEndpoint<{}>(
