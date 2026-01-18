@@ -647,17 +647,17 @@ export class GraffitiDecentralized implements Pick<
         },
     inboxToken?: string | null,
     recipient?: string | null,
-  ): AsyncGenerator<{
-    object: GraffitiObject<Schema>;
-    storageBucketKey: string;
-    tags: Uint8Array[];
-    allowedTickets: Uint8Array[] | undefined;
-    tombstone?: boolean;
-  }> {
-    // TODO: fix these
-    // @ts-ignore
+  ): AsyncGenerator<
+    {
+      object: GraffitiObject<Schema>;
+      storageBucketKey: string;
+      tags: Uint8Array[];
+      allowedTickets: Uint8Array[] | undefined;
+      tombstone?: boolean;
+    },
+    string
+  > {
     const iterator: MessageStream<Schema> =
-      // @ts-ignore
       "tags" in queryArguments
         ? this.inboxes.query<Schema>(
             inboxEndpoint,
@@ -665,11 +665,11 @@ export class GraffitiDecentralized implements Pick<
             queryArguments.objectSchema,
             inboxToken,
           )
-        : this.inboxes.continueQuery(
+        : (this.inboxes.continueQuery(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
-          );
+          ) as unknown as MessageStream<Schema>);
 
     while (true) {
       const itResult = await iterator.next();
@@ -748,12 +748,16 @@ export class GraffitiDecentralized implements Pick<
           MAX_OBJECT_SIZE_BYTES,
         );
 
+        if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {
+          throw new GraffitiErrorForbidden(
+            `Recipient is required when allowed ticket is present`,
+          );
+        }
         const privateObjectInfo = allowedTickets
           ? { allowedTickets }
           : MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata
             ? {
-                // TODO: fix this
-                recipient: recipient ?? "noone",
+                recipient: recipient ?? "null",
                 allowedTicket: metadata[MESSAGE_DATA_ALLOWED_TICKET_KEY],
                 allowedIndex: metadata[MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY],
               }
