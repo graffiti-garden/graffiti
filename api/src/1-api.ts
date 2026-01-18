@@ -5,7 +5,6 @@ import type {
   GraffitiSession,
   GraffitiPostObject,
   GraffitiObjectStream,
-  GraffitiObjectStreamContinue,
   GraffitiMedia,
   GraffitiPostMedia,
   GraffitiMediaAccept,
@@ -284,7 +283,7 @@ export abstract class Graffiti {
   abstract continueDiscover(
     cursor: string,
     session?: GraffitiSession | null,
-  ): GraffitiObjectStreamContinue<{}>;
+  ): GraffitiObjectStream<{}>;
 
   /**
    * Uploads media data, such as an image or video.

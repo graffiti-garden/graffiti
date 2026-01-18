@@ -5,7 +5,6 @@ import type {
   JSONSchema,
   GraffitiObject,
   GraffitiObjectStreamReturn,
-  GraffitiObjectStreamContinue,
   Graffiti,
   GraffitiSession,
 } from "@graffiti-garden/api";
@@ -51,12 +50,12 @@ export function continueStream<Schema extends JSONSchema>(
   streamReturn: GraffitiObjectStreamReturn<Schema>,
   type: "cursor" | "continue",
   session?: GraffitiSession | null,
-): GraffitiObjectStreamContinue<Schema> {
+): GraffitiObjectStream<Schema> {
   if (type === "cursor") {
     return graffiti.continueDiscover(
       streamReturn.cursor,
       session,
-    ) as unknown as GraffitiObjectStreamContinue<Schema>;
+    ) as unknown as GraffitiObjectStream<Schema>;
   } else {
     return streamReturn.continue();
   }

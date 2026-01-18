@@ -210,7 +210,9 @@ export interface GraffitiSession {
  * each of which can be used to resume the stream from where it left off.
  */
 export type GraffitiObjectStream<Schema extends JSONSchema> = AsyncGenerator<
-  GraffitiObjectStreamError | GraffitiObjectStreamEntry<Schema>,
+  | GraffitiObjectStreamError
+  | GraffitiObjectStreamEntry<Schema>
+  | GraffitiObjectStreamTombstone,
   GraffitiObjectStreamReturn<Schema>
 >;
 
@@ -233,8 +235,8 @@ export interface GraffitiObjectStreamError {
 }
 
 /**
- * A successful result from a {@link GraffitiObjectStream} or
- * {@link GraffitiObjectStreamContinue} that includes an object.
+ * A successful result from a {@link GraffitiObjectStream}
+ * that includes an object.
  *
  * @internal
  */
@@ -244,7 +246,7 @@ export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
    */
   error?: undefined;
   /**
-   * Empty property for compatibility with {@link GraffitiObjectStreamContinueTombstone}
+   * Empty property for compatibility with {@link GraffitiObjectStreamTombstone}
    */
   tombstone?: undefined;
   /**
@@ -254,14 +256,14 @@ export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
 }
 
 /**
- * A result from a {@link GraffitiObjectStreamContinue} that indicated
+ * A result from a {@link GraffitiObjectStream} that indicated
  * an object has been deleted since the original stream was run.
  * Only sparse metadata about the deleted object is returned to respect
  * the deleting actor's privacy.
  *
  * @internal
  */
-export interface GraffitiObjectStreamContinueTombstone {
+export interface GraffitiObjectStreamTombstone {
   /**
    * Empty property for compatibility with {@link GraffitiObjectStreamError}
    */
@@ -284,17 +286,7 @@ export interface GraffitiObjectStreamContinueTombstone {
 }
 
 /**
- * A continuation of the {@link GraffitiObjectStream} type can include
- * both objects and tombstones of deleted objects.
- *
- * @internal
- */
-export type GraffitiObjectStreamContinueEntry<Schema extends JSONSchema> =
-  | GraffitiObjectStreamEntry<Schema>
-  | GraffitiObjectStreamContinueTombstone;
-
-/**
- * The output of a {@link GraffitiObjectStream} or a {@link GraffitiObjectStreamContinue}
+ * The output of a {@link GraffitiObjectStream}
  * that allows the stream to be continued from where it left off.
  *
  * The {@link continue} function preserves the typing of the original stream,
@@ -302,7 +294,7 @@ export type GraffitiObjectStreamContinueEntry<Schema extends JSONSchema> =
  * has closed and reopened an application.
  *
  * The continued stream may include `tombstone`s of objects that have been
- * deleted since the original stream was run. See {@link GraffitiObjectStreamContinueTombstone}.
+ * deleted since the original stream was run. See {@link GraffitiObjectStreamTombstone}.
  * The continued stream may also return some objects that were already
  * returned by the original stream, depending on how much state the
  * underlying implementation is able to preserve.
@@ -314,9 +306,7 @@ export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
    * @returns A function that creates new stream that continues from where the original stream left off.
    * It preserves the typing of the original stream.
    */
-  continue: (
-    session?: GraffitiSession | null,
-  ) => GraffitiObjectStreamContinue<Schema>;
+  continue: (session?: GraffitiSession | null) => GraffitiObjectStream<Schema>;
   /**
    * A string that can be serialized and stored to resume the stream later.
    * It must be passed to the {@link Graffiti.continueDiscover} method
@@ -324,22 +314,6 @@ export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
    */
   cursor: string;
 }
-
-/**
- * A continutation of the {@link GraffitiObjectStream} type, as returned by
- * the {@link GraffitiObjectStreamReturn.continue} or by using
- * {@link GraffitiObjectStreamReturn.cursor} with {@link Graffiti.continueDiscover}.
- *
- * The continued stream may include `tombstone`s of objects that have been
- * deleted since the original stream was run. See {@link GraffitiObjectStreamContinueTombstone}.
- *
- * @internal
- */
-export type GraffitiObjectStreamContinue<Schema extends JSONSchema> =
-  AsyncGenerator<
-    GraffitiObjectStreamError | GraffitiObjectStreamContinueEntry<Schema>,
-    GraffitiObjectStreamReturn<Schema>
-  >;
 
 /**
  * The event type produced in {@link Graffiti.sessionEvents}

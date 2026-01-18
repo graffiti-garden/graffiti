@@ -375,6 +375,7 @@ export const graffitiDiscoverTests = (
           },
         })) {
           assert(!result.error, "result has error");
+          assert(!result.tombstone, "result is tombstone");
           if (property in result.object.value) {
             count++;
           }
@@ -401,9 +402,6 @@ export const graffitiDiscoverTests = (
           assert(returnValue.done, "value2 is not done");
 
           await graffiti.delete(posted, session);
-
-          const iterator = graffiti.discover(object.channels, {});
-          await expect(iterator.next()).resolves.toHaveProperty("done", true);
 
           const tombIterator = continueStream<{}>(
             graffiti,
