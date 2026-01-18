@@ -57,6 +57,36 @@ export class Inboxes {
     return parsed.id;
   }
 
+  async get(
+    inboxUrl: string,
+    messageId: string,
+    inboxToken?: string | null,
+  ): Promise<LabeledMessageBase> {
+    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
+    const cache = await this.cache;
+    const cached = await cache.messages.get(messageCacheKey);
+    if (cached) return cached;
+
+    const url = `${inboxUrl}/message/${messageId}`;
+    const response = await fetchWithErrorHandling(url, {
+      method: "GET",
+      headers: {
+        ...(inboxToken
+          ? {
+              Authorization: `Bearer ${inboxToken}`,
+            }
+          : {}),
+      },
+    });
+
+    const blob = await response.blob();
+    const cbor = dagCborDecode(await blob.arrayBuffer());
+    const parsed = LabeledMessageBaseSchema.parse(cbor);
+
+    await cache.messages.set(messageCacheKey, parsed);
+    return parsed;
+  }
+
   async label(
     inboxUrl: string,
     messageId: string,

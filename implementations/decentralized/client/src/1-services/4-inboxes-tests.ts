@@ -1,5 +1,5 @@
 import { assert, describe, expect, test } from "vitest";
-import { Inboxes } from "./4-inboxes";
+import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "./4-inboxes";
 import { GraffitiErrorUnauthorized } from "./utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
@@ -23,11 +23,17 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         allowed: ["did:example2"],
       };
 
-      const messageId = await inboxes.send(inboxEndpoint, {
+      const sending = {
         m: metadata,
         o: object,
         t: tags,
-      });
+      };
+      const messageId = await inboxes.send(inboxEndpoint, sending);
+
+      // Get the message back
+      const message = await inboxes.get(inboxEndpoint, messageId, inboxToken);
+      expect(message.m).toEqual(sending);
+      expect(message.l).toEqual(0);
 
       const iterator = inboxes.query<{}>(inboxEndpoint, tags, {}, inboxToken);
 
@@ -54,6 +60,10 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       expect(result2.value.l).toEqual(42);
       const endResult2 = await iterator2.next();
       expect(endResult2.done).toBe(true);
+
+      const message2 = await inboxes.get(inboxEndpoint, messageId, inboxToken);
+      expect(message2.m).toEqual(sending);
+      expect(message2.l).toEqual(42);
     });
 
     test("query with continue", async () => {
