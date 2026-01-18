@@ -44,7 +44,7 @@ export function maskGraffitiObject(
 
   return {
     ...object,
-    allowed: allowedMasked,
+    ...(allowedMasked ? { allowed: allowedMasked } : {}),
     channels: channelsMasked,
   };
 }
