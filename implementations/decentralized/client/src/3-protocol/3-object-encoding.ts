@@ -58,6 +58,9 @@ export class ObjectEncoding {
     objectBytes: Uint8Array;
     allowedTickets: Uint8Array[] | undefined;
   }> {
+    // Clean out any undefineds
+    partialObject = cleanUndefined(partialObject);
+
     // Create a verifiable attestation that the actor
     // knows the included channels without
     // directly revealing any channel to anyone who doesn't
@@ -158,7 +161,6 @@ export class ObjectEncoding {
           allowedIndex: number;
         }
       | {
-          recipients: string[];
           allowedTickets: Uint8Array[];
         },
   ): Promise<void> {
@@ -280,7 +282,7 @@ export class ObjectEncoding {
           (_, i) => i === privateObjectInfo.allowedIndex,
         );
       } else {
-        recipients = privateObjectInfo.recipients;
+        recipients = [...(object.allowed ?? [])];
         allowedTickets = privateObjectInfo.allowedTickets;
         attestations = allowedAttestations;
       }
@@ -367,4 +369,22 @@ export function decodeObjectUrl(objectUrl: string) {
     actor: decodeObjectUrlComponent(actor),
     contentAddress: decodeObjectUrlComponent(contentAddress),
   };
+}
+
+function cleanUndefined(value: any): any {
+  if (value === undefined) return null;
+
+  if (Array.isArray(value)) {
+    return value.map(cleanUndefined);
+  }
+
+  if (typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, cleanUndefined(v)]),
+    );
+  }
+
+  return value;
 }

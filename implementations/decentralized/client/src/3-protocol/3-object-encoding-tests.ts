@@ -93,7 +93,6 @@ export function objectEncodingTests() {
 
     test("validate private", async () => {
       await objectEncoding.validate(object, tags, objectBytes, {
-        recipients: allowed,
         allowedTickets,
       });
 
@@ -121,7 +120,6 @@ export function objectEncodingTests() {
           tags,
           objectBytes,
           {
-            recipients: allowed,
             allowedTickets,
           },
         ),
@@ -146,7 +144,6 @@ export function objectEncodingTests() {
           [new TextEncoder().encode(url), ...tags.slice(1)],
           objectBytes,
           {
-            recipients: allowed,
             allowedTickets,
           },
         ),
@@ -182,7 +179,6 @@ export function objectEncodingTests() {
           [new TextEncoder().encode(wrongObjectUrl), ...tags.slice(1)],
           wrongObjectBytes,
           {
-            recipients: allowed,
             allowedTickets,
           },
         ),
@@ -220,7 +216,6 @@ export function objectEncodingTests() {
           [new TextEncoder().encode(wrongObjectUrl), ...tags.slice(1)],
           wrongObjectBytes,
           {
-            recipients: allowed,
             allowedTickets,
           },
         ),
@@ -248,7 +243,6 @@ export function objectEncodingTests() {
 
       await expect(
         objectEncoding.validate(object, tags, objectBytes, {
-          recipients: allowed,
           allowedTickets: wrongAllowedTickets,
         }),
       ).rejects.toThrow();
@@ -258,10 +252,17 @@ export function objectEncodingTests() {
       const wrongRecipients = allowed.map((recipient) => recipient + "-wrong");
 
       await expect(
-        objectEncoding.validate(object, tags, objectBytes, {
-          recipients: wrongRecipients,
-          allowedTickets,
-        }),
+        objectEncoding.validate(
+          {
+            ...object,
+            allowed: wrongRecipients,
+          },
+          tags,
+          objectBytes,
+          {
+            allowedTickets,
+          },
+        ),
       ).rejects.toThrow();
     });
   });
