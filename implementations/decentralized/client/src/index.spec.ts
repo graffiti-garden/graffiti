@@ -3,7 +3,11 @@ import type {
   GraffitiLogoutEvent,
   GraffitiSession,
 } from "@graffiti-garden/api";
-import { graffitiCRUDTests } from "@graffiti-garden/api/tests";
+import {
+  graffitiCRUDTests,
+  graffitiDiscoverTests,
+  graffitiMediaTests,
+} from "@graffiti-garden/api/tests";
 import { DecentralizedIdentifiers } from "./1-services/2-dids";
 import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
@@ -75,15 +79,27 @@ describe("GraffitiDecentralized Tests", async () => {
   handleTests(handles[0]);
   objectEncodingTests();
 
+  const useGraffiti = () => {
+    return new GraffitiDecentralized(
+      {
+        defaultInboxEndpoints: ["https://localhost:5173/i/shared"],
+      },
+      sessionMethods,
+    );
+  };
   // @ts-ignore
   graffitiCRUDTests(
-    () =>
-      new GraffitiDecentralized(
-        {
-          defaultInboxEndpoints: ["https://localhost:5173/i/shared"],
-        },
-        sessionMethods,
-      ),
+    useGraffiti,
+    () => sessions[0],
+    () => sessions[1],
+  );
+  graffitiMediaTests(
+    useGraffiti,
+    () => sessions[0],
+    () => sessions[1],
+  );
+  graffitiDiscoverTests(
+    useGraffiti,
     () => sessions[0],
     () => sessions[1],
   );
