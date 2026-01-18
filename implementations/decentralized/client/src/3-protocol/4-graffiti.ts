@@ -29,6 +29,7 @@ import { Authorization } from "../1-services/1-authorization";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import {
   Inboxes,
+  LABELED_MESSAGE_MESSAGE_KEY,
   MESSAGE_METADATA_KEY,
   MESSAGE_OBJECT_KEY,
   MESSAGE_TAGS_KEY,
@@ -80,27 +81,43 @@ const Uint8ArraySchema = custom<Uint8Array>(
   (v): v is Uint8Array => v instanceof Uint8Array,
 );
 const MESSAGE_DATA_STORAGE_BUCKET_KEY = "k";
-const MESSAGE_DATA_TOMBSTONE_KEY = "t";
-const MESSAGE_DATA_ALLOWED_TICKET_KEY = "a";
-const MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY = "i";
-const MESSAGE_DATA_ALLOWED_TICKETS_KEY = "s";
+const MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY = "t";
 const MessageMetadataBaseSchema = strictObject({
   [MESSAGE_DATA_STORAGE_BUCKET_KEY]: string(),
-  [MESSAGE_DATA_TOMBSTONE_KEY]: optional(boolean()),
+  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: optional(string()),
 });
+const MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY = "id";
+const MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY = "e";
+const MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY = "a";
+const MessageMetadataAnnouncementsSchema = array(
+  strictObject({
+    [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: string(),
+    [MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY]: optional(url()),
+    [MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY]: optional(url()),
+  }),
+);
+const MESSAGE_DATA_ALLOWED_TICKETS_KEY = "s";
+const MESSAGE_DATA_ANNOUNCEMENTS_KEY = "n";
 const MessageMetaDataSelfSchema = extend(MessageMetadataBaseSchema, {
   [MESSAGE_DATA_ALLOWED_TICKETS_KEY]: optional(array(Uint8ArraySchema)),
+  [MESSAGE_DATA_ANNOUNCEMENTS_KEY]: MessageMetadataAnnouncementsSchema,
 });
+const MESSAGE_DATA_ALLOWED_TICKET_KEY = "a";
+const MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY = "i";
 const MessageMetadataPrivateSchema = extend(MessageMetadataBaseSchema, {
   [MESSAGE_DATA_ALLOWED_TICKET_KEY]: Uint8ArraySchema,
   [MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY]: int().check(nonnegative()),
 });
 const MessageMetadataSchema = union([
+  MessageMetadataBaseSchema,
   MessageMetaDataSelfSchema,
   MessageMetadataPrivateSchema,
 ]);
 type MessageMetadataBase = infer_<typeof MessageMetadataBaseSchema>;
 type MessageMetadata = infer_<typeof MessageMetadataSchema>;
+type MessageMetadataAnnouncements = infer_<
+  typeof MessageMetadataAnnouncementsSchema
+>;
 
 const MESSAGE_LABEL_UNLABELED = 0;
 const MESSAGE_LABEL_VALID = 1;
@@ -355,14 +372,7 @@ export class GraffitiDecentralized implements Graffiti {
       },
       resolvedSession.personalInbox.token,
     );
-    let existing:
-      | {
-          object: GraffitiObjectBase;
-          storageBucketKey: string;
-          tags: Uint8Array[];
-          allowedTickets: Uint8Array[] | undefined;
-        }
-      | undefined = undefined;
+    let existing: SingleEndpointQueryResult<{}> | undefined;
     for await (const result of iterator) {
       if (result.object.url !== objectUrl) continue;
       if (result.tombstone) {
@@ -374,7 +384,14 @@ export class GraffitiDecentralized implements Graffiti {
     if (!existing) {
       throw new GraffitiErrorNotFound(`Object ${objectUrl} not found`);
     }
-    const { object, storageBucketKey, tags, allowedTickets } = existing;
+    const {
+      object,
+      storageBucketKey,
+      tags,
+      allowedTickets,
+      announcements,
+      messageId,
+    } = existing;
 
     // Delete the object from the actor's own storage bucket
     await this.storageBuckets.delete(
@@ -390,7 +407,14 @@ export class GraffitiDecentralized implements Graffiti {
       allowedTickets,
       storageBucketKey,
       session,
-      true,
+      [
+        ...(announcements ?? []),
+        // Make sure we delete from our own inbox too
+        {
+          [MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY]: session.actor,
+          [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: messageId,
+        },
+      ],
     );
 
     return object;
@@ -576,9 +600,9 @@ export class GraffitiDecentralized implements Graffiti {
       },
     );
 
-    let indexedIteratorNexts = iterators.map(async (it, index) =>
-      indexedSingleEndpointQueryNext<Schema>(it, index),
-    );
+    let indexedIteratorNexts = iterators.map<
+      Promise<IndexedSingleEndpointQueryResult<Schema>>
+    >(async (it, index) => indexedSingleEndpointQueryNext<Schema>(it, index));
     let active = indexedIteratorNexts.length;
 
     while (active > 0) {
@@ -695,36 +719,16 @@ export class GraffitiDecentralized implements Graffiti {
     allowedTickets: Uint8Array[] | undefined,
     storageBucketKey: string,
     session: GraffitiSession,
-    tombstone?: boolean,
+    priorAnnouncements?: MessageMetadataAnnouncements,
   ): Promise<void> {
     const resolvedSession = this.sessions.resolveSession(session);
     if (!resolvedSession) throw new Error("Not logged in");
 
     const metadataBase: MessageMetadataBase = {
       [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
-      ...(tombstone
-        ? {
-            [MESSAGE_DATA_TOMBSTONE_KEY]: tombstone,
-          }
-        : {}),
     };
 
-    // Send the complete object to my own personal inbox
-    // along with its key and allowed tickets
-    const selfMetadata: MessageMetadata = {
-      ...metadataBase,
-      ...(allowedTickets
-        ? {
-            [MESSAGE_DATA_ALLOWED_TICKETS_KEY]: allowedTickets,
-          }
-        : {}),
-    };
-    await this.inboxes.send(resolvedSession.personalInbox.serviceEndpoint, {
-      [MESSAGE_TAGS_KEY]: tags,
-      [MESSAGE_OBJECT_KEY]: object,
-      [MESSAGE_METADATA_KEY]: dagCborEncode(selfMetadata),
-    });
-
+    const announcements: MessageMetadataAnnouncements = [];
     const allowed = object.allowed;
     if (Array.isArray(allowed)) {
       if (!allowedTickets || allowedTickets.length !== allowed.length) {
@@ -759,16 +763,37 @@ export class GraffitiDecentralized implements Graffiti {
             );
           }
 
+          const tombstonedMessageId = priorAnnouncements
+            ? priorAnnouncements.find(
+                (a) =>
+                  // TODO: for this to work, message IDs need to be portable across inboxes
+                  a[MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY] === recipient,
+              )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
+            : undefined;
+
           // Announce to the inbox
           const privateMetadata: MessageMetadata = {
             ...metadataBase,
+            ...(tombstonedMessageId
+              ? {
+                  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
+                }
+              : {}),
             [MESSAGE_DATA_ALLOWED_TICKET_KEY]: allowedTickets[recipientIndex],
             [MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY]: recipientIndex,
           };
-          await this.inboxes.send(personalInbox.serviceEndpoint, {
-            [MESSAGE_TAGS_KEY]: tags,
-            [MESSAGE_OBJECT_KEY]: masked,
-            [MESSAGE_METADATA_KEY]: dagCborEncode(privateMetadata),
+          const messageId = await this.inboxes.send(
+            personalInbox.serviceEndpoint,
+            {
+              [MESSAGE_TAGS_KEY]: tags,
+              [MESSAGE_OBJECT_KEY]: masked,
+              [MESSAGE_METADATA_KEY]: dagCborEncode(privateMetadata),
+            },
+          );
+
+          announcements.push({
+            [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: messageId,
+            [MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY]: recipient,
           });
         }),
       );
@@ -785,18 +810,42 @@ export class GraffitiDecentralized implements Graffiti {
       // and only include the recipient actor on the allowed list
       const copy = JSON.parse(JSON.stringify(object)) as GraffitiObjectBase;
       const masked = maskGraffitiObject(copy, []);
-      const sharedMetadataBytes = dagCborEncode(metadataBase);
 
       // Send the object to each shared inbox
       const sharedInboxes = resolvedSession.sharedInboxes;
       const results = await Promise.allSettled(
-        sharedInboxes.map(async (inbox) =>
-          this.inboxes.send(inbox.serviceEndpoint, {
+        sharedInboxes.map(async (inbox) => {
+          const tombstonedMessageId = priorAnnouncements
+            ? priorAnnouncements.find(
+                (a) =>
+                  a[MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY] ===
+                  inbox.serviceEndpoint,
+              )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
+            : undefined;
+          const metadata: MessageMetadata = {
+            ...metadataBase,
+            ...(tombstonedMessageId
+              ? {
+                  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
+                }
+              : {}),
+          };
+
+          const messageId = await this.inboxes.send(inbox.serviceEndpoint, {
+            ...(tombstonedMessageId
+              ? {
+                  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
+                }
+              : {}),
             [MESSAGE_TAGS_KEY]: tags,
             [MESSAGE_OBJECT_KEY]: masked,
-            [MESSAGE_METADATA_KEY]: sharedMetadataBytes,
-          }),
-        ),
+            [MESSAGE_METADATA_KEY]: dagCborEncode(metadata),
+          });
+          announcements.push({
+            [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: messageId,
+            [MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY]: inbox.serviceEndpoint,
+          });
+        }),
       );
 
       for (const [index, result] of results.entries()) {
@@ -807,6 +856,33 @@ export class GraffitiDecentralized implements Graffiti {
         }
       }
     }
+
+    // Send the complete object to my own personal inbox
+    // along with its key and allowed tickets
+    const tombstonedMessageId = priorAnnouncements
+      ? priorAnnouncements.find(
+          (a) => a[MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY] === session.actor,
+        )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
+      : undefined;
+    const selfMetadata: MessageMetadata = {
+      ...metadataBase,
+      ...(allowedTickets
+        ? {
+            [MESSAGE_DATA_ALLOWED_TICKETS_KEY]: allowedTickets,
+          }
+        : {}),
+      ...(tombstonedMessageId
+        ? {
+            [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
+          }
+        : {}),
+      [MESSAGE_DATA_ANNOUNCEMENTS_KEY]: announcements,
+    };
+    await this.inboxes.send(resolvedSession.personalInbox.serviceEndpoint, {
+      [MESSAGE_TAGS_KEY]: tags,
+      [MESSAGE_OBJECT_KEY]: object,
+      [MESSAGE_METADATA_KEY]: dagCborEncode(selfMetadata),
+    });
   }
 
   protected async *querySingleEndpoint<Schema extends JSONSchema>(
@@ -866,21 +942,26 @@ export class GraffitiDecentralized implements Graffiti {
 
       const {
         [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
-        [MESSAGE_DATA_TOMBSTONE_KEY]: tombstone,
+        [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
       } = metadata;
 
       const allowedTickets =
         MESSAGE_DATA_ALLOWED_TICKETS_KEY in metadata
           ? metadata[MESSAGE_DATA_ALLOWED_TICKETS_KEY]
           : undefined;
+      const announcements =
+        MESSAGE_DATA_ANNOUNCEMENTS_KEY in metadata
+          ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY]
+          : undefined;
 
       if (label === MESSAGE_LABEL_VALID) {
-        this.markSeen(object.url, storageBucketKey, messageId);
         yield {
+          messageId,
           object,
           storageBucketKey,
           allowedTickets,
           tags: receivedTags,
+          announcements,
         };
         continue;
       }
@@ -938,37 +1019,45 @@ export class GraffitiDecentralized implements Graffiti {
         validationError = e;
       }
 
-      if (tombstone) {
+      if (tombstonedMessageId) {
         if (validationError instanceof GraffitiErrorNotFound) {
-          // It is correct
-          if (inboxToken) {
-            const seenMessageId = this.getSeen(object.url, storageBucketKey);
-            if (seenMessageId) {
-              // Label the previous message as trash
-              this.inboxes
-                .label(
+          // Not found == The tombstone is correct
+          this.inboxes
+            // Get the referenced message
+            .get(inboxEndpoint, tombstonedMessageId, inboxToken)
+            .then((result) => {
+              // Make sure that it actually references the object being deleted
+              if (
+                result &&
+                result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY].url ===
+                  object.url
+              ) {
+                // If it does, label the message as trash, it is no longer needed
+                this.inboxes.label(
                   inboxEndpoint,
-                  messageId,
+                  tombstonedMessageId,
                   MESSAGE_LABEL_TRASH,
                   inboxToken,
-                )
-                .then(() => this.deleteSeen(object.url, storageBucketKey));
-            }
-            // Label the tombstone itself as trash
-            this.inboxes.label(
-              inboxEndpoint,
-              messageId,
-              MESSAGE_LABEL_TRASH,
-              inboxToken,
-            );
-          }
+                );
+              }
+
+              // Then, label the tombstone message as trash
+              this.inboxes.label(
+                inboxEndpoint,
+                messageId,
+                MESSAGE_LABEL_TRASH,
+                inboxToken,
+              );
+            });
 
           yield {
+            messageId,
             tombstone: true,
             object,
             storageBucketKey,
             allowedTickets,
             tags: receivedTags,
+            announcements,
           };
         } else {
           console.error("Recieved an incorrect object");
@@ -982,7 +1071,6 @@ export class GraffitiDecentralized implements Graffiti {
         }
       } else {
         if (validationError === undefined) {
-          this.markSeen(object.url, storageBucketKey, messageId);
           this.inboxes.label(
             inboxEndpoint,
             messageId,
@@ -990,10 +1078,12 @@ export class GraffitiDecentralized implements Graffiti {
             inboxToken,
           );
           yield {
+            messageId,
             object,
             storageBucketKey,
             tags: receivedTags,
             allowedTickets,
+            announcements,
           };
         } else {
           console.error("Recieved an incorrect object");
@@ -1007,28 +1097,6 @@ export class GraffitiDecentralized implements Graffiti {
         }
       }
     }
-  }
-
-  // TODO make this a dedicated cache stored in IDB
-  seen = new Map<
-    string, // object url + storage bucket key
-    string // messageID
-  >();
-  markSeen(objectUrl: string, storageBucketKey: string, messageId: string) {
-    this.seen.set(
-      `${encodeURIComponent(objectUrl)}:${encodeURIComponent(storageBucketKey)}`,
-      messageId,
-    );
-  }
-  getSeen(objectUrl: string, storageBucketKey: string) {
-    return this.seen.get(
-      `${encodeURIComponent(objectUrl)}:${encodeURIComponent(storageBucketKey)}`,
-    );
-  }
-  deleteSeen(objectUrl: string, storageBucketKey: string) {
-    this.seen.delete(
-      `${encodeURIComponent(objectUrl)}:${encodeURIComponent(storageBucketKey)}`,
-    );
   }
 }
 
@@ -1051,11 +1119,13 @@ const CursorSchema = strictObject({
 });
 
 interface SingleEndpointQueryResult<Schema extends JSONSchema> {
+  messageId: string;
   object: GraffitiObject<Schema>;
   storageBucketKey: string;
   tags: Uint8Array[];
   allowedTickets: Uint8Array[] | undefined;
   tombstone?: boolean;
+  announcements?: MessageMetadataAnnouncements | undefined;
 }
 interface SingleEndpointQueryIterator<
   Schema extends JSONSchema,
