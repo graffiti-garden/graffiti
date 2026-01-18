@@ -253,6 +253,30 @@ export const graffitiCRUDTests = (
         // And not see any channels
         expect(gotten2.channels).toEqual([]);
       });
+
+      it("post and get with extra values", async () => {
+        const value = {
+          something: "hello, world~ c:",
+        };
+        const channels = [randomString(), randomString()];
+
+        const post = {
+          value,
+          channels,
+          extra: "extra value",
+        };
+
+        // Post the object
+        const output = await graffiti.post<{}>(post, session);
+        expect(output.actor).toEqual(session1.actor);
+        expect(output.value).toEqual(value);
+        expect(output.allowed).toBeUndefined();
+        expect(output.channels).toEqual(channels);
+        expect(output).not.toHaveProperty("extra");
+
+        const gotten = await graffiti.get<{}>(output, {}, session1);
+        expect(gotten).toEqual(output);
+      });
     },
   );
 };
