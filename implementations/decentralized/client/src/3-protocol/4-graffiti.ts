@@ -16,6 +16,10 @@ import {
   GraffitiErrorTooLarge,
   isMediaAcceptable,
   GraffitiErrorNotAcceptable,
+  GraffitiErrorCursorExpired,
+  type GraffitiObjectStream,
+  type GraffitiObjectStreamContinue,
+  GraffitiErrorInvalidSchema,
 } from "@graffiti-garden/api";
 import { randomBytes } from "@noble/hashes/utils.js";
 import {
@@ -39,7 +43,10 @@ import {
   STRING_ENCODER_METHOD_BASE64URL,
 } from "../2-primitives/1-string-encoding";
 import { ContentAddresses } from "../2-primitives/2-content-addresses";
-import { ChannelAttestations } from "../2-primitives/3-channel-attestations";
+import {
+  CHANNEL_ATTESTATION_METHOD_SHA256_ED25519,
+  ChannelAttestations,
+} from "../2-primitives/3-channel-attestations";
 import { AllowedAttestations } from "../2-primitives/4-allowed-attestations";
 
 import { Handles } from "./2-handles";
@@ -55,6 +62,7 @@ import {
   MAX_OBJECT_SIZE_BYTES,
   ObjectEncoding,
 } from "./3-object-encoding";
+
 import {
   type infer as infer_,
   custom,
@@ -67,6 +75,8 @@ import {
   optional,
   extend,
   union,
+  record,
+  url,
 } from "zod/mini";
 
 const Uint8ArraySchema = custom<Uint8Array>(
@@ -106,10 +116,7 @@ export interface GraffitiDecentralizedOptions {
 }
 
 // @ts-ignore
-export class GraffitiDecentralized implements Pick<
-  Graffiti,
-  "post" | "get" | "delete"
-> {
+export class GraffitiDecentralized implements Graffiti {
   protected readonly dids = new DecentralizedIdentifiers();
   protected readonly authorization = new Authorization();
   protected readonly storageBuckets = new StorageBuckets();
@@ -515,6 +522,217 @@ export class GraffitiDecentralized implements Pick<
     );
   };
 
+  async *discoverMeta<Schema extends JSONSchema>(
+    channels: string[],
+    schema: Schema,
+    cursors: {
+      [endpoint: string]: string;
+    },
+    session?: GraffitiSession | null,
+  ): GraffitiObjectStreamContinue<Schema> {
+    const tombstones = new Map<string, boolean>();
+
+    let allInboxes: { serviceEndpoint: string; token?: string }[];
+    if (session) {
+      const resolvedSession = this.sessions.resolveSession(session);
+      if (!resolvedSession) throw new Error("Invalid session");
+      allInboxes = [
+        resolvedSession.personalInbox,
+        ...resolvedSession.sharedInboxes,
+      ];
+    } else {
+      allInboxes = this.defaultInboxEndpoints.map((e) => ({
+        serviceEndpoint: e,
+      }));
+    }
+
+    // Make sure all cursors are represented by an inbox
+    for (const endpoint in cursors) {
+      if (!allInboxes.some((i) => i.serviceEndpoint === endpoint)) {
+        throw new GraffitiErrorForbidden(
+          "Cursor does not match actor's inboxes",
+        );
+      }
+    }
+
+    // Turn the channels into tags
+    const tags = await Promise.all(
+      channels.map((c) =>
+        this.channelAttestations.register(
+          CHANNEL_ATTESTATION_METHOD_SHA256_ED25519,
+          c,
+        ),
+      ),
+    );
+
+    const iterators = allInboxes.map((i) => {
+      const cursor = cursors[i.serviceEndpoint];
+      return this.querySingleEndpoint(
+        i.serviceEndpoint,
+        cursor
+          ? {
+              cursor,
+            }
+          : {
+              tags,
+              objectSchema: schema,
+            },
+        i.token,
+        session?.actor,
+      );
+    });
+
+    async function indexedNext(it: (typeof iterators)[0], index: number) {
+      try {
+        return {
+          index: index,
+          error: undefined,
+          result: await it.next(),
+        };
+      } catch (e) {
+        if (
+          e instanceof GraffitiErrorCursorExpired ||
+          e instanceof GraffitiErrorInvalidSchema
+        ) {
+          // Propogate these errors to the root
+          throw e;
+        }
+        // Otherwise, silently pass them in the stream
+        return {
+          index,
+          error: e instanceof Error ? e : new Error(String(e)),
+          result: undefined,
+        };
+      }
+    }
+    let indexedIterators = iterators.map(async (it, index) =>
+      indexedNext(it, index),
+    );
+    let active = indexedIterators.length;
+
+    while (active > 0) {
+      const next = await Promise.race(indexedIterators);
+      if (next.error !== undefined) {
+        // Remove it from the race
+        indexedIterators[next.index] = new Promise(() => {});
+        active--;
+        yield {
+          error: next.error,
+          origin: allInboxes[next.index].serviceEndpoint,
+        };
+      } else if (next.result.done) {
+        // Store the cursor for future use
+        const inbox = allInboxes[next.index];
+        cursors[inbox.serviceEndpoint] = next.result.value;
+        // Remove it from the race
+        indexedIterators[next.index] = new Promise(() => {});
+        active--;
+      } else {
+        // Re-arm the iterator
+        indexedIterators[next.index] = indexedNext(
+          iterators[next.index],
+          next.index,
+        );
+        const { object, tombstone, tags: receivedTags } = next.result.value;
+        if (tombstone) {
+          if (tombstones.get(object.url) === true) continue;
+          tombstones.set(object.url, true);
+          yield {
+            tombstone,
+            object: { url: object.url },
+          };
+        } else {
+          // Filter already seen
+          if (tombstones.get(object.url) === false) continue;
+
+          // Fill in the matched channels
+          const matchedTagIndices = tags.reduce<number[]>(
+            (acc, tag, tagIndex) => {
+              for (const receivedTag of receivedTags) {
+                if (
+                  tag.length === receivedTag.length &&
+                  tag.every((b, i) => receivedTag[i] === b)
+                ) {
+                  acc.push(tagIndex);
+                  break;
+                }
+              }
+              return acc;
+            },
+            [],
+          );
+          const matchedChannels = matchedTagIndices.map(
+            (index) => channels[index],
+          );
+          if (matchedChannels.length === 0) {
+            yield {
+              error: new Error(
+                "Inbox returned object without matching channels",
+              ),
+              origin: allInboxes[next.index].serviceEndpoint,
+            };
+          }
+          tombstones.set(object.url, false);
+          yield {
+            object: {
+              ...object,
+              channels: matchedChannels,
+            },
+          };
+        }
+      }
+    }
+
+    return {
+      cursor: JSON.stringify({
+        channels,
+        cursors,
+      } satisfies infer_<typeof CursorSchema>),
+      continue: (session) =>
+        this.discoverMeta<Schema>(channels, schema, cursors, session),
+    };
+  }
+
+  async *discover<Schema extends JSONSchema>(
+    channels: string[],
+    schema: Schema,
+    session?: GraffitiSession | null,
+  ): GraffitiObjectStream<Schema> {
+    const iterator = this.discoverMeta(channels, schema, {}, session);
+    while (true) {
+      const result = await iterator.next();
+      if (result.done) return result.value;
+      if (result.value.error) {
+        yield result.value;
+      } else if (result.value.tombstone) {
+        // Filter out tombstones
+        continue;
+      } else {
+        yield result.value;
+      }
+    }
+  }
+
+  continueDiscover(
+    cursor: string,
+    session?: GraffitiSession | null,
+  ): GraffitiObjectStreamContinue<{}> {
+    // Extract the channels from the cursor
+    let channels: string[];
+    let cursors: { [endpoint: string]: string };
+    try {
+      const json = JSON.parse(cursor);
+      const parsed = CursorSchema.parse(json);
+      channels = parsed.channels;
+      cursors = parsed.cursors;
+    } catch (error) {
+      return (async function* () {
+        throw new GraffitiErrorCursorExpired("Invalid cursor");
+      })();
+    }
+    return this.discoverMeta(channels, {}, cursors, session);
+  }
+
   async announceObject(
     object: GraffitiObjectBase,
     tags: Uint8Array[],
@@ -879,3 +1097,8 @@ const MEDIA_OBJECT_SCHEMA = {
     },
   },
 } as const satisfies JSONSchema;
+
+const CursorSchema = strictObject({
+  cursors: record(url(), string()),
+  channels: array(string()),
+});
