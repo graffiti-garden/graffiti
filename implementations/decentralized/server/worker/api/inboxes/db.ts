@@ -167,6 +167,63 @@ export async function sendMessage(
   return { messageId: messageSeq.toString(), created };
 }
 
+export async function getMessage(
+  context: Context<{ Bindings: Bindings }>,
+  inboxId: string,
+  messageId: string,
+  userId?: number,
+) {
+  const info = await getInboxInfo(context, inboxId);
+
+  if (!info || !(info.userId === userId || info.userId === 0)) {
+    throw new HTTPException(403, {
+      message: "Cannot read someone else's inbox",
+    });
+  }
+  const inboxSeq = info.inboxSeq;
+
+  const res = await context.env.DB.prepare(
+    `
+  SELECT
+    tags,
+    object,
+    metadata,
+    l.label AS label
+  FROM inbox_messages
+  LEFT JOIN inbox_message_labels l
+    ON seq = l.message_seq AND l.user_id = ?
+  WHERE inbox_seq = ? AND seq = ?
+  `,
+  )
+    .bind(userId, inboxSeq, messageId)
+    .first<{
+      tags: ArrayBuffer;
+      object: string;
+      metadata: ArrayBuffer;
+      label: number | null;
+    }>();
+
+  if (!res) {
+    throw new HTTPException(404, { message: "Message not found" });
+  }
+
+  const messageRaw = {
+    t: dagCborDecode(new Uint8Array(res.tags)),
+    o: JSON.parse(res.object),
+    m: dagCborDecode(new Uint8Array(res.metadata)),
+  };
+
+  const message = MessageSchema.parse(messageRaw);
+
+  const out: z.infer<typeof LabeledMessageSchema> = {
+    id: messageId,
+    m: message,
+    l: res.label ?? 0,
+  };
+
+  return out;
+}
+
 export async function queryMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,

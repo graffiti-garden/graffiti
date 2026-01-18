@@ -9,6 +9,7 @@ import {
   exportMessages,
   MessageSchema,
   LabeledMessageSchema,
+  getMessage,
 } from "./db";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { augmentService, getId } from "../shared";
@@ -135,6 +136,49 @@ inbox.openapi(sendRoute, async (c) => {
   const { messageId, created } = await sendMessage(c, inboxId, message);
   const output = { id: messageId };
   return c.body(dagCborEncode(output).slice(), created ? 201 : 200, {
+    "Content-Type": "application/cbor",
+  });
+});
+
+const messageRoute = createRoute({
+  method: "get",
+  description: "Get a message from the inbox via its message ID",
+  tags: ["Inbox"],
+  path: "/message/{messageId}",
+  request: {
+    params: z.object({
+      messageId: z.string(),
+    }),
+  },
+  security: [{ oauth2: [] }],
+  responses: {
+    200: {
+      description: "Message retrieved",
+      content: {
+        "application/cbor": {
+          schema: LabeledMessageSchema,
+        },
+      },
+    },
+    401: { description: "Invalid authorization" },
+    403: {
+      description: "Cannot label an message in someone else's inbox",
+    },
+    404: { description: "Message not found" },
+  },
+});
+inbox.openapi(messageRoute, async (c) => {
+  let token: string | undefined = undefined;
+  try {
+    token = await getHeaderToken(c);
+  } catch {} // Not to worry if not present
+  const userId = token ? (await verifySessionHeader(c)).userId : undefined;
+  const inboxId = getInboxId(c);
+
+  const { messageId } = c.req.valid("param");
+
+  const message = await getMessage(c, inboxId, messageId, userId);
+  return c.body(dagCborEncode(message).slice(), 200, {
     "Content-Type": "application/cbor",
   });
 });
