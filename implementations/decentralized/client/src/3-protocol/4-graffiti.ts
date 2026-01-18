@@ -13,6 +13,9 @@ import {
   compileGraffitiObjectSchema,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorForbidden,
+  GraffitiErrorTooLarge,
+  isMediaAcceptable,
+  GraffitiErrorNotAcceptable,
 } from "@graffiti-garden/api";
 import { randomBytes } from "@noble/hashes/utils.js";
 import {
@@ -394,6 +397,124 @@ export class GraffitiDecentralized implements Pick<
     return object;
   };
 
+  postMedia: Graffiti["postMedia"] = async (...args) => {
+    const [media, session] = args;
+
+    const type = media.data.type;
+
+    const resolvedSession = this.sessions.resolveSession(session);
+    if (!resolvedSession) throw new Error("Invalid session");
+
+    // Generate a random storage key
+    const keyBytes = randomBytes();
+    const key = await this.stringEncoder.encode(
+      STRING_ENCODER_METHOD_BASE64URL,
+      keyBytes,
+    );
+
+    // Store the media at that key
+    await this.storageBuckets.put(
+      resolvedSession.storageBucket.serviceEndpoint,
+      key,
+      await media.data.bytes(),
+      resolvedSession.storageBucket.token,
+    );
+
+    // Create an object
+    const { url } = await this.post<typeof MEDIA_OBJECT_SCHEMA>(
+      {
+        value: {
+          key,
+          type,
+          size: media.data.size,
+        },
+        channels: [],
+        allowed: media.allowed,
+      },
+      session,
+    );
+
+    return url;
+  };
+
+  getMedia: Graffiti["getMedia"] = async (...args) => {
+    const [mediaUrl, accept, session] = args;
+
+    const object = await this.get<typeof MEDIA_OBJECT_SCHEMA>(
+      mediaUrl,
+      MEDIA_OBJECT_SCHEMA,
+      session,
+    );
+
+    const { key, type, size } = object.value;
+
+    if (accept?.maxBytes && size > accept.maxBytes) {
+      throw new GraffitiErrorTooLarge("File size exceeds limit");
+    }
+
+    // Make sure it adheres to requirements.accept
+    if (accept?.types) {
+      if (!isMediaAcceptable(type, accept.types)) {
+        throw new GraffitiErrorNotAcceptable(
+          `Unacceptable media type, ${type}`,
+        );
+      }
+    }
+
+    // Get the actor's storage bucket endpoint
+    const actorDocument = await this.dids.resolve(object.actor);
+    const storageBucketService = actorDocument?.service?.find(
+      (service) =>
+        service.id === DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET &&
+        service.type === DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
+    );
+    if (!storageBucketService) {
+      throw new GraffitiErrorNotFound(
+        `Actor ${object.actor} has no storage bucket service`,
+      );
+    }
+    if (typeof storageBucketService.serviceEndpoint !== "string") {
+      throw new GraffitiErrorNotFound(
+        `Actor ${object.actor} does not have a valid storage bucket endpoint`,
+      );
+    }
+    const storageBucketEndpoint = storageBucketService.serviceEndpoint;
+
+    const data = await this.storageBuckets.get(
+      storageBucketEndpoint,
+      key,
+      size,
+    );
+
+    const blob = new Blob([data.slice()], { type });
+
+    return {
+      data: blob,
+      actor: object.actor,
+      allowed: object.allowed,
+    };
+  };
+
+  deleteMedia: Graffiti["deleteMedia"] = async (...args) => {
+    const [mediaUrl, session] = args;
+
+    const resolvedSession = this.sessions.resolveSession(session);
+    if (!resolvedSession) throw new Error("Invalid session");
+
+    const result = await this.delete(mediaUrl, session);
+
+    if (!("key" in result.value && typeof result.value.key === "string"))
+      throw new Error(
+        "Deleted object was not media: " + JSON.stringify(result, null, 2),
+      );
+
+    await this.storageBuckets.delete(
+      resolvedSession.storageBucket.serviceEndpoint,
+      result.value.key,
+      resolvedSession.storageBucket.token,
+    );
+  };
+
   async announceObject(
     object: GraffitiObjectBase,
     tags: Uint8Array[],
@@ -741,3 +862,16 @@ export class GraffitiDecentralized implements Pick<
     );
   }
 }
+
+const MEDIA_OBJECT_SCHEMA = {
+  properties: {
+    value: {
+      properties: {
+        type: { type: "string" },
+        size: { type: "number" },
+        key: { type: "string" },
+      },
+      required: ["type", "size", "key"],
+    },
+  },
+} as const satisfies JSONSchema;
