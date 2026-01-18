@@ -24,7 +24,7 @@ export class StorageBuckets {
         "Content-Type": "application/octet-stream",
         Authorization: `Bearer ${authorizationToken}`,
       },
-      body: value.slice().buffer,
+      body: value.slice(),
     });
   }
 
