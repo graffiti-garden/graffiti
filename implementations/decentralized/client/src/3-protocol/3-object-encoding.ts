@@ -162,12 +162,18 @@ export class ObjectEncoding {
           allowedTickets: Uint8Array[];
         },
   ): Promise<void> {
+    if (objectBytes.byteLength > MAX_OBJECT_SIZE_BYTES) {
+      throw new Error("Object is too big");
+    }
     const { actor, contentAddress } = decodeObjectUrl(object.url);
     if (actor !== object.actor) {
       throw new Error("Object actor does not match URL actor");
     }
 
     const objectUrlTag = tags.at(0);
+    if (!objectUrlTag) {
+      throw new Error("No object URL tag");
+    }
     if (new TextDecoder().decode(objectUrlTag) !== object.url) {
       throw new Error("Object URL tag does not match object URL");
     }
