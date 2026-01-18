@@ -10,6 +10,8 @@ import {
   type GraffitiObject,
   unpackObjectUrl,
   type GraffitiObjectUrl,
+  compileGraffitiObjectSchema,
+  GraffitiErrorSchemaMismatch,
 } from "@graffiti-garden/api";
 import { randomBytes } from "@noble/hashes/utils.js";
 import {
@@ -268,6 +270,7 @@ export class GraffitiDecentralized implements Pick<
     session?: GraffitiSession | null,
   ): Promise<GraffitiObject<Schema>> {
     let services: { token?: string; serviceEndpoint: string }[];
+    const validator = await compileGraffitiObjectSchema(schema);
 
     if (session) {
       // If logged in, first search one's
@@ -290,13 +293,13 @@ export class GraffitiDecentralized implements Pick<
     const objectUrl = unpackObjectUrl(url);
     const tags = [new TextEncoder().encode(objectUrl)];
     for (const service of services) {
-      let object: GraffitiObject<Schema> | undefined = undefined;
+      let object: GraffitiObjectBase | undefined = undefined;
 
-      const iterator = this.querySingleEndpoint<Schema>(
+      const iterator = this.querySingleEndpoint<{}>(
         service.serviceEndpoint,
         {
           tags,
-          objectSchema: schema,
+          objectSchema: {},
         },
         service.token,
         session?.actor,
@@ -311,7 +314,15 @@ export class GraffitiDecentralized implements Pick<
         }
       }
 
-      if (object) return object;
+      if (object) {
+        if (!validator(object)) {
+          throw new GraffitiErrorSchemaMismatch(
+            "Object exists but does not match the supplied schema",
+          );
+        }
+
+        return object;
+      }
     }
 
     throw new GraffitiErrorNotFound("Object not found");
