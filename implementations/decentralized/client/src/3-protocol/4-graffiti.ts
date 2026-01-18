@@ -5,11 +5,9 @@ import {
   type Graffiti,
   type GraffitiLoginEvent,
   type GraffitiObjectBase,
-  type GraffitiPostObject,
   type GraffitiSession,
   type GraffitiObject,
   unpackObjectUrl,
-  type GraffitiObjectUrl,
   compileGraffitiObjectSchema,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorForbidden,
@@ -17,9 +15,8 @@ import {
   isMediaAcceptable,
   GraffitiErrorNotAcceptable,
   GraffitiErrorCursorExpired,
-  type GraffitiObjectStream,
-  type GraffitiObjectStreamContinue,
   GraffitiErrorInvalidSchema,
+  type GraffitiObjectStream,
 } from "@graffiti-garden/api";
 import { randomBytes } from "@noble/hashes/utils.js";
 import {
@@ -115,7 +112,6 @@ export interface GraffitiDecentralizedOptions {
   defaultInboxEndpoints?: string[];
 }
 
-// @ts-ignore
 export class GraffitiDecentralized implements Graffiti {
   protected readonly dids = new DecentralizedIdentifiers();
   protected readonly authorization = new Authorization();
@@ -235,16 +231,15 @@ export class GraffitiDecentralized implements Graffiti {
     await this.sessions.logout(session.actor);
   };
 
-  async post<Schema extends JSONSchema>(
-    partialObject: GraffitiPostObject<Schema>,
-    session: GraffitiSession,
-  ): Promise<GraffitiObject<Schema>> {
+  // @ts-ignore
+  post: Graffiti["post"] = async (...args) => {
+    const [partialObject, session] = args;
     const resolvedSession = this.sessions.resolveSession(session);
     if (!resolvedSession) throw new Error("Not logged in");
 
     // Encode the object
     const { object, tags, objectBytes, allowedTickets } =
-      await this.objectEncoding.encode<Schema>(partialObject, session.actor);
+      await this.objectEncoding.encode<{}>(partialObject, session.actor);
 
     // Generate a random key under which to store the object
     // If the object is private, this means no one will be able to
@@ -277,13 +272,10 @@ export class GraffitiDecentralized implements Graffiti {
     );
 
     return object;
-  }
+  };
 
-  async get<Schema extends JSONSchema>(
-    url: string | GraffitiObjectUrl,
-    schema: Schema,
-    session?: GraffitiSession | null,
-  ): Promise<GraffitiObject<Schema>> {
+  get: Graffiti["get"] = async (...args) => {
+    const [url, schema, session] = args;
     let services: { token?: string; serviceEndpoint: string }[];
     const validator = await compileGraffitiObjectSchema(schema);
 
@@ -341,7 +333,7 @@ export class GraffitiDecentralized implements Graffiti {
     }
 
     throw new GraffitiErrorNotFound("Object not found");
-  }
+  };
 
   delete: Graffiti["delete"] = async (url, session) => {
     const resolvedSession = this.sessions.resolveSession(session);
@@ -529,7 +521,7 @@ export class GraffitiDecentralized implements Graffiti {
       [endpoint: string]: string;
     },
     session?: GraffitiSession | null,
-  ): GraffitiObjectStreamContinue<Schema> {
+  ): GraffitiObjectStream<Schema> {
     const tombstones = new Map<string, boolean>();
 
     let allInboxes: { serviceEndpoint: string; token?: string }[];
@@ -565,56 +557,36 @@ export class GraffitiDecentralized implements Graffiti {
       ),
     );
 
-    const iterators = allInboxes.map((i) => {
-      const cursor = cursors[i.serviceEndpoint];
-      return this.querySingleEndpoint(
-        i.serviceEndpoint,
-        cursor
-          ? {
-              cursor,
-            }
-          : {
-              tags,
-              objectSchema: schema,
-            },
-        i.token,
-        session?.actor,
-      );
-    });
-
-    async function indexedNext(it: (typeof iterators)[0], index: number) {
-      try {
-        return {
-          index: index,
-          error: undefined,
-          result: await it.next(),
-        };
-      } catch (e) {
-        if (
-          e instanceof GraffitiErrorCursorExpired ||
-          e instanceof GraffitiErrorInvalidSchema
-        ) {
-          // Propogate these errors to the root
-          throw e;
-        }
-        // Otherwise, silently pass them in the stream
-        return {
-          index,
-          error: e instanceof Error ? e : new Error(String(e)),
-          result: undefined,
-        };
-      }
-    }
-    let indexedIterators = iterators.map(async (it, index) =>
-      indexedNext(it, index),
+    const iterators: SingleEndpointQueryIterator<Schema>[] = allInboxes.map(
+      (i) => {
+        const cursor = cursors[i.serviceEndpoint];
+        return this.querySingleEndpoint<Schema>(
+          i.serviceEndpoint,
+          cursor
+            ? {
+                cursor,
+              }
+            : {
+                tags,
+                objectSchema: schema,
+              },
+          i.token,
+          session?.actor,
+        );
+      },
     );
-    let active = indexedIterators.length;
+
+    let indexedIteratorNexts = iterators.map(async (it, index) =>
+      indexedSingleEndpointQueryNext<Schema>(it, index),
+    );
+    let active = indexedIteratorNexts.length;
 
     while (active > 0) {
-      const next = await Promise.race(indexedIterators);
+      const next: IndexedSingleEndpointQueryResult<Schema> =
+        await Promise.race<any>(indexedIteratorNexts);
       if (next.error !== undefined) {
         // Remove it from the race
-        indexedIterators[next.index] = new Promise(() => {});
+        indexedIteratorNexts[next.index] = new Promise(() => {});
         active--;
         yield {
           error: next.error,
@@ -625,14 +597,15 @@ export class GraffitiDecentralized implements Graffiti {
         const inbox = allInboxes[next.index];
         cursors[inbox.serviceEndpoint] = next.result.value;
         // Remove it from the race
-        indexedIterators[next.index] = new Promise(() => {});
+        indexedIteratorNexts[next.index] = new Promise(() => {});
         active--;
       } else {
         // Re-arm the iterator
-        indexedIterators[next.index] = indexedNext(
-          iterators[next.index],
-          next.index,
-        );
+        indexedIteratorNexts[next.index] =
+          indexedSingleEndpointQueryNext<Schema>(
+            iterators[next.index],
+            next.index,
+          );
         const { object, tombstone, tags: receivedTags } = next.result.value;
         if (tombstone) {
           if (tombstones.get(object.url) === true) continue;
@@ -693,30 +666,13 @@ export class GraffitiDecentralized implements Graffiti {
     };
   }
 
-  async *discover<Schema extends JSONSchema>(
-    channels: string[],
-    schema: Schema,
-    session?: GraffitiSession | null,
-  ): GraffitiObjectStream<Schema> {
-    const iterator = this.discoverMeta(channels, schema, {}, session);
-    while (true) {
-      const result = await iterator.next();
-      if (result.done) return result.value;
-      if (result.value.error) {
-        yield result.value;
-      } else if (result.value.tombstone) {
-        // Filter out tombstones
-        continue;
-      } else {
-        yield result.value;
-      }
-    }
-  }
+  discover: Graffiti["discover"] = (...args) => {
+    const [channels, schema, session] = args;
+    return this.discoverMeta<(typeof args)[1]>(channels, schema, {}, session);
+  };
 
-  continueDiscover(
-    cursor: string,
-    session?: GraffitiSession | null,
-  ): GraffitiObjectStreamContinue<{}> {
+  continueDiscover: Graffiti["continueDiscover"] = (...args) => {
+    const [cursor, session] = args;
     // Extract the channels from the cursor
     let channels: string[];
     let cursors: { [endpoint: string]: string };
@@ -730,8 +686,8 @@ export class GraffitiDecentralized implements Graffiti {
         throw new GraffitiErrorCursorExpired("Invalid cursor");
       })();
     }
-    return this.discoverMeta(channels, {}, cursors, session);
-  }
+    return this.discoverMeta<{}>(channels, {}, cursors, session);
+  };
 
   async announceObject(
     object: GraffitiObjectBase,
@@ -865,16 +821,7 @@ export class GraffitiDecentralized implements Graffiti {
         },
     inboxToken?: string | null,
     recipient?: string | null,
-  ): AsyncGenerator<
-    {
-      object: GraffitiObject<Schema>;
-      storageBucketKey: string;
-      tags: Uint8Array[];
-      allowedTickets: Uint8Array[] | undefined;
-      tombstone?: boolean;
-    },
-    string
-  > {
+  ): SingleEndpointQueryIterator<Schema> {
     const iterator: MessageStream<Schema> =
       "tags" in queryArguments
         ? this.inboxes.query<Schema>(
@@ -1102,3 +1049,50 @@ const CursorSchema = strictObject({
   cursors: record(url(), string()),
   channels: array(string()),
 });
+
+interface SingleEndpointQueryResult<Schema extends JSONSchema> {
+  object: GraffitiObject<Schema>;
+  storageBucketKey: string;
+  tags: Uint8Array[];
+  allowedTickets: Uint8Array[] | undefined;
+  tombstone?: boolean;
+}
+interface SingleEndpointQueryIterator<
+  Schema extends JSONSchema,
+> extends AsyncGenerator<SingleEndpointQueryResult<Schema>, string> {}
+type IndexedSingleEndpointQueryResult<Schema extends JSONSchema> =
+  | {
+      index: number;
+      error?: undefined;
+      result: IteratorResult<SingleEndpointQueryResult<Schema>, string>;
+    }
+  | {
+      index: number;
+      error: Error;
+      result?: undefined;
+    };
+
+async function indexedSingleEndpointQueryNext<Schema extends JSONSchema>(
+  it: SingleEndpointQueryIterator<Schema>,
+  index: number,
+): Promise<IndexedSingleEndpointQueryResult<Schema>> {
+  try {
+    return {
+      index: index,
+      result: await it.next(),
+    };
+  } catch (e) {
+    if (
+      e instanceof GraffitiErrorCursorExpired ||
+      e instanceof GraffitiErrorInvalidSchema
+    ) {
+      // Propogate these errors to the root
+      throw e;
+    }
+    // Otherwise, silently pass them in the stream
+    return {
+      index,
+      error: e instanceof Error ? e : new Error(String(e)),
+    };
+  }
+}
