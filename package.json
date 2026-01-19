@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/api",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "The heart of Graffiti",
   "types": "./dist/src/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -28,6 +28,7 @@
     "src",
     "dist",
     "tests",
+    "LICENSE",
     "package.json",
     "README.md"
   ],
