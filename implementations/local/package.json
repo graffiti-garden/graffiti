@@ -71,7 +71,8 @@
     "src",
     "dist",
     "package.json",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
