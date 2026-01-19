@@ -140,6 +140,12 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly channelAttestations = new ChannelAttestations();
   protected readonly allowedAttestations = new AllowedAttestations();
 
+  protected readonly sessions = new Sessions({
+    dids: this.dids,
+    authorization: this.authorization,
+    storageBuckets: this.storageBuckets,
+    inboxes: this.inboxes,
+  });
   protected readonly handles = new Handles({ dids: this.dids });
   protected readonly objectEncoding = new ObjectEncoding({
     stringEncoder: this.stringEncoder,
@@ -150,30 +156,19 @@ export class GraffitiDecentralized implements Graffiti {
 
   protected readonly defaultInboxEndpoints: string[];
   protected readonly identityCreatorEndpoint: string;
-  protected readonly sessions: Sessions;
-  constructor(options?: GraffitiDecentralizedOptions, sessions?: Sessions) {
+  constructor(options?: GraffitiDecentralizedOptions) {
     this.defaultInboxEndpoints = options?.defaultInboxEndpoints ?? [
       "https://graffiti.actor/i/shared",
     ];
     this.identityCreatorEndpoint =
       options?.identityCreatorEndpoint ?? "https://graffiti.actor/create";
-
-    this.sessions =
-      sessions ??
-      new Sessions({
-        dids: this.dids,
-        authorization: this.authorization,
-        storageBuckets: this.storageBuckets,
-        inboxes: this.inboxes,
-      });
-    this.sessionEvents = this.sessions.sessionEvents;
   }
 
   readonly actorToHandle: Graffiti["actorToHandle"] =
     this.handles.actorToHandle.bind(this.handles);
   readonly handleToActor: Graffiti["handleToActor"] =
     this.handles.handleToActor.bind(this.handles);
-  readonly sessionEvents: Graffiti["sessionEvents"];
+  readonly sessionEvents: Graffiti["sessionEvents"] = this.sessions.sessionEvents;
 
   login: Graffiti["login"] = async (actor?: string) => {
     try {

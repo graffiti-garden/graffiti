@@ -84,10 +84,8 @@ describe("GraffitiDecentralized Tests", async () => {
       {
         defaultInboxEndpoints: ["https://localhost:5173/i/shared"],
       },
-      sessionMethods,
     );
   };
-  // @ts-ignore
   graffitiCRUDTests(
     useGraffiti,
     () => sessions[0],
