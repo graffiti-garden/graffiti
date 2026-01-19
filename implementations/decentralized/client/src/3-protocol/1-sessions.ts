@@ -476,9 +476,8 @@ export class Sessions {
     }
   }
 
-  protected loggedInSessions_: StoredSession[] = [];
   protected get loggedInSessions(): StoredSession[] {
-    if (typeof window === "undefined") return this.loggedInSessions_;
+    if (typeof window === "undefined") return loggedInSessions_;
 
     const data = window.localStorage.getItem(
       LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY,
@@ -504,7 +503,7 @@ export class Sessions {
   }
   protected set loggedInSessions(sessions: StoredSession[]) {
     if (typeof window === "undefined") {
-      this.loggedInSessions_ = sessions;
+      loggedInSessions_ = sessions;
       return;
     }
 
@@ -518,6 +517,7 @@ export class Sessions {
     return this.loggedInSessions.find((s) => s.actor === session.actor);
   }
 }
+let loggedInSessions_: StoredSession[] = [];
 
 const LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY = "graffiti-login-in-progress";
 const LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY = "graffiti-logout-in-progress";
