@@ -4,9 +4,9 @@ import type {
   JSONSchema,
   GraffitiObjectBase,
   GraffitiObjectStream,
-  GraffitiObjectStreamContinueEntry,
-  GraffitiObjectStreamContinue,
+  GraffitiObjectStreamEntry,
   GraffitiObjectUrl,
+  GraffitiObjectStreamTombstone,
 } from "@graffiti-garden/api";
 import {
   compileGraffitiObjectSchema,
@@ -18,8 +18,12 @@ import {
 import { Repeater } from "@repeaterjs/repeater";
 export type * from "@graffiti-garden/api";
 
+type GraffitiObjectStreamSuccess<Schema extends JSONSchema> =
+  | GraffitiObjectStreamEntry<Schema>
+  | GraffitiObjectStreamTombstone;
+
 export type GraffitiSynchronizeCallback = (
-  object: GraffitiObjectStreamContinueEntry<{}>,
+  object: GraffitiObjectStreamSuccess<{}>,
 ) => void;
 
 export interface GraffitiSynchronizeOptions {
@@ -130,8 +134,8 @@ export class GraffitiSynchronize implements Graffiti {
     schema: Schema,
     session?: GraffitiSession | null,
     seenUrls: Set<string> = new Set<string>(),
-  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
-    const repeater = new Repeater<GraffitiObjectStreamContinueEntry<Schema>>(
+  ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
+    const repeater = new Repeater<GraffitiObjectStreamSuccess<Schema>>(
       async (push, stop) => {
         const validate = await compileGraffitiObjectSchema(schema);
         const callback: GraffitiSynchronizeCallback = (objectUpdate) => {
@@ -187,7 +191,7 @@ export class GraffitiSynchronize implements Graffiti {
     channels: string[],
     schema: Schema,
     session?: GraffitiSession | null,
-  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
+  ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
     function matchObject(object: GraffitiObjectBase) {
       return object.channels.some((channel) => channels.includes(channel));
     }
@@ -210,7 +214,7 @@ export class GraffitiSynchronize implements Graffiti {
     objectUrl: string | GraffitiObjectUrl,
     schema: Schema,
     session?: GraffitiSession | null | undefined,
-  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
+  ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
     const url = unpackObjectUrl(objectUrl);
     function matchObject(object: GraffitiObjectBase) {
       return object.url === url;
@@ -239,12 +243,12 @@ export class GraffitiSynchronize implements Graffiti {
   synchronizeAll<Schema extends JSONSchema>(
     schema: Schema,
     session?: GraffitiSession | null,
-  ): AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>> {
+  ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
     return this.synchronize<Schema>(() => true, [], schema, session);
   }
 
   protected async synchronizeDispatch(
-    objectUpdate: GraffitiObjectStreamContinueEntry<{}>,
+    objectUpdate: GraffitiObjectStreamSuccess<{}>,
     waitForListeners = false,
   ) {
     for (const callback of this.callbacks) {
@@ -291,9 +295,9 @@ export class GraffitiSynchronize implements Graffiti {
     }
   };
 
+  // @ts-ignore
   post: Graffiti["post"] = async (...args) => {
-    // @ts-ignore
-    const object = await this.graffiti.post(...args);
+    const object = await this.graffiti.post<{}>(...args);
     await this.synchronizeDispatch({ object }, true);
     return object;
   };
@@ -316,8 +320,8 @@ export class GraffitiSynchronize implements Graffiti {
   };
 
   protected objectStreamContinue<Schema extends JSONSchema>(
-    iterator: GraffitiObjectStreamContinue<Schema>,
-  ): GraffitiObjectStreamContinue<Schema> {
+    iterator: GraffitiObjectStream<Schema>,
+  ): GraffitiObjectStream<Schema> {
     const this_ = this;
     return (async function* () {
       while (true) {
@@ -331,7 +335,8 @@ export class GraffitiSynchronize implements Graffiti {
           };
         }
         if (!result.value.error) {
-          this_.synchronizeDispatch(result.value);
+          const value = result.value as GraffitiObjectStreamSuccess<{}>;
+          this_.synchronizeDispatch(value);
         }
         yield result.value;
       }
