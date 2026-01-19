@@ -157,6 +157,133 @@ export class Inboxes {
     return { response, waitTil };
   }
 
+  protected async *yieldFromCache(
+    cache: Cache,
+    inboxUrl: string,
+    messageIdsCacheKey: string,
+    cachedMessageIds: CacheQueryValue,
+    cacheNumSeen: number = 0,
+  ): AsyncGenerator<LabeledMessageBase> {
+    // Filter out all messageIds before
+    // the number already seen
+    const messageIds = cachedMessageIds.messageIds.slice(cacheNumSeen);
+
+    // Get all the messages pointed to in the cache
+    const messages = await Promise.all(
+      messageIds.map(async (id) => {
+        const message = await cache.messages.get(
+          getMessageCacheKey(inboxUrl, id),
+        );
+        if (!message) {
+          // Something is very wrong with the cache,
+          // it refers to message IDs that are not cached
+          try {
+            await cache.messageIds.del(messageIdsCacheKey);
+          } catch {}
+          throw new Error("Cache out of sync - perhaps clear browser storage");
+        }
+        return message;
+      }),
+    );
+
+    yield* messages;
+  }
+
+  protected async *lockedMessageStreamer<Schema extends JSONSchema>(
+    ...args: Parameters<typeof this.messageStreamer<Schema>>
+  ): MessageStream<Schema> {
+    if (typeof window === "undefined") {
+      // TODO: implement locking in node as well, but not
+      // high priority since most use will be in browser
+      const streamer = this.messageStreamer<Schema>(...args);
+      while (true) {
+        const next = await streamer.next();
+        if (next.done) return next.value;
+        yield next.value;
+      }
+    }
+
+    // Request the lock
+    const messageIdsCacheKey = await args[0];
+    let releaseLock = () => {};
+    let hasLock: boolean = false;
+    await new Promise<void>((resolvehasLock) => {
+      window.navigator.locks.request(
+        messageIdsCacheKey,
+        {
+          mode: "exclusive",
+          ifAvailable: true,
+        },
+        async (lock) => {
+          // Immediately return whether we
+          // acquired the lock or not
+          hasLock = !!lock;
+          resolvehasLock();
+
+          // Then wait for the release to be called
+          await new Promise<void>((r) => (releaseLock = r));
+        },
+      );
+    });
+    if (hasLock) {
+      // If we have the lock, simply proceed with the regular streamer
+      try {
+        const streamer = this.messageStreamer<Schema>(...args);
+        while (true) {
+          const next = await streamer.next();
+          if (next.done) return next.value;
+          yield next.value;
+        }
+      } finally {
+        // Release the lock when all done
+        releaseLock();
+      }
+    }
+
+    // Someone else has the lock,
+    // so wait until the lock is released,
+    // then just return from the cache
+    releaseLock();
+    await window.navigator.locks.request(messageIdsCacheKey, () => {});
+
+    // TODO: the arguments here are brittle
+    // at some point, refactor things
+    const inboxUrl = args[1];
+    const objectSchema = args[5] ?? {};
+    const cacheVersion = args[6];
+    const cacheNumSeen = args[7];
+
+    const cache = await this.cache;
+    const cachedMessageIds = await cache.messageIds.get(messageIdsCacheKey);
+    if (!cachedMessageIds) {
+      throw new Error("Cache not found");
+    }
+    if (
+      cacheVersion !== undefined &&
+      cacheVersion !== cachedMessageIds.version
+    ) {
+      throw new GraffitiErrorCursorExpired("Cursor is stale");
+    }
+
+    const iterator = this.yieldFromCache(
+      cache,
+      inboxUrl,
+      messageIdsCacheKey,
+      cachedMessageIds,
+      cacheNumSeen,
+    );
+    for await (const m of iterator) yield m as LabeledMessage<Schema>;
+
+    const outputCursor: infer_<typeof CursorSchema> = {
+      numSeen: cachedMessageIds.messageIds.length,
+      version: cachedMessageIds.version,
+      messageIdsCacheKey,
+      objectSchema,
+    };
+
+    return JSON.stringify(outputCursor);
+  }
+
   protected async *messageStreamer<Schema extends JSONSchema>(
     messageIdsCacheKey_: Promise<string>,
     inboxUrl: string,
@@ -220,35 +347,15 @@ export class Inboxes {
     }
 
     if (firstResponse !== undefined && cachedMessageIds) {
-      // The cursor is valid!
-
-      // Filter out all messageIds before
-      // the number already seen
-      const messageIds = cachedMessageIds.messageIds.slice(cacheNumSeen);
-
-      // Get all the messages pointed to in the cache
-      const messages = await Promise.all(
-        messageIds.map(async (id) => {
-          const message = await cache.messages.get(
-            getMessageCacheKey(inboxUrl, id),
-          );
-          if (!message) {
-            // Something is very wrong with the cache,
-            // it refers to message IDs that are not cached
-            try {
-              await cache.messageIds.del(messageIdsCacheKey);
-            } catch {}
-            throw new Error(
-              "Cache out of sync - perhaps clear browser storage",
-            );
-          }
-          return message;
-        }),
+      // Cursor is valid! Yield from the cache
+      const iterator = this.yieldFromCache(
+        cache,
+        inboxUrl,
+        messageIdsCacheKey,
+        cachedMessageIds,
+        cacheNumSeen,
       );
-
-      for (const message of messages) {
-        yield message as LabeledMessage<Schema>;
-      }
+      for await (const m of iterator) yield m as LabeledMessage<Schema>;
     }
 
     if (firstResponse === undefined) {
@@ -363,7 +470,7 @@ export class Inboxes {
     });
 
     const messageIdsCacheKey = getMessageIdsCacheKey(inboxUrl, "query", body);
-    return this.messageStreamer<Schema>(
+    return this.lockedMessageStreamer<Schema>(
       messageIdsCacheKey,
       inboxUrl,
       "query",
@@ -384,7 +491,7 @@ export class Inboxes {
     const { messageIdsCacheKey, numSeen, objectSchema, version } =
       CursorSchema.parse(decodedCursor);
 
-    return this.messageStreamer<{}>(
+    return this.lockedMessageStreamer<{}>(
       Promise.resolve(messageIdsCacheKey),
       inboxUrl,
       "query",
@@ -399,7 +506,7 @@ export class Inboxes {
   export(inboxUrl: string, inboxToken: string): MessageStream<{}> {
     verifyHTTPSEndpoint(inboxUrl);
     const messageIdsCacheKey = getMessageIdsCacheKey(inboxUrl, "export");
-    return this.messageStreamer<{}>(
+    return this.lockedMessageStreamer<{}>(
       messageIdsCacheKey,
       inboxUrl,
       "export",
