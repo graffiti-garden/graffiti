@@ -118,7 +118,7 @@ export async function sendMessage(
         metadata
       ) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(hash) DO NOTHING
-      RETURNING seq;
+      RETURNING message_seq;
     `,
   )
     .bind(
@@ -129,26 +129,26 @@ export async function sendMessage(
       JSON.stringify(message.o),
       dagCborEncode(message.m),
     )
-    .first<{ seq: number }>();
+    .first<{ message_seq: number }>();
 
   let created: boolean;
   let messageSeq: number;
   if (inserted) {
     created = true;
-    messageSeq = inserted.seq;
+    messageSeq = inserted.message_seq;
   } else {
     created = false;
     const result = await context.env.DB.prepare(
-      `SELECT seq, message_id FROM inbox_messages WHERE inbox_seq = ? AND hash = ?`,
+      `SELECT message_seq, message_id FROM inbox_messages WHERE inbox_seq = ? AND hash = ?`,
     )
       .bind(inboxSeq, messageHash)
-      .first<{ seq: number; message_id: string }>();
+      .first<{ message_seq: number; message_id: string }>();
     if (!result) {
       throw new HTTPException(500, {
         message: "Duplicate message deleted during send?",
       });
     }
-    messageSeq = result.seq;
+    messageSeq = result.message_seq;
     messageId = result.message_id;
   }
 
@@ -198,7 +198,7 @@ export async function getMessage(
     l.label AS label
   FROM inbox_messages m
   LEFT JOIN inbox_message_labels l
-    ON m.seq = l.message_seq AND l.user_id = ?
+    ON m.message_seq = l.message_seq AND l.user_id = ?
   WHERE inbox_seq = ? AND message_id = ?
   `,
   )
@@ -268,7 +268,7 @@ export async function queryMessages(
       ORDER BY t.message_seq ASC
     )
     SELECT
-      m.seq,
+      m.message_seq,
       m.message_id,
       m.tags,
       m.object,
@@ -276,12 +276,12 @@ export async function queryMessages(
     userId ? `l.label AS label` : `NULL as label`,
     `FROM message_candidates c
     JOIN inbox_messages m
-      ON m.seq = c.message_seq`,
+      ON m.message_seq = c.message_seq`,
     userId
       ? `LEFT JOIN inbox_message_labels l
       ON c.message_seq = l.message_seq AND l.user_id = ?`
       : ``,
-    `ORDER BY m.seq ASC
+    `ORDER BY m.message_seq ASC
     LIMIT ?`,
   ].join("\n");
 
@@ -296,7 +296,7 @@ export async function queryMessages(
   const res = await context.env.DB.prepare(sql)
     .bind(...bindings)
     .all<{
-      seq: number;
+      message_seq: number;
       message_id: string;
       tags: ArrayBuffer;
       object: string;
@@ -308,7 +308,7 @@ export async function queryMessages(
   const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
   const lastSeq = resultsRaw.length
-    ? resultsRaw[resultsRaw.length - 1].seq
+    ? resultsRaw[resultsRaw.length - 1].message_seq
     : sinceSeq;
 
   const results = resultsRaw
@@ -352,16 +352,16 @@ export async function labelMessage(
 
   // Make sure the message is in the indbox
   const result = await context.env.DB.prepare(
-    `SELECT seq FROM inbox_messages WHERE inbox_seq = ? AND message_id = ?`,
+    `SELECT message_seq FROM inbox_messages WHERE inbox_seq = ? AND message_id = ?`,
   )
     .bind(inboxSeq, messageId)
-    .first<{ seq: number }>();
+    .first<{ message_seq: number }>();
   if (!result) {
     throw new HTTPException(404, {
       message: "Message not found",
     });
   }
-  const messageSeq = result.seq;
+  const messageSeq = result.message_seq;
 
   await context.env.DB.prepare(
     `
@@ -399,7 +399,7 @@ export async function exportMessages(
   const res = await context.env.DB.prepare(
     `
     SELECT
-      seq,
+      message_seq,
       message_id,
       tags,
       object,
@@ -407,15 +407,15 @@ export async function exportMessages(
       l.label AS label
     FROM inbox_messages
     LEFT JOIN inbox_message_labels l
-      ON seq = l.message_seq AND l.user_id = ?
-    WHERE inbox_seq = ? AND seq > ?
-    ORDER BY seq ASC
+      ON message_seq = l.message_seq AND l.user_id = ?
+    WHERE inbox_seq = ? AND message_seq > ?
+    ORDER BY message_seq ASC
     LIMIT ?
   `,
   )
     .bind(userId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
-      seq: number;
+      message_seq: number;
       message_id: string;
       tags: ArrayBuffer;
       object: string;
@@ -427,7 +427,7 @@ export async function exportMessages(
   const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
   const lastSeq = resultsRaw.length
-    ? resultsRaw[resultsRaw.length - 1].seq
+    ? resultsRaw[resultsRaw.length - 1].message_seq
     : sinceSeq;
 
   const results = resultsRaw.map((r) => {
