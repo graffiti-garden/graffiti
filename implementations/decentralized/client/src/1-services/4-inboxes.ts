@@ -199,7 +199,10 @@ export class Inboxes {
       waitTil = out.waitTil;
     } catch (e) {
       if (!(e instanceof GraffitiErrorCursorExpired && cachedCursor)) {
-        // Unexpected error
+        console.error(
+          "Unexpected error in stream, waiting 5 seconds before continuing...",
+        );
+        await new Promise((resolve) => setTimeout(resolve, 5000));
         throw e;
       }
 
