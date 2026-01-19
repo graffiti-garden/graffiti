@@ -207,6 +207,7 @@ export class GraffitiLocalObjects {
     return object;
   };
 
+  // @ts-ignore
   post: Graffiti["post"] = async (...args) => {
     const [objectPartial, session] = args;
 
@@ -231,7 +232,13 @@ export class GraffitiLocalObjects {
     });
 
     return {
-      ...objectPartial,
+      channels: objectPartial.channels,
+      value: objectPartial.value,
+      ...(objectPartial.allowed
+        ? {
+            allowed: objectPartial.allowed,
+          }
+        : {}),
       actor,
       url,
     };
