@@ -761,7 +761,6 @@ export class GraffitiDecentralized implements Graffiti {
           const tombstonedMessageId = priorAnnouncements
             ? priorAnnouncements.find(
                 (a) =>
-                  // TODO: for this to work, message IDs need to be portable across inboxes
                   a[MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY] === recipient,
               )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
             : undefined;
