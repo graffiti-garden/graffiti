@@ -18,7 +18,10 @@ import {
 import { Repeater } from "@repeaterjs/repeater";
 export type * from "@graffiti-garden/api";
 
-type GraffitiObjectStreamSuccess<Schema extends JSONSchema> =
+/**
+ * A result from a Graffiti object stream without errors.
+ */
+export type GraffitiObjectStreamSuccess<Schema extends JSONSchema> =
   | GraffitiObjectStreamEntry<Schema>
   | GraffitiObjectStreamTombstone;
 
