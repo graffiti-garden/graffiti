@@ -3,8 +3,9 @@ import type {
   GraffitiObjectBase,
   JSONSchema,
   GraffitiSession,
-  GraffitiObjectStreamContinue,
-  GraffitiObjectStreamContinueEntry,
+  GraffitiObjectStreamEntry,
+  GraffitiObjectStream,
+  GraffitiObjectStreamTombstone,
 } from "@graffiti-garden/api";
 import {
   GraffitiErrorNotFound,
@@ -251,13 +252,13 @@ export class GraffitiLocalObjects {
       ifModifiedSince: number;
     },
   ): AsyncGenerator<
-    GraffitiObjectStreamContinueEntry<Schema>,
+    GraffitiObjectStreamEntry<Schema> | GraffitiObjectStreamTombstone,
     ContinueDiscoverParams
   > {
     // If we are continuing a discover, make sure to wait at
-    // least 2 seconds since the last poll to start a new one.
+    // least 1 second since the last poll to start a new one.
     if (continueParams) {
-      const continueBuffer = this.options.continueBuffer ?? 2000;
+      const continueBuffer = this.options.continueBuffer ?? 1000;
       const timeElapsedSinceLastDiscover =
         Date.now() - continueParams.lastDiscovered;
       if (timeElapsedSinceLastDiscover < continueBuffer) {
@@ -367,7 +368,7 @@ export class GraffitiLocalObjects {
       ifModifiedSince: number;
     },
     session?: GraffitiSession | null,
-  ): GraffitiObjectStreamContinue<Schema> {
+  ): GraffitiObjectStream<Schema> {
     if (session?.actor !== args[2]?.actor) {
       throw new GraffitiErrorForbidden(
         "Cannot continue a cursor started by another actor",
