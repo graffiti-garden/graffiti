@@ -48,7 +48,7 @@ export class Inboxes {
       headers: {
         "Content-Type": "application/cbor",
       },
-      body: new Uint8Array(dagCborEncode(message)),
+      body: new Uint8Array(dagCborEncode({ m: message })),
     });
 
     const blob = await response.blob();
