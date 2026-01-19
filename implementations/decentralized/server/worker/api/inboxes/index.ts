@@ -69,6 +69,11 @@ const ExportCursorSchema = z.object({
   waitTil: z.number().optional(),
 });
 
+const PutMessageSchema = z.object({
+  id: z.string().optional(),
+  m: MessageSchema,
+});
+
 const inboxes = new Hono<{ Bindings: Bindings }>();
 
 const inbox = new OpenAPIHono<{ Bindings: Bindings }>();
@@ -83,7 +88,7 @@ const sendRoute = createRoute({
     body: {
       content: {
         "application/cbor": {
-          schema: MessageSchema,
+          schema: PutMessageSchema,
         },
       },
       required: true,
@@ -126,14 +131,16 @@ inbox.openapi(sendRoute, async (c) => {
   const inboxId = getInboxId(c);
   const messageBlob = await c.req.blob();
   const messageBytes = await messageBlob.arrayBuffer();
-  let message: z.infer<typeof MessageSchema>;
+  let message: z.infer<typeof PutMessageSchema>;
   try {
     const messageDecoded = dagCborDecode(messageBytes);
-    message = MessageSchema.parse(messageDecoded);
+    message = PutMessageSchema.parse(messageDecoded);
   } catch (e) {
     throw new HTTPException(400, { message: "Invalid message format" });
   }
-  const { messageId, created } = await sendMessage(c, inboxId, message);
+  // TODO: allow user's to assign message IDs in their own inbox
+  // for portability... and perhaps assign labels too
+  const { messageId, created } = await sendMessage(c, inboxId, message.m);
   const output = { id: messageId };
   return c.body(dagCborEncode(output).slice(), created ? 201 : 200, {
     "Content-Type": "application/cbor",

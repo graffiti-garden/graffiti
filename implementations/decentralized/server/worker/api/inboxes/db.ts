@@ -8,6 +8,7 @@ import { HTTPException } from "hono/http-exception";
 import { LRUCache } from "lru-cache";
 import z from "zod";
 import { Validator } from "@cfworker/json-schema";
+import { randomBase64 } from "../../app/auth/utils";
 
 const INBOX_QUERY_LIMIT = 100;
 const INBOX_INFO_CACHE_CAPACITY = 1000;
@@ -87,6 +88,7 @@ export async function sendMessage(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
   message: z.infer<typeof MessageSchema>,
+  messageId_?: string,
 ) {
   // Determine if the inbox is under the user's control,
   // which we will later use to determine if we can label the message
@@ -103,20 +105,24 @@ export async function sendMessage(
     new Uint8Array(operationBytes),
   );
 
+  let messageId = messageId_ ?? randomBase64();
+
   const inserted = await context.env.DB.prepare(
     `
       INSERT INTO inbox_messages (
+        message_id,
         hash,
         inbox_seq,
         tags,
         object,
         metadata
-      ) VALUES (?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(hash) DO NOTHING
       RETURNING seq;
     `,
   )
     .bind(
+      messageId,
       messageHash,
       inboxSeq,
       dagCborEncode(message.t),
@@ -133,16 +139,17 @@ export async function sendMessage(
   } else {
     created = false;
     const result = await context.env.DB.prepare(
-      `SELECT seq FROM inbox_messages WHERE inbox_seq = ? AND hash = ?`,
+      `SELECT seq, message_id FROM inbox_messages WHERE inbox_seq = ? AND hash = ?`,
     )
       .bind(inboxSeq, messageHash)
-      .first<{ seq: number }>();
+      .first<{ seq: number; message_id: string }>();
     if (!result) {
       throw new HTTPException(500, {
         message: "Duplicate message deleted during send?",
       });
     }
     messageSeq = result.seq;
+    messageId = result.message_id;
   }
 
   const statements: D1PreparedStatement[] = [];
@@ -164,7 +171,7 @@ export async function sendMessage(
     await context.env.DB.batch(statements);
   }
 
-  return { messageId: messageSeq.toString(), created };
+  return { messageId, created };
 }
 
 export async function getMessage(
@@ -189,10 +196,10 @@ export async function getMessage(
     object,
     metadata,
     l.label AS label
-  FROM inbox_messages
+  FROM inbox_messages m
   LEFT JOIN inbox_message_labels l
-    ON seq = l.message_seq AND l.user_id = ?
-  WHERE inbox_seq = ? AND seq = ?
+    ON m.seq = l.message_seq AND l.user_id = ?
+  WHERE inbox_seq = ? AND message_id = ?
   `,
   )
     .bind(userId, inboxSeq, messageId)
@@ -262,6 +269,7 @@ export async function queryMessages(
     )
     SELECT
       m.seq,
+      m.message_id,
       m.tags,
       m.object,
       m.metadata,`,
@@ -289,6 +297,7 @@ export async function queryMessages(
     .bind(...bindings)
     .all<{
       seq: number;
+      message_id: string;
       tags: ArrayBuffer;
       object: string;
       metadata: ArrayBuffer;
@@ -298,7 +307,9 @@ export async function queryMessages(
   const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
   const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
-  const lastSeq = resultsRaw.reduce((maxSeq, r) => Math.max(maxSeq, r.seq), 0);
+  const lastSeq = resultsRaw.length
+    ? resultsRaw[resultsRaw.length - 1].seq
+    : sinceSeq;
 
   const results = resultsRaw
     .map((r) => {
@@ -309,7 +320,7 @@ export async function queryMessages(
       };
       const message = MessageSchema.parse(messageRaw);
       const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
-        id: r.seq.toString(),
+        id: r.message_id,
         m: message,
         l: r.label ?? 0,
       };
@@ -341,15 +352,16 @@ export async function labelMessage(
 
   // Make sure the message is in the indbox
   const result = await context.env.DB.prepare(
-    `SELECT seq FROM inbox_messages WHERE seq = ? AND inbox_seq = ?`,
+    `SELECT seq FROM inbox_messages WHERE inbox_seq = ? AND message_id = ?`,
   )
-    .bind(Number(messageId), inboxSeq)
-    .first();
+    .bind(inboxSeq, messageId)
+    .first<{ seq: number }>();
   if (!result) {
     throw new HTTPException(404, {
       message: "Message not found",
     });
   }
+  const messageSeq = result.seq;
 
   await context.env.DB.prepare(
     `
@@ -361,7 +373,7 @@ export async function labelMessage(
     ON CONFLICT (message_seq, user_id) DO UPDATE SET label = EXCLUDED.label;
   `,
   )
-    .bind(Number(messageId), userId, label)
+    .bind(messageSeq, userId, label)
     .run();
 }
 
@@ -388,6 +400,7 @@ export async function exportMessages(
     `
     SELECT
       seq,
+      message_id,
       tags,
       object,
       metadata,
@@ -403,6 +416,7 @@ export async function exportMessages(
     .bind(userId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
       seq: number;
+      message_id: string;
       tags: ArrayBuffer;
       object: string;
       metadata: ArrayBuffer;
@@ -412,7 +426,9 @@ export async function exportMessages(
   const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
   const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
 
-  const lastSeq = resultsRaw.reduce((maxSeq, r) => Math.max(maxSeq, r.seq), 0);
+  const lastSeq = resultsRaw.length
+    ? resultsRaw[resultsRaw.length - 1].seq
+    : sinceSeq;
 
   const results = resultsRaw.map((r) => {
     const messageRaw = {
@@ -422,7 +438,7 @@ export async function exportMessages(
     };
     const message = MessageSchema.parse(messageRaw);
     const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
-      id: r.seq.toString(),
+      id: r.message_id,
       m: message,
       l: r.label ?? 0,
     };

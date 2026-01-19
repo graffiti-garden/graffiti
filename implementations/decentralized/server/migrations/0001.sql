@@ -127,6 +127,7 @@ INSERT OR IGNORE INTO inboxes (inbox_seq, inbox_id, user_id, created_at)
 
 CREATE TABLE IF NOT EXISTS inbox_messages (
   seq             INTEGER PRIMARY KEY,
+  message_id      TEXT NOT NULL,
   inbox_seq       INTEGER NOT NULL,
   hash            BLOB NOT NULL UNIQUE,
   tags            BLOB NOT NULL,
@@ -137,6 +138,7 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_seq ON inbox_messages(inbox_seq, seq ASC);
+CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_message_id ON inbox_messages(inbox_seq, message_id);
 CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_hash ON inbox_messages(inbox_seq, hash);
 
 CREATE TABLE IF NOT EXISTS inbox_message_tags (
