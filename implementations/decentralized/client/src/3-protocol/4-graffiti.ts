@@ -247,7 +247,6 @@ export class GraffitiDecentralized implements Graffiti {
   post: Graffiti["post"] = async (...args) => {
     const [partialObject, session] = args;
     const resolvedSession = this.sessions.resolveSession(session);
-    if (!resolvedSession) throw new Error("Not logged in");
 
     // Encode the object
     const { object, tags, objectBytes, allowedTickets } =
@@ -295,7 +294,6 @@ export class GraffitiDecentralized implements Graffiti {
       // If logged in, first search one's
       // personal inbox, then any shared inboxes
       const resolvedSession = this.sessions.resolveSession(session);
-      if (!resolvedSession) throw new Error("Invalid session");
       services = [
         resolvedSession.personalInbox,
         ...resolvedSession.sharedInboxes,
@@ -349,7 +347,6 @@ export class GraffitiDecentralized implements Graffiti {
 
   delete: Graffiti["delete"] = async (url, session) => {
     const resolvedSession = this.sessions.resolveSession(session);
-    if (!resolvedSession) throw new Error("Invalid session");
 
     const objectUrl = unpackObjectUrl(url);
 
@@ -421,7 +418,6 @@ export class GraffitiDecentralized implements Graffiti {
     const type = media.data.type;
 
     const resolvedSession = this.sessions.resolveSession(session);
-    if (!resolvedSession) throw new Error("Invalid session");
 
     // Generate a random storage key
     const keyBytes = randomBytes();
@@ -517,7 +513,6 @@ export class GraffitiDecentralized implements Graffiti {
     const [mediaUrl, session] = args;
 
     const resolvedSession = this.sessions.resolveSession(session);
-    if (!resolvedSession) throw new Error("Invalid session");
 
     const result = await this.delete(mediaUrl, session);
 
@@ -546,7 +541,6 @@ export class GraffitiDecentralized implements Graffiti {
     let allInboxes: { serviceEndpoint: string; token?: string }[];
     if (session) {
       const resolvedSession = this.sessions.resolveSession(session);
-      if (!resolvedSession) throw new Error("Invalid session");
       allInboxes = [
         resolvedSession.personalInbox,
         ...resolvedSession.sharedInboxes,
@@ -717,7 +711,6 @@ export class GraffitiDecentralized implements Graffiti {
     priorAnnouncements?: MessageMetadataAnnouncements,
   ): Promise<void> {
     const resolvedSession = this.sessions.resolveSession(session);
-    if (!resolvedSession) throw new Error("Not logged in");
 
     const metadataBase: MessageMetadataBase = {
       [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,

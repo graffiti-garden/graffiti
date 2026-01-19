@@ -513,8 +513,16 @@ export class Sessions {
     );
   }
 
-  resolveSession(session: GraffitiSession): StoredSession | undefined {
-    return this.loggedInSessions.find((s) => s.actor === session.actor);
+  resolveSession(session: GraffitiSession): StoredSession {
+    const resolvedSession = this.loggedInSessions.find((s) => s.actor === session.actor);
+    if (!resolvedSession) {
+      const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", {
+        detail: { actor: session.actor },
+      });
+      this.sessionEvents.dispatchEvent(logoutEvent);
+      throw new Error("Not logged in");
+    }
+    return resolvedSession;
   }
 }
 let loggedInSessions_: StoredSession[] = [];
