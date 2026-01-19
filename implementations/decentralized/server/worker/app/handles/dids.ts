@@ -11,6 +11,14 @@ import {
 const handleDids = new Hono<{ Bindings: Bindings }>();
 
 export async function getDid(c: Context<{ Bindings: Bindings }>) {
+  // Disable CORs
+  c.header("Access-Control-Allow-Origin", "*");
+  c.header("Access-Control-Allow-Methods", "GET");
+  c.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type, If-None-Match, Accept-Encoding",
+  );
+
   const handleName = c.req.param("handle-name");
 
   const result = await c.env.DB.prepare(
