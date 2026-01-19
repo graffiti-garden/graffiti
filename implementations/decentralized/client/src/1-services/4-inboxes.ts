@@ -263,7 +263,7 @@ export class Inboxes {
     // Continue streaming results
     let response = firstResponse;
     let cursor: string;
-    const version = cacheVersion ?? crypto.randomUUID();
+    const version = cachedMessageIds?.version ?? crypto.randomUUID();
     let messageIds = cachedMessageIds?.messageIds ?? [];
     while (true) {
       const blob = await response.blob();
