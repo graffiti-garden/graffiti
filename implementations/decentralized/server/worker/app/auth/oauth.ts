@@ -109,6 +109,12 @@ oauth.post("/token", async (c) => {
 });
 
 oauth.post("/revoke", async (c) => {
+  // Disable CORS
+  const headers = new Headers();
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "POST");
+  headers.set("Access-Control-Allow-Headers", "Content-Type");
+
   // Get the token from an "application/x-www-form-urlencoded" body
   const params = new URLSearchParams(await c.req.text());
   const token = params.get("token");
@@ -118,7 +124,7 @@ oauth.post("/revoke", async (c) => {
     });
   }
   await deleteSessionToken(c, token);
-  return c.json({ revoked: true });
+  return c.json({ revoked: true }, { headers });
 });
 
 export default oauth;
