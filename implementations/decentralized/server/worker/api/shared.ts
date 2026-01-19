@@ -54,7 +54,11 @@ function disableCors(router: OpenAPIHono<{ Bindings: Bindings }>) {
     c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     c.header(
       "Access-Control-Allow-Headers",
-      "Content-Type, Content-Length, Authorization, If-None-Match, Accept-Encoding",
+      "Content-Type, Authorization, If-None-Match, Accept-Encoding",
+    );
+    c.header(
+      "Access-Control-Expose-Headers",
+      "Content-Type, Content-Length, Content-Encoding, ETag, Retry-After",
     );
     await next();
   });
