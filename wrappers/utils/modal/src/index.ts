@@ -63,11 +63,7 @@ export class GraffitiModal {
         import("./graffiti.webp"),
         import("./rock-salt.woff2"),
       ]).then(
-        async ([
-          { default: style },
-          { default: imageUrl },
-          { default: fontUrl },
-        ]) => {
+        async ([{ default: style }, { default: image }, { default: font }]) => {
           const header = document.createElement("header");
           const closeButton = document.createElement("button");
           closeButton.className = "secondary";
@@ -83,18 +79,14 @@ export class GraffitiModal {
           this.dialog.appendChild(header);
           this.dialog.appendChild(main);
 
-          const base = new URL(".", import.meta.url);
-          const imageUrlAbs = new URL(imageUrl, base).href;
-          const fontUrlAbs = new URL(fontUrl, base).href;
-
-          const ff = new FontFace("Rock Salt", `url(${fontUrlAbs})`, {
+          const ff = new FontFace("Rock Salt", `url(${font})`, {
             style: "normal",
             weight: "400",
           });
           document.fonts.add(ff);
           await ff.load();
 
-          style = style.replace("url(graffiti.jpg)", `url(${imageUrlAbs})`);
+          style = style.replace("url(graffiti.jpg)", `url(${image})`);
 
           const sheet = new CSSStyleSheet();
           sheet.replace(style).then(() => {
