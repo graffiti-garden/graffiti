@@ -12,8 +12,8 @@ for (const format of ["esm", "cjs"] as const) {
     outdir: `dist/${format}`,
     loader: {
       ".css": "text",
-      ".webp": "dataurl",
-      ".woff2": "dataurl",
+      ".webp": "file",
+      ".woff2": "file",
     },
   });
 }
