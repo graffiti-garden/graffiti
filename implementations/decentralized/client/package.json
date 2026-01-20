@@ -22,7 +22,6 @@
     "src",
     "dist",
     "package.json",
-    "README.md",
     "LICENSE"
   ],
   "author": "Theia Henderson",
@@ -31,9 +30,8 @@
     "test": "NODE_TLS_REJECT_UNAUTHORIZED=0 vitest",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
-    "build": "rm -rf dist && rm -rf docs && npm run build:types && npm run build:js && npm run build:docs",
-    "build:docs": "typedoc --options typedoc.json",
-    "prepublishOnly": "npm update && npm run build"
+    "build": "rm -rf dist && npm run build:types && npm run build:js",
+    "prepublishOnly": "npm update && npm test && npm run build"
   },
   "repository": {
     "type": "git",
@@ -45,12 +43,12 @@
   "devDependencies": {
     "@types/node": "^25.0.9",
     "tsx": "^4.21.0",
-    "typedoc": "^0.28.16",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.1.0",
+    "@graffiti-garden/modal": "^1.0.1",
     "@ipld/dag-cbor": "^9.2.5",
     "@noble/ed25519": "^3.0.0",
     "@noble/hashes": "^2.0.1",
