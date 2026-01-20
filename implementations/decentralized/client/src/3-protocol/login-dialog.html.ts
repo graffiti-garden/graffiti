@@ -1,6 +1,6 @@
 export const template = `<template id="graffiti-login-welcome">
   <h1>
-    <a target="_blank" href="https://graffiti.garden">Graffiti Log In</a>
+    <a target="_blank" href="https://graffiti.garden">Graffiti<wbr> Log In</a>
   </h1>
 
   <ul>
@@ -16,7 +16,7 @@ export const template = `<template id="graffiti-login-welcome">
 
 <template id="graffiti-login-handle">
   <h1>
-    <a target="_blank" href="https://graffiti.garden">Graffiti Log In</a>
+    <a target="_blank" href="https://graffiti.garden">Graffiti<wbr> Log In</a>
   </h1>
 
   <form id="graffiti-login-handle-form">
