@@ -61,6 +61,7 @@ import {
   ObjectEncoding,
 } from "./3-object-encoding";
 
+import { GraffitiModal } from "@graffiti-garden/modal";
 import {
   type infer as infer_,
   custom,
@@ -154,6 +155,23 @@ export class GraffitiDecentralized implements Graffiti {
     allowedAttestations: this.allowedAttestations,
   });
 
+  protected readonly modal: GraffitiModal | undefined =
+    typeof window === "undefined"
+      ? undefined
+      : new GraffitiModal({
+          useTemplateHTML: () =>
+            import("./login-dialog.html").then(({ template }) => template),
+          onManualClose: () => {
+            const event = new CustomEvent("login", {
+              detail: {
+                error: new Error("User cancelled login"),
+                manual: true,
+              },
+            });
+            this.sessionEvents.dispatchEvent(event);
+          },
+        });
+
   protected readonly defaultInboxEndpoints: string[];
   protected readonly identityCreatorEndpoint: string;
   constructor(options?: GraffitiDecentralizedOptions) {
@@ -162,17 +180,46 @@ export class GraffitiDecentralized implements Graffiti {
     ];
     this.identityCreatorEndpoint =
       options?.identityCreatorEndpoint ?? "https://graffiti.actor/create";
+
+    this.sessionEvents.addEventListener("login", async (event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = event.detail as GraffitiLoginEvent["detail"];
+      if (
+        detail.error !== undefined &&
+        !("manual" in detail && detail.manual)
+      ) {
+        alert("Login failed: " + detail.error.message);
+        const actor = detail.session?.actor;
+        let handle: string | undefined;
+        if (actor) {
+          try {
+            handle = await this.actorToHandle(actor);
+          } catch (error) {
+            console.error("Failed to handle actor:", error);
+          }
+        }
+        this.login_(handle);
+      }
+    });
   }
 
   readonly actorToHandle: Graffiti["actorToHandle"] =
     this.handles.actorToHandle.bind(this.handles);
   readonly handleToActor: Graffiti["handleToActor"] =
     this.handles.handleToActor.bind(this.handles);
-  readonly sessionEvents: Graffiti["sessionEvents"] = this.sessions.sessionEvents;
+  readonly sessionEvents: Graffiti["sessionEvents"] =
+    this.sessions.sessionEvents;
 
   login: Graffiti["login"] = async (actor?: string) => {
     try {
-      await this.login_(actor);
+      let proposedHandle: string | undefined;
+      try {
+        proposedHandle = actor ? await this.actorToHandle(actor) : undefined;
+      } catch (error) {
+        console.error("Error fetching handle for actor:", error);
+      }
+
+      await this.login_(proposedHandle);
     } catch (e) {
       const loginError: GraffitiLoginEvent = new CustomEvent("login", {
         detail: {
@@ -182,25 +229,89 @@ export class GraffitiDecentralized implements Graffiti {
       this.sessionEvents.dispatchEvent(loginError);
     }
   };
-  protected async login_(proposedActor?: string) {
-    let proposedHandle: string | undefined;
-    try {
-      proposedHandle = proposedActor
-        ? await this.actorToHandle(proposedActor)
-        : undefined;
-    } catch (error) {
-      console.error("Error fetching handle for actor:", error);
-    }
-
-    let handle: string | undefined;
+  protected async login_(proposedHandle?: string) {
     if (typeof window !== "undefined") {
-      // Browser environment
-      // TODO:
-      // - Make this a full UI
-      // - Add an option for account creation as well
-      // - Use https://github.com/graffiti-garden/modal
-      handle =
-        window.prompt("Please enter your handle:", proposedHandle) || undefined;
+      let template: HTMLElement | undefined;
+      if (proposedHandle !== undefined) {
+        template = await this.modal?.displayTemplate("graffiti-login-handle");
+        const input = template?.querySelector(
+          "#username",
+        ) as HTMLInputElement | null;
+        input?.setAttribute("value", proposedHandle);
+        input?.addEventListener("focus", () => input?.select());
+        new Promise<void>((r) => {
+          setTimeout(() => r(), 0);
+        }).then(() => {
+          input?.focus();
+        });
+
+        template
+          ?.querySelector("#graffiti-login-handle-form")
+          ?.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            input?.setAttribute("disabled", "true");
+            const submitButton = template?.querySelector(
+              "#graffiti-login-handle-submit",
+            ) as HTMLButtonElement | null;
+            submitButton?.setAttribute("disabled", "true");
+            submitButton && (submitButton.innerHTML = "Logging in...");
+
+            if (!input?.value) {
+              alert("No handle provided");
+              this.login_("");
+              return;
+            }
+
+            let handle = input.value;
+            if (!handle.includes(".") && !handle.startsWith("localhost")) {
+              const defaultHost = new URL(this.identityCreatorEndpoint).host;
+              handle = `${handle}.${defaultHost}`;
+            }
+
+            let actor: string;
+            try {
+              actor = await this.handleToActor(handle);
+            } catch (e) {
+              alert("Could not find an identity associated with that handle.");
+              this.login_(handle);
+              return;
+            }
+
+            try {
+              await this.sessions.login(actor);
+            } catch (e) {
+              alert("Error logging in.");
+              console.error(e);
+              this.login_(handle);
+            }
+          });
+      } else {
+        template = await this.modal?.displayTemplate("graffiti-login-welcome");
+        template
+          ?.querySelector("#graffiti-login-existing")
+          ?.addEventListener("click", (e) => {
+            e.preventDefault();
+            this.login_("");
+          });
+        new Promise<void>((r) => {
+          setTimeout(() => r(), 0);
+        }).then(() => {
+          (
+            template?.querySelector("#graffiti-login-new") as HTMLAnchorElement
+          )?.focus();
+        });
+      }
+
+      const createUrl = new URL(this.identityCreatorEndpoint);
+      createUrl.searchParams.set(
+        "redirect_uri",
+        encodeURIComponent(window.location.toString()),
+      );
+      template
+        ?.querySelector("#graffiti-login-new")
+        ?.setAttribute("href", createUrl.toString());
+
+      await this.modal?.open();
     } else {
       // Node.js environment
       const readline = await import("readline").catch((e) => {
@@ -218,7 +329,7 @@ export class GraffitiDecentralized implements Graffiti {
         output: process.stdout,
       });
 
-      handle = await new Promise((resolve) => {
+      const handle: string | undefined = await new Promise((resolve) => {
         rl.question(
           `Please enter your handle${proposedHandle ? ` (default: ${proposedHandle})` : ""}: `,
           (input) => {
@@ -227,16 +338,16 @@ export class GraffitiDecentralized implements Graffiti {
           },
         );
       });
+
+      if (!handle) {
+        throw new Error("No handle provided");
+      }
+
+      // Convert the handle to an actor
+      const actor = await this.handleToActor(handle);
+
+      await this.sessions.login(actor);
     }
-
-    if (!handle) {
-      throw new Error("No handle provided");
-    }
-
-    // Convert the handle to an actor
-    const actor = await this.handleToActor(handle);
-
-    await this.sessions.login(actor);
   }
 
   logout: Graffiti["logout"] = async (session) => {
@@ -753,8 +864,7 @@ export class GraffitiDecentralized implements Graffiti {
 
           const tombstonedMessageId = priorAnnouncements
             ? priorAnnouncements.find(
-                (a) =>
-                  a[MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY] === recipient,
+                (a) => a[MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY] === recipient,
               )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
             : undefined;
 
