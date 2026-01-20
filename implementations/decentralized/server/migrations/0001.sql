@@ -118,7 +118,6 @@ CREATE TABLE IF NOT EXISTS inboxes (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS idx_inboxes_by_inbox_id ON inboxes(inbox_id);
 CREATE INDEX IF NOT EXISTS idx_inboxes_by_user_id ON inboxes(user_id);
 
 -- Insert the shared inbox
@@ -134,11 +133,11 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
   object          TEXT NOT NULL,
   metadata        BLOB NOT NULL,
 
+  UNIQUE (inbox_seq, message_id),
   FOREIGN KEY (inbox_seq) REFERENCES inboxes(inbox_seq) ON DELETE CASCADE
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_seq ON inbox_messages(inbox_seq, message_seq ASC);
-CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_message_id ON inbox_messages(inbox_seq, message_id);
 CREATE INDEX IF NOT EXISTS idx_inbox_messages_by_hash ON inbox_messages(inbox_seq, hash);
 
 CREATE TABLE IF NOT EXISTS inbox_message_tags (
@@ -147,13 +146,12 @@ CREATE TABLE IF NOT EXISTS inbox_message_tags (
     inbox_seq       INTEGER NOT NULL,
 
     PRIMARY KEY (message_seq, tag),
-    FOREIGN KEY (message_seq) REFERENCES inbox_messages(message_seq) ON DELETE CASCADE
+    FOREIGN KEY (message_seq) REFERENCES inbox_messages(message_seq) ON DELETE CASCADE,
+    FOREIGN KEY (inbox_seq) REFERENCES inboxes(inbox_seq) ON DELETE CASCADE
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_inbox_message_tags
     ON inbox_message_tags(inbox_seq, tag, message_seq ASC);
-CREATE INDEX IF NOT EXISTS idx_inbox_message_tags_by_message_seq
-    ON inbox_message_tags(message_seq, tag);
 
 CREATE TABLE IF NOT EXISTS inbox_message_labels (
     message_seq     INTEGER NOT NULL,
