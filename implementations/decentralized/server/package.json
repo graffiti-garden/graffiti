@@ -1,11 +1,11 @@
 {
-  "name": "@graffiti-garden/server-worker",
+  "name": "@graffiti-garden/server",
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "private": true,
   "scripts": {
     "dev:web": "vite --config web/vite.config.mts",
-    "dev:api": "wrangler dev --config wrangler.toml",
+    "dev:api": "mkdir -p dist && wrangler dev --config wrangler.toml",
     "dev": "concurrently --kill-others \"npm run dev:web\" \"npm run dev:api\"",
     "build:web": "vite build --config web/vite.config.mts",
     "deploy": "npm run build:web && wrangler deploy --config wrangler.toml"
