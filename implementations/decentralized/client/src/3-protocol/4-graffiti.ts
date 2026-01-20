@@ -541,7 +541,7 @@ export class GraffitiDecentralized implements Graffiti {
     await this.storageBuckets.put(
       resolvedSession.storageBucket.serviceEndpoint,
       key,
-      await media.data.bytes(),
+      new Uint8Array(await media.data.arrayBuffer()),
       resolvedSession.storageBucket.token,
     );
 
