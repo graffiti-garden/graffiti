@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev:web": "vite --config web/vite.config.mts",
-    "dev:api": "mkdir -p dist && wrangler dev --config wrangler.toml",
+    "dev:api": "mkdir -p web/dist && wrangler dev --config wrangler.toml",
     "dev": "concurrently --kill-others \"npm run dev:web\" \"npm run dev:api\"",
     "build:web": "vite build --config web/vite.config.mts",
     "deploy": "npm run build:web && wrangler deploy --config wrangler.toml"
@@ -29,13 +29,13 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260120.0",
     "@types/http-proxy": "^1.17.17",
-    "@vitejs/plugin-basic-ssl": "^2.1.3",
+    "@vitejs/plugin-basic-ssl": "^2.1.4",
     "@vitejs/plugin-vue": "^6.0.3",
     "@vue/typescript-plugin": "^3.2.2",
     "concurrently": "^9.2.1",
     "http-proxy": "^1.18.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
-    "wrangler": "^4.59.2"
+    "wrangler": "^4.59.3"
   }
 }
