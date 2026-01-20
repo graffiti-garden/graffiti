@@ -54,10 +54,9 @@ oauth.get("/authorize", async (c) => {
 
 oauth.post("/token", async (c) => {
   // Disable CORS
-  const headers = new Headers();
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Methods", "POST");
-  headers.set("Access-Control-Allow-Headers", "Content-Type");
+  c.header("Access-Control-Allow-Origin", "*");
+  c.header("Access-Control-Allow-Methods", "POST");
+  c.header("Access-Control-Allow-Headers", "Content-Type");
 
   const params = new URLSearchParams(await c.req.text());
   const code = params.get("code");
@@ -105,15 +104,14 @@ oauth.post("/token", async (c) => {
   const { token } = await createSessionToken(c, result.user_id);
 
   // Return the access token
-  return c.json({ access_token: token, token_type: "bearer" }, { headers });
+  return c.json({ access_token: token, token_type: "bearer" });
 });
 
 oauth.post("/revoke", async (c) => {
   // Disable CORS
-  const headers = new Headers();
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Methods", "POST");
-  headers.set("Access-Control-Allow-Headers", "Content-Type");
+  c.header("Access-Control-Allow-Origin", "*");
+  c.header("Access-Control-Allow-Methods", "POST");
+  c.header("Access-Control-Allow-Headers", "Content-Type");
 
   // Get the token from an "application/x-www-form-urlencoded" body
   const params = new URLSearchParams(await c.req.text());
@@ -124,7 +122,7 @@ oauth.post("/revoke", async (c) => {
     });
   }
   await deleteSessionToken(c, token);
-  return c.json({ revoked: true }, { headers });
+  return c.json({ revoked: true });
 });
 
 export default oauth;
