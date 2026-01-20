@@ -192,7 +192,7 @@ export class Inboxes {
   protected async *lockedMessageStreamer<Schema extends JSONSchema>(
     ...args: Parameters<typeof this.messageStreamer<Schema>>
   ): MessageStream<Schema> {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !(await canUseIDB())) {
       // TODO: implement locking in node as well, but not
       // high priority since most use will be in browser
       const streamer = this.messageStreamer<Schema>(...args);
@@ -205,11 +205,12 @@ export class Inboxes {
 
     // Request the lock
     const messageIdsCacheKey = await args[0];
+    const lockKey = `graffiti:inbox:${messageIdsCacheKey}`;
     let releaseLock = () => {};
     let hasLock: boolean = false;
     await new Promise<void>((resolvehasLock) => {
       window.navigator.locks.request(
-        messageIdsCacheKey,
+        lockKey,
         {
           mode: "exclusive",
           ifAvailable: true,
@@ -244,7 +245,7 @@ export class Inboxes {
     // so wait until the lock is released,
     // then just return from the cache
     releaseLock();
-    await window.navigator.locks.request(messageIdsCacheKey, () => {});
+    await window.navigator.locks.request(lockKey, () => {});
 
     // TODO: the arguments here are brittle
     // at some point, refactor things
@@ -583,10 +584,26 @@ type CacheQueryValue = {
   waitTil?: number;
 };
 
-const HAS_IDB =
-  typeof globalThis !== "undefined" &&
-  !!(globalThis as any).indexedDB &&
-  typeof (globalThis as any).indexedDB.open === "function";
+async function canUseIDB(): Promise<boolean> {
+  try {
+    if (!globalThis.indexedDB) return false;
+
+    // Small probe database
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open("__idb_probe__", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("k");
+      req.onsuccess = () => {
+        req.result.close();
+        resolve();
+      };
+      req.onerror = () => reject(req.error);
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 type Cache = {
   messages: {
@@ -622,8 +639,18 @@ async function getMessageIdsCacheKey(
         .join(""),
     );
 }
+
+async function resetCacheDB() {
+  await new Promise<void>((resolve) => {
+    const req = indexedDB.deleteDatabase("graffiti-inbox-cache");
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve(); // best effort
+    req.onblocked = () => resolve(); // best effort
+  });
+}
+
 async function createCache(): Promise<Cache> {
-  if (HAS_IDB) {
+  if (await canUseIDB()) {
     const { openDB } = await import("idb");
     const db = await openDB("graffiti-inbox-cache", 1, {
       upgrade(db) {
@@ -634,14 +661,32 @@ async function createCache(): Promise<Cache> {
 
     return {
       messages: {
-        get: (k) => db.get("m", k),
+        get: async (k) => {
+          try {
+            return db.get("m", k);
+          } catch (error) {
+            console.error("Error getting message from cache:", error);
+            console.error("resetting cache...");
+            await resetCacheDB();
+            return undefined;
+          }
+        },
         set: async (k, v) => {
           await db.put("m", v, k);
         },
         del: (k) => db.delete("m", k),
       },
       messageIds: {
-        get: async (k) => await db.get("q", k),
+        get: async (k) => {
+          try {
+            return await db.get("q", k);
+          } catch (error) {
+            console.error("Error getting message IDs from cache:", error);
+            console.error("resetting cache...");
+            await resetCacheDB();
+            return undefined;
+          }
+        },
         set: async (k, v) => {
           await db.put("q", v, k);
         },
