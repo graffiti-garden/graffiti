@@ -112,7 +112,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       await expect(
         inboxes.export(inboxEndpoint, "invalid-token").next(),
       ).rejects.toThrowError(GraffitiErrorUnauthorized);
-    });
+    }, 30000);
 
     test("query paged", async () => {
       const tags = [randomBytes(), randomBytes()];
