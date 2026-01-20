@@ -62,32 +62,48 @@ export class GraffitiModal {
         import("./style.css"),
         import("./graffiti.webp"),
         import("./rock-salt.woff2"),
-      ]).then(([{ default: style }, { default: image }, { default: font }]) => {
-        const header = document.createElement("header");
-        const closeButton = document.createElement("button");
-        closeButton.className = "secondary";
-        closeButton.textContent = "Close";
-        closeButton?.addEventListener("click", () => {
-          this.close();
-          this.onManualClose?.();
-        });
-        header.appendChild(closeButton);
+      ]).then(
+        async ([
+          { default: style },
+          { default: imageUrl },
+          { default: fontUrl },
+        ]) => {
+          const header = document.createElement("header");
+          const closeButton = document.createElement("button");
+          closeButton.className = "secondary";
+          closeButton.textContent = "Close";
+          closeButton?.addEventListener("click", () => {
+            this.close();
+            this.onManualClose?.();
+          });
+          header.appendChild(closeButton);
 
-        const main = document.createElement("main");
+          const main = document.createElement("main");
 
-        this.dialog.appendChild(header);
-        this.dialog.appendChild(main);
+          this.dialog.appendChild(header);
+          this.dialog.appendChild(main);
 
-        style = style.replace("url(graffiti.jpg)", `url(${image})`);
-        style = style.replace("url(rock-salt.woff2)", `url(${font})`);
+          const base = new URL(".", import.meta.url);
+          const imageUrlAbs = new URL(imageUrl, base).href;
+          const fontUrlAbs = new URL(fontUrl, base).href;
 
-        const sheet = new CSSStyleSheet();
-        sheet.replace(style).then(() => {
-          this.shadow.adoptedStyleSheets = [sheet];
-        });
+          const ff = new FontFace("Rock Salt", `url(${fontUrlAbs})`, {
+            style: "normal",
+            weight: "400",
+          });
+          document.fonts.add(ff);
+          await ff.load();
 
-        return main;
-      });
+          style = style.replace("url(graffiti.jpg)", `url(${imageUrlAbs})`);
+
+          const sheet = new CSSStyleSheet();
+          sheet.replace(style).then(() => {
+            this.shadow.adoptedStyleSheets = [sheet];
+          });
+
+          return main;
+        },
+      );
     }
     return this.main_;
   }
