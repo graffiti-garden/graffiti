@@ -114,18 +114,18 @@ import StatusIcon from "./utils/StatusIcon.vue";
 import { useRouter } from "vue-router";
 import { handleNameToHandle, handleNameToDid } from "../../shared/did-schemas";
 
-const redirectUri = new URLSearchParams(window.location.search).get(
+const redirectUriEncoded = new URLSearchParams(window.location.search).get(
     "redirect_uri",
 );
 const redirect = computed(() => {
-    if (redirectUri) {
+    if (redirectUriEncoded) {
         try {
+            const redirectUri = redirectUriEncoded
+                ? decodeURIComponent(redirectUriEncoded)
+                : redirectUriEncoded;
             const url = new URL(redirectUri);
-            if (handleName.value) {
-                url.searchParams.set(
-                    "handle",
-                    handleNameToHandle(handleName.value, baseHost),
-                );
+            if (actor.value) {
+                url.searchParams.set("actor", encodeURIComponent(actor.value));
             }
             return url.toString();
         } catch (e) {
