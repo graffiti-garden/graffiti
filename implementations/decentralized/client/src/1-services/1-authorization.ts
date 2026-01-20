@@ -28,12 +28,17 @@ export class Authorization {
   eventTarget: EventTarget = new EventTarget();
 
   constructor() {
+    // Extract oauth redirect synchronously so the route
+    // can be changed before any SPA routers (e.g. vue router)
+    // start messing with things
+    const oauthPromise = this.completeOauth();
+
     (async () => {
       // Allow listeners to be added first
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       // Complete the oauth flow
-      await this.completeOauth();
+      await oauthPromise;
 
       // Send an initialized event
       const initializedEvent: InitializedEvent = new CustomEvent("initialized");
@@ -171,9 +176,13 @@ export class Authorization {
     }
 
     // Construct the authorization URL
+    const redirectUriStripped = new URL(redirectUri);
+    redirectUriStripped.hash = "";
+    redirectUriStripped.search = "";
+
     const redirectTo = buildAuthorizationUrl(configuration, {
       scope,
-      redirect_uri: redirectUri,
+      redirect_uri: redirectUriStripped.toString(),
       state,
     });
 
@@ -187,7 +196,7 @@ export class Authorization {
     }
   }
 
-  protected async completeOauth() {
+  protected completeOauth() {
     if (typeof window === "undefined") return;
 
     // Look in local storage to see if we have a pending login
@@ -225,36 +234,34 @@ export class Authorization {
       // Make sure that we redirected back to the correct page
       const expectedUrl = new URL(redirectUri);
       const callbackUrl = new URL(window.location.href);
-      if (
-        expectedUrl.pathname !== callbackUrl.pathname ||
-        expectedUrl.hash !== callbackUrl.hash
-      )
-        return;
-
+      if (expectedUrl.pathname !== callbackUrl.pathname) return;
       // Make sure it is actually an oauth call
       const params = callbackUrl.searchParams;
       if (!params.has("code") && !params.has("error")) return;
 
-      // Restore the query parameters to the expected URL,
+      // Restore the hash and query parameters to the expected URL,
       // removing the code, state, and error parameters
       window.history.replaceState({}, document.title, expectedUrl.toString());
       window.localStorage.removeItem(LOCAL_STORAGE_OAUTH2_KEY);
 
-      const configuration = await this.getAuthorizationConfiguration(
-        authorizationEndpoint,
-      );
-
-      await this.onCallbackUrl({
-        loginId,
-        callbackUrl,
-        configuration,
-        expectedState: state,
-        serviceEndpoints,
-      });
+      return new Promise<void>((resolve) => setTimeout(resolve, 0))
+        .then(() => this.getAuthorizationConfiguration(authorizationEndpoint))
+        .then((configuration) =>
+          this.onCallbackUrl({
+            loginId,
+            callbackUrl,
+            configuration,
+            expectedState: state,
+            serviceEndpoints,
+          }),
+        )
+        .catch((e) => {
+          const error = e instanceof Error ? e : new Error("Unknown error");
+          const detail: LoginEvent["detail"] = { loginId, error };
+          this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
+        });
     } catch (e) {
-      const error = e instanceof Error ? e : new Error("Unknown error");
-      const detail: LoginEvent["detail"] = { loginId, error };
-      this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
+      console.error(e);
     }
   }
 
