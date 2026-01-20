@@ -23,12 +23,8 @@
         import { GraffitiModal } from "../dist/esm/index.js";
 
         const modal = new GraffitiModal({
-            useTemplateHTML: () => {
-                const template = document.createElement("template");
-                template.id = "my-template";
-                template.innerHTML = `This is a template`;
-                return template.outerHTML;
-            },
+            useTemplateHTML: () =>
+                fetch("./template.html").then((response) => response.text()),
             onManualClose: () => {
                 console.log("Modal closed manually");
             },
