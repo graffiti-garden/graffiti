@@ -66,9 +66,35 @@ export class Sessions {
       this.onLogout.bind(this),
     );
 
+    // Handle account registration redirect immediately,
+    // to prevent SPA routers from hijacking the URL too soon
+    let loginPromise: Promise<void> | undefined;
+    if (typeof window !== "undefined") {
+      const actorEncoded = new URLSearchParams(window.location.search).get(
+        "actor",
+      );
+      if (actorEncoded) {
+        try {
+          // Get the actor
+          const actor = decodeURIComponent(actorEncoded);
+          // Strip it from the URL
+          const url = new URL(window.location.toString());
+          url.searchParams.delete("actor");
+          window.history.replaceState({}, "", url.toString());
+          // Complete the login
+          loginPromise = this.login(actor);
+        } catch (error) {
+          console.error("Error decoding actor:", error);
+        }
+      }
+    }
+
     (async () => {
       // Allow listeners to be added before dispatching events
       await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Wait for login to complete, if there
+      await loginPromise;
 
       for (const session of this.loggedInSessions) {
         const loginEvent: GraffitiLoginEvent = new CustomEvent("login", {
@@ -514,7 +540,9 @@ export class Sessions {
   }
 
   resolveSession(session: GraffitiSession): StoredSession {
-    const resolvedSession = this.loggedInSessions.find((s) => s.actor === session.actor);
+    const resolvedSession = this.loggedInSessions.find(
+      (s) => s.actor === session.actor,
+    );
     if (!resolvedSession) {
       const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", {
         detail: { actor: session.actor },
