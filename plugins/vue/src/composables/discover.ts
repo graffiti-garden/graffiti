@@ -1,12 +1,12 @@
 import type {
   GraffitiObject,
-  GraffitiObjectStreamContinue,
-  GraffitiObjectStreamContinueEntry,
+  GraffitiObjectStream,
   GraffitiObjectStreamError,
   GraffitiObjectStreamReturn,
   GraffitiSession,
   JSONSchema,
 } from "@graffiti-garden/api";
+import type { GraffitiObjectStreamSuccess } from "@graffiti-garden/wrapper-synchronize";
 import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
@@ -57,8 +57,8 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   const isFirstPoll = ref(true);
 
   // Maintain iterators for disposal
-  let syncIterator: AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>>;
-  let discoverIterator: GraffitiObjectStreamContinue<Schema>;
+  let syncIterator: AsyncGenerator<GraffitiObjectStreamSuccess<Schema>>;
+  let discoverIterator: GraffitiObjectStream<Schema>;
   onScopeDispose(() => {
     syncIterator?.return(null);
     discoverIterator?.return({
@@ -87,7 +87,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
       // Initialize new iterators
       const mySyncIterator = graffiti.synchronizeDiscover<Schema>(...args);
       syncIterator = mySyncIterator;
-      let myDiscoverIterator: GraffitiObjectStreamContinue<Schema>;
+      let myDiscoverIterator: GraffitiObjectStream<Schema>;
 
       // Set up automatic iterator cleanup
       let active = true;
@@ -148,8 +148,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
         while (true) {
           let result: IteratorResult<
-            | GraffitiObjectStreamContinueEntry<Schema>
-            | GraffitiObjectStreamError,
+            GraffitiObjectStreamSuccess<Schema> | GraffitiObjectStreamError,
             GraffitiObjectStreamReturn<Schema>
           >;
           try {

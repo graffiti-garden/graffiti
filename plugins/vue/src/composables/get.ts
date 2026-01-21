@@ -1,10 +1,10 @@
 import type {
   GraffitiObject,
   GraffitiObjectUrl,
-  GraffitiObjectStreamContinueEntry,
   GraffitiSession,
   JSONSchema,
 } from "@graffiti-garden/api";
+import type { GraffitiObjectStreamSuccess } from "@graffiti-garden/wrapper-synchronize";
 import { GraffitiErrorNotFound } from "@graffiti-garden/api";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
@@ -45,7 +45,7 @@ export function useGraffitiGet<Schema extends JSONSchema>(
   let poll_ = async () => {};
   const poll = async () => poll_();
 
-  let iterator: AsyncGenerator<GraffitiObjectStreamContinueEntry<Schema>>;
+  let iterator: AsyncGenerator<GraffitiObjectStreamSuccess<Schema>>;
   onScopeDispose(() => {
     iterator?.return(null);
   });
