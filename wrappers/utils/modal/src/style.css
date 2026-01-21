@@ -1,5 +1,5 @@
 .graffiti-modal {
-    --back: rgb(26, 26, 26, 0.85);
+    --back: rgba(26, 26, 26, 0.85);
     --halfback: rgba(80, 80, 80, 0.85);
     --halfback2: rgba(26, 26, 26, 0.85);
     --hover: rgba(202, 122, 204, 0.3);
@@ -18,7 +18,6 @@
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
-    display: block;
     min-width: 95dvw;
     min-height: 95dvh;
     height: 95dvh;
@@ -70,14 +69,10 @@
         max-width: 600px;
         width: 100%;
         gap: 2em;
-        padding-top: 4dvh;
-        padding-bottom: 4dvh;
-        margin-top: 4dvh;
-        margin-bottom: 4dvh;
-        margin-left: 4dvw;
-        margin-right: 4dvw;
-        padding-left: 4dvw;
-        padding-right: 4dvw;
+        padding-inline: clamp(1rem, 4dvw, 3rem);
+        padding-block: clamp(1rem, 4dvh, 3rem);
+        margin-inline: clamp(1rem, 4dvw, 3rem);
+        margin-block: clamp(1rem, 4dvh, 3rem);
         background: var(--back);
         border-radius: 1rem;
         display: flex;
@@ -171,6 +166,16 @@
         background-color: var(--back);
     }
 
+    @media (max-height: 600px) {
+        main {
+            gap: 1em;
+        }
+
+        h1 {
+            font-size: 100%;
+        }
+    }
+
     @media (max-width: 600px) {
         main {
             border-radius: 0;
@@ -232,29 +237,6 @@
         background: rgba(202, 122, 204, 0.6);
         color: white;
         text-decoration: none;
-    }
-
-    h3 {
-        color: var(--frontfaded);
-    }
-
-    h2 {
-        text-align: center;
-        font-weight: 500;
-        font-size: 150%;
-        background: var(--halfback2);
-        padding: 1rem;
-        border-radius: 1rem;
-        border: 1px solid var(--frontfaded);
-        color: var(--front);
-    }
-
-    main > div {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: stretch;
-        gap: 0.5rem;
     }
 }
 
