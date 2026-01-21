@@ -3,7 +3,6 @@ import type { Bindings } from "../../env";
 import {
   createSessionToken,
   deleteSessionToken,
-  getHeaderToken,
   verifySessionCookie,
 } from "./session";
 import { HTTPException } from "hono/http-exception";
@@ -53,11 +52,6 @@ oauth.get("/authorize", async (c) => {
 });
 
 oauth.post("/token", async (c) => {
-  // Disable CORS
-  c.header("Access-Control-Allow-Origin", "*");
-  c.header("Access-Control-Allow-Methods", "POST");
-  c.header("Access-Control-Allow-Headers", "Content-Type");
-
   const params = new URLSearchParams(await c.req.text());
   const code = params.get("code");
   const redirect_uri = params.get("redirect_uri");
@@ -108,11 +102,6 @@ oauth.post("/token", async (c) => {
 });
 
 oauth.post("/revoke", async (c) => {
-  // Disable CORS
-  c.header("Access-Control-Allow-Origin", "*");
-  c.header("Access-Control-Allow-Methods", "POST");
-  c.header("Access-Control-Allow-Headers", "Content-Type");
-
   // Get the token from an "application/x-www-form-urlencoded" body
   const params = new URLSearchParams(await c.req.text());
   const token = params.get("token");
