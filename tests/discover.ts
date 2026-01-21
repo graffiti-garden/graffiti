@@ -388,6 +388,47 @@ export const graffitiDiscoverTests = (
       expect(counts.get("other")).toBe(1);
     });
 
+    it("multi 'device' discover", async () => {
+      const graffiti1 = useGraffiti();
+      const graffiti2 = useGraffiti();
+
+      const prepost = randomPostObject();
+      const posted = await graffiti1.post<{}>(prepost, session1);
+
+      const iterator1 = graffiti1.discover(prepost.channels, {}, session1);
+      const iterator2 = graffiti2.discover(prepost.channels, {}, session1);
+      const next1 = await iterator1.next();
+      const next2 = await iterator2.next();
+      assert(!next1.done && !next1.value.error);
+      assert(!next2.done && !next2.value.error);
+      expect(next1.value.object).toEqual(posted);
+      expect(next2.value.object).toEqual(posted);
+      const next3 = await iterator1.next();
+      const next4 = await iterator2.next();
+      assert(next3.done);
+      assert(next4.done);
+
+      await graffiti1.delete(posted, session1);
+
+      const iterator3 = next3.value.continue(session1);
+      const next5 = await iterator3.next();
+      assert(!next5.done && !next5.value.error);
+      expect(next5.value.tombstone).toBe(true);
+      expect(next5.value.object.url).toEqual(posted.url);
+      await expect(iterator3.next()).resolves.toHaveProperty("done", true);
+
+      // Wait for "labels" to propogate
+      // which could introduce a cache bug
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const iterator4 = next4.value.continue(session1);
+      const next6 = await iterator4.next();
+      assert(!next6.done && !next6.value.error);
+      expect(next6.value.tombstone).toBe(true);
+      expect(next6.value.object.url).toEqual(posted.url);
+      await expect(iterator4.next()).resolves.toHaveProperty("done", true);
+    });
+
     for (const continueType of ["cursor", "continue"] as const) {
       describe(`continue discover with ${continueType}`, () => {
         it("discover for deleted content", async () => {
