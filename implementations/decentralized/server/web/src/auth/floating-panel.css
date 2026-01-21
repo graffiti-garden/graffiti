@@ -46,4 +46,8 @@ dialog {
         font-size: 1.5rem;
         width: 100%;
     }
+
+    code {
+        word-break: break-all;
+    }
 }
