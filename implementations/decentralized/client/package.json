@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/implementation-decentralized",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A client for a decentralized implementation of the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -51,7 +51,7 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.1.1",
-    "@graffiti-garden/modal": "^1.0.1",
+    "@graffiti-garden/modal": "^1.0.2",
     "@ipld/dag-cbor": "^9.2.5",
     "@noble/ed25519": "^3.0.0",
     "@noble/hashes": "^2.0.1",
