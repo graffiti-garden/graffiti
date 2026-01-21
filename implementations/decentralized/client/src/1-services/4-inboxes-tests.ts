@@ -32,6 +32,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
 
       // Get the message back
       const message = await inboxes.get(inboxEndpoint, messageId, inboxToken);
+      assert(message !== null);
       expect(message.m).toEqual(sending);
       expect(message.l).toEqual(0);
 
@@ -62,6 +63,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       expect(endResult2.done).toBe(true);
 
       const message2 = await inboxes.get(inboxEndpoint, messageId, inboxToken);
+      assert(message2 !== null);
       expect(message2.m).toEqual(sending);
       expect(message2.l).toEqual(42);
     });
