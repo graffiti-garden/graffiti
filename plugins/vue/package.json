@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-vue",
-  "version": "1.0.8",
+  "version": "1.1.0",
   "description": "Vue.js wrapper for the Graffiti API",
   "types": "./dist/node/plugin.d.ts",
   "module": "./dist/node/plugin.mjs",
@@ -22,7 +22,8 @@
     "src",
     "dist",
     "package.json",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "example": "cd examples/sfc && vite",
@@ -44,23 +45,22 @@
     "url": "https://github.com/graffiti-garden/wrapper-vue/issues"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^1.0.8",
-    "@graffiti-garden/wrapper-synchronize": "^1.0.8"
+    "@graffiti-garden/api": "^1.1.0",
+    "@graffiti-garden/wrapper-synchronize": "^1.1.0"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-local": "^1.0.8",
-    "@types/node": "^25.0.6",
+    "@graffiti-garden/implementation-decentralized": "^0.0.2",
+    "@types/node": "^25.0.9",
     "@vitejs/plugin-vue": "^6.0.3",
     "@vue/typescript-plugin": "^3.2.2",
     "typedoc": "^0.28.16",
     "typedoc-plugin-vue": "^1.5.1",
     "vite": "^7.3.1",
     "vite-plugin-dts": "^4.5.4",
-    "vite-plugin-node-polyfills": "^0.25.0",
-    "vue": "^3.5.26",
+    "vue": "^3.5.27",
     "vue-router": "^4.6.4"
   },
   "peerDependencies": {
-    "vue": "^3.5.26"
+    "vue": "^3.5.27"
   }
 }
