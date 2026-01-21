@@ -11,6 +11,7 @@ import {
   GraffitiErrorForbidden,
 } from "@graffiti-garden/api";
 import { randomString, randomUrl } from "./utils.js";
+import { randomPostObject } from "@graffiti-garden/api/tests";
 
 export const graffitiCRUDTests = (
   useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete">,
@@ -276,6 +277,32 @@ export const graffitiCRUDTests = (
 
         const gotten = await graffiti.get<{}>(output, {}, session1);
         expect(gotten).toEqual(output);
+      });
+
+      it("multi 'device' get", async () => {
+        const graffiti1 = useGraffiti();
+        const graffiti2 = useGraffiti();
+
+        const prepost = randomPostObject();
+        const posted = await graffiti1.post<{}>(prepost, session1);
+
+        const gotten1 = await graffiti1.get(posted, {}, session1);
+        const gotten2 = await graffiti2.get(posted, {}, session1);
+        expect(gotten1).toEqual(posted);
+        expect(gotten2).toEqual(posted);
+
+        await graffiti1.delete(posted, session1);
+
+        await expect(graffiti1.get(posted, {}, session1)).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
+
+        // Wait for "labels" to propogate
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        await expect(graffiti2.get(posted, {}, session1)).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
       });
     },
   );
