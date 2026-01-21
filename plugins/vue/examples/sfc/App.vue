@@ -5,7 +5,7 @@ import type { GraffitiSession, JSONSchema } from "@graffiti-garden/api";
 
 const graffiti = useGraffiti();
 
-const channel = ref("graffiti-client-dem");
+const channel = ref(crypto.randomUUID());
 const channels = computed(() => [channel.value]);
 const autopoll = ref(true);
 const polling = ref(false);
@@ -191,7 +191,12 @@ function setFileToUpload(event: Event) {
                 </ul>
             </nav>
             <ul v-if="!isFirstPoll">
-                <li v-for="object in objects" :key="object.url">
+                <li
+                    v-for="object in objects.sort(
+                        (a, b) => b.value.published - a.value.published,
+                    )"
+                    :key="object.url"
+                >
                     <GraffitiObjectInfo :object="object" />
                     <ul v-if="object.value.attachments">
                         <li
