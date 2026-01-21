@@ -7,6 +7,7 @@ import {
 import {
   compileGraffitiObjectSchema,
   GraffitiErrorCursorExpired,
+  GraffitiErrorNotFound,
 } from "@graffiti-garden/api";
 import {
   encode as dagCborEncode,
@@ -61,23 +62,32 @@ export class Inboxes {
     inboxUrl: string,
     messageId: string,
     inboxToken?: string | null,
-  ): Promise<LabeledMessageBase> {
+  ): Promise<LabeledMessageBase | null> {
     const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
     const cache = await this.cache;
     const cached = await cache.messages.get(messageCacheKey);
-    if (cached) return cached;
+    if (cached !== undefined) return cached;
 
     const url = `${inboxUrl}/message/${messageId}`;
-    const response = await fetchWithErrorHandling(url, {
-      method: "GET",
-      headers: {
-        ...(inboxToken
-          ? {
-              Authorization: `Bearer ${inboxToken}`,
-            }
-          : {}),
-      },
-    });
+    let response: Response | null = null;
+    try {
+      response = await fetchWithErrorHandling(url, {
+        method: "GET",
+        headers: {
+          ...(inboxToken
+            ? {
+                Authorization: `Bearer ${inboxToken}`,
+              }
+            : {}),
+        },
+      });
+    } catch (e) {
+      if (e instanceof GraffitiErrorNotFound) {
+        await cache.messages.set(messageCacheKey, null);
+        return null;
+      }
+      throw e;
+    }
 
     const blob = await response.blob();
     const cbor = dagCborDecode(await blob.arrayBuffer());
@@ -607,8 +617,8 @@ async function canUseIDB(): Promise<boolean> {
 
 type Cache = {
   messages: {
-    get(k: string): Promise<LabeledMessageBase | undefined>;
-    set(k: string, value: LabeledMessageBase): Promise<void>;
+    get(k: string): Promise<LabeledMessageBase | null | undefined>;
+    set(k: string, value: LabeledMessageBase | null): Promise<void>;
     del(k: string): Promise<void>;
   };
   messageIds: {
@@ -695,7 +705,7 @@ async function createCache(): Promise<Cache> {
     };
   }
 
-  const m = new Map<string, LabeledMessageBase>();
+  const m = new Map<string, LabeledMessageBase | null>();
   const q = new Map<string, CacheQueryValue>();
 
   return {
