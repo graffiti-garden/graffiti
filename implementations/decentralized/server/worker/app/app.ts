@@ -11,7 +11,6 @@ const app = new Hono<{ Bindings: Bindings }>();
 // Do not allow iframe for security
 app.use("*", async (c, next) => {
   c.header("X-Frame-Options", "DENY");
-  c.header("Access-Control-Allow-Origin", "none");
   await next();
 });
 

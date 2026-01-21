@@ -5,16 +5,29 @@ import app from "./app/app";
 import storageBuckets from "./api/storage-buckets/index";
 import indexers from "./api/inboxes/index";
 import handleDids from "./app/handles/dids";
+import { cors } from "hono/cors";
 
 const router = new Hono<{ Bindings: Bindings }>();
 
+const noCors = cors({
+  origin: "*",
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowHeaders: ["Content-Type", "Authorization", "If-None-Match"],
+  exposeHeaders: ["ETag", "Retry-After"],
+  maxAge: 86400, // one day
+});
+
+router.use("/app/oauth/token", noCors);
+router.use("/app/oauth/revoke", noCors);
+router.use("/handles/handle/*", noCors);
 router.route("/app", app);
+router.use("/i/*", noCors);
 router.route("/i", indexers);
+router.use("/s/*", noCors);
 router.route("/s", storageBuckets);
 function oauthConfiguration(context: Context) {
   const issuer = getOrigin(context);
-  const headers = new Headers();
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  context.header("Cache-Control", "public, max-age=31536000, immutable");
   return context.json({
     issuer,
     authorization_endpoint: `${issuer}/oauth`,
@@ -24,6 +37,7 @@ function oauthConfiguration(context: Context) {
     response_types_supported: ["code"],
   });
 }
+router.use("/.well-known/*", noCors);
 router.get("/.well-known/oauth-authorization-server", oauthConfiguration);
 router.get("/.well-known/openid-configuration", oauthConfiguration);
 
@@ -38,9 +52,8 @@ router.all("*", async (c) => {
     return c.notFound();
   }
 
-  // Disable cross origin for static assets
+  // Disable iframes for static assets
   c.header("X-Frame-Options", "DENY");
-  c.header("Access-Control-Allow-Origin", "none");
 
   // Try to serve a static asset first.
   const assetRes = await c.env.ASSETS.fetch(c.req.raw);
@@ -76,6 +89,7 @@ function getHostRouter(baseHost: string): Hono<{ Bindings: Bindings }> {
         return `/domain${url.pathname}`;
       },
     });
+    hostRouter.use("/subdomain/*", noCors);
     hostRouter.route("/subdomain", handleDids);
     hostRouter.route("/domain", router);
     hostRouter.use(compress());

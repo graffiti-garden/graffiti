@@ -47,23 +47,6 @@ function addAuthRoute(
   });
 }
 
-function disableCors(router: OpenAPIHono<{ Bindings: Bindings }>) {
-  router.use("*", async (c, next) => {
-    // Disable CORs
-    c.header("Access-Control-Allow-Origin", "*");
-    c.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    c.header(
-      "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, If-None-Match, Accept-Encoding",
-    );
-    c.header(
-      "Access-Control-Expose-Headers",
-      "Content-Type, Content-Length, Content-Encoding, ETag, Retry-After",
-    );
-    await next();
-  });
-}
-
 function addOpenAPI(router: OpenAPIHono<{ Bindings: Bindings }>, type: string) {
   router.openAPIRegistry.registerComponent("securitySchemes", "oauth2", {
     type: "oauth2",
@@ -147,7 +130,6 @@ export function augmentService(
   router: OpenAPIHono<{ Bindings: Bindings }>,
   type: string,
 ) {
-  disableCors(router);
   addAuthRoute(router, type);
   addOpenAPI(router, type);
 }
