@@ -29,6 +29,7 @@ import { Authorization } from "../1-services/1-authorization";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import {
   Inboxes,
+  LABELED_MESSAGE_LABEL_KEY,
   LABELED_MESSAGE_MESSAGE_KEY,
   MESSAGE_METADATA_KEY,
   MESSAGE_OBJECT_KEY,
@@ -1017,7 +1018,12 @@ export class GraffitiDecentralized implements Graffiti {
       const result = itResult.value;
 
       const label = result.l;
-      if (label !== MESSAGE_LABEL_VALID && label !== MESSAGE_LABEL_UNLABELED)
+      // Anything invalid or unexpected, we can skip
+      if (
+        label !== MESSAGE_LABEL_VALID &&
+        label !== MESSAGE_LABEL_UNLABELED &&
+        label !== MESSAGE_LABEL_TRASH
+      )
         continue;
 
       const messageId = result.id;
@@ -1061,9 +1067,50 @@ export class GraffitiDecentralized implements Graffiti {
           announcements,
         };
         continue;
+      } else if (label === MESSAGE_LABEL_TRASH) {
+        // If it is simply trash, just continue.
+        if (!tombstonedMessageId) continue;
+
+        // Make sure the tombstone points to a real message
+        const past = await this.inboxes.get(
+          inboxEndpoint,
+          tombstonedMessageId,
+          inboxToken,
+        );
+        if (
+          !past ||
+          past[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY].url !==
+            object.url
+        )
+          continue;
+
+        // If the referred to message isn't labeled as trash, trash it
+        // This may happen if a trash message is processed on another
+        // device and the device cache is out of date.
+        if (past[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH) {
+          // Label the message as trash
+          this.inboxes.label(
+            inboxEndpoint,
+            tombstonedMessageId,
+            MESSAGE_LABEL_TRASH,
+            inboxToken,
+          );
+        }
+
+        // Return the tombstone
+        yield {
+          messageId,
+          tombstone: true,
+          object,
+          storageBucketKey,
+          allowedTickets,
+          tags: receivedTags,
+          announcements,
+        };
+        continue;
       }
 
-      // Try to validate the object
+      // Otherwise, unlabeled: try to validate the object
       let validationError: unknown | undefined = undefined;
       try {
         const actor = object.actor;
@@ -1123,13 +1170,15 @@ export class GraffitiDecentralized implements Graffiti {
             // Get the referenced message
             .get(inboxEndpoint, tombstonedMessageId, inboxToken)
             .then((result) => {
-              // Make sure that it actually references the object being deleted
               if (
+                // Make sure that it actually references the object being deleted
                 result &&
                 result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY].url ===
-                  object.url
+                  object.url &&
+                // And that the object is not already marked as trash
+                result[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH
               ) {
-                // If it does, label the message as trash, it is no longer needed
+                // If valid but not yet trash, label the message as trash
                 this.inboxes.label(
                   inboxEndpoint,
                   tombstonedMessageId,
