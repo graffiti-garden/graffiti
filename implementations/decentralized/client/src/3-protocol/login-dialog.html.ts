@@ -1,11 +1,11 @@
 export const template = `<template id="graffiti-login-welcome">
   <h1>
-    <a target="_blank" href="https://graffiti.garden">Graffiti<wbr> Log In</a>
+    <a target="_blank" href="https://graffiti.garden">Graffiti Log&nbsp;In</a>
   </h1>
 
   <ul>
-    <li><a type="button" id="graffiti-login-new">Create new Graffiti identity</a></li>
-    <li><button class="secondary" id="graffiti-login-existing">Use existing Graffiti identity</button></li>
+    <li><a type="button" id="graffiti-login-new">Create&nbsp;new Graffiti&nbsp;identity</a></li>
+    <li><button class="secondary" id="graffiti-login-existing">Use&nbsp;existing Graffiti&nbsp;identity</button></li>
   </ul>
 
   <aside>
@@ -15,12 +15,12 @@ export const template = `<template id="graffiti-login-welcome">
 </template>
 
 <template id="graffiti-login-handle">
-  <h1>
-    <a target="_blank" href="https://graffiti.garden">Graffiti<wbr> Log In</a>
-  </h1>
+<h1>
+  <a target="_blank" href="https://graffiti.garden">Graffiti Log&nbsp;In</a>
+</h1>
 
   <form id="graffiti-login-handle-form">
-    <label for="username">Enter your Graffiti handle:</label>
+    <label for="username">Graffiti handle:</label>
     <input
       type="text"
       name="username"
@@ -29,7 +29,7 @@ export const template = `<template id="graffiti-login-welcome">
       autocapitalize="none"
       spellcheck="false"
       inputmode="url"
-      placeholder="example.graffiti.actor"
+      placeholder="you.graffiti.actor"
       required
     >
     <button id="graffiti-login-handle-submit" type="submit">
@@ -38,6 +38,6 @@ export const template = `<template id="graffiti-login-welcome">
   </form>
 
   <p>
-    Don't have a Graffiti handle? <a id="graffiti-login-new">Create one</a>.
+    Don't&nbsp;have&nbsp;a Graffiti&nbsp;handle? <a id="graffiti-login-new">Create&nbsp;one</a>.
   </p>
 </template>`;

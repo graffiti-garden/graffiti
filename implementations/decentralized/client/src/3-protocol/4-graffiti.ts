@@ -240,11 +240,7 @@ export class GraffitiDecentralized implements Graffiti {
         ) as HTMLInputElement | null;
         input?.setAttribute("value", proposedHandle);
         input?.addEventListener("focus", () => input?.select());
-        new Promise<void>((r) => {
-          setTimeout(() => r(), 0);
-        }).then(() => {
-          input?.focus();
-        });
+        setTimeout(() => input?.focus(), 0);
 
         template
           ?.querySelector("#graffiti-login-handle-form")
@@ -294,13 +290,16 @@ export class GraffitiDecentralized implements Graffiti {
             e.preventDefault();
             this.login_("");
           });
-        new Promise<void>((r) => {
-          setTimeout(() => r(), 0);
-        }).then(() => {
-          (
-            template?.querySelector("#graffiti-login-new") as HTMLAnchorElement
-          )?.focus();
-        });
+
+        setTimeout(
+          () =>
+            (
+              template?.querySelector(
+                "#graffiti-login-new",
+              ) as HTMLAnchorElement
+            )?.focus(),
+          0,
+        );
       }
 
       const createUrl = new URL(this.identityCreatorEndpoint);
