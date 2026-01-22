@@ -11,6 +11,10 @@ import {
 const handleDids = new Hono<{ Bindings: Bindings }>();
 
 export async function getDid(c: Context<{ Bindings: Bindings }>) {
+  c.header(
+    "Cache-Control",
+    "public, max-age=3600, stale-while-revalidate=86400",
+  );
   const handleName = c.req.param("handle-name");
 
   const result = await c.env.DB.prepare(
