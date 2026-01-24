@@ -108,6 +108,7 @@
         letter-spacing: 0.1em;
         text-align: center;
         color: var(--front);
+        line-height: 1.5em;
     }
 
     h1 a:not([type="button"]) {
