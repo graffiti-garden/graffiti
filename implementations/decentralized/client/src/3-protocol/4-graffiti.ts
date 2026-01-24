@@ -34,6 +34,7 @@ import {
   MESSAGE_METADATA_KEY,
   MESSAGE_OBJECT_KEY,
   MESSAGE_TAGS_KEY,
+  type LabeledMessage,
   type MessageStream,
 } from "../1-services/4-inboxes";
 
@@ -1016,88 +1017,200 @@ export class GraffitiDecentralized implements Graffiti {
 
       const result = itResult.value;
 
-      const label = result.l;
-      // Anything invalid or unexpected, we can skip
+      // TODO: parallelize the processing of messages
+      const processed = await this.processOneLabeledMessage<Schema>(
+        inboxEndpoint,
+        result,
+        inboxToken,
+        recipient,
+      );
+      if (processed) yield processed;
+    }
+  }
+
+  protected async processOneLabeledMessage<Schema extends JSONSchema>(
+    inboxEndpoint: string,
+    result: LabeledMessage<Schema>,
+    inboxToken?: string | null,
+    recipient?: string | null,
+  ): Promise<SingleEndpointQueryResult<Schema> | void> {
+    const label = result.l;
+    // Anything invalid or unexpected, we can skip
+    if (
+      label !== MESSAGE_LABEL_VALID &&
+      label !== MESSAGE_LABEL_UNLABELED &&
+      label !== MESSAGE_LABEL_TRASH
+    )
+      return;
+
+    const messageId = result.id;
+    const { o: object, m: metadataBytes, t: receivedTags } = result.m;
+
+    let metadata: MessageMetadata;
+    try {
+      const metadataRaw = dagCborDecode(metadataBytes);
+      metadata = MessageMetadataSchema.parse(metadataRaw);
+    } catch (e) {
+      this.inboxes.label(
+        inboxEndpoint,
+        messageId,
+        MESSAGE_LABEL_INVALID,
+        inboxToken,
+      );
+      return;
+    }
+
+    const {
+      [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
+      [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
+    } = metadata;
+
+    const allowedTickets =
+      MESSAGE_DATA_ALLOWED_TICKETS_KEY in metadata
+        ? metadata[MESSAGE_DATA_ALLOWED_TICKETS_KEY]
+        : undefined;
+    const announcements =
+      MESSAGE_DATA_ANNOUNCEMENTS_KEY in metadata
+        ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY]
+        : undefined;
+
+    if (label === MESSAGE_LABEL_VALID) {
+      return {
+        messageId,
+        object,
+        storageBucketKey,
+        allowedTickets,
+        tags: receivedTags,
+        announcements,
+      };
+    } else if (label === MESSAGE_LABEL_TRASH) {
+      // If it is simply trash, just continue.
+      if (!tombstonedMessageId) return;
+
+      // Make sure the tombstone points to a real message
+      const past = await this.inboxes.get(
+        inboxEndpoint,
+        tombstonedMessageId,
+        inboxToken,
+      );
       if (
-        label !== MESSAGE_LABEL_VALID &&
-        label !== MESSAGE_LABEL_UNLABELED &&
-        label !== MESSAGE_LABEL_TRASH
+        !past ||
+        past[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY].url !== object.url
       )
-        continue;
+        return;
 
-      const messageId = result.id;
-      const { o: object, m: metadataBytes, t: receivedTags } = result.m;
-
-      let metadata: MessageMetadata;
-      try {
-        const metadataRaw = dagCborDecode(metadataBytes);
-        metadata = MessageMetadataSchema.parse(metadataRaw);
-      } catch (e) {
+      // If the referred to message isn't labeled as trash, trash it
+      // This may happen if a trash message is processed on another
+      // device and the device cache is out of date.
+      if (past[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH) {
+        // Label the message as trash
         this.inboxes.label(
           inboxEndpoint,
-          messageId,
-          MESSAGE_LABEL_INVALID,
+          tombstonedMessageId,
+          MESSAGE_LABEL_TRASH,
           inboxToken,
         );
-        continue;
       }
 
-      const {
-        [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
-        [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
-      } = metadata;
+      // Return the tombstone
+      return {
+        messageId,
+        tombstone: true,
+        object,
+        storageBucketKey,
+        allowedTickets,
+        tags: receivedTags,
+        announcements,
+      };
+    }
 
-      const allowedTickets =
-        MESSAGE_DATA_ALLOWED_TICKETS_KEY in metadata
-          ? metadata[MESSAGE_DATA_ALLOWED_TICKETS_KEY]
-          : undefined;
-      const announcements =
-        MESSAGE_DATA_ANNOUNCEMENTS_KEY in metadata
-          ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY]
-          : undefined;
-
-      if (label === MESSAGE_LABEL_VALID) {
-        yield {
-          messageId,
-          object,
-          storageBucketKey,
-          allowedTickets,
-          tags: receivedTags,
-          announcements,
-        };
-        continue;
-      } else if (label === MESSAGE_LABEL_TRASH) {
-        // If it is simply trash, just continue.
-        if (!tombstonedMessageId) continue;
-
-        // Make sure the tombstone points to a real message
-        const past = await this.inboxes.get(
-          inboxEndpoint,
-          tombstonedMessageId,
-          inboxToken,
+    // Otherwise, unlabeled: try to validate the object
+    let validationError: unknown | undefined = undefined;
+    try {
+      const actor = object.actor;
+      const actorDocument = await this.dids.resolve(actor);
+      const storageBucketService = actorDocument?.service?.find(
+        (service) =>
+          service.id === DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET &&
+          service.type === DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
+      );
+      if (!storageBucketService) {
+        throw new GraffitiErrorNotFound(
+          `Actor ${actor} has no storage bucket service`,
         );
-        if (
-          !past ||
-          past[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY].url !==
-            object.url
-        )
-          continue;
+      }
+      if (typeof storageBucketService.serviceEndpoint !== "string") {
+        throw new GraffitiErrorNotFound(
+          `Actor ${actor} does not have a valid storage bucket endpoint`,
+        );
+      }
+      const storageBucketEndpoint = storageBucketService.serviceEndpoint;
 
-        // If the referred to message isn't labeled as trash, trash it
-        // This may happen if a trash message is processed on another
-        // device and the device cache is out of date.
-        if (past[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH) {
-          // Label the message as trash
-          this.inboxes.label(
-            inboxEndpoint,
-            tombstonedMessageId,
-            MESSAGE_LABEL_TRASH,
-            inboxToken,
-          );
-        }
+      const objectBytes = await this.storageBuckets.get(
+        storageBucketEndpoint,
+        storageBucketKey,
+        MAX_OBJECT_SIZE_BYTES,
+      );
 
-        // Return the tombstone
-        yield {
+      if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {
+        throw new GraffitiErrorForbidden(
+          `Recipient is required when allowed ticket is present`,
+        );
+      }
+      const privateObjectInfo = allowedTickets
+        ? { allowedTickets }
+        : MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata
+          ? {
+              recipient: recipient ?? "null",
+              allowedTicket: metadata[MESSAGE_DATA_ALLOWED_TICKET_KEY],
+              allowedIndex: metadata[MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY],
+            }
+          : undefined;
+
+      await this.objectEncoding.validate(
+        object,
+        receivedTags,
+        objectBytes,
+        privateObjectInfo,
+      );
+    } catch (e) {
+      validationError = e;
+    }
+
+    if (tombstonedMessageId) {
+      if (validationError instanceof GraffitiErrorNotFound) {
+        // Not found == The tombstone is correct
+        this.inboxes
+          // Get the referenced message
+          .get(inboxEndpoint, tombstonedMessageId, inboxToken)
+          .then((result) => {
+            if (
+              // Make sure that it actually references the object being deleted
+              result &&
+              result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY].url ===
+                object.url &&
+              // And that the object is not already marked as trash
+              result[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH
+            ) {
+              // If valid but not yet trash, label the message as trash
+              this.inboxes.label(
+                inboxEndpoint,
+                tombstonedMessageId,
+                MESSAGE_LABEL_TRASH,
+                inboxToken,
+              );
+            }
+
+            // Then, label the tombstone message as trash
+            this.inboxes.label(
+              inboxEndpoint,
+              messageId,
+              MESSAGE_LABEL_TRASH,
+              inboxToken,
+            );
+          });
+
+        return {
           messageId,
           tombstone: true,
           object,
@@ -1106,149 +1219,50 @@ export class GraffitiDecentralized implements Graffiti {
           tags: receivedTags,
           announcements,
         };
-        continue;
-      }
-
-      // Otherwise, unlabeled: try to validate the object
-      let validationError: unknown | undefined = undefined;
-      try {
-        const actor = object.actor;
-        const actorDocument = await this.dids.resolve(actor);
-        const storageBucketService = actorDocument?.service?.find(
-          (service) =>
-            service.id === DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET &&
-            service.type === DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
-        );
-        if (!storageBucketService) {
-          throw new GraffitiErrorNotFound(
-            `Actor ${actor} has no storage bucket service`,
-          );
-        }
-        if (typeof storageBucketService.serviceEndpoint !== "string") {
-          throw new GraffitiErrorNotFound(
-            `Actor ${actor} does not have a valid storage bucket endpoint`,
-          );
-        }
-        const storageBucketEndpoint = storageBucketService.serviceEndpoint;
-
-        const objectBytes = await this.storageBuckets.get(
-          storageBucketEndpoint,
-          storageBucketKey,
-          MAX_OBJECT_SIZE_BYTES,
-        );
-
-        if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {
-          throw new GraffitiErrorForbidden(
-            `Recipient is required when allowed ticket is present`,
-          );
-        }
-        const privateObjectInfo = allowedTickets
-          ? { allowedTickets }
-          : MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata
-            ? {
-                recipient: recipient ?? "null",
-                allowedTicket: metadata[MESSAGE_DATA_ALLOWED_TICKET_KEY],
-                allowedIndex: metadata[MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY],
-              }
-            : undefined;
-
-        await this.objectEncoding.validate(
-          object,
-          receivedTags,
-          objectBytes,
-          privateObjectInfo,
-        );
-      } catch (e) {
-        validationError = e;
-      }
-
-      if (tombstonedMessageId) {
-        if (validationError instanceof GraffitiErrorNotFound) {
-          // Not found == The tombstone is correct
-          this.inboxes
-            // Get the referenced message
-            .get(inboxEndpoint, tombstonedMessageId, inboxToken)
-            .then((result) => {
-              if (
-                // Make sure that it actually references the object being deleted
-                result &&
-                result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY].url ===
-                  object.url &&
-                // And that the object is not already marked as trash
-                result[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH
-              ) {
-                // If valid but not yet trash, label the message as trash
-                this.inboxes.label(
-                  inboxEndpoint,
-                  tombstonedMessageId,
-                  MESSAGE_LABEL_TRASH,
-                  inboxToken,
-                );
-              }
-
-              // Then, label the tombstone message as trash
-              this.inboxes.label(
-                inboxEndpoint,
-                messageId,
-                MESSAGE_LABEL_TRASH,
-                inboxToken,
-              );
-            });
-
-          yield {
-            messageId,
-            tombstone: true,
-            object,
-            storageBucketKey,
-            allowedTickets,
-            tags: receivedTags,
-            announcements,
-          };
-        } else {
-          console.error("Recieved an incorrect tombstone object");
-          console.error(validationError);
-          this.inboxes.label(
-            inboxEndpoint,
-            messageId,
-            MESSAGE_LABEL_INVALID,
-            inboxToken,
-          );
-        }
       } else {
-        if (validationError === undefined) {
-          this.inboxes.label(
-            inboxEndpoint,
-            messageId,
-            MESSAGE_LABEL_VALID,
-            inboxToken,
-          );
-          yield {
-            messageId,
-            object,
-            storageBucketKey,
-            tags: receivedTags,
-            allowedTickets,
-            announcements,
-          };
-        } else if (validationError instanceof GraffitiErrorNotFound) {
-          // Item was deleted before we got a chance to
-          // validate it. Just label the message as trash.
-          this.inboxes.label(
-            inboxEndpoint,
-            messageId,
-            MESSAGE_LABEL_TRASH,
-            inboxToken,
-          );
-        } else {
-          console.error("Recieved an incorrect object");
-          console.error(validationError);
-          this.inboxes.label(
-            inboxEndpoint,
-            messageId,
-            MESSAGE_LABEL_INVALID,
-            inboxToken,
-          );
-        }
+        console.error("Recieved an incorrect tombstone object");
+        console.error(validationError);
+        this.inboxes.label(
+          inboxEndpoint,
+          messageId,
+          MESSAGE_LABEL_INVALID,
+          inboxToken,
+        );
+      }
+    } else {
+      if (validationError === undefined) {
+        this.inboxes.label(
+          inboxEndpoint,
+          messageId,
+          MESSAGE_LABEL_VALID,
+          inboxToken,
+        );
+        return {
+          messageId,
+          object,
+          storageBucketKey,
+          tags: receivedTags,
+          allowedTickets,
+          announcements,
+        };
+      } else if (validationError instanceof GraffitiErrorNotFound) {
+        // Item was deleted before we got a chance to
+        // validate it. Just label the message as trash.
+        this.inboxes.label(
+          inboxEndpoint,
+          messageId,
+          MESSAGE_LABEL_TRASH,
+          inboxToken,
+        );
+      } else {
+        console.error("Recieved an incorrect object");
+        console.error(validationError);
+        this.inboxes.label(
+          inboxEndpoint,
+          messageId,
+          MESSAGE_LABEL_INVALID,
+          inboxToken,
+        );
       }
     }
   }
