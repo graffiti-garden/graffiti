@@ -1205,7 +1205,7 @@ export class GraffitiDecentralized implements Graffiti {
             announcements,
           };
         } else {
-          console.error("Recieved an incorrect object");
+          console.error("Recieved an incorrect tombstone object");
           console.error(validationError);
           this.inboxes.label(
             inboxEndpoint,
@@ -1230,6 +1230,15 @@ export class GraffitiDecentralized implements Graffiti {
             allowedTickets,
             announcements,
           };
+        } else if (validationError instanceof GraffitiErrorNotFound) {
+          // Item was deleted before we got a chance to
+          // validate it. Just label the message as trash.
+          this.inboxes.label(
+            inboxEndpoint,
+            messageId,
+            MESSAGE_LABEL_TRASH,
+            inboxToken,
+          );
         } else {
           console.error("Recieved an incorrect object");
           console.error(validationError);
