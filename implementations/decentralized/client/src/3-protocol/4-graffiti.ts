@@ -132,6 +132,8 @@ export interface GraffitiDecentralizedOptions {
   defaultInboxEndpoints?: string[];
 }
 
+const CONCURRENCY = 16;
+
 export class GraffitiDecentralized implements Graffiti {
   protected readonly dids = new DecentralizedIdentifiers();
   protected readonly authorization = new Authorization();
@@ -1010,20 +1012,38 @@ export class GraffitiDecentralized implements Graffiti {
             inboxToken,
           ) as unknown as MessageStream<Schema>);
 
+    const inFlight: Promise<SingleEndpointQueryResult<Schema> | void>[] = [];
+    let doneValue: string | null = null;
+
     while (true) {
-      const itResult = await iterator.next();
-      // Return the cursor if done
-      if (itResult.done) return itResult.value;
+      while (doneValue === null && inFlight.length < CONCURRENCY) {
+        const itResult = await iterator.next();
+        if (itResult.done) {
+          doneValue = itResult.value;
+          break;
+        }
 
-      const result = itResult.value;
+        const processPromise = this.processOneLabeledMessage<Schema>(
+          inboxEndpoint,
+          itResult.value,
+          inboxToken,
+          recipient,
+        ).catch((e) => {
+          throw e;
+        });
 
-      // TODO: parallelize the processing of messages
-      const processed = await this.processOneLabeledMessage<Schema>(
-        inboxEndpoint,
-        result,
-        inboxToken,
-        recipient,
-      );
+        inFlight.push(processPromise);
+      }
+
+      const nextProcessedPromise = inFlight.shift();
+
+      if (!nextProcessedPromise) {
+        if (doneValue !== null) return doneValue;
+
+        throw new Error("Process queue empty but no return value");
+      }
+
+      const processed = await nextProcessedPromise;
       if (processed) yield processed;
     }
   }
