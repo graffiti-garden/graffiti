@@ -70,12 +70,13 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
       refresh.value++;
     }, timeout);
   }
+  const args_ = () =>
+    [toValue(channels), toValue(schema), toValue(session)] as const;
   watch(
-    () => ({
-      args: [toValue(channels), toValue(schema), toValue(session)] as const,
-      refresh: refresh.value,
-    }),
-    ({ args }, _prev, onInvalidate) => {
+    () => `${refresh.value}:${JSON.stringify(args_())}`,
+    (_, __, onInvalidate) => {
+      const args = args_();
+
       // Reset the output
       objectsRaw.clear();
       objects.value = [];

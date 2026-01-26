@@ -61,12 +61,15 @@ export function useGraffitiGetMedia(
     });
     return pollPromise;
   }
+
+  const args_ = () =>
+    [toValue(url), toValue(accept), toValue(session)] as const;
+
   watch(
-    () => ({
-      args: [toValue(url), toValue(accept), toValue(session)] as const,
-      pollCounter: pollCounter.value,
-    }),
-    async ({ args }, _prev, onInvalidate) => {
+    () => `${pollCounter.value}:${JSON.stringify(args_())}`,
+    async (_, __, onInvalidate) => {
+      const args = args_();
+
       // Revoke the data URL to prevent a memory leak
       if (media.value?.dataUrl) {
         URL.revokeObjectURL(media.value.dataUrl);
