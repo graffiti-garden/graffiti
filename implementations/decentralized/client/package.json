@@ -50,7 +50,7 @@
     "vitest": "^4.0.17"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^1.1.1",
+    "@graffiti-garden/api": "^1.2.0",
     "@graffiti-garden/modal": "^1.0.3",
     "@ipld/dag-cbor": "^9.2.5",
     "@noble/ed25519": "^3.0.0",
