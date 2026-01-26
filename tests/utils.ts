@@ -47,16 +47,9 @@ export async function nextStreamValue<Schema extends JSONSchema>(
 
 export function continueStream<Schema extends JSONSchema>(
   graffiti: Pick<Graffiti, "continueDiscover">,
-  streamReturn: GraffitiObjectStreamReturn<Schema>,
-  type: "cursor" | "continue",
+  streamReturn: GraffitiObjectStreamReturn,
+  type: "cursor",
   session?: GraffitiSession | null,
 ): GraffitiObjectStream<Schema> {
-  if (type === "cursor") {
-    return graffiti.continueDiscover(
-      streamReturn.cursor,
-      session,
-    ) as unknown as GraffitiObjectStream<Schema>;
-  } else {
-    return streamReturn.continue();
-  }
+  return graffiti.continueDiscover<Schema>(streamReturn.cursor, session);
 }

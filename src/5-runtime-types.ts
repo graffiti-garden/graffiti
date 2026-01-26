@@ -52,26 +52,6 @@ export const GraffitiMediaAcceptSchema = looseObject({
   maxBytes: optional(int().check(nonnegative())),
 });
 
-async function* wrapGraffitiStream<Schema extends JSONSchema>(
-  stream: GraffitiObjectStream<Schema>,
-): GraffitiObjectStream<Schema> {
-  while (true) {
-    const next = await stream.next();
-    if (next.done) {
-      const { cursor, continue: continue_ } = next.value;
-      return {
-        cursor,
-        continue: (...args) => {
-          const typedArgs = tuple([GraffitiOptionalSessionSchema]).parse(args);
-          return continue_(...typedArgs);
-        },
-      };
-    } else {
-      yield next.value;
-    }
-  }
-}
-
 export class GraffitiRuntimeTypes implements Graffiti {
   sessionEvents: Graffiti["sessionEvents"];
   constructor(protected readonly graffiti: Graffiti) {
@@ -160,20 +140,19 @@ export class GraffitiRuntimeTypes implements Graffiti {
       looseObject({}),
       GraffitiOptionalSessionSchema,
     ]).parse(args);
-    const stream = this.graffiti.discover<(typeof args)[1]>(
+    return this.graffiti.discover<(typeof args)[1]>(
       typedArgs[0],
       typedArgs[1] as (typeof args)[1],
       typedArgs[2],
     );
-    return wrapGraffitiStream<(typeof args)[1]>(stream);
   };
 
+  // @ts-ignore - inferred types on continueDiscover do not effect output
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
     const typedArgs = tuple([string(), GraffitiOptionalSessionSchema]).parse(
       args,
     );
 
-    const stream = this.graffiti.continueDiscover(...typedArgs);
-    return wrapGraffitiStream<{}>(stream);
+    return this.graffiti.continueDiscover<{}>(...typedArgs);
   };
 }

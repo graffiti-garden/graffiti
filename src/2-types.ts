@@ -192,28 +192,30 @@ export interface GraffitiSession {
 }
 
 /**
- * A stream of data that are returned by {@link Graffiti.discover}.
+ * A stream of data that returned by {@link Graffiti.discover | `discover`}
+ * and {@link Graffiti.continueDiscover | `continueDiscover`}.
  *
- * Errors are returned within the stream rather than as
+ * Non-fatal errors are returned within the stream rather than as
  * exceptions that would halt the entire stream. This is because
  * some implementations may pull data from multiple sources
- * including some that may be unreliable. In many cases,
- * these errors can be safely ignored.
+ * including some that may be unreliable. Such errors can generally
+ * be ignored, but should be printed for debugging.
  * See {@link GraffitiObjectStreamError}.
  *
  * The stream is an [`AsyncGenerator`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function)
  * that can be iterated over using `for await` loops or calling `next` on the generator.
  * The stream can be terminated by breaking out of a loop calling `return` on the generator.
  *
- * The stream ends by returning a {@link GraffitiObjectStreamReturn.continue | `continue`}
- * function and a {@link GraffitiObjectStreamReturn.cursor | `cursor`} string,
- * each of which can be used to resume the stream from where it left off.
+ * The stream ends by returning a
+ * {@link GraffitiObjectStreamReturn.cursor | `cursor`} string,
+ * that can be passed to {@link Graffiti.continueDiscover | `continueDiscover`} to
+ * resume the stream from where it left off.
  */
 export type GraffitiObjectStream<Schema extends JSONSchema> = AsyncGenerator<
   | GraffitiObjectStreamError
   | GraffitiObjectStreamEntry<Schema>
   | GraffitiObjectStreamTombstone,
-  GraffitiObjectStreamReturn<Schema>
+  GraffitiObjectStreamReturn
 >;
 
 /**
@@ -286,31 +288,15 @@ export interface GraffitiObjectStreamTombstone {
 }
 
 /**
- * The output of a {@link GraffitiObjectStream}
- * that allows the stream to be continued from where it left off.
- *
- * The {@link continue} function preserves the typing of the original stream,
- * where as the {@link cursor} string can be serialized for use after a person
- * has closed and reopened an application.
- *
- * The continued stream may include `tombstone`s of objects that have been
- * deleted since the original stream was run. See {@link GraffitiObjectStreamTombstone}.
- * The continued stream may also return some objects that were already
- * returned by the original stream, depending on how much state the
- * underlying implementation is able to preserve.
+ * The final return value of a {@link GraffitiObjectStream}.
  *
  * @internal
  */
-export interface GraffitiObjectStreamReturn<Schema extends JSONSchema> {
+export interface GraffitiObjectStreamReturn {
   /**
-   * @returns A function that creates new stream that continues from where the original stream left off.
-   * It preserves the typing of the original stream.
-   */
-  continue: (session?: GraffitiSession | null) => GraffitiObjectStream<Schema>;
-  /**
-   * A string that can be serialized and stored to resume the stream later.
-   * It must be passed to the {@link Graffiti.continueDiscover} method
-   * to resume the stream.
+   * A string that can be passed to the {@link Graffiti.continueDiscover | `continueDiscover`}
+   * to resume the stream. The cursor can be serialized and used between
+   * instantiations of {@link Graffiti}
    */
   cursor: string;
 }
@@ -353,22 +339,12 @@ export type GraffitiLogoutEvent = CustomEvent<
  * The event type produced in {@link Graffiti.sessionEvents}
  * after an application has attempted to complete any login redirects
  * and restore any previously active sessions.
- * Successful session restores will be returned in parallel as
- * their own {@link GraffitiLoginEvent} events.
- *
- * This event optionally returns an `href` property
- * representing the URL that originated a login request,
- * which may be useful for redirecting the user back to
- * the page they were on after login.
+ * Successful session restores will be returned in prior to the
+ * initialized event as their own {@link GraffitiLoginEvent} events.
  * The event name to listen for is `initialized`.
  */
 export type GraffitiSessionInitializedEvent = CustomEvent<
-  | {
-      error?: Error;
-      href?: string;
-    }
-  | null
-  | undefined
+  { error?: Error } | null | undefined
 >;
 
 export type GraffitiMedia = {

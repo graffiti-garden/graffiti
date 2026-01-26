@@ -410,7 +410,10 @@ export const graffitiDiscoverTests = (
 
       await graffiti1.delete(posted, session1);
 
-      const iterator3 = next3.value.continue(session1);
+      const iterator3 = graffiti1.continueDiscover(
+        next3.value.cursor,
+        session1,
+      );
       const next5 = await iterator3.next();
       assert(!next5.done && !next5.value.error);
       expect(next5.value.tombstone).toBe(true);
@@ -421,7 +424,10 @@ export const graffitiDiscoverTests = (
       // which could introduce a cache bug
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const iterator4 = next4.value.continue(session1);
+      const iterator4 = graffiti2.continueDiscover(
+        next4.value.cursor,
+        session1,
+      );
       const next6 = await iterator4.next();
       assert(!next6.done && !next6.value.error);
       expect(next6.value.tombstone).toBe(true);
@@ -429,7 +435,7 @@ export const graffitiDiscoverTests = (
       await expect(iterator4.next()).resolves.toHaveProperty("done", true);
     });
 
-    for (const continueType of ["cursor", "continue"] as const) {
+    for (const continueType of ["cursor"] as const) {
       describe(`continue discover with ${continueType}`, () => {
         it("discover for deleted content", async () => {
           const object = randomPostObject();
