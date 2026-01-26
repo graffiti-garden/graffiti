@@ -61,12 +61,14 @@ export class ObjectEncoding {
     // Clean out any undefineds
     partialObject = cleanUndefined(partialObject);
 
+    const uniqueChannels = [...new Set(partialObject.channels)];
+
     // Create a verifiable attestation that the actor
     // knows the included channels without
     // directly revealing any channel to anyone who doesn't
     // know the channel already
     const channelAttestationAndPublicIds = await Promise.all(
-      partialObject.channels.map((channel) =>
+      uniqueChannels.map((channel) =>
         this.primitives.channelAttestations.attest(
           // TODO: get this from the DID document of the actor
           CHANNEL_ATTESTATION_METHOD_SHA256_ED25519,
@@ -137,7 +139,7 @@ export class ObjectEncoding {
 
     const object: GraffitiObject<Schema> = {
       value: partialObject.value,
-      channels: partialObject.channels,
+      channels: uniqueChannels,
       url: objectUrl,
       actor,
       ...(partialObject.allowed
