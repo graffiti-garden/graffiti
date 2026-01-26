@@ -28,7 +28,7 @@ import type { JSONSchema } from "json-schema-to-ts";
  * The Typescript code for this API is [open source on Github](https://github.com/graffiti-garden/api).
  *
  * There are several different implementations of this Graffiti API available,
- * including a [federated implementation](https://github.com/graffiti-garden/implementation-remote),
+ * including a [decentralized implementation](https://github.com/graffiti-garden/implementation-decentralized),
  * that lets people choose where their data is stored (you do not need to host your own server)
  * and a [local implementation](https://github.com/graffiti-garden/implementation-local)
  * that can be used for testing and development. Different implementations can
@@ -208,12 +208,9 @@ export abstract class Graffiti {
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
    * The {@link GraffitiObjectStream} ends by returning a
-   * {@link GraffitiObjectStreamReturn.continue | `continue`} method and a
    * {@link GraffitiObjectStreamReturn.cursor | `cursor`} string,
-   * each of which can be be used to poll for new objects.
-   * The `continue` method preserves the type safety of the stream and the `cursor`
-   * string can be serialized to continue the stream after an application is closed
-   * and reopened.
+   * that can be passed to {@link continueDiscover | `continueDiscover`} to
+   * poll for new objects.
    *
    * `discover` will not return objects that the querying {@link GraffitiObjectBase.actor | `actor`}
    * is not {@link GraffitiObjectBase.allowed | `allowed`} to access.
@@ -261,16 +258,7 @@ export abstract class Graffiti {
    * {@link GraffitiObjectBase.url | `url`}s of objects that
    * have been {@link delete | `delete`d}, as marked by a `tombstone`.
    *
-   * The `cursor` allows the client to
-   * serialize the state of the stream and continue it later.
-   * However this method loses any typing information that was
-   * present in the original stream. For better type safety
-   * and when serializing is not necessary, use the
-   * {@link GraffitiObjectStreamReturn.continue | `continue`} method
-   * instead, which is returned along with the `cursor` at the
-   * end of the original stream.
-   *
-   * @throws {@link GraffitiErrorNotFound} upon iteration
+   * @throws {@link GraffitiErrorCursorExpired} upon iteration
    * if the cursor is invalid or expired.
    *
    * @throws {@link GraffitiErrorForbidden} upon iteration
@@ -280,10 +268,10 @@ export abstract class Graffiti {
    *
    * @group 2 - Multi-Object Methods
    */
-  abstract continueDiscover(
+  abstract continueDiscover<Schema extends JSONSchema>(
     cursor: string,
     session?: GraffitiSession | null,
-  ): GraffitiObjectStream<{}>;
+  ): GraffitiObjectStream<Schema>;
 
   /**
    * Uploads media data, such as an image or video.
