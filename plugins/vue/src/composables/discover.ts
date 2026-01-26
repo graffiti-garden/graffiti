@@ -65,11 +65,6 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   });
 
   const refresh = ref(0);
-  function restartWatch(timeout = 0) {
-    setTimeout(() => {
-      refresh.value++;
-    }, timeout);
-  }
   const args_ = () =>
     [toValue(channels), toValue(schema), toValue(session)] as const;
   watch(
@@ -94,6 +89,12 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
         mySyncIterator.return(null);
         myDiscoverIterator?.return({ cursor: "" });
       });
+      function restartWatch(timeout = 0) {
+        setTimeout(() => {
+          if (!active) return;
+          refresh.value++;
+        }, timeout);
+      }
 
       // Start to synchronize in the background
       // (all polling results will go through here)
