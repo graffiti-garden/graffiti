@@ -8,7 +8,7 @@ import { HTTPException } from "hono/http-exception";
 import { LRUCache } from "lru-cache";
 import z from "zod";
 import { Validator } from "@cfworker/json-schema";
-import { randomBase64 } from "../../app/auth/utils";
+import { randomBase64, encodeBase64 } from "../../app/auth/utils";
 
 const INBOX_QUERY_LIMIT = 100;
 const INBOX_INFO_CACHE_CAPACITY = 1000;
@@ -28,10 +28,21 @@ export const Uint8ArraySchema = z
     type: "string",
     description: "A byte array",
   });
-export const TagsSchema = z.array(Uint8ArraySchema).openapi({
-  description:
-    "A set of per-message tags. A message can only be queried by specifying one of its tags",
-});
+export const TagsSchema = z
+  .array(Uint8ArraySchema)
+  .refine(
+    (tags) => {
+      const unique = new Set(tags.map(encodeBase64));
+      return unique.size === tags.length;
+    },
+    {
+      message: "Tags must be unique",
+    },
+  )
+  .openapi({
+    description:
+      "A set of per-message tags. A message can only be queried by specifying one of its tags",
+  });
 export const MessageSchema = z
   .object({
     t: TagsSchema,
