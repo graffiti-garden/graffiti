@@ -380,8 +380,6 @@ export class GraffitiLocalObjects {
       const result = await iterator.next();
       if (result.done) {
         return {
-          continue: (session) =>
-            this.discoverContinue<Schema>(args, result.value, session),
           cursor: this.discoverCursor(args, result.value),
         };
       }
@@ -403,12 +401,6 @@ export class GraffitiLocalObjects {
         const result = await iterator.next();
         if (result.done) {
           return {
-            continue: (session) =>
-              this_.discoverContinue<(typeof args)[1]>(
-                args,
-                result.value,
-                session,
-              ),
             cursor: this_.discoverCursor(args, result.value),
           };
         }
@@ -419,6 +411,7 @@ export class GraffitiLocalObjects {
     })();
   };
 
+  // @ts-ignore
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
     const [cursor, session] = args;
     if (cursor.startsWith("discover:")) {
@@ -436,6 +429,7 @@ export class GraffitiLocalObjects {
       return this.discoverContinue<{}>(
         [channels, schema, session],
         continueParams,
+        session,
       );
     } else {
       return (async function* () {
