@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-vue",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Vue.js wrapper for the Graffiti API",
   "types": "./dist/node/plugin.d.ts",
   "module": "./dist/node/plugin.mjs",
@@ -45,11 +45,11 @@
     "url": "https://github.com/graffiti-garden/wrapper-vue/issues"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^1.1.0",
-    "@graffiti-garden/wrapper-synchronize": "^1.1.0"
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/wrapper-synchronize": "^1.2.0"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-decentralized": "^0.0.2",
+    "@graffiti-garden/implementation-decentralized": "^0.0.3",
     "@types/node": "^25.0.9",
     "@vitejs/plugin-vue": "^6.0.3",
     "@vue/typescript-plugin": "^3.2.2",

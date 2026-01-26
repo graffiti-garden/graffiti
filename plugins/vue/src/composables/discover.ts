@@ -61,10 +61,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   let discoverIterator: GraffitiObjectStream<Schema>;
   onScopeDispose(() => {
     syncIterator?.return(null);
-    discoverIterator?.return({
-      continue: () => discoverIterator,
-      cursor: "",
-    });
+    discoverIterator?.return({ cursor: "" });
   });
 
   const refresh = ref(0);
@@ -94,10 +91,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
       onInvalidate(() => {
         active = false;
         mySyncIterator.return(null);
-        myDiscoverIterator?.return({
-          continue: () => discoverIterator,
-          cursor: "",
-        });
+        myDiscoverIterator?.return({ cursor: "" });
       });
 
       // Start to synchronize in the background
@@ -129,7 +123,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
       // Then set up a polling function
       let polling = false;
-      let continueFn: GraffitiObjectStreamReturn<Schema>["continue"] = () =>
+      let continueFn: () => GraffitiObjectStream<Schema> = () =>
         graffiti.discover<Schema>(...args);
       poll_ = async () => {
         if (polling || !active) return;
@@ -137,7 +131,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
         // Try to start the iterator
         try {
-          myDiscoverIterator = continueFn(args[2]);
+          myDiscoverIterator = continueFn();
         } catch (e) {
           // Discovery is lazy so this should not happen,
           // wait a bit before retrying
@@ -149,7 +143,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
         while (true) {
           let result: IteratorResult<
             GraffitiObjectStreamSuccess<Schema> | GraffitiObjectStreamError,
-            GraffitiObjectStreamReturn<Schema>
+            GraffitiObjectStreamReturn
           >;
           try {
             result = await myDiscoverIterator.next();
@@ -166,7 +160,8 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           }
           if (!active) return;
           if (result.done) {
-            continueFn = result.value.continue;
+            continueFn = () =>
+              graffiti.continueDiscover<Schema>(result.value.cursor, args[2]);
             break;
           } else if (result.value.error) {
             // Non-fatal errors do not stop the stream
