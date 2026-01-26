@@ -304,6 +304,15 @@ export const graffitiCRUDTests = (
           GraffitiErrorNotFound,
         );
       });
+
+      it("post with duplicate channels", async () => {
+        const prepost = randomPostObject();
+        const channel = randomString();
+        prepost.channels = [channel, ...prepost.channels, channel];
+        const output = await graffiti.post<{}>(prepost, session);
+        prepost.channels.forEach((c) => expect(output.channels).toContain(c));
+        expect(output.channels).toContain(channel);
+      });
     },
   );
 };
