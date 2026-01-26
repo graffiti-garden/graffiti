@@ -50,9 +50,13 @@ export function useGraffitiGet<Schema extends JSONSchema>(
     iterator?.return(null);
   });
 
+  const args_ = () =>
+    [toValue(url), toValue(schema), toValue(session)] as const;
   watch(
-    () => [toValue(url), toValue(schema), toValue(session)] as const,
-    (args, _prev, onInvalidate) => {
+    () => JSON.stringify(args_()),
+    (_, __, onInvalidate) => {
+      const args = args_();
+
       // Reset the object value (undefined = "loading")
       object.value = undefined;
 
