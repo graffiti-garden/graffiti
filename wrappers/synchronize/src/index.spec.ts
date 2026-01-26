@@ -169,10 +169,7 @@ describe.concurrent("synchronizeDiscover", () => {
     }
 
     // Try returning...
-    iterator.return({
-      continue: () => iterator,
-      cursor: "",
-    });
+    iterator.return({ cursor: "" });
   });
 
   it("not allowed", async () => {
@@ -287,7 +284,9 @@ describe.concurrent("synchronizeGet", () => {
     ).rejects.toThrow("Timeout");
 
     // However, the continue will pick up on it
-    const continueResult = await nullDiscoverResult.value.continue().next();
+    const continueResult = await graffiti
+      .continueDiscover(nullDiscoverResult.value.cursor)
+      .next();
     assert(!continueResult.done && !continueResult.value.error);
     expect(continueResult.value.tombstone).toBe(true);
     expect(continueResult.value.object.url).toEqual(posted.url);

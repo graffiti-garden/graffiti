@@ -322,21 +322,14 @@ export class GraffitiSynchronize implements Graffiti {
     }
   };
 
-  protected objectStreamContinue<Schema extends JSONSchema>(
+  protected objectStream<Schema extends JSONSchema>(
     iterator: GraffitiObjectStream<Schema>,
   ): GraffitiObjectStream<Schema> {
     const this_ = this;
     return (async function* () {
       while (true) {
         const result = await iterator.next();
-        if (result.done) {
-          const { continue: continue_, cursor } = result.value;
-          return {
-            continue: (session?: GraffitiSession | null) =>
-              this_.objectStreamContinue<Schema>(continue_(session)),
-            cursor,
-          };
-        }
+        if (result.done) return result.value;
         if (!result.value.error) {
           const value = result.value as GraffitiObjectStreamSuccess<{}>;
           this_.synchronizeDispatch(value);
@@ -346,27 +339,14 @@ export class GraffitiSynchronize implements Graffiti {
     })();
   }
 
-  protected objectStream<Schema extends JSONSchema>(
-    iterator: GraffitiObjectStream<Schema>,
-  ): GraffitiObjectStream<Schema> {
-    const wrapped = this.objectStreamContinue<Schema>(iterator);
-    return (async function* () {
-      // Filter out the tombstones for type safety
-      while (true) {
-        const result = await wrapped.next();
-        if (result.done) return result.value;
-        if (result.value.error || !result.value.tombstone) yield result.value;
-      }
-    })();
-  }
-
   discover: Graffiti["discover"] = (...args) => {
     const iterator = this.graffiti.discover(...args);
     return this.objectStream<(typeof args)[1]>(iterator);
   };
 
+  // @ts-ignore
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
-    const iterator = this.graffiti.continueDiscover(...args);
-    return this.objectStreamContinue<{}>(iterator);
+    const iterator = this.graffiti.continueDiscover<{}>(...args);
+    return this.objectStream<{}>(iterator);
   };
 }
