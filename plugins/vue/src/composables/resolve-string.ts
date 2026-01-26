@@ -3,7 +3,7 @@ import type { MaybeRefOrGetter } from "vue";
 import { ref, toValue, watch } from "vue";
 
 export function useResolveString(
-  input: MaybeRefOrGetter<string>,
+  input: MaybeRefOrGetter<string | null | undefined>,
   resolve: (input: string) => Promise<string>,
 ) {
   const output = ref<string | null | undefined>(undefined);
@@ -15,6 +15,10 @@ export function useResolveString(
       onInvalidate(() => {
         active = false;
       });
+      if (!input) {
+        output.value = input;
+        return;
+      }
 
       output.value = undefined;
 
