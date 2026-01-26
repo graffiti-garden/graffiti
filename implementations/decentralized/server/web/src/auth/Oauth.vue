@@ -71,7 +71,7 @@ function handleApprove() {
     const url = new URL("/app/oauth/authorize", window.location.origin);
     url.searchParams.set("redirect_uri", redirectUriObject.toString());
     url.searchParams.set("state", state);
-    window.location.href = url.toString();
+    window.location.replace(url.toString());
 }
 
 function handleDeny() {
@@ -82,6 +82,6 @@ function handleDeny() {
         "error_description",
         "The user denied the request",
     );
-    window.location.href = redirectUriObject.toString();
+    window.location.replace(redirectUriObject.toString());
 }
 </script>

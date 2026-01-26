@@ -154,7 +154,7 @@ async function onRegister(name: string) {
 const router = useRouter();
 async function onCancel() {
     if (redirect.value) {
-        window.location.href = redirect.value;
+        window.location.replace(redirect.value);
     } else {
         router.push({ name: "home" });
     }
