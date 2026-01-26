@@ -115,7 +115,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
                 }
                 batchFlattenPromise = undefined;
                 resolve();
-              }, 50);
+              }, 0);
             });
           }
         }
@@ -135,6 +135,8 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
         } catch (e) {
           // Discovery is lazy so this should not happen,
           // wait a bit before retrying
+          console.error("Fatal error in discover");
+          console.error(e);
           return restartWatch(5000);
         }
         if (!active) return;
