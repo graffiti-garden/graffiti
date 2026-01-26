@@ -788,8 +788,6 @@ export class GraffitiDecentralized implements Graffiti {
         channels,
         cursors,
       } satisfies infer_<typeof CursorSchema>),
-      continue: (session) =>
-        this.discoverMeta<Schema>(channels, schema, cursors, session),
     };
   }
 
@@ -798,6 +796,7 @@ export class GraffitiDecentralized implements Graffiti {
     return this.discoverMeta<(typeof args)[1]>(channels, schema, {}, session);
   };
 
+  // @ts-ignore
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
     const [cursor, session] = args;
     // Extract the channels from the cursor
