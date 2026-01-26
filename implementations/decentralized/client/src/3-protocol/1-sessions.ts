@@ -52,7 +52,7 @@ export class Sessions {
           const parsed = InitializedEventDetailSchema.safeParse(e.detail);
           if (!parsed.success) return;
           const error = parsed.data?.error;
-          if (error) console.log(error);
+          if (error) console.error(error);
           resolve();
         },
       );
