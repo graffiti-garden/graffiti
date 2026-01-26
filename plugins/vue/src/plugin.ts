@@ -14,7 +14,6 @@ import type {
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
 import { setGraffitiSession, setGraffitiSynchronize } from "./globals";
-import type { Router } from "vue-router";
 import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 
 declare module "vue" {
@@ -182,21 +181,6 @@ export const GraffitiPlugin: Plugin<GraffitiPluginOptions> = {
 
       if (detail && detail.error) {
         console.error(detail.error);
-      }
-
-      if (detail && detail.href) {
-        // If we're using Vue Router, redirect to the URL after login
-        const router = app.config.globalProperties.$router as
-          | Router
-          | undefined;
-        if (router) {
-          const base = router.options.history.base;
-          const url = new URL(detail.href);
-          if (url.pathname.startsWith(base)) {
-            url.pathname = url.pathname.slice(base.length);
-          }
-          await router.replace(url.pathname + url.search + url.hash);
-        }
       }
 
       // Set the session to "null" if the user is not logged in
