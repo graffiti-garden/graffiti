@@ -8,9 +8,8 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
-                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-decentralized": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-decentralized/dist/browser/index.js"
                 }
             }
         </script>
@@ -37,8 +36,7 @@
         </style>
     </head>
     <body>
-        <div id="app"></div>
-        <template id="my-template">
+        <div id="app">
             <header>
                 <h1>Graffiti Email-like Messaging</h1>
                 <p>
@@ -49,8 +47,10 @@
                 <template v-if="$graffitiSession.value">
                     <p>You are logged in as:</p>
                     <p>
-                        <button @click="copyActor">
-                            {{ $graffitiSession.value.actor }}
+                        <button @click="copyHandle">
+                            <graffiti-actor-to-handle
+                                :actor="$graffitiSession.value.actor"
+                            ></graffiti-actor-to-handle>
                         </button>
                         👈 click to copy
                     </p>
@@ -91,11 +91,12 @@
                     <h2>Inbox</h2>
 
                     <graffiti-discover
-                        v-slot="{ objects: messages, poll, isInitialPolling }"
+                        v-slot="{ objects: messages, poll, isFirstPoll }"
                         :channels="[$graffitiSession.value.actor]"
                         :schema="emailSchema()"
+                        :session="$graffitiSession.value"
                     >
-                        <p v-if="isInitialPolling">Loading...</p>
+                        <p v-if="isFirstPoll">Loading...</p>
                         <p v-else-if="!messages.length">No messages yet!</p>
                         <button @click="poll()">Check for new messages</button>
                         <display-emails :messages="messages" />
@@ -108,8 +109,9 @@
                         v-slot="{ objects: messages }"
                         :channels="[$graffitiSession.value.actor]"
                         :schema="emailSchema(true)"
+                        :session="$graffitiSession.value"
                     >
-                        <p v-if="isInitialPolling">Loading...</p>
+                        <p v-if="isFirstPoll">Loading...</p>
                         <p v-else-if="!messages.length">
                             You have not sent any messages yet!
                         </p>
@@ -148,12 +150,14 @@
                             id="subject"
                             v-model="subject"
                             placeholder="Subject"
+                            required
                         />
                         <label for="message">Message:</label>
                         <textarea
                             id="message"
                             v-model="message"
                             placeholder="Your message here"
+                            required
                         ></textarea>
                         <input
                             type="submit"
@@ -163,7 +167,7 @@
                     </form>
                 </template>
             </main>
-        </template>
+        </div>
         <template id="display-emails">
             <ul>
                 <li
@@ -172,9 +176,23 @@
                 >
                     <article>
                         <header>
-                            <h3>{{ message.value.subject || `NO SUBJECT` }}</h3>
-                            <p>To: {{ message.value.to.join(", ") }}</p>
-                            <p>From: {{ message.actor }}</p>
+                            <h3>{{ message.value.name || `NO SUBJECT` }}</h3>
+                            <p>
+                                To:
+                                <template v-for="to in message.value.to">
+                                    <graffiti-actor-to-handle
+                                        :actor="to"
+                                    ></graffiti-actor-to-handle
+                                    >,
+                                </template>
+                            </p>
+                            <p>
+                                From:
+                                <graffiti-actor-to-handle
+                                    :actor="message.actor"
+                                >
+                                </graffiti-actor-to-handle>
+                            </p>
                             <p>
                                 Sent: {{ new
                                 Date(message.value.published).toLocaleString()
@@ -191,12 +209,9 @@
         <script type="module">
             import { createApp } from "vue";
             import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
-            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+            import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 
             createApp({
-                template: "#my-template",
-                // Declare reactive data
                 data() {
                     return {
                         state: "inbox",
@@ -212,10 +227,11 @@
                     },
                 },
                 methods: {
-                    copyActor() {
-                        navigator.clipboard.writeText(
+                    async copyHandle() {
+                        const handle = await this.$graffiti.actorToHandle(
                             this.$graffitiSession.value.actor,
                         );
+                        navigator.clipboard.writeText(handle);
                         alert("copied!");
                     },
                     async sendMail() {
@@ -224,28 +240,21 @@
                             alert("Please add at least one recipient.");
                             return;
                         }
-                        if (
-                            !this.subject &&
-                            !confirm("Send without a subject?")
-                        ) {
-                            return;
-                        }
-                        if (
-                            !this.message &&
-                            !confirm("Send an empty message?")
-                        ) {
-                            return;
-                        }
-                        await this.$graffiti.put(
+                        const recipientActors = await Promise.all(
+                            this.recipients.map((r) =>
+                                this.$graffiti.handleToActor(r),
+                            ),
+                        );
+                        const posted = await this.$graffiti.post(
                             {
                                 channels: [
                                     this.$graffitiSession.value.actor,
-                                    ...recipients,
+                                    ...recipientActors,
                                 ],
-                                allowed: recipients,
+                                allowed: recipientActors,
                                 value: {
-                                    to: recipients,
-                                    subject: this.subject,
+                                    to: recipientActors,
+                                    name: this.subject,
                                     content: this.message,
                                     published: Date.now(),
                                 },
@@ -265,7 +274,7 @@
                                 value: {
                                     required: ["content", "published"],
                                     properties: {
-                                        title: { type: "string" },
+                                        name: { type: "string" },
                                         content: { type: "string" },
                                         published: { type: "number" },
                                         to: {
@@ -281,8 +290,7 @@
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiLocal(),
-                    // graffiti: new GraffitiRemote(),
+                    graffiti: new GraffitiDecentralized(),
                 })
                 .mount("#app");
         </script>
