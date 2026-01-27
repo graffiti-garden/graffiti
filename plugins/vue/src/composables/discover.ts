@@ -12,6 +12,8 @@ import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
 import { useGraffitiSynchronize } from "../globals";
 
+const BATCH_PERIOD_MS = 50;
+
 /**
  * The [Graffiti.discover](https://api.graffiti.garden/classes/Graffiti.html#discover)
  * method as a reactive [composable](https://vuejs.org/guide/reusability/composables.html)
@@ -99,6 +101,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
       // Start to synchronize in the background
       // (all polling results will go through here)
       let batchFlattenPromise: Promise<void> | undefined = undefined;
+      let then = 0;
       (async () => {
         for await (const result of mySyncIterator) {
           if (!active) break;
@@ -107,9 +110,14 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           } else {
             objectsRaw.set(result.object.url, result.object);
           }
-          // Flatten objects in batches to prevent
-          // excessive re-rendering
+
+          const now = Date.now();
           if (!batchFlattenPromise) {
+            // If many objects are being received back to back,
+            // flatten them in batches to prevent
+            // excessive re-rendering
+            const timeoutLength =
+              now - then < BATCH_PERIOD_MS ? BATCH_PERIOD_MS : 0;
             batchFlattenPromise = new Promise<void>((resolve) => {
               setTimeout(() => {
                 if (active) {
@@ -117,9 +125,10 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
                 }
                 batchFlattenPromise = undefined;
                 resolve();
-              }, 0);
+              }, timeoutLength);
             });
           }
+          then = now;
         }
       })();
 
