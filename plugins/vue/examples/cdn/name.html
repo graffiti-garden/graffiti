@@ -8,9 +8,8 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
-                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-decentralized": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-decentralized/dist/browser/index.js"
                 }
             }
         </script>
@@ -39,8 +38,14 @@
                 </p>
             </main>
             <main v-else>
+                <p>
+                    You handle is:
+                    <graffiti-actor-to-handle
+                        :actor="$graffitiSession.value.actor"
+                    ></graffiti-actor-to-handle>
+                </p>
                 <graffiti-discover
-                    v-slot="{ objects: profiles, isInitialPolling }"
+                    v-slot="{ objects: profiles, isFirstPoll }"
                     :channels="[$graffitiSession.value.actor]"
                     :schema="{
                       properties: {
@@ -55,7 +60,7 @@
                       },
                     }"
                 >
-                    <p v-if="isInitialPolling">Loading...</p>
+                    <p v-if="isFirstPoll">Loading...</p>
                     <template v-else>
                         <p v-if="!profiles.length">You haven't set a name!</p>
                         <p v-else>
@@ -65,41 +70,54 @@
                                 a.value.published)[0].value.name }}
                             </strong>
                         </p>
-                        <button @click="changeName">Change your name</button>
+                        <button @click="changeName" :disabled="changing">
+                            {{ changing ? 'Changing...' : 'Change your name' }}
+                        </button>
                     </template>
                 </graffiti-discover>
+                <button @click="$graffiti.logout($graffitiSession.value)">
+                    Log Out
+                </button>
             </main>
         </template>
         <script type="module">
             import { createApp } from "vue";
             import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
-            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+            import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 
             createApp({
                 template: "#my-template",
+                data() {
+                    return { changing: false };
+                },
                 methods: {
                     changeName() {
                         const name = prompt("What's your name?");
                         if (!name) return;
-                        this.$graffiti.put(
-                            {
-                                value: {
-                                    name,
-                                    describes:
+                        this.changing = true;
+                        this.$graffiti
+                            .post(
+                                {
+                                    value: {
+                                        name,
+                                        describes:
+                                            this.$graffitiSession.value.actor,
+                                        published: Date.now(),
+                                    },
+                                    channels: [
                                         this.$graffitiSession.value.actor,
-                                    published: Date.now(),
+                                    ],
                                 },
-                                channels: [this.$graffitiSession.value.actor],
-                            },
-                            this.$graffitiSession.value,
-                        );
+                                this.$graffitiSession.value,
+                            )
+                            .finally(() => {
+                                this.changing = false;
+                            });
                     },
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiLocal(),
-                    // graffiti: new GraffitiRemote(),
+                    graffiti: new GraffitiDecentralized(),
                 })
                 .mount("#app");
         </script>

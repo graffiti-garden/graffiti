@@ -49,10 +49,10 @@
     "@graffiti-garden/wrapper-synchronize": "^1.2.0"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-decentralized": "^0.0.3",
-    "@types/node": "^25.0.9",
+    "@graffiti-garden/implementation-decentralized": "^0.0.4",
+    "@types/node": "^25.0.10",
     "@vitejs/plugin-vue": "^6.0.3",
-    "@vue/typescript-plugin": "^3.2.2",
+    "@vue/typescript-plugin": "^3.2.4",
     "typedoc": "^0.28.16",
     "typedoc-plugin-vue": "^1.5.1",
     "vite": "^7.3.1",

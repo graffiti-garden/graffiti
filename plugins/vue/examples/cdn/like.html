@@ -8,9 +8,8 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
-                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-decentralized": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-decentralized/dist/browser/index.js"
                 }
             }
         </script>
@@ -20,8 +19,7 @@
         />
     </head>
     <body>
-        <div id="app"></div>
-        <template id="my-template">
+        <div id="app">
             <header>
                 <h1>Graffiti Like Button</h1>
                 <p>
@@ -67,11 +65,17 @@
                         ></graffiti-like>
                     </li>
                 </ul>
+                <button
+                    v-if="$graffitiSession.value"
+                    @click="$graffiti.logout($graffitiSession.value)"
+                >
+                    Log Out
+                </button>
             </main>
-        </template>
+        </div>
         <template id="like-template">
             <graffiti-discover
-                v-slot="{ objects: likes, isInitialPolling }"
+                v-slot="{ objects: likes, isFirstPoll }"
                 :channels="[target]"
                 :schema="{
                     properties: {
@@ -85,30 +89,36 @@
                     }
                 }"
             >
-                <button v-if="isInitialPolling" disabled>Loading...</button>
+                <button v-if="isFirstPoll" disabled>Loading...</button>
                 <button
                     v-else-if="!$graffitiSession.value"
                     @click="$graffiti.login()"
                 >
                     Log in to like ({{ likes.length }})
                 </button>
+                <button v-else-if="processing" disabled>
+                    Loading... ({{ likes.length}})
+                </button>
                 <button
                     v-else-if="!likes.some(l => l.actor === $graffitiSession.value.actor)"
-                    @click="$graffiti.put({
+                    @click="processing=true; $graffiti.post({
                         value: {
                             activity: 'Like',
                             target: target,
                         },
                         channels: [target]
-                    }, $graffitiSession.value)"
+                    }, $graffitiSession.value).finally(()=> { processing=false })"
                 >
                     Like ({{ likes.length }})
                 </button>
                 <button
                     v-else
-                    @click="likes.filter(
+                    :disabled="processing"
+                    @click="processing=true; likes.filter(
                         like => like.actor === $graffitiSession.value.actor
-                    ).map(like => $graffiti.delete(like, $graffitiSession.value))"
+                    ).map(like => $graffiti.delete(like, $graffitiSession.value).finally(()=> {
+                        processing = false
+                    }))"
                 >
                     Unlike ({{ likes.length }})
                 </button>
@@ -117,21 +127,21 @@
         <script type="module">
             import { createApp } from "vue";
             import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
-            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+            import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 
             createApp({
-                template: "#my-template",
                 components: {
                     GraffitiLike: {
                         template: "#like-template",
                         props: ["target"],
+                        data() {
+                            return { processing: false };
+                        },
                     },
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiLocal(),
-                    // graffiti: new GraffitiRemote(),
+                    graffiti: new GraffitiDecentralized(),
                 })
                 .mount("#app");
         </script>

@@ -8,9 +8,8 @@
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue/dist/vue.esm-browser.prod.js",
-                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue@0.7/dist/browser/plugin.mjs",
-                    "@graffiti-garden/implementation-local": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-local/dist/browser/index.js",
-                    "@graffiti-garden/implementation-remote": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-remote/dist/browser/index.js"
+                    "@graffiti-garden/wrapper-vue": "https://cdn.jsdelivr.net/npm/@graffiti-garden/wrapper-vue/dist/browser/plugin.mjs",
+                    "@graffiti-garden/implementation-decentralized": "https://cdn.jsdelivr.net/npm/@graffiti-garden/implementation-decentralized/dist/browser/index.js"
                 }
             }
         </script>
@@ -99,7 +98,11 @@
                         >
                             <article>
                                 <header>
-                                    <h3>{{ reply.actor }}</h3>
+                                    <h3>
+                                        <graffiti-actor-to-handle
+                                            :actor="reply.actor"
+                                        ></graffiti-actor-to-handle>
+                                    </h3>
                                     <p>
                                         {{ new Date( reply.value.published,
                                         ).toLocaleString() }}
@@ -115,18 +118,6 @@
                                                     ?.actor === reply.actor
                                             "
                                             >
-                                                <li>
-                                                    <button
-                                                        @click="
-                                                            editReply(
-                                                                reply,
-                                                                $graffitiSession.value,
-                                                            )
-                                                        "
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                </li>
                                                 <li>
                                                     <button
                                                         @click="
@@ -171,8 +162,7 @@
         <script type="module">
             import { createApp } from "vue";
             import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-            import { GraffitiLocal } from "@graffiti-garden/implementation-local";
-            import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+            import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 
             createApp({
                 template: "#my-template",
@@ -213,7 +203,7 @@
                         methods: {
                             async postReply(session) {
                                 this.replying = true;
-                                await this.$graffiti.put(
+                                await this.$graffiti.post(
                                     {
                                         value: {
                                             content: this.reply,
@@ -227,26 +217,6 @@
                                 this.replying = false;
                                 this.reply = "";
                             },
-                            async editReply(reply, session) {
-                                const newContent = prompt(
-                                    "Edit your reply",
-                                    reply.value.content,
-                                );
-                                if (!newContent) return;
-                                const patched = await this.$graffiti.patch(
-                                    {
-                                        value: [
-                                            {
-                                                op: "replace",
-                                                path: "/content",
-                                                value: newContent,
-                                            },
-                                        ],
-                                    },
-                                    reply,
-                                    session,
-                                );
-                            },
                             async deleteReply(reply, session) {
                                 confirm(
                                     "Are you sure you want to delete this reply? It cannot be undone.",
@@ -257,8 +227,7 @@
                 },
             })
                 .use(GraffitiPlugin, {
-                    graffiti: new GraffitiLocal(),
-                    // graffiti: new GraffitiRemote(),
+                    graffiti: new GraffitiDecentralized(),
                 })
                 .mount("#app");
         </script>
