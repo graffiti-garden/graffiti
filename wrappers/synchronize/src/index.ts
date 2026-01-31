@@ -288,7 +288,10 @@ export class GraffitiSynchronize implements Graffiti {
       this.synchronizeDispatch({ object });
       return object;
     } catch (error) {
-      if (error instanceof GraffitiErrorNotFound) {
+      if (
+        error instanceof GraffitiErrorNotFound ||
+        (error instanceof Error && error.name === "GraffitiErrorNotFound")
+      ) {
         this.synchronizeDispatch({
           tombstone: true,
           object: { url: unpackObjectUrl(args[0]) },
@@ -315,7 +318,10 @@ export class GraffitiSynchronize implements Graffiti {
       await this.synchronizeDispatch(update, true);
       return oldObject;
     } catch (error) {
-      if (error instanceof GraffitiErrorNotFound) {
+      if (
+        error instanceof GraffitiErrorNotFound ||
+        (error instanceof Error && error.name === "GraffitiErrorNotFound")
+      ) {
         await this.synchronizeDispatch(update, true);
       }
       throw error;
