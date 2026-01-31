@@ -61,9 +61,9 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   // Maintain iterators for disposal
   let syncIterator: AsyncGenerator<GraffitiObjectStreamSuccess<Schema>>;
   let discoverIterator: GraffitiObjectStream<Schema>;
-  onScopeDispose(() => {
-    syncIterator?.return(null);
-    discoverIterator?.return({ cursor: "" });
+  onScopeDispose(async () => {
+    await syncIterator?.return(null);
+    await discoverIterator?.return({ cursor: "" });
   });
 
   const refresh = ref(0);
@@ -86,10 +86,10 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
       // Set up automatic iterator cleanup
       let active = true;
-      onInvalidate(() => {
+      onInvalidate(async () => {
         active = false;
-        mySyncIterator.return(null);
-        myDiscoverIterator?.return({ cursor: "" });
+        await mySyncIterator.return(null);
+        await myDiscoverIterator?.return({ cursor: "" });
       });
       function restartWatch(timeout = 0) {
         setTimeout(() => {
@@ -161,7 +161,10 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           try {
             result = await myDiscoverIterator.next();
           } catch (e) {
-            if (e instanceof GraffitiErrorCursorExpired) {
+            if (
+              e instanceof GraffitiErrorCursorExpired ||
+              (e instanceof Error && e.name === "GraffitiErrorCursorExpired")
+            ) {
               // The cursor has expired, we need to start from scratch.
               return restartWatch();
             } else {

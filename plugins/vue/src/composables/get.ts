@@ -92,7 +92,12 @@ export function useGraffitiGet<Schema extends JSONSchema>(
         try {
           await graffiti.get<Schema>(...args);
         } catch (e) {
-          if (!(e instanceof GraffitiErrorNotFound)) {
+          if (
+            !(
+              e instanceof GraffitiErrorNotFound ||
+              (e instanceof Error && e.name === "GraffitiErrorNotFound")
+            )
+          ) {
             console.error(e);
           }
         }
