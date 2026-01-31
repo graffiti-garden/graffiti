@@ -333,14 +333,18 @@ export class GraffitiSynchronize implements Graffiti {
   ): GraffitiObjectStream<Schema> {
     const this_ = this;
     return (async function* () {
-      while (true) {
-        const result = await iterator.next();
-        if (result.done) return result.value;
-        if (!result.value.error) {
-          const value = result.value as GraffitiObjectStreamSuccess<{}>;
-          this_.synchronizeDispatch(value);
+      try {
+        while (true) {
+          const result = await iterator.next();
+          if (result.done) return result.value;
+          if (!result.value.error) {
+            const value = result.value as GraffitiObjectStreamSuccess<{}>;
+            this_.synchronizeDispatch(value);
+          }
+          yield result.value;
         }
-        yield result.value;
+      } finally {
+        await iterator.return({ cursor: "" });
       }
     })();
   }

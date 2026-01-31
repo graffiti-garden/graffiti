@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-synchronize",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Internal synchronization for the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -47,7 +47,7 @@
   "homepage": "https://sync.graffiti.garden/classes/GraffitiSynchronize.html",
   "devDependencies": {
     "@graffiti-garden/implementation-local": "^1.2.0",
-    "@types/node": "^25.0.6",
+    "@types/node": "^25.1.0",
     "@vitest/coverage-v8": "^4.0.17",
     "esbuild-plugin-polyfill-node": "^0.3.0",
     "tsx": "^4.20.6",
