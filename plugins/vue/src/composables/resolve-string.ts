@@ -29,7 +29,12 @@ export function useResolveString(
         if (!active) return;
 
         output.value = null;
-        if (!(err instanceof GraffitiErrorNotFound)) {
+        if (
+          !(
+            err instanceof GraffitiErrorNotFound ||
+            (err instanceof Error && err.name === "GraffitiErrorNotFound")
+          )
+        ) {
           console.error(err);
         }
       }

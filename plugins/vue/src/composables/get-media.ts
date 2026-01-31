@@ -93,7 +93,10 @@ export function useGraffitiGetMedia(
         };
       } catch (e) {
         if (!active) return;
-        if (e instanceof GraffitiErrorNotFound) {
+        if (
+          e instanceof GraffitiErrorNotFound ||
+          (e instanceof Error && e.name === "GraffitiErrorNotFound")
+        ) {
           media.value = null;
         } else {
           console.error(e);
