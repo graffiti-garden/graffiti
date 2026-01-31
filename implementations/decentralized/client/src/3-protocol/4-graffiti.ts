@@ -708,79 +708,87 @@ export class GraffitiDecentralized implements Graffiti {
     >(async (it, index) => indexedSingleEndpointQueryNext<Schema>(it, index));
     let active = indexedIteratorNexts.length;
 
-    while (active > 0) {
-      const next: IndexedSingleEndpointQueryResult<Schema> =
-        await Promise.race<any>(indexedIteratorNexts);
-      if (next.error !== undefined) {
-        // Remove it from the race
-        indexedIteratorNexts[next.index] = new Promise(() => {});
-        active--;
-        yield {
-          error: next.error,
-          origin: allInboxes[next.index].serviceEndpoint,
-        };
-      } else if (next.result.done) {
-        // Store the cursor for future use
-        const inbox = allInboxes[next.index];
-        cursors[inbox.serviceEndpoint] = next.result.value;
-        // Remove it from the race
-        indexedIteratorNexts[next.index] = new Promise(() => {});
-        active--;
-      } else {
-        // Re-arm the iterator
-        indexedIteratorNexts[next.index] =
-          indexedSingleEndpointQueryNext<Schema>(
-            iterators[next.index],
-            next.index,
-          );
-        const { object, tombstone, tags: receivedTags } = next.result.value;
-        if (tombstone) {
-          if (tombstones.get(object.url) === true) continue;
-          tombstones.set(object.url, true);
+    try {
+      while (active > 0) {
+        const next: IndexedSingleEndpointQueryResult<Schema> =
+          await Promise.race<any>(indexedIteratorNexts);
+        if (next.error !== undefined) {
+          // Remove it from the race
+          indexedIteratorNexts[next.index] = new Promise(() => {});
+          active--;
           yield {
-            tombstone,
-            object: { url: object.url },
+            error: next.error,
+            origin: allInboxes[next.index].serviceEndpoint,
           };
+        } else if (next.result.done) {
+          // Store the cursor for future use
+          const inbox = allInboxes[next.index];
+          cursors[inbox.serviceEndpoint] = next.result.value;
+          // Remove it from the race
+          indexedIteratorNexts[next.index] = new Promise(() => {});
+          active--;
         } else {
-          // Filter already seen
-          if (tombstones.get(object.url) === false) continue;
-
-          // Fill in the matched channels
-          const matchedTagIndices = tags.reduce<number[]>(
-            (acc, tag, tagIndex) => {
-              for (const receivedTag of receivedTags) {
-                if (
-                  tag.length === receivedTag.length &&
-                  tag.every((b, i) => receivedTag[i] === b)
-                ) {
-                  acc.push(tagIndex);
-                  break;
-                }
-              }
-              return acc;
-            },
-            [],
-          );
-          const matchedChannels = matchedTagIndices.map(
-            (index) => channels[index],
-          );
-          if (matchedChannels.length === 0) {
+          // Re-arm the iterator
+          indexedIteratorNexts[next.index] =
+            indexedSingleEndpointQueryNext<Schema>(
+              iterators[next.index],
+              next.index,
+            );
+          const { object, tombstone, tags: receivedTags } = next.result.value;
+          if (tombstone) {
+            if (tombstones.get(object.url) === true) continue;
+            tombstones.set(object.url, true);
             yield {
-              error: new Error(
-                "Inbox returned object without matching channels",
-              ),
-              origin: allInboxes[next.index].serviceEndpoint,
+              tombstone,
+              object: { url: object.url },
+            };
+          } else {
+            // Filter already seen
+            if (tombstones.get(object.url) === false) continue;
+
+            // Fill in the matched channels
+            const matchedTagIndices = tags.reduce<number[]>(
+              (acc, tag, tagIndex) => {
+                for (const receivedTag of receivedTags) {
+                  if (
+                    tag.length === receivedTag.length &&
+                    tag.every((b, i) => receivedTag[i] === b)
+                  ) {
+                    acc.push(tagIndex);
+                    break;
+                  }
+                }
+                return acc;
+              },
+              [],
+            );
+            const matchedChannels = matchedTagIndices.map(
+              (index) => channels[index],
+            );
+            if (matchedChannels.length === 0) {
+              yield {
+                error: new Error(
+                  "Inbox returned object without matching channels",
+                ),
+                origin: allInboxes[next.index].serviceEndpoint,
+              };
+            }
+            tombstones.set(object.url, false);
+            yield {
+              object: {
+                ...object,
+                channels: matchedChannels,
+              },
             };
           }
-          tombstones.set(object.url, false);
-          yield {
-            object: {
-              ...object,
-              channels: matchedChannels,
-            },
-          };
         }
       }
+    } finally {
+      await Promise.all(
+        iterators.map<Promise<void>>(async (it) => {
+          await it.return("");
+        }),
+      );
     }
 
     return {
@@ -1014,36 +1022,40 @@ export class GraffitiDecentralized implements Graffiti {
     const inFlight: Promise<SingleEndpointQueryResult<Schema> | void>[] = [];
     let doneValue: string | null = null;
 
-    while (true) {
-      while (doneValue === null && inFlight.length < CONCURRENCY) {
-        const itResult = await iterator.next();
-        if (itResult.done) {
-          doneValue = itResult.value;
-          break;
+    try {
+      while (true) {
+        while (doneValue === null && inFlight.length < CONCURRENCY) {
+          const itResult = await iterator.next();
+          if (itResult.done) {
+            doneValue = itResult.value;
+            break;
+          }
+
+          const processPromise = this.processOneLabeledMessage<Schema>(
+            inboxEndpoint,
+            itResult.value,
+            inboxToken,
+            recipient,
+          ).catch((e) => {
+            throw e;
+          });
+
+          inFlight.push(processPromise);
         }
 
-        const processPromise = this.processOneLabeledMessage<Schema>(
-          inboxEndpoint,
-          itResult.value,
-          inboxToken,
-          recipient,
-        ).catch((e) => {
-          throw e;
-        });
+        const nextProcessedPromise = inFlight.shift();
 
-        inFlight.push(processPromise);
+        if (!nextProcessedPromise) {
+          if (doneValue !== null) return doneValue;
+
+          throw new Error("Process queue empty but no return value");
+        }
+
+        const processed = await nextProcessedPromise;
+        if (processed) yield processed;
       }
-
-      const nextProcessedPromise = inFlight.shift();
-
-      if (!nextProcessedPromise) {
-        if (doneValue !== null) return doneValue;
-
-        throw new Error("Process queue empty but no return value");
-      }
-
-      const processed = await nextProcessedPromise;
-      if (processed) yield processed;
+    } finally {
+      await iterator.return("");
     }
   }
 

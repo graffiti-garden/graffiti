@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/implementation-decentralized",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A client for a decentralized implementation of the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -43,7 +43,7 @@
     "url": "https://github.com/graffiti-garden/implementation-decentralized/issues"
   },
   "devDependencies": {
-    "@types/node": "^25.0.10",
+    "@types/node": "^25.1.0",
     "@vitest/coverage-v8": "^4.0.18",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
