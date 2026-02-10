@@ -119,6 +119,11 @@ let requestSeq = 0;
 watch(
     handleName,
     (newHandleName) => {
+        const normalizedHandleName = newHandleName.toLowerCase();
+        if (normalizedHandleName !== newHandleName) {
+            handleName.value = normalizedHandleName;
+            return;
+        }
         const mySeq = ++requestSeq;
         if (debounceTimer) clearTimeout(debounceTimer);
 
@@ -127,9 +132,9 @@ watch(
         } else if (newHandleName.length > 64) {
             errorStatus.value = "Handle is too long";
             availabilityStatus.value = "error";
-        } else if (!newHandleName.match(/^[a-zA-Z0-9_-]+$/)) {
+        } else if (!newHandleName.match(/^[a-z0-9_-]+$/)) {
             errorStatus.value =
-                "Handle can only contain letters, numbers, underscores, and hyphens";
+                "Handle can only contain lowercase letters, numbers, underscores, and hyphens";
             availabilityStatus.value = "error";
         } else {
             availabilityStatus.value = "checking";
