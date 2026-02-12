@@ -5,6 +5,7 @@ export class GraffitiModal {
   protected useTemplateHTML: () => Promise<string> | string;
   protected templates_: Promise<Map<string, HTMLTemplateElement>> | undefined;
   protected onManualClose?: () => any;
+  protected displayTemplateSeq = 0;
 
   constructor(options: {
     useTemplateHTML: () => Promise<string> | string;
@@ -111,14 +112,24 @@ export class GraffitiModal {
   }
 
   async displayTemplate(templateId: string) {
+    const seq = ++this.displayTemplateSeq;
+    const throwIfStale = () => {
+      if (seq === this.displayTemplateSeq) return;
+      throw new Error(
+        `displayTemplate(${templateId}) overridden by concurrent call`,
+      );
+    };
+
     const main = await this.main;
-    main.innerHTML = "";
+    throwIfStale();
     const template = (await this.templates).get(templateId);
+    throwIfStale();
+
     if (!template) {
       throw new Error(`Template not found: ${templateId}`);
     }
     const content = template.content.cloneNode(true);
-    main.appendChild(content);
+    main.replaceChildren(content);
     return main;
   }
 }
