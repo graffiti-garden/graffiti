@@ -15,6 +15,7 @@
     border-radius: 1rem;
     box-shadow: 0 0 2rem black;
     overflow: hidden;
+    position: fixed;
     opacity: 0;
     transition: opacity 0.3s;
     pointer-events: none;
@@ -287,16 +288,16 @@
 
 .graffiti-modal::before {
     content: "";
-    position: fixed;
-    left: 0;
-    right: 0;
+    position: absolute;
+    inset: calc(-1 * var(--blurpix));
     z-index: -1;
     background-image: url(graffiti.jpg);
     background-size: cover;
     background-repeat: no-repeat;
     background-position: 50% 50%;
-    height: calc(100% + 2 * var(--blurpix));
-    width: calc(100% + 2 * var(--blurpix));
     filter: blur(var(--blurpix));
-    margin: calc(-1 * var(--blurpix));
+    border-radius: inherit;
+    pointer-events: none;
+    transform: translateZ(0);
+    overflow: hidden;
 }
