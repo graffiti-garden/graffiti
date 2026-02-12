@@ -115,9 +115,18 @@
         color: inherit;
     }
 
-    h1 a:hover {
-        background: none;
-        color: inherit;
+    @media (hover: hover) and (pointer: fine) {
+        h1 a:hover {
+            background: none;
+            color: inherit;
+        }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        h1 a:active {
+            background: none;
+            color: inherit;
+        }
     }
 
     button,
@@ -199,15 +208,30 @@
         text-decoration: none;
     }
 
-    :is(button, ul a, input[type="submit"]):hover {
-        cursor: pointer;
-        background: var(--hover);
-        color: var(--front);
+    @media (hover: hover) and (pointer: fine) {
+        :is(button, ul a, input[type="submit"]):hover {
+            cursor: pointer;
+            background: var(--hover);
+            color: var(--front);
+        }
+
+        a:hover {
+            text-decoration: underline;
+            cursor: pointer;
+        }
     }
 
-    a:hover {
-        text-decoration: underline;
-        cursor: pointer;
+    @media (hover: none), (pointer: coarse) {
+        :is(button, ul a, input[type="submit"]):active {
+            cursor: pointer;
+            background: var(--hover);
+            color: var(--front);
+        }
+
+        a:active {
+            text-decoration: underline;
+            cursor: pointer;
+        }
     }
 
     form {
@@ -234,10 +258,20 @@
         color: white;
     }
 
-    :is(button, a[type="button"], input[type="submit"]):hover {
-        background: rgba(202, 122, 204, 0.6);
-        color: white;
-        text-decoration: none;
+    @media (hover: hover) and (pointer: fine) {
+        :is(button, a[type="button"], input[type="submit"]):hover {
+            background: rgba(202, 122, 204, 0.6);
+            color: white;
+            text-decoration: none;
+        }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        :is(button, a[type="button"], input[type="submit"]):active {
+            background: rgba(202, 122, 204, 0.6);
+            color: white;
+            text-decoration: none;
+        }
     }
 }
 
