@@ -34,7 +34,13 @@
         openButton.addEventListener("click", async () => {
             openButton.disabled = true;
             openButton.innerHTML = "Opening...";
-            await modal.displayTemplate("my-template");
+            // Ensure that we don't get the "double template"
+            // issue when displayTemplate is called in rapid
+            // succession.
+            await Promise.allSettled([
+                modal.displayTemplate("my-template"),
+                modal.displayTemplate("my-template"),
+            ]);
             modal.open();
             openButton.disabled = false;
             openButton.innerHTML = "Open";
