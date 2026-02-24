@@ -37,6 +37,7 @@ import {
   type LabeledMessage,
   type MessageStream,
 } from "../1-services/4-inboxes";
+import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 import {
   StringEncoder,
@@ -205,6 +206,28 @@ export class GraffitiDecentralized implements Graffiti {
         this.login_(handle);
       }
     });
+
+    // If any methods throw an unauthorized error,
+    // log out the used session
+    for (const method of [
+      "post",
+      "get",
+      "delete",
+      "postMedia",
+      "getMedia",
+      "deleteMedia",
+    ]) {
+      const fn = (this as any)[method];
+      (this as any)[method] = async (...args: unknown[]) => {
+        try {
+          return await fn(...args);
+        } catch (e) {
+          const session = args[args.length - 1] as any;
+          await this.tryLogoutIfUnauthorized(e, session);
+          throw e;
+        }
+      };
+    }
   }
 
   readonly actorToHandle: Graffiti["actorToHandle"] =
@@ -720,6 +743,7 @@ export class GraffitiDecentralized implements Graffiti {
             error: next.error,
             origin: allInboxes[next.index].serviceEndpoint,
           };
+          this.tryLogoutIfUnauthorized(next.error, session);
         } else if (next.result.done) {
           // Store the cursor for future use
           const inbox = allInboxes[next.index];
@@ -783,6 +807,9 @@ export class GraffitiDecentralized implements Graffiti {
           }
         }
       }
+    } catch (e) {
+      this.tryLogoutIfUnauthorized(e, session);
+      throw e;
     } finally {
       await Promise.all(
         iterators.map<Promise<void>>(async (it) => {
@@ -822,6 +849,15 @@ export class GraffitiDecentralized implements Graffiti {
     }
     return this.discoverMeta<{}>(channels, {}, cursors, session);
   };
+
+  protected async tryLogoutIfUnauthorized(
+    e: unknown,
+    session?: GraffitiSession | null,
+  ) {
+    if (e instanceof GraffitiErrorUnauthorized && session) {
+      await this.sessions.logout(session.actor);
+    }
+  }
 
   async announceObject(
     object: GraffitiObjectBase,

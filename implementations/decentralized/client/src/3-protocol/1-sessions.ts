@@ -25,6 +25,7 @@ import {
   tuple,
   enum as enum_,
 } from "zod/mini";
+import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 export const DID_SERVICE_TYPE_GRAFFITI_INBOX = "GraffitiInbox";
 export const DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET = "GraffitiStorageBucket";
@@ -371,7 +372,13 @@ export class Sessions {
     } catch (e) {
       const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", {
         detail: {
-          error: e instanceof Error ? e : new Error(String(e)),
+          error:
+            e instanceof GraffitiErrorUnauthorized
+              ? // Unauthorized errors can be treated as successful logouts
+                undefined
+              : e instanceof Error
+                ? e
+                : new Error(String(e)),
           actor,
         },
       });
