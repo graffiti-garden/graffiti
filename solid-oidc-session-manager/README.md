@@ -1,3 +1,11 @@
+# Deprecated!
+
+Graffiti no longer uses Solid, so this package is no longer maintained. See the up-to-date Graffiti client/server pair here:
+- [Client](https://github.com/graffiti-garden/implementation-decentralized)
+- [Server](https://github.com/graffiti-garden/server)
+
+What follows is kept for archival purposes:
+
 # Graffiti Solid OIDC Session Manager
 
 This implements the login and logout methods of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
