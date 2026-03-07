@@ -134,6 +134,7 @@ export interface GraffitiDecentralizedOptions {
 }
 
 const CONCURRENCY = 16;
+const LOCAL_STORAGE_REMEMBERED_HANDLE_KEY = "graffiti-login-remembered-handle";
 
 export class GraffitiDecentralized implements Graffiti {
   protected readonly dids = new DecentralizedIdentifiers();
@@ -189,10 +190,11 @@ export class GraffitiDecentralized implements Graffiti {
     this.sessionEvents.addEventListener("login", async (event) => {
       if (!(event instanceof CustomEvent)) return;
       const detail = event.detail as GraffitiLoginEvent["detail"];
-      if (
-        detail.error !== undefined &&
-        !("manual" in detail && detail.manual)
-      ) {
+
+      if (detail.error !== undefined) {
+        // If "manual", the window was closed by the user, nothing to do
+        if ("manual" in detail && detail.manual) return;
+
         alert("Login failed: " + detail.error.message);
         const actor = detail.session?.actor;
         let handle: string | undefined;
@@ -203,7 +205,22 @@ export class GraffitiDecentralized implements Graffiti {
             console.error("Failed to handle actor:", error);
           }
         }
+        // Open the login window again with the failed actor
         this.login_(handle);
+        return;
+      }
+
+      const actor = detail.session.actor;
+
+      let handle: string | undefined;
+      try {
+        handle = await this.actorToHandle(actor);
+      } catch (error) {
+        console.error("Failed to load handle from actor:", error);
+      }
+
+      if (handle) {
+        await this.rememberHandleInPasswordManager(handle, actor);
       }
     });
 
@@ -264,7 +281,10 @@ export class GraffitiDecentralized implements Graffiti {
         const input = template?.querySelector(
           "#username",
         ) as HTMLInputElement | null;
-        input?.setAttribute("value", proposedHandle);
+        const rememberedHandle =
+          proposedHandle ||
+          (await this.getRememberedHandleFromPasswordManager());
+        if (input) input.value = rememberedHandle ?? "";
         input?.addEventListener("focus", () => input?.select());
         setTimeout(() => input?.focus(), 0);
 
@@ -373,6 +393,105 @@ export class GraffitiDecentralized implements Graffiti {
       const actor = await this.handleToActor(handle);
 
       await this.sessions.login(actor);
+    }
+  }
+
+  protected async rememberHandleInPasswordManager(
+    handle: string,
+    actor: string,
+  ) {
+    if (typeof window === "undefined") return;
+
+    const credentials = window.navigator.credentials;
+
+    const PasswordCredentialConstructor = (
+      window as unknown as {
+        PasswordCredential?: new (data: {
+          id: string;
+          password: string;
+          name?: string;
+        }) => Credential;
+      }
+    ).PasswordCredential;
+
+    if (!credentials?.store || !PasswordCredentialConstructor) {
+      this.rememberHandleInBrowserStorage(handle);
+      return;
+    }
+
+    try {
+      const credential = new PasswordCredentialConstructor({
+        id: handle,
+        // Graffiti logins use external authorization; this stable placeholder
+        // allows browsers/password managers to persist the handle.
+        password: "no-password",
+        name: handle,
+      });
+      await credentials.store(credential);
+    } catch (error) {
+      console.error("Failed to remember handle in password manager:", error);
+      this.rememberHandleInBrowserStorage(handle);
+    }
+  }
+
+  protected async getRememberedHandleFromPasswordManager() {
+    if (typeof window === "undefined") return undefined;
+
+    const credentials = window.navigator.credentials;
+    const PasswordCredentialConstructor = (
+      window as unknown as {
+        PasswordCredential?: new (data: {
+          id: string;
+          password: string;
+          name?: string;
+        }) => Credential;
+      }
+    ).PasswordCredential;
+    if (!credentials?.get || !PasswordCredentialConstructor) {
+      return this.getRememberedHandleFromBrowserStorage();
+    }
+
+    try {
+      const credential = await credentials.get({
+        password: true,
+        mediation: "optional",
+      } as any);
+      if (
+        credential &&
+        "id" in credential &&
+        typeof credential.id === "string"
+      ) {
+        return credential.id;
+      }
+    } catch (error) {
+      console.error("Failed to load handle from password manager:", error);
+      return this.getRememberedHandleFromBrowserStorage();
+    }
+
+    return undefined;
+  }
+
+  protected rememberHandleInBrowserStorage(handle: string) {
+    if (typeof window === "undefined") return;
+
+    try {
+      window.localStorage.setItem(LOCAL_STORAGE_REMEMBERED_HANDLE_KEY, handle);
+    } catch (error) {
+      console.error("Failed to remember handle in browser storage:", error);
+    }
+  }
+
+  protected getRememberedHandleFromBrowserStorage() {
+    if (typeof window === "undefined") return undefined;
+
+    try {
+      return (
+        window.localStorage.getItem(LOCAL_STORAGE_REMEMBERED_HANDLE_KEY) ??
+        undefined
+      );
+    } catch (error) {
+      console.error("Failed to load handle from browser storage:", error);
+      return undefined;
     }
   }
 
