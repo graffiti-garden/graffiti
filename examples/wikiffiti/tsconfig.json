@@ -8,7 +8,8 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
-    "plugins": [{ "name": "@vue/typescript-plugin" }]
+    "types": ["vite/client"],
+    "plugins": [{ "name": "@vue/typescript-plugin" }],
   },
-  "include": ["src"]
+  "include": ["src"],
 }
