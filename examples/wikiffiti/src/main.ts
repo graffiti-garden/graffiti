@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import App from "./App.vue";
 import Nav from "./Nav.vue";
 import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 
 const redirect = sessionStorage.redirect;
 delete sessionStorage.redirect;
@@ -11,9 +11,11 @@ if (redirect && redirect !== location.href) {
   history.replaceState(null, "", redirect);
 }
 
+const graffiti = new GraffitiDecentralized();
+
 const routes = [
   {
-    path: "/wiki/:channel",
+    path: "/wiki/:name",
     component: App,
     props: true,
   },
@@ -28,9 +30,4 @@ const router = createRouter({
   routes,
 });
 
-createApp(Nav)
-  .use(GraffitiPlugin, {
-    graffiti: new GraffitiRemote(),
-  })
-  .use(router)
-  .mount("#app");
+createApp(Nav).use(GraffitiPlugin, { graffiti }).use(router).mount("#app");

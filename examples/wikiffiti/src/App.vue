@@ -1,28 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, type Ref } from "vue";
-import {
-    useGraffiti,
-    useGraffitiDiscover,
-    useGraffitiSession,
-} from "@graffiti-garden/wrapper-vue";
+import { useGraffiti, useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
 import { editSchema } from "./schemas";
 import { Logoot } from "./logoot";
 import type { GraffitiSession } from "@graffiti-garden/api";
 import markdownit from "markdown-it";
 
 const props = defineProps<{
-    channel: string;
+    name: string;
 }>();
 
 const title = computed(() => {
     // Decode and convert the channel to title case
-    return decodeURIComponent(props.channel)
+    return decodeURIComponent(props.name)
         .replace(/-/g, " ")
         .replace(/\b\w/g, (c) => c.toUpperCase());
 });
 
-const { results: edits, isPolling } = useGraffitiDiscover(
-    () => [props.channel],
+const channel = computed(() => "wiki:" + props.name);
+
+const { objects: edits, isFirstPoll: isPolling } = useGraffitiDiscover(
+    () => [channel.value],
     () => editSchema(title.value),
 );
 
@@ -177,9 +175,9 @@ function onInput(event: Event) {
 const graffiti = useGraffiti();
 async function saveEdits(session: GraffitiSession) {
     myEdit.value.value.target = title.value;
-    await graffiti.put(
+    await graffiti.post(
         {
-            channels: [props.channel],
+            channels: [channel.value],
             value: myEdit.value.value,
         },
         session,
@@ -226,7 +224,9 @@ const md = markdownit({
                             :value="author"
                             :id="author"
                         />
-                        <label :for="author">{{ author }}</label>
+                        <label :for="author">
+                            <GraffitiActorToHandle :actor="author" />
+                        </label>
                     </li>
                 </ul>
             </details>
