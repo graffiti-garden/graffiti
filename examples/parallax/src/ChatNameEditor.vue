@@ -44,8 +44,17 @@ async function save() {
 <template>
     <div v-if="editing">
         <form @submit.prevent="save()">
-            <input type="text" ref="editor" v-model="editingValue" />
-            <input type="submit" value="Save" :disabled="saving" />
+            <input
+                type="text"
+                ref="editor"
+                v-model="editingValue"
+                :disabled="saving"
+            />
+            <input
+                type="submit"
+                :value="saving ? 'Saving...' : 'Save'"
+                :disabled="saving"
+            />
             <button @click.prevent="editing = false" :disabled="saving">
                 Cancel
             </button>

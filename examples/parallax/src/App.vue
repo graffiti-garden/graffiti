@@ -1,11 +1,26 @@
 <script setup lang="ts">
+import { ref } from "vue";
+import { useGraffiti } from "@graffiti-garden/wrapper-vue";
 import { parallaxOrProvenance } from "./parallaxOrProvenance";
+
+const graffiti = useGraffiti();
+const loggingIn = ref(false);
+async function login() {
+    loggingIn.value = true;
+    try {
+        await graffiti.login();
+    } finally {
+        loggingIn.value = false;
+    }
+}
 </script>
 
 <template>
     <dialog v-if="$graffitiSession.value === null" open class="login">
         <h1>{{ parallaxOrProvenance }}</h1>
-        <button @click="$graffiti.login()">Log In</button>
+        <button @click="login" :disabled="loggingIn">
+            {{ loggingIn ? "Logging in..." : "Log In" }}
+        </button>
     </dialog>
     <dialog v-else-if="$graffitiSession.value === undefined" open class="login">
         <h1>{{ parallaxOrProvenance }} is loading...</h1>
