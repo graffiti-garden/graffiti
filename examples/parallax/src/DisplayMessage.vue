@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { MessageObject } from "./schemas";
+import type { DisplayMessageObject } from "./schemas";
 
 defineProps<{
-    message: MessageObject;
+    message: DisplayMessageObject;
 }>();
 </script>
 
@@ -24,14 +24,50 @@ defineProps<{
             <p>{{ message.value.content }}</p>
         </main>
         <footer>
-            <time :datetime="new Date(message.value.published).toISOString()">
-                {{
-                    new Date(message.value.published).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "numeric",
-                    })
-                }}
-            </time>
+            <span class="metadata">
+                <time
+                    :datetime="new Date(message.value.published).toISOString()"
+                >
+                    {{
+                        new Date(message.value.published).toLocaleTimeString(
+                            [],
+                            {
+                                hour: "numeric",
+                                minute: "numeric",
+                            },
+                        )
+                    }}
+                </time>
+                <span
+                    :class="[
+                        'delivery-status',
+                        message.deliveryStatus ?? 'sent',
+                    ]"
+                    :aria-label="
+                        message.deliveryStatus === 'sending'
+                            ? 'Sending'
+                            : message.deliveryStatus === 'failed'
+                              ? 'Failed to send'
+                              : 'Sent'
+                    "
+                    :title="
+                        message.deliveryStatus === 'sending'
+                            ? 'Sending'
+                            : message.deliveryStatus === 'failed'
+                              ? 'Failed to send'
+                              : 'Sent'
+                    "
+                >
+                    <template v-if="message.deliveryStatus !== 'sending'">
+                        <template v-if="message.deliveryStatus === 'failed'">
+                            !
+                        </template>
+                        <template v-else>
+                            ✓
+                        </template>
+                    </template>
+                </span>
+            </span>
         </footer>
     </article>
 </template>
@@ -59,9 +95,37 @@ article {
         display: flex;
         flex-direction: column;
 
-        time {
+        .metadata {
             align-self: flex-end;
             margin-left: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .delivery-status {
+            width: 1em;
+            height: 1em;
+            flex: 0 0 1em;
+            border: 1px solid currentColor;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            font-size: 0.9em;
+            line-height: 1;
+        }
+
+        .delivery-status.sending {
+            opacity: 0.6;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .delivery-status.failed {
+            color: var(--very-bad-color);
+            font-weight: bold;
         }
     }
 }
@@ -76,5 +140,11 @@ article:not(.is-own-message) {
     background: var(--foreground2);
     align-self: flex-start;
     border-bottom-left-radius: 0;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 </style>

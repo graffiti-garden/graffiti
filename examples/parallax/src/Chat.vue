@@ -7,9 +7,11 @@ import {
     isMemberUpdateObject,
     isMessageObject,
     type ChatNameObject,
+    type DisplayMessageObject,
     type MemberUpdateObject,
     type MessageObject,
 } from "./schemas";
+import { sendMessage } from "./setters";
 import { sortByPublished, groupAdjacentBy } from "./utils";
 import Membership from "./Membership.vue";
 import ChatNameEditor from "./ChatNameEditor.vue";
@@ -94,11 +96,59 @@ const memberUpdates = computed(() => {
     });
 });
 
-const messages = computed<MessageObject[]>(() =>
-    chatObjects.value
+const localMessages = ref<DisplayMessageObject[]>([]);
+const messages = computed<DisplayMessageObject[]>(() => {
+    const messages = new Map<string, DisplayMessageObject>();
+
+    for (const message of chatObjects.value
         .filter(isMessageObject)
-        .filter((message) => myMembers.value.has(message.actor)),
-);
+        .filter((message) => myMembers.value.has(message.actor))) {
+        messages.set(message.url, message);
+    }
+    for (const message of localMessages.value) {
+        if (message.channels.includes(props.channel)) {
+            messages.set(message.url, message);
+        }
+    }
+
+    return [...messages.values()];
+});
+
+async function sendMyMessage(content: string) {
+    const message: DisplayMessageObject = {
+        url: `local:${crypto.randomUUID()}`,
+        actor: props.session.actor,
+        channels: [props.channel],
+        allowed: [...myMembers.value],
+        value: {
+            content,
+            published: Date.now(),
+            to: [...myMembers.value],
+        },
+        deliveryStatus: "sending",
+    };
+    const index = localMessages.value.push(message) - 1;
+
+    try {
+        const posted = await sendMessage(
+            content,
+            myMembers.value,
+            props.channel,
+            props.session,
+        );
+        if (!posted) throw new Error("Cannot send an empty message.");
+        localMessages.value[index] = {
+            ...posted,
+            deliveryStatus: "sent",
+        };
+    } catch (error) {
+        console.error(error);
+        localMessages.value[index] = {
+            ...message,
+            deliveryStatus: "failed",
+        };
+    }
+}
 
 // Group changes to the same name
 const groupedChatNames = groupAdjacentBy(chatNames, (group, chatName) =>
@@ -216,6 +266,7 @@ const isMembersOpen = ref(false);
                     :channel="channel"
                     :myMembers="myMembers"
                     :session="session"
+                    @send="sendMyMessage"
                 />
             </footer>
         </article>

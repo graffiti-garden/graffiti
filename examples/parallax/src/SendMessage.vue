@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, useTemplateRef } from "vue";
-import { addMember, sendMessage } from "./setters";
+import { addMember } from "./setters";
 import type { GraffitiSession } from "@graffiti-garden/api";
 
 const props = defineProps<{
@@ -8,9 +8,11 @@ const props = defineProps<{
     channel: string;
     session: GraffitiSession;
 }>();
+const emit = defineEmits<{
+    send: [message: string];
+}>();
 
 const message = ref("");
-const isSending = ref(false);
 
 const input = useTemplateRef("messageInput");
 
@@ -18,22 +20,12 @@ onMounted(() => {
     input.value?.focus();
 });
 
-async function sendMyMessage() {
+function sendMyMessage() {
     if (!message.value) return;
-    isSending.value = true;
-    try {
-        await sendMessage(
-            message.value,
-            props.myMembers,
-            props.channel,
-            props.session,
-        );
-        message.value = "";
-        await nextTick();
-        input.value?.focus();
-    } finally {
-        isSending.value = false;
-    }
+    const content = message.value;
+    message.value = "";
+    emit("send", content);
+    nextTick(() => input.value?.focus());
 }
 </script>
 
@@ -43,7 +35,6 @@ async function sendMyMessage() {
             type="text"
             v-model="message"
             placeholder="Message"
-            :disabled="isSending"
             ref="messageInput"
         />
         <input type="submit" value="Send" class="visually-hidden" />

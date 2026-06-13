@@ -80,7 +80,7 @@ export async function sendMessage(
   session: GraffitiSession,
 ) {
   if (!message.length) return;
-  await useGraffiti().post<MessageSchema>(
+  return await useGraffiti().post<MessageSchema>(
     {
       value: {
         content: message,
