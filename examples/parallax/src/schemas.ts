@@ -60,6 +60,9 @@ export function messageSchema() {
 }
 export type MessageSchema = ReturnType<typeof messageSchema>;
 export type MessageObject = GraffitiObject<MessageSchema>;
+export type DisplayMessageObject = MessageObject & {
+  deliveryStatus?: "sending" | "sent" | "failed";
+};
 
 export function chatObjectSchema(channel: string) {
   return {
