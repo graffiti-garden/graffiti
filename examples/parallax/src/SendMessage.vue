@@ -21,16 +21,19 @@ onMounted(() => {
 async function sendMyMessage() {
     if (!message.value) return;
     isSending.value = true;
-    await sendMessage(
-        message.value,
-        props.myMembers,
-        props.channel,
-        props.session,
-    );
-    message.value = "";
-    isSending.value = false;
-    await nextTick();
-    input.value?.focus();
+    try {
+        await sendMessage(
+            message.value,
+            props.myMembers,
+            props.channel,
+            props.session,
+        );
+        message.value = "";
+        await nextTick();
+        input.value?.focus();
+    } finally {
+        isSending.value = false;
+    }
 }
 </script>
 
@@ -45,13 +48,18 @@ async function sendMyMessage() {
         />
         <input type="submit" value="Send" class="visually-hidden" />
     </form>
-    <form v-else @submit.prevent="addMember(
-        props.session.actor,
-        props.myMembers,
-        props.channel,
-        props.session,
-    )">
-        <input type="submit" value="Join to Chat!"
+    <form
+        v-else
+        @submit.prevent="
+            addMember(
+                props.session.actor,
+                props.myMembers,
+                props.channel,
+                props.session,
+            )
+        "
+    >
+        <input type="submit" value="Join Chat" />
     </form>
 </template>
 

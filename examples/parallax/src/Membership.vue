@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { GraffitiSession } from "@graffiti-garden/api";
 import { ref } from "vue";
-import { removeMember } from "./setters";
-import { addMember } from "./setters";
+import { useGraffiti } from "@graffiti-garden/wrapper-vue";
+import { addMember, removeMember } from "./setters";
 import { parallaxOrProvenance } from "./parallaxOrProvenance";
 
 const props = defineProps<{
@@ -12,33 +12,60 @@ const props = defineProps<{
     admin: string;
 }>();
 
+const graffiti = useGraffiti();
 const removing = ref(new Set<string>());
 async function remove(member: string) {
     removing.value.add(member);
-    await removeMember(member, props.myMembers, props.channel, props.session);
-    removing.value.delete(member);
+    try {
+        await removeMember(
+            member,
+            props.myMembers,
+            props.channel,
+            props.session,
+        );
+    } finally {
+        removing.value.delete(member);
+    }
 }
 
 const newMember = ref("");
 const adding = ref(false);
-async function add(member?: string) {
+const addError = ref("");
+async function add(member = newMember.value) {
+    const account = member.trim();
+    if (!account) return;
+
     adding.value = true;
-    await addMember(
-        member ?? newMember.value,
-        props.myMembers,
-        props.channel,
-        props.session,
-    );
-    adding.value = false;
-    newMember.value = "";
+    addError.value = "";
+    try {
+        const actor = account.startsWith("did:")
+            ? account
+            : await graffiti.handleToActor(account);
+        await addMember(
+            actor,
+            props.myMembers,
+            props.channel,
+            props.session,
+        );
+        newMember.value = "";
+    } catch (error) {
+        console.error(error);
+        addError.value = "That account could not be found.";
+    } finally {
+        adding.value = false;
+    }
 }
 
 const copied = ref(false);
-async function copyUsername() {
-    navigator.clipboard.writeText(props.session.actor);
-    copied.value = true;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    copied.value = false;
+async function copyHandle() {
+    try {
+        const handle = await graffiti.actorToHandle(props.session.actor);
+        await navigator.clipboard.writeText(handle);
+        copied.value = true;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+    } finally {
+        copied.value = false;
+    }
 }
 </script>
 
@@ -50,21 +77,22 @@ async function copyUsername() {
     </p>
 
     <form @submit.prevent="add()" v-if="session.actor === admin">
-        <input type="text" v-model="newMember" placeholder="Username" />
+        <input type="text" v-model="newMember" placeholder="Handle" />
         <input type="submit" value="Add" :disabled="adding" />
     </form>
+    <p v-if="addError" role="alert">{{ addError }}</p>
 
     <ul>
         <li>
             <span>
                 <code>
-                    {{ props.session.actor }}
+                    <GraffitiActorToHandle :actor="props.session.actor" />
                 </code>
                 (you)
             </span>
             <div class="container">
-                <button @click="copyUsername" :disabled="copied">
-                    {{ copied ? "Copied!" : "Copy Username" }}
+                <button @click="copyHandle" :disabled="copied">
+                    {{ copied ? "Copied!" : "Copy Handle" }}
                 </button>
                 <button
                     v-if="
@@ -89,7 +117,8 @@ async function copyUsername() {
         <template v-for="member in myMembers" :key="member">
             <li v-if="member !== session.actor">
                 <code>
-                    {{ member }} {{ member === admin ? "(admin)" : "" }}
+                    <GraffitiActorToHandle :actor="member" />
+                    {{ member === admin ? "(admin)" : "" }}
                 </code>
                 <button
                     v-if="session.actor === admin"

@@ -4,13 +4,15 @@ import App from "./App.vue";
 import Chat from "./Chat.vue";
 import AllChats from "./AllChats.vue";
 import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 
 const redirect = sessionStorage.redirect;
 delete sessionStorage.redirect;
 if (redirect && redirect !== location.href) {
   history.replaceState(null, "", redirect);
 }
+
+const graffiti = new GraffitiDecentralized();
 
 const routes = [
   {
@@ -31,9 +33,7 @@ const router = createRouter({
 });
 
 createApp(App)
-  .use(GraffitiPlugin, {
-    graffiti: new GraffitiRemote(),
-  })
+  .use(GraffitiPlugin, { graffiti })
   .directive("focus", { mounted: (e) => e.focus() })
   .use(router)
   .mount("#app");

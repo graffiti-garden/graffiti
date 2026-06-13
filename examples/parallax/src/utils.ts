@@ -14,7 +14,7 @@ export function sortByPublished<
   }>,
 >(objects: MaybeRefOrGetter<T[]>) {
   return computed(() =>
-    toValue(objects).sort((a, b) => b.value.published - a.value.published),
+    toValue(objects).toSorted((a, b) => b.value.published - a.value.published),
   );
 }
 

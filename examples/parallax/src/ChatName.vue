@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import type { GraffitiSession, JSONSchema } from "@graffiti-garden/api";
+import type { GraffitiSession } from "@graffiti-garden/api";
 import { useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
-import { chatNameSchema } from "./schemas";
+import { chatNameSchema, type ChatNameObject } from "./schemas";
 import { sortByPublished } from "./utils";
-import type { ChatNameObject } from "./schemas";
 import { chatAdmin } from "./parallaxOrProvenance";
 
 const props = defineProps<{
@@ -16,9 +15,10 @@ const admin = chatAdmin(
     () => props.session,
 );
 
-const { objects, isInitialPolling } = useGraffitiDiscover(
+const { objects, isFirstPoll } = useGraffitiDiscover(
     () => [props.channel],
     () => chatNameSchema(props.channel, admin.value),
+    () => props.session,
 );
 const chatNames = sortByPublished<ChatNameObject>(objects);
 
@@ -26,7 +26,7 @@ const myChatName = () => chatNames.value.at(0)?.value.name;
 </script>
 
 <template>
-    <span v-if="isInitialPolling"> Loading... </span>
+    <span v-if="isFirstPoll"> Loading... </span>
     <span v-else-if="!myChatName()"> Unnamed Chat </span>
     <span v-else>
         {{ myChatName() }}

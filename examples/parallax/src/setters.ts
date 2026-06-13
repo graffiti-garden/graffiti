@@ -14,7 +14,7 @@ export async function setChatName(
   session: GraffitiSession,
 ) {
   if (!name.length || name === myChatName) return;
-  await useGraffiti().put<ChatNameSchema>(
+  await useGraffiti().post<ChatNameSchema>(
     {
       channels: [channel],
       value: {
@@ -36,7 +36,7 @@ export async function addMember(
 ) {
   if (!newMember.length) return;
   if (myMembers.has(newMember)) return;
-  await useGraffiti().put<MemberUpdateSchema>(
+  await useGraffiti().post<MemberUpdateSchema>(
     {
       value: {
         activity: "Add",
@@ -58,7 +58,7 @@ export async function removeMember(
   session: GraffitiSession,
 ) {
   if (!myMembers.has(member)) return;
-  await useGraffiti().put<MemberUpdateSchema>(
+  await useGraffiti().post<MemberUpdateSchema>(
     {
       value: {
         activity: "Remove",
@@ -80,7 +80,7 @@ export async function sendMessage(
   session: GraffitiSession,
 ) {
   if (!message.length) return;
-  await useGraffiti().put<MessageSchema>(
+  await useGraffiti().post<MessageSchema>(
     {
       value: {
         content: message,
