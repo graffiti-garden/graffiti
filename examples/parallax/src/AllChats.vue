@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import type { GraffitiSession, JSONSchema } from "@graffiti-garden/api";
-import { useGraffitiDiscover, useGraffiti } from "@graffiti-garden/wrapper-vue";
+import { useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
 import { addMember } from "./setters";
+import ChatAdmin from "./ChatAdmin.vue";
 import ChatName from "./ChatName.vue";
-import { parallaxOrProvenance, chatAdmin } from "./parallaxOrProvenance";
+import { parallaxOrProvenance } from "./parallaxOrProvenance";
 
 const props = defineProps<{
     session: GraffitiSession;
 }>();
 
-const { objects: chatsAll, isInitialPolling } = useGraffitiDiscover(
+const { objects: chatsAll, isFirstPoll } = useGraffitiDiscover(
     () => [props.session.actor],
     () =>
         ({
@@ -19,7 +20,7 @@ const { objects: chatsAll, isInitialPolling } = useGraffitiDiscover(
                 value: {
                     required: ["activity", "target", "object", "published"],
                     properties: {
-                        activity: { enum: ["Add"] },
+                        activity: { enum: ["Add", "Remove"] },
                         target: { enum: [props.session.actor] },
                         object: { type: "string" },
                         published: { type: "number" },
@@ -27,29 +28,46 @@ const { objects: chatsAll, isInitialPolling } = useGraffitiDiscover(
                 },
             },
         }) as const satisfies JSONSchema,
+    () => props.session,
 );
 
-// Group the chats by target
-const groupedChats = () => {
-    const groupedChats = new Map<string, typeof chatsAll.value>();
-    for (const chat of chatsAll.value) {
-        const object = chat.value.object;
-        if (!groupedChats.has(object)) {
-            groupedChats.set(object, []);
-        }
-        groupedChats.get(object)?.push(chat);
-    }
-    return groupedChats;
+type MembershipUpdate = {
+    value: {
+        activity: "Add" | "Remove";
+        object: string;
+        published: number;
+    };
 };
+
+const chats = computed(() => {
+    const latestByChat = new Map<string, MembershipUpdate>();
+    for (const update of chatsAll.value as MembershipUpdate[]) {
+        const current = latestByChat.get(update.value.object);
+        if (!current || current.value.published < update.value.published) {
+            latestByChat.set(update.value.object, update);
+        }
+    }
+
+    const chats: string[] = [];
+    for (const update of latestByChat.values()) {
+        if (update.value.activity === "Add") {
+            chats.push(update.value.object);
+        }
+    }
+    return chats;
+});
 
 const creating = ref(false);
 const router = useRouter();
 async function createChat(session: GraffitiSession) {
     creating.value = true;
-    const channel = crypto.randomUUID();
-    await addMember(session.actor, new Set(), channel, session);
-    creating.value = false;
-    router.push({ name: "chat", params: { channel } });
+    try {
+        const channel = crypto.randomUUID();
+        await addMember(session.actor, new Set(), channel, session);
+        router.push({ name: "chat", params: { channel } });
+    } finally {
+        creating.value = false;
+    }
 }
 </script>
 
@@ -66,8 +84,8 @@ async function createChat(session: GraffitiSession) {
     </header>
     <main>
         <ul>
-            <li v-if="isInitialPolling">Loading...</li>
-            <li v-for="[object] in groupedChats()" :key="object">
+            <li v-if="isFirstPoll">Loading...</li>
+            <li v-for="object in chats" :key="object">
                 <RouterLink
                     :to="{
                         name: 'chat',
@@ -76,7 +94,8 @@ async function createChat(session: GraffitiSession) {
                 >
                     <ChatName :session="session" :channel="object" />
                     <span v-if="parallaxOrProvenance === 'Provenance'">
-                        (admin: {{ chatAdmin(()=>object, session) }})
+                        (admin:
+                        <ChatAdmin :channel="object" :session="session" />)
                     </span>
                 </RouterLink>
             </li>

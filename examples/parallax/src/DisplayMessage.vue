@@ -18,7 +18,7 @@ defineProps<{
                     message.actor === $graffitiSession.value?.actor,
             }"
         >
-            <h3>{{ message.actor }}</h3>
+            <h3><GraffitiActorToHandle :actor="message.actor" /></h3>
         </header>
         <main>
             <p>{{ message.value.content }}</p>

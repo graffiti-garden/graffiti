@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, type Ref } from "vue";
+import { computed, ref } from "vue";
+import { useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
 import {
-    useGraffitiSession,
-    useGraffitiDiscover,
-} from "@graffiti-garden/wrapper-vue";
-import {
-    chatNameSchema,
-    memberUpdateSchema,
-    messageSchema,
+    chatObjectSchema,
+    isChatNameObject,
+    isMemberUpdateObject,
+    isMessageObject,
     type ChatNameObject,
     type MemberUpdateObject,
     type MessageObject,
@@ -27,20 +25,21 @@ const props = defineProps<{
     session: GraffitiSession;
 }>();
 
-const graffitiSession = useGraffitiSession();
-
 const admin = chatAdmin(
     () => props.channel,
     () => props.session,
 );
 
-const { objects: chatNamesRaw, isInitialPolling: isInitialPollingChatNames } =
-    useGraffitiDiscover(
-        () => [props.channel],
-        () => chatNameSchema(props.channel),
-        undefined,
-        true,
-    );
+const { objects: chatObjects, isFirstPoll } = useGraffitiDiscover(
+    () => [props.channel],
+    () => chatObjectSchema(props.channel),
+    () => props.session,
+    true,
+);
+
+const chatNamesRaw = computed(() =>
+    chatObjects.value.filter(isChatNameObject),
+);
 const chatNamesSorted = sortByPublished<ChatNameObject>(chatNamesRaw);
 const chatNames = computed(() =>
     chatNamesSorted.value.filter((chatName) => {
@@ -57,14 +56,8 @@ const myChatName = computed(
             .name,
 );
 
-const {
-    objects: memberUpdatesRaw,
-    isInitialPolling: isInitialPollingMemberUpdates,
-} = useGraffitiDiscover(
-    () => [props.channel],
-    () => memberUpdateSchema(props.channel),
-    undefined,
-    true,
+const memberUpdatesRaw = computed(() =>
+    chatObjects.value.filter(isMemberUpdateObject),
 );
 const memberUpdatesAll = sortByPublished<MemberUpdateObject>(memberUpdatesRaw);
 
@@ -101,19 +94,11 @@ const memberUpdates = computed(() => {
     });
 });
 
-const { objects: messages_, isInitialPolling: isInitialPollingMessages } =
-    useGraffitiDiscover(
-        () => [props.channel],
-        () => messageSchema(),
-        undefined,
-        true,
-    );
-const messages: Ref<MessageObject[]> = computed(() => {
-    const messages: MessageObject[] = messages_.value;
-    return messages.filter((message) => {
-        return myMembers.value.has(message.actor);
-    });
-});
+const messages = computed<MessageObject[]>(() =>
+    chatObjects.value
+        .filter(isMessageObject)
+        .filter((message) => myMembers.value.has(message.actor)),
+);
 
 // Group changes to the same name
 const groupedChatNames = groupAdjacentBy(chatNames, (group, chatName) =>
@@ -192,6 +177,7 @@ const isMembersOpen = ref(false);
             </header>
             <main>
                 <ul>
+                    <li v-if="isFirstPoll">Loading...</li>
                     <li
                         v-for="update in updates"
                         :key="

@@ -1,4 +1,8 @@
-import type { JSONSchema, GraffitiObject } from "@graffiti-garden/api";
+import type {
+  GraffitiObject,
+  GraffitiObjectBase,
+  JSONSchema,
+} from "@graffiti-garden/api";
 
 export function chatNameSchema(channel: string, actor?: string) {
   return {
@@ -56,3 +60,51 @@ export function messageSchema() {
 }
 export type MessageSchema = ReturnType<typeof messageSchema>;
 export type MessageObject = GraffitiObject<MessageSchema>;
+
+export function chatObjectSchema(channel: string) {
+  return {
+    anyOf: [
+      chatNameSchema(channel),
+      memberUpdateSchema(channel),
+      messageSchema(),
+    ],
+  } as const satisfies JSONSchema;
+}
+export type ChatObjectSchema = ReturnType<typeof chatObjectSchema>;
+export type ChatObject = GraffitiObject<ChatObjectSchema>;
+
+function valueOf(object: GraffitiObjectBase): Record<string, unknown> {
+  return object.value as Record<string, unknown>;
+}
+
+export function isChatNameObject(
+  object: GraffitiObjectBase,
+): object is ChatNameObject {
+  const value = valueOf(object);
+  return (
+    typeof value.name === "string" &&
+    typeof value.published === "number" &&
+    typeof value.describes === "string"
+  );
+}
+
+export function isMemberUpdateObject(
+  object: GraffitiObjectBase,
+): object is MemberUpdateObject {
+  const value = valueOf(object);
+  return (
+    (value.activity === "Add" || value.activity === "Remove") &&
+    typeof value.target === "string" &&
+    typeof value.object === "string" &&
+    typeof value.published === "number"
+  );
+}
+
+export function isMessageObject(
+  object: GraffitiObjectBase,
+): object is MessageObject {
+  const value = valueOf(object);
+  return (
+    typeof value.content === "string" && typeof value.published === "number"
+  );
+}

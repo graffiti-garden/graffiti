@@ -31,7 +31,8 @@ const countSquared = () => count.value * count.value;
         <p>
             <GroupNames :group="group" />
             {{ isAdd() ? "added" : "removed" }}
-            {{ member() === props.session.actor ? "you" : member() }}
+            <template v-if="member() === props.session.actor">you</template>
+            <GraffitiActorToHandle v-else :actor="member()" />
             {{ isAdd() ? "to" : "from" }}
             <template v-if="parallaxOrProvenance==='Parallax'">
             {{ includesMe() ? "your" : "their" }}
@@ -46,13 +47,13 @@ const countSquared = () => count.value * count.value;
                 v-if="isAdd() && !myMembers.has(member())"
                 @click="addMember(member(), myMembers, channel, session)"
             >
-                Add {{ member() }}
+                Add <GraffitiActorToHandle :actor="member()" />
             </button>
             <button
                 v-else-if="!isAdd() && myMembers.has(member())"
                 @click="removeMember(member(), myMembers, channel, session)"
             >
-                Remove {{ member() }}
+                Remove <GraffitiActorToHandle :actor="member()" />
             </button>
         </template>
         <template v-else-if="session.actor=== admin">
@@ -64,7 +65,7 @@ const countSquared = () => count.value * count.value;
                 :key="`add-${actor}`"
                 @click="addMember(actor, myMembers, channel, session)"
             >
-                Add {{ actor }}
+                Add <GraffitiActorToHandle :actor="actor" />
             </button>
             <button
                 v-else
@@ -74,7 +75,7 @@ const countSquared = () => count.value * count.value;
                 :key="`remove-${actor}`"
                 @click="removeMember(actor, myMembers, channel, session)"
             >
-                Remove {{ actor }}
+                Remove <GraffitiActorToHandle :actor="actor" />
             </button>
         </template>
     </aside>

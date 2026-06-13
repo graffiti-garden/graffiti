@@ -26,15 +26,18 @@ async function edit() {
 
 async function save() {
     saving.value = true;
-    await setChatName(
-        editingValue.value,
-        props.myChatName,
-        props.myMembers,
-        props.channel,
-        props.session,
-    );
-    saving.value = false;
-    editing.value = false;
+    try {
+        await setChatName(
+            editingValue.value,
+            props.myChatName,
+            props.myMembers,
+            props.channel,
+            props.session,
+        );
+        editing.value = false;
+    } finally {
+        saving.value = false;
+    }
 }
 </script>
 
