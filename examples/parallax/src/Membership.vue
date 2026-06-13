@@ -107,7 +107,7 @@ async function copyHandle() {
                     v-if="
                         myMembers.has(session.actor) && session.actor === admin
                     "
-                    @click="remove(session.actor)"
+                    @click="remove(session.actor).then(() => $router.push('/'))"
                     :disabled="removing.has(session.actor)"
                     class="bad"
                 >
