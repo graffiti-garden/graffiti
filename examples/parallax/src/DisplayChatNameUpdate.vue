@@ -4,6 +4,7 @@ import type { ChatNameObject } from "./schemas";
 import { setChatName } from "./setters";
 import GroupNames from "./GroupNames.vue";
 import { parallaxOrProvenance } from "./parallaxOrProvenance";
+import { ref } from "vue";
 
 const props = defineProps<{
     group: ChatNameObject[];
@@ -17,6 +18,22 @@ const props = defineProps<{
 const name = () => props.group[0].value.name;
 const includesMe = () =>
     props.group.some((c) => c.actor === props.session.actor);
+
+const saving = ref(false);
+async function useName() {
+    saving.value = true;
+    try {
+        await setChatName(
+            name(),
+            props.myChatName,
+            props.myMembers,
+            props.channel,
+            props.session,
+        );
+    } finally {
+        saving.value = false;
+    }
+}
 </script>
 
 <template>
@@ -33,11 +50,13 @@ const includesMe = () =>
         </p>
         <button
             v-if="myChatName !== name() && session.actor === admin"
-            @click="
-                setChatName(name(), myChatName, myMembers, channel, session)
-            "
+            @click="useName"
+            :disabled="saving"
         >
-            Name the chat <strong>"{{ name() }}"</strong>
+            <template v-if="saving">Saving...</template>
+            <template v-else>
+                Name the chat <strong>"{{ name() }}"</strong>
+            </template>
         </button>
     </aside>
 </template>

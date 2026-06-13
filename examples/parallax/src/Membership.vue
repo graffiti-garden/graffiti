@@ -77,8 +77,17 @@ async function copyHandle() {
     </p>
 
     <form @submit.prevent="add()" v-if="session.actor === admin">
-        <input type="text" v-model="newMember" placeholder="Handle" />
-        <input type="submit" value="Add" :disabled="adding" />
+        <input
+            type="text"
+            v-model="newMember"
+            placeholder="Handle"
+            :disabled="adding"
+        />
+        <input
+            type="submit"
+            :value="adding ? 'Adding...' : 'Add'"
+            :disabled="adding"
+        />
     </form>
     <p v-if="addError" role="alert">{{ addError }}</p>
 
@@ -102,7 +111,9 @@ async function copyHandle() {
                     :disabled="removing.has(session.actor)"
                     class="bad"
                 >
-                    Leave
+                    {{
+                        removing.has(session.actor) ? "Leaving..." : "Leave"
+                    }}
                 </button>
                 <button
                     v-else-if="session.actor === admin"
@@ -110,7 +121,7 @@ async function copyHandle() {
                     :disabled="adding"
                     class="good"
                 >
-                    Join
+                    {{ adding ? "Joining..." : "Join" }}
                 </button>
             </div>
         </li>
@@ -126,7 +137,7 @@ async function copyHandle() {
                     :disabled="removing.has(member)"
                     class="bad"
                 >
-                    Remove
+                    {{ removing.has(member) ? "Removing..." : "Remove" }}
                 </button>
             </li>
         </template>

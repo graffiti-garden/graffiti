@@ -2,7 +2,10 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import type { GraffitiSession, JSONSchema } from "@graffiti-garden/api";
-import { useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
+import {
+    useGraffiti,
+    useGraffitiDiscover,
+} from "@graffiti-garden/wrapper-vue";
 import { addMember } from "./setters";
 import ChatAdmin from "./ChatAdmin.vue";
 import ChatName from "./ChatName.vue";
@@ -11,6 +14,7 @@ import { parallaxOrProvenance } from "./parallaxOrProvenance";
 const props = defineProps<{
     session: GraffitiSession;
 }>();
+const graffiti = useGraffiti();
 
 const { objects: chatsAll, isFirstPoll } = useGraffitiDiscover(
     () => [props.session.actor],
@@ -58,6 +62,7 @@ const chats = computed(() => {
 });
 
 const creating = ref(false);
+const loggingOut = ref(false);
 const router = useRouter();
 async function createChat(session: GraffitiSession) {
     creating.value = true;
@@ -67,6 +72,15 @@ async function createChat(session: GraffitiSession) {
         router.push({ name: "chat", params: { channel } });
     } finally {
         creating.value = false;
+    }
+}
+
+async function logout(session: GraffitiSession) {
+    loggingOut.value = true;
+    try {
+        await graffiti.logout(session);
+    } finally {
+        loggingOut.value = false;
     }
 }
 </script>
@@ -80,7 +94,9 @@ async function createChat(session: GraffitiSession) {
             {{ parallaxOrProvenance }}
             Chat
         </h1>
-        <button @click="$graffiti.logout(session)">Log out</button>
+        <button @click="logout(session)" :disabled="loggingOut">
+            {{ loggingOut ? "Logging out..." : "Log out" }}
+        </button>
     </header>
     <main>
         <ul>

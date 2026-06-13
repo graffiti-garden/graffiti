@@ -13,6 +13,7 @@ const emit = defineEmits<{
 }>();
 
 const message = ref("");
+const joining = ref(false);
 
 const input = useTemplateRef("messageInput");
 
@@ -27,6 +28,20 @@ function sendMyMessage() {
     emit("send", content);
     nextTick(() => input.value?.focus());
 }
+
+async function joinChat() {
+    joining.value = true;
+    try {
+        await addMember(
+            props.session.actor,
+            props.myMembers,
+            props.channel,
+            props.session,
+        );
+    } finally {
+        joining.value = false;
+    }
+}
 </script>
 
 <template>
@@ -39,18 +54,12 @@ function sendMyMessage() {
         />
         <input type="submit" value="Send" class="visually-hidden" />
     </form>
-    <form
-        v-else
-        @submit.prevent="
-            addMember(
-                props.session.actor,
-                props.myMembers,
-                props.channel,
-                props.session,
-            )
-        "
-    >
-        <input type="submit" value="Join Chat" />
+    <form v-else @submit.prevent="joinChat">
+        <input
+            type="submit"
+            :value="joining ? 'Joining...' : 'Join Chat'"
+            :disabled="joining"
+        />
     </form>
 </template>
 
