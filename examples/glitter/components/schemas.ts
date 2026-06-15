@@ -6,12 +6,10 @@ export function joinSchema(channel: string) {
       value: {
         properties: {
           activity: { const: "Add" },
-          // The actor
           object: { type: "string" },
-          // To the namebook
           target: { const: channel },
         },
-        required: ["activity", "target", "object"],
+        required: ["activity", "object", "target"],
       },
     },
   } as const satisfies JSONSchema;
@@ -47,6 +45,7 @@ export function profileSchema(actor: string) {
         },
         required: ["name", "describes", "published"],
       },
+      actor: { const: actor },
     },
   } as const satisfies JSONSchema;
 }
@@ -58,7 +57,6 @@ export function noteSchema(inReplyTo?: string) {
         properties: {
           content: { type: "string" },
           published: { type: "number" },
-          createdAt: { type: "number" },
           isNotQuote: { type: "boolean" },
           to: {
             type: "array",
@@ -69,7 +67,7 @@ export function noteSchema(inReplyTo?: string) {
             ...(inReplyTo ? { const: inReplyTo } : {}),
           },
         },
-        required: ["content"],
+        required: ["content", "published"],
       },
     },
   } as const satisfies JSONSchema;

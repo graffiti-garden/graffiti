@@ -1,8 +1,15 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useTemplateRef } from "vue";
+import {
+    useGraffitiActorToHandle,
+    useGraffitiDiscover,
+    useGraffitiSession,
+} from "@graffiti-garden/wrapper-vue";
 import Name from "./Name.vue";
 import Follow from "./Follow.vue";
 import Notes from "./Notes.vue";
+import { type FollowObject } from "./follows";
+import { followSchema } from "./schemas";
 
 const props = defineProps<{
     actorEncoded: string;
@@ -11,19 +18,34 @@ const props = defineProps<{
 const actor = computed(() =>
     props.actorEncoded ? decodeURIComponent(props.actorEncoded) : "",
 );
+const session = useGraffitiSession();
+const { handle } = useGraffitiActorToHandle(actor);
+const nameComponent = useTemplateRef<{ hasProfile: boolean }>("nameComponent");
+const hasName = computed(() => nameComponent.value?.hasProfile ?? false);
+const { objects: followObjects, isFirstPoll: isPollingFollow } =
+    useGraffitiDiscover(
+        () => (session.value ? [session.value.actor] : []),
+        () => followSchema(session.value?.actor ?? "", actor.value),
+    );
+const follows = computed(
+    () => followObjects.value as unknown as FollowObject[],
+);
 </script>
 
 <template>
     <h1>
-        <Name :actor="actor" :editable="true" />
+        <Name ref="nameComponent" :actor="actor" :editable="true" />
     </h1>
-    <h2>
-        <a :href="actor">{{ actor }}</a>
-    </h2>
-    <Follow v-if="actor !== $graffitiSession.value?.actor" :object="actor" />
+    <h2 v-if="hasName && handle">{{ handle }}</h2>
+    <Follow
+        v-if="actor !== $graffitiSession.value?.actor"
+        :object="actor"
+        :follows="follows"
+        :loading="isPollingFollow"
+    />
     <Notes
         :actors="[actor]"
-        :at="actor !== $graffitiSession.value?.actor ? [actor] : undefined"
+        :to="actor !== $graffitiSession.value?.actor ? [actor] : undefined"
         :prompt="
             actor === $graffitiSession.value?.actor
                 ? 'what\'s on your mind?'

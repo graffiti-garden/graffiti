@@ -9,10 +9,9 @@ import Notes from "./Notes.vue";
 
 const sessionRef = useGraffitiSession();
 
-const { objects: follows, isInitialPolling } = useGraffitiDiscover(
+const { objects: follows, isFirstPoll } = useGraffitiDiscover(
     () => (sessionRef.value ? [sessionRef.value.actor] : []),
     () => followSchema(sessionRef.value?.actor ?? ""),
-    sessionRef,
 );
 
 const actors = computed(() => [
@@ -21,7 +20,7 @@ const actors = computed(() => [
 </script>
 
 <template>
-    <template v-if="isInitialPolling">
+    <template v-if="isFirstPoll">
         <h1>Loading...</h1>
     </template>
     <template v-else-if="!follows.length">

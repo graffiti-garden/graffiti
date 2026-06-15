@@ -1,25 +1,25 @@
 <script setup lang="ts">
 import { ref } from "vue";
+import { useGraffiti, useGraffitiSession } from "@graffiti-garden/wrapper-vue";
 import {
-    useGraffiti,
-    useGraffitiDiscover,
-    useGraffitiSession,
-} from "@graffiti-garden/wrapper-vue";
-import { followSchema } from "./schemas";
+    deleteFollows,
+    postFollow,
+    type FollowObject,
+} from "./follows";
 
 const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
 
-const props = defineProps<{
-    object: string;
-}>();
-
-const { objects: follows, isInitialPolling: isPollingFollows } =
-    useGraffitiDiscover(
-        () => (sessionRef.value ? [sessionRef.value.actor] : []),
-        () => followSchema(sessionRef.value?.actor ?? "", props.object),
-        sessionRef,
-    );
+const props = withDefaults(
+    defineProps<{
+        object: string;
+        follows: FollowObject[];
+        loading?: boolean;
+    }>(),
+    {
+        loading: false,
+    },
+);
 
 const isToggling = ref(false);
 async function toggleFollow() {
@@ -29,39 +29,28 @@ async function toggleFollow() {
         return;
     }
     isToggling.value = true;
-    if (follows.value.length) {
-        await Promise.all(
-            follows.value.map<Promise<any>>((follow) =>
-                graffiti.delete(follow, session),
-            ),
-        );
-    } else if (props.object) {
-        await graffiti.put<ReturnType<typeof followSchema>>(
-            {
-                value: {
-                    activity: "Follow",
-                    object: props.object,
-                },
-                channels: [session.actor],
-                actor: session.actor,
-            },
-            session,
-        );
+    try {
+        if (props.follows.length) {
+            await deleteFollows(graffiti, props.follows, session);
+        } else if (props.object) {
+            await postFollow(graffiti, props.object, session);
+        }
+    } finally {
+        isToggling.value = false;
     }
-    isToggling.value = false;
 }
 </script>
 
 <template>
-    <input
-        type="checkbox"
-        :id="'follow:' + object"
-        :checked="!follows.length"
-    />
-    <label :for="'follow:' + object" v-if="isPollingFollows || isToggling"
-        >loading...</label
+    <button
+        type="button"
+        @click="toggleFollow"
+        :disabled="loading || isToggling"
     >
-    <label v-else :for="'follow' + object" @click.prevent="toggleFollow">
-        follow<template v-if="follows.length">ed</template>
-    </label>
+        <template v-if="loading">loading...</template>
+        <template v-else-if="isToggling">
+            {{ follows.length ? "unfollowing..." : "following..." }}
+        </template>
+        <template v-else>{{ follows.length ? "unfollow" : "follow" }}</template>
+    </button>
 </template>

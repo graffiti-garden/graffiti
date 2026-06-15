@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import {
     useGraffitiDiscover,
     useGraffiti,
+    useGraffitiActorToHandle,
     useGraffitiSession,
 } from "@graffiti-garden/wrapper-vue";
 import { profileSchema } from "./schemas";
@@ -20,64 +21,61 @@ const props = withDefaults(
     },
 );
 
-const { objects: results, isInitialPolling: isPolling } = useGraffitiDiscover(
+const { objects: results, isFirstPoll: isPolling } = useGraffitiDiscover(
     () => [props.actor],
     () => profileSchema(props.actor),
-    sessionRef,
 );
+const { handle } = useGraffitiActorToHandle(() => props.actor);
+
 const currentProfile = computed(() => {
-    if (!results.value.length) return null;
-    return results.value.sort(
-        (a, b) =>
-            new Date(b.lastModified).getTime() -
-            new Date(a.lastModified).getTime(),
-    )[0];
+    return results.value.reduce<(typeof results.value)[number] | null>(
+        (latest, profile) =>
+            !latest || profile.value.published > latest.value.published
+                ? profile
+                : latest,
+        null,
+    );
 });
 const currentName = computed(() => {
-    return currentProfile.value ? currentProfile.value.value.name : "Anonymous";
+    return currentProfile.value?.value.name ?? handle.value ?? props.actor;
 });
+const hasProfile = computed(() => currentProfile.value !== null);
+defineExpose({ hasProfile });
 
 const editing = ref(false);
 const editingName = ref("");
 const isSettingName = ref(false);
 async function setName() {
-    if (!editingName.value) return;
+    const name = editingName.value.trim();
+    if (!name || isSettingName.value) return;
+
     const session = sessionRef.value;
     if (!session) {
         alert("You are not logged in!");
         return;
     }
+    if (name === currentName.value) {
+        editing.value = false;
+        return;
+    }
 
     isSettingName.value = true;
-    if (currentProfile.value) {
-        await graffiti.patch(
-            {
-                value: [
-                    {
-                        op: "replace",
-                        path: "/name",
-                        value: editingName.value,
-                    },
-                ],
-            },
-            currentProfile.value,
-            session,
-        );
-    } else {
-        await graffiti.put<ReturnType<typeof profileSchema>>(
+    try {
+        await graffiti.post<ReturnType<typeof profileSchema>>(
             {
                 value: {
-                    name: editingName.value,
-                    describes: props.actor,
+                    name,
+                    describes: session.actor,
                     published: Date.now(),
                 },
                 channels: [session.actor],
             },
             session,
         );
+        editing.value = false;
+    } finally {
+        isSettingName.value = false;
     }
-    isSettingName.value = false;
-    editing.value = false;
 }
 </script>
 

@@ -15,7 +15,7 @@ const props = withDefaults(
     defineProps<{
         actors?: string[];
         inReplyTo?: string;
-        at?: string[];
+        to?: string[];
         prompt: string;
     }>(),
     {
@@ -27,26 +27,22 @@ const props = withDefaults(
 function channels() {
     const channels = [...props.actors];
     if (props.inReplyTo) channels.push(props.inReplyTo);
-    if (props.at) channels.push(...props.at);
+    if (props.to) channels.push(...props.to);
     return channels;
 }
 
 const {
     objects: notes,
     poll: pollNotes,
-    isInitialPolling: isPolling,
+    isFirstPoll: isPolling,
 } = useGraffitiDiscover(
     channels,
     () => noteSchema(props.inReplyTo),
-    sessionRef,
-    true,
 );
 
 const notesSorted = computed(() =>
-    notes.value.sort(
-        (a, b) =>
-            (b.value.published ?? b.lastModified) -
-            (a.value.published ?? a.lastModified),
+    notes.value.toSorted(
+        (a, b) => b.value.published - a.value.published,
     ),
 );
 
@@ -64,12 +60,12 @@ async function submitNote() {
     const note = {
         content: noteContent.value,
         published: Date.now(),
-        at: undefined,
+        to: undefined,
         inReplyTo: undefined,
     } as const;
 
     if (props.inReplyTo) {
-        await graffiti.put<ReturnType<typeof noteSchema>>(
+        await graffiti.post<ReturnType<typeof noteSchema>>(
             {
                 value: {
                     ...note,
@@ -80,19 +76,19 @@ async function submitNote() {
             },
             session,
         );
-    } else if (props.at) {
-        await graffiti.put<ReturnType<typeof noteSchema>>(
+    } else if (props.to) {
+        await graffiti.post<ReturnType<typeof noteSchema>>(
             {
                 value: {
                     ...note,
-                    at: props.at,
+                    to: props.to,
                 },
-                channels: [...props.at, session.actor],
+                channels: [...props.to, session.actor],
             },
             session,
         );
     } else {
-        await graffiti.put<ReturnType<typeof noteSchema>>(
+        await graffiti.post<ReturnType<typeof noteSchema>>(
             {
                 value: note,
                 channels: [session.actor],
@@ -117,8 +113,10 @@ async function submitNote() {
         <input type="submit" value="post" />
     </form>
 
-      <div class="refresher">
-        <button v-if="!isPolling" @click="pollNotes">refresh posts</button>
+    <div class="refresher">
+        <button v-if="!isPolling" type="button" @click="pollNotes">
+            refresh posts
+        </button>
         <button v-else disabled>refreshing...</button>
     </div>
     <ul>
@@ -127,7 +125,12 @@ async function submitNote() {
                 v-if="
                     (!note.value.isNotQuote ||
                         note.value.inReplyTo === inReplyTo) &&
-                    note.actor === $graffitiSession.value?.actor
+                    (inReplyTo ||
+                        (to?.length
+                            ? to.every((actor) =>
+                                  note.value.to?.includes(actor),
+                              )
+                            : actors.includes(note.actor)))
                 "
             >
                 <Note :note="note" :showInReplyTo="!inReplyTo" />
