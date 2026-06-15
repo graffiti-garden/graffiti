@@ -1,10 +1,11 @@
 import { createApp } from "vue";
 import Directory from "./components/Directory.vue";
 import Feed from "./components/Feed.vue";
+import Following from "./components/Following.vue";
 import Profile from "./components/Profile.vue";
 import Navigation from "./components/Navigation.vue";
 import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
-import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
+import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 import VueClickAway from "vue3-click-away";
 import { createRouter, createWebHistory } from "vue-router";
 import "./style.css";
@@ -15,10 +16,16 @@ if (redirect && redirect !== location.href) {
   history.replaceState(null, "", redirect);
 }
 
+const graffiti = new GraffitiDecentralized();
+
 const routes = [
   {
     path: "/",
     component: Feed,
+  },
+  {
+    path: "/following",
+    component: Following,
   },
   {
     path: "/directory",
@@ -38,9 +45,7 @@ const router = createRouter({
 
 createApp(Navigation)
   .use(router)
-  .use(GraffitiPlugin, {
-    graffiti: new GraffitiRemote(),
-  })
+  .use(GraffitiPlugin, { graffiti })
   .use(VueClickAway)
   .directive("focus", { mounted: (el: HTMLElement) => el.focus() })
   .mount("#app");

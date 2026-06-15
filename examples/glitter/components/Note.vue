@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import type { GraffitiObject } from "@graffiti-garden/api";
-import { useGraffitiSession } from "@graffiti-garden/wrapper-vue";
+import {
+    useGraffiti,
+    useGraffitiSession,
+} from "@graffiti-garden/wrapper-vue";
 import Name from "./Name.vue";
 import Notes from "./Notes.vue";
 import { noteSchema } from "./schemas";
 import { ref, computed } from "vue";
 
+const graffiti = useGraffiti();
 const session = useGraffitiSession();
 
 const props = withDefaults(
@@ -23,9 +27,7 @@ const props = withDefaults(
 
 const formattedTimestamp = computed(() =>
     props.note
-        ? new Date(
-              props.note.value.published ?? props.note.lastModified,
-          ).toLocaleDateString(undefined, {
+        ? new Date(props.note.value.published).toLocaleDateString(undefined, {
               month: "long",
               day: "numeric",
               year: "numeric",
@@ -55,15 +57,19 @@ const sanitizedContent = computed(() =>
 
 const commentsOpen = ref(false);
 const editMenuOpen = ref(false);
-const editing = ref(false);
-const editText = ref("");
+
+async function deleteNote() {
+    const activeSession = session.value;
+    if (!activeSession) return;
+    await graffiti.delete(props.note.url, activeSession);
+}
 </script>
 
 <template>
     <h1>
         <Name :actor="note.actor" />
-        <template v-if="note.value.at">
-            <template v-for="actor in note.value.at" :key="actor">
+        <template v-if="note.value.to">
+            <template v-for="actor in note.value.to" :key="actor">
                 @<Name :actor="actor" />
             </template>
         </template>
@@ -87,49 +93,13 @@ const editText = ref("");
         <label :for="'menu' + note.url">⚙️</label>
 
         <menu v-if="editMenuOpen" @click="editMenuOpen = false">
-            <li v-if="!editing">
-                <button
-                    @click="
-                        editing = true;
-                        editText = note.value.content;
-                    "
-                >
-                    edit
-                </button>
-            </li>
             <li>
-                <button @click="$graffiti.delete(note, session)">delete</button>
+                <button @click="deleteNote">delete</button>
             </li>
         </menu>
     </div>
 
-    <form
-        v-if="editing && session"
-        @submit.prevent="
-            $graffiti
-                .patch(
-                    {
-                        value: [
-                            {
-                                op: 'replace',
-                                path: '/content',
-                                value: editText,
-                            },
-                        ],
-                    },
-                    note,
-                    session,
-                )
-                .then(() => (editing = false))
-        "
-    >
-        <textarea v-model="editText" v-focus> </textarea>
-        <div class="edit-buttons">
-            <input type="button" value="cancel" @click="editing = false" />
-            <input type="submit" value="save" />
-        </div>
-    </form>
-    <p v-else v-html="sanitizedContent"></p>
+    <p v-html="sanitizedContent"></p>
 
     <GraffitiGet
         v-if="note.value.inReplyTo && showInReplyTo"

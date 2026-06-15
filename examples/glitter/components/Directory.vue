@@ -7,182 +7,137 @@ import {
 } from "@graffiti-garden/wrapper-vue";
 import Follow from "./Follow.vue";
 import Name from "./Name.vue";
-import { followSchema, joinSchema, type JoinObject } from "./schemas";
+import { type FollowObject } from "./follows";
+import { followSchema, joinSchema } from "./schemas";
 
 const graffiti = useGraffiti();
 const sessionRef = useGraffitiSession();
-
 const joinChannel = "glitter";
 
-const { objects: joinsUnfiltered, isInitialPolling: isPollingJoins } =
-    useGraffitiDiscover(
-        [joinChannel],
-        joinSchema(joinChannel),
-        () => sessionRef.value,
+const { objects: joinObjects, isFirstPoll: isPollingDirectory } =
+    useGraffitiDiscover([joinChannel], joinSchema(joinChannel));
+
+type DirectoryJoin = {
+    url: string;
+    actor: string;
+    value: { object: string };
+};
+function validJoinObjects() {
+    return (joinObjects.value as unknown as DirectoryJoin[]).filter(
+        (join) => join.actor === join.value.object,
     );
+}
 
 const joins = computed(() => {
-    const results: JoinObject[] = joinsUnfiltered.value;
-    // Only show joins that
-    return results.filter((v) =>
-        v.value.actor ? v.actor === v.value.actor : true,
-    );
+    const joinsByActor = new Map<string, DirectoryJoin>();
+    for (const join of validJoinObjects()) {
+        joinsByActor.set(join.actor, join);
+    }
+    return [...joinsByActor.values()];
 });
 
+const { objects: followObjects, isFirstPoll: isPollingFollows } =
+    useGraffitiDiscover(
+        () => (sessionRef.value ? [sessionRef.value.actor] : []),
+        () => followSchema(sessionRef.value?.actor ?? ""),
+    );
+const followsByActor = computed(() => {
+    const grouped = new Map<string, FollowObject[]>();
+    for (const follow of followObjects.value as unknown as FollowObject[]) {
+        const actorFollows = grouped.get(follow.value.object) ?? [];
+        actorFollows.push(follow);
+        grouped.set(follow.value.object, actorFollows);
+    }
+    return grouped;
+});
+function followsFor(actor: string) {
+    return followsByActor.value.get(actor) ?? [];
+}
+
 const myJoins = computed(() =>
-    joins.value.filter((join) => join.actor === sessionRef.value?.actor),
+    validJoinObjects().filter(
+        (join) => join.actor === sessionRef.value?.actor,
+    ),
 );
 
 const isTogglingJoin = ref(false);
 async function toggleJoin() {
     const session = sessionRef.value;
-    if (!session) {
-        alert("You are not logged in!");
-        return;
-    }
+    if (!session || isTogglingJoin.value) return;
+
     isTogglingJoin.value = true;
-    if (myJoins.value.length) {
-        await Promise.all(
-            myJoins.value.map((join) => graffiti.delete(join, session)),
-        );
-    } else {
-        const schema = joinSchema(joinChannel);
-        await graffiti.put<typeof schema>(
-            {
-                value: {
-                    activity: "Add",
-                    object: session.actor,
-                    target: joinChannel,
+    try {
+        if (myJoins.value.length) {
+            await Promise.all(
+                myJoins.value.map((join) =>
+                    graffiti.delete(join.url, session),
+                ),
+            );
+        } else {
+            await graffiti.post<ReturnType<typeof joinSchema>>(
+                {
+                    value: {
+                        activity: "Add",
+                        object: session.actor,
+                        target: joinChannel,
+                    },
+                    channels: [joinChannel],
                 },
-                channels: ["glitter"],
-            },
-            session,
-        );
+                session,
+            );
+        }
+    } finally {
+        isTogglingJoin.value = false;
     }
-    isTogglingJoin.value = false;
 }
 
-const followTarget = ref("");
-async function follow() {
-    if (!followTarget.value) return;
-    if (!sessionRef.value) return;
-    if (following.value.some((f) => f.value.object === followTarget.value))
-        return;
-    alert(followTarget.value);
-    await graffiti.put<ReturnType<typeof followSchema>>(
-        {
-            value: {
-                activity: "Follow",
-                object: followTarget.value,
-            },
-            channels: [sessionRef.value?.actor],
-        },
-        sessionRef.value,
-    );
-    followTarget.value = "";
-}
-
-const { objects: following } = useGraffitiDiscover(
-    () => (sessionRef.value ? [sessionRef.value.actor] : []),
-    () => followSchema(sessionRef.value?.actor ?? ""),
-    sessionRef,
-);
-
-const copying = ref(false);
-function copyActor() {
-    if (!sessionRef.value) return;
-    copying.value = true;
-    navigator.clipboard.writeText(sessionRef.value.actor);
-    setTimeout(() => {
-        copying.value = false;
-    }, 500);
-}
 </script>
 
 <template>
     <section>
-        <h1>
-            ⚠️⚠️The Public Directory is Disabled While The Graffiti Paper is
-            Under Review!!⚠️⚠️
-        </h1>
-
-        <p>
-            In the mean time, you can manually follow someone. Your username is:
-        </p>
-        <div class="username">
-            <code>{{ $graffitiSession.value?.actor }}</code>
-            <button @click="copyActor">
-                {{ !copying ? "Copy" : "Copied" }}
+        <h1>Directory</h1>
+        <div class="directory-membership">
+            <p>Add yourself so other people can find and follow you.</p>
+            <button
+                type="button"
+                @click="toggleJoin"
+                :disabled="isPollingDirectory || isTogglingJoin"
+            >
+                <template v-if="isPollingDirectory">
+                    Loading directory...
+                </template>
+                <template v-else-if="isTogglingJoin">
+                    {{ myJoins.length ? "Leaving..." : "Joining..." }}
+                </template>
+                <template v-else>
+                    {{
+                        myJoins.length
+                            ? "Remove me from the directory"
+                            : "Add me to the directory"
+                    }}
+                </template>
             </button>
         </div>
 
-        <form @submit.prevent="follow">
-            <input
-                v-model="followTarget"
-                type="text"
-                placeholder="Enter a username"
-            />
-            <button type="submit">Follow</button>
-        </form>
-
-        <h2>Following</h2>
-        <ul>
-            <li v-for="follow in following">
-                <Name :actor="follow.value.object" />
-                <div class="modifiers">
-                    <button
-                        @click="
-                            $graffiti.delete(follow, $graffitiSession.value!)
-                        "
-                    >
-                        unfollow
-                    </button>
+        <p v-if="isPollingDirectory">Loading...</p>
+        <p v-else-if="!joins.length">No one has joined the directory yet.</p>
+        <ul v-else class="directory">
+            <li v-for="join in joins" :key="join.actor">
+                <Name :actor="join.actor" />
+                <div
+                    v-if="join.actor !== $graffitiSession.value?.actor"
+                    class="modifiers"
+                >
+                    <Follow
+                        :object="join.actor"
+                        :follows="followsFor(join.actor)"
+                        :loading="isPollingFollows"
+                    />
                 </div>
+                <span v-else>you</span>
             </li>
         </ul>
     </section>
-
-    <!-- In the mean time,
-        <button>
-        Click here to copy your username
-        </button>,
-        and m -->
-
-    <!-- <div v-if="isPollingJoins || isTogglingJoin">loading...</div>
-    <ul class="directory">
-        <li>
-            <h1>
-                <Name v-if="sessionRef" :actor="sessionRef.actor" />
-            </h1>
-            <div class="modifiers">
-                <input
-                    type="checkbox"
-                    :checked="!myJoins.length"
-                    id="directorycheck"
-                    @change="toggleJoin"
-                />
-                <label for="directorycheck">
-                    <template v-if="!myJoins.length">
-                        add me to the directory!
-                    </template>
-                    <template v-else> remove me </template>
-                </label>
-            </div>
-        </li>
-    </ul>
-
-    <h1>namebook entries:</h1>
-
-    <ul>
-        <li v-for="join in joins" :key="join.actor">
-            <h1>
-                <Name :actor="join.actor" />
-            </h1>
-            <div class="modifiers">
-                <Follow :object="join.actor" />
-            </div>
-        </li>
-    </ul> -->
 </template>
 
 <style scoped>
@@ -199,28 +154,20 @@ section * {
 }
 
 h1 {
-    color: #d93025;
-    background: #fff3cd;
-    padding: 1rem;
-    border: 2px solid #d93025;
     font-size: 1.5rem;
     text-align: center;
 }
 
-.username {
+.directory-membership {
     display: flex;
+    flex-direction: column;
     align-items: center;
+    gap: 0.5rem;
+    text-align: center;
 }
 
 p {
     font-size: 1rem;
-}
-
-code {
-    display: inline-block;
-    background: white;
-    padding: 0.5rem 0.5rem;
-    font-family: monospace;
 }
 
 button:not(li *) {
@@ -235,23 +182,6 @@ button:not(li *):hover {
     background: var(--dark-blue);
 }
 
-form {
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-}
-
-input[type="text"] {
-    width: 100%;
-    padding: 0.5rem;
-    font-size: 1rem;
-}
-
-h2 {
-    font-size: 1.25rem;
-    padding-bottom: 0.25rem;
-}
-
 li {
     width: 100%;
     padding: 1rem;
@@ -259,6 +189,10 @@ li {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
+}
+
+.directory {
+    width: 100%;
 }
 
 .modifiers {

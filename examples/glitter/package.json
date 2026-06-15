@@ -1,29 +1,27 @@
 {
-  "name": "@graffiti-garden/namebook",
+  "name": "@graffiti-garden/glitter",
   "version": "0.0.0",
-  "description": "a book of names",
+  "description": "A small social network built with Graffiti",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build"
   },
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/api": "^0.6.2",
-    "@graffiti-garden/implementation-remote": "^0.6.1",
-    "@graffiti-garden/wrapper-vue": "^0.7.0",
-    "@vitejs/plugin-vue": "^5.2.1",
-    "vue": "^3.5.13",
-    "vue-router": "^4.5.0",
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/implementation-decentralized": "^0.0.9",
+    "@graffiti-garden/wrapper-vue": "^1.2.2",
+    "vue": "^3.5.38",
+    "vue-router": "^5.1.0",
     "vue3-click-away": "^1.2.4"
   },
   "devDependencies": {
-    "@vue/language-server": "^2.2.0",
-    "@vue/tsconfig": "^0.7.0",
-    "@vue/typescript-plugin": "^2.2.0",
-    "tslib": "^2.8.1",
-    "typescript": "^5.7.3",
-    "vite": "^5.4.14",
-    "vite-plugin-node-polyfills": "^0.23.0"
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/typescript-plugin": "^3.3.5",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vue-tsc": "^3.3.5"
   }
 }

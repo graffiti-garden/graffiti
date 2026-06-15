@@ -7,8 +7,10 @@
     "strict": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
+    "skipLibCheck": true,
     "verbatimModuleSyntax": true,
-    "plugins": [{ "name": "@vue/typescript-plugin" }]
+    "types": ["vite/client"],
+    "plugins": [{ "name": "@vue/typescript-plugin" }],
   },
-  "include": ["main.ts", "components", "activities"]
+  "include": ["main.ts", "components/**/*.ts", "components/**/*.vue"],
 }
