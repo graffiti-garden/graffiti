@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/implementation-decentralized",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "A client for a decentralized implementation of the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -43,23 +43,25 @@
     "url": "https://github.com/graffiti-garden/implementation-decentralized/issues"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
+    "@types/js-cookie": "^3.0.6",
+    "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.0.18",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.18"
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.2.0",
     "@graffiti-garden/modal": "^1.0.4",
-    "@ipld/dag-cbor": "^9.2.5",
-    "@noble/ed25519": "^3.0.0",
-    "@noble/hashes": "^2.0.1",
-    "did-resolver": "^4.1.0",
+    "@ipld/dag-cbor": "^10.0.1",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "2.2",
+    "did-resolver": "^5.0.1",
     "idb": "^8.0.3",
-    "openid-client": "^6.8.2",
+    "js-cookie": "^3.0.8",
+    "openid-client": "^6.8.4",
     "plc-did-resolver": "^1.0.0",
     "web-did-resolver": "^2.0.32",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   }
 }
