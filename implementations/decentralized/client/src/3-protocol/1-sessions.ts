@@ -16,6 +16,11 @@ import { StorageBuckets } from "../1-services/3-storage-buckets";
 import type { Inboxes } from "../1-services/4-inboxes";
 import type { Service } from "did-resolver";
 import {
+  getBrowserStorageItem,
+  removeBrowserStorageItem,
+  setBrowserStorageItem,
+} from "./browser-storage";
+import {
   type infer as infer_,
   extend,
   array,
@@ -512,9 +517,7 @@ export class Sessions {
   protected get loggedInSessions(): StoredSession[] {
     if (typeof window === "undefined") return loggedInSessions_;
 
-    const data = window.localStorage.getItem(
-      LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY,
-    );
+    const data = getBrowserStorageItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
     if (!data) return [];
 
     let json: unknown;
@@ -522,14 +525,14 @@ export class Sessions {
       json = JSON.parse(data);
     } catch {
       console.error("Error parsing stored session data");
-      window.localStorage.removeItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
+      removeBrowserStorageItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
       return [];
     }
 
     const parsed = array(StoredSessionSchema).safeParse(json);
     if (!parsed.success) {
       console.error("Stored session data is invalid");
-      window.localStorage.removeItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
+      removeBrowserStorageItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
       return [];
     }
     return parsed.data;
@@ -540,7 +543,7 @@ export class Sessions {
       return;
     }
 
-    window.localStorage.setItem(
+    setBrowserStorageItem(
       LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY,
       JSON.stringify(sessions),
     );

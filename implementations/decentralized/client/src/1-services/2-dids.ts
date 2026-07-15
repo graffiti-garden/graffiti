@@ -1,15 +1,18 @@
 import { GraffitiErrorNotFound } from "@graffiti-garden/api";
-import { Resolver, type DIDDocument } from "did-resolver";
+import { Resolver, type DIDDocument, type ResolverRegistry } from "did-resolver";
 import { getResolver as plcResolver } from "plc-did-resolver";
 import { getResolver as webResolver } from "web-did-resolver";
 
 export class DecentralizedIdentifiers {
-  protected readonly methods = {
+  protected readonly methods: Record<string, unknown> = {
     ...plcResolver(),
     ...webResolver(),
   };
 
-  protected readonly resolver = new Resolver(this.methods, { cache: true });
+  protected readonly resolver = new Resolver(
+    this.methods as unknown as ResolverRegistry,
+    { cache: true },
+  );
 
   async resolve(did: string): Promise<DIDDocument> {
     if (
