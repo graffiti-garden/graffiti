@@ -1,0 +1,74 @@
+{
+  "name": "@graffiti-garden/wrapper-iframe-rpc",
+  "version": "0.1.0",
+  "description": "Pass a Graffiti implementation across an iframe boundary",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "browser": "./dist/browser/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/esm/client/index.js"
+      },
+      "require": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/cjs/client/index.js"
+      }
+    },
+    "./host": {
+      "import": {
+        "types": "./dist/host/index.d.ts",
+        "default": "./dist/esm/host/index.js"
+      },
+      "require": {
+        "types": "./dist/host/index.d.ts",
+        "default": "./dist/cjs/host/index.js"
+      }
+    }
+  },
+  "files": [
+    "client",
+    "host",
+    "index.ts",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "npm run test:build && vitest run test",
+    "test:build": "tsx test/esbuild.config.mts",
+    "test:watch": "vitest test",
+    "build:js": "tsx esbuild.config.mts",
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "build": "rm -rf dist && npm run build:types && npm run build:js",
+    "check": "tsc --noEmit",
+    "prepublishOnly": "npm update && npm test && npm run build"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "penpal": "^7.0.6"
+  },
+  "devDependencies": {
+    "@graffiti-garden/implementation-local": "^1.2.0",
+    "@vitest/browser-playwright": "^4.0.17",
+    "esbuild": "^0.28.1",
+    "esbuild-plugin-polyfill-node": "^0.3.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  }
+}
