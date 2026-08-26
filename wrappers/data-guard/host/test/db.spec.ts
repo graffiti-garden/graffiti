@@ -74,4 +74,34 @@ describe("GuardDB", () => {
     expect((await db.audit()).requests).toEqual([]);
     expect(await db.permissions(source, "actor:one", "logout")).toHaveLength(1);
   });
+
+  it("does not resurrect an in-flight request after history is cleared", async () => {
+    const db = database();
+    const request = await db.request(source, "actor:one", "post", {});
+    await db.allow(request);
+    await db.clearHistory();
+
+    await expect(
+      db.finish(request, { ok: true, value: { url: "graffiti:one" } }),
+    ).resolves.toBeUndefined();
+    expect((await db.audit()).requests).toEqual([]);
+  });
+
+  it("atomically permits only one recovery per request", async () => {
+    const db = database();
+    const original = await db.request(source, "actor:one", "post", {});
+
+    const attempts = await Promise.allSettled([
+      db.recovery(source, "actor:one", "delete", {}, original.id),
+      db.recovery(source, "actor:one", "delete", {}, original.id),
+    ]);
+
+    expect(attempts.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+    expect(attempts.filter(({ status }) => status === "rejected")).toHaveLength(1);
+    expect(
+      (await db.audit()).requests.filter(
+        ({ request }) => request.undoOf === original.id,
+      ),
+    ).toHaveLength(1);
+  });
 });

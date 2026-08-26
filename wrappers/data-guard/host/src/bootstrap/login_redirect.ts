@@ -27,6 +27,8 @@ export async function handleLoginRedirect(url: URL) {
     if (!(event instanceof CustomEvent)) return;
     const detail = event.detail as GraffitiLoginEvent["detail"];
     if (detail.error && !("manual" in detail && detail.manual)) return;
+    // Ignore restored sessions while opening the login UI. A later manual
+    // login or cancellation is what authorizes returning to the application.
     if (!initialized && starting) return;
     ready = true;
     redirect();
@@ -40,9 +42,17 @@ export async function handleLoginRedirect(url: URL) {
   }
 }
 
-function getRedirectUrl(url: URL) {
-  const redirectUrl = url.searchParams.get("redirectUrl");
-  if (!redirectUrl) return getStoredUrl();
+export function getRedirectUrl(url: URL) {
+  const encodedRedirect = url.searchParams.get("redirectUrl");
+  if (encodedRedirect === null) return getStoredUrl();
+  const parsedRedirect = URL.parse(encodedRedirect);
+  if (
+    parsedRedirect?.protocol !== "http:" &&
+    parsedRedirect?.protocol !== "https:"
+  ) {
+    return null;
+  }
+  const redirectUrl = parsedRedirect.href;
   const value = JSON.stringify({
     redirectUrl,
     expiresAt: Date.now() + storageMaxAge,
@@ -61,12 +71,17 @@ function read(storage: Storage) {
   if (!value) return null;
   try {
     const stored = JSON.parse(value);
+    const parsedRedirect =
+      typeof stored.redirectUrl === "string"
+        ? URL.parse(stored.redirectUrl)
+        : null;
     if (
-      typeof stored.redirectUrl === "string" &&
+      (parsedRedirect?.protocol === "http:" ||
+        parsedRedirect?.protocol === "https:") &&
       typeof stored.expiresAt === "number" &&
       stored.expiresAt > Date.now()
     ) {
-      return stored.redirectUrl as string;
+      return parsedRedirect.href;
     }
   } catch {}
   clearStoredUrl();
