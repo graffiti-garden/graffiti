@@ -1,5 +1,5 @@
 {
-  "name": "@graffiti-garden/wrapper-guard",
+  "name": "@graffiti-garden/wrapper-data-guard",
   "version": "0.1.0",
   "description": "Ask for permission before a site accesses Graffiti",
   "types": "./dist/index.d.ts",

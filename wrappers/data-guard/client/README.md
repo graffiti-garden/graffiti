@@ -1,9 +1,9 @@
-# Graffiti Guard
+# Graffiti Data Guard
 
 Ask before a site accesses authenticated Graffiti data.
 
 ```ts
-import { GraffitiGuarded } from "@graffiti-garden/wrapper-guard";
+import { GraffitiGuarded } from "@graffiti-garden/wrapper-data-guard";
 
 const graffiti = new GraffitiGuarded({
   // This is the default host if one is not specified
