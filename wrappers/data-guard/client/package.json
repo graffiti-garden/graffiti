@@ -1,0 +1,45 @@
+{
+  "name": "@graffiti-garden/wrapper-guard",
+  "version": "0.1.0",
+  "description": "Ask for permission before a site accesses Graffiti",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "browser": "./dist/browser/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "build:js": "tsx esbuild.config.mts",
+    "build": "rm -rf dist && npm run build:types && npm run build:js",
+    "check": "tsc --noEmit",
+    "prepublishOnly": "npm update && npm run check && npm run build"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/wrapper-iframe-rpc": "^0.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

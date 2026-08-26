@@ -1,0 +1,32 @@
+{
+  "name": "graffiti-wrapper-guard-host",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/implementation-decentralized": "^0.0.10",
+    "@graffiti-garden/wrapper-iframe-rpc": "^0.1.0",
+    "@graffiti-garden/wrapper-vue": "^1.2.2",
+    "@mlc-ai/web-llm": "^0.2.84",
+    "ajv": "^8.20.0",
+    "human-filetypes": "^1.1.6",
+    "idb": "^8.0.3",
+    "vue": "^3.5.29"
+  },
+  "devDependencies": {
+    "@graffiti-garden/implementation-local": "^1.2.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-vue": "^6.0.4",
+    "fake-indexeddb": "^6.2.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.12",
+    "vitest": "^4.0.17",
+    "vue-tsc": "^3.2.5"
+  }
+}

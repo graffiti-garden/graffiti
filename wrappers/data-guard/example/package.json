@@ -1,0 +1,25 @@
+{
+  "name": "graffiti-wrapper-guard-example",
+  "private": true,
+  "scripts": {
+    "predev": "npm --prefix ../client run build",
+    "dev": "concurrently -k -n host,example \"npm --prefix ../host run dev -- --host 0.0.0.0 --port 5174 --strictPort\" \"vite --host 0.0.0.0 --port 5173 --strictPort\"",
+    "build": "vite build",
+    "check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/wrapper-guard": "file:../client",
+    "@graffiti-garden/wrapper-vue": "^1.2.2",
+    "@picocss/pico": "^2.1.1",
+    "vue": "^3.5.29"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-vue": "^6.0.4",
+    "concurrently": "^10.0.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.12",
+    "vue-tsc": "^3.2.5"
+  }
+}
