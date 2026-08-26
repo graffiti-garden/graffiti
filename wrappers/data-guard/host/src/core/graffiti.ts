@@ -68,10 +68,10 @@ export class GuardedGraffiti extends Graffiti {
     try {
       value = await implementation.apply(this.graffiti, args);
     } catch (error) {
-      await this.guard.fail(request, error);
+      await this.recordAudit(() => this.guard.fail(request, error));
       throw error;
     }
-    await this.guard.succeed(request, method, value);
+    await this.recordAudit(() => this.guard.succeed(request, method, value));
     return value;
   }
 
@@ -94,25 +94,42 @@ export class GuardedGraffiti extends Graffiti {
             next = await stream.next();
           } catch (error) {
             complete = true;
-            await self.guard.fail(request, error);
+            await self.recordAudit(() => self.guard.fail(request, error));
             throw error;
           }
           if (next.done) {
             complete = true;
-            await self.guard.succeed(request, "discover", next.value);
+            await self.recordAudit(() =>
+              self.guard.succeed(request, "discover", next.value),
+            );
             return next.value;
           }
           yield next.value;
         }
       } finally {
         if (!complete) {
-          await stream.return({ cursor: "" });
-          await self.guard.fail(
-            request,
-            new Error("Discovery was aborted before completion."),
-          );
+          try {
+            await stream.return({ cursor: "" });
+          } finally {
+            await self.recordAudit(() =>
+              self.guard.fail(
+                request,
+                new Error("Discovery was aborted before completion."),
+              ),
+            );
+          }
         }
       }
     })();
+  }
+
+  private async recordAudit(record: () => Promise<void>) {
+    try {
+      await record();
+    } catch (error) {
+      // The Graffiti call has already completed, so an audit failure must not
+      // misreport its outcome and encourage a duplicate retry.
+      console.error("Failed to finalize the Graffiti guard audit record.", error);
+    }
   }
 }

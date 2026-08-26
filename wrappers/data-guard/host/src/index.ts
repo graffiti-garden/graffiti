@@ -16,6 +16,9 @@ import App from "./ui/App.vue";
 import { ask } from "./ui/ask.js";
 
 const app = createApp(App);
+// The storage-access prompt uses this root before Graffiti can safely touch
+// browser storage. Graffiti-dependent prompt components are rendered only after
+// the plugin is installed below.
 app.mount("#app");
 const pageUrl = new URL(window.location.href);
 

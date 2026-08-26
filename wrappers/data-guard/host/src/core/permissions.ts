@@ -13,6 +13,8 @@ export function objectMatch(
     kind: "object",
     schema: sortJson(schema),
     channels: answer.anyChannels ? "any" : normalizeStrings(object.channels),
+    // Public data is already visible to every subset of actors, so remembering
+    // a public operation also permits otherwise-similar private operations.
     allowed:
       object.allowed == null || answer.anyAllowed
         ? "any"
@@ -109,8 +111,10 @@ function mediaMatchKey(value: unknown) {
   return kind === FileKind.Unknown ? `mime:${type}` : `kind:${kind}`;
 }
 
+// Preserve the exact JSON shape and types while allowing scalar values to vary,
+// except for conventional Graffiti discriminators that identify object kinds.
 function schemaFor(value: any, key?: string): any {
-  if ((key === "type" || key === "@type") && isScalar(value)) {
+  if (["type", "@type", "activity"].includes(key ?? "") && isScalar(value)) {
     return { const: value };
   }
   if (value === null) return { type: "null" };

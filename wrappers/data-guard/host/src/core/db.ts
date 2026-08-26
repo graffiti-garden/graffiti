@@ -106,16 +106,29 @@ export class GuardDB {
     subject: unknown,
     undoOf?: string,
   ) {
-    const request: Request = {
-      id: crypto.randomUUID(),
-      source,
-      actor,
-      method,
-      subject,
-      createdAt: Date.now(),
-      ...(undoOf ? { undoOf } : {}),
-    };
+    const request = newRequest(source, actor, method, subject, undoOf);
     await (await this.database).add("requests", { request });
+    return request;
+  }
+
+  async recovery(
+    source: Source,
+    actor: string,
+    method: Request["method"],
+    subject: unknown,
+    undoOf: string,
+  ) {
+    const db = await this.database;
+    const transaction = db.transaction("requests", "readwrite");
+    const store = transaction.objectStore("requests");
+    // The transaction serializes this check-and-add across guard tabs.
+    if ((await store.index("undo").getKey(undoOf)) !== undefined) {
+      await transaction.done;
+      throw new Error("This request has already been recovered.");
+    }
+    const request = newRequest(source, actor, method, subject, undoOf);
+    await store.add({ request });
+    await transaction.done;
     return request;
   }
 
@@ -175,8 +188,19 @@ export class GuardDB {
       | { ok: false; error: string },
   ) {
     const db = await this.database;
-    const entry = await db.get("requests", request.id);
-    if (!entry?.result) throw new Error(`Guard request ${request.id} was not authorized.`);
+    const transaction = db.transaction("requests", "readwrite");
+    const store = transaction.objectStore("requests");
+    const entry = await store.get(request.id);
+    // Clearing history is allowed while an operation is in flight. If its
+    // record is already gone, do not recreate it or misreport the operation.
+    if (!entry) {
+      await transaction.done;
+      return;
+    }
+    if (!entry.result) {
+      await transaction.done;
+      throw new Error(`Guard request ${request.id} was not authorized.`);
+    }
     entry.result.execution = execution.ok
       ? {
           ok: true,
@@ -184,7 +208,8 @@ export class GuardDB {
           ...(execution.value !== undefined ? { value: execution.value } : {}),
         }
       : { ok: false, at: Date.now(), error: execution.error };
-    await db.put("requests", entry);
+    await store.put(entry);
+    await transaction.done;
   }
 
   async revoke(id: string) {
@@ -207,10 +232,6 @@ export class GuardDB {
 
   async entry(id: string) {
     return (await this.database).get("requests", id);
-  }
-
-  async recoveries(id: string) {
-    return (await this.database).getAllFromIndex("requests", "undo", id);
   }
 
   async clearHistory() {
@@ -237,9 +258,33 @@ export class GuardDB {
 
   private async updateRequest(id: string, result: RequestResult) {
     const db = await this.database;
-    const entry = await db.get("requests", id);
-    if (!entry) throw new Error(`Unknown guard request ${id}.`);
+    const transaction = db.transaction("requests", "readwrite");
+    const store = transaction.objectStore("requests");
+    const entry = await store.get(id);
+    if (!entry) {
+      await transaction.done;
+      throw new Error(`Unknown guard request ${id}.`);
+    }
     entry.result = result;
-    await db.put("requests", entry);
+    await store.put(entry);
+    await transaction.done;
   }
+}
+
+function newRequest(
+  source: Source,
+  actor: string,
+  method: Request["method"],
+  subject: unknown,
+  undoOf?: string,
+): Request {
+  return {
+    id: crypto.randomUUID(),
+    source,
+    actor,
+    method,
+    subject,
+    createdAt: Date.now(),
+    ...(undoOf ? { undoOf } : {}),
+  };
 }

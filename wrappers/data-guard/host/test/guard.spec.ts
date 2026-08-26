@@ -2,6 +2,7 @@ import type { Graffiti } from "@graffiti-garden/api";
 import { afterEach, describe, expect, it } from "vitest";
 import { GuardDB } from "../src/core/db.js";
 import { Guard } from "../src/core/guard.js";
+import type { GraffitiMethod } from "../src/core/graffiti.js";
 
 const databases: GuardDB[] = [];
 afterEach(async () => {
@@ -121,5 +122,60 @@ describe("Guard", () => {
     expect(await guard.authorize("get", ["graffiti:public", {}])).toBeUndefined();
     expect(await guard.authorize("discover", [["chat"], {}])).toBeUndefined();
     expect(prompts()).toBe(0);
+  });
+
+  it("treats activity as an object discriminator", async () => {
+    const { guard, prompts } = setup();
+    await guard.authorize("post", [
+      {
+        value: { activity: "Like", target: "graffiti:first" },
+        channels: ["chat"],
+      },
+      session,
+    ]);
+    await guard.authorize("post", [
+      {
+        value: { activity: "Like", target: "graffiti:second" },
+        channels: ["chat"],
+      },
+      session,
+    ]);
+    await guard.authorize("post", [
+      {
+        value: { activity: "Follow", target: "actor:two" },
+        channels: ["chat"],
+      },
+      session,
+    ]);
+
+    expect(prompts()).toBe(2);
+  });
+
+  it("lets a remembered public operation apply to a recipient subset", async () => {
+    const { guard, prompts } = setup();
+    await guard.authorize("post", [
+      { value: { type: "Note", content: "public" }, channels: ["chat"] },
+      session,
+    ]);
+    await guard.authorize("post", [
+      {
+        value: { type: "Note", content: "private" },
+        channels: ["chat"],
+        allowed: ["actor:two"],
+      },
+      session,
+    ]);
+
+    expect(prompts()).toBe(1);
+  });
+
+  it("rejects an unknown authenticated Graffiti method", async () => {
+    const { guard } = setup();
+    await expect(
+      guard.authorize(
+        "futureMutation" as GraffitiMethod,
+        [session] as never,
+      ),
+    ).rejects.toThrow("Unsupported authenticated Graffiti method");
   });
 });

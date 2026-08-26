@@ -14,6 +14,7 @@ type StorageAccessHandle = {
 };
 
 type StorageDocument = Document & {
+  hasStorageAccess?: () => Promise<boolean>;
   requestStorageAccess?: (
     types?: typeof storageTypes,
   ) => Promise<StorageAccessHandle | void>;
@@ -33,7 +34,10 @@ async function activate() {
     await requestAndInstall(request);
     return;
   } catch {}
-  await new Promise<void>((resolve, reject) => {
+  try {
+    if (await storageDocument.hasStorageAccess?.()) return;
+  } catch {}
+  await new Promise<void>((resolve) => {
     const onContinue = async () => {
       show(StorageAccess, { busy: true, onContinue });
       try {
@@ -42,8 +46,7 @@ async function activate() {
         setVisible(false);
         resolve();
       } catch (error) {
-        show(StorageAccess, { error: true });
-        reject(error);
+        show(StorageAccess, { error: true, onContinue });
       }
     };
     setVisible(true);
@@ -54,8 +57,16 @@ async function activate() {
 async function requestAndInstall(
   request: NonNullable<StorageDocument["requestStorageAccess"]>,
 ) {
-  const handle = await request(storageTypes);
+  let handle: StorageAccessHandle | void;
+  try {
+    handle = await request(storageTypes);
+  } catch {
+    // Some browsers implement only the original, untyped Storage Access API.
+    handle = await request();
+  }
   if (!handle) return;
+  // idb and the decentralized implementation read these window globals, so
+  // install any partitioned-storage handles before constructing either one.
   for (const type of ["localStorage", "indexedDB"] as const) {
     if (handle[type]) {
       Object.defineProperty(window, type, {

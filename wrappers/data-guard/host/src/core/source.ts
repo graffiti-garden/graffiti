@@ -64,6 +64,7 @@ function hasActor(value: unknown): value is {
 }
 
 function sessionFromArgs(args: readonly unknown[]) {
+  // Every Graffiti method that accepts a session places it last.
   const session = args.at(-1);
   return hasActor(session) ? session : undefined;
 }

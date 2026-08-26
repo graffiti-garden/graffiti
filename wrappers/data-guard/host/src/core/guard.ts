@@ -120,15 +120,12 @@ export class Guard {
     if (!entry?.result?.execution?.ok) {
       throw new Error("Only successful requests can be recovered.");
     }
-    if ((await this.db.recoveries(id)).length) {
-      throw new Error("This request has already been recovered.");
-    }
     const original = entry.request;
     const session = this.sessions.get(original.actor);
     if (!session) throw new Error("Log in as the original actor first.");
     const method = recoveryMethod(original.method);
     if (!method) throw new Error(`${original.method} cannot be recovered.`);
-    const request = await this.db.request(
+    const request = await this.db.recovery(
       original.source,
       original.actor,
       method,
@@ -156,18 +153,28 @@ export class Guard {
     return this.db.clearEverything();
   }
 
-  private async prepare(method: string, args: any[]): Promise<any> {
-    if (["post", "get", "delete"].includes(method)) {
-      return await objectRequest(this.graffiti, method, args);
+  private async prepare(method: GraffitiMethod, args: any[]): Promise<any> {
+    switch (method) {
+      case "post":
+      case "get":
+      case "delete":
+        return await objectRequest(this.graffiti, method, args);
+      case "postMedia":
+      case "getMedia":
+      case "deleteMedia":
+        return await mediaRequest(this.graffiti, method, args);
+      case "discover":
+        return discoveryRequest(args as GraffitiArgs<"discover">);
+      case "logout":
+        return logoutRequest();
+      case "continueDiscover":
+      case "login":
+      case "actorToHandle":
+      case "handleToActor":
+        return undefined;
+      default:
+        return unsupportedMethod(method);
     }
-    if (["postMedia", "getMedia", "deleteMedia"].includes(method)) {
-      return await mediaRequest(this.graffiti, method, args);
-    }
-    if (method === "discover") {
-      return discoveryRequest(args as GraffitiArgs<"discover">);
-    }
-    if (method === "logout") return logoutRequest();
-    return undefined;
   }
 
   private async performRecovery(
@@ -199,12 +206,18 @@ export class Guard {
 }
 
 function resultValue(method: string, value: any, subject: any) {
+  // Audit results retain only identifiers needed for recovery, never private
+  // response bodies, session credentials, or media bytes.
   if (method === "post") return { url: value.url };
   if (method === "postMedia") return { url: value };
   if (["get", "delete"].includes(method)) return { url: subject.object.url };
   if (["getMedia", "deleteMedia"].includes(method)) return { url: subject.url };
   if (method === "discover") return { complete: true };
   return undefined;
+}
+
+function unsupportedMethod(method: never): never {
+  throw new Error(`Unsupported authenticated Graffiti method ${String(method)}.`);
 }
 
 function recoveryMethod(method: string) {
