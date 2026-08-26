@@ -1,0 +1,85 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app,
+main {
+  min-height: 100%;
+  background: transparent;
+}
+
+:root {
+  color-scheme: light dark;
+  --background-color: #fff;
+  --text-color: #202122;
+  --title-color: #101418;
+  --border-color: #a2a9b1;
+  --border-color-hover: #27292d;
+  --link-color: #36c;
+  --link-hover-color: #3056a9;
+  --secondary-color: #54595d;
+  --secondary-hover-color: #202122;
+  --warning-color: #bf3c2c;
+  --warning-hover-color: #9f3526;
+  --background-color-interactive: #eaecf0;
+  --background-color-interactive-hover: #dadde3;
+  --accent-button-background: #36c;
+  --accent-button-background-hover: #3056a9;
+  --accent-button-text: #fff;
+}
+
+body {
+  color: var(--text-color);
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+button,
+input {
+  font-size: inherit;
+  font-family: inherit;
+}
+
+a,
+button {
+  border: none;
+  color: var(--link-color);
+  background: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+:is(a, button):hover {
+  color: var(--link-hover-color);
+  text-decoration: underline 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background-color: #101418;
+    --text-color: #eaecf0;
+    --title-color: #f8f9fa;
+    --border-color: #72777d;
+    --border-color-hover: #a2a9b1;
+    --link-color: #88a3e8;
+    --link-hover-color: #a6bbf5;
+    --secondary-color: #a2a9b1;
+    --secondary-hover-color: #c8ccd1;
+    --warning-color: #fd7865;
+    --warning-hover-color: #fea898;
+    --background-color-interactive: #27292d;
+    --background-color-interactive-hover: #404244;
+  }
+}

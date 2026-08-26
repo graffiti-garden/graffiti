@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+.vitest-attachments
+__screenshots__
+graffitiDb*
+*.sw*
+.DS_Store
