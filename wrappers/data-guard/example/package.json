@@ -1,5 +1,5 @@
 {
-  "name": "graffiti-wrapper-guard-example",
+  "name": "graffiti-wrapper-data-guard-example",
   "private": true,
   "scripts": {
     "predev": "npm --prefix ../client run build",
@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.2.0",
-    "@graffiti-garden/wrapper-guard": "file:../client",
+    "@graffiti-garden/wrapper-data-guard": "file:../client",
     "@graffiti-garden/wrapper-vue": "^1.2.2",
     "@picocss/pico": "^2.1.1",
     "vue": "^3.5.29"

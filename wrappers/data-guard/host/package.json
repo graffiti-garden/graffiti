@@ -1,5 +1,5 @@
 {
-  "name": "graffiti-wrapper-guard-host",
+  "name": "graffiti-wrapper-data-guard-host",
   "private": true,
   "scripts": {
     "dev": "vite",

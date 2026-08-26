@@ -4,7 +4,7 @@ import type {
 } from "@graffiti-garden/api";
 
 export const messageChannel =
-  "https://graffiti.garden/examples/wrapper-guard/messages";
+  "https://graffiti.garden/examples/wrapper-data-guard/messages";
 
 export const messageSchema: JSONSchema = {
   type: "object",
