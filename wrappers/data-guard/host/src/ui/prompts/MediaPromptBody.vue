@@ -14,7 +14,7 @@ const props = defineProps<{
   canRemember: boolean;
   resolve: (answer: any) => void;
   preview?: any;
-  action: "store" | "get" | "delete";
+  action: "store" | "access" | "delete";
 }>();
 
 const media = computed(() => props.request.subject as any);
@@ -62,7 +62,7 @@ const title = computed(
       />
     </template>
     <template #details>
-      <dl @click.stop>
+      <dl>
         <dt>Kind</dt><dd>{{ labels.item }}</dd>
         <dt>MIME type</dt><dd><code>{{ media.type }}</code></dd>
         <template v-if="media.name"><dt>Name</dt><dd>{{ media.name }}</dd></template>

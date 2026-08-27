@@ -41,6 +41,10 @@ main.container {
   display: grid;
 }
 
+.private-attachment {
+  align-self: end;
+}
+
 .feed-header {
   margin-bottom: 1rem;
 }

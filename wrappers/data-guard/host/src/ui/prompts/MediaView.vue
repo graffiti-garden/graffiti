@@ -38,8 +38,6 @@ watch(
   <div
     class="media"
     :class="{ image: url && type.startsWith('image/') }"
-    @click.stop
-    @keydown.stop
   >
     <img v-if="url && type.startsWith('image/')" :src="url" alt="Media preview" />
     <video v-else-if="url && type.startsWith('video/')" :src="url" controls />

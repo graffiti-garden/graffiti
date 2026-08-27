@@ -8,6 +8,7 @@ export type Permission = {
   actor: string;
   method: GraffitiMethod;
   match:
+    | { kind: "object"; url: string }
     | {
         kind: "object";
         schema: unknown;
@@ -19,6 +20,7 @@ export type Permission = {
         schema: unknown;
         channels: string[] | "any";
       }
+    | { kind: "media"; url: string }
     | {
         kind: "media";
         mediaType: string;
@@ -155,11 +157,7 @@ export class GuardDB {
     permission: Omit<Permission, "id" | "createdAt">,
   ) {
     const db = await this.database;
-    const record: Permission = {
-      ...permission,
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-    };
+    const record = newPermission(permission);
     const transaction = db.transaction(
       ["permissions", "requests"],
       "readwrite",
@@ -186,9 +184,13 @@ export class GuardDB {
     execution:
       | { ok: true; value?: unknown }
       | { ok: false; error: string },
+    implicitPermission?: Omit<Permission, "id" | "createdAt">,
   ) {
     const db = await this.database;
-    const transaction = db.transaction("requests", "readwrite");
+    const transaction = db.transaction(
+      ["permissions", "requests"],
+      "readwrite",
+    );
     const store = transaction.objectStore("requests");
     const entry = await store.get(request.id);
     // Clearing history is allowed while an operation is in flight. If its
@@ -208,8 +210,19 @@ export class GuardDB {
           ...(execution.value !== undefined ? { value: execution.value } : {}),
         }
       : { ok: false, at: Date.now(), error: execution.error };
-    await store.put(entry);
-    await transaction.done;
+    // A successful post and the exact read permission implied by its returned
+    // URL become visible together; neither can be recorded without the other.
+    await Promise.all([
+      store.put(entry),
+      ...(implicitPermission
+        ? [
+            transaction
+              .objectStore("permissions")
+              .add(newPermission(implicitPermission)),
+          ]
+        : []),
+      transaction.done,
+    ]);
   }
 
   async revoke(id: string) {
@@ -269,6 +282,16 @@ export class GuardDB {
     await store.put(entry);
     await transaction.done;
   }
+}
+
+function newPermission(
+  permission: Omit<Permission, "id" | "createdAt">,
+): Permission {
+  return {
+    ...permission,
+    id: crypto.randomUUID(),
+    createdAt: Date.now(),
+  };
 }
 
 function newRequest(

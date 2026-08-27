@@ -5,7 +5,7 @@ import {
 } from "@graffiti-garden/api";
 import { GuardDB, type Request } from "./db.js";
 import type { GraffitiArgs, GraffitiMethod } from "./graffiti.js";
-import { matches } from "./permissions.js";
+import { exactReadMatch, matches } from "./permissions.js";
 import { discoveryRequest } from "./requests/discovery.js";
 import { logoutRequest } from "./requests/identity.js";
 import { mediaRequest } from "./requests/media.js";
@@ -55,6 +55,16 @@ export class Guard {
       method,
       prepared.subject,
     );
+    // A successful preparatory fetch proves data is public when it has no
+    // allowed list. Keep the authenticated read auditable, but do not ask the
+    // user to authorize access to data available without their session.
+    if (
+      (method === "get" && prepared.subject.object.allowed === undefined) ||
+      (method === "getMedia" && prepared.subject.allowed === undefined)
+    ) {
+      await this.db.allow(request);
+      return { request, prepared };
+    }
     let permission = (await this.db.permissions(source, actor, method)).find(
       (candidate) => matches(candidate, prepared.subject),
     );
@@ -74,12 +84,16 @@ export class Guard {
       throw new GraffitiErrorForbidden(`The user denied the ${method} request.`);
     }
 
-    if (answer.remember && prepared.createMatch) {
+    const retainExactRead =
+      !answer.remember && ["get", "getMedia", "discover"].includes(method);
+    if ((answer.remember || retainExactRead) && prepared.createMatch) {
       permission = await this.db.grant(request, {
         source,
         actor,
         method,
-        match: prepared.createMatch(answer),
+        match: retainExactRead
+          ? exactReadMatch(prepared.subject)
+          : prepared.createMatch(answer),
       });
     } else {
       await this.db.allow(request);
@@ -87,12 +101,17 @@ export class Guard {
     return { request, prepared, permission };
   }
 
-  async succeed(handle: any, method: string, value: any) {
+  async succeed(handle: any, value: any) {
     if (!handle) return;
-    await this.db.finish(handle.request, {
-      ok: true,
-      value: resultValue(method, value, handle.request.subject),
-    });
+    const request = handle.request as Request;
+    await this.db.finish(
+      request,
+      {
+        ok: true,
+        value: resultValue(request.method, value, request.subject),
+      },
+      implicitReadPermission(request, value),
+    );
   }
 
   async fail(handle: any, error: unknown) {
@@ -213,6 +232,32 @@ function resultValue(method: string, value: any, subject: any) {
   if (["get", "delete"].includes(method)) return { url: subject.object.url };
   if (["getMedia", "deleteMedia"].includes(method)) return { url: subject.url };
   if (method === "discover") return { complete: true };
+  return undefined;
+}
+
+function implicitReadPermission(request: Request, value: any) {
+  // The calling app necessarily learns the URL returned by its own write, so
+  // asking again before it reads that exact URL cannot protect information.
+  const subject = request.subject as any;
+  if (request.method === "post") {
+    return {
+      source: request.source,
+      actor: request.actor,
+      method: "get" as const,
+      match: exactReadMatch({
+        kind: "object",
+        object: { ...subject.object, url: value.url },
+      }),
+    };
+  }
+  if (request.method === "postMedia") {
+    return {
+      source: request.source,
+      actor: request.actor,
+      method: "getMedia" as const,
+      match: exactReadMatch({ ...subject, url: value }),
+    };
+  }
   return undefined;
 }
 

@@ -22,7 +22,17 @@ const prompts: Record<string, Component> = {
   logout: LogoutPrompt,
 };
 
+// The app has one prompt surface. Serialize prompts so concurrent Graffiti
+// calls cannot replace one another and leave an authorization unresolved.
+let previousPrompt = Promise.resolve();
+
 export function ask(request: Request, canRemember: boolean, preview?: unknown) {
+  const answer = previousPrompt.then(() => open(request, canRemember, preview));
+  previousPrompt = answer.then(() => undefined, () => undefined);
+  return answer;
+}
+
+function open(request: Request, canRemember: boolean, preview?: unknown) {
   setVisible(true);
   return new Promise<any>((resolve) => {
     show(prompts[request.method], {
