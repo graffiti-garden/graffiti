@@ -40,14 +40,26 @@ const title = computed(
   >
     <template #summary>
       <span>wants to {{ action }}:</span>
-      <div v-if="preview?.url" class="media-preview" @click.stop @keydown.stop>
+      <div v-if="preview?.url" class="media-preview">
         <GraffitiGetMedia
+          v-slot="{ media: fetchedMedia }"
           :url="preview.url"
           :accept="preview.accept"
           :session="preview.session"
-        />
+        >
+          <MediaView
+            :media="fetchedMedia"
+            :name="media.name"
+            :description="labels.description"
+          />
+        </GraffitiGetMedia>
       </div>
-      <MediaView v-else :media="preview?.media" />
+      <MediaView
+        v-else
+        :media="preview?.media"
+        :name="media.name"
+        :description="labels.description"
+      />
     </template>
     <template #details>
       <dl @click.stop>

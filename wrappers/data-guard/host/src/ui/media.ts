@@ -1,15 +1,16 @@
-import { FileKind, fromMime } from "human-filetypes";
+import { FileKind, fromMime, mimeData } from "human-filetypes";
 
 export function mediaLabels(type: unknown) {
-  const kind = fromMime(
-    String(type || "application/octet-stream").toLowerCase().trim(),
-  );
+  const mime = String(type || "application/octet-stream").toLowerCase().trim();
+  const kind = fromMime(mime);
   const item =
     kind === FileKind.Unknown || kind === FileKind.Application ? "file" : kind;
   return {
     item,
+    description:
+      mimeData[mime]?.label ?? (item === "file" ? "Unrecognized file" : `${capitalize(item)} file`),
     remember: `Allow For All ${
-      item === "file" ? "Files" : `${capitalize(item)} Files`
+      item === "file" ? "Unrecognized Files" : `${capitalize(item)} Files`
     }`,
   };
 }

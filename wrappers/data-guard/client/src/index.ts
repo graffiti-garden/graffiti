@@ -40,6 +40,7 @@ export class GraffitiGuarded extends Graffiti {
       "allow-scripts",
       "allow-same-origin",
       "allow-storage-access-by-user-activation",
+      "allow-downloads",
       "allow-forms",
       "allow-popups",
       "allow-top-navigation-by-user-activation",

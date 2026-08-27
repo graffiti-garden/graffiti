@@ -17,6 +17,7 @@
     "ajv": "^8.20.0",
     "human-filetypes": "^1.1.6",
     "idb": "^8.0.3",
+    "pdfjs-dist": "^6.2.108",
     "vue": "^3.5.29"
   },
   "devDependencies": {
