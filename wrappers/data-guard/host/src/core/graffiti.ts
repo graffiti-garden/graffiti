@@ -71,7 +71,7 @@ export class GuardedGraffiti extends Graffiti {
       await this.recordAudit(() => this.guard.fail(request, error));
       throw error;
     }
-    await this.recordAudit(() => this.guard.succeed(request, method, value));
+    await this.recordAudit(() => this.guard.succeed(request, value));
     return value;
   }
 
@@ -99,9 +99,7 @@ export class GuardedGraffiti extends Graffiti {
           }
           if (next.done) {
             complete = true;
-            await self.recordAudit(() =>
-              self.guard.succeed(request, "discover", next.value),
-            );
+            await self.recordAudit(() => self.guard.succeed(request, next.value));
             return next.value;
           }
           yield next.value;

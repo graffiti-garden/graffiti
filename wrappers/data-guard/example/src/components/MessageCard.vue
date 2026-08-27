@@ -90,6 +90,7 @@ async function remove() {
     <AttachmentView
       v-if="current.value.attachment"
       :attachment="current.value.attachment"
+      :session="session"
     />
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>

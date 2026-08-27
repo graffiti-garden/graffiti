@@ -1,13 +1,18 @@
 <script setup lang="ts">
+import type { GraffitiSession } from "@graffiti-garden/api";
 import { useGraffitiGetMedia } from "@graffiti-garden/wrapper-vue";
 import { computed } from "vue";
 import type { MessageAttachment } from "../model.js";
 
-const props = defineProps<{ attachment: MessageAttachment }>();
+const props = defineProps<{
+  attachment: MessageAttachment;
+  session?: GraffitiSession;
+}>();
 const accept = computed(() => ({ types: [props.attachment.mediaType] }));
 const { media } = useGraffitiGetMedia(
   () => props.attachment.url,
   accept,
+  () => props.session,
 );
 const kind = computed(() => props.attachment.mediaType.split("/")[0]);
 </script>

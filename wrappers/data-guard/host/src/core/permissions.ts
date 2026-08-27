@@ -47,11 +47,24 @@ export function mediaMatch(
   };
 }
 
+/** Retain access to one previously approved read without broadening its scope. */
+export function exactReadMatch(subject: any): Permission["match"] {
+  if (subject.kind === "discover") return discoverMatch(subject, {});
+  if (subject.kind === "object") {
+    return { kind: "object", url: exactUrl(subject.object.url) };
+  }
+  if (subject.kind === "media") {
+    return { kind: "media", url: exactUrl(subject.url) };
+  }
+  throw new TypeError("Cannot create an exact permission for this request.");
+}
+
 export function matches(permission: Permission, subject: any) {
   const match = permission.match;
   if (match.kind !== subject.kind) return false;
   if (match.kind === "logout") return true;
   if (match.kind === "object") {
+    if ("url" in match) return match.url === subject.object.url;
     return (
       ajv.validate(match.schema as object, subject.object.value) &&
       sameScope(match.channels, subject.object.channels) &&
@@ -64,6 +77,7 @@ export function matches(permission: Permission, subject: any) {
       sameScope(match.channels, subject.channels)
     );
   }
+  if ("url" in match) return match.url === subject.url;
   return (
     match.mediaType === mediaMatchKey(subject.type) &&
     sameScope(match.allowed, subject.allowed)
@@ -109,6 +123,13 @@ function mediaMatchKey(value: unknown) {
   const type = String(value || "application/octet-stream").toLowerCase().trim();
   const kind = fromMime(type);
   return kind === FileKind.Unknown ? `mime:${type}` : `kind:${kind}`;
+}
+
+function exactUrl(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    throw new TypeError("An exact read permission requires a URL.");
+  }
+  return value;
 }
 
 // Preserve the exact JSON shape and types while allowing scalar values to vary,

@@ -13,6 +13,7 @@ const graffiti = useGraffiti();
 const content = ref("");
 const mention = ref("");
 const attachment = ref<File>();
+const privateAttachment = ref(false);
 const fileInput = useTemplateRef("fileInput");
 const busy = ref(false);
 const error = ref("");
@@ -23,6 +24,7 @@ const canSend = computed(
 
 function selectAttachment(event: Event) {
   attachment.value = (event.target as HTMLInputElement).files?.[0];
+  if (!attachment.value) privateAttachment.value = false;
 }
 
 async function send() {
@@ -39,7 +41,13 @@ async function send() {
     let media: MessageAttachment | undefined;
     if (attachment.value) {
       const file = attachment.value;
-      mediaUrl = await graffiti.postMedia({ data: file }, props.session);
+      mediaUrl = await graffiti.postMedia(
+        {
+          data: file,
+          ...(privateAttachment.value ? { allowed: [] } : {}),
+        },
+        props.session,
+      );
       media = {
         type: "Document",
         url: mediaUrl,
@@ -67,6 +75,7 @@ async function send() {
     content.value = "";
     mention.value = "";
     attachment.value = undefined;
+    privateAttachment.value = false;
     if (fileInput.value) fileInput.value.value = "";
     notice.value = "Message sent.";
   } catch (cause) {
@@ -112,6 +121,14 @@ async function send() {
             :disabled="busy"
             @change="selectAttachment"
           />
+        </label>
+        <label class="private-attachment">
+          <input
+            v-model="privateAttachment"
+            type="checkbox"
+            :disabled="busy || !attachment"
+          />
+          Private attachment <small>(only you can access it)</small>
         </label>
       </div>
       <footer class="composer-footer">

@@ -6,7 +6,9 @@ const responseSchema = {
   required: ["summary"],
   additionalProperties: false,
 };
-const model = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
+// This small model is sufficient for a one-sentence description and avoids
+// making the permission prompt depend on a roughly 1 GB GPU allocation.
+const model = "SmolLM2-360M-Instruct-q4f32_1-MLC";
 let enginePromise: ReturnType<typeof loadWebLlm> | undefined;
 
 export async function summarizeObject(object: any) {
@@ -15,11 +17,18 @@ export async function summarizeObject(object: any) {
     channels: object.channels,
     ...(object.allowed !== undefined ? { allowed: object.allowed } : {}),
   });
-  for (const summarize of [chromeSummary, webLlmSummary]) {
+  for (const [name, summarize] of [
+    ["browser Prompt API", chromeSummary],
+    ["WebLLM", webLlmSummary],
+  ] as const) {
     try {
       const summary = await summarize(input);
       if (summary) return summary;
-    } catch {}
+    } catch (error) {
+      // AI summaries are optional UI assistance. Keep the permission prompt
+      // usable while leaving enough information to diagnose browser support.
+      console.info(`[Graffiti Guard] ${name} unavailable.`, error);
+    }
   }
 }
 
@@ -52,24 +61,34 @@ async function chromeSummary(input: string) {
 async function webLlmSummary(input: string) {
   if (!("gpu" in navigator)) return;
   const engine = await (enginePromise ??= loadWebLlm());
+  if (!engine) return;
   const response = await engine.chat.completions.create({
     messages: [
       { role: "system", content: `${systemPrompt} Return only JSON matching {"summary":"..."}.` },
       { role: "user", content: `Object JSON:\n${input}` },
     ],
     temperature: 0,
-    max_tokens: 160,
+    max_tokens: 120,
+    response_format: {
+      type: "json_object",
+      schema: JSON.stringify(responseSchema),
+    },
   });
   return readSummary(response.choices[0]?.message.content);
 }
 
 async function loadWebLlm() {
-  const { CreateMLCEngine } = await import("@mlc-ai/web-llm");
-  return CreateMLCEngine(model, {
-    initProgressCallback({ text }) {
-      if (text) console.info(`[Graffiti Guard] WebLLM: ${text}`);
-    },
-  });
+  try {
+    const { CreateMLCEngine } = await import("@mlc-ai/web-llm");
+    return await CreateMLCEngine(model, {
+      initProgressCallback({ text }) {
+        if (text) console.info(`[Graffiti Guard] WebLLM: ${text}`);
+      },
+    });
+  } catch (error) {
+    console.info("[Graffiti Guard] WebLLM could not start.", error);
+    return undefined;
+  }
 }
 
 function readSummary(value: unknown) {
