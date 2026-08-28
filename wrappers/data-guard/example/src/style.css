@@ -1,0 +1,126 @@
+:root {
+  --pico-font-size: 100%;
+  --pico-spacing: 0.85rem;
+}
+
+body {
+  min-width: 20rem;
+}
+
+body > #app > header {
+  padding-top: 1rem;
+}
+
+main.container {
+  max-width: 52rem;
+  padding-bottom: 4rem;
+}
+
+.welcome,
+.composer {
+  margin-bottom: 2rem;
+}
+
+.composer-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.composer-footer,
+.feed-header,
+.message-meta,
+.message-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.composer-footer > span {
+  display: grid;
+}
+
+.private-attachment {
+  align-self: end;
+}
+
+.feed-header {
+  margin-bottom: 1rem;
+}
+
+.feed-header h2 {
+  margin-bottom: 0;
+}
+
+.message-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.message {
+  margin: 0;
+}
+
+.message-meta {
+  margin-bottom: 0.75rem;
+}
+
+.message-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mentions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.attachment {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.attachment img,
+.attachment video {
+  max-height: 24rem;
+  width: auto;
+  border-radius: var(--pico-border-radius);
+}
+
+.attachment audio {
+  width: 100%;
+}
+
+.message-actions {
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.message-actions button,
+.feed-header button,
+nav button {
+  width: auto;
+  margin: 0;
+}
+
+.error {
+  color: var(--pico-del-color);
+}
+
+.success {
+  color: var(--pico-ins-color);
+}
+
+@media (max-width: 640px) {
+  .composer-options {
+    grid-template-columns: 1fr;
+  }
+
+  nav,
+  .feed-header,
+  .message-meta {
+    align-items: flex-start;
+  }
+}
