@@ -1,0 +1,99 @@
+#app {
+    > header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        backdrop-filter: blur(10px);
+        background: color-mix(
+            in srgb,
+            var(--pico-background-color) 85%,
+            transparent
+        );
+        border-bottom: 1px solid var(--pico-muted-border-color);
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
+    }
+    > :is(header, main) {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+.router-link-active {
+    text-decoration: none;
+}
+
+.router-link-exact-active,
+li a.router-link-exact-active {
+    text-decoration: underline;
+}
+
+header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: baseline;
+    justify-content: space-between;
+}
+
+article header {
+    justify-content: flex-start;
+}
+
+#app > main {
+    padding-bottom: 2rem;
+    padding-top: 1rem;
+}
+
+ul.cards {
+    padding-left: 0;
+    li {
+        list-style: none;
+    }
+}
+
+nav li {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+* :is(button, a[role="button"]) {
+    padding: calc(
+            var(--pico-nav-link-spacing-vertical) - var(--pico-border-width) * 2
+        )
+        var(--pico-nav-link-spacing-horizontal);
+}
+
+a[role="button"] {
+    margin-top: 0;
+}
+
+main h2 {
+    a {
+        color: inherit;
+    }
+    display: flex;
+    gap: 1rem;
+    span,
+    a {
+        word-break: break-all;
+    }
+}
+
+.secondary {
+    background: var(--pico-secondary-background);
+    border: 1px solid var(--pico-form-element-border-color);
+}
+.secondary:hover {
+    background: var(--pico-secondary-hover-background);
+    border-color: var(--pico-secondary-hover-border);
+}
+
+aside {
+    color: var(--pico-muted-color);
+    font-style: italic;
+}
