@@ -1,0 +1,113 @@
+import type {
+  GraffitiObject,
+  GraffitiObjectBase,
+  JSONSchema,
+} from "@graffiti-garden/api";
+
+export function chatNameSchema(channel: string, actor?: string) {
+  return {
+    properties: {
+      value: {
+        required: ["describes", "name", "published"],
+        properties: {
+          describes: { enum: [channel] },
+          name: { type: "string" },
+          published: { type: "number" },
+        },
+      },
+      actor: actor ? { enum: [actor] } : {},
+    },
+  } as const satisfies JSONSchema;
+}
+export type ChatNameSchema = ReturnType<typeof chatNameSchema>;
+export type ChatNameObject = GraffitiObject<ChatNameSchema>;
+
+export function memberUpdateSchema(channel: string) {
+  return {
+    properties: {
+      value: {
+        required: ["activity", "target", "object", "published"],
+        properties: {
+          // Add/Remove the target to/from the object
+          activity: { enum: ["Add", "Remove"] },
+          target: { type: "string" }, // actor to add
+          object: { enum: [channel] },
+          published: { type: "number" },
+        },
+      },
+    },
+  } as const satisfies JSONSchema;
+}
+export type MemberUpdateSchema = ReturnType<typeof memberUpdateSchema>;
+export type MemberUpdateObject = GraffitiObject<MemberUpdateSchema>;
+
+export function messageSchema() {
+  return {
+    properties: {
+      value: {
+        required: ["content", "published"],
+        properties: {
+          content: { type: "string" },
+          published: { type: "number" },
+          to: {
+            type: "array",
+            items: { type: "string" },
+          },
+        },
+      },
+    },
+  } as const satisfies JSONSchema;
+}
+export type MessageSchema = ReturnType<typeof messageSchema>;
+export type MessageObject = GraffitiObject<MessageSchema>;
+export type DisplayMessageObject = MessageObject & {
+  deliveryStatus?: "sending" | "sent" | "failed";
+};
+
+export function chatObjectSchema(channel: string) {
+  return {
+    anyOf: [
+      chatNameSchema(channel),
+      memberUpdateSchema(channel),
+      messageSchema(),
+    ],
+  } as const satisfies JSONSchema;
+}
+export type ChatObjectSchema = ReturnType<typeof chatObjectSchema>;
+export type ChatObject = GraffitiObject<ChatObjectSchema>;
+
+function valueOf(object: GraffitiObjectBase): Record<string, unknown> {
+  return object.value as Record<string, unknown>;
+}
+
+export function isChatNameObject(
+  object: GraffitiObjectBase,
+): object is ChatNameObject {
+  const value = valueOf(object);
+  return (
+    typeof value.name === "string" &&
+    typeof value.published === "number" &&
+    typeof value.describes === "string"
+  );
+}
+
+export function isMemberUpdateObject(
+  object: GraffitiObjectBase,
+): object is MemberUpdateObject {
+  const value = valueOf(object);
+  return (
+    (value.activity === "Add" || value.activity === "Remove") &&
+    typeof value.target === "string" &&
+    typeof value.object === "string" &&
+    typeof value.published === "number"
+  );
+}
+
+export function isMessageObject(
+  object: GraffitiObjectBase,
+): object is MessageObject {
+  const value = valueOf(object);
+  return (
+    typeof value.content === "string" && typeof value.published === "number"
+  );
+}

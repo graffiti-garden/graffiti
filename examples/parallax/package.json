@@ -1,0 +1,25 @@
+{
+  "name": "@graffiti-garden/parallax",
+  "version": "0.0.0",
+  "description": "A chat app where you are always the moderator",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/implementation-decentralized": "^0.0.9",
+    "@graffiti-garden/wrapper-vue": "^1.2.2",
+    "vue": "^3.5.38",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/typescript-plugin": "^3.3.5",
+    "vite": "^8.0.16",
+    "vue-tsc": "^3.3.5"
+  }
+}
