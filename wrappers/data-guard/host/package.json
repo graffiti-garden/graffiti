@@ -1,6 +1,14 @@
 {
   "name": "graffiti-wrapper-data-guard-host",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "wrappers/data-guard/host"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

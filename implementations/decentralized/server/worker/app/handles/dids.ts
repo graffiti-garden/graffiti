@@ -16,6 +16,11 @@ export async function getDid(c: Context<{ Bindings: Bindings }>) {
     "public, max-age=3600, stale-while-revalidate=86400",
   );
   const handleName = c.req.param("handle-name");
+  if (!handleName) {
+    throw new HTTPException(400, {
+      message: "Handle name is required.",
+    });
+  }
 
   const result = await c.env.DB.prepare(
     "SELECT services, also_known_as FROM handles WHERE name = ?",

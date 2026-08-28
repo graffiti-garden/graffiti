@@ -5,6 +5,8 @@ on:
     branches: ["main"]
     paths:
       - "api/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/api-pages.yml"
   workflow_dispatch:
 
@@ -32,15 +34,12 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: api/package-lock.json
 
-      - name: Install API dependencies
+      - name: Install dependencies
         run: npm ci
-        working-directory: api
 
       - name: Build API documentation
-        run: npm run build:docs
-        working-directory: api
+        run: npm run build:docs --workspace=@graffiti-garden/api
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

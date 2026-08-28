@@ -29,10 +29,18 @@
     "build:js": "tsx esbuild.config.mts",
     "build": "rm -rf dist && npm run build:types && npm run build:js",
     "check": "tsc --noEmit",
-    "prepublishOnly": "npm update && npm run check && npm run build"
+    "prepublishOnly": "npm run check && npm run build"
   },
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "wrappers/data-guard/client"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
+  },
   "dependencies": {
     "@graffiti-garden/api": "^1.2.0",
     "@graffiti-garden/wrapper-iframe-rpc": "^0.1.0"

@@ -1,6 +1,14 @@
 {
   "name": "graffiti-wrapper-data-guard-example",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "wrappers/data-guard/example"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
+  },
   "scripts": {
     "predev": "npm --prefix ../client run build",
     "dev": "concurrently -k -n host,example \"npm --prefix ../host run dev -- --host 0.0.0.0 --port 5174 --strictPort\" \"vite --host 0.0.0.0 --port 5173 --strictPort\"",
@@ -9,7 +17,7 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.2.0",
-    "@graffiti-garden/wrapper-data-guard": "file:../client",
+    "@graffiti-garden/wrapper-data-guard": "^0.1.0",
     "@graffiti-garden/wrapper-vue": "^1.2.2",
     "@picocss/pico": "^2.1.1",
     "vue": "^3.5.29"

@@ -13,7 +13,7 @@ import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
 import { Sessions } from "./3-protocol/1-sessions";
-import { afterAll, describe } from "vitest";
+import { afterAll, beforeAll, describe } from "vitest";
 import { Handles } from "./3-protocol/2-handles";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
@@ -25,48 +25,55 @@ import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-t
 import { handleTests } from "./3-protocol/2-handles-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
+import {
+  DecentralizedTestEnvironment,
+  decentralizedSharedInbox,
+  decentralizedTestUsers,
+} from "../test/environment";
 
-describe("GraffitiDecentralized Tests", async () => {
-  // Initialize structures for log in/out
-  const dids = new DecentralizedIdentifiers();
-  const sessionMethods = new Sessions({
-    dids,
-    authorization: new Authorization(),
-    inboxes: new Inboxes(),
-    storageBuckets: new StorageBuckets(),
-  });
-  const handleMethods = new Handles({ dids });
-
-  // Login
-  const handles = [
-    "localhost%3A5173:app:handles:handle:test1",
-    "localhost%3A5173:app:handles:handle:test2",
-  ];
+describe("GraffitiDecentralized Tests", () => {
+  const environment = new DecentralizedTestEnvironment();
+  const handles = decentralizedTestUsers.map((user) => user.handle);
   let sessions: GraffitiSession[] = [];
-  for (const handle of handles) {
-    sessions.push(await login(handle));
-  }
-  const resolvedSessions = sessions.map((s) => {
-    const resolved = sessionMethods.resolveSession(s);
-    if (!resolved) throw new Error("Error logging in");
-    return resolved;
+  let sessionMethods: Sessions;
+  let handleMethods: Handles;
+
+  beforeAll(async () => {
+    await environment.start();
+
+    const dids = new DecentralizedIdentifiers();
+    sessionMethods = new Sessions({
+      dids,
+      authorization: new Authorization(),
+      inboxes: new Inboxes(),
+      storageBuckets: new StorageBuckets(),
+    });
+    handleMethods = new Handles({ dids });
+
+    for (const handle of handles) {
+      sessions.push(await login(handle));
+    }
   });
-  // Logout on cleanup
+
   afterAll(async () => {
-    for (const session of sessions) {
-      await logout(session.actor);
+    try {
+      for (const session of sessions) {
+        await logout(session.actor);
+      }
+    } finally {
+      await environment.stop();
     }
   });
 
   // Service tests
   didTests();
   storageBucketTests(
-    resolvedSessions[0].storageBucket.serviceEndpoint,
-    resolvedSessions[0].storageBucket.token,
+    decentralizedTestUsers[0].bucketEndpoint,
+    decentralizedTestUsers[0].token,
   );
   inboxTests(
-    resolvedSessions[0].personalInbox.serviceEndpoint,
-    resolvedSessions[0].personalInbox.token,
+    decentralizedTestUsers[0].inboxEndpoint,
+    decentralizedTestUsers[0].token,
   );
 
   // Primitive tests
@@ -79,13 +86,10 @@ describe("GraffitiDecentralized Tests", async () => {
   handleTests(handles[0]);
   objectEncodingTests();
 
-  const useGraffiti = () => {
-    return new GraffitiDecentralized(
-      {
-        defaultInboxEndpoints: ["https://localhost:5173/i/shared"],
-      },
-    );
-  };
+  const useGraffiti = () =>
+    new GraffitiDecentralized({
+      defaultInboxEndpoints: [decentralizedSharedInbox],
+    });
   graffitiCRUDTests(
     useGraffiti,
     () => sessions[0],
@@ -107,9 +111,16 @@ describe("GraffitiDecentralized Tests", async () => {
     const actor = await handleMethods.handleToActor(handle);
 
     return await new Promise<GraffitiSession>((resolve, reject) => {
+      let timeout: ReturnType<typeof setTimeout>;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        sessionMethods.sessionEvents.removeEventListener("login", listener);
+      };
       const listener = (e: unknown) => {
         if (!(e instanceof CustomEvent)) return;
         const detail = e.detail as GraffitiLoginEvent["detail"];
+        if (detail.session?.actor !== actor) return;
+        cleanup();
         if (detail.error) {
           reject(detail.error);
         } else {
@@ -118,23 +129,30 @@ describe("GraffitiDecentralized Tests", async () => {
       };
       sessionMethods.sessionEvents.addEventListener("login", listener);
 
-      setTimeout(
+      timeout = setTimeout(
         () => {
-          sessionMethods.sessionEvents.removeEventListener("login", listener);
+          cleanup();
           reject(new Error("Authorization timed out"));
         },
-        5 * 60 * 1000,
-      ); // 5 minutes timeout
+        30 * 1000,
+      );
 
-      sessionMethods.login(actor);
+      void sessionMethods.login(actor);
     });
   }
 
   async function logout(actor: string) {
     return await new Promise<void>((resolve, reject) => {
+      let timeout: ReturnType<typeof setTimeout>;
+      const cleanup = () => {
+        clearTimeout(timeout);
+        sessionMethods.sessionEvents.removeEventListener("logout", listener);
+      };
       const listener = (e: unknown) => {
         if (!(e instanceof CustomEvent)) return;
         const detail = e.detail as GraffitiLogoutEvent["detail"];
+        if (detail.actor !== actor) return;
+        cleanup();
 
         if (detail.error) {
           reject(detail.error);
@@ -144,15 +162,15 @@ describe("GraffitiDecentralized Tests", async () => {
       };
       sessionMethods.sessionEvents.addEventListener("logout", listener);
 
-      setTimeout(
+      timeout = setTimeout(
         () => {
-          sessionMethods.sessionEvents.removeEventListener("logout", listener);
+          cleanup();
           reject(new Error("Logout timed out"));
         },
-        5 * 60 * 1000,
-      ); // 5 minutes timeout
+        30 * 1000,
+      );
 
-      sessionMethods.logout(actor);
+      void sessionMethods.logout(actor);
     });
   }
 });

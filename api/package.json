@@ -35,18 +35,20 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "scripts": {
+    "check": "tsc --noEmit",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
     "build": "rm -rf dist && rm -rf docs && npm run build:types && npm run build:js && npm run build:docs",
     "build:docs": "typedoc --options typedoc.json",
-    "prepublishOnly": "npm update && npm run build"
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/graffiti-garden/api.git"
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "api"
   },
   "bugs": {
-    "url": "https://github.com/graffiti-garden/api/issues"
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
   },
   "homepage": "https://api.graffiti.garden/classes/Graffiti.html",
   "devDependencies": {

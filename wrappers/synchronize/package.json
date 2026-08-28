@@ -19,6 +19,7 @@
     }
   },
   "scripts": {
+    "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest --coverage",
@@ -26,7 +27,7 @@
     "build:js": "tsx esbuild.config.mts",
     "build:docs": "typedoc --options typedoc.json && cp -r example docs",
     "build": "rm -rf dist && npm run build:types && npm run build:js && npm run build:docs",
-    "prepublishOnly": "npm update && npm test && npm run build"
+    "prepublishOnly": "npm test && npm run build"
   },
   "files": [
     "src",
@@ -39,10 +40,11 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/graffiti-garden/wrapper-synchronize.git"
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "wrappers/synchronize"
   },
   "bugs": {
-    "url": "https://github.com/graffiti-garden/wrapper-synchronize/issues"
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
   },
   "homepage": "https://sync.graffiti.garden/classes/GraffitiSynchronize.html",
   "devDependencies": {
