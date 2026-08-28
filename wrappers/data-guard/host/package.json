@@ -1,6 +1,7 @@
 {
   "name": "graffiti-wrapper-data-guard-host",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/graffiti.git",
