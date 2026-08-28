@@ -27,5 +27,9 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "validate": "npm run build && npm run check && npm test"
+  },
+  "overrides": {
+    "undici": "7.29.0",
+    "uuid": "11.1.1"
   }
 }
