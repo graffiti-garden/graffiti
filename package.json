@@ -1,6 +1,7 @@
 {
   "name": "graffiti-monorepo",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "packageManager": "npm@11.5.1",
   "engines": {
     "node": ">=24"
