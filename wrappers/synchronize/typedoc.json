@@ -1,0 +1,7 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "cname": "sync.graffiti.garden",
+  "titleLink": "/classes/GraffitiSynchronize.html",
+  "searchInDocuments": true,
+  "searchInComments": true
+}

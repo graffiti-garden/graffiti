@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-stats
+docs
+*.sw*
+.DS_Store
+graffitiDb*
+coverage
+docs
