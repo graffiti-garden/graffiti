@@ -1,0 +1,30 @@
+{
+  "name": "graffiti-monorepo",
+  "private": true,
+  "packageManager": "npm@11.5.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "api",
+    "wrappers/utils/modal",
+    "implementations/local",
+    "implementations/decentralized/client",
+    "wrappers/synchronize",
+    "wrappers/iframe-rpc",
+    "plugins/vue",
+    "wrappers/data-guard/client",
+    "wrappers/data-guard/host",
+    "wrappers/data-guard/example",
+    "implementations/decentralized/server",
+    "examples/glitter",
+    "examples/parallax",
+    "examples/wikiffiti"
+  ],
+  "scripts": {
+    "check": "npm run check --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "validate": "npm run build && npm run check && npm test"
+  }
+}

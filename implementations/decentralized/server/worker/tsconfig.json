@@ -1,7 +1,8 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["esnext", "webworker"],
+    "lib": ["esnext"],
+    "skipLibCheck": true,
     "types": ["@cloudflare/workers-types"],
   },
   "include": ["index.ts", "env.ts", "app", "api", "../shared/"],

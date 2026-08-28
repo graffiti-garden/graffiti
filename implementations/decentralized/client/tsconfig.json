@@ -14,4 +14,5 @@
     "declarationDir": "./dist",
   },
   "include": ["src"],
+  "exclude": ["src/**/*.spec.ts", "src/**/*-tests.ts"],
 }

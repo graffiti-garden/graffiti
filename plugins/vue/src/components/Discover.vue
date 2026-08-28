@@ -24,10 +24,10 @@ defineSlots<{
 }>();
 
 const { objects, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
-    toRef(props, "channels"),
-    toRef(props, "schema"),
-    toRef(props, "session"),
-    toRef(props, "autopoll"),
+    toRef(() => props.channels),
+    toRef(() => props.schema),
+    toRef(() => props.session),
+    toRef(() => props.autopoll),
 );
 </script>
 

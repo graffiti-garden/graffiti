@@ -59,7 +59,7 @@ webauthn.get("/register/challenge", async (c) => {
     attestationType: "none",
     userDisplayName: displayName,
     userName: displayName,
-    userID: new TextEncoder().encode(userId.toString()),
+    userID: Uint8Array.from(new TextEncoder().encode(userId.toString())),
   });
 
   // Store the challenge for later

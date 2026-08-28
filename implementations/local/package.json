@@ -59,13 +59,14 @@
     }
   },
   "scripts": {
+    "check": "tsc --noEmit",
     "test": "vitest run src",
     "test:watch": "vitest --watch src",
     "test:coverage": "vitest --coverage src",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
     "build": "rm -rf dist && npm run build:types && npm run build:js",
-    "prepublishOnly": "npm update && npm test && npm run build"
+    "prepublishOnly": "npm test && npm run build"
   },
   "files": [
     "src",
@@ -78,10 +79,11 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/graffiti-garden/implementation-local.git"
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "implementations/local"
   },
   "bugs": {
-    "url": "https://github.com/graffiti-garden/implementation-local/issues"
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
   },
   "devDependencies": {
     "@types/negotiator": "^0.6.4",

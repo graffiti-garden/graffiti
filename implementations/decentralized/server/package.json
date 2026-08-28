@@ -3,11 +3,24 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "implementations/decentralized/server"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
+  },
   "scripts": {
     "dev:web": "vite --config web/vite.config.mts",
     "dev:api": "mkdir -p web/dist && wrangler dev --config wrangler.toml",
     "dev": "concurrently --kill-others \"npm run dev:web\" \"npm run dev:api\"",
+    "check:web": "vue-tsc --noEmit -p web/tsconfig.json",
+    "check:worker": "tsc --noEmit -p worker/tsconfig.json",
+    "check": "npm run check:web && npm run check:worker",
     "build:web": "vite build --config web/vite.config.mts",
+    "build:worker": "wrangler deploy --dry-run --config wrangler.toml",
+    "build": "npm run build:web && npm run build:worker",
     "deploy": "npm run build:web && wrangler deploy --config wrangler.toml"
   },
   "dependencies": {
@@ -22,20 +35,21 @@
     "hono": "^4.11.4",
     "lru-cache": "^11.2.4",
     "multiformats": "^13.4.2",
-    "vue": "^3.5.27",
+    "vue": "3.5.27",
     "vue-router": "^4.6.4",
     "zod": "^4.2.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260120.0",
     "@types/http-proxy": "^1.17.17",
-    "@vitejs/plugin-basic-ssl": "^2.1.4",
-    "@vitejs/plugin-vue": "^6.0.3",
-    "@vue/typescript-plugin": "^3.2.2",
+    "@vitejs/plugin-basic-ssl": "2.1.4",
+    "@vitejs/plugin-vue": "6.0.3",
+    "@vue/typescript-plugin": "3.2.2",
     "concurrently": "^9.2.1",
     "http-proxy": "^1.18.1",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.1",
+    "typescript": "5.9.3",
+    "vite": "7.3.1",
+    "vue-tsc": "3.2.2",
     "wrangler": "^4.59.3"
   }
 }
