@@ -4,7 +4,7 @@ import { GraffitiRpcClient } from "@graffiti-garden/wrapper-iframe-rpc/client";
 let instance: GraffitiGuarded | undefined;
 
 export interface GraffitiGuardedOptions {
-  hostUrl: string | URL;
+  hostUrl?: string | URL;
   channel?: string;
   timeout?: number;
 }
@@ -28,14 +28,17 @@ export class GraffitiGuarded extends Graffiti {
   private readonly onMessage!: (event: MessageEvent) => void;
   private destroyed = false;
 
-  constructor(options: GraffitiGuardedOptions) {
+  constructor(options: GraffitiGuardedOptions = {}) {
     super();
     if (instance) return instance;
 
-    const hostUrl = new URL(options.hostUrl.toString(), document.baseURI);
+    const hostUrl = new URL(
+      options.hostUrl?.toString() ?? "https://guard.graffiti.garden/",
+      document.baseURI,
+    );
     const iframe = document.createElement("iframe");
     iframe.title = "Graffiti Guard";
-    iframe.allow = "storage-access; language-model";
+    iframe.allow = "storage-access";
     iframe.sandbox.add(
       "allow-scripts",
       "allow-same-origin",
@@ -80,13 +83,24 @@ export class GraffitiGuarded extends Graffiti {
       if (
         event.source !== remoteWindow ||
         event.origin !== hostUrl.origin ||
-        event.data?.type !== "graffiti-guard:set-visible" ||
-        typeof event.data.visible !== "boolean"
+        !event.data ||
+        typeof event.data !== "object"
       ) {
         return;
       }
-      iframe.style.display = event.data.visible ? "block" : "none";
-      iframe.setAttribute("aria-hidden", String(!event.data.visible));
+      if (
+        event.data.type === "graffiti-guard:set-visible" &&
+        typeof event.data.visible === "boolean"
+      ) {
+        iframe.style.display = event.data.visible ? "block" : "none";
+        iframe.setAttribute("aria-hidden", String(!event.data.visible));
+      } else if (
+        event.data.type === "graffiti-guard:open-audit" &&
+        typeof event.data.actor === "string" &&
+        Array.isArray(event.data.source)
+      ) {
+        this.audit(event.data);
+      }
     };
     window.addEventListener("message", onMessage);
 

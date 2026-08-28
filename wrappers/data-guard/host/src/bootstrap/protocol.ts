@@ -28,3 +28,13 @@ export function setVisible(visible: boolean) {
     "*",
   );
 }
+
+export function requestAudit(
+  actor: string,
+  source: { id: string; name: string }[],
+) {
+  window.parent.postMessage(
+    { type: "graffiti-guard:open-audit", actor, source },
+    "*",
+  );
+}

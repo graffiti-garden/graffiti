@@ -12,13 +12,15 @@ export const messageSchema: JSONSchema = {
     value: {
       type: "object",
       properties: {
-        type: { const: "Note" },
         content: { type: "string" },
         published: { type: "string" },
+        inReplyTo: { type: "string" },
         mentions: {
           type: "array",
           items: { type: "string" },
         },
+        replies: { type: "boolean" },
+        id: { type: "string" },
         attachment: {
           type: "object",
           properties: {
@@ -31,7 +33,14 @@ export const messageSchema: JSONSchema = {
           required: ["type", "url", "mediaType", "name", "size"],
         },
       },
-      required: ["type", "content", "published"],
+      required: [
+        "content",
+        "published",
+        "inReplyTo",
+        "mentions",
+        "replies",
+        "id",
+      ],
     },
   },
   required: ["value"],
@@ -46,10 +55,12 @@ export interface MessageAttachment {
 }
 
 export interface MessageValue {
-  type: "Note";
   content: string;
   published: string;
-  mentions?: string[];
+  inReplyTo: string;
+  mentions: string[];
+  replies: boolean;
+  id: string;
   attachment?: MessageAttachment;
 }
 

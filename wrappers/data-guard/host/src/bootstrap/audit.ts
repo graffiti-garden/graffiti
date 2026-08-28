@@ -1,12 +1,11 @@
-import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
+import type { Graffiti } from "@graffiti-garden/api";
 import { GuardDB } from "../core/db.js";
 import { Guard } from "../core/guard.js";
 import { sourceFromContext } from "../core/source.js";
 import { openAudit } from "../ui/audit.js";
 
-export function handleAudit(url: URL) {
+export function handleAudit(url: URL, graffiti: Graffiti) {
   const options = auditOptions(url);
-  const graffiti = new GraffitiDecentralized();
   const guard = new Guard(
     graffiti,
     new GuardDB(),

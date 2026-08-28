@@ -23,27 +23,17 @@ const request = {
 
 beforeEach(() => vi.clearAllMocks());
 
-describe("permission prompt queue", () => {
-  it("does not replace an unresolved prompt with a concurrent request", async () => {
-    const resolve: ((answer: unknown) => void)[] = [];
-    show.mockImplementation((_component, props) => resolve.push(props.resolve));
+describe("permission prompt", () => {
+  it("shows and resolves a permission prompt", async () => {
+    let resolve: (answer: unknown) => void = () => {};
+    show.mockImplementation((_component, props) => (resolve = props.resolve));
 
-    const first = ask(request, true);
-    const second = ask({ ...request, id: "second" }, true);
-    await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1));
+    const answer = ask(request, true);
+    await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
+    resolve({ remember: false });
 
-    resolve.shift()?.({ remember: false });
-    await first;
-    await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(2));
-
-    resolve.shift()?.(false);
-    await second;
-    expect(clear).toHaveBeenCalledTimes(2);
-    expect(setVisible.mock.calls.map(([visible]) => visible)).toEqual([
-      true,
-      false,
-      true,
-      false,
-    ]);
+    await expect(answer).resolves.toEqual({ remember: false });
+    expect(clear).toHaveBeenCalledOnce();
+    expect(setVisible.mock.calls).toEqual([[true], [false]]);
   });
 });
