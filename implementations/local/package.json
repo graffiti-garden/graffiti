@@ -1,0 +1,101 @@
+{
+  "name": "@graffiti-garden/implementation-local",
+  "version": "1.2.0",
+  "description": "A local implementation of the Graffiti API using PouchDB",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "browser": "./dist/browser/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./objects": {
+      "import": {
+        "types": "./dist/objects.d.ts",
+        "default": "./dist/esm/objects.js"
+      },
+      "require": {
+        "types": "./dist/objects.d.ts",
+        "default": "./dist/cjs/objects.js"
+      }
+    },
+    "./identity": {
+      "import": {
+        "types": "./dist/identity.d.ts",
+        "default": "./dist/esm/identity.js"
+      },
+      "require": {
+        "types": "./dist/identity.d.ts",
+        "default": "./dist/cjs/identity.js"
+      }
+    },
+    "./media": {
+      "import": {
+        "types": "./dist/media.d.ts",
+        "default": "./dist/esm/media.js"
+      },
+      "require": {
+        "types": "./dist/media.d.ts",
+        "default": "./dist/cjs/media.js"
+      }
+    },
+    "./utilities": {
+      "import": {
+        "types": "./dist/utilities.d.ts",
+        "default": "./dist/esm/utilities.js"
+      },
+      "require": {
+        "types": "./dist/utilities.d.ts",
+        "default": "./dist/cjs/utilities.js"
+      }
+    }
+  },
+  "scripts": {
+    "test": "vitest run src",
+    "test:watch": "vitest --watch src",
+    "test:coverage": "vitest --coverage src",
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "build:js": "tsx esbuild.config.mts",
+    "build": "rm -rf dist && npm run build:types && npm run build:js",
+    "prepublishOnly": "npm update && npm test && npm run build"
+  },
+  "files": [
+    "src",
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/implementation-local.git"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/implementation-local/issues"
+  },
+  "devDependencies": {
+    "@types/negotiator": "^0.6.4",
+    "@types/node": "^25.0.6",
+    "@types/pouchdb": "^6.4.2",
+    "@vitest/coverage-v8": "^4.0.17",
+    "esbuild": "^0.27.2",
+    "esbuild-plugin-polyfill-node": "^0.3.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.17"
+  },
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "pouchdb": "^9.0.0"
+  }
+}
