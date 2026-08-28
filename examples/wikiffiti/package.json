@@ -1,0 +1,25 @@
+{
+  "name": "@graffiti-garden/wikiffiti",
+  "version": "0.0.0",
+  "description": "an extensible wiki built on Graffiti",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/implementation-decentralized": "^0.0.9",
+    "@graffiti-garden/wrapper-vue": "^1.2.2",
+    "markdown-it": "^14.2.0",
+    "vue": "^3.5.13",
+    "vue-router": "^5.0.7"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/typescript-plugin": "^3.3.2",
+    "vite": "^8.0.14"
+  }
+}
