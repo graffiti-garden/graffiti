@@ -98,6 +98,7 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/wrapper-runtime-types": "^0.1.0",
     "pouchdb": "^9.0.0"
   }
 }
