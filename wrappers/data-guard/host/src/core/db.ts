@@ -15,11 +15,6 @@ export type Permission = {
         channels: string[] | "any";
         allowed: string[] | "any";
       }
-    | {
-        kind: "discover";
-        schema: unknown;
-        channels: string[] | "any";
-      }
     | { kind: "media"; url: string }
     | {
         kind: "media";
@@ -62,7 +57,7 @@ interface GuardDatabase extends DBSchema {
   requests: {
     key: string;
     value: { request: Request; result?: RequestResult };
-    indexes: { source: string; created: number; undo: string };
+    indexes: { undo: string };
   };
 }
 
@@ -79,8 +74,6 @@ export class GuardDB {
         const requests = db.createObjectStore("requests", {
           keyPath: "request.id",
         });
-        requests.createIndex("source", "request.source.key");
-        requests.createIndex("created", "request.createdAt");
         requests.createIndex("undo", "request.undoOf");
       },
     });
@@ -179,6 +172,32 @@ export class GuardDB {
     return record;
   }
 
+  async ensurePermission(
+    permission: Omit<Permission, "id" | "createdAt">,
+  ) {
+    const db = await this.database;
+    const transaction = db.transaction("permissions", "readwrite");
+    const store = transaction.objectStore("permissions");
+    // The readwrite transaction serializes concurrent discoveries so they
+    // cannot create duplicate exact permissions for the same object.
+    const existing = (
+      await store.index("source").getAll(permission.source.key)
+    ).find(
+      (candidate) =>
+        candidate.actor === permission.actor &&
+        candidate.method === permission.method &&
+        JSON.stringify(candidate.match) === JSON.stringify(permission.match),
+    );
+    if (existing) {
+      await transaction.done;
+      return existing;
+    }
+    const record = newPermission(permission);
+    await store.add(record);
+    await transaction.done;
+    return record;
+  }
+
   async finish(
     request: Request,
     execution:
@@ -210,8 +229,9 @@ export class GuardDB {
           ...(execution.value !== undefined ? { value: execution.value } : {}),
         }
       : { ok: false, at: Date.now(), error: execution.error };
-    // A successful post and the exact read permission implied by its returned
-    // URL become visible together; neither can be recorded without the other.
+    // A successful private post and the exact read permission implied by its
+    // returned URL become visible together; neither is recorded without the
+    // other. Public data needs no stored read permission.
     await Promise.all([
       store.put(entry),
       ...(implicitPermission

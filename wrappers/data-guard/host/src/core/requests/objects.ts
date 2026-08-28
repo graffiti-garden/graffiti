@@ -5,12 +5,18 @@ export async function objectRequest(
   method: string,
   args: any[],
 ) {
-  const object =
+  return prepareObjectRequest(
     method === "post"
-      ? normalizeObject(args[0])
-      : normalizeObject(await graffiti.get(args[0], {}, args.at(-1)));
+      ? args[0]
+      : await graffiti.get(args[0], {}, args.at(-1)),
+  );
+}
+
+/** Prepare an object already returned by Graffiti without fetching it again. */
+export function prepareObjectRequest(value: any) {
+  const object = normalizeObject(value);
   return {
     subject: { kind: "object", object },
-    createMatch: (answer: any) => objectMatch(object, answer),
+    createMatch: () => objectMatch(object),
   };
 }

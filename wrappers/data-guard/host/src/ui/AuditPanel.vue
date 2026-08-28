@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from "vue";
 import type { Permission, Request } from "../core/db.js";
 import type { Guard } from "../core/guard.js";
 import { sourceLabel } from "../core/source.js";
+import IdentityValue from "./values/IdentityValue.vue";
+import TimestampValue from "./values/TimestampValue.vue";
+import UuidValue from "./values/UuidValue.vue";
 
 const props = defineProps<{
   guard: Guard;
@@ -139,7 +142,6 @@ function methodLabel(method: string) {
       post: "Store data",
       get: "Access data",
       delete: "Delete data",
-      discover: "Search data",
       postMedia: "Store media",
       getMedia: "Access media",
       deleteMedia: "Delete media",
@@ -152,9 +154,6 @@ function permissionSummary(permission: Permission) {
   const match = permission.match;
   if ("url" in match) return `This exact URL: ${match.url}`;
   if (match.kind === "logout") return "May end this actor's session";
-  if (match.kind === "discover") {
-    return `Matching query on ${scope(match.channels, "channel")}`;
-  }
   if (match.kind === "media") {
     const media = match.mediaType.startsWith("kind:")
       ? `${match.mediaType.slice(5)} files`
@@ -166,9 +165,6 @@ function permissionSummary(permission: Permission) {
 
 function requestSummary(request: Request) {
   const subject = request.subject as any;
-  if (subject?.kind === "discover") {
-    return `Query on ${scope(subject.channels, "channel")}`;
-  }
   if (subject?.kind === "media") {
     return subject.url ? `Media at ${subject.url}` : `${subject.type || "Media"}`;
   }
@@ -212,14 +208,6 @@ function recipientScope(value: string[] | "any") {
   if (value === "any") return "any visibility";
   if (!value.length) return "private visibility";
   return `visibility for ${value.length} recipient${value.length === 1 ? "" : "s"}`;
-}
-
-function time(value: number) {
-  return new Date(value).toLocaleString();
-}
-
-function dateTime(value: number) {
-  return new Date(value).toISOString();
 }
 
 function capitalize(value: string) {
@@ -317,13 +305,13 @@ function errorMessage(cause: unknown) {
                 <p class="method">{{ methodLabel(permission.method) }}</p>
                 <h3>{{ permissionSummary(permission) }}</h3>
               </div>
-              <time :datetime="dateTime(permission.createdAt)">
-                {{ time(permission.createdAt) }}
-              </time>
+              <TimestampValue
+                :value="new Date(permission.createdAt)"
+              />
             </header>
             <dl class="metadata">
               <div><dt>Source</dt><dd>{{ sourceLabel(permission.source) }}</dd></div>
-              <div><dt>Actor</dt><dd><code>{{ permission.actor }}</code></dd></div>
+              <div><dt>Actor</dt><dd><IdentityValue :actor="permission.actor" /></dd></div>
             </dl>
             <details>
               <summary>Exact permission data</summary>
@@ -367,20 +355,20 @@ function errorMessage(cause: unknown) {
                 <span class="status" :class="status(entry).class">
                   {{ status(entry).label }}
                 </span>
-                <time :datetime="dateTime(entry.request.createdAt)">
-                  {{ time(entry.request.createdAt) }}
-                </time>
+                <TimestampValue
+                  :value="new Date(entry.request.createdAt)"
+                />
               </div>
             </header>
             <dl class="metadata">
               <div><dt>Source</dt><dd>{{ sourceLabel(entry.request.source) }}</dd></div>
-              <div><dt>Actor</dt><dd><code>{{ entry.request.actor }}</code></dd></div>
+              <div><dt>Actor</dt><dd><IdentityValue :actor="entry.request.actor" /></dd></div>
             </dl>
             <p v-if="permissionUse(entry)" class="permission-use">
               {{ permissionUse(entry) }}
             </p>
             <p v-if="entry.request.undoOf" class="permission-use">
-              Recovery of request <code>{{ entry.request.undoOf }}</code>
+              Recovery of request <UuidValue :value="entry.request.undoOf" />
             </p>
             <p
               v-if="entry.result?.execution && !entry.result.execution.ok"
@@ -461,7 +449,6 @@ button.quiet:hover { color: var(--link-hover-color); text-decoration: underline;
 .section-header p, .page-header p, .maintenance p { margin-top: 0.25rem; color: var(--secondary-color); }
 .records { display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
 .record { display: grid; gap: 0.8rem; border: 1px solid var(--border-color); border-radius: 0.6rem; padding: 1rem; background: var(--background-color); }
-.record-header time, .outcome time { color: var(--secondary-color); font-size: 0.85rem; white-space: nowrap; }
 .outcome { display: grid; justify-items: end; gap: 0.35rem; }
 .status { border-radius: 999px; padding: 0.12rem 0.5rem; font-size: 0.78rem; font-weight: 700; }
 .status.pending, .status.allowed { color: var(--secondary-color); background: var(--background-color-interactive); }
@@ -489,7 +476,6 @@ pre { max-height: 18rem; overflow: auto; margin: 0.55rem 0 0; border-radius: 0.4
   .filter-fields { grid-template-columns: 1fr; }
   .filter-fields label:not(:first-child) { margin-top: 0.35rem; }
   .outcome { justify-items: start; }
-  .record-header time, .outcome time { white-space: normal; }
   .maintenance-actions { width: 100%; }
   .maintenance-actions button { flex: 1; }
 }

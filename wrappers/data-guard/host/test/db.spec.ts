@@ -60,6 +60,24 @@ describe("GuardDB", () => {
     expect(await db.permissions(source, "actor:one", "post")).toEqual([]);
   });
 
+  it("deduplicates concurrent exact permissions", async () => {
+    const db = database();
+    const permission = {
+      source,
+      actor: "actor:one",
+      method: "get" as const,
+      match: { kind: "object" as const, url: "graffiti:one" },
+    };
+
+    const [first, second] = await Promise.all([
+      db.ensurePermission(permission),
+      db.ensurePermission(permission),
+    ]);
+
+    expect(second.id).toBe(first.id);
+    expect(await db.permissions(source, "actor:one", "get")).toHaveLength(1);
+  });
+
   it("clears history without clearing active permissions", async () => {
     const db = database();
     const request = await db.request(source, "actor:one", "logout", {});

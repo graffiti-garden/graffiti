@@ -6,50 +6,28 @@ const ajv = new Ajv({ strict: false });
 
 export function objectMatch(
   object: any,
-  answer: any,
 ): Extract<Permission["match"], { kind: "object" }> {
   const schema = schemaFor(object.value);
   return {
     kind: "object",
     schema: sortJson(schema),
-    channels: answer.anyChannels ? "any" : normalizeStrings(object.channels),
-    // Public data is already visible to every subset of actors, so remembering
-    // a public operation also permits otherwise-similar private operations.
-    allowed:
-      object.allowed == null || answer.anyAllowed
-        ? "any"
-        : normalizeStrings(object.allowed),
-  };
-}
-
-export function discoverMatch(
-  subject: any,
-  answer: any,
-): Extract<Permission["match"], { kind: "discover" }> {
-  return {
-    kind: "discover",
-    schema: sortJson(subject.schema),
-    channels: answer.anyChannels ? "any" : normalizeStrings(subject.channels),
+    channels: "any",
+    allowed: "any",
   };
 }
 
 export function mediaMatch(
   subject: any,
-  answer: any,
 ): Extract<Permission["match"], { kind: "media" }> {
   return {
     kind: "media",
     mediaType: mediaMatchKey(subject.type),
-    allowed:
-      subject.allowed == null || answer.anyAllowed
-        ? "any"
-        : normalizeStrings(subject.allowed),
+    allowed: "any",
   };
 }
 
 /** Retain access to one previously approved read without broadening its scope. */
 export function exactReadMatch(subject: any): Permission["match"] {
-  if (subject.kind === "discover") return discoverMatch(subject, {});
   if (subject.kind === "object") {
     return { kind: "object", url: exactUrl(subject.object.url) };
   }
@@ -71,12 +49,6 @@ export function matches(permission: Permission, subject: any) {
       sameScope(match.allowed, subject.object.allowed)
     );
   }
-  if (match.kind === "discover") {
-    return (
-      stableStringify(match.schema) === stableStringify(subject.schema) &&
-      sameScope(match.channels, subject.channels)
-    );
-  }
   if ("url" in match) return match.url === subject.url;
   return (
     match.mediaType === mediaMatchKey(subject.type) &&
@@ -93,14 +65,6 @@ export function normalizeObject(object: any) {
       : {}),
     ...(typeof object.url === "string" ? { url: object.url } : {}),
     ...(typeof object.actor === "string" ? { actor: object.actor } : {}),
-  };
-}
-
-export function normalizeQuery(channels: string[], schema: unknown) {
-  return {
-    kind: "discover",
-    channels: normalizeStrings(channels),
-    schema: sortJson(schema),
   };
 }
 

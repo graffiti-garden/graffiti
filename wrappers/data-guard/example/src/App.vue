@@ -33,6 +33,9 @@ const messages = computed(() =>
         Date.parse(a.value.published) - Date.parse(b.value.published),
     ),
 );
+const replyTarget = computed(
+  () => messages.value[messages.value.length - 1]?.url,
+);
 const guardedSession = computed(() =>
   session.value
     ? {
@@ -101,7 +104,11 @@ async function logOut() {
   </header>
 
   <main class="container">
-    <MessageComposer v-if="guardedSession" :session="guardedSession" />
+    <MessageComposer
+      v-if="guardedSession"
+      :session="guardedSession"
+      :in-reply-to="replyTarget"
+    />
     <article v-else-if="session === null" class="welcome">
       <h1>Join the conversation</h1>
       <p>You can read messages now. Log in when you want to send one.</p>

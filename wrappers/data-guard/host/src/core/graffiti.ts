@@ -1,4 +1,8 @@
-import { Graffiti, type GraffitiObjectStream } from "@graffiti-garden/api";
+import {
+  Graffiti,
+  GraffitiErrorForbidden,
+  type GraffitiObjectStream,
+} from "@graffiti-garden/api";
 import type { Guard } from "./guard.js";
 
 export type GraffitiMethod = {
@@ -36,16 +40,13 @@ export class GuardedGraffiti extends Graffiti {
         // once here so the rest of the guard can retain the API's types.
         const method = String(property) as GraffitiMethod;
         const implementationMethod = value as Method;
-        // A cursor is itself the capability to continue a discovery, so a
-        // continuation bypasses the guard entirely.
-        if (method === "continueDiscover") {
-          return implementationMethod.bind(implementation);
-        }
-        if (method === "discover") {
+        if (method === "discover" || method === "continueDiscover") {
           return (...args: unknown[]) =>
             this.stream(
               implementationMethod,
-              args as GraffitiArgs<"discover">,
+              args as
+                | GraffitiArgs<"discover">
+                | GraffitiArgs<"continueDiscover">,
             );
         }
         return (...args: unknown[]) =>
@@ -77,11 +78,12 @@ export class GuardedGraffiti extends Graffiti {
 
   private stream(
     implementation: Method,
-    args: GraffitiArgs<"discover">,
+    args: GraffitiArgs<"discover"> | GraffitiArgs<"continueDiscover">,
   ): GraffitiObjectStream<{}> {
     const self = this;
     return (async function* () {
-      const request = await self.guard.authorize("discover", args);
+      // Queries and cursors need no permission. Only private objects crossing
+      // this stream boundary are authorized and audited.
       const stream = implementation.apply(
         self.graffiti,
         args,
@@ -89,33 +91,36 @@ export class GuardedGraffiti extends Graffiti {
       let complete = false;
       try {
         while (true) {
-          let next;
-          try {
-            next = await stream.next();
-          } catch (error) {
-            complete = true;
-            await self.recordAudit(() => self.guard.fail(request, error));
-            throw error;
-          }
+          const next = await stream.next();
           if (next.done) {
             complete = true;
-            await self.recordAudit(() => self.guard.succeed(request, next.value));
             return next.value;
           }
-          yield next.value;
+          const result = next.value;
+          if (
+            !result.error &&
+            !result.tombstone &&
+            result.object?.allowed != null
+          ) {
+            try {
+              const request = await self.guard.authorizeDiscovered(
+                args,
+                result.object,
+              );
+              await self.recordAudit(() =>
+                self.guard.succeed(request, result.object),
+              );
+            } catch (error) {
+              if (!(error instanceof GraffitiErrorForbidden)) throw error;
+              yield { error, origin: guardOrigin() };
+              continue;
+            }
+          }
+          yield result;
         }
       } finally {
         if (!complete) {
-          try {
-            await stream.return({ cursor: "" });
-          } finally {
-            await self.recordAudit(() =>
-              self.guard.fail(
-                request,
-                new Error("Discovery was aborted before completion."),
-              ),
-            );
-          }
+          await stream.return({ cursor: "" });
         }
       }
     })();
@@ -130,4 +135,10 @@ export class GuardedGraffiti extends Graffiti {
       console.error("Failed to finalize the Graffiti guard audit record.", error);
     }
   }
+}
+
+function guardOrigin() {
+  return typeof window === "undefined"
+    ? "graffiti-guard:"
+    : window.location.origin;
 }

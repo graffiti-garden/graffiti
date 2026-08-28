@@ -8,10 +8,17 @@ import {
   type MessageAttachment,
 } from "../model.js";
 
-const props = defineProps<{ session: GraffitiSession }>();
+const props = defineProps<{
+  session: GraffitiSession;
+  inReplyTo?: string;
+}>();
 const graffiti = useGraffiti();
-const content = ref("");
-const mention = ref("");
+const content = ref(
+  "Hello world, this is a sort of long piece text just to test what happens with wrapping, hope it works!!! and im going to keep going for a little bit... okkkkk now its.... good",
+);
+const mention = ref(
+  "did:plc:numtqzbw74lmrguyvpzq6uf5, did:plc:ewvi7nxzyoun6zhxrhs64oiz, did:web:graffiti.garden",
+);
 const attachment = ref<File>();
 const privateAttachment = ref(false);
 const fileInput = useTemplateRef("fileInput");
@@ -35,9 +42,15 @@ async function send() {
   let mediaUrl: string | undefined;
 
   try {
-    const mentions = mention.value.trim()
-      ? [await graffiti.handleToActor(mention.value.trim())]
-      : undefined;
+    const mentions = await Promise.all(
+      mention.value
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) =>
+          value.startsWith("did:") ? value : graffiti.handleToActor(value),
+        ),
+    );
     let media: MessageAttachment | undefined;
     if (attachment.value) {
       const file = attachment.value;
@@ -60,10 +73,14 @@ async function send() {
     await graffiti.post(
       {
         value: {
-          type: "Note",
           content: content.value.trim(),
           published: new Date().toISOString(),
-          ...(mentions ? { mentions } : {}),
+          inReplyTo:
+            props.inReplyTo ??
+            "graffiti:did!plc!numtqzbw74lmrguyvpzq6uf5:uEiBQi0oYnjV_A-EOuv0Vwpz7ExiNmZ2YlAm4liR4jZq-dQ",
+          mentions,
+          replies: false,
+          id: crypto.randomUUID(),
           ...(media ? { attachment: media } : {}),
         },
         // One stable public room; Graffiti channels are discovery indexes.
@@ -105,11 +122,11 @@ async function send() {
       </label>
       <div class="composer-options">
         <label>
-          Mention someone <small>(optional)</small>
+          Mention people <small>(comma-separated, optional)</small>
           <input
             v-model="mention"
             type="text"
-            placeholder="their.handle"
+            placeholder="handles or DIDs"
             :disabled="busy"
           />
         </label>

@@ -1,15 +1,18 @@
 import {
   GraffitiErrorForbidden,
   type Graffiti,
+  type GraffitiObject,
   type GraffitiSession,
 } from "@graffiti-garden/api";
 import { GuardDB, type Request } from "./db.js";
 import type { GraffitiArgs, GraffitiMethod } from "./graffiti.js";
 import { exactReadMatch, matches } from "./permissions.js";
-import { discoveryRequest } from "./requests/discovery.js";
 import { logoutRequest } from "./requests/identity.js";
 import { mediaRequest } from "./requests/media.js";
-import { objectRequest } from "./requests/objects.js";
+import {
+  objectRequest,
+  prepareObjectRequest,
+} from "./requests/objects.js";
 import {
   actorFromArgs,
   sourceFromArgs,
@@ -17,6 +20,7 @@ import {
 
 export class Guard {
   private readonly sessions = new Map<string, GraffitiSession>();
+  private previousAuthorization = Promise.resolve();
 
   constructor(
     private readonly graffiti: Graffiti,
@@ -26,7 +30,7 @@ export class Guard {
       request: Request,
       canRemember: boolean,
       preview?: unknown,
-    ) => Promise<false | { remember: boolean; anyChannels?: boolean; anyAllowed?: boolean }>,
+    ) => Promise<false | { remember: boolean }>,
   ) {
     graffiti.sessionEvents.addEventListener("login", (event) => {
       if (!(event instanceof CustomEvent) || event.detail?.error) return;
@@ -42,13 +46,68 @@ export class Guard {
     method: Method,
     args: GraffitiArgs<Method>,
   ) {
-    if (method === "continueDiscover") return undefined;
+    if (method === "discover" || method === "continueDiscover") {
+      return undefined;
+    }
     const actor = actorFromArgs(args);
     if (!actor) return undefined;
     const source = sourceFromArgs(this.origin, args);
     const prepared = await this.prepare(method, args as any[]);
     if (!prepared) return undefined;
+    return this.authorizePrepared(source, actor, method, prepared);
+  }
 
+  async authorizeDiscovered(
+    args: GraffitiArgs<"discover"> | GraffitiArgs<"continueDiscover">,
+    object: GraffitiObject<{}>,
+  ) {
+    if (object.allowed == null) return undefined;
+    const actor = actorFromArgs(args);
+    if (!actor) {
+      throw new GraffitiErrorForbidden(
+        "A private discovery result requires an authenticated session.",
+      );
+    }
+    const source = sourceFromArgs(this.origin, args);
+    const prepared = prepareObjectRequest(object);
+    const handle = await this.authorizePrepared(
+      source,
+      actor,
+      "get",
+      prepared,
+    );
+    // Once the object crosses into the app, retaining its exact URL requires
+    // no broader authority than the disclosure which has already occurred.
+    await this.db.ensurePermission(
+      objectReadPermission(source, actor, prepared.subject.object.url),
+    );
+    return handle;
+  }
+
+  private authorizePrepared(
+    source: ReturnType<typeof sourceFromArgs>,
+    actor: string,
+    method: GraffitiMethod,
+    prepared: any,
+  ) {
+    // Recheck saved permissions only when this request reaches the front of
+    // the queue, so a broad grant from the preceding prompt can authorize it.
+    const authorization = this.previousAuthorization.then(() =>
+      this.decide(source, actor, method, prepared),
+    );
+    this.previousAuthorization = authorization.then(
+      () => undefined,
+      () => undefined,
+    );
+    return authorization;
+  }
+
+  private async decide(
+    source: ReturnType<typeof sourceFromArgs>,
+    actor: string,
+    method: GraffitiMethod,
+    prepared: any,
+  ) {
     const request = await this.db.request(
       source,
       actor,
@@ -59,8 +118,8 @@ export class Guard {
     // allowed list. Keep the authenticated read auditable, but do not ask the
     // user to authorize access to data available without their session.
     if (
-      (method === "get" && prepared.subject.object.allowed === undefined) ||
-      (method === "getMedia" && prepared.subject.allowed === undefined)
+      (method === "get" && prepared.subject.object.allowed == null) ||
+      (method === "getMedia" && prepared.subject.allowed == null)
     ) {
       await this.db.allow(request);
       return { request, prepared };
@@ -85,7 +144,7 @@ export class Guard {
     }
 
     const retainExactRead =
-      !answer.remember && ["get", "getMedia", "discover"].includes(method);
+      !answer.remember && ["get", "getMedia"].includes(method);
     if ((answer.remember || retainExactRead) && prepared.createMatch) {
       permission = await this.db.grant(request, {
         source,
@@ -93,7 +152,7 @@ export class Guard {
         method,
         match: retainExactRead
           ? exactReadMatch(prepared.subject)
-          : prepared.createMatch(answer),
+          : prepared.createMatch(),
       });
     } else {
       await this.db.allow(request);
@@ -182,10 +241,9 @@ export class Guard {
       case "getMedia":
       case "deleteMedia":
         return await mediaRequest(this.graffiti, method, args);
-      case "discover":
-        return discoveryRequest(args as GraffitiArgs<"discover">);
       case "logout":
         return logoutRequest();
+      case "discover":
       case "continueDiscover":
       case "login":
       case "actorToHandle":
@@ -231,7 +289,6 @@ function resultValue(method: string, value: any, subject: any) {
   if (method === "postMedia") return { url: value };
   if (["get", "delete"].includes(method)) return { url: subject.object.url };
   if (["getMedia", "deleteMedia"].includes(method)) return { url: subject.url };
-  if (method === "discover") return { complete: true };
   return undefined;
 }
 
@@ -240,17 +297,15 @@ function implicitReadPermission(request: Request, value: any) {
   // asking again before it reads that exact URL cannot protect information.
   const subject = request.subject as any;
   if (request.method === "post") {
-    return {
-      source: request.source,
-      actor: request.actor,
-      method: "get" as const,
-      match: exactReadMatch({
-        kind: "object",
-        object: { ...subject.object, url: value.url },
-      }),
-    };
+    if (subject.object.allowed == null) return undefined;
+    return objectReadPermission(
+      request.source,
+      request.actor,
+      value.url,
+    );
   }
   if (request.method === "postMedia") {
+    if (subject.allowed == null) return undefined;
     return {
       source: request.source,
       actor: request.actor,
@@ -259,6 +314,19 @@ function implicitReadPermission(request: Request, value: any) {
     };
   }
   return undefined;
+}
+
+function objectReadPermission(
+  source: Request["source"],
+  actor: string,
+  url: string,
+) {
+  return {
+    source,
+    actor,
+    method: "get" as const,
+    match: exactReadMatch({ kind: "object", object: { url } }),
+  };
 }
 
 function unsupportedMethod(method: never): never {

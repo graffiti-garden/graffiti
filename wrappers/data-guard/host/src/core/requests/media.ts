@@ -21,16 +21,7 @@ export async function mediaRequest(
   };
   return {
     subject,
-    preview: {
-      media,
-      ...(url
-        ? {
-            url,
-            accept: method === "getMedia" ? args[1] : {},
-            session: args.at(-1),
-          }
-        : {}),
-    },
-    createMatch: (answer: any) => mediaMatch(subject, answer),
+    preview: { media },
+    createMatch: () => mediaMatch(subject),
   };
 }

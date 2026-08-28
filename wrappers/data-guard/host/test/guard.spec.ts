@@ -1,5 +1,5 @@
 import type { Graffiti } from "@graffiti-garden/api";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GuardDB } from "../src/core/db.js";
 import { Guard } from "../src/core/guard.js";
 import type { GraffitiMethod } from "../src/core/graffiti.js";
@@ -10,9 +10,11 @@ afterEach(async () => {
 });
 
 function setup(
-  answer = { remember: true },
-  mediaAllowed?: string[],
-  objectAllowed?: string[],
+  answer:
+    | false
+    | { remember: boolean } = { remember: true },
+  mediaAllowed?: string[] | null,
+  objectAllowed?: string[] | null,
 ) {
   const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
   databases.push(db);
@@ -46,6 +48,41 @@ const session = {
 };
 
 describe("Guard", () => {
+  it("rechecks permissions before showing a queued prompt", async () => {
+    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    databases.push(db);
+    let prompts = 0;
+    let answerFirst: (answer: { remember: boolean }) => void = () => {};
+    const firstAnswer = new Promise<{ remember: boolean }>(
+      (resolve) => (answerFirst = resolve),
+    );
+    const guard = new Guard(
+      { sessionEvents: new EventTarget() } as Graffiti,
+      db,
+      "https://example.com",
+      async () => {
+        prompts += 1;
+        return prompts === 1 ? firstAnswer : { remember: true };
+      },
+    );
+    const post = (content: string) =>
+      guard.authorize("post", [
+        { value: { type: "Note", content }, channels: ["chat"] },
+        session,
+      ]);
+
+    const first = post("first");
+    await vi.waitFor(() => expect(prompts).toBe(1));
+    const second = post("second");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(prompts).toBe(1);
+
+    answerFirst({ remember: true });
+    const [firstHandle, secondHandle] = await Promise.all([first, second]);
+    expect(secondHandle?.permission?.id).toBe(firstHandle?.permission?.id);
+    expect(prompts).toBe(1);
+  });
+
   it("reuses a permission only for the same method, actor, and source", async () => {
     const { guard, prompts } = setup();
     const first = await guard.authorize("post", [
@@ -111,13 +148,19 @@ describe("Guard", () => {
     expect(entry.result?.execution).toBeUndefined();
   });
 
-  it("treats a discovery cursor as authority to continue", async () => {
+  it("does not authorize or audit discovery queries or cursors", async () => {
     const { db, guard, prompts } = setup();
+    const discovery = await guard.authorize("discover", [
+      ["chat"],
+      {},
+      session,
+    ]);
     const continuation = await guard.authorize("continueDiscover", [
       "cursor-one",
       session,
     ]);
 
+    expect(discovery).toBeUndefined();
     expect(continuation).toBeUndefined();
     expect(prompts()).toBe(0);
     expect((await db.audit()).requests).toEqual([]);
@@ -148,6 +191,16 @@ describe("Guard", () => {
     expect(object?.permission).toBeUndefined();
     expect(media?.permission).toBeUndefined();
     expect((await db.audit()).requests).toHaveLength(2);
+  });
+
+  it("also treats a null allowed list as public", async () => {
+    const { db, guard, prompts } = setup({ remember: true }, null, null);
+
+    await guard.authorize("get", ["graffiti:public", {}, session]);
+    await guard.authorize("getMedia", ["graffiti:public-media", {}, session]);
+
+    expect(prompts()).toBe(0);
+    expect((await db.audit()).permissions).toEqual([]);
   });
 
   it("treats activity as an object discriminator", async () => {
@@ -195,6 +248,31 @@ describe("Guard", () => {
     expect(prompts()).toBe(1);
   });
 
+  it("defaults remembered channel and recipient scopes to any", async () => {
+    const { guard } = setup({ remember: true }, [], []);
+
+    const object = await guard.authorize("get", [
+      "graffiti:private",
+      {},
+      session,
+    ]);
+    const media = await guard.authorize("getMedia", [
+      "graffiti:private-media",
+      {},
+      session,
+    ]);
+
+    expect(object?.permission?.match).toMatchObject({
+      kind: "object",
+      channels: "any",
+      allowed: "any",
+    });
+    expect(media?.permission?.match).toMatchObject({
+      kind: "media",
+      allowed: "any",
+    });
+  });
+
   it("retains Allow Once access only for the exact approved read", async () => {
     const { db, guard, prompts } = setup({ remember: false }, [], []);
 
@@ -205,22 +283,6 @@ describe("Guard", () => {
       session,
     ]);
     await guard.authorize("get", ["graffiti:second", {}, session]);
-
-    const query = await guard.authorize("discover", [
-      ["chat"],
-      { type: "object" },
-      session,
-    ]);
-    const repeatedQuery = await guard.authorize("discover", [
-      ["chat"],
-      { type: "object" },
-      session,
-    ]);
-    await guard.authorize("discover", [
-      ["other"],
-      { type: "object" },
-      session,
-    ]);
 
     const media = await guard.authorize("getMedia", [
       "graffiti:media",
@@ -234,21 +296,20 @@ describe("Guard", () => {
     ]);
 
     expect(repeatedGet?.permission?.id).toBe(get?.permission?.id);
-    expect(repeatedQuery?.permission?.id).toBe(query?.permission?.id);
     expect(repeatedMedia?.permission?.id).toBe(media?.permission?.id);
-    expect(prompts()).toBe(5);
-    expect((await db.audit()).permissions).toHaveLength(5);
+    expect(prompts()).toBe(3);
+    expect((await db.audit()).permissions).toHaveLength(3);
 
     await guard.revoke(get!.permission!.id);
     await guard.authorize("get", ["graffiti:first", {}, session]);
-    expect(prompts()).toBe(6);
+    expect(prompts()).toBe(4);
   });
 
   it("implicitly permits reading data posted by the same app", async () => {
     const { db, guard, prompts } = setup({ remember: false }, [], []);
 
     const post = await guard.authorize("post", [
-      { value: { type: "Note" }, channels: ["chat"] },
+      { value: { type: "Note" }, channels: ["chat"], allowed: [] },
       session,
     ]);
     await guard.succeed(post, { url: "graffiti:posted" });
@@ -269,6 +330,135 @@ describe("Guard", () => {
     expect(get?.permission?.id).toBeDefined();
     expect(getMedia?.permission?.id).toBeDefined();
     expect((await db.audit()).permissions).toHaveLength(2);
+  });
+
+  it("does not store implicit read permissions for public writes", async () => {
+    const { db, guard } = setup({ remember: false });
+
+    const post = await guard.authorize("post", [
+      { value: { type: "Note" }, channels: ["chat"] },
+      session,
+    ]);
+    await guard.succeed(post, { url: "graffiti:public-post" });
+    const postMedia = await guard.authorize("postMedia", [
+      { data: new Blob(["public"]) },
+      session,
+    ]);
+    await guard.succeed(postMedia, "graffiti:public-media");
+
+    expect((await db.audit()).permissions).toEqual([]);
+  });
+
+  it("authorizes private discovery results as exact get requests", async () => {
+    const { db, guard, prompts } = setup({ remember: false }, [], []);
+    const args = [["chat"], {}, session];
+    const object = {
+      url: "graffiti:discovered",
+      value: { type: "Note" },
+      channels: ["chat"],
+      allowed: [],
+      actor: "actor:one",
+    };
+
+    const first = await guard.authorizeDiscovered(args, object);
+    await guard.succeed(first, object);
+    const second = await guard.authorizeDiscovered(["cursor", session], object);
+    await guard.succeed(second, object);
+
+    expect(prompts()).toBe(1);
+    expect(second?.permission?.id).toBe(first?.permission?.id);
+    expect((await db.audit()).permissions).toHaveLength(1);
+    const history = (await db.audit()).requests;
+    expect(history).toHaveLength(2);
+    expect(history.every(({ request }) => request.method === "get")).toBe(true);
+    expect(history.every(({ result }) => result?.execution?.ok)).toBe(true);
+  });
+
+  it("does not record or store public discovery results", async () => {
+    const { db, guard, prompts } = setup();
+    const base = {
+      value: {},
+      channels: ["chat"],
+      actor: "actor:one",
+    };
+
+    expect(await guard.authorizeDiscovered([["chat"], {}, session], {
+      ...base,
+      url: "graffiti:undefined",
+    })).toBeUndefined();
+    expect(await guard.authorizeDiscovered([["chat"], {}, session], {
+      ...base,
+      url: "graffiti:null",
+      allowed: null,
+    })).toBeUndefined();
+
+    expect(prompts()).toBe(0);
+    expect(await db.audit()).toEqual({ permissions: [], requests: [] });
+  });
+
+  it("uses broad get permissions for later private discovery results", async () => {
+    const { db, guard, prompts } = setup({ remember: true }, [], []);
+    const args = [["chat"], {}, session];
+    const object = (url: string, content: string) => ({
+      url,
+      value: { type: "Note", content },
+      channels: ["chat"],
+      allowed: [],
+      actor: "actor:one",
+    });
+
+    const first = await guard.authorizeDiscovered(
+      args,
+      object("graffiti:first", "first"),
+    );
+    await guard.succeed(first, object("graffiti:first", "first"));
+    const second = await guard.authorizeDiscovered(
+      args,
+      object("graffiti:second", "second"),
+    );
+    await guard.succeed(second, object("graffiti:second", "second"));
+
+    expect(prompts()).toBe(1);
+    expect(second?.permission?.id).toBe(first?.permission?.id);
+    // One broad grant plus an exact grant for each disclosed object.
+    expect((await db.audit()).permissions).toHaveLength(3);
+  });
+
+  it("rejects a private sessionless discovery result", async () => {
+    const { db, guard, prompts } = setup();
+
+    await expect(
+      guard.authorizeDiscovered([["chat"], {}], {
+        url: "graffiti:private",
+        value: {},
+        channels: ["chat"],
+        allowed: [],
+        actor: "actor:one",
+      }),
+    ).rejects.toThrow("authenticated session");
+
+    expect(prompts()).toBe(0);
+    expect(await db.audit()).toEqual({ permissions: [], requests: [] });
+  });
+
+  it("records a denied private discovery result as a get request", async () => {
+    const { db, guard, prompts } = setup(false, [], []);
+
+    await expect(
+      guard.authorizeDiscovered([["chat"], {}, session], {
+        url: "graffiti:private",
+        value: {},
+        channels: ["chat"],
+        allowed: [],
+        actor: "actor:one",
+      }),
+    ).rejects.toBeInstanceOf(Error);
+
+    expect(prompts()).toBe(1);
+    const [entry] = (await db.audit()).requests;
+    expect(entry.request.method).toBe("get");
+    expect(entry.result?.authorization.allowed).toBe(false);
+    expect(entry.result?.execution).toBeUndefined();
   });
 
   it("rejects an unknown authenticated Graffiti method", async () => {

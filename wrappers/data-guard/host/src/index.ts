@@ -26,7 +26,9 @@ if (window.parent === window) {
   if (isLoginRedirect(pageUrl)) {
     void handleLoginRedirect(pageUrl);
   } else {
-    handleAudit(pageUrl);
+    const graffiti = new GraffitiDecentralized();
+    app.use(GraffitiPlugin, { graffiti });
+    handleAudit(pageUrl, graffiti);
   }
 } else {
   listenToParent((origin) => {
