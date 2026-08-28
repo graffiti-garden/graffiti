@@ -1,0 +1,303 @@
+.graffiti-modal {
+    --back: rgba(26, 26, 26, 0.85);
+    --halfback: rgba(80, 80, 80, 0.85);
+    --halfback2: rgba(26, 26, 26, 0.85);
+    --hover: rgba(202, 122, 204, 0.3);
+    --frontfaded: rgba(190, 190, 190);
+    --front: rgba(240, 240, 240);
+    --emph: rgb(202, 122, 204);
+    --blurpix: 3px;
+    border-color: var(--emph);
+    box-sizing: border-box;
+    border-width: 2px;
+    padding: 0;
+    margin: 0;
+    border-radius: 1rem;
+    box-shadow: 0 0 2rem black;
+    overflow: hidden;
+    position: fixed;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    min-width: 95dvw;
+    min-height: 95dvh;
+    height: 95dvh;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        "Fira Sans",
+        "Droid Sans",
+        "Helvetica Neue",
+        sans-serif;
+    color: var(--front);
+    font-size: 150%;
+
+    * {
+        box-sizing: border-box;
+        padding: 0;
+        margin: 0;
+    }
+
+    ::selection {
+        background: rgba(202, 122, 204, 0.3);
+    }
+
+    :focus {
+        outline: 2px solid var(--front);
+    }
+
+    header {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    main {
+        flex: 1;
+        max-width: 600px;
+        width: 100%;
+        gap: 2em;
+        padding-inline: clamp(1rem, 4dvw, 3rem);
+        padding-block: clamp(1rem, 4dvh, 3rem);
+        margin-inline: clamp(1rem, 4dvw, 3rem);
+        margin-block: clamp(1rem, 4dvh, 3rem);
+        background: var(--back);
+        border-radius: 1rem;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        scrollbar-color: var(--emph) rgba(0, 0, 0, 0);
+    }
+
+    ul {
+        list-style-type: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
+        align-items: stretch;
+        justify-content: stretch;
+    }
+
+    aside {
+        color: var(--frontfaded);
+    }
+
+    .secondary,
+    a:not([type="button"]) {
+        color: var(--emph);
+    }
+
+    h1 {
+        font-size: 120%;
+        font-family:
+            Rock Salt,
+            cursive,
+            sans-serif;
+        letter-spacing: 0.1em;
+        text-align: center;
+        color: var(--front);
+        line-height: 1.5em;
+    }
+
+    h1 a:not([type="button"]) {
+        color: inherit;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        h1 a:hover {
+            background: none;
+            color: inherit;
+        }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        h1 a:active {
+            background: none;
+            color: inherit;
+        }
+    }
+
+    button,
+    input[type="submit"],
+    input[type="text"],
+    a[type="button"] {
+        font-size: inherit;
+        width: 100%;
+        text-align: center;
+        display: block;
+        border-radius: 1rem;
+        border: 2px solid var(--emph);
+        padding: 1em;
+        padding-top: 0.5em;
+        padding-bottom: 0.5em;
+        transition: 0.1s;
+        text-overflow: ellipsis;
+        background: none;
+        line-height: 1.2em;
+    }
+
+    input[type="text"] {
+        font-weight: 500;
+        background: var(--front);
+        text-align: left;
+        color: black;
+    }
+
+    header button {
+        border-radius: 0 0 0 1rem;
+        border-right: none;
+        border-top: none;
+        background-color: var(--halfback2);
+        width: fit-content;
+        position: relative;
+        overflow: hidden;
+    }
+
+    header button::before {
+        z-index: -1;
+        top: 0;
+        left: 0;
+        height: 100%;
+        position: absolute;
+        width: 100%;
+        content: "";
+        background-color: var(--back);
+    }
+
+    @media (max-height: 600px) {
+        main {
+            gap: 1em;
+        }
+
+        h1 {
+            font-size: 100%;
+        }
+    }
+
+    @media (max-width: 600px) {
+        main {
+            border-radius: 0;
+            margin: auto;
+            overflow: auto;
+        }
+
+        header button {
+            border-radius: 0;
+            border-left: none;
+            width: 100%;
+        }
+
+        html {
+            justify-content: safe center;
+        }
+    }
+
+    a {
+        text-decoration: none;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        :is(button, ul a, input[type="submit"]):hover {
+            cursor: pointer;
+            background: var(--hover);
+            color: var(--front);
+        }
+
+        a:hover {
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        :is(button, ul a, input[type="submit"]):active {
+            cursor: pointer;
+            background: var(--hover);
+            color: var(--front);
+        }
+
+        a:active {
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: stretch;
+        gap: 0.5em;
+    }
+
+    iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+
+    :is(button, a[type="button"], input[type="submit"]).secondary {
+        color: rgb(244, 213, 244);
+        background: rgba(26, 26, 26, 0.6);
+    }
+
+    :is(button, a[type="button"], input[type="submit"]):not(.secondary) {
+        background: var(--hover);
+        color: white;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+        :is(button, a[type="button"], input[type="submit"]):hover {
+            background: rgba(202, 122, 204, 0.6);
+            color: white;
+            text-decoration: none;
+        }
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        :is(button, a[type="button"], input[type="submit"]):active {
+            background: rgba(202, 122, 204, 0.6);
+            color: white;
+            text-decoration: none;
+        }
+    }
+}
+
+.graffiti-modal[open] {
+    pointer-events: inherit;
+    opacity: 1;
+}
+
+.graffiti-modal::backdrop {
+    background-color: black;
+    opacity: 0.5;
+}
+
+.graffiti-modal::before {
+    content: "";
+    position: absolute;
+    inset: calc(-1 * var(--blurpix));
+    z-index: -1;
+    background-image: url(graffiti.jpg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    filter: blur(var(--blurpix));
+    border-radius: inherit;
+    pointer-events: none;
+    transform: translateZ(0);
+    overflow: hidden;
+}

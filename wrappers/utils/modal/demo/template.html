@@ -1,0 +1,27 @@
+<template id="my-template">
+    <h1>
+        <a target="_blank" href="https://graffiti.garden"
+            >Graffiti Log&nbsp;In</a
+        >
+    </h1>
+
+    <form id="graffiti-login-handle-form">
+        <label for="username">Enter your Graffiti handle:</label>
+        <input
+            type="text"
+            name="username"
+            id="username"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            inputmode="url"
+            placeholder="example.graffiti.actor"
+            required
+        />
+        <button id="graffiti-login-handle-submit" type="submit">Log In</button>
+    </form>
+
+    <p>
+        Don't have a Graffiti handle? <a id="graffiti-login-new">Create one</a>.
+    </p>
+</template>

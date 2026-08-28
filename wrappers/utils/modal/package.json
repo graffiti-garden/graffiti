@@ -1,0 +1,48 @@
+{
+  "name": "@graffiti-garden/modal",
+  "version": "1.0.4",
+  "description": " A stylish modal for user input within Graffiti implementations.",
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && npm run build:js && npm run build:types",
+    "build:js": "tsx esbuild.config.mts",
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "prepublishOnly": "npm update && npm run build"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/modal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/modal/issues"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

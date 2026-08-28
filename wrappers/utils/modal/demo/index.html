@@ -1,0 +1,49 @@
+<!doctype html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Graffiti Modal Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        /* Try to break the shadow DOM */
+        dialog,
+        dialog *,
+        p {
+            color: green !important;
+            font-size: 1.5em;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Graffiti Modal Demo</h1>
+    <button id="open">Open</button>
+
+    <script type="module">
+        import { GraffitiModal } from "../dist/esm/index.js";
+
+        const modal = new GraffitiModal({
+            useTemplateHTML: () =>
+                fetch("./template.html").then((response) => response.text()),
+            onManualClose: () => {
+                console.log("Modal closed manually");
+            },
+        });
+
+        const openButton = document.querySelector("#open");
+        openButton.addEventListener("click", async () => {
+            openButton.disabled = true;
+            openButton.innerHTML = "Opening...";
+            // Ensure that we don't get the "double template"
+            // issue when displayTemplate is called in rapid
+            // succession.
+            await Promise.allSettled([
+                modal.displayTemplate("my-template"),
+                modal.displayTemplate("my-template"),
+            ]);
+            modal.open();
+            openButton.disabled = false;
+            openButton.innerHTML = "Open";
+        });
+    </script>
+</body>
