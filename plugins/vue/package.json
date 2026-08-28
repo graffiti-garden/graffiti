@@ -1,0 +1,65 @@
+{
+  "name": "@graffiti-garden/wrapper-vue",
+  "version": "1.2.2",
+  "description": "Vue.js wrapper for the Graffiti API",
+  "types": "./dist/node/plugin.d.ts",
+  "module": "./dist/node/plugin.mjs",
+  "main": "./dist/node/plugin.js",
+  "browser": "./dist/browser/plugin.mjs",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/node/plugin.d.ts",
+        "default": "./dist/node/plugin.mjs"
+      },
+      "require": {
+        "types": "./dist/node/plugin.d.ts",
+        "default": "./dist/node/plugin.js"
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "example": "cd examples/sfc && vite",
+    "build:example": "cd examples/sfc && vite build",
+    "build:js:node": "vite build --config vite.config.node.mts",
+    "build:js:browser": "vite build --config vite.config.browser.mts",
+    "build:js": "npm run build:js:node && npm run build:js:browser",
+    "build:docs": "npm run build:js && typedoc --options typedoc.json",
+    "build": "rm -rf dist && npm run build:docs && npm run build:example && cp -r examples docs",
+    "prepublishOnly": "npm install && npm run build"
+  },
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/wrapper-vue.git"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/wrapper-vue/issues"
+  },
+  "dependencies": {
+    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/wrapper-synchronize": "^1.2.1"
+  },
+  "devDependencies": {
+    "@graffiti-garden/implementation-decentralized": "^0.0.4",
+    "@types/node": "^25.1.0",
+    "@vitejs/plugin-vue": "^6.0.3",
+    "@vue/typescript-plugin": "^3.2.4",
+    "typedoc": "^0.28.16",
+    "typedoc-plugin-vue": "^1.5.1",
+    "vite": "^7.3.1",
+    "vite-plugin-dts": "^4.5.4",
+    "vue": "^3.5.27"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.27"
+  }
+}
