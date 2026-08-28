@@ -1,0 +1,6 @@
+docs
+node_modules
+trash
+dist
+coverage
+.DS_Store
