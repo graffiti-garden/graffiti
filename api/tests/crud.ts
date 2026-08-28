@@ -1,0 +1,318 @@
+import { it, expect, describe, beforeAll } from "vitest";
+import type {
+  Graffiti,
+  GraffitiSession,
+  JSONSchema,
+} from "@graffiti-garden/api";
+import {
+  GraffitiErrorNotFound,
+  GraffitiErrorSchemaMismatch,
+  GraffitiErrorInvalidSchema,
+  GraffitiErrorForbidden,
+} from "@graffiti-garden/api";
+import { randomString, randomUrl } from "./utils.js";
+import { randomPostObject } from "@graffiti-garden/api/tests";
+
+export const graffitiCRUDTests = (
+  useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete">,
+  useSession1: () => GraffitiSession | Promise<GraffitiSession>,
+  useSession2: () => GraffitiSession | Promise<GraffitiSession>,
+) => {
+  describe.concurrent(
+    "CRUD",
+    {
+      timeout: 20000,
+    },
+    () => {
+      let graffiti: ReturnType<typeof useGraffiti>;
+      let session: GraffitiSession;
+      let session1: GraffitiSession;
+      let session2: GraffitiSession;
+      beforeAll(async () => {
+        graffiti = useGraffiti();
+        session1 = await useSession1();
+        session = session1;
+        session2 = await useSession2();
+      });
+
+      it("get nonexistant object", async () => {
+        await expect(graffiti.get(randomUrl(), {})).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
+      });
+
+      it("post, get, delete", async () => {
+        const value = {
+          something: "hello, world~ c:",
+        };
+        const channels = [randomString(), randomString()];
+
+        // Post the object
+        const previous = await graffiti.post<{}>({ value, channels }, session);
+        expect(previous.value).toEqual(value);
+        expect(previous.channels).toEqual(channels);
+        expect(previous.allowed).toEqual(undefined);
+        expect(previous.actor).toEqual(session.actor);
+
+        // Get it back
+        const gotten = await graffiti.get(previous, {});
+        expect(gotten.value).toEqual(value);
+        expect(gotten.channels).toEqual([]);
+        expect(gotten.allowed).toBeUndefined();
+        expect(gotten.url).toEqual(previous.url);
+        expect(gotten.actor).toEqual(previous.actor);
+
+        // Delete it
+        const deleted = await graffiti.delete(gotten, session);
+        expect(deleted.value).toEqual(value);
+        expect(deleted.channels).toEqual(channels);
+        expect(deleted.allowed).toBeUndefined();
+        expect(deleted.actor).toEqual(session.actor);
+        expect(deleted.url).toEqual(previous.url);
+
+        // Get is not found
+        await expect(graffiti.get(gotten, {})).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
+
+        // Delete it again
+        await expect(graffiti.delete(gotten, session)).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
+      });
+
+      it("post then delete with wrong actor", async () => {
+        const posted = await graffiti.post<{}>(
+          { value: {}, channels: [] },
+          session2,
+        );
+
+        await expect(graffiti.delete(posted, session1)).rejects.toThrow(
+          GraffitiErrorForbidden,
+        );
+      });
+
+      it("post and get with schema", async () => {
+        const schema = {
+          properties: {
+            value: {
+              properties: {
+                something: {
+                  type: "string",
+                },
+                another: {
+                  type: "array",
+                  items: {
+                    type: "number",
+                  },
+                },
+                deeper: {
+                  type: "object",
+                  properties: {
+                    deepProp: {
+                      type: "string",
+                    },
+                  },
+                  required: ["deepProp"],
+                },
+              },
+              required: ["another", "deeper"],
+            },
+          },
+        } as const satisfies JSONSchema;
+
+        const goodValue = {
+          something: "hello",
+          another: [1, 2, 3],
+          deeper: {
+            deepProp: "hello",
+          },
+        };
+
+        const posted = await graffiti.post<typeof schema>(
+          {
+            value: goodValue,
+            channels: [],
+          },
+          session,
+        );
+        const gotten = await graffiti.get(posted, schema);
+
+        expect(gotten.value.something).toEqual(goodValue.something);
+        expect(gotten.value.another).toEqual(goodValue.another);
+        expect(gotten.value.another[0]).toEqual(1);
+        expect(gotten.value.deeper.deepProp).toEqual(goodValue.deeper.deepProp);
+      });
+
+      it("post and get with invalid schema", async () => {
+        const posted = await graffiti.post<{}>(
+          { value: {}, channels: [] },
+          session,
+        );
+        await expect(
+          graffiti.get(posted, {
+            properties: {
+              value: {
+                //@ts-ignore
+                type: "asdf",
+              },
+            },
+          }),
+        ).rejects.toThrow(GraffitiErrorInvalidSchema);
+      });
+
+      it("post and get with wrong schema", async () => {
+        const posted = await graffiti.post<{}>(
+          {
+            value: {
+              hello: "world",
+            },
+            channels: [],
+          },
+          session,
+        );
+
+        await expect(
+          graffiti.get(posted, {
+            properties: {
+              value: {
+                properties: {
+                  hello: {
+                    type: "number",
+                  },
+                },
+              },
+            },
+          }),
+        ).rejects.toThrow(GraffitiErrorSchemaMismatch);
+      });
+
+      it("post and get with empty access control", async () => {
+        const value = {
+          um: "hi",
+        };
+        const allowed = [randomUrl()];
+        const channels = [randomString()];
+        const posted = await graffiti.post<{}>(
+          { value, allowed, channels },
+          session1,
+        );
+
+        // Get it with authenticated session
+        const gotten = await graffiti.get(posted, {}, session1);
+        expect(gotten.url).toEqual(posted.url);
+        expect(gotten.actor).toEqual(session1.actor);
+        expect(gotten.value).toEqual(value);
+        expect(gotten.allowed).toEqual(allowed);
+        expect(gotten.channels).toEqual(channels);
+
+        // But not without session
+        await expect(graffiti.get(posted, {})).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
+
+        // Or the wrong session
+        await expect(graffiti.get(posted, {}, session2)).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
+      });
+
+      it("post and get with specific access control", async () => {
+        const value = {
+          um: "hi",
+        };
+        const allowed = [randomUrl(), session2.actor, randomUrl()];
+        const channels = [randomString()];
+        const posted = await graffiti.post<{}>(
+          {
+            value,
+            allowed,
+            channels,
+          },
+          session1,
+        );
+
+        // Get it with authenticated session
+        const gotten = await graffiti.get(posted, {}, session1);
+        expect(gotten.url).toEqual(posted.url);
+        expect(gotten.actor).toEqual(session1.actor);
+        expect(gotten.value).toEqual(value);
+        expect(gotten.allowed).toEqual(allowed);
+        expect(gotten.channels).toEqual(channels);
+
+        // But not without session
+        await expect(graffiti.get(posted, {})).rejects.toBeInstanceOf(
+          GraffitiErrorNotFound,
+        );
+
+        const gotten2 = await graffiti.get(posted, {}, session2);
+        expect(gotten.url).toEqual(posted.url);
+        expect(gotten.actor).toEqual(session1.actor);
+        expect(gotten2.value).toEqual(value);
+        // They should only see that is is private to them
+        expect(gotten2.allowed).toEqual([session2.actor]);
+        // And not see any channels
+        expect(gotten2.channels).toEqual([]);
+      });
+
+      it("post and get with extra values", async () => {
+        const value = {
+          something: "hello, world~ c:",
+        };
+        const channels = [randomString(), randomString()];
+
+        const post = {
+          value,
+          channels,
+          extra: "extra value",
+        };
+
+        // Post the object
+        const output = await graffiti.post<{}>(post, session);
+        expect(output.actor).toEqual(session1.actor);
+        expect(output.value).toEqual(value);
+        expect(output.allowed).toBeUndefined();
+        expect(output.channels).toEqual(channels);
+        expect(output).not.toHaveProperty("extra");
+
+        const gotten = await graffiti.get<{}>(output, {}, session1);
+        expect(gotten).toEqual(output);
+      });
+
+      it("multi 'device' get", async () => {
+        const graffiti1 = useGraffiti();
+        const graffiti2 = useGraffiti();
+
+        const prepost = randomPostObject();
+        const posted = await graffiti1.post<{}>(prepost, session1);
+
+        const gotten1 = await graffiti1.get(posted, {}, session1);
+        const gotten2 = await graffiti2.get(posted, {}, session1);
+        expect(gotten1).toEqual(posted);
+        expect(gotten2).toEqual(posted);
+
+        await graffiti1.delete(posted, session1);
+
+        await expect(graffiti1.get(posted, {}, session1)).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
+
+        // Wait for "labels" to propogate
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        await expect(graffiti2.get(posted, {}, session1)).rejects.toThrow(
+          GraffitiErrorNotFound,
+        );
+      });
+
+      it("post with duplicate channels", async () => {
+        const prepost = randomPostObject();
+        const channel = randomString();
+        prepost.channels = [channel, ...prepost.channels, channel];
+        const output = await graffiti.post<{}>(prepost, session);
+        prepost.channels.forEach((c) => expect(output.channels).toContain(c));
+        expect(output.channels).toContain(channel);
+      });
+    },
+  );
+};

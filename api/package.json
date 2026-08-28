@@ -1,0 +1,64 @@
+{
+  "name": "@graffiti-garden/api",
+  "version": "1.2.0",
+  "description": "The heart of Graffiti",
+  "types": "./dist/src/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "browser": "./dist/browser/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/src/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./tests": {
+      "import": {
+        "types": "./dist/tests/index.d.ts",
+        "default": "./dist/tests.mjs"
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "tests",
+    "LICENSE",
+    "package.json",
+    "README.md"
+  ],
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "build:js": "tsx esbuild.config.mts",
+    "build": "rm -rf dist && rm -rf docs && npm run build:types && npm run build:js && npm run build:docs",
+    "build:docs": "typedoc --options typedoc.json",
+    "prepublishOnly": "npm update && npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/api/issues"
+  },
+  "homepage": "https://api.graffiti.garden/classes/Graffiti.html",
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "tsx": "^4.21.0",
+    "typedoc": "^0.28.16",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "json-schema-to-ts": "^3.1.1",
+    "zod": "^4.3.5"
+  }
+}
