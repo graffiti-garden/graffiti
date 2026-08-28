@@ -1,3 +1,4 @@
+import type { Graffiti } from "@graffiti-garden/api";
 import {
   looseObject,
   array,
@@ -12,9 +13,6 @@ import {
   nonnegative,
   extend,
 } from "zod/mini";
-import type { Graffiti } from "./1-api.js";
-import type { GraffitiObjectStream } from "./2-types.js";
-import type { JSONSchema } from "json-schema-to-ts";
 
 export const GraffitiPostObjectSchema = looseObject({
   value: looseObject({}),
@@ -54,6 +52,7 @@ export const GraffitiMediaAcceptSchema = looseObject({
 
 export class GraffitiRuntimeTypes implements Graffiti {
   sessionEvents: Graffiti["sessionEvents"];
+
   constructor(protected readonly graffiti: Graffiti) {
     this.sessionEvents = this.graffiti.sessionEvents;
   }
@@ -78,7 +77,7 @@ export class GraffitiRuntimeTypes implements Graffiti {
     return this.graffiti.actorToHandle(...typedArgs);
   };
 
-  // @ts-ignore - inferred types on post do not effect output
+  // @ts-ignore - inferred types on post do not affect output
   post: Graffiti["post"] = (...args) => {
     const typedArgs = tuple([
       GraffitiPostObjectSchema,
@@ -147,7 +146,7 @@ export class GraffitiRuntimeTypes implements Graffiti {
     );
   };
 
-  // @ts-ignore - inferred types on continueDiscover do not effect output
+  // @ts-ignore - inferred types on continueDiscover do not affect output
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
     const typedArgs = tuple([string(), GraffitiOptionalSessionSchema]).parse(
       args,

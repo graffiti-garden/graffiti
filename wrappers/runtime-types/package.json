@@ -1,7 +1,7 @@
 {
-  "name": "@graffiti-garden/implementation-decentralized",
-  "version": "0.0.10",
-  "description": "A client for a decentralized implementation of the Graffiti API",
+  "name": "@graffiti-garden/wrapper-runtime-types",
+  "version": "0.1.0",
+  "description": "Runtime argument validation for the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
   "main": "./dist/cjs/index.js",
@@ -21,15 +21,15 @@
   "files": [
     "src",
     "dist",
-    "package.json",
-    "LICENSE"
+    "LICENSE",
+    "package.json"
   ],
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "check": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "check": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest --watch",
+    "test:watch": "vitest",
     "test:coverage": "vitest --coverage",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
@@ -39,34 +39,21 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/graffiti.git",
-    "directory": "implementations/decentralized/client"
+    "directory": "wrappers/runtime-types"
   },
   "bugs": {
     "url": "https://github.com/graffiti-garden/graffiti/issues"
   },
   "devDependencies": {
-    "@types/js-cookie": "^3.0.6",
-    "@types/node": "^26.1.1",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@types/node": "^25.0.9",
+    "@vitest/coverage-v8": "^4.0.17",
     "esbuild": "^0.28.1",
-    "miniflare": "4.20260730.0",
-    "tsx": "^4.23.1",
-    "typescript": "^7.0.2",
-    "vitest": "^4.0.18"
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.2.0",
-    "@graffiti-garden/modal": "^1.0.4",
-    "@graffiti-garden/wrapper-runtime-types": "^0.1.0",
-    "@ipld/dag-cbor": "^10.0.1",
-    "@noble/ed25519": "^3.1.0",
-    "@noble/hashes": "2.2",
-    "did-resolver": "^5.0.1",
-    "idb": "^8.0.3",
-    "js-cookie": "^3.0.8",
-    "openid-client": "^6.8.4",
-    "plc-did-resolver": "^1.0.0",
-    "web-did-resolver": "^2.0.32",
-    "zod": "^4.4.3"
+    "zod": "^4.3.5"
   }
 }

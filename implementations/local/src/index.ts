@@ -1,4 +1,5 @@
-import { Graffiti, GraffitiRuntimeTypes } from "@graffiti-garden/api";
+import type { Graffiti } from "@graffiti-garden/api";
+import { GraffitiRuntimeTypes } from "@graffiti-garden/wrapper-runtime-types";
 import { GraffitiLocalIdentity } from "./identity";
 import { GraffitiLocalObjects, type GraffitiLocalOptions } from "./objects";
 import { GraffitiLocalMedia } from "./media";

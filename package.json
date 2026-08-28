@@ -7,6 +7,7 @@
   },
   "workspaces": [
     "api",
+    "wrappers/runtime-types",
     "wrappers/utils/modal",
     "implementations/local",
     "implementations/decentralized/client",
