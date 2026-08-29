@@ -14,10 +14,16 @@ jobs:
     name: Validate workspaces
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      pages_repositories: ${{ steps.pages.outputs.repositories }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+
+      - name: Read Pages site configuration
+        id: pages
+        run: echo "repositories=$(jq -c 'map(.repository)' .github/pages-sites.json)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -39,3 +45,76 @@ jobs:
 
       - name: Test workspaces
         run: npm test
+
+      - name: Bundle external Pages sites
+        run: |
+          mkdir -p api/docs/deployment-assets
+
+          jq -r '.[] | [.repository, .output] | @tsv' .github/pages-sites.json |
+            while IFS=$'\t' read -r repository output; do
+              test -f "$output/index.html"
+              tar -czf "api/docs/deployment-assets/$repository.tar.gz" -C "$output" .
+            done
+
+      - name: Save API documentation for Pages
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-pages
+          path: api/docs
+          retention-days: 1
+
+  deploy-api:
+    name: Deploy API documentation
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: api-pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download API documentation
+        uses: actions/download-artifact@v5
+        with:
+          name: api-pages
+          path: api/docs
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: api/docs
+
+      - name: Deploy API documentation
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  dispatch-pages:
+    name: Dispatch ${{ matrix.repository }}
+    needs: [validate, deploy-api]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: ${{ fromJSON(needs.validate.outputs.pages_repositories) }}
+    steps:
+      - name: Dispatch Pages deployment
+        env:
+          GH_TOKEN: ${{ secrets.PAGES_DISPATCH_TOKEN }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        run: >-
+          gh api
+          --method POST
+          "repos/graffiti-garden/$TARGET_REPOSITORY/dispatches"
+          -f event_type=graffiti-pages-deploy
+          --silent
