@@ -93,8 +93,7 @@ npx playwright install --with-deps chromium
 
 ### Working on One Workspace
 
-This monorepo uses [npm workspaces](https://docs.npmjs.com/cli/v7/using-npm/workspaces) to manage many packages at the same time.
-To work on one package, you can `cd` into its directory and run commands there as normal. Alternatively, you can run commands from the root directory and use the `--workspace` option to specify which workspace to target. For example:
+This monorepo uses [npm workspaces](https://docs.npmjs.com/cli/v7/using-npm/workspaces) to manage many packages at the same time. Installation should only ever happen at the root, but otherwise you can `cd` into its directory and run commands there as normal. Alternatively, you can run commands from the root directory and use the `--workspace` option to specify which workspace to target. For example:
 
 ```sh
 # Run the runtime-types wrapper tests
@@ -113,7 +112,7 @@ Before opening a pull request:
 3. If a published package's behavior changes, run `npm run changeset`, select the affected packages and version bumps, and commit the generated `.changeset/*.md` file. Documentation, test-only, and internal changes do not need a changeset.
 4. Run `npm run validate` from the repository root before submitting your pull request.
 
-Once a pull request is merged, new package versions will be published automatically (see [package publishing docs](./docs/package-publishing/)) and new documentation will be built and deployed to GitHub Pages (see [multi-site deployment docs](./docs/pages-deployment/)).
+Once a pull request is merged, no additional release work is needed. New package versions will be [published automatically](./docs/package-publishing/) and new documentation and example sites will be [deployed automatically](./docs/pages-deployment/).
 
 ## How to Cite
 
