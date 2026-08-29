@@ -51,7 +51,7 @@
     "esbuild": "^0.28.1",
     "miniflare": "4.20260730.0",
     "tsx": "^4.23.1",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.18"
   },
   "dependencies": {
