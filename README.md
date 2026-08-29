@@ -110,7 +110,10 @@ Before opening a pull request:
 
 1. Keep changes scoped and update documentation and tests as needed.
 2. Run the affected workspace's checks and tests while iterating.
-3. Run `npm run validate` from the repository root before submitting.
+3. If a published package's behavior changes, run `npm run changeset`, select the affected packages and version bumps, and commit the generated `.changeset/*.md` file. Documentation, test-only, and internal changes do not need a changeset.
+4. Run `npm run validate` from the repository root before submitting your pull request.
+
+Once a pull request is merged, new package versions will be published automatically (see [package publishing docs](./docs/package-publishing/)) and new documentation will be built and deployed to GitHub Pages (see [multi-site deployment docs](./docs/pages-deployment/)).
 
 ## How to Cite
 

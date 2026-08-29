@@ -1,5 +1,6 @@
 {
   "name": "@graffiti-garden/wikiffiti",
+  "private": true,
   "version": "0.0.0",
   "description": "an extensible wiki built on Graffiti",
   "scripts": {

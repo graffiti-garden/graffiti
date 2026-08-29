@@ -118,3 +118,37 @@ jobs:
           "repos/graffiti-garden/$TARGET_REPOSITORY/dispatches"
           -f event_type=graffiti-pages-deploy
           --silent
+
+  release-packages:
+    name: Version or publish packages
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    concurrency:
+      group: npm-packages
+      cancel-in-progress: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create release pull request or publish packages
+        uses: changesets/action@v2
+        with:
+          publish-script: npm run release

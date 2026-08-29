@@ -24,6 +24,9 @@
     "examples/wikiffiti"
   ],
   "scripts": {
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "npm run build && changeset publish",
     "check": "npm run check --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
@@ -34,6 +37,7 @@
     "uuid": "11.1.1"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.1",
     "esbuild": "0.28.2",
     "rollup": "4.63.1"
   }
