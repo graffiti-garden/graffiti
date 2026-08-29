@@ -19,6 +19,7 @@ npm install @graffiti-garden/wrapper-synchronize
 ```
 
 In the browser, you can use a CDN like jsDelivr. Add an import map the the `<head>` of your HTML file:
+
 ```html
 <head>
     <script type="importmap">
@@ -31,10 +32,12 @@ In the browser, you can use a CDN like jsDelivr. Add an import map the the `<hea
 </head>
 ```
 
-In either case, you can then import and contruct the class as follows:
+In either case, you can then import and construct the class as follows:
 
 ```typescript
-import { GraffitiSynchronize } from "@graffiti-garden/wrapper-syncronize";
-const graffiti = new GraffitiLocal() // or any other implementation of the Graffiti API
-const graffitiSynchronized = new GraffitiSynchronize(graffiti)
+import { GraffitiLocal } from "@graffiti-garden/implementation-local";
+import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
+
+const graffiti = new GraffitiLocal(); // or any other implementation of the Graffiti API
+const graffitiSynchronized = new GraffitiSynchronize(graffiti);
 ```

@@ -2,8 +2,8 @@
 
 This is a local implementation of the [Graffiti API](https://api.graffiti.garden/classes/Graffiti.html)
 using [PouchDB](https://pouchdb.com/).
-By default, it automatically persist data in both the browser and Node.js using
-whatever stoage is available in each environment.
+By default, it automatically persists data in both the browser and Node.js using
+whatever storage is available in each environment.
 It can also be configured to use an external [CouchDB](https://couchdb.apache.org/) instance,
 but using a remote database is insecure.
 
@@ -16,6 +16,7 @@ npm install @graffiti-garden/implementation-local
 ```
 
 In the browser, you can use a CDN like jsDelivr. Add an import map the the `<head>` of your HTML file:
+
 ```html
 <head>
     <script type="importmap">
@@ -62,10 +63,12 @@ See the [PouchDB documentation](https://pouchdb.com/api.html#create_database) fo
 Pieces of this implementation can be pulled out to use in other implementations.
 
 ```typescript
-// The basic database interface based on PouchDB
-import { GraffitiLocalDatabase } from "@graffiti-garden/implementation-local/database";
-// The log in and out methods and events - insecure but useful for testing
-import { GraffitiLocalSessionManager } from "@graffiti-garden/implementation-local/session-manager";
+// The object database interface based on PouchDB
+import { GraffitiLocalObjects } from "@graffiti-garden/implementation-local/objects";
+// The login methods and events—insecure but useful for testing
+import { GraffitiLocalIdentity } from "@graffiti-garden/implementation-local/identity";
+// Media storage backed by Graffiti object operations
+import { GraffitiLocalMedia } from "@graffiti-garden/implementation-local/media";
 // Various utilities for implementing the Graffiti API
 import * as GraffitiUtilities from "@graffiti-garden/implementation-local/utilities";
 ```

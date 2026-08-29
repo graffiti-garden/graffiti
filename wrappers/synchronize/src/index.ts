@@ -84,7 +84,7 @@ export interface GraffitiSynchronizeOptions {
  * to stream all the Graffiti changes that an application is aware of, which can be used
  * for caching or history building.
  *
- * The source code for this library is [available on GitHub](https://github.com/graffiti-garden/wrapper-synchronize/).
+ * The source code for this library is [available on GitHub](https://github.com/graffiti-garden/graffiti/tree/main/wrappers/synchronize/).
  *
  * @groupDescription 0 - Synchronize Methods
  * This group contains methods that listen for changes made via

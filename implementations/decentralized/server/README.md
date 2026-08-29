@@ -1,10 +1,10 @@
 # Graffiti Server
 
-This server fulfills the Graffiti protocol as [currently defined here](https://github.com/graffiti-garden/implementation-decentralized).
-The server is currently written to run as a [Cloudflare worker](https://developers.cloudflare.com/workers/), but in the future it may be modified
-to run on other platforms or bare metal.
-
-The official deployment live at [https://graffiti.actor](https://graffiti.actor/)
+This code implements the server side of the
+[decentralized Graffiti architecture](../). It provides the account UI,
+identity and OAuth/WebAuthn flows, storage buckets, and inboxes. The official
+deployment is at [graffiti.actor](https://graffiti.actor/) as a [Cloudflare worker](https://developers.cloudflare.com/workers/) but we are actively looking to host
+additional servers on other services. Contact us if you are interesting in hosting a Graffiti server.
 
 ## Overview
 
@@ -24,23 +24,11 @@ The official deployment live at [https://graffiti.actor](https://graffiti.actor/
 
 ## Local development
 
-Clone the repository and install the dependencies:
+After `npm ci` at the repository root:
 
-```bash
-git clone git@github.com:graffiti-garden/server.git
-cd server
-npm install
-```
-
-Then, set up the database:
-
-```bash
+```sh
+cd implementations/decentralized/server
 npx wrangler d1 migrations apply graffiti-db --local
-```
-
-Finally, start the server:
-
-```bash
 npm run dev
 ```
 
