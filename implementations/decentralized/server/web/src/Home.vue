@@ -48,8 +48,11 @@
         If you are unhappy with {{ baseHost }} you may migrate any and all
         services to another provider at any time. The open source code for this
         project is
-        <a target="_blank" href="https://github.com/graffiti-garden/server">
-            available on Github
+        <a
+            target="_blank"
+            href="https://github.com/graffiti-garden/graffiti/tree/main/implementations/decentralized/server"
+        >
+            available on GitHub
         </a>
     </aside>
 </template>

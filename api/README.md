@@ -2,60 +2,47 @@
 
 The Graffiti API makes it possible to build many different types of social applications
 that naturally interoperate each other, all using only standard client-side tools.
-This repository contains the abstract API and its documentation.
+This folder contains the abstract API, its documentation, and conformonce tests.
 
-[**View the API Documentation**](https://api.graffiti.garden/classes/Graffiti.html)
+To build with the API: [**see the API Documentation**](https://api.graffiti.garden/classes/Graffiti.html)
 
 ## Implementing the API
 
-To implement the API, first install it:
+To implement the API, create a class that extends the abstract `Graffiti` class and implement its
+methods and `sessionEvents` contract:
 
-```bash
-npm install @graffiti-garden/api
-```
-
-Then create a class that extends the `Graffiti` class and implement the abstract methods.
-
-```typescript
+```ts
 import { Graffiti } from "@graffiti-garden/api";
 
 class MyGraffitiImplementation extends Graffiti {
-  // Implement the abstract methods here
+  // Implement the abstract members documented in the API reference.
 }
 ```
 
-### Testing
+See the [implementations](../implementations/) folder for examples of how to implement the API.
 
-We have written a number of unit tests written with [vitest](https://vitest.dev/)
-that can be used to verify implementations of the API.
-To use them, create a test file in that ends in `*.spec.ts` and format it as follows:
+### Conformance Tests
 
-```typescript
+The `@graffiti-garden/api/tests` export provides Vitest suites that can be
+reused by implementations. For example:
+
+```ts
 import { graffitiCRUDTests } from "@graffiti-garden/api/tests";
 
 const useGraffiti = () => new MyGraffitiImplementation();
-// Fill in with implementation-specific information
-// to provide to valid actor sessions for the tests
-// to use as identities.
-const useSession1 = () => ({ actor: "someone" });
-const useSession2 = () => ({ actor: "someoneelse" });
+const useSession1 = () => ({ actor: "https://example.com/alice" });
+const useSession2 = () => ({ actor: "https://example.com/bob" });
 
-// Run the tests
 graffitiCRUDTests(useGraffiti, useSession1, useSession2);
 ```
 
-Then run the tests in the root of your directory with:
-
-```bash
-npx vitest
-```
+Add equivalent discover and media suites as appropriate.
 
 ## Building the Documentation
 
-To build the [TypeDoc](https://typedoc.org/) documentation, run the following commands:
+To build the [TypeDoc](https://typedoc.org/) documentation, run:
 
 ```bash
-npm run install
 npm run build:docs
 ```
 

@@ -15,7 +15,7 @@ which can be used in the programmatic [composition API](https://vuejs.org/guide/
 ## Installation
 
 You must install this package along with Vue.js and an implementation of the Graffiti API.
-In this example, we will use the [local implementation](https://github.com/graffiti-garden/implementation-local) of the Graffiti API, but any other would be similar.
+In this example, we will use the [local implementation](../../implementations/local/) of the Graffiti API, but any other would be similar.
 In node.js, simply install them with npm:
 
 ```bash
@@ -42,7 +42,7 @@ Add an import map the the `<head>` of your HTML file:
 </head>
 ```
 
-In ether case install the plugin in your Vue app as follows:
+In either case, install the plugin in your Vue app as follows:
 
 ```typescript
 import { createApp } from "vue";

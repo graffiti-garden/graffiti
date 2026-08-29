@@ -118,7 +118,7 @@ export interface GraffitiPluginOptions {
  *
  * ```ts
  * import { createApp } from "vue";
- * import { GraffitiPlugin } from "@graffiti-garden/vue";
+ * import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
  * import { GraffitiLocal } from "@graffiti-garden/implementation-local";
  * import App from "./App.vue";
  *
