@@ -1,5 +1,6 @@
 {
   "name": "@graffiti-garden/parallax",
+  "private": true,
   "version": "0.0.0",
   "description": "A chat app where you are always the moderator",
   "scripts": {

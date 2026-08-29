@@ -1,5 +1,6 @@
 {
   "name": "@graffiti-garden/glitter",
+  "private": true,
   "version": "0.0.0",
   "description": "A small social network built with Graffiti",
   "scripts": {
