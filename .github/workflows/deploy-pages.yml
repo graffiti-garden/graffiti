@@ -1,0 +1,41 @@
+name: Reusable Pages deployment
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages-${{ github.repository }}
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download validated Pages build
+        run: |
+          site_name="${GITHUB_REPOSITORY#*/}"
+          mkdir -p .pages-build
+          curl --fail --location --retry 5 --retry-all-errors \
+            "https://api.graffiti.garden/deployment-assets/$site_name.tar.gz?run=$GITHUB_RUN_ID" \
+            --output .pages-build.tar.gz
+          tar -xzf .pages-build.tar.gz -C .pages-build
+          test -f .pages-build/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: .pages-build
+
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

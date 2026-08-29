@@ -1,0 +1,30 @@
+[
+  {
+    "repository": "wrapper-synchronize",
+    "output": "wrappers/synchronize/docs"
+  },
+  {
+    "repository": "wrapper-vue",
+    "output": "plugins/vue/docs"
+  },
+  {
+    "repository": "glitter",
+    "output": "examples/glitter/dist"
+  },
+  {
+    "repository": "parallax",
+    "output": "examples/parallax/dist"
+  },
+  {
+    "repository": "provenance",
+    "output": "examples/parallax/dist"
+  },
+  {
+    "repository": "wikiffiti",
+    "output": "examples/wikiffiti/dist"
+  },
+  {
+    "repository": "guard",
+    "output": "wrappers/data-guard/host/dist"
+  }
+]

@@ -1,0 +1,14 @@
+name: Deploy Pages from Graffiti monorepo
+
+on:
+  repository_dispatch:
+    types: [graffiti-pages-deploy]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: graffiti-garden/graffiti/.github/workflows/deploy-pages.yml@main
