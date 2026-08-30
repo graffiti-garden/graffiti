@@ -11,6 +11,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
+    "rootDir": "./src",
     "declarationDir": "./dist"
   },
   "include": ["src"]

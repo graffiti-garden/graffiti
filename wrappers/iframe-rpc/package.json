@@ -68,7 +68,7 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.2.0",
-    "penpal": "^7.0.6"
+    "penpal": "^8.0.1"
   },
   "devDependencies": {
     "@graffiti-garden/implementation-local": "^1.2.0",
@@ -76,7 +76,7 @@
     "esbuild": "^0.28.1",
     "esbuild-plugin-polyfill-node": "^0.3.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   }
 }

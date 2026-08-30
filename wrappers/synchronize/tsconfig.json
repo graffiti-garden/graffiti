@@ -4,6 +4,7 @@
     "module": "esnext",
     "lib": ["es2023"],
     "moduleResolution": "bundler",
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
@@ -11,6 +12,7 @@
     "declaration": true,
     "declarationMap": true,
     "skipLibCheck": true,
+    "rootDir": "./src",
     "outDir": "dist"
   },
   "include": ["src"],

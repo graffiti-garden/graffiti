@@ -51,7 +51,7 @@
     "esbuild": "^0.28.1",
     "miniflare": "4.20260730.0",
     "tsx": "^4.23.1",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.18"
   },
   "dependencies": {
@@ -60,7 +60,7 @@
     "@graffiti-garden/wrapper-runtime-types": "^0.1.0",
     "@ipld/dag-cbor": "^10.0.1",
     "@noble/ed25519": "^3.1.0",
-    "@noble/hashes": "2.2",
+    "@noble/hashes": "2.4",
     "did-resolver": "^5.0.1",
     "idb": "^8.0.3",
     "js-cookie": "^3.0.8",

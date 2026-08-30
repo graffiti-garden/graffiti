@@ -13,7 +13,7 @@
     "@graffiti-garden/api": "^1.2.0",
     "@graffiti-garden/implementation-decentralized": "^0.0.10",
     "@graffiti-garden/wrapper-vue": "^1.2.2",
-    "markdown-it": "^14.2.0",
+    "markdown-it": "^15.0.1",
     "vue": "^3.5.13",
     "vue-router": "^5.0.7"
   },

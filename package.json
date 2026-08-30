@@ -40,5 +40,13 @@
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.1"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "workerd": true,
+    "fsevents@2.3.2": true,
+    "fsevents@2.3.3": true,
+    "leveldown@5.6.0": true,
+    "leveldown@6.1.1": true
   }
 }

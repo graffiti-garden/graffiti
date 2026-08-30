@@ -9,7 +9,7 @@ export default defineConfig({
     minify: true,
     outDir: "dist/browser",
     lib: {
-      entry: resolve(__dirname, "src/plugin.ts"),
+      entry: resolve(import.meta.dirname, "src/plugin.ts"),
       name: "plugin",
       fileName: "plugin",
       formats: ["es"],
