@@ -45,11 +45,11 @@
     "url": "https://github.com/graffiti-garden/graffiti/issues"
   },
   "devDependencies": {
-    "@types/node": "^25.0.9",
+    "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.0.17",
     "esbuild": "^0.28.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   },
   "dependencies": {

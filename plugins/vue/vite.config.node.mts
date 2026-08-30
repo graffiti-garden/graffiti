@@ -4,12 +4,12 @@ import vue from "@vitejs/plugin-vue";
 import dts from "vite-plugin-dts";
 
 export default defineConfig({
-  plugins: [vue(), dts()],
+  plugins: [vue(), dts({ processor: "vue" })],
   build: {
     sourcemap: true,
     outDir: "dist/node",
     lib: {
-      entry: resolve(__dirname, "src/plugin.ts"),
+      entry: resolve(import.meta.dirname, "src/plugin.ts"),
       name: "plugin",
       fileName: "plugin",
       formats: ["es", "cjs"],

@@ -34,7 +34,7 @@
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-vue": "^6.0.4",
     "fake-indexeddb": "^6.2.5",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vite": "^8.0.12",
     "vitest": "^4.0.17",
     "vue-tsc": "^3.2.5"
