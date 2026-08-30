@@ -60,8 +60,10 @@ The repository also contains three relatively simple example apps that demonstra
 
 ### Requirements
 
-- [Node.js](https://nodejs.org/) 24 or newer
-- npm 11.5.1 or a compatible npm 11 release
+- [Node.js](https://nodejs.org/)
+- [npm](https://www.npmjs.com/)
+
+See [`package.json`](./package.json) for the minimum required Node and npm versions.
 
 Install all dependencies from the repository root:
 
