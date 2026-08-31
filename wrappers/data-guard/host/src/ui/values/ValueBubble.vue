@@ -9,6 +9,7 @@ import {
 } from "vue";
 
 defineProps<{ emoji: string; title?: string }>();
+const emit = defineEmits<{ "update:pinned": [value: boolean] }>();
 const disclosure = Boolean(useSlots().details);
 const pinned = ref(false);
 const suppressed = ref(false);
@@ -36,6 +37,7 @@ function clickAway(event: PointerEvent) {
 }
 
 watch(pinned, (value) => {
+  emit("update:pinned", value);
   if (value) document.addEventListener("pointerdown", clickAway);
   else document.removeEventListener("pointerdown", clickAway);
 });
