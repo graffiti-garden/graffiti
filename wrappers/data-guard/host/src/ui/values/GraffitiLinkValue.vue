@@ -68,6 +68,8 @@ function label(media: any) {
 <template>
   <ValueBubble
     :emoji="emoji"
+    centered
+    :flush="Boolean(object)"
     @update:pinned="active = active || $event"
   >
     <GraffitiActorToHandle v-if="media" v-slot="{ handle }" :actor="media.actor">
@@ -98,5 +100,5 @@ function label(media: any) {
 </template>
 
 <style scoped>
-.graffiti-data { width: min(30rem, calc(100vw - 3rem)); }
+.graffiti-data { width: 100%; min-width: 0; box-sizing: border-box; }
 </style>
