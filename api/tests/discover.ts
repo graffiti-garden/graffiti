@@ -66,6 +66,21 @@ export const graffitiDiscoverTests = (
       await expect(iterator.next()).resolves.toHaveProperty("done", true);
     });
 
+    it("discover with boolean schemas", async () => {
+      const object = randomPostObject();
+      const posted = await graffiti.post<{}>(object, session);
+
+      const matchingIterator = graffiti.discover<{}>(object.channels, true);
+      const value = await nextStreamValue<{}>(matchingIterator);
+      expect(value.url).toEqual(posted.url);
+
+      const nonmatchingIterator = graffiti.discover(object.channels, false);
+      await expect(nonmatchingIterator.next()).resolves.toHaveProperty(
+        "done",
+        true,
+      );
+    });
+
     it("discover not allowed", async () => {
       const object = randomPostObject();
       object.allowed = [randomUrl(), randomUrl()];

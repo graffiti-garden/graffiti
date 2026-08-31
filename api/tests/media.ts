@@ -35,6 +35,7 @@ export const graffitiMediaTests = (
         const text = randomString();
         const data = new Blob([text], { type: "text/plain" });
         const mediaUrl = await graffiti.postMedia({ data }, session);
+        expect(URL.canParse(mediaUrl)).toBe(true);
 
         // Get the media back
         const media = await graffiti.getMedia(mediaUrl, {});
@@ -102,6 +103,38 @@ export const graffitiMediaTests = (
             maxBytes: data.size - 1,
           }),
         ).rejects.toThrow(GraffitiErrorTooLarge);
+      });
+
+      it("rejects a fractional maximum size", async () => {
+        const data = new Blob([], { type: "text/plain" });
+        const mediaUrl = await graffiti.postMedia({ data }, session);
+
+        // Start from a resolved promise so this assertion supports both
+        // synchronous argument validation and asynchronous implementations.
+        await expect(
+          Promise.resolve().then(() =>
+            graffiti.getMedia(mediaUrl, { maxBytes: 0.5 }),
+          ),
+        ).rejects.toThrow();
+      });
+
+      it("rejects malformed URLs", async () => {
+        const invalidUrl = "not a URL";
+        const data = new Blob([], { type: "text/plain" });
+
+        await expect(
+          Promise.resolve().then(() => graffiti.getMedia(invalidUrl, {})),
+        ).rejects.toThrow();
+        await expect(
+          Promise.resolve().then(() =>
+            graffiti.postMedia({ data, allowed: [invalidUrl] }, session),
+          ),
+        ).rejects.toThrow();
+        await expect(
+          Promise.resolve().then(() =>
+            graffiti.postMedia({ data }, { ...session, actor: invalidUrl }),
+          ),
+        ).rejects.toThrow();
       });
 
       it("empty allowed", async () => {

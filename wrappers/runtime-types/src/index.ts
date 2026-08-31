@@ -2,6 +2,7 @@ import type { Graffiti } from "@graffiti-garden/api";
 import {
   looseObject,
   array,
+  boolean,
   string,
   url,
   union,
@@ -38,6 +39,8 @@ export const GraffitiOptionalSessionSchema = optional(
   nullable(GraffitiSessionSchema),
 );
 
+export const GraffitiJSONSchemaSchema = union([boolean(), looseObject({})]);
+
 export const GraffitiPostMediaSchema = looseObject({
   data: instanceof_(Blob),
   allowed: optional(nullable(array(url()))),
@@ -58,7 +61,7 @@ export class GraffitiRuntimeTypes implements Graffiti {
   }
 
   login: Graffiti["login"] = (...args) => {
-    const typedArgs = tuple([optional(url())]).parse(args);
+    const typedArgs = tuple([optional(nullable(url()))]).parse(args);
     return this.graffiti.login(...typedArgs);
   };
 
@@ -90,7 +93,7 @@ export class GraffitiRuntimeTypes implements Graffiti {
   get: Graffiti["get"] = (...args) => {
     const typedArgs = tuple([
       GraffitiObjectUrlSchema,
-      looseObject({}),
+      GraffitiJSONSchemaSchema,
       GraffitiOptionalSessionSchema,
     ]).parse(args);
 
@@ -136,7 +139,7 @@ export class GraffitiRuntimeTypes implements Graffiti {
   discover: Graffiti["discover"] = (...args) => {
     const typedArgs = tuple([
       array(string()),
-      looseObject({}),
+      GraffitiJSONSchemaSchema,
       GraffitiOptionalSessionSchema,
     ]).parse(args);
     return this.graffiti.discover<(typeof args)[1]>(

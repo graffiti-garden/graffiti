@@ -49,6 +49,7 @@ export const graffitiCRUDTests = (
 
         // Post the object
         const previous = await graffiti.post<{}>({ value, channels }, session);
+        expect(URL.canParse(previous.url)).toBe(true);
         expect(previous.value).toEqual(value);
         expect(previous.channels).toEqual(channels);
         expect(previous.allowed).toEqual(undefined);
@@ -185,6 +186,46 @@ export const graffitiCRUDTests = (
             },
           }),
         ).rejects.toThrow(GraffitiErrorSchemaMismatch);
+      });
+
+      it("post and get with boolean schemas", async () => {
+        const posted = await graffiti.post<{}>(
+          { value: {}, channels: [] },
+          session,
+        );
+
+        await expect(graffiti.get(posted, true)).resolves.toEqual(posted);
+        await expect(graffiti.get(posted, false)).rejects.toThrow(
+          GraffitiErrorSchemaMismatch,
+        );
+      });
+
+      it("rejects malformed URLs", async () => {
+        const invalidUrl = "not a URL";
+
+        await expect(
+          Promise.resolve().then<void>(
+            async () => void (await graffiti.get(invalidUrl, {})),
+          ),
+        ).rejects.toThrow();
+        await expect(
+          Promise.resolve().then<void>(
+            async () =>
+              void (await graffiti.post<{}>(
+                { value: {}, channels: [], allowed: [invalidUrl] },
+                session,
+              )),
+          ),
+        ).rejects.toThrow();
+        await expect(
+          Promise.resolve().then<void>(
+            async () =>
+              void (await graffiti.post<{}>(
+                { value: {}, channels: [] },
+                { ...session, actor: invalidUrl },
+              )),
+          ),
+        ).rejects.toThrow();
       });
 
       it("post and get with empty access control", async () => {
