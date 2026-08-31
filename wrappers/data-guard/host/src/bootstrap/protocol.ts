@@ -34,7 +34,7 @@ export function requestAudit(
   source: { id: string; name: string }[],
 ) {
   window.parent.postMessage(
-    { type: "graffiti-guard:open-audit", actor, source },
+    { type: "graffiti-guard:open-audit", actor, source, view: "permissions" },
     "*",
   );
 }

@@ -99,7 +99,10 @@ export class GraffitiGuarded extends Graffiti {
         typeof event.data.actor === "string" &&
         Array.isArray(event.data.source)
       ) {
-        this.audit(event.data);
+        this.audit(
+          event.data,
+          event.data.view === "permissions" ? "permissions" : "activity",
+        );
       }
     };
     window.addEventListener("message", onMessage);
@@ -132,11 +135,15 @@ export class GraffitiGuarded extends Graffiti {
   };
 
   /** Open the host-owned audit panel without exposing audit data to this app. */
-  audit(session?: GraffitiGuardSession) {
+  audit(
+    session?: GraffitiGuardSession,
+    view: "activity" | "permissions" = "activity",
+  ) {
     const auditUrl = new URL(this.hostUrl);
     auditUrl.searchParams.set("redirectUrl", window.location.href);
     auditUrl.searchParams.set("source", JSON.stringify(session?.source ?? []));
     if (session?.actor) auditUrl.searchParams.set("actor", session.actor);
+    auditUrl.searchParams.set("view", view);
     window.location.assign(auditUrl.href);
   }
 

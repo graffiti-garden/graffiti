@@ -1,6 +1,6 @@
 # Graffiti
 
-Graffiti is a generic infrastructure that makes it possible to build a wide variety of social apps using only client-side code. Graffiti can be used to build apps like [Twitter](https://glitter.graffiti.garden/), [Messenger](https://parallax.graffiti.garden/), [Wikipedia](https://wiki.graffiti.garden/), [Uber](https://social.wiki/#/v?/rideshare), and [brand new types of social apps](https://social.wiki).
+Graffiti is a infrastructure that makes it possible to build a wide variety of social apps using only client-side code. Graffiti can be used to build apps like [Twitter](https://glitter.graffiti.garden/), [Messenger](https://parallax.graffiti.garden/), [Wikipedia](https://wiki.graffiti.garden/), [Uber](https://social.wiki/#/v?/rideshare), and [brand new types of social apps](https://social.wiki).
 
 This monorepo includes:
 
