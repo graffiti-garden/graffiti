@@ -35,7 +35,7 @@ a closed shadow root.
 ```sh
 npm run check --workspace=@graffiti-garden/modal
 npm run build --workspace=@graffiti-garden/modal
-npx http-server wrappers/utils/modal
+npx http-server implementations/utils/modal
 ```
 
 Open `/demo/` on the local server after building.
