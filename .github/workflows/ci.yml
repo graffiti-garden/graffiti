@@ -156,6 +156,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Create release pull request or publish packages
         uses: changesets/action@v2
         with:
