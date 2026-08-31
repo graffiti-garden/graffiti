@@ -29,9 +29,11 @@ function getInboxId(context: Context<{ Bindings: Bindings }>) {
   return getId(context, "inbox");
 }
 
-const ObjectSchemaSchema = z.looseObject({}).openapi({
-  description: "A JSON Schema to filter the message data by.",
-});
+const ObjectSchemaSchema = z
+  .union([z.looseObject({}), z.boolean()])
+  .openapi({
+    description: "A JSON Schema to filter the message data by.",
+  });
 
 const LabelSchema = z.int().min(0).openapi({
   description:
