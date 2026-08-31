@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   GraffitiMediaAcceptSchema,
   GraffitiMediaSchema,
+  GraffitiJSONSchemaSchema,
   GraffitiObjectSchema,
   GraffitiObjectUrlSchema,
   GraffitiOptionalSessionSchema,
@@ -112,6 +113,7 @@ describe("GraffitiRuntimeTypes", () => {
     const accept = { types: ["text/plain"], maxBytes: 100 };
 
     await expect(wrapper.login(actor)).resolves.toBeUndefined();
+    await expect(wrapper.login(null)).resolves.toBeUndefined();
     await expect(wrapper.logout(session)).resolves.toBeUndefined();
     await expect(wrapper.handleToActor("alice.example")).resolves.toBe(actor);
     await expect(wrapper.actorToHandle(actor)).resolves.toBe("alice.example");
@@ -119,6 +121,9 @@ describe("GraffitiRuntimeTypes", () => {
       results.object,
     );
     await expect(wrapper.get(objectUrl, schema, session)).resolves.toBe(
+      results.object,
+    );
+    await expect(wrapper.get(objectUrl, true, session)).resolves.toBe(
       results.object,
     );
     await expect(wrapper.delete({ url: objectUrl }, session)).resolves.toBe(
@@ -132,21 +137,27 @@ describe("GraffitiRuntimeTypes", () => {
     expect(wrapper.discover(["posts"], schema, session)).toBe(
       results.discoverStream,
     );
+    expect(wrapper.discover(["posts"], false, session)).toBe(
+      results.discoverStream,
+    );
     expect(wrapper.continueDiscover("cursor", session)).toBe(
       results.continueStream,
     );
 
     expect(methods.login).toHaveBeenCalledWith(actor);
+    expect(methods.login).toHaveBeenCalledWith(null);
     expect(methods.logout).toHaveBeenCalledWith(session);
     expect(methods.handleToActor).toHaveBeenCalledWith("alice.example");
     expect(methods.actorToHandle).toHaveBeenCalledWith(actor);
     expect(methods.post).toHaveBeenCalledWith(postObject, session);
     expect(methods.get).toHaveBeenCalledWith(objectUrl, schema, session);
+    expect(methods.get).toHaveBeenCalledWith(objectUrl, true, session);
     expect(methods.delete).toHaveBeenCalledWith({ url: objectUrl }, session);
     expect(methods.postMedia).toHaveBeenCalledWith(postMedia, session);
     expect(methods.getMedia).toHaveBeenCalledWith(mediaUrl, accept, session);
     expect(methods.deleteMedia).toHaveBeenCalledWith(mediaUrl, session);
     expect(methods.discover).toHaveBeenCalledWith(["posts"], schema, session);
+    expect(methods.discover).toHaveBeenCalledWith(["posts"], false, session);
     expect(methods.continueDiscover).toHaveBeenCalledWith("cursor", session);
   });
 
@@ -173,7 +184,7 @@ describe("GraffitiRuntimeTypes", () => {
     await expect(wrapper.get(objectUrl, schema, session)).rejects.toBe(
       asyncError,
     );
-    expect(() => wrapper.discover(["posts"], schema, session)).toThrow(
+    expect(() => wrapper.discover<{}>(["posts"], schema, session)).toThrow(
       syncError,
     );
   });
@@ -193,6 +204,8 @@ describe("exported schemas", () => {
     });
     expect(GraffitiSessionSchema.parse(session)).toEqual(session);
     expect(GraffitiOptionalSessionSchema.parse(null)).toBeNull();
+    expect(GraffitiJSONSchemaSchema.parse(true)).toBe(true);
+    expect(GraffitiJSONSchemaSchema.parse(false)).toBe(false);
     expect(GraffitiPostMediaSchema.parse(postMedia)).toEqual(postMedia);
     expect(GraffitiMediaSchema.parse({ ...postMedia, actor })).toEqual({
       ...postMedia,

@@ -384,6 +384,7 @@ export type GraffitiMediaAccept = {
   types?: string[];
   /**
    * The maximum acceptable size, in bytes, of the media.
+   * Must be a nonnegative safe integer.
    */
   maxBytes?: number;
 };
