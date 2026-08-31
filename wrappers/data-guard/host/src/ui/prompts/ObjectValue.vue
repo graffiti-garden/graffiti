@@ -106,19 +106,19 @@ function resizeWithKeyboard(event: KeyboardEvent) {
 </template>
 
 <style scoped>
-.table { --property-column: 28%; position: relative; min-width: 0; line-height: 1.5; }
+.table { --property-column: 28%; position: relative; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; border-radius: 0.35rem; line-height: 1.5; }
 .table.array { --property-column: 2.5rem; }
 .table.nested { border: 1px solid var(--border-color); border-radius: 0.35rem; }
-.row { display: grid; grid-template-columns: var(--property-column) minmax(0, 1fr); min-width: 0; align-items: stretch; }
+.row { display: grid; width: 100%; min-width: 0; box-sizing: border-box; grid-template-columns: var(--property-column) minmax(0, 1fr); align-items: stretch; }
 .table > .row:nth-child(odd) { background: var(--background-color-interactive); }
 .table > .row:nth-child(even) { background: var(--background-color); }
 .table.reverse > .row:nth-child(odd) { background: var(--background-color); }
 .table.reverse > .row:nth-child(even) { background: var(--background-color-interactive); }
 .table > .row:first-child { border-start-start-radius: 0.35rem; border-start-end-radius: 0.35rem; }
 .table > .row:last-of-type { border-end-start-radius: 0.35rem; border-end-end-radius: 0.35rem; }
-.key { display: flex; min-width: 0; align-items: center; border-right: 3px solid var(--border-color); padding: 0.35rem 0.55rem; font-weight: 700; overflow-wrap: anywhere; }
+.key { display: flex; min-width: 0; box-sizing: border-box; align-items: center; border-right: 3px solid var(--border-color); padding: 0.35rem 0.55rem; font-weight: 700; overflow-wrap: anywhere; }
 .table.array > .row > .key { justify-content: flex-end; padding-right: 0.45rem; font-weight: 400; }
-.value { min-width: 0; padding: 0.35rem 0.55rem; overflow-wrap: anywhere; }
+.value { min-width: 0; box-sizing: border-box; padding: 0.35rem 0.55rem; overflow-wrap: anywhere; }
 .empty { color: var(--secondary-color); }
 .table > .column-resizer, .table > .column-resizer:hover, .table > .column-resizer:focus-visible { position: absolute; top: 0; bottom: 0; left: var(--property-column); z-index: 2; width: 0.9rem; transform: translateX(-50%); border: 0; border-radius: 0; padding: 0; color: transparent; background: transparent; box-shadow: none; cursor: col-resize; touch-action: none; }
 .column-resizer::after { position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; transform: translateX(-50%); background: transparent; content: ""; }
