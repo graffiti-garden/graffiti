@@ -37,7 +37,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/graffiti.git",
-    "directory": "wrappers/utils/modal"
+    "directory": "implementations/utils/modal"
   },
   "bugs": {
     "url": "https://github.com/graffiti-garden/graffiti/issues"
