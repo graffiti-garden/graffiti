@@ -710,6 +710,13 @@ export class GraffitiDecentralized implements Graffiti {
   getMedia: Graffiti["getMedia"] = async (...args) => {
     const [mediaUrl, accept, session] = args;
 
+    if (
+      accept?.maxBytes !== undefined &&
+      (!Number.isSafeInteger(accept.maxBytes) || accept.maxBytes < 0)
+    ) {
+      throw new TypeError("maxBytes must be a nonnegative safe integer");
+    }
+
     const object = await this.get<typeof MEDIA_OBJECT_SCHEMA>(
       mediaUrl,
       MEDIA_OBJECT_SCHEMA,
@@ -718,7 +725,7 @@ export class GraffitiDecentralized implements Graffiti {
 
     const { key, type, size } = object.value;
 
-    if (accept?.maxBytes && size > accept.maxBytes) {
+    if (accept?.maxBytes !== undefined && size > accept.maxBytes) {
       throw new GraffitiErrorTooLarge("File size exceeds limit");
     }
 

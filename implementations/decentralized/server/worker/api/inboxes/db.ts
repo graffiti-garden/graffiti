@@ -7,7 +7,7 @@ import {
 import { HTTPException } from "hono/http-exception";
 import { LRUCache } from "lru-cache";
 import z from "zod";
-import { Validator } from "@cfworker/json-schema";
+import { Validator, type Schema } from "@cfworker/json-schema";
 import { randomBase64, encodeBase64 } from "../../app/auth/utils";
 
 const INBOX_QUERY_LIMIT = 100;
@@ -246,7 +246,7 @@ export async function queryMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
   tags: Uint8Array[],
-  objectSchema: {},
+  objectSchema: Schema | boolean,
   userId?: number,
   sinceSeq: number = 0,
 ) {
