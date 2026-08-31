@@ -1,0 +1,88 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["npm"],
+  "timezone": "America/New_York",
+  "schedule": ["before 6am on Monday"],
+  "minimumReleaseAge": "3 days",
+  "automerge": false,
+  "packageRules": [
+    {
+      "description": "Update the TypeScript build toolchain together",
+      "groupName": "TypeScript build toolchain",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchPackageNames": [
+        "typescript",
+        "tsx",
+        "esbuild",
+        "esbuild-plugin-polyfill-node",
+        "typedoc",
+        "typedoc-plugin-vue"
+      ],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "description": "Update Vitest packages together",
+      "groupName": "Vitest",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchPackageNames": ["vitest", "@vitest/**"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "description": "Update Vite and Vue build tools together",
+      "groupName": "Vite and Vue build tools",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchPackageNames": [
+        "vue-tsc",
+        "@vue/typescript-plugin",
+        "vite",
+        "@vitejs/**",
+        "vite-plugin-dts"
+      ],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "description": "Update the Vue runtime together",
+      "groupName": "Vue runtime",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["vue", "vue-router"],
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "description": "Keep TypeScript and Vitest development ranges synchronized",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchPackageNames": [
+        "typescript",
+        "tsx",
+        "esbuild",
+        "esbuild-plugin-polyfill-node",
+        "typedoc",
+        "typedoc-plugin-vue",
+        "vitest",
+        "@vitest/**"
+      ],
+      "rangeStrategy": "replace"
+    },
+    {
+      "description": "Keep Vue and Vite development ranges synchronized",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchPackageNames": [
+        "vue-tsc",
+        "@vue/typescript-plugin",
+        "vite",
+        "@vitejs/**",
+        "vite-plugin-dts"
+      ],
+      "rangeStrategy": "replace"
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on Monday"]
+  }
+}
