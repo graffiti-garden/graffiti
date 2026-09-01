@@ -38,6 +38,13 @@ export function handleNameToHandle(handleName: string, baseHost: string) {
 export function handleNameToDid(handleName: string, baseHost: string) {
   return `did:web:${handleNameToHandle(handleName, baseHost)}`;
 }
+export function didToHandle(did: string) {
+  const match = did.match(/^did:web:(.+)$/);
+  if (!match) {
+    throw new Error(`Invalid DID format: ${did}`);
+  }
+  return match[1];
+}
 export function constructDidDocument(args: {
   did: string;
   services: z.infer<typeof OptionalServicesSchema>;

@@ -68,8 +68,6 @@
 import { ref, watch } from "vue";
 import type { Actor } from "./types";
 import {
-    OptionalAlsoKnownAsSchema,
-    OptionalServicesSchema,
     constructDidDocument,
     type OptionalAlsoKnownAs,
     type OptionalServices,
@@ -77,6 +75,7 @@ import {
 import EditDid from "./EditDid.vue";
 import { fetchFromSelf } from "../globals";
 import CopyButton from "../utils/CopyButton.vue";
+import { fetchActorDidData } from "./plc-directory";
 
 const props = defineProps<{
     actor: Actor;
@@ -89,45 +88,15 @@ const alsoKnownAs = ref<OptionalAlsoKnownAs>(undefined);
 const services = ref<OptionalServices>(undefined);
 async function fetchActor() {
     documentStatus.value = "loading";
-    let result: Response;
     try {
-        result = await fetch(`https://plc.directory/${actor.did}/data`);
+        const data = await fetchActorDidData(actor);
+        alsoKnownAs.value = data.alsoKnownAs;
+        services.value = data.services;
+        documentStatus.value = "success";
     } catch (error) {
         console.error(error);
         documentStatus.value = "error";
-        return;
     }
-    let json: any;
-    try {
-        json = await result.json();
-    } catch (error) {
-        console.error(error);
-        documentStatus.value = "error";
-        return;
-    }
-
-    if (json.did !== actor.did) {
-        console.error(`DID mismatch: ${json.did} !== ${actor.did}`);
-        documentStatus.value = "error";
-        return;
-    }
-    if (!json.rotationKeys.includes(actor.rotationKey)) {
-        console.error(
-            `Rotation key mismatch: ${json.rotationKeys} does not include ${actor.rotationKey}`,
-        );
-        documentStatus.value = "error";
-        return;
-    }
-
-    try {
-        alsoKnownAs.value = OptionalAlsoKnownAsSchema.parse(json.alsoKnownAs);
-        services.value = OptionalServicesSchema.parse(json.services);
-    } catch (error) {
-        console.error(error);
-        documentStatus.value = "error";
-        return;
-    }
-    documentStatus.value = "success";
 }
 fetchActor();
 
