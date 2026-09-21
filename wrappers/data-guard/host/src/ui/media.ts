@@ -9,9 +9,6 @@ export function mediaLabels(type: unknown) {
     item,
     description:
       mimeData[mime]?.label ?? (item === "file" ? "Unrecognized file" : `${capitalize(item)} file`),
-    remember: `Allow For All ${
-      item === "file" ? "Unrecognized Files" : `${capitalize(item)} Files`
-    }`,
   };
 }
 

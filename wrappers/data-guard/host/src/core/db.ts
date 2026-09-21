@@ -7,6 +7,7 @@ export type Permission = {
   source: Source;
   actor: string;
   method: GraffitiMethod;
+  decision: "allow" | "deny";
   match:
     | { kind: "object"; url: string }
     | {
@@ -37,7 +38,11 @@ export type Request = {
 
 export type RequestResult = {
   authorization:
-    | { allowed: false; at: number }
+    | {
+        allowed: false;
+        at: number;
+        permission?: { id: string; created: boolean };
+      }
     | {
         allowed: true;
         at: number;
@@ -65,8 +70,12 @@ export class GuardDB {
   private readonly database;
 
   constructor(private readonly name = "graffiti-guard") {
-    this.database = openDB<GuardDatabase>(name, 1, {
-      upgrade(db) {
+    this.database = openDB<GuardDatabase>(name, 2, {
+      upgrade(db, oldVersion, _newVersion, transaction) {
+        if (oldVersion > 0) {
+          transaction.objectStore("permissions").clear();
+          return;
+        }
         const permissions = db.createObjectStore("permissions", {
           keyPath: "id",
         });
@@ -127,9 +136,15 @@ export class GuardDB {
     return request;
   }
 
-  async deny(request: Request) {
+  async deny(request: Request, permission?: Permission) {
     await this.updateRequest(request.id, {
-      authorization: { allowed: false, at: Date.now() },
+      authorization: {
+        allowed: false,
+        at: Date.now(),
+        ...(permission
+          ? { permission: { id: permission.id, created: false } }
+          : {}),
+      },
     });
   }
 
@@ -147,7 +162,22 @@ export class GuardDB {
 
   async grant(
     request: Request,
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
+  ) {
+    return this.remember(request, { ...permission, decision: "allow" }, true);
+  }
+
+  async block(
+    request: Request,
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
+  ) {
+    return this.remember(request, { ...permission, decision: "deny" }, false);
+  }
+
+  private async remember(
+    request: Request,
     permission: Omit<Permission, "id" | "createdAt">,
+    allowed: boolean,
   ) {
     const db = await this.database;
     const record = newPermission(permission);
@@ -159,7 +189,7 @@ export class GuardDB {
     if (!entry) throw new Error(`Unknown guard request ${request.id}.`);
     entry.result = {
       authorization: {
-        allowed: true,
+        allowed,
         at: Date.now(),
         permission: { id: record.id, created: true },
       },
@@ -173,7 +203,7 @@ export class GuardDB {
   }
 
   async ensurePermission(
-    permission: Omit<Permission, "id" | "createdAt">,
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
   ) {
     const db = await this.database;
     const transaction = db.transaction("permissions", "readwrite");
@@ -186,13 +216,14 @@ export class GuardDB {
       (candidate) =>
         candidate.actor === permission.actor &&
         candidate.method === permission.method &&
+        candidate.decision === "allow" &&
         JSON.stringify(candidate.match) === JSON.stringify(permission.match),
     );
     if (existing) {
       await transaction.done;
       return existing;
     }
-    const record = newPermission(permission);
+    const record = newPermission({ ...permission, decision: "allow" });
     await store.add(record);
     await transaction.done;
     return record;
@@ -203,7 +234,10 @@ export class GuardDB {
     execution:
       | { ok: true; value?: unknown }
       | { ok: false; error: string },
-    implicitPermission?: Omit<Permission, "id" | "createdAt">,
+    implicitPermission?: Omit<
+      Permission,
+      "id" | "createdAt" | "decision"
+    >,
   ) {
     const db = await this.database;
     const transaction = db.transaction(
@@ -238,7 +272,12 @@ export class GuardDB {
         ? [
             transaction
               .objectStore("permissions")
-              .add(newPermission(implicitPermission)),
+              .add(
+                newPermission({
+                  ...implicitPermission,
+                  decision: "allow",
+                }),
+              ),
           ]
         : []),
       transaction.done,

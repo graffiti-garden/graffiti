@@ -30,3 +30,33 @@ it("acknowledges the embedding origin before connecting", async () => {
   );
   expect(connect).toHaveBeenCalledWith("https://app.example");
 });
+
+it("announces when the parent has made the guard visible", async () => {
+  const parent = { postMessage: vi.fn() };
+  let onMessage: ((event: MessageEvent) => void) | undefined;
+  vi.stubGlobal("window", {
+    parent,
+    addEventListener: vi.fn((type, listener) => {
+      if (type === "message") onMessage = listener;
+    }),
+  });
+  const { listenToParent, visibilityEvents } = await import(
+    "../src/bootstrap/protocol.js"
+  );
+  const shown = vi.fn();
+  visibilityEvents.addEventListener("shown", shown);
+  listenToParent(vi.fn());
+
+  onMessage?.({
+    source: parent,
+    origin: "https://app.example",
+    data: { type: "graffiti-guard:connect" },
+  } as unknown as MessageEvent);
+  onMessage?.({
+    source: parent,
+    origin: "https://app.example",
+    data: { type: "graffiti-guard:shown" },
+  } as unknown as MessageEvent);
+
+  expect(shown).toHaveBeenCalledOnce();
+});

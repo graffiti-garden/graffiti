@@ -123,6 +123,13 @@ export class GraffitiGuarded extends Graffiti {
       ) {
         iframe.style.display = event.data.visible ? "block" : "none";
         iframe.setAttribute("aria-hidden", String(!event.data.visible));
+        if (event.data.visible) {
+          iframe.focus();
+          remoteWindow.postMessage(
+            { type: "graffiti-guard:shown" },
+            hostUrl.origin,
+          );
+        }
       } else if (
         event.data.type === "graffiti-guard:open-audit" &&
         typeof event.data.actor === "string" &&

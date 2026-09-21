@@ -18,6 +18,10 @@ import {
   sourceFromArgs,
 } from "./source.js";
 
+export type GuardAnswer =
+  | false
+  | { allow: boolean; remember: boolean };
+
 export class Guard {
   private readonly sessions = new Map<string, GraffitiSession>();
   private previousAuthorization = Promise.resolve();
@@ -30,7 +34,7 @@ export class Guard {
       request: Request,
       canRemember: boolean,
       preview?: unknown,
-    ) => Promise<false | { remember: boolean }>,
+    ) => Promise<GuardAnswer>,
   ) {
     graffiti.sessionEvents.addEventListener("login", (event) => {
       if (!(event instanceof CustomEvent) || event.detail?.error) return;
@@ -124,11 +128,17 @@ export class Guard {
       await this.db.allow(request);
       return { request, prepared };
     }
-    let permission = (await this.db.permissions(source, actor, method)).find(
-      (candidate) => matches(candidate, prepared.subject),
-    );
+    let permission = (await this.db.permissions(source, actor, method))
+      .filter((candidate) => matches(candidate, prepared.subject))
+      .sort((left, right) => right.createdAt - left.createdAt)[0];
 
     if (permission) {
+      if (permission.decision === "deny") {
+        await this.db.deny(request, permission);
+        throw new GraffitiErrorForbidden(
+          `The user denied the ${method} request.`,
+        );
+      }
       await this.db.allow(request, permission);
       return { request, prepared, permission };
     }
@@ -138,8 +148,17 @@ export class Guard {
       Boolean(prepared.createMatch),
       prepared.preview,
     );
-    if (!answer) {
-      await this.db.deny(request);
+    if (!answer || !answer.allow) {
+      if (answer && answer.remember && prepared.createMatch) {
+        await this.db.block(request, {
+          source,
+          actor,
+          method,
+          match: prepared.createMatch(),
+        });
+      } else {
+        await this.db.deny(request);
+      }
       throw new GraffitiErrorForbidden(`The user denied the ${method} request.`);
     }
 

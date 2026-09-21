@@ -1,3 +1,5 @@
+export const visibilityEvents = new EventTarget();
+
 export function listenToParent(connect: (origin: string) => void) {
   let origin: string | undefined;
   window.addEventListener("message", (event) => {
@@ -26,6 +28,12 @@ export function listenToParent(connect: (origin: string) => void) {
         );
         connect(origin);
       }
+    } else if (
+      origin &&
+      event.origin === origin &&
+      event.data.type === "graffiti-guard:shown"
+    ) {
+      visibilityEvents.dispatchEvent(new Event("shown"));
     }
   });
 }

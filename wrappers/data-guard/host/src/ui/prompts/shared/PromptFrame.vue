@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, useTemplateRef } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, useTemplateRef } from "vue";
+import { visibilityEvents } from "../../../bootstrap/protocol.js";
 
 const props = defineProps<{
   title: string;
@@ -20,11 +21,19 @@ function escape() {
   else props.cancel();
 }
 
+function focusFrame() {
+  void nextTick(() => frame.value?.focus());
+}
+
 onMounted(() => {
-  frame.value?.focus();
+  focusFrame();
+  visibilityEvents.addEventListener("shown", focusFrame);
   document.addEventListener("pointerdown", clickAway);
 });
-onBeforeUnmount(() => document.removeEventListener("pointerdown", clickAway));
+onBeforeUnmount(() => {
+  visibilityEvents.removeEventListener("shown", focusFrame);
+  document.removeEventListener("pointerdown", clickAway);
+});
 </script>
 
 <template>
@@ -50,7 +59,6 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", clickAway));
       </header>
       <div class="content"><slot /></div>
       <footer>
-        <button type="button" class="secondary" @click="props.cancel()">Cancel</button>
         <div class="actions"><slot name="actions" /></div>
       </footer>
     </dialog>
@@ -73,13 +81,9 @@ h1 { flex: 1; margin: 0; color: var(--title-color); font-size: 2rem; line-height
 .guard-menu button { width: 100%; border: 0; border-radius: 0; padding: 0.5rem 0.75rem; color: var(--text-color); background: transparent; font-size: 1.15rem; text-align: left; white-space: nowrap; cursor: pointer; }
 .guard-menu button:hover, .guard-menu button:focus-visible { background: var(--background-color-interactive-hover); }
 .content { display: flex; flex-direction: column; gap: 1.5rem; }
-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; margin-top: 3rem; }
-.actions { display: flex; flex-flow: row-reverse wrap; justify-content: flex-end; gap: 0.625rem; }
+footer { margin-top: 2.5rem; }
+.actions { width: 100%; }
 button, :deep(button) { border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; color: var(--accent-button-text); background: var(--accent-button-background); font: inherit; cursor: pointer; }
 button:hover, :deep(button:hover) { border-color: var(--border-color-hover); background: var(--accent-button-background-hover); text-decoration: none; }
-button.secondary { border: 0; border-radius: 0; padding: 0; color: var(--secondary-color); background: transparent; }
-button.secondary:hover { color: var(--secondary-hover-color); background: transparent; text-decoration: underline 2px; }
-:deep(button.remember) { color: var(--text-color); background: var(--background-color-interactive); }
-:deep(button.remember:hover) { background: var(--background-color-interactive-hover); }
-@media (max-width: 42rem) { .backdrop { padding: 0.75rem; } dialog { width: 100%; } footer, .actions { display: grid; grid-template-columns: 1fr; } .actions { order: -1; } button, :deep(button) { width: 100%; } }
+@media (max-width: 42rem) { .backdrop { padding: 0.75rem; } dialog { width: 100%; } button, :deep(button) { width: 100%; } }
 </style>

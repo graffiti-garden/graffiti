@@ -1,7 +1,7 @@
 import type { Graffiti } from "@graffiti-garden/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GuardDB } from "../src/core/db.js";
-import { Guard } from "../src/core/guard.js";
+import { Guard, type GuardAnswer } from "../src/core/guard.js";
 import type { GraffitiMethod } from "../src/core/graffiti.js";
 
 const databases: GuardDB[] = [];
@@ -10,9 +10,7 @@ afterEach(async () => {
 });
 
 function setup(
-  answer:
-    | false
-    | { remember: boolean } = { remember: true },
+  answer: GuardAnswer = { allow: true, remember: true },
   mediaAllowed?: string[] | null,
   objectAllowed?: string[] | null,
 ) {
@@ -52,8 +50,8 @@ describe("Guard", () => {
     const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
     databases.push(db);
     let prompts = 0;
-    let answerFirst: (answer: { remember: boolean }) => void = () => {};
-    const firstAnswer = new Promise<{ remember: boolean }>(
+    let answerFirst: (answer: GuardAnswer) => void = () => {};
+    const firstAnswer = new Promise<GuardAnswer>(
       (resolve) => (answerFirst = resolve),
     );
     const guard = new Guard(
@@ -62,7 +60,9 @@ describe("Guard", () => {
       "https://example.com",
       async () => {
         prompts += 1;
-        return prompts === 1 ? firstAnswer : { remember: true };
+        return prompts === 1
+          ? firstAnswer
+          : { allow: true, remember: true };
       },
     );
     const post = (content: string) =>
@@ -77,7 +77,7 @@ describe("Guard", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(prompts).toBe(1);
 
-    answerFirst({ remember: true });
+    answerFirst({ allow: true, remember: true });
     const [firstHandle, secondHandle] = await Promise.all([first, second]);
     expect(secondHandle?.permission?.id).toBe(firstHandle?.permission?.id);
     expect(prompts).toBe(1);
@@ -148,6 +148,52 @@ describe("Guard", () => {
     expect(entry.result?.execution).toBeUndefined();
   });
 
+  it("reuses a remembered denial for similar requests", async () => {
+    const { db, guard, prompts } = setup({ allow: false, remember: true });
+    const post = (content: string) =>
+      guard.authorize("post", [
+        {
+          value: { type: "Note", content },
+          channels: ["chat"],
+        },
+        session,
+      ]);
+
+    await expect(post("first")).rejects.toThrow("denied");
+    await expect(post("second")).rejects.toThrow("denied");
+
+    expect(prompts()).toBe(1);
+    const audit = await db.audit();
+    expect(audit.permissions).toHaveLength(1);
+    expect(audit.permissions[0].decision).toBe("deny");
+    expect(
+      audit.requests.every(
+        ({ result }) =>
+          result?.authorization.allowed === false &&
+          result.authorization.permission?.id === audit.permissions[0].id,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not remember an unchecked denial or a cancellation", async () => {
+    for (const answer of [
+      { allow: false, remember: false } as const,
+      false as const,
+    ]) {
+      const { db, guard, prompts } = setup(answer);
+      const args = [
+        { value: { type: "Note" }, channels: ["chat"] },
+        session,
+      ] as const;
+
+      await expect(guard.authorize("post", args)).rejects.toThrow("denied");
+      await expect(guard.authorize("post", args)).rejects.toThrow("denied");
+
+      expect(prompts()).toBe(2);
+      expect((await db.audit()).permissions).toEqual([]);
+    }
+  });
+
   it("does not authorize or audit discovery queries or cursors", async () => {
     const { db, guard, prompts } = setup();
     const discovery = await guard.authorize("discover", [
@@ -194,7 +240,11 @@ describe("Guard", () => {
   });
 
   it("also treats a null allowed list as public", async () => {
-    const { db, guard, prompts } = setup({ remember: true }, null, null);
+    const { db, guard, prompts } = setup(
+      { allow: true, remember: true },
+      null,
+      null,
+    );
 
     await guard.authorize("get", ["graffiti:public", {}, session]);
     await guard.authorize("getMedia", ["graffiti:public-media", {}, session]);
@@ -249,7 +299,7 @@ describe("Guard", () => {
   });
 
   it("defaults remembered channel and recipient scopes to any", async () => {
-    const { guard } = setup({ remember: true }, [], []);
+    const { guard } = setup({ allow: true, remember: true }, [], []);
 
     const object = await guard.authorize("get", [
       "graffiti:private",
@@ -273,8 +323,12 @@ describe("Guard", () => {
     });
   });
 
-  it("retains Allow Once access only for the exact approved read", async () => {
-    const { db, guard, prompts } = setup({ remember: false }, [], []);
+  it("retains an unremembered allow only for the exact approved read", async () => {
+    const { db, guard, prompts } = setup(
+      { allow: true, remember: false },
+      [],
+      [],
+    );
 
     const get = await guard.authorize("get", ["graffiti:first", {}, session]);
     const repeatedGet = await guard.authorize("get", [
@@ -306,7 +360,11 @@ describe("Guard", () => {
   });
 
   it("implicitly permits reading data posted by the same app", async () => {
-    const { db, guard, prompts } = setup({ remember: false }, [], []);
+    const { db, guard, prompts } = setup(
+      { allow: true, remember: false },
+      [],
+      [],
+    );
 
     const post = await guard.authorize("post", [
       { value: { type: "Note" }, channels: ["chat"], allowed: [] },
@@ -333,7 +391,7 @@ describe("Guard", () => {
   });
 
   it("does not store implicit read permissions for public writes", async () => {
-    const { db, guard } = setup({ remember: false });
+    const { db, guard } = setup({ allow: true, remember: false });
 
     const post = await guard.authorize("post", [
       { value: { type: "Note" }, channels: ["chat"] },
@@ -350,7 +408,11 @@ describe("Guard", () => {
   });
 
   it("authorizes private discovery results as exact get requests", async () => {
-    const { db, guard, prompts } = setup({ remember: false }, [], []);
+    const { db, guard, prompts } = setup(
+      { allow: true, remember: false },
+      [],
+      [],
+    );
     const args = [["chat"], {}, session];
     const object = {
       url: "graffiti:discovered",
@@ -397,7 +459,11 @@ describe("Guard", () => {
   });
 
   it("uses broad get permissions for later private discovery results", async () => {
-    const { db, guard, prompts } = setup({ remember: true }, [], []);
+    const { db, guard, prompts } = setup(
+      { allow: true, remember: true },
+      [],
+      [],
+    );
     const args = [["chat"], {}, session];
     const object = (url: string, content: string) => ({
       url,

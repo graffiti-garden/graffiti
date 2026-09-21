@@ -30,9 +30,9 @@ describe("permission prompt", () => {
 
     const answer = ask(request, true);
     await vi.waitFor(() => expect(show).toHaveBeenCalledOnce());
-    resolve({ remember: false });
+    resolve({ allow: false, remember: true });
 
-    await expect(answer).resolves.toEqual({ remember: false });
+    await expect(answer).resolves.toEqual({ allow: false, remember: true });
     expect(clear).toHaveBeenCalledOnce();
     expect(setVisible.mock.calls).toEqual([[true], [false]]);
   });

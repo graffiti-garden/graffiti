@@ -408,21 +408,23 @@ function requestAction(request: Request) {
 
 function permissionAction(permission: Permission) {
   const match = permission.match;
+  let action: string;
   if (match.kind === "media") {
     const kind =
       "mediaType" in match && match.mediaType.startsWith("kind:")
         ? match.mediaType.slice(5).toLowerCase()
         : "file";
-    return `${mediaVerb(permission.method)} ${nounWithArticle(kind === "file" ? "file" : `${kind} file`)}`;
+    action = `${mediaVerb(permission.method)} ${nounWithArticle(kind === "file" ? "file" : `${kind} file`)}`;
+  } else {
+    action =
+      ({
+        post: "Post data",
+        get: "Access data",
+        delete: "Delete data",
+        logout: "Log out",
+      } as Record<string, string>)[permission.method] ?? permission.method;
   }
-  return (
-    ({
-      post: "Post data",
-      get: "Access data",
-      delete: "Delete data",
-      logout: "Log out",
-    } as Record<string, string>)[permission.method] ?? permission.method
-  );
+  return `${permission.decision === "deny" ? "Deny" : "Allow"} ${action[0].toLowerCase()}${action.slice(1)}`;
 }
 
 function mediaVerb(method: string) {

@@ -15,7 +15,7 @@ const guard = new Guard(
   implementation,
   database,
   "https://example.com",
-  async () => ({ remember: false }),
+  async () => ({ allow: true, remember: false }),
 );
 const graffiti = new GuardedGraffiti(implementation, guard);
 

@@ -37,7 +37,6 @@ const title = computed(
     :resolve="resolve"
     :title="title"
     summary=""
-    :remember-label="labels.remember"
   >
     <template #summary>
       <span>asks to {{ action }}:</span>
