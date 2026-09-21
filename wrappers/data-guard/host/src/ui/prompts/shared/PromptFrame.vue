@@ -58,7 +58,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", clickAway));
 </template>
 
 <style scoped>
-.backdrop { position: fixed; inset: 0; display: grid; align-items: start; justify-items: center; overflow: auto; scrollbar-gutter: stable both-edges; padding: 1rem; background: rgb(0 0 0 / 20%); }
+.backdrop { position: fixed; inset: 0; display: grid; align-items: start; justify-items: center; overflow: auto; scrollbar-gutter: stable both-edges; padding: 1rem; background: transparent; }
 dialog { position: static; display: flex; flex-direction: column; width: min(42rem, calc(100vw - 2rem)); overflow: visible; margin: 0; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0 2.5rem rgb(0 0 0 / 90%); font-size: 1.5rem; outline: none; }
 header { position: relative; display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 2.5rem; }
 h1 { flex: 1; margin: 0; color: var(--title-color); font-size: 2rem; line-height: 1.05; }

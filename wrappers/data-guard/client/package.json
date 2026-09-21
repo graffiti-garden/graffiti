@@ -28,6 +28,7 @@
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
     "build": "rm -rf dist && npm run build:types && npm run build:js",
+    "dev": "tsx esbuild.config.mts --watch",
     "check": "tsc --noEmit",
     "prepublishOnly": "npm run check && npm run build"
   },
@@ -46,6 +47,7 @@
     "@graffiti-garden/wrapper-iframe-rpc": "^0.1.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.2",
     "esbuild": "^0.28.1",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2"

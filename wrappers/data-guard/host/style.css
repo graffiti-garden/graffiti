@@ -13,7 +13,9 @@ main {
 }
 
 :root {
-  color-scheme: light dark;
+  /* Keep Firefox's embedded document canvas transparent. Popup colors still
+     follow the user's preference through the media query below. */
+  color-scheme: light;
   --background-color: #fff;
   --text-color: #202122;
   --title-color: #101418;
@@ -67,7 +69,6 @@ button {
 
 @media (prefers-color-scheme: dark) {
   :root {
-    color-scheme: dark;
     --background-color: #101418;
     --text-color: #eaecf0;
     --title-color: #f8f9fa;
