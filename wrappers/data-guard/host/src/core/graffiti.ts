@@ -89,6 +89,7 @@ export class GuardedGraffiti extends Graffiti {
         args,
       ) as GraffitiObjectStream<{}>;
       let complete = false;
+      let privateResult = 0;
       try {
         while (true) {
           const next = await stream.next();
@@ -106,6 +107,7 @@ export class GuardedGraffiti extends Graffiti {
               const request = await self.guard.authorizeDiscovered(
                 args,
                 result.object,
+                ++privateResult,
               );
               await self.recordAudit(() =>
                 self.guard.succeed(request, result.object),

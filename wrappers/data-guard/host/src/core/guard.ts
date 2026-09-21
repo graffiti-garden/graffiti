@@ -23,9 +23,23 @@ export type GuardAnswer =
   | { allow: boolean; remember: boolean }
   | { blockSite: true };
 
+export type GuardQueueStatus = {
+  pending: number;
+  events: EventTarget;
+};
+
+export type GuardPromptContext = {
+  queue: GuardQueueStatus;
+  privateResult?: number;
+};
+
 export class Guard {
   private readonly sessions = new Map<string, GraffitiSession>();
   private previousAuthorization = Promise.resolve();
+  private readonly queue: GuardQueueStatus = {
+    pending: 0,
+    events: new EventTarget(),
+  };
 
   constructor(
     private readonly graffiti: Graffiti,
@@ -35,6 +49,7 @@ export class Guard {
       request: Request,
       canRemember: boolean,
       preview?: unknown,
+      context?: GuardPromptContext,
     ) => Promise<GuardAnswer>,
   ) {
     graffiti.sessionEvents.addEventListener("login", (event) => {
@@ -66,6 +81,7 @@ export class Guard {
   async authorizeDiscovered(
     args: GraffitiArgs<"discover"> | GraffitiArgs<"continueDiscover">,
     object: GraffitiObject<{}>,
+    privateResult = 1,
   ) {
     if (object.allowed == null) return undefined;
     const actor = actorFromArgs(args);
@@ -82,6 +98,7 @@ export class Guard {
       actor,
       "get",
       prepared,
+      privateResult,
     );
     // Once the object crosses into the app, retaining its exact URL requires
     // no broader authority than the disclosure which has already occurred.
@@ -96,17 +113,25 @@ export class Guard {
     actor: string,
     method: GraffitiMethod,
     prepared: any,
+    privateResult?: number,
   ) {
+    this.updatePending(1);
     // Recheck saved permissions only when this request reaches the front of
     // the queue, so a broad grant from the preceding prompt can authorize it.
     const authorization = this.previousAuthorization.then(() =>
-      this.decide(source, actor, method, prepared),
+      this.decide(source, actor, method, prepared, privateResult),
     );
-    this.previousAuthorization = authorization.then(
+    const tracked = authorization.finally(() => this.updatePending(-1));
+    this.previousAuthorization = tracked.then(
       () => undefined,
       () => undefined,
     );
-    return authorization;
+    return tracked;
+  }
+
+  private updatePending(change: number) {
+    this.queue.pending += change;
+    this.queue.events.dispatchEvent(new Event("change"));
   }
 
   private async decide(
@@ -114,6 +139,7 @@ export class Guard {
     actor: string,
     method: GraffitiMethod,
     prepared: any,
+    privateResult?: number,
   ) {
     if (await this.db.isSourceBlocked(source)) throw sourceBlocked();
     const request = await this.db.request(
@@ -151,6 +177,7 @@ export class Guard {
       request,
       Boolean(prepared.createMatch),
       prepared.preview,
+      { queue: this.queue, privateResult },
     );
     if (await this.db.isSourceBlocked(source)) {
       await this.db.deny(request);
@@ -161,13 +188,24 @@ export class Guard {
       await this.db.deny(request);
       throw sourceBlocked();
     }
+    const rememberSimilar = Boolean(answer && answer.remember);
+    const retainExactRead = Boolean(
+      answer && !answer.remember && ["get", "getMedia"].includes(method),
+    );
+    const match =
+      prepared.createMatch && (rememberSimilar || retainExactRead)
+        ? retainExactRead
+          ? exactReadMatch(prepared.subject)
+          : prepared.createMatch()
+        : undefined;
+
     if (!answer || !answer.allow) {
-      if (answer && answer.remember && prepared.createMatch) {
+      if (match) {
         await this.db.block(request, {
           source,
           actor,
           method,
-          match: prepared.createMatch(),
+          match,
         });
       } else {
         await this.db.deny(request);
@@ -175,16 +213,12 @@ export class Guard {
       throw new GraffitiErrorForbidden(`The user denied the ${method} request.`);
     }
 
-    const retainExactRead =
-      !answer.remember && ["get", "getMedia"].includes(method);
-    if ((answer.remember || retainExactRead) && prepared.createMatch) {
+    if (match) {
       permission = await this.db.grant(request, {
         source,
         actor,
         method,
-        match: retainExactRead
-          ? exactReadMatch(prepared.subject)
-          : prepared.createMatch(),
+        match,
       });
     } else {
       await this.db.allow(request);

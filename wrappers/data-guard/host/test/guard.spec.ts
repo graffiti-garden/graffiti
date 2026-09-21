@@ -1,7 +1,12 @@
 import type { Graffiti } from "@graffiti-garden/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GuardDB } from "../src/core/db.js";
-import { Guard, type GuardAnswer } from "../src/core/guard.js";
+import {
+  Guard,
+  type GuardAnswer,
+  type GuardPromptContext,
+  type GuardQueueStatus,
+} from "../src/core/guard.js";
 import type { GraffitiMethod } from "../src/core/graffiti.js";
 
 const databases: GuardDB[] = [];
@@ -50,6 +55,7 @@ describe("Guard", () => {
     const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
     databases.push(db);
     let prompts = 0;
+    let queue: GuardQueueStatus | undefined;
     let answerFirst: (answer: GuardAnswer) => void = () => {};
     const firstAnswer = new Promise<GuardAnswer>(
       (resolve) => (answerFirst = resolve),
@@ -58,8 +64,9 @@ describe("Guard", () => {
       { sessionEvents: new EventTarget() } as Graffiti,
       db,
       "https://example.com",
-      async () => {
+      async (_request, _canRemember, _preview, context) => {
         prompts += 1;
+        queue = context?.queue;
         return prompts === 1
           ? firstAnswer
           : { allow: true, remember: true };
@@ -76,11 +83,13 @@ describe("Guard", () => {
     const second = post("second");
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(prompts).toBe(1);
+    expect(queue?.pending).toBe(2);
 
     answerFirst({ allow: true, remember: true });
     const [firstHandle, secondHandle] = await Promise.all([first, second]);
     expect(secondHandle?.permission?.id).toBe(firstHandle?.permission?.id);
     expect(prompts).toBe(1);
+    expect(queue?.pending).toBe(0);
   });
 
   it("reuses a permission only for the same method, actor, and source", async () => {
@@ -175,7 +184,7 @@ describe("Guard", () => {
     ).toBe(true);
   });
 
-  it("does not remember an unchecked denial or a cancellation", async () => {
+  it("does not remember an unchecked post denial or a cancellation", async () => {
     for (const answer of [
       { allow: false, remember: false } as const,
       false as const,
@@ -192,6 +201,50 @@ describe("Guard", () => {
       expect(prompts()).toBe(2);
       expect((await db.audit()).permissions).toEqual([]);
     }
+  });
+
+  it("retains an unchecked denial only for the exact private read", async () => {
+    const { db, guard, prompts } = setup(
+      { allow: false, remember: false },
+      [],
+      [],
+    );
+    const denyObject = (url: string) =>
+      guard.authorize("get", [url, {}, session]);
+    const denyMedia = (url: string) =>
+      guard.authorize("getMedia", [url, {}, session]);
+
+    await expect(denyObject("graffiti:first")).rejects.toThrow("denied");
+    await expect(denyObject("graffiti:first")).rejects.toThrow("denied");
+    await expect(denyObject("graffiti:second")).rejects.toThrow("denied");
+    await expect(denyMedia("graffiti:media")).rejects.toThrow("denied");
+    await expect(denyMedia("graffiti:media")).rejects.toThrow("denied");
+
+    expect(prompts()).toBe(3);
+    const permissions = (await db.audit()).permissions;
+    expect(permissions).toHaveLength(3);
+    expect(permissions.every(({ decision }) => decision === "deny")).toBe(true);
+    expect(permissions.map(({ match }) => match)).toEqual(
+      expect.arrayContaining([
+        { kind: "object", url: "graffiti:first" },
+        { kind: "object", url: "graffiti:second" },
+        { kind: "media", url: "graffiti:media" },
+      ]),
+    );
+  });
+
+  it("does not remember a cancelled private read", async () => {
+    const { db, guard, prompts } = setup(false, [], []);
+
+    await expect(
+      guard.authorize("get", ["graffiti:private", {}, session]),
+    ).rejects.toThrow("denied");
+    await expect(
+      guard.authorize("get", ["graffiti:private", {}, session]),
+    ).rejects.toThrow("denied");
+
+    expect(prompts()).toBe(2);
+    expect((await db.audit()).permissions).toEqual([]);
   });
 
   it("blocks every guarded request from a site without prompting again", async () => {
@@ -498,6 +551,31 @@ describe("Guard", () => {
     expect(history).toHaveLength(2);
     expect(history.every(({ request }) => request.method === "get")).toBe(true);
     expect(history.every(({ result }) => result?.execution?.ok)).toBe(true);
+  });
+
+  it("marks private discovery prompts as part of a result stream", async () => {
+    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    databases.push(db);
+    let promptContext: GuardPromptContext | undefined;
+    const guard = new Guard(
+      { sessionEvents: new EventTarget() } as Graffiti,
+      db,
+      "https://example.com",
+      async (_request, _canRemember, _preview, context) => {
+        promptContext = context;
+        return { allow: true, remember: false };
+      },
+    );
+
+    await guard.authorizeDiscovered([["chat"], {}, session], {
+      url: "graffiti:private",
+      value: {},
+      channels: ["chat"],
+      allowed: [],
+      actor: "actor:one",
+    });
+
+    expect(promptContext?.privateResult).toBe(1);
   });
 
   it("does not record or store public discovery results", async () => {

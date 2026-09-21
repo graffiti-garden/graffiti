@@ -6,6 +6,7 @@ const props = defineProps<{
   title: string;
   cancel: () => void;
   blockSite: () => void;
+  confirming: boolean;
   reviewPermissions: () => void;
 }>();
 const frame = useTemplateRef("frame");
@@ -38,7 +39,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="backdrop" @pointerdown.self="props.cancel()">
+  <div
+    class="backdrop"
+    :class="{ confirming }"
+    @pointerdown.self="props.cancel()"
+  >
     <dialog
       ref="frame"
       open
@@ -71,7 +76,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .backdrop { position: fixed; inset: 0; display: grid; align-items: start; justify-items: center; overflow: auto; scrollbar-gutter: stable both-edges; padding: 1rem; background: transparent; }
-dialog { position: static; display: flex; flex-direction: column; width: min(42rem, calc(100vw - 2rem)); overflow: visible; margin: 0; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0 2.5rem rgb(0 0 0 / 90%); font-size: 1.5rem; outline: none; }
+dialog { position: static; display: flex; flex-direction: column; width: min(42rem, calc(100vw - 2rem)); overflow: visible; margin: 0; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0 2.5rem rgb(0 0 0 / 90%); font-size: 1.5rem; outline: none; animation: prompt-enter 140ms ease-out; transition: opacity 140ms ease-in, transform 140ms ease-in; }
+.backdrop.confirming { pointer-events: none; }
+.backdrop.confirming dialog { opacity: 0; transform: translateY(-0.3rem) scale(0.99); }
 header { position: relative; display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 2.5rem; }
 h1 { flex: 1; margin: 0; color: var(--title-color); font-size: 2rem; line-height: 1.05; }
 .guard-options { position: relative; flex: none; }
@@ -90,4 +97,6 @@ footer { margin-top: 2.5rem; }
 button, :deep(button) { border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; color: var(--accent-button-text); background: var(--accent-button-background); font: inherit; cursor: pointer; }
 button:hover, :deep(button:hover) { border-color: var(--border-color-hover); background: var(--accent-button-background-hover); text-decoration: none; }
 @media (max-width: 42rem) { .backdrop { padding: 0.75rem; } dialog { width: 100%; } .actions :deep(button) { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { dialog { animation: none; transition: none; } }
+@keyframes prompt-enter { from { opacity: 0; transform: translateY(0.3rem) scale(0.99); } }
 </style>

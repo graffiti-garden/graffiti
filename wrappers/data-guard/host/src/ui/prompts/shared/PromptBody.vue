@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { requestAudit } from "../../../bootstrap/protocol.js";
 import type { Request } from "../../../core/db.js";
 import type { GuardAnswer } from "../../../core/guard.js";
 import { sourceLabel } from "../../../core/source.js";
 import { rememberDecisionLabel } from "../../remember.js";
+import { pendingRequests, privateResult } from "../../show.js";
 import PromptFrame from "./PromptFrame.vue";
 
 const props = withDefaults(
@@ -21,20 +22,45 @@ const props = withDefaults(
 
 const open = ref(false);
 const remember = ref(false);
+const confirming = ref(false);
+const otherRequests = computed(() => Math.max(0, pendingRequests.value - 1));
+const queueStatus = computed(() => {
+  return otherRequests.value
+    ? `${otherRequests.value} more ${otherRequests.value === 1 ? "request" : "requests"} waiting`
+    : "";
+});
+const confirmationDelay = window.matchMedia("(prefers-reduced-motion: reduce)")
+  .matches
+  ? 0
+  : 140;
+let confirmationTimer: ReturnType<typeof setTimeout> | undefined;
+
+function confirm(answer: GuardAnswer) {
+  if (confirming.value) return;
+  confirming.value = true;
+  confirmationTimer = setTimeout(() => props.resolve(answer), confirmationDelay);
+}
 
 function decide(allow: boolean) {
-  props.resolve({
+  confirm({
     allow,
     remember: props.canRemember && remember.value,
   });
 }
+
+function cancel() {
+  if (!confirming.value) props.resolve(false);
+}
+
+onBeforeUnmount(() => clearTimeout(confirmationTimer));
 </script>
 
 <template>
   <PromptFrame
     :title="title"
-    :cancel="() => resolve(false)"
-    :block-site="() => resolve({ blockSite: true })"
+    :cancel="cancel"
+    :block-site="() => confirm({ blockSite: true })"
+    :confirming="confirming"
     :review-permissions="() => requestAudit(request.actor, request.source.path)"
   >
     <div class="summary">
@@ -56,12 +82,22 @@ function decide(allow: boolean) {
     <template #actions>
       <div class="prompt-actions" :class="{ 'after-details': details }">
         <label v-if="canRemember" class="remember-decision">
-          <input v-model="remember" type="checkbox" />
+          <input v-model="remember" type="checkbox" :disabled="confirming" />
           <span>{{ rememberDecisionLabel(request) }}</span>
         </label>
         <div class="decision-actions">
-          <button type="button" class="deny" @click="decide(false)">Deny</button>
-          <button type="button" @click="decide(true)">Allow</button>
+          <button type="button" class="deny" :disabled="confirming" @click="decide(false)">Deny</button>
+          <button type="button" :disabled="confirming" @click="decide(true)">Allow</button>
+        </div>
+        <div
+          v-if="queueStatus || privateResult"
+          class="prompt-status"
+          aria-live="polite"
+        >
+          <p v-if="queueStatus">{{ queueStatus }}</p>
+          <p v-if="privateResult">
+            Reviewing private data · Request {{ privateResult }} so far
+          </p>
         </div>
       </div>
     </template>
@@ -88,6 +124,8 @@ summary:hover, summary:focus-visible { border-color: var(--border-color-hover); 
 .remember-decision input { flex: none; width: 1.75rem; height: 1.75rem; margin: 0; accent-color: var(--accent-button-background); }
 .decision-actions { display: flex; justify-content: space-between; gap: 1rem; }
 .decision-actions button { min-width: 7rem; padding: 0.55rem 1.5rem; font-size: 1.6rem; }
+.prompt-status { display: grid; gap: 0.25rem; margin-top: 1rem; color: var(--secondary-color); font-size: 1rem; line-height: 1.4; text-align: center; }
+.prompt-status p { margin: 0; }
 button.deny { color: var(--text-color); background: var(--background-color-interactive); }
 button.deny:hover { color: var(--text-color); background: var(--background-color-interactive-hover); }
 @media (max-width: 42rem) { .decision-actions { flex-direction: column-reverse; } }
