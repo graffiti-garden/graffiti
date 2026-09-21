@@ -115,18 +115,42 @@ export class Guard {
     prepared: any,
     privateResult?: number,
   ) {
-    this.updatePending(1);
+    let counted = false;
+    const countIfPromptCandidate = this.couldPrompt(
+      source,
+      actor,
+      method,
+      prepared,
+    ).then((couldPrompt) => {
+      counted = couldPrompt;
+      if (couldPrompt) this.updatePending(1);
+    });
     // Recheck saved permissions only when this request reaches the front of
     // the queue, so a broad grant from the preceding prompt can authorize it.
-    const authorization = this.previousAuthorization.then(() =>
-      this.decide(source, actor, method, prepared, privateResult),
-    );
-    const tracked = authorization.finally(() => this.updatePending(-1));
+    const authorization = this.previousAuthorization.then(async () => {
+      await countIfPromptCandidate;
+      return this.decide(source, actor, method, prepared, privateResult);
+    });
+    const tracked = authorization.finally(() => {
+      if (counted) this.updatePending(-1);
+    });
     this.previousAuthorization = tracked.then(
       () => undefined,
       () => undefined,
     );
     return tracked;
+  }
+
+  private async couldPrompt(
+    source: ReturnType<typeof sourceFromArgs>,
+    actor: string,
+    method: GraffitiMethod,
+    prepared: any,
+  ) {
+    if (isPublicRead(method, prepared)) return false;
+    return !(await this.db.permissions(source, actor, method)).some(
+      (permission) => matches(permission, prepared.subject),
+    );
   }
 
   private updatePending(change: number) {
@@ -151,10 +175,7 @@ export class Guard {
     // A successful preparatory fetch proves data is public when it has no
     // allowed list. Keep the authenticated read auditable, but do not ask the
     // user to authorize access to data available without their session.
-    if (
-      (method === "get" && prepared.subject.object.allowed == null) ||
-      (method === "getMedia" && prepared.subject.allowed == null)
-    ) {
+    if (isPublicRead(method, prepared)) {
       await this.db.allow(request);
       return { request, prepared };
     }
@@ -360,6 +381,13 @@ function resultValue(method: string, value: any, subject: any) {
   if (["get", "delete"].includes(method)) return { url: subject.object.url };
   if (["getMedia", "deleteMedia"].includes(method)) return { url: subject.url };
   return undefined;
+}
+
+function isPublicRead(method: GraffitiMethod, prepared: any) {
+  return (
+    (method === "get" && prepared.subject.object.allowed == null) ||
+    (method === "getMedia" && prepared.subject.allowed == null)
+  );
 }
 
 function implicitReadPermission(request: Request, value: any) {

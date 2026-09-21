@@ -92,6 +92,58 @@ describe("Guard", () => {
     expect(queue?.pending).toBe(0);
   });
 
+  it("does not count queued requests that cannot prompt", async () => {
+    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    databases.push(db);
+    await db.ensurePermission({
+      source: {
+        key: JSON.stringify(["https://example.com", "chat"]),
+        origin: "https://example.com",
+        path: session.source,
+      },
+      actor: session.actor,
+      method: "logout",
+      match: { kind: "logout" },
+    });
+    let queue: GuardQueueStatus | undefined;
+    let answerPrompt: (answer: GuardAnswer) => void = () => {};
+    const promptAnswer = new Promise<GuardAnswer>(
+      (resolve) => (answerPrompt = resolve),
+    );
+    const guard = new Guard(
+      {
+        sessionEvents: new EventTarget(),
+        get: async (url: string) => ({
+          value: { type: "Note", content: "public" },
+          channels: ["chat"],
+          url,
+          actor: "actor:one",
+        }),
+      } as unknown as Graffiti,
+      db,
+      "https://example.com",
+      async (_request, _canRemember, _preview, context) => {
+        queue = context?.queue;
+        return promptAnswer;
+      },
+    );
+
+    const post = guard.authorize("post", [
+      { value: { type: "Note", content: "private" }, channels: ["chat"] },
+      session,
+    ]);
+    await vi.waitFor(() => expect(queue?.pending).toBe(1));
+
+    const get = guard.authorize("get", ["graffiti:public", {}, session]);
+    const logout = guard.authorize("logout", [session]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(queue?.pending).toBe(1);
+
+    answerPrompt({ allow: true, remember: false });
+    await Promise.all([post, get, logout]);
+    expect(queue?.pending).toBe(0);
+  });
+
   it("reuses a permission only for the same method, actor, and source", async () => {
     const { guard, prompts } = setup();
     const first = await guard.authorize("post", [
