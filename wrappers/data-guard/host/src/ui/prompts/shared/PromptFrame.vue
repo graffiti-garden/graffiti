@@ -63,6 +63,14 @@ onBeforeUnmount(() => {
             <button type="button" @click="props.reviewPermissions()">
               Review permissions
             </button>
+            <a
+              class="graffiti-link"
+              href="https://graffiti.garden"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              About Graffiti <span aria-hidden="true">↗</span>
+            </a>
           </div>
         </details>
       </header>
@@ -89,8 +97,9 @@ h1 { flex: 1; margin: 0; color: var(--title-color); font-size: 2rem; line-height
 .guard-options summary:focus-visible { outline: 2px solid var(--link-color); outline-offset: 0.15rem; }
 .guard-options summary span { display: grid; height: 100%; place-items: center; font-size: 1.7rem; line-height: 1; }
 .guard-menu { position: absolute; top: 100%; right: 0; z-index: 1; display: grid; width: max-content; overflow: hidden; border: 1px solid var(--border-color); border-radius: 0.5rem 0 0.5rem 0.5rem; background: var(--background-color); box-shadow: 0 0.4rem 1rem rgb(0 0 0 / 25%); cursor: pointer; }
-.guard-menu button { width: auto; border: 0; border-radius: 0; padding: 0.5rem 0.75rem; color: var(--text-color); background: transparent; font-size: 1.15rem; text-align: left; white-space: nowrap; cursor: pointer; }
-.guard-menu button:hover, .guard-menu button:focus-visible { background: var(--background-color-interactive-hover); }
+.guard-menu :is(button, a) { display: block; width: auto; border: 0; border-radius: 0; padding: 0.5rem 0.75rem; color: var(--text-color); background: transparent; font-size: 1.15rem; font-weight: 400; line-height: normal; text-align: left; white-space: nowrap; cursor: pointer; }
+.guard-menu :is(button, a):hover, .guard-menu :is(button, a):focus-visible { color: var(--text-color); background: var(--background-color-interactive-hover); text-decoration: none; }
+.guard-menu .graffiti-link { border-top: 1px solid var(--border-color); color: var(--link-color); font-weight: 650; }
 .content { display: flex; flex-direction: column; gap: 1.5rem; }
 footer { margin-top: 2.5rem; }
 .actions { width: 100%; }
