@@ -29,6 +29,7 @@ describe("rememberDecisionLabel", () => {
 
   it.each([
     ["postMedia", "image/png", "upload an image"],
+    ["postMedia", "text/html", "upload a document"],
     ["getMedia", "video/mp4", "access a private video"],
     ["deleteMedia", "audio/mpeg", "delete an audio file"],
   ] as const)("describes %s by media kind", (method, type, action) => {

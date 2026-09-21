@@ -42,7 +42,12 @@ watch(
     <img v-if="url && type.startsWith('image/')" :src="url" alt="Media preview" />
     <video v-else-if="url && type.startsWith('video/')" :src="url" controls />
     <audio v-else-if="url && type.startsWith('audio/')" :src="url" controls preload="metadata" />
-    <iframe v-else-if="url && type.startsWith('text/')" :src="url" sandbox="" title="Text preview" />
+    <iframe
+      v-else-if="url && type.startsWith('text/')"
+      :src="url"
+      sandbox="allow-scripts"
+      title="Document preview"
+    />
     <PdfView
       v-else-if="url && type.startsWith('application/pdf')"
       :media="media"

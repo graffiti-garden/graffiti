@@ -1,10 +1,16 @@
 import { FileKind, fromMime, mimeData } from "human-filetypes";
 
+const documentTypes = new Set(["text/html", "application/xhtml+xml"]);
+
 export function mediaLabels(type: unknown) {
   const mime = String(type || "application/octet-stream").toLowerCase().trim();
   const kind = fromMime(mime);
   const item =
-    kind === FileKind.Unknown || kind === FileKind.Application ? "file" : kind;
+    documentTypes.has(mime)
+      ? FileKind.Document
+      : kind === FileKind.Unknown || kind === FileKind.Application
+        ? "file"
+        : kind;
   return {
     item,
     description:

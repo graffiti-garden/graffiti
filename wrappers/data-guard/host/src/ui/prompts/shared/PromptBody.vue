@@ -118,7 +118,7 @@ details[open] summary::after { content: "▲"; }
 summary:hover, summary:focus-visible { border-color: var(--border-color-hover); background: var(--background-color-interactive-hover); }
 .detail-content { display: grid; gap: 0.75rem; padding-top: 2rem; }
 .prompt-actions.after-details { padding-top: 1.1rem; }
-.remember-decision { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 2.5rem; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.8rem 1rem; color: var(--text-color); background: var(--background-color-interactive); font-size: 1.25rem; line-height: 1.4; cursor: pointer; user-select: none; }
+.remember-decision { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 2.5rem; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.8rem 1rem; color: var(--text-color); background: transparent; font-size: 1.25rem; line-height: 1.4; cursor: pointer; user-select: none; }
 .remember-decision:hover { border-color: var(--border-color-hover); background: var(--background-color-interactive-hover); }
 .remember-decision span { text-wrap: pretty; }
 .remember-decision input { flex: none; width: 1.75rem; height: 1.75rem; margin: 0; accent-color: var(--accent-button-background); }
