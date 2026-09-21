@@ -60,6 +60,18 @@ describe("GuardDB", () => {
     const audit = await db.audit();
     expect(audit.permissions).toEqual([]);
     expect(audit.requests).toHaveLength(1);
+    expect(audit.siteBlocks).toEqual([]);
+  });
+
+  it("stores and removes a site-wide block", async () => {
+    const db = database();
+
+    const block = await db.blockSource(source);
+    expect(await db.isSourceBlocked(source)).toBe(true);
+    expect((await db.audit()).siteBlocks).toEqual([block]);
+
+    await db.unblockSource(source.key);
+    expect(await db.isSourceBlocked(source)).toBe(false);
   });
 
   it("stores active permissions separately from request results", async () => {
@@ -152,6 +164,26 @@ describe("GuardDB", () => {
 
     expect((await db.audit()).requests).toEqual([]);
     expect(await db.permissions(source, "actor:one", "logout")).toHaveLength(1);
+  });
+
+  it("clears site blocks with the rest of the guard data", async () => {
+    const db = database();
+    const request = await db.request(source, "actor:one", "logout", {});
+    await db.grant(request, {
+      source,
+      actor: "actor:one",
+      method: "logout",
+      match: { kind: "logout" },
+    });
+    await db.blockSource(source);
+
+    await db.clearEverything();
+
+    expect(await db.audit()).toEqual({
+      permissions: [],
+      requests: [],
+      siteBlocks: [],
+    });
   });
 
   it("does not resurrect an in-flight request after history is cleared", async () => {

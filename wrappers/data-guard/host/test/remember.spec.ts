@@ -23,7 +23,7 @@ describe("rememberDecisionLabel", () => {
     ["logout", "log you out"],
   ] as const)("describes %s requests", (method, action) => {
     expect(rememberDecisionLabel(request(method))).toBe(
-      `Remember your decision whenever this site asks to ${action}`,
+      `Remember your decision whenever this site asks to ${action}?`,
     );
   });
 
@@ -33,7 +33,7 @@ describe("rememberDecisionLabel", () => {
     ["deleteMedia", "audio/mpeg", "delete an audio file"],
   ] as const)("describes %s by media kind", (method, type, action) => {
     expect(rememberDecisionLabel(request(method, { type }))).toBe(
-      `Remember your decision whenever this site asks to ${action}`,
+      `Remember your decision whenever this site asks to ${action}?`,
     );
   });
 });

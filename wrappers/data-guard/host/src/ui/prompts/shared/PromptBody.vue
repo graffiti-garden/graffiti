@@ -34,6 +34,7 @@ function decide(allow: boolean) {
   <PromptFrame
     :title="title"
     :cancel="() => resolve(false)"
+    :block-site="() => resolve({ blockSite: true })"
     :review-permissions="() => requestAudit(request.actor, request.source.path)"
   >
     <div class="summary">

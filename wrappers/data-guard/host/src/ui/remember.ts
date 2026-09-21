@@ -12,7 +12,7 @@ export function rememberDecisionLabel(request: Request) {
           : request.method === "logout"
             ? "log you out"
             : mediaAction(request);
-  return `Remember your decision whenever this site asks to ${action}`;
+  return `Remember your decision whenever this site asks to ${action}?`;
 }
 
 function mediaAction(request: Request) {

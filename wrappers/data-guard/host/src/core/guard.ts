@@ -20,7 +20,8 @@ import {
 
 export type GuardAnswer =
   | false
-  | { allow: boolean; remember: boolean };
+  | { allow: boolean; remember: boolean }
+  | { blockSite: true };
 
 export class Guard {
   private readonly sessions = new Map<string, GraffitiSession>();
@@ -56,6 +57,7 @@ export class Guard {
     const actor = actorFromArgs(args);
     if (!actor) return undefined;
     const source = sourceFromArgs(this.origin, args);
+    if (await this.db.isSourceBlocked(source)) throw sourceBlocked();
     const prepared = await this.prepare(method, args as any[]);
     if (!prepared) return undefined;
     return this.authorizePrepared(source, actor, method, prepared);
@@ -73,6 +75,7 @@ export class Guard {
       );
     }
     const source = sourceFromArgs(this.origin, args);
+    if (await this.db.isSourceBlocked(source)) throw sourceBlocked();
     const prepared = prepareObjectRequest(object);
     const handle = await this.authorizePrepared(
       source,
@@ -112,6 +115,7 @@ export class Guard {
     method: GraffitiMethod,
     prepared: any,
   ) {
+    if (await this.db.isSourceBlocked(source)) throw sourceBlocked();
     const request = await this.db.request(
       source,
       actor,
@@ -148,6 +152,15 @@ export class Guard {
       Boolean(prepared.createMatch),
       prepared.preview,
     );
+    if (await this.db.isSourceBlocked(source)) {
+      await this.db.deny(request);
+      throw sourceBlocked();
+    }
+    if (answer && "blockSite" in answer) {
+      await this.db.blockSource(source);
+      await this.db.deny(request);
+      throw sourceBlocked();
+    }
     if (!answer || !answer.allow) {
       if (answer && answer.remember && prepared.createMatch) {
         await this.db.block(request, {
@@ -210,6 +223,10 @@ export class Guard {
 
   async revoke(id: string) {
     await this.db.revoke(id);
+  }
+
+  async unblockSource(key: string) {
+    await this.db.unblockSource(key);
   }
 
   async recover(id: string) {
@@ -350,6 +367,12 @@ function objectReadPermission(
 
 function unsupportedMethod(method: never): never {
   throw new Error(`Unsupported authenticated Graffiti method ${String(method)}.`);
+}
+
+function sourceBlocked() {
+  return new GraffitiErrorForbidden(
+    "The user blocked all requests from this site.",
+  );
 }
 
 function recoveryMethod(method: string) {

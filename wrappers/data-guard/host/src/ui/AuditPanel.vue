@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { GraffitiActorToHandle } from "@graffiti-garden/wrapper-vue";
 import { computed, onMounted, ref, useTemplateRef, watch } from "vue";
-import type { Permission, Request } from "../core/db.js";
+import type { Permission, Request, SiteBlock } from "../core/db.js";
 import type { Guard } from "../core/guard.js";
 import { sourceLabel } from "../core/source.js";
 import { mediaLabels } from "./media.js";
@@ -19,12 +19,16 @@ const props = defineProps<{
 }>();
 
 type HistoryEntry = Awaited<ReturnType<Guard["audit"]>>["requests"][number];
+type AccessRule =
+  | { kind: "permission"; permission: Permission }
+  | { kind: "site-block"; block: SiteBlock };
 type TableKind = "activity" | "permissions";
 type SortState = { key: string; descending: boolean };
 
 const requestedView = new URL(window.location.href).searchParams.get("view");
 const tab = ref<TableKind>(requestedView === "permissions" ? "permissions" : "activity");
 const permissions = ref<Permission[]>([]);
+const siteBlocks = ref<SiteBlock[]>([]);
 const history = ref<HistoryEntry[]>([]);
 const urlSites = window.location.search
   ? new URL(window.location.href).searchParams.getAll("site").filter(Boolean)
@@ -72,6 +76,7 @@ const sources = computed(() => {
   const values = [
     ...(props.initialSource ? [props.initialSource] : []),
     ...permissions.value.map(({ source }) => source),
+    ...siteBlocks.value.map(({ source }) => source),
     ...activity.value.map(({ request }) => request.source),
   ];
   const unique = new Map<string, Permission["source"]>();
@@ -96,8 +101,19 @@ const actors = computed(() =>
 const filteredActivity = computed(() =>
   activity.value.filter(({ request }) => matchesFacets(request)),
 );
-const filteredPermissions = computed(() =>
-  permissions.value.filter(matchesFacets),
+const accessRules = computed<AccessRule[]>(() => [
+  ...permissions.value.map(
+    (permission): AccessRule => ({ kind: "permission", permission }),
+  ),
+  ...siteBlocks.value.map(
+    (block): AccessRule => ({ kind: "site-block", block }),
+  ),
+]);
+const filteredAccessRules = computed(() =>
+  accessRules.value.filter(matchesRuleFacets),
+);
+const permissionResultCount = computed(
+  () => filteredAccessRules.value.length,
 );
 const hasFacets = computed(
   () => selectedSources.value.length > 0 || selectedActors.value.length > 0,
@@ -105,19 +121,19 @@ const hasFacets = computed(
 const sortedActivity = computed(() =>
   sorted(filteredActivity.value, activitySort.value, activitySortValue),
 );
-const sortedPermissions = computed(() =>
+const sortedAccessRules = computed(() =>
   sorted(
-    filteredPermissions.value,
+    filteredAccessRules.value,
     permissionSort.value,
-    permissionSortValue,
+    accessRuleSortValue,
   ),
 );
 const pagedActivity = computed(() => paginate(sortedActivity.value));
-const pagedPermissions = computed(() => paginate(sortedPermissions.value));
+const pagedAccessRules = computed(() => paginate(sortedAccessRules.value));
 const resultCount = computed(() =>
   tab.value === "activity"
     ? filteredActivity.value.length
-    : filteredPermissions.value.length,
+    : filteredAccessRules.value.length,
 );
 const pageCount = computed(() =>
   Math.max(1, Math.ceil(resultCount.value / PAGE_SIZE)),
@@ -138,6 +154,7 @@ async function load() {
   try {
     const audit = await props.guard.audit();
     permissions.value = audit.permissions;
+    siteBlocks.value = audit.siteBlocks;
     history.value = audit.requests;
   } catch (cause) {
     error.value = errorMessage(cause);
@@ -160,6 +177,17 @@ function matchesFacets(value: { source: Permission["source"]; actor: string }) {
       selectedSources.value.includes(value.source.key)) &&
     (!selectedActors.value.length ||
       selectedActors.value.includes(value.actor))
+  );
+}
+
+function matchesRuleFacets(rule: AccessRule) {
+  const source = accessRuleSource(rule);
+  return (
+    (!selectedSources.value.length ||
+      selectedSources.value.includes(source.key)) &&
+    (rule.kind === "site-block" ||
+      !selectedActors.value.length ||
+      selectedActors.value.includes(rule.permission.actor))
   );
 }
 
@@ -188,13 +216,16 @@ function syncFacetUrl() {
 function sourceCount(key: string) {
   return tab.value === "activity"
     ? activity.value.filter(({ request }) => request.source.key === key).length
-    : permissions.value.filter(({ source }) => source.key === key).length;
+    : accessRules.value.filter(
+        (rule) => accessRuleSource(rule).key === key,
+      ).length;
 }
 
 function actorCount(actor: string) {
   return tab.value === "activity"
     ? activity.value.filter(({ request }) => request.actor === actor).length
-    : permissions.value.filter((permission) => permission.actor === actor).length;
+    : permissions.value.filter((permission) => permission.actor === actor).length +
+        siteBlocks.value.length;
 }
 
 function paginate<T>(values: T[]) {
@@ -229,12 +260,12 @@ function activitySortValue(entry: HistoryEntry, key: string) {
   return request.createdAt;
 }
 
-function permissionSortValue(permission: Permission, key: string) {
-  if (key === "permission") return permissionAction(permission);
-  if (key === "scope") return permissionScope(permission);
-  if (key === "source") return sourceLabel(permission.source);
-  if (key === "actor") return permission.actor;
-  return permission.createdAt;
+function accessRuleSortValue(rule: AccessRule, key: string) {
+  if (key === "permission") return accessRuleAction(rule);
+  if (key === "scope") return accessRuleScope(rule);
+  if (key === "source") return sourceLabel(accessRuleSource(rule));
+  if (key === "actor") return accessRuleActor(rule);
+  return accessRuleCreatedAt(rule);
 }
 
 function changeSort(kind: TableKind, key: string) {
@@ -329,16 +360,24 @@ async function run(operation: () => Promise<unknown>) {
   }
 }
 
-function revoke(permission: Permission) {
-  return run(() => props.guard.revoke(permission.id));
+function revokeRule(rule: AccessRule) {
+  return run(() =>
+    rule.kind === "permission"
+      ? props.guard.revoke(rule.permission.id)
+      : props.guard.unblockSource(rule.block.source.key),
+  );
 }
 
 async function revokeShown() {
-  const count = filteredPermissions.value.length;
+  const count = permissionResultCount.value;
   if (!confirm(`Revoke ${count} permission${count === 1 ? "" : "s"}?`)) return;
   await run(async () => {
-    for (const permission of filteredPermissions.value) {
-      await props.guard.revoke(permission.id);
+    for (const rule of filteredAccessRules.value) {
+      if (rule.kind === "permission") {
+        await props.guard.revoke(rule.permission.id);
+      } else {
+        await props.guard.unblockSource(rule.block.source.key);
+      }
     }
   });
 }
@@ -458,6 +497,40 @@ function permissionScope(permission: Permission) {
   return `${kind} · ${collection} · ${visibilityLabel(match.allowed)}`;
 }
 
+function accessRuleAction(rule: AccessRule) {
+  return rule.kind === "permission"
+    ? permissionAction(rule.permission)
+    : "Block all requests";
+}
+
+function accessRuleScope(rule: AccessRule) {
+  return rule.kind === "permission"
+    ? permissionScope(rule.permission)
+    : "Entire site";
+}
+
+function accessRuleSource(rule: AccessRule) {
+  return rule.kind === "permission"
+    ? rule.permission.source
+    : rule.block.source;
+}
+
+function accessRuleActor(rule: AccessRule) {
+  return rule.kind === "permission" ? rule.permission.actor : "All identities";
+}
+
+function accessRuleCreatedAt(rule: AccessRule) {
+  return rule.kind === "permission"
+    ? rule.permission.createdAt
+    : rule.block.createdAt;
+}
+
+function accessRuleKey(rule: AccessRule) {
+  return rule.kind === "permission"
+    ? `permission:${rule.permission.id}`
+    : `block:${rule.block.source.key}`;
+}
+
 function objectSchemaKind(schema: unknown) {
   const properties = (schema as any)?.properties;
   const kind =
@@ -552,7 +625,7 @@ function errorMessage(cause: unknown) {
             :aria-current="tab === 'permissions' ? 'page' : undefined"
             @click="selectTab('permissions')"
           >
-            Permissions <span>{{ filteredPermissions.length }}</span>
+            Permissions <span>{{ permissionResultCount }}</span>
           </button>
         </nav>
 
@@ -651,20 +724,20 @@ function errorMessage(cause: unknown) {
         <section v-else aria-labelledby="permissions-heading">
           <header class="section-header">
             <h2 id="permissions-heading">
-              {{ filteredPermissions.length }}
-              {{ filteredPermissions.length === 1 ? "permission" : "permissions" }}
+              {{ permissionResultCount }}
+              {{ permissionResultCount === 1 ? "permission" : "permissions" }}
             </h2>
             <button
               type="button"
               class="danger quiet"
-              :disabled="busy || !filteredPermissions.length"
+              :disabled="busy || !permissionResultCount"
               @click="revokeShown"
             >
               Revoke results
             </button>
           </header>
 
-          <p v-if="!filteredPermissions.length" class="empty">No permissions found.</p>
+          <p v-if="!permissionResultCount" class="empty">No permissions found.</p>
           <div v-else ref="permissionTable" class="record-table" role="table" aria-label="Permissions">
             <div class="table-heading" :style="gridStyle('permissions')" role="row">
               <div
@@ -694,22 +767,32 @@ function errorMessage(cause: unknown) {
             </div>
 
             <article
-              v-for="permission in pagedPermissions"
-              :key="permission.id"
+              v-for="rule in pagedAccessRules"
+              :key="accessRuleKey(rule)"
               class="record-row"
               :style="gridStyle('permissions')"
               role="row"
             >
-              <strong role="cell">{{ permissionAction(permission) }}</strong>
+              <strong role="cell">{{ accessRuleAction(rule) }}</strong>
               <span class="item-cell" role="cell">
-                <GraffitiLinkValue v-if="'url' in permission.match" :url="permission.match.url" lazy />
-                <span v-else>{{ permissionScope(permission) }}</span>
+                <GraffitiLinkValue
+                  v-if="rule.kind === 'permission' && 'url' in rule.permission.match"
+                  :url="rule.permission.match.url"
+                  lazy
+                />
+                <span v-else>{{ accessRuleScope(rule) }}</span>
               </span>
-              <span class="source-cell" role="cell">{{ sourceLabel(permission.source) }}</span>
-              <span class="identity-cell" role="cell"><IdentityValue :actor="permission.actor" /></span>
-              <span class="time-cell" role="cell"><TimestampValue :value="new Date(permission.createdAt)" /></span>
+              <span class="source-cell" role="cell">{{ sourceLabel(accessRuleSource(rule)) }}</span>
+              <span class="identity-cell" role="cell">
+                <IdentityValue
+                  v-if="rule.kind === 'permission'"
+                  :actor="rule.permission.actor"
+                />
+                <template v-else>All identities</template>
+              </span>
+              <span class="time-cell" role="cell"><TimestampValue :value="new Date(accessRuleCreatedAt(rule))" /></span>
               <span class="action-cell" role="cell">
-                <button type="button" class="danger compact" :disabled="busy" @click="revoke(permission)">
+                <button type="button" class="danger compact" :disabled="busy" @click="revokeRule(rule)">
                   Revoke
                 </button>
               </span>

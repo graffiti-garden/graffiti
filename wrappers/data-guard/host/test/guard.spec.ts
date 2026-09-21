@@ -194,6 +194,70 @@ describe("Guard", () => {
     }
   });
 
+  it("blocks every guarded request from a site without prompting again", async () => {
+    const { db, guard, prompts } = setup({ blockSite: true }, [], []);
+
+    await expect(
+      guard.authorize("post", [
+        { value: { type: "Note" }, channels: ["chat"] },
+        session,
+      ]),
+    ).rejects.toThrow("blocked all requests");
+    await expect(
+      guard.authorize("getMedia", [
+        "graffiti:media",
+        {},
+        { ...session, actor: "actor:two" },
+      ]),
+    ).rejects.toThrow("blocked all requests");
+
+    expect(prompts()).toBe(1);
+    const audit = await db.audit();
+    expect(audit.siteBlocks).toHaveLength(1);
+    expect(audit.permissions).toEqual([]);
+  });
+
+  it("does not accept an open prompt after another guard blocks the site", async () => {
+    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    databases.push(db);
+    const graffiti = { sessionEvents: new EventTarget() } as Graffiti;
+    let answerOpenPrompt: (answer: GuardAnswer) => void = () => {};
+    let openPrompted = false;
+    const openAnswer = new Promise<GuardAnswer>(
+      (resolve) => (answerOpenPrompt = resolve),
+    );
+    const openGuard = new Guard(
+      graffiti,
+      db,
+      "https://example.com",
+      async () => {
+        openPrompted = true;
+        return openAnswer;
+      },
+    );
+    const blockingGuard = new Guard(
+      graffiti,
+      db,
+      "https://example.com",
+      async () => ({ blockSite: true }),
+    );
+    const post = (guard: Guard, content: string) =>
+      guard.authorize("post", [
+        { value: { type: "Note", content }, channels: ["chat"] },
+        session,
+      ]);
+
+    const openRequest = post(openGuard, "open");
+    await vi.waitFor(() => expect(openPrompted).toBe(true));
+    await expect(post(blockingGuard, "block")).rejects.toThrow(
+      "blocked all requests",
+    );
+    answerOpenPrompt({ allow: true, remember: true });
+
+    await expect(openRequest).rejects.toThrow("blocked all requests");
+    expect((await db.audit()).permissions).toEqual([]);
+  });
+
   it("does not authorize or audit discovery queries or cursors", async () => {
     const { db, guard, prompts } = setup();
     const discovery = await guard.authorize("discover", [
@@ -455,7 +519,11 @@ describe("Guard", () => {
     })).toBeUndefined();
 
     expect(prompts()).toBe(0);
-    expect(await db.audit()).toEqual({ permissions: [], requests: [] });
+    expect(await db.audit()).toEqual({
+      permissions: [],
+      requests: [],
+      siteBlocks: [],
+    });
   });
 
   it("uses broad get permissions for later private discovery results", async () => {
@@ -504,7 +572,11 @@ describe("Guard", () => {
     ).rejects.toThrow("authenticated session");
 
     expect(prompts()).toBe(0);
-    expect(await db.audit()).toEqual({ permissions: [], requests: [] });
+    expect(await db.audit()).toEqual({
+      permissions: [],
+      requests: [],
+      siteBlocks: [],
+    });
   });
 
   it("records a denied private discovery result as a get request", async () => {

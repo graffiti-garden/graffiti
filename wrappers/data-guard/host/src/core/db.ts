@@ -26,6 +26,11 @@ export type Permission = {
   createdAt: number;
 };
 
+export type SiteBlock = {
+  source: Source;
+  createdAt: number;
+};
+
 export type Request = {
   id: string;
   source: Source;
@@ -64,28 +69,53 @@ interface GuardDatabase extends DBSchema {
     value: { request: Request; result?: RequestResult };
     indexes: { undo: string };
   };
+  blockedSources: {
+    key: string;
+    value: SiteBlock;
+  };
 }
 
 export class GuardDB {
   private readonly database;
 
   constructor(private readonly name = "graffiti-guard") {
-    this.database = openDB<GuardDatabase>(name, 2, {
+    this.database = openDB<GuardDatabase>(name, 3, {
       upgrade(db, oldVersion, _newVersion, transaction) {
-        if (oldVersion > 0) {
+        if (oldVersion === 0) {
+          const permissions = db.createObjectStore("permissions", {
+            keyPath: "id",
+          });
+          permissions.createIndex("source", "source.key");
+          const requests = db.createObjectStore("requests", {
+            keyPath: "request.id",
+          });
+          requests.createIndex("undo", "request.undoOf");
+        } else if (oldVersion < 2) {
           transaction.objectStore("permissions").clear();
-          return;
         }
-        const permissions = db.createObjectStore("permissions", {
-          keyPath: "id",
-        });
-        permissions.createIndex("source", "source.key");
-        const requests = db.createObjectStore("requests", {
-          keyPath: "request.id",
-        });
-        requests.createIndex("undo", "request.undoOf");
+        if (oldVersion < 3) {
+          db.createObjectStore("blockedSources", {
+            keyPath: "source.key",
+          });
+        }
       },
     });
+  }
+
+  async isSourceBlocked(source: Source) {
+    return Boolean(
+      await (await this.database).get("blockedSources", source.key),
+    );
+  }
+
+  async blockSource(source: Source) {
+    const block = { source, createdAt: Date.now() };
+    await (await this.database).put("blockedSources", block);
+    return block;
+  }
+
+  async unblockSource(key: string) {
+    await (await this.database).delete("blockedSources", key);
   }
 
   async permissions(
@@ -290,15 +320,17 @@ export class GuardDB {
 
   async audit() {
     const db = await this.database;
-    const [permissions, requests] = await Promise.all([
+    const [permissions, requests, siteBlocks] = await Promise.all([
       db.getAll("permissions"),
       db.getAll("requests"),
+      db.getAll("blockedSources"),
     ]);
     return {
       permissions: permissions.sort((a, b) => b.createdAt - a.createdAt),
       requests: requests.sort(
         (a, b) => b.request.createdAt - a.request.createdAt,
       ),
+      siteBlocks: siteBlocks.sort((a, b) => b.createdAt - a.createdAt),
     };
   }
 
@@ -313,12 +345,13 @@ export class GuardDB {
   async clearEverything() {
     const db = await this.database;
     const transaction = db.transaction(
-      ["permissions", "requests"],
+      ["permissions", "requests", "blockedSources"],
       "readwrite",
     );
     await Promise.all([
       transaction.objectStore("permissions").clear(),
       transaction.objectStore("requests").clear(),
+      transaction.objectStore("blockedSources").clear(),
       transaction.done,
     ]);
   }
