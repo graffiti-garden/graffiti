@@ -68,11 +68,21 @@ function resizeWithKeyboard(event: KeyboardEvent) {
     v-else
     ref="table"
     class="table"
-    :class="{ nested, array: Array.isArray(value), reverse: !firstInteractive }"
+    :class="{ nested, array: Array.isArray(value) }"
     :style="Array.isArray(value) ? undefined : `--property-column: ${propertyColumn}%`"
     role="table"
   >
-    <div v-for="([key, item], index) in entries(value)" :key="key" class="row" role="row">
+    <div v-if="!nested && !Array.isArray(value)" class="heading" role="row">
+      <span class="heading-key" role="columnheader">Property</span>
+      <span class="heading-value" role="columnheader">Value</span>
+    </div>
+    <div
+      v-for="([key, item], index) in entries(value)"
+      :key="key"
+      class="row"
+      :class="{ interactive: rowInteractive(index) }"
+      role="row"
+    >
       <span class="key" role="rowheader">
         {{ keyLabel(key, value) }}
       </span>
@@ -109,11 +119,12 @@ function resizeWithKeyboard(event: KeyboardEvent) {
 .table { --property-column: 28%; position: relative; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; border-radius: 0.35rem; line-height: 1.5; }
 .table.array { --property-column: 2.5rem; }
 .table.nested { border: 1px solid var(--border-color); border-radius: 0.35rem; }
-.row { display: grid; width: 100%; min-width: 0; box-sizing: border-box; grid-template-columns: var(--property-column) minmax(0, 1fr); align-items: stretch; }
-.table > .row:nth-child(odd) { background: var(--background-color-interactive); }
-.table > .row:nth-child(even) { background: var(--background-color); }
-.table.reverse > .row:nth-child(odd) { background: var(--background-color); }
-.table.reverse > .row:nth-child(even) { background: var(--background-color-interactive); }
+.row, .heading { display: grid; width: 100%; min-width: 0; box-sizing: border-box; grid-template-columns: var(--property-column) minmax(0, 1fr); align-items: stretch; }
+.row { background: var(--background-color); }
+.row.interactive { background: var(--background-color-interactive); }
+.heading { border-start-start-radius: 0.35rem; border-start-end-radius: 0.35rem; border-bottom: 1px solid var(--border-color); color: var(--secondary-color); background: var(--background-color-interactive); font-size: 0.8rem; font-weight: 600; line-height: 1.2; }
+.heading-key, .heading-value { display: flex; min-width: 0; align-items: center; padding: 0.35rem 0.55rem; }
+.heading-key { border-right: 3px solid var(--border-color); }
 .table > .row:first-child { border-start-start-radius: 0.35rem; border-start-end-radius: 0.35rem; }
 .table > .row:last-of-type { border-end-start-radius: 0.35rem; border-end-end-radius: 0.35rem; }
 .key { display: flex; min-width: 0; box-sizing: border-box; align-items: center; border-right: 3px solid var(--border-color); padding: 0.35rem 0.55rem; font-weight: 700; overflow-wrap: anywhere; }
