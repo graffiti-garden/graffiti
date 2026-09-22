@@ -7,12 +7,9 @@ const ajv = new Ajv({ strict: false });
 export function objectMatch(
   object: any,
 ): Extract<Permission["match"], { kind: "object" }> {
-  const schema = schemaFor(object.value);
   return {
     kind: "object",
-    schema: sortJson(schema),
-    channels: "any",
-    allowed: "any",
+    example: cloneJson(object.value),
   };
 }
 
@@ -21,8 +18,11 @@ export function mediaMatch(
 ): Extract<Permission["match"], { kind: "media" }> {
   return {
     kind: "media",
-    mediaType: mediaMatchKey(subject.type),
-    allowed: "any",
+    example: {
+      type: String(subject.type || "application/octet-stream"),
+      size: Number(subject.size) || 0,
+      ...(typeof subject.name === "string" ? { name: subject.name } : {}),
+    },
   };
 }
 
@@ -43,17 +43,10 @@ export function matches(permission: Permission, subject: any) {
   if (match.kind === "logout") return true;
   if (match.kind === "object") {
     if ("url" in match) return match.url === subject.object.url;
-    return (
-      ajv.validate(match.schema as object, subject.object.value) &&
-      sameScope(match.channels, subject.object.channels) &&
-      sameScope(match.allowed, subject.object.allowed)
-    );
+    return ajv.validate(schemaFor(match.example), subject.object.value);
   }
   if ("url" in match) return match.url === subject.url;
-  return (
-    match.mediaType === mediaMatchKey(subject.type) &&
-    sameScope(match.allowed, subject.allowed)
-  );
+  return mediaMatchKey(match.example.type) === mediaMatchKey(subject.type);
 }
 
 export function normalizeObject(object: any) {
@@ -66,13 +59,6 @@ export function normalizeObject(object: any) {
     ...(typeof object.url === "string" ? { url: object.url } : {}),
     ...(typeof object.actor === "string" ? { actor: object.actor } : {}),
   };
-}
-
-function sameScope(expected: unknown, actual: unknown) {
-  return (
-    expected === "any" ||
-    stableStringify(expected) === stableStringify(normalizeStrings(actual))
-  );
 }
 
 function normalizeStrings(value: unknown): any {
@@ -135,10 +121,6 @@ function schemaFor(value: any, key?: string): any {
 
 function isScalar(value: unknown) {
   return value === null || ["string", "number", "boolean"].includes(typeof value);
-}
-
-function stableStringify(value: unknown) {
-  return JSON.stringify(sortJson(value));
 }
 
 function sortJson(value: unknown): unknown {

@@ -1,18 +1,9 @@
-import type { Graffiti } from "@graffiti-garden/api";
-import { GuardDB } from "../core/db.js";
-import { Guard } from "../core/guard.js";
 import { sourceFromContext } from "../core/source.js";
 import { openAudit } from "../ui/audit.js";
 
-export function handleAudit(url: URL, graffiti: Graffiti) {
+export function handleAudit(url: URL) {
   const options = auditOptions(url);
-  const guard = new Guard(
-    graffiti,
-    new GuardDB(),
-    options.redirectUrl?.origin ?? url.origin,
-    async () => false,
-  );
-  openAudit(guard, {
+  openAudit({
     ...options,
     redirectUrl: options.redirectUrl?.href,
   });

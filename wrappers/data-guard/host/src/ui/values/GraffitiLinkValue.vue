@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { GraffitiMedia, GraffitiObject } from "@graffiti-garden/api";
+import type {
+  GraffitiMedia,
+  GraffitiObject,
+  GraffitiSession,
+} from "@graffiti-garden/api";
 import {
   GraffitiActorToHandle,
   useGraffiti,
@@ -10,9 +14,14 @@ import { mediaLabels } from "../media.js";
 import MediaView from "../prompts/MediaView.vue";
 import ValueBubble from "./ValueBubble.vue";
 
-const props = withDefaults(defineProps<{ url: string; lazy?: boolean }>(), {
-  lazy: false,
-});
+const props = withDefaults(
+  defineProps<{
+    url: string;
+    lazy?: boolean;
+    session?: GraffitiSession | null;
+  }>(),
+  { lazy: false, session: null },
+);
 const graffiti = useGraffiti();
 const schema = {} as const;
 const accept = { types: ["*/*"] };
@@ -38,7 +47,7 @@ watch(
     // Graffiti URLs do not encode their resource kind. Probe media first, then
     // fall back to structured data on any media error.
     try {
-      const value = await graffiti.getMedia(url, accept);
+      const value = await graffiti.getMedia(url, accept, props.session);
       if (!current) return;
       media.value = value;
       resolved.value = true;
@@ -48,7 +57,7 @@ watch(
     }
 
     try {
-      const value = await graffiti.get(url, schema);
+      const value = await graffiti.get(url, schema, props.session);
       if (current) object.value = value;
     } catch {
       // The neutral unavailable state covers links that resolve as neither.

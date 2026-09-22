@@ -19,7 +19,7 @@ function setup(
   mediaAllowed?: string[] | null,
   objectAllowed?: string[] | null,
 ) {
-  const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+  const db = new GuardDB();
   databases.push(db);
   let prompts = 0;
   const object = {
@@ -52,7 +52,7 @@ const session = {
 
 describe("Guard", () => {
   it("rechecks permissions before showing a queued prompt", async () => {
-    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    const db = new GuardDB();
     databases.push(db);
     let prompts = 0;
     let queue: GuardQueueStatus | undefined;
@@ -93,7 +93,7 @@ describe("Guard", () => {
   });
 
   it("does not count queued requests that cannot prompt", async () => {
-    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    const db = new GuardDB();
     databases.push(db);
     await db.ensurePermission({
       source: {
@@ -176,39 +176,6 @@ describe("Guard", () => {
     expect(prompts()).toBe(3);
   });
 
-  it("records authorization separately from execution failure", async () => {
-    const { db, guard } = setup();
-    const request = await guard.authorize("logout", [session]);
-    await guard.fail(request, new Error("network unavailable"));
-    const entry = (await db.audit()).requests[0];
-
-    expect(entry.result?.authorization.allowed).toBe(true);
-    expect(entry.result?.execution).toMatchObject({
-      ok: false,
-      error: "network unavailable",
-    });
-  });
-
-  it("records a denial without inventing an execution result", async () => {
-    const { db } = setup();
-    const graffiti = {
-      sessionEvents: new EventTarget(),
-    } as unknown as Graffiti;
-    const guard = new Guard(
-      graffiti,
-      db,
-      "https://example.com",
-      async () => false,
-    );
-
-    await expect(guard.authorize("logout", [session])).rejects.toThrow(
-      "denied",
-    );
-    const entry = (await db.audit()).requests[0];
-    expect(entry.result?.authorization.allowed).toBe(false);
-    expect(entry.result?.execution).toBeUndefined();
-  });
-
   it("reuses a remembered denial for similar requests", async () => {
     const { db, guard, prompts } = setup({ allow: false, remember: true });
     const post = (content: string) =>
@@ -224,16 +191,9 @@ describe("Guard", () => {
     await expect(post("second")).rejects.toThrow("denied");
 
     expect(prompts()).toBe(1);
-    const audit = await db.audit();
-    expect(audit.permissions).toHaveLength(1);
-    expect(audit.permissions[0].decision).toBe("deny");
-    expect(
-      audit.requests.every(
-        ({ result }) =>
-          result?.authorization.allowed === false &&
-          result.authorization.permission?.id === audit.permissions[0].id,
-      ),
-    ).toBe(true);
+    const permissions = (await db.rulesSnapshot()).permissions;
+    expect(permissions).toHaveLength(1);
+    expect(permissions[0].decision).toBe("deny");
   });
 
   it("does not remember an unchecked post denial or a cancellation", async () => {
@@ -251,7 +211,7 @@ describe("Guard", () => {
       await expect(guard.authorize("post", args)).rejects.toThrow("denied");
 
       expect(prompts()).toBe(2);
-      expect((await db.audit()).permissions).toEqual([]);
+      expect((await db.rulesSnapshot()).permissions).toEqual([]);
     }
   });
 
@@ -273,7 +233,7 @@ describe("Guard", () => {
     await expect(denyMedia("graffiti:media")).rejects.toThrow("denied");
 
     expect(prompts()).toBe(3);
-    const permissions = (await db.audit()).permissions;
+    const permissions = (await db.rulesSnapshot()).permissions;
     expect(permissions).toHaveLength(3);
     expect(permissions.every(({ decision }) => decision === "deny")).toBe(true);
     expect(permissions.map(({ match }) => match)).toEqual(
@@ -296,10 +256,10 @@ describe("Guard", () => {
     ).rejects.toThrow("denied");
 
     expect(prompts()).toBe(2);
-    expect((await db.audit()).permissions).toEqual([]);
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
-  it("blocks every guarded request from a site without prompting again", async () => {
+  it("blocks every guarded request from a site for the same identity", async () => {
     const { db, guard, prompts } = setup({ blockSite: true }, [], []);
 
     await expect(
@@ -316,14 +276,14 @@ describe("Guard", () => {
       ]),
     ).rejects.toThrow("blocked all requests");
 
-    expect(prompts()).toBe(1);
-    const audit = await db.audit();
-    expect(audit.siteBlocks).toHaveLength(1);
-    expect(audit.permissions).toEqual([]);
+    expect(prompts()).toBe(2);
+    const rules = await db.rulesSnapshot();
+    expect(rules.siteBlocks).toHaveLength(2);
+    expect(rules.permissions).toEqual([]);
   });
 
   it("does not accept an open prompt after another guard blocks the site", async () => {
-    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    const db = new GuardDB();
     databases.push(db);
     const graffiti = { sessionEvents: new EventTarget() } as Graffiti;
     let answerOpenPrompt: (answer: GuardAnswer) => void = () => {};
@@ -360,11 +320,11 @@ describe("Guard", () => {
     answerOpenPrompt({ allow: true, remember: true });
 
     await expect(openRequest).rejects.toThrow("blocked all requests");
-    expect((await db.audit()).permissions).toEqual([]);
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
-  it("does not authorize or audit discovery queries or cursors", async () => {
-    const { db, guard, prompts } = setup();
+  it("does not authorize discovery queries or cursors", async () => {
+    const { guard, prompts } = setup();
     const discovery = await guard.authorize("discover", [
       ["chat"],
       {},
@@ -378,7 +338,6 @@ describe("Guard", () => {
     expect(discovery).toBeUndefined();
     expect(continuation).toBeUndefined();
     expect(prompts()).toBe(0);
-    expect((await db.audit()).requests).toEqual([]);
   });
 
   it("does not guard sessionless public reads", async () => {
@@ -389,7 +348,7 @@ describe("Guard", () => {
   });
 
   it("automatically allows authenticated reads of public data", async () => {
-    const { db, guard, prompts } = setup();
+    const { guard, prompts } = setup();
 
     const object = await guard.authorize("get", [
       "graffiti:public",
@@ -405,7 +364,6 @@ describe("Guard", () => {
     expect(prompts()).toBe(0);
     expect(object?.permission).toBeUndefined();
     expect(media?.permission).toBeUndefined();
-    expect((await db.audit()).requests).toHaveLength(2);
   });
 
   it("also treats a null allowed list as public", async () => {
@@ -419,7 +377,7 @@ describe("Guard", () => {
     await guard.authorize("getMedia", ["graffiti:public-media", {}, session]);
 
     expect(prompts()).toBe(0);
-    expect((await db.audit()).permissions).toEqual([]);
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
   it("treats activity as an object discriminator", async () => {
@@ -467,7 +425,7 @@ describe("Guard", () => {
     expect(prompts()).toBe(1);
   });
 
-  it("defaults remembered channel and recipient scopes to any", async () => {
+  it("stores examples for remembered broad permissions", async () => {
     const { guard } = setup({ allow: true, remember: true }, [], []);
 
     const object = await guard.authorize("get", [
@@ -483,12 +441,17 @@ describe("Guard", () => {
 
     expect(object?.permission?.match).toMatchObject({
       kind: "object",
-      channels: "any",
-      allowed: "any",
+      example: {
+        type: "Note",
+        content: "existing",
+      },
     });
     expect(media?.permission?.match).toMatchObject({
       kind: "media",
-      allowed: "any",
+      example: {
+        type: "image/png",
+        size: 5,
+      },
     });
   });
 
@@ -521,7 +484,7 @@ describe("Guard", () => {
     expect(repeatedGet?.permission?.id).toBe(get?.permission?.id);
     expect(repeatedMedia?.permission?.id).toBe(media?.permission?.id);
     expect(prompts()).toBe(3);
-    expect((await db.audit()).permissions).toHaveLength(3);
+    expect((await db.rulesSnapshot()).permissions).toHaveLength(3);
 
     await guard.revoke(get!.permission!.id);
     await guard.authorize("get", ["graffiti:first", {}, session]);
@@ -556,7 +519,7 @@ describe("Guard", () => {
     expect(prompts()).toBe(2);
     expect(get?.permission?.id).toBeDefined();
     expect(getMedia?.permission?.id).toBeDefined();
-    expect((await db.audit()).permissions).toHaveLength(2);
+    expect((await db.rulesSnapshot()).permissions).toHaveLength(2);
   });
 
   it("does not store implicit read permissions for public writes", async () => {
@@ -573,7 +536,7 @@ describe("Guard", () => {
     ]);
     await guard.succeed(postMedia, "graffiti:public-media");
 
-    expect((await db.audit()).permissions).toEqual([]);
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
   it("authorizes private discovery results as exact get requests", async () => {
@@ -598,15 +561,11 @@ describe("Guard", () => {
 
     expect(prompts()).toBe(1);
     expect(second?.permission?.id).toBe(first?.permission?.id);
-    expect((await db.audit()).permissions).toHaveLength(1);
-    const history = (await db.audit()).requests;
-    expect(history).toHaveLength(2);
-    expect(history.every(({ request }) => request.method === "get")).toBe(true);
-    expect(history.every(({ result }) => result?.execution?.ok)).toBe(true);
+    expect((await db.rulesSnapshot()).permissions).toHaveLength(1);
   });
 
   it("marks private discovery prompts as part of a result stream", async () => {
-    const db = new GuardDB(`guard-test-${crypto.randomUUID()}`);
+    const db = new GuardDB();
     databases.push(db);
     let promptContext: GuardPromptContext | undefined;
     const guard = new Guard(
@@ -649,9 +608,8 @@ describe("Guard", () => {
     })).toBeUndefined();
 
     expect(prompts()).toBe(0);
-    expect(await db.audit()).toEqual({
+    expect(await db.rulesSnapshot()).toEqual({
       permissions: [],
-      requests: [],
       siteBlocks: [],
     });
   });
@@ -685,7 +643,7 @@ describe("Guard", () => {
     expect(prompts()).toBe(1);
     expect(second?.permission?.id).toBe(first?.permission?.id);
     // One broad grant plus an exact grant for each disclosed object.
-    expect((await db.audit()).permissions).toHaveLength(3);
+    expect((await db.rulesSnapshot()).permissions).toHaveLength(3);
   });
 
   it("rejects a private sessionless discovery result", async () => {
@@ -702,14 +660,13 @@ describe("Guard", () => {
     ).rejects.toThrow("authenticated session");
 
     expect(prompts()).toBe(0);
-    expect(await db.audit()).toEqual({
+    expect(await db.rulesSnapshot()).toEqual({
       permissions: [],
-      requests: [],
       siteBlocks: [],
     });
   });
 
-  it("records a denied private discovery result as a get request", async () => {
+  it("does not remember a cancelled private discovery result", async () => {
     const { db, guard, prompts } = setup(false, [], []);
 
     await expect(
@@ -723,10 +680,7 @@ describe("Guard", () => {
     ).rejects.toBeInstanceOf(Error);
 
     expect(prompts()).toBe(1);
-    const [entry] = (await db.audit()).requests;
-    expect(entry.request.method).toBe("get");
-    expect(entry.result?.authorization.allowed).toBe(false);
-    expect(entry.result?.execution).toBeUndefined();
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
   it("rejects an unknown authenticated Graffiti method", async () => {

@@ -2,9 +2,8 @@ import {
   GraffitiErrorForbidden,
   type Graffiti,
   type GraffitiObject,
-  type GraffitiSession,
 } from "@graffiti-garden/api";
-import { GuardDB, type Request } from "./db.js";
+import { GuardDB, type Permission, type Request } from "./db.js";
 import type { GraffitiArgs, GraffitiMethod } from "./graffiti.js";
 import { exactReadMatch, matches } from "./permissions.js";
 import { logoutRequest } from "./requests/identity.js";
@@ -15,6 +14,7 @@ import {
 } from "./requests/objects.js";
 import {
   actorFromArgs,
+  sessionFromArgs,
   sourceFromArgs,
 } from "./source.js";
 
@@ -34,7 +34,6 @@ export type GuardPromptContext = {
 };
 
 export class Guard {
-  private readonly sessions = new Map<string, GraffitiSession>();
   private previousAuthorization = Promise.resolve();
   private readonly queue: GuardQueueStatus = {
     pending: 0,
@@ -51,16 +50,7 @@ export class Guard {
       preview?: unknown,
       context?: GuardPromptContext,
     ) => Promise<GuardAnswer>,
-  ) {
-    graffiti.sessionEvents.addEventListener("login", (event) => {
-      if (!(event instanceof CustomEvent) || event.detail?.error) return;
-      this.sessions.set(event.detail.session.actor, event.detail.session);
-    });
-    graffiti.sessionEvents.addEventListener("logout", (event) => {
-      if (!(event instanceof CustomEvent) || event.detail?.error) return;
-      this.sessions.delete(event.detail.actor);
-    });
-  }
+  ) {}
 
   async authorize<Method extends GraffitiMethod>(
     method: Method,
@@ -71,8 +61,10 @@ export class Guard {
     }
     const actor = actorFromArgs(args);
     if (!actor) return undefined;
+    const session = sessionFromArgs(args)!;
     const source = sourceFromArgs(this.origin, args);
-    if (await this.db.isSourceBlocked(source)) throw sourceBlocked();
+    await this.db.load(source, session);
+    if (await this.db.isSourceBlocked(source, actor)) throw sourceBlocked();
     const prepared = await this.prepare(method, args as any[]);
     if (!prepared) return undefined;
     return this.authorizePrepared(source, actor, method, prepared);
@@ -91,7 +83,9 @@ export class Guard {
       );
     }
     const source = sourceFromArgs(this.origin, args);
-    if (await this.db.isSourceBlocked(source)) throw sourceBlocked();
+    const session = sessionFromArgs(args)!;
+    await this.db.load(source, session);
+    if (await this.db.isSourceBlocked(source, actor)) throw sourceBlocked();
     const prepared = prepareObjectRequest(object);
     const handle = await this.authorizePrepared(
       source,
@@ -165,7 +159,7 @@ export class Guard {
     prepared: any,
     privateResult?: number,
   ) {
-    if (await this.db.isSourceBlocked(source)) throw sourceBlocked();
+    if (await this.db.isSourceBlocked(source, actor)) throw sourceBlocked();
     const request = await this.db.request(
       source,
       actor,
@@ -185,12 +179,12 @@ export class Guard {
 
     if (permission) {
       if (permission.decision === "deny") {
-        await this.db.deny(request, permission);
+        await this.db.deny(request);
         throw new GraffitiErrorForbidden(
           `The user denied the ${method} request.`,
         );
       }
-      await this.db.allow(request, permission);
+      await this.db.allow(request);
       return { request, prepared, permission };
     }
 
@@ -200,12 +194,12 @@ export class Guard {
       prepared.preview,
       { queue: this.queue, privateResult },
     );
-    if (await this.db.isSourceBlocked(source)) {
+    if (await this.db.isSourceBlocked(source, actor)) {
       await this.db.deny(request);
       throw sourceBlocked();
     }
     if (answer && "blockSite" in answer) {
-      await this.db.blockSource(source);
+      await this.db.blockSource(source, actor);
       await this.db.deny(request);
       throw sourceBlocked();
     }
@@ -252,28 +246,14 @@ export class Guard {
     const request = handle.request as Request;
     await this.db.finish(
       request,
-      {
-        ok: true,
-        value: resultValue(request.method, value, request.subject),
-      },
       implicitReadPermission(request, value),
     );
   }
 
   async fail(handle: any, error: unknown) {
     if (!handle) return;
-    await this.db.finish(handle.request, {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  audit() {
-    return this.db.audit();
-  }
-
-  hasSession(actor?: string) {
-    return Boolean(actor && this.sessions.has(actor));
+    void error;
+    await this.db.finish(handle.request);
   }
 
   async revoke(id: string) {
@@ -282,44 +262,6 @@ export class Guard {
 
   async unblockSource(key: string) {
     await this.db.unblockSource(key);
-  }
-
-  async recover(id: string) {
-    const entry = await this.db.entry(id);
-    if (!entry?.result?.execution?.ok) {
-      throw new Error("Only successful requests can be recovered.");
-    }
-    const original = entry.request;
-    const session = this.sessions.get(original.actor);
-    if (!session) throw new Error("Log in as the original actor first.");
-    const method = recoveryMethod(original.method);
-    if (!method) throw new Error(`${original.method} cannot be recovered.`);
-    const request = await this.db.recovery(
-      original.source,
-      original.actor,
-      method,
-      original.subject,
-      original.id,
-    );
-    await this.db.allow(request);
-    try {
-      const value = await this.performRecovery(original, entry.result.execution.value, session);
-      await this.db.finish(request, { ok: true, value });
-    } catch (error) {
-      await this.db.finish(request, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  clearHistory() {
-    return this.db.clearHistory();
-  }
-
-  clearEverything() {
-    return this.db.clearEverything();
   }
 
   private async prepare(method: GraffitiMethod, args: any[]): Promise<any> {
@@ -345,42 +287,6 @@ export class Guard {
     }
   }
 
-  private async performRecovery(
-    request: Request,
-    result: unknown,
-    session: GraffitiSession,
-  ) {
-    const value = result as any;
-    const subject = request.subject as any;
-    if (request.method === "post") {
-      await this.graffiti.delete(value.url, session);
-      return { deletedUrl: value.url };
-    }
-    if (request.method === "postMedia") {
-      await this.graffiti.deleteMedia(value.url, session);
-      return { deletedUrl: value.url };
-    }
-    const object = subject.object;
-    const restored = await this.graffiti.post(
-      {
-        value: object.value,
-        channels: object.channels,
-        ...(object.allowed !== undefined ? { allowed: object.allowed } : {}),
-      },
-      session,
-    );
-    return { url: restored.url, replacesUrl: object.url };
-  }
-}
-
-function resultValue(method: string, value: any, subject: any) {
-  // Audit results retain only identifiers needed for recovery, never private
-  // response bodies, session credentials, or media bytes.
-  if (method === "post") return { url: value.url };
-  if (method === "postMedia") return { url: value };
-  if (["get", "delete"].includes(method)) return { url: subject.object.url };
-  if (["getMedia", "deleteMedia"].includes(method)) return { url: subject.url };
-  return undefined;
 }
 
 function isPublicRead(method: GraffitiMethod, prepared: any) {
@@ -435,11 +341,4 @@ function sourceBlocked() {
   return new GraffitiErrorForbidden(
     "The user blocked all requests from this site.",
   );
-}
-
-function recoveryMethod(method: string) {
-  if (method === "post") return "delete";
-  if (method === "postMedia") return "deleteMedia";
-  if (method === "delete") return "post";
-  return undefined;
 }
