@@ -1,4 +1,7 @@
-import { markRaw, shallowReactive, type Component } from "vue";
+import { markRaw, ref, shallowReactive, type Component } from "vue";
+
+export const pendingRequests = ref(0);
+export const privateResult = ref<number>();
 
 export const componentState = shallowReactive<{
   component: Component | null;

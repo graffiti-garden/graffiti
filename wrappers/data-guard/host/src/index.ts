@@ -12,10 +12,12 @@ import { activateStorageAccess } from "./bootstrap/storage_access.js";
 import { GuardDB } from "./core/db.js";
 import { GuardedGraffiti } from "./core/graffiti.js";
 import { Guard } from "./core/guard.js";
+import { GraffitiRuleStore } from "./core/rules.js";
 import App from "./ui/App.vue";
 import { ask } from "./ui/ask.js";
 
-const app = createApp(App);
+const ruleStore = new GraffitiRuleStore();
+const app = createApp(App, { ruleStore });
 // The storage-access prompt uses this root before Graffiti can safely touch
 // browser storage. Graffiti-dependent prompt components are rendered only after
 // the plugin is installed below.
@@ -28,14 +30,16 @@ if (window.parent === window) {
   } else {
     const graffiti = new GraffitiDecentralized();
     app.use(GraffitiPlugin, { graffiti });
-    handleAudit(pageUrl, graffiti);
+    ruleStore.activate();
+    handleAudit(pageUrl);
   }
 } else {
   listenToParent((origin) => {
     activateStorageAccess().then(() => {
       const graffiti = new GraffitiDecentralized();
       app.use(GraffitiPlugin, { graffiti });
-      const guard = new Guard(graffiti, new GuardDB(), origin, ask);
+      ruleStore.activate();
+      const guard = new Guard(graffiti, new GuardDB(ruleStore), origin, ask);
       serveGraffiti(new GuardedGraffiti(graffiti, guard)).connect({
         remoteWindow: window.parent,
         allowedOrigins: [origin],

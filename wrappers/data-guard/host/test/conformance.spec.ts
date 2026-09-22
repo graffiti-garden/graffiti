@@ -10,12 +10,12 @@ import { Guard } from "../src/core/guard.js";
 import { GuardedGraffiti } from "../src/core/graffiti.js";
 
 const implementation = new GraffitiLocal();
-const database = new GuardDB("guard-conformance");
+const database = new GuardDB();
 const guard = new Guard(
   implementation,
   database,
   "https://example.com",
-  async () => ({ remember: false }),
+  async () => ({ allow: true, remember: false }),
 );
 const graffiti = new GuardedGraffiti(implementation, guard);
 

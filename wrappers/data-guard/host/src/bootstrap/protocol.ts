@@ -1,3 +1,5 @@
+export const visibilityEvents = new EventTarget();
+
 export function listenToParent(connect: (origin: string) => void) {
   let origin: string | undefined;
   window.addEventListener("message", (event) => {
@@ -16,8 +18,22 @@ export function listenToParent(connect: (origin: string) => void) {
       if (origin && origin !== event.origin) return;
       if (!origin) {
         origin = event.origin;
+        // Acknowledge before storage initialization, which may wait for user
+        // interaction. The embedder can distinguish a responsive guard from
+        // a URL the browser refused to load (for example, an untrusted local
+        // HTTPS certificate).
+        window.parent.postMessage(
+          { type: "graffiti-guard:connected" },
+          origin,
+        );
         connect(origin);
       }
+    } else if (
+      origin &&
+      event.origin === origin &&
+      event.data.type === "graffiti-guard:shown"
+    ) {
+      visibilityEvents.dispatchEvent(new Event("shown"));
     }
   });
 }
@@ -34,7 +50,7 @@ export function requestAudit(
   source: { id: string; name: string }[],
 ) {
   window.parent.postMessage(
-    { type: "graffiti-guard:open-audit", actor, source, view: "permissions" },
+    { type: "graffiti-guard:open-audit", actor, source },
     "*",
   );
 }

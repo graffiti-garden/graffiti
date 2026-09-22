@@ -28,8 +28,10 @@ await graffiti.post({
   channels: ['my-channel'],
 }, documentSession);
 
-// Open the audit page to investigate the action history and granted permissions
-graffiti.audit(documentSession);
+// Link to the audit page for this part of the app.
+const auditLink = document.createElement("a");
+auditLink.href = graffiti.auditUrl(documentSession);
+auditLink.textContent = "Review data permissions";
 
 // Destroy the GraffitiGuarded instance if you no longer need it.
 graffiti.destroy();

@@ -64,6 +64,7 @@ describe("GuardedGraffiti audit finalization", () => {
     };
     const discovery = async function* () {
       yield entry;
+      yield entry;
       return { cursor: "next" };
     };
     const implementation = {
@@ -78,20 +79,30 @@ describe("GuardedGraffiti audit finalization", () => {
     const graffiti = new GuardedGraffiti(implementation, guard);
     const session = { actor: "actor:one" };
 
-    await graffiti.discover([], {}, session).next();
+    const results = graffiti.discover([], {}, session);
+    await results.next();
+    await results.next();
     await graffiti.continueDiscover("next", session).next();
 
     expect(guard.authorizeDiscovered).toHaveBeenNthCalledWith(
       1,
       [[], {}, session],
       entry.object,
+      1,
     );
     expect(guard.authorizeDiscovered).toHaveBeenNthCalledWith(
       2,
+      [[], {}, session],
+      entry.object,
+      2,
+    );
+    expect(guard.authorizeDiscovered).toHaveBeenNthCalledWith(
+      3,
       ["next", session],
       entry.object,
+      1,
     );
-    expect(guard.succeed).toHaveBeenCalledTimes(2);
+    expect(guard.succeed).toHaveBeenCalledTimes(3);
   });
 
   it("passes public and upstream entries through and yields denials as errors", async () => {

@@ -2,9 +2,8 @@ import {
   GraffitiErrorForbidden,
   type Graffiti,
   type GraffitiObject,
-  type GraffitiSession,
 } from "@graffiti-garden/api";
-import { GuardDB, type Request } from "./db.js";
+import { GuardDB, type Permission, type Request } from "./db.js";
 import type { GraffitiArgs, GraffitiMethod } from "./graffiti.js";
 import { exactReadMatch, matches } from "./permissions.js";
 import { logoutRequest } from "./requests/identity.js";
@@ -15,12 +14,31 @@ import {
 } from "./requests/objects.js";
 import {
   actorFromArgs,
+  sessionFromArgs,
   sourceFromArgs,
 } from "./source.js";
 
+export type GuardAnswer =
+  | false
+  | { allow: boolean; remember: boolean }
+  | { blockSite: true };
+
+export type GuardQueueStatus = {
+  pending: number;
+  events: EventTarget;
+};
+
+export type GuardPromptContext = {
+  queue: GuardQueueStatus;
+  privateResult?: number;
+};
+
 export class Guard {
-  private readonly sessions = new Map<string, GraffitiSession>();
   private previousAuthorization = Promise.resolve();
+  private readonly queue: GuardQueueStatus = {
+    pending: 0,
+    events: new EventTarget(),
+  };
 
   constructor(
     private readonly graffiti: Graffiti,
@@ -30,17 +48,9 @@ export class Guard {
       request: Request,
       canRemember: boolean,
       preview?: unknown,
-    ) => Promise<false | { remember: boolean }>,
-  ) {
-    graffiti.sessionEvents.addEventListener("login", (event) => {
-      if (!(event instanceof CustomEvent) || event.detail?.error) return;
-      this.sessions.set(event.detail.session.actor, event.detail.session);
-    });
-    graffiti.sessionEvents.addEventListener("logout", (event) => {
-      if (!(event instanceof CustomEvent) || event.detail?.error) return;
-      this.sessions.delete(event.detail.actor);
-    });
-  }
+      context?: GuardPromptContext,
+    ) => Promise<GuardAnswer>,
+  ) {}
 
   async authorize<Method extends GraffitiMethod>(
     method: Method,
@@ -51,7 +61,10 @@ export class Guard {
     }
     const actor = actorFromArgs(args);
     if (!actor) return undefined;
+    const session = sessionFromArgs(args)!;
     const source = sourceFromArgs(this.origin, args);
+    await this.db.load(source, session);
+    if (await this.db.isSourceBlocked(source, actor)) throw sourceBlocked();
     const prepared = await this.prepare(method, args as any[]);
     if (!prepared) return undefined;
     return this.authorizePrepared(source, actor, method, prepared);
@@ -60,6 +73,7 @@ export class Guard {
   async authorizeDiscovered(
     args: GraffitiArgs<"discover"> | GraffitiArgs<"continueDiscover">,
     object: GraffitiObject<{}>,
+    privateResult = 1,
   ) {
     if (object.allowed == null) return undefined;
     const actor = actorFromArgs(args);
@@ -69,12 +83,16 @@ export class Guard {
       );
     }
     const source = sourceFromArgs(this.origin, args);
+    const session = sessionFromArgs(args)!;
+    await this.db.load(source, session);
+    if (await this.db.isSourceBlocked(source, actor)) throw sourceBlocked();
     const prepared = prepareObjectRequest(object);
     const handle = await this.authorizePrepared(
       source,
       actor,
       "get",
       prepared,
+      privateResult,
     );
     // Once the object crosses into the app, retaining its exact URL requires
     // no broader authority than the disclosure which has already occurred.
@@ -89,17 +107,49 @@ export class Guard {
     actor: string,
     method: GraffitiMethod,
     prepared: any,
+    privateResult?: number,
   ) {
+    let counted = false;
+    const countIfPromptCandidate = this.couldPrompt(
+      source,
+      actor,
+      method,
+      prepared,
+    ).then((couldPrompt) => {
+      counted = couldPrompt;
+      if (couldPrompt) this.updatePending(1);
+    });
     // Recheck saved permissions only when this request reaches the front of
     // the queue, so a broad grant from the preceding prompt can authorize it.
-    const authorization = this.previousAuthorization.then(() =>
-      this.decide(source, actor, method, prepared),
-    );
-    this.previousAuthorization = authorization.then(
+    const authorization = this.previousAuthorization.then(async () => {
+      await countIfPromptCandidate;
+      return this.decide(source, actor, method, prepared, privateResult);
+    });
+    const tracked = authorization.finally(() => {
+      if (counted) this.updatePending(-1);
+    });
+    this.previousAuthorization = tracked.then(
       () => undefined,
       () => undefined,
     );
-    return authorization;
+    return tracked;
+  }
+
+  private async couldPrompt(
+    source: ReturnType<typeof sourceFromArgs>,
+    actor: string,
+    method: GraffitiMethod,
+    prepared: any,
+  ) {
+    if (isPublicRead(method, prepared)) return false;
+    return !(await this.db.permissions(source, actor, method)).some(
+      (permission) => matches(permission, prepared.subject),
+    );
+  }
+
+  private updatePending(change: number) {
+    this.queue.pending += change;
+    this.queue.events.dispatchEvent(new Event("change"));
   }
 
   private async decide(
@@ -107,7 +157,9 @@ export class Guard {
     actor: string,
     method: GraffitiMethod,
     prepared: any,
+    privateResult?: number,
   ) {
+    if (await this.db.isSourceBlocked(source, actor)) throw sourceBlocked();
     const request = await this.db.request(
       source,
       actor,
@@ -117,19 +169,22 @@ export class Guard {
     // A successful preparatory fetch proves data is public when it has no
     // allowed list. Keep the authenticated read auditable, but do not ask the
     // user to authorize access to data available without their session.
-    if (
-      (method === "get" && prepared.subject.object.allowed == null) ||
-      (method === "getMedia" && prepared.subject.allowed == null)
-    ) {
+    if (isPublicRead(method, prepared)) {
       await this.db.allow(request);
       return { request, prepared };
     }
-    let permission = (await this.db.permissions(source, actor, method)).find(
-      (candidate) => matches(candidate, prepared.subject),
-    );
+    let permission = (await this.db.permissions(source, actor, method))
+      .filter((candidate) => matches(candidate, prepared.subject))
+      .sort((left, right) => right.createdAt - left.createdAt)[0];
 
     if (permission) {
-      await this.db.allow(request, permission);
+      if (permission.decision === "deny") {
+        await this.db.deny(request);
+        throw new GraffitiErrorForbidden(
+          `The user denied the ${method} request.`,
+        );
+      }
+      await this.db.allow(request);
       return { request, prepared, permission };
     }
 
@@ -137,22 +192,48 @@ export class Guard {
       request,
       Boolean(prepared.createMatch),
       prepared.preview,
+      { queue: this.queue, privateResult },
     );
-    if (!answer) {
+    if (await this.db.isSourceBlocked(source, actor)) {
       await this.db.deny(request);
+      throw sourceBlocked();
+    }
+    if (answer && "blockSite" in answer) {
+      await this.db.blockSource(source, actor);
+      await this.db.deny(request);
+      throw sourceBlocked();
+    }
+    const rememberSimilar = Boolean(answer && answer.remember);
+    const retainExactRead = Boolean(
+      answer && !answer.remember && ["get", "getMedia"].includes(method),
+    );
+    const match =
+      prepared.createMatch && (rememberSimilar || retainExactRead)
+        ? retainExactRead
+          ? exactReadMatch(prepared.subject)
+          : prepared.createMatch()
+        : undefined;
+
+    if (!answer || !answer.allow) {
+      if (match) {
+        await this.db.block(request, {
+          source,
+          actor,
+          method,
+          match,
+        });
+      } else {
+        await this.db.deny(request);
+      }
       throw new GraffitiErrorForbidden(`The user denied the ${method} request.`);
     }
 
-    const retainExactRead =
-      !answer.remember && ["get", "getMedia"].includes(method);
-    if ((answer.remember || retainExactRead) && prepared.createMatch) {
+    if (match) {
       permission = await this.db.grant(request, {
         source,
         actor,
         method,
-        match: retainExactRead
-          ? exactReadMatch(prepared.subject)
-          : prepared.createMatch(),
+        match,
       });
     } else {
       await this.db.allow(request);
@@ -165,70 +246,22 @@ export class Guard {
     const request = handle.request as Request;
     await this.db.finish(
       request,
-      {
-        ok: true,
-        value: resultValue(request.method, value, request.subject),
-      },
       implicitReadPermission(request, value),
     );
   }
 
   async fail(handle: any, error: unknown) {
     if (!handle) return;
-    await this.db.finish(handle.request, {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  audit() {
-    return this.db.audit();
-  }
-
-  hasSession(actor?: string) {
-    return Boolean(actor && this.sessions.has(actor));
+    void error;
+    await this.db.finish(handle.request);
   }
 
   async revoke(id: string) {
     await this.db.revoke(id);
   }
 
-  async recover(id: string) {
-    const entry = await this.db.entry(id);
-    if (!entry?.result?.execution?.ok) {
-      throw new Error("Only successful requests can be recovered.");
-    }
-    const original = entry.request;
-    const session = this.sessions.get(original.actor);
-    if (!session) throw new Error("Log in as the original actor first.");
-    const method = recoveryMethod(original.method);
-    if (!method) throw new Error(`${original.method} cannot be recovered.`);
-    const request = await this.db.recovery(
-      original.source,
-      original.actor,
-      method,
-      original.subject,
-      original.id,
-    );
-    await this.db.allow(request);
-    try {
-      const value = await this.performRecovery(original, entry.result.execution.value, session);
-      await this.db.finish(request, { ok: true, value });
-    } catch (error) {
-      await this.db.finish(request, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  clearHistory() {
-    return this.db.clearHistory();
-  }
-
-  clearEverything() {
-    return this.db.clearEverything();
+  async unblockSource(key: string) {
+    await this.db.unblockSource(key);
   }
 
   private async prepare(method: GraffitiMethod, args: any[]): Promise<any> {
@@ -254,42 +287,13 @@ export class Guard {
     }
   }
 
-  private async performRecovery(
-    request: Request,
-    result: unknown,
-    session: GraffitiSession,
-  ) {
-    const value = result as any;
-    const subject = request.subject as any;
-    if (request.method === "post") {
-      await this.graffiti.delete(value.url, session);
-      return { deletedUrl: value.url };
-    }
-    if (request.method === "postMedia") {
-      await this.graffiti.deleteMedia(value.url, session);
-      return { deletedUrl: value.url };
-    }
-    const object = subject.object;
-    const restored = await this.graffiti.post(
-      {
-        value: object.value,
-        channels: object.channels,
-        ...(object.allowed !== undefined ? { allowed: object.allowed } : {}),
-      },
-      session,
-    );
-    return { url: restored.url, replacesUrl: object.url };
-  }
 }
 
-function resultValue(method: string, value: any, subject: any) {
-  // Audit results retain only identifiers needed for recovery, never private
-  // response bodies, session credentials, or media bytes.
-  if (method === "post") return { url: value.url };
-  if (method === "postMedia") return { url: value };
-  if (["get", "delete"].includes(method)) return { url: subject.object.url };
-  if (["getMedia", "deleteMedia"].includes(method)) return { url: subject.url };
-  return undefined;
+function isPublicRead(method: GraffitiMethod, prepared: any) {
+  return (
+    (method === "get" && prepared.subject.object.allowed == null) ||
+    (method === "getMedia" && prepared.subject.allowed == null)
+  );
 }
 
 function implicitReadPermission(request: Request, value: any) {
@@ -333,9 +337,8 @@ function unsupportedMethod(method: never): never {
   throw new Error(`Unsupported authenticated Graffiti method ${String(method)}.`);
 }
 
-function recoveryMethod(method: string) {
-  if (method === "post") return "delete";
-  if (method === "postMedia") return "deleteMedia";
-  if (method === "delete") return "post";
-  return undefined;
+function sourceBlocked() {
+  return new GraffitiErrorForbidden(
+    "The user blocked all requests from this site.",
+  );
 }

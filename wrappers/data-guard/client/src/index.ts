@@ -1,7 +1,10 @@
 import { Graffiti, type GraffitiSession } from "@graffiti-garden/api";
 import { GraffitiRpcClient } from "@graffiti-garden/wrapper-iframe-rpc/client";
 
+declare const DATA_GUARD_DEFAULT_HOST_URL: string;
+
 let instance: GraffitiGuarded | undefined;
+const defaultConnectionTimeout = 10_000;
 
 export interface GraffitiGuardedOptions {
   hostUrl?: string | URL;
@@ -26,6 +29,7 @@ export class GraffitiGuarded extends Graffiti {
   private readonly iframe!: HTMLIFrameElement;
   private readonly rpc!: GraffitiRpcClient;
   private readonly onMessage!: (event: MessageEvent) => void;
+  private readonly connectionTimeout!: number;
   private destroyed = false;
 
   constructor(options: GraffitiGuardedOptions = {}) {
@@ -33,7 +37,7 @@ export class GraffitiGuarded extends Graffiti {
     if (instance) return instance;
 
     const hostUrl = new URL(
-      options.hostUrl?.toString() ?? "https://guard.graffiti.garden/",
+      options.hostUrl?.toString() ?? DATA_GUARD_DEFAULT_HOST_URL,
       document.baseURI,
     );
     const iframe = document.createElement("iframe");
@@ -60,11 +64,23 @@ export class GraffitiGuarded extends Graffiti {
       width: "100vw",
       zIndex: "2147483647",
     });
+    let connected = false;
+    let connectionErrorShown = false;
     iframe.addEventListener("load", () => {
       // Bootstrap the guard with the browser-reported embedding origin, which
       // the RPC handshake verifies internally but does not expose to the host.
       iframe.contentWindow?.postMessage({ type: "graffiti-guard:connect" }, hostUrl.origin);
     });
+    const showConnectionError = () => {
+      if (connected || connectionErrorShown) return;
+      connectionErrorShown = true;
+      window.alert(
+        `This app could not connect to its data service at ${hostUrl.origin}. ` +
+          "The service may be offline, or your browser may be blocking its security certificate. " +
+          "Open that address directly, then reload this page.",
+      );
+    };
+    iframe.addEventListener("error", showConnectionError);
     document.body.append(iframe);
 
     const remoteWindow = iframe.contentWindow;
@@ -79,6 +95,14 @@ export class GraffitiGuarded extends Graffiti {
       channel: options.channel,
       timeout: options.timeout,
     });
+    const connectionTimeout = window.setTimeout(
+      showConnectionError,
+      options.timeout ?? defaultConnectionTimeout,
+    );
+    const markConnected = () => {
+      connected = true;
+      window.clearTimeout(connectionTimeout);
+    };
     const onMessage = (event: MessageEvent) => {
       if (
         event.source !== remoteWindow ||
@@ -88,21 +112,30 @@ export class GraffitiGuarded extends Graffiti {
       ) {
         return;
       }
+      markConnected();
       if (
+        event.data.type === "graffiti-guard:connected"
+      ) {
+        return;
+      } else if (
         event.data.type === "graffiti-guard:set-visible" &&
         typeof event.data.visible === "boolean"
       ) {
         iframe.style.display = event.data.visible ? "block" : "none";
         iframe.setAttribute("aria-hidden", String(!event.data.visible));
+        if (event.data.visible) {
+          iframe.focus();
+          remoteWindow.postMessage(
+            { type: "graffiti-guard:shown" },
+            hostUrl.origin,
+          );
+        }
       } else if (
         event.data.type === "graffiti-guard:open-audit" &&
         typeof event.data.actor === "string" &&
         Array.isArray(event.data.source)
       ) {
-        this.audit(
-          event.data,
-          event.data.view === "permissions" ? "permissions" : "activity",
-        );
+        window.location.assign(this.auditUrl(event.data));
       }
     };
     window.addEventListener("message", onMessage);
@@ -112,6 +145,7 @@ export class GraffitiGuarded extends Graffiti {
     this.rpc = rpc;
     this.sessionEvents = rpc.sessionEvents;
     this.onMessage = onMessage;
+    this.connectionTimeout = connectionTimeout;
 
     instance = new Proxy(this, {
       get(target, property, receiver) {
@@ -134,22 +168,22 @@ export class GraffitiGuarded extends Graffiti {
     return Promise.resolve();
   };
 
-  /** Open the host-owned audit panel without exposing audit data to this app. */
-  audit(
-    session?: GraffitiGuardSession,
-    view: "activity" | "permissions" = "activity",
-  ) {
+  /** Link to the host-owned audit panel without exposing audit data to this app. */
+  auditUrl(scope?: {
+    actor?: string;
+    source?: GraffitiGuardSourceSegment[];
+  }) {
     const auditUrl = new URL(this.hostUrl);
     auditUrl.searchParams.set("redirectUrl", window.location.href);
-    auditUrl.searchParams.set("source", JSON.stringify(session?.source ?? []));
-    if (session?.actor) auditUrl.searchParams.set("actor", session.actor);
-    auditUrl.searchParams.set("view", view);
-    window.location.assign(auditUrl.href);
+    auditUrl.searchParams.set("source", JSON.stringify(scope?.source ?? []));
+    if (scope?.actor) auditUrl.searchParams.set("actor", scope.actor);
+    return auditUrl.href;
   }
 
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    window.clearTimeout(this.connectionTimeout);
     window.removeEventListener("message", this.onMessage);
     this.rpc.destroy();
     this.iframe.remove();

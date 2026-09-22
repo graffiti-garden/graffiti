@@ -1,4 +1,4 @@
-import { deleteDB, openDB, type DBSchema } from "idb";
+import type { GraffitiSession } from "@graffiti-garden/api";
 import type { GraffitiMethod } from "./graffiti.js";
 import type { Source } from "./source.js";
 
@@ -7,21 +7,28 @@ export type Permission = {
   source: Source;
   actor: string;
   method: GraffitiMethod;
+  decision: "allow" | "deny";
   match:
     | { kind: "object"; url: string }
     | {
         kind: "object";
-        schema: unknown;
-        channels: string[] | "any";
-        allowed: string[] | "any";
+        /** The request data used to derive what counts as similar. */
+        example: unknown;
       }
     | { kind: "media"; url: string }
     | {
         kind: "media";
-        mediaType: string;
-        allowed: string[] | "any";
+        /** File metadata used to derive what counts as similar. */
+        example: { type: string; size: number; name?: string };
       }
     | { kind: "logout" };
+  createdAt: number;
+};
+
+export type SiteBlock = {
+  id: string;
+  source: Source;
+  actor: string;
   createdAt: number;
 };
 
@@ -31,67 +38,55 @@ export type Request = {
   actor: string;
   method: GraffitiMethod;
   subject: unknown;
-  createdAt: number;
-  undoOf?: string;
 };
 
-export type RequestResult = {
-  authorization:
-    | { allowed: false; at: number }
-    | {
-        allowed: true;
-        at: number;
-        permission?: { id: string; created: boolean };
-      };
-  execution?:
-    | { ok: true; at: number; value?: unknown }
-    | { ok: false; at: number; error: string };
-};
-
-interface GuardDatabase extends DBSchema {
-  permissions: {
-    key: string;
-    value: Permission;
-    indexes: { source: string };
-  };
-  requests: {
-    key: string;
-    value: { request: Request; result?: RequestResult };
-    indexes: { undo: string };
-  };
+export interface GuardRuleRepository {
+  load(source: Source, session: GraffitiSession): Promise<void>;
+  isSourceBlocked(source: Source, actor: string): Promise<boolean>;
+  blockSource(source: Source, actor: string): Promise<SiteBlock>;
+  unblockSource(key: string, actor?: string): Promise<void>;
+  permissions(
+    source: Source,
+    actor: string,
+    method: GraffitiMethod,
+  ): Promise<Permission[]>;
+  remember(
+    permission: Omit<Permission, "id" | "createdAt">,
+  ): Promise<Permission>;
+  ensurePermission(
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
+  ): Promise<Permission>;
+  revoke(id: string, actor?: string): Promise<void>;
+  snapshot(): Promise<{ permissions: Permission[]; siteBlocks: SiteBlock[] }>;
+  destroy(): Promise<void>;
 }
 
 export class GuardDB {
-  private readonly database;
+  private readonly rules: GuardRuleRepository;
+  private readonly pendingRequests = new Map<string, boolean>();
 
-  constructor(private readonly name = "graffiti-guard") {
-    this.database = openDB<GuardDatabase>(name, 1, {
-      upgrade(db) {
-        const permissions = db.createObjectStore("permissions", {
-          keyPath: "id",
-        });
-        permissions.createIndex("source", "source.key");
-        const requests = db.createObjectStore("requests", {
-          keyPath: "request.id",
-        });
-        requests.createIndex("undo", "request.undoOf");
-      },
-    });
+  constructor(repository?: GuardRuleRepository) {
+    this.rules = repository ?? new MemoryRuleRepository();
   }
 
-  async permissions(
-    source: Source,
-    actor: string,
-    method: Permission["method"],
-  ) {
-    return (await (await this.database).getAllFromIndex(
-      "permissions",
-      "source",
-      source.key,
-    )).filter(
-      (permission) =>
-        permission.actor === actor && permission.method === method,
-    );
+  load(source: Source, session: GraffitiSession) {
+    return this.rules.load(source, session);
+  }
+
+  isSourceBlocked(source: Source, actor = "") {
+    return this.rules.isSourceBlocked(source, actor);
+  }
+
+  blockSource(source: Source, actor = "") {
+    return this.rules.blockSource(source, actor);
+  }
+
+  unblockSource(key: string, actor?: string) {
+    return this.rules.unblockSource(key, actor);
+  }
+
+  permissions(source: Source, actor: string, method: Permission["method"]) {
+    return this.rules.permissions(source, actor, method);
   }
 
   async request(
@@ -99,219 +94,182 @@ export class GuardDB {
     actor: string,
     method: Request["method"],
     subject: unknown,
-    undoOf?: string,
   ) {
-    const request = newRequest(source, actor, method, subject, undoOf);
-    await (await this.database).add("requests", { request });
-    return request;
-  }
-
-  async recovery(
-    source: Source,
-    actor: string,
-    method: Request["method"],
-    subject: unknown,
-    undoOf: string,
-  ) {
-    const db = await this.database;
-    const transaction = db.transaction("requests", "readwrite");
-    const store = transaction.objectStore("requests");
-    // The transaction serializes this check-and-add across guard tabs.
-    if ((await store.index("undo").getKey(undoOf)) !== undefined) {
-      await transaction.done;
-      throw new Error("This request has already been recovered.");
-    }
-    const request = newRequest(source, actor, method, subject, undoOf);
-    await store.add({ request });
-    await transaction.done;
+    const request = newRequest(source, actor, method, subject);
+    this.pendingRequests.set(request.id, false);
     return request;
   }
 
   async deny(request: Request) {
-    await this.updateRequest(request.id, {
-      authorization: { allowed: false, at: Date.now() },
-    });
+    this.authorizeRequest(request.id, false);
   }
 
-  async allow(request: Request, permission?: Permission) {
-    await this.updateRequest(request.id, {
-      authorization: {
-        allowed: true,
-        at: Date.now(),
-        ...(permission
-          ? { permission: { id: permission.id, created: false } }
-          : {}),
-      },
-    });
+  async allow(request: Request) {
+    this.authorizeRequest(request.id, true);
   }
 
   async grant(
     request: Request,
-    permission: Omit<Permission, "id" | "createdAt">,
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
   ) {
-    const db = await this.database;
-    const record = newPermission(permission);
-    const transaction = db.transaction(
-      ["permissions", "requests"],
-      "readwrite",
-    );
-    const entry = await transaction.objectStore("requests").get(request.id);
-    if (!entry) throw new Error(`Unknown guard request ${request.id}.`);
-    entry.result = {
-      authorization: {
-        allowed: true,
-        at: Date.now(),
-        permission: { id: record.id, created: true },
-      },
-    };
-    await Promise.all([
-      transaction.objectStore("permissions").add(record),
-      transaction.objectStore("requests").put(entry),
-      transaction.done,
-    ]);
+    return this.remember(request, { ...permission, decision: "allow" }, true);
+  }
+
+  async block(
+    request: Request,
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
+  ) {
+    return this.remember(request, { ...permission, decision: "deny" }, false);
+  }
+
+  private async remember(
+    request: Request,
+    permission: Omit<Permission, "id" | "createdAt">,
+    allowed: boolean,
+  ) {
+    if (!this.pendingRequests.has(request.id)) {
+      throw new Error(`Unknown guard request ${request.id}.`);
+    }
+    const record = await this.rules.remember(permission);
+    this.authorizeRequest(request.id, allowed);
     return record;
   }
 
-  async ensurePermission(
-    permission: Omit<Permission, "id" | "createdAt">,
+  ensurePermission(
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
   ) {
-    const db = await this.database;
-    const transaction = db.transaction("permissions", "readwrite");
-    const store = transaction.objectStore("permissions");
-    // The readwrite transaction serializes concurrent discoveries so they
-    // cannot create duplicate exact permissions for the same object.
-    const existing = (
-      await store.index("source").getAll(permission.source.key)
-    ).find(
-      (candidate) =>
-        candidate.actor === permission.actor &&
-        candidate.method === permission.method &&
-        JSON.stringify(candidate.match) === JSON.stringify(permission.match),
-    );
-    if (existing) {
-      await transaction.done;
-      return existing;
-    }
-    const record = newPermission(permission);
-    await store.add(record);
-    await transaction.done;
-    return record;
+    return this.rules.ensurePermission(permission);
   }
 
   async finish(
     request: Request,
-    execution:
-      | { ok: true; value?: unknown }
-      | { ok: false; error: string },
-    implicitPermission?: Omit<Permission, "id" | "createdAt">,
+    implicitPermission?: Omit<
+      Permission,
+      "id" | "createdAt" | "decision"
+    >,
   ) {
-    const db = await this.database;
-    const transaction = db.transaction(
-      ["permissions", "requests"],
-      "readwrite",
-    );
-    const store = transaction.objectStore("requests");
-    const entry = await store.get(request.id);
-    // Clearing history is allowed while an operation is in flight. If its
-    // record is already gone, do not recreate it or misreport the operation.
-    if (!entry) {
-      await transaction.done;
-      return;
-    }
-    if (!entry.result) {
-      await transaction.done;
+    const authorized = this.pendingRequests.get(request.id);
+    if (authorized === undefined) return;
+    if (!authorized) {
       throw new Error(`Guard request ${request.id} was not authorized.`);
     }
-    entry.result.execution = execution.ok
-      ? {
-          ok: true,
-          at: Date.now(),
-          ...(execution.value !== undefined ? { value: execution.value } : {}),
-        }
-      : { ok: false, at: Date.now(), error: execution.error };
-    // A successful private post and the exact read permission implied by its
-    // returned URL become visible together; neither is recorded without the
-    // other. Public data needs no stored read permission.
-    await Promise.all([
-      store.put(entry),
-      ...(implicitPermission
-        ? [
-            transaction
-              .objectStore("permissions")
-              .add(newPermission(implicitPermission)),
-          ]
-        : []),
-      transaction.done,
-    ]);
+    this.pendingRequests.delete(request.id);
+    if (implicitPermission) {
+      await this.rules.ensurePermission(implicitPermission);
+    }
   }
 
-  async revoke(id: string) {
-    await (await this.database).delete("permissions", id);
+  revoke(id: string, actor?: string) {
+    return this.rules.revoke(id, actor);
   }
 
-  async audit() {
-    const db = await this.database;
-    const [permissions, requests] = await Promise.all([
-      db.getAll("permissions"),
-      db.getAll("requests"),
-    ]);
-    return {
-      permissions: permissions.sort((a, b) => b.createdAt - a.createdAt),
-      requests: requests.sort(
-        (a, b) => b.request.createdAt - a.request.createdAt,
-      ),
-    };
-  }
-
-  async entry(id: string) {
-    return (await this.database).get("requests", id);
-  }
-
-  async clearHistory() {
-    await (await this.database).clear("requests");
-  }
-
-  async clearEverything() {
-    const db = await this.database;
-    const transaction = db.transaction(
-      ["permissions", "requests"],
-      "readwrite",
-    );
-    await Promise.all([
-      transaction.objectStore("permissions").clear(),
-      transaction.objectStore("requests").clear(),
-      transaction.done,
-    ]);
+  rulesSnapshot() {
+    return this.rules.snapshot();
   }
 
   async destroy() {
-    (await this.database).close();
-    await deleteDB(this.name);
+    this.pendingRequests.clear();
+    await this.rules.destroy();
   }
 
-  private async updateRequest(id: string, result: RequestResult) {
-    const db = await this.database;
-    const transaction = db.transaction("requests", "readwrite");
-    const store = transaction.objectStore("requests");
-    const entry = await store.get(id);
-    if (!entry) {
-      await transaction.done;
+  private authorizeRequest(id: string, allowed: boolean) {
+    if (!this.pendingRequests.has(id)) {
       throw new Error(`Unknown guard request ${id}.`);
     }
-    entry.result = result;
-    await store.put(entry);
-    await transaction.done;
+    if (allowed) this.pendingRequests.set(id, true);
+    else this.pendingRequests.delete(id);
   }
 }
 
-function newPermission(
-  permission: Omit<Permission, "id" | "createdAt">,
-): Permission {
-  return {
-    ...permission,
-    id: crypto.randomUUID(),
-    createdAt: Date.now(),
-  };
+class MemoryRuleRepository implements GuardRuleRepository {
+  private readonly permissionsById = new Map<string, Permission>();
+  private readonly blocksById = new Map<string, SiteBlock>();
+  private write = Promise.resolve();
+
+  async load(_source: Source, _session: GraffitiSession) {}
+
+  async isSourceBlocked(source: Source, actor: string) {
+    return [...this.blocksById.values()].some(
+      (block) =>
+        block.source.key === source.key && (!actor || block.actor === actor),
+    );
+  }
+
+  async blockSource(source: Source, actor: string) {
+    const existing = [...this.blocksById.values()].find(
+      (block) => block.source.key === source.key && block.actor === actor,
+    );
+    if (existing) return existing;
+    const block = {
+      id: crypto.randomUUID(),
+      source,
+      actor,
+      createdAt: Date.now(),
+    };
+    this.blocksById.set(block.id, block);
+    return block;
+  }
+
+  async unblockSource(key: string, actor?: string) {
+    for (const [id, block] of this.blocksById) {
+      if (block.source.key === key && (!actor || block.actor === actor)) {
+        this.blocksById.delete(id);
+      }
+    }
+  }
+
+  async permissions(source: Source, actor: string, method: GraffitiMethod) {
+    return [...this.permissionsById.values()].filter(
+      (permission) =>
+        permission.source.key === source.key &&
+        permission.actor === actor &&
+        permission.method === method,
+    );
+  }
+
+  async remember(permission: Omit<Permission, "id" | "createdAt">) {
+    const record = { ...permission, id: crypto.randomUUID(), createdAt: Date.now() };
+    this.permissionsById.set(record.id, record);
+    return record;
+  }
+
+  ensurePermission(
+    permission: Omit<Permission, "id" | "createdAt" | "decision">,
+  ) {
+    const result = this.write.then(async () => {
+      const existing = [...this.permissionsById.values()].find(
+        (candidate) =>
+          candidate.source.key === permission.source.key &&
+          candidate.actor === permission.actor &&
+          candidate.method === permission.method &&
+          candidate.decision === "allow" &&
+          JSON.stringify(candidate.match) === JSON.stringify(permission.match),
+      );
+      return existing ?? this.remember({ ...permission, decision: "allow" });
+    });
+    this.write = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  async revoke(id: string) {
+    this.permissionsById.delete(id);
+    this.blocksById.delete(id);
+  }
+
+  async snapshot() {
+    return {
+      permissions: [...this.permissionsById.values()],
+      siteBlocks: [...this.blocksById.values()],
+    };
+  }
+
+  async destroy() {
+    this.permissionsById.clear();
+    this.blocksById.clear();
+  }
 }
 
 function newRequest(
@@ -319,7 +277,6 @@ function newRequest(
   actor: string,
   method: Request["method"],
   subject: unknown,
-  undoOf?: string,
 ): Request {
   return {
     id: crypto.randomUUID(),
@@ -327,7 +284,5 @@ function newRequest(
     actor,
     method,
     subject,
-    createdAt: Date.now(),
-    ...(undoOf ? { undoOf } : {}),
   };
 }
