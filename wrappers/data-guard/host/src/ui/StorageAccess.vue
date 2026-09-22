@@ -1,7 +1,15 @@
 <script setup lang="ts">
-defineProps<{ busy?: boolean; error?: boolean; onContinue?: () => void }>();
+const props = defineProps<{
+  busy?: boolean;
+  error?: boolean;
+  onContinue?: () => void;
+  setupUrl?: string;
+  setup?: boolean;
+  redirectUrl?: string;
+}>();
 
 const guardHost = window.location.host;
+const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
 </script>
 <template>
   <div class="backdrop">
@@ -9,15 +17,23 @@ const guardHost = window.location.host;
       open
       aria-modal="true"
       aria-labelledby="storage-access-title"
-      aria-describedby="storage-access-description"
+      :aria-describedby="setup ? undefined : 'storage-access-description'"
     >
-      <template v-if="error">
+      <template v-if="setup">
+        <h1 id="storage-access-title">Continue to the app</h1>
+        <a class="button" :href="redirectUrl">Continue to {{ appHost }}</a>
+      </template>
+      <template v-else-if="error">
         <h1 id="storage-access-title">Cookies weren’t allowed</h1>
         <p id="storage-access-description">
           This app needs cookies from <strong>{{ guardHost }}</strong> to work.
-          Check your browser settings or refresh, then try again.
+          Your browser may need you to open it directly before cookies can be
+          allowed.
         </p>
-        <button type="button" @click="onContinue">Try again</button>
+        <a v-if="setupUrl" class="button" :href="setupUrl" target="_top">
+          Continue
+        </a>
+        <button v-else type="button" @click="onContinue">Try again</button>
       </template>
       <template v-else>
         <h1 id="storage-access-title">Allow cookies to continue</h1>
@@ -71,7 +87,8 @@ strong {
   overflow-wrap: anywhere;
 }
 
-button {
+button,
+.button {
   display: block;
   margin: 2rem 0 0 auto;
   border: 1px solid var(--border-color);
@@ -80,9 +97,11 @@ button {
   color: var(--accent-button-text);
   background: var(--accent-button-background);
   font: inherit;
+  text-decoration: none;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled),
+.button:hover {
   border-color: var(--border-color-hover);
   background: var(--accent-button-background-hover);
   text-decoration: none;
@@ -103,8 +122,11 @@ button:disabled {
     padding: 1.25rem;
   }
 
-  button {
+  button,
+  .button {
     width: 100%;
+    box-sizing: border-box;
+    text-align: center;
   }
 }
 </style>

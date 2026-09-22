@@ -28,7 +28,37 @@ it("acknowledges the embedding origin before connecting", async () => {
     { type: "graffiti-guard:connected" },
     "https://app.example",
   );
-  expect(connect).toHaveBeenCalledWith("https://app.example");
+  expect(connect).toHaveBeenCalledWith("https://app.example", undefined);
+});
+
+it("passes through a page URL only for the embedding origin", async () => {
+  const parent = { postMessage: vi.fn() };
+  let onMessage: ((event: MessageEvent) => void) | undefined;
+  vi.stubGlobal("window", {
+    parent,
+    addEventListener: vi.fn((type, listener) => {
+      if (type === "message") onMessage = listener;
+    }),
+  });
+  const { listenToParent } = await import(
+    "../src/bootstrap/protocol.js"
+  );
+  const connect = vi.fn();
+  listenToParent(connect);
+
+  onMessage?.({
+    source: parent,
+    origin: "https://app.example",
+    data: {
+      type: "graffiti-guard:connect",
+      pageUrl: "https://app.example/page",
+    },
+  } as unknown as MessageEvent);
+
+  expect(connect).toHaveBeenCalledWith(
+    "https://app.example",
+    "https://app.example/page",
+  );
 });
 
 it("announces when the parent has made the guard visible", async () => {

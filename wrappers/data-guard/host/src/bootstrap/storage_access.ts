@@ -22,11 +22,11 @@ type StorageDocument = Document & {
 
 let activation: Promise<void> | undefined;
 
-export function activateStorageAccess() {
-  return (activation ??= activate());
+export function activateStorageAccess(pageUrl?: string) {
+  return (activation ??= activate(pageUrl));
 }
 
-async function activate() {
+async function activate(pageUrl?: string) {
   const storageDocument = document as StorageDocument;
   const request = storageDocument.requestStorageAccess?.bind(document);
   if (!request) return;
@@ -37,6 +37,7 @@ async function activate() {
   try {
     if (await storageDocument.hasStorageAccess?.()) return;
   } catch {}
+  const setupUrl = storageSetupUrl(pageUrl);
   await new Promise<void>((resolve) => {
     const onContinue = async () => {
       show(StorageAccess, { busy: true, onContinue });
@@ -46,12 +47,34 @@ async function activate() {
         setVisible(false);
         resolve();
       } catch (error) {
-        show(StorageAccess, { error: true, onContinue });
+        if (setupUrl && openStorageSetup(setupUrl)) return;
+        show(StorageAccess, { error: true, onContinue, setupUrl });
       }
     };
     setVisible(true);
     show(StorageAccess, { onContinue });
   });
+}
+
+function openStorageSetup(setupUrl: string) {
+  try {
+    if (!window.top || window.top === window) return false;
+    window.top.location.href = setupUrl;
+    return true;
+  } catch {
+    // A browser may consume the user activation after showing a native denial.
+    return false;
+  }
+}
+
+function storageSetupUrl(pageUrl?: string) {
+  if (!pageUrl) return;
+  const setupUrl = new URL(window.location.href);
+  setupUrl.search = "";
+  setupUrl.hash = "";
+  setupUrl.searchParams.set("guardStorageSetup", "1");
+  setupUrl.searchParams.set("redirectUrl", pageUrl);
+  return setupUrl.href;
 }
 
 async function requestAndInstall(

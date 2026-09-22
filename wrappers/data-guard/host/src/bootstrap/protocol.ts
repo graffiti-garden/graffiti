@@ -1,6 +1,8 @@
 export const visibilityEvents = new EventTarget();
 
-export function listenToParent(connect: (origin: string) => void) {
+export function listenToParent(
+  connect: (origin: string, pageUrl?: string) => void,
+) {
   let origin: string | undefined;
   window.addEventListener("message", (event) => {
     if (
@@ -26,7 +28,11 @@ export function listenToParent(connect: (origin: string) => void) {
           { type: "graffiti-guard:connected" },
           origin,
         );
-        connect(origin);
+        const pageUrl = URL.parse(event.data.pageUrl);
+        connect(
+          origin,
+          pageUrl?.origin === origin ? pageUrl.href : undefined,
+        );
       }
     } else if (
       origin &&
