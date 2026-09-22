@@ -8,6 +8,10 @@ import {
   isLoginRedirect,
 } from "./bootstrap/login_redirect.js";
 import { listenToParent } from "./bootstrap/protocol.js";
+import {
+  handleStorageSetup,
+  isStorageSetup,
+} from "./bootstrap/storage_setup.js";
 import { activateStorageAccess } from "./bootstrap/storage_access.js";
 import { GuardDB } from "./core/db.js";
 import { GuardedGraffiti } from "./core/graffiti.js";
@@ -27,6 +31,8 @@ const pageUrl = new URL(window.location.href);
 if (window.parent === window) {
   if (isLoginRedirect(pageUrl)) {
     void handleLoginRedirect(pageUrl);
+  } else if (isStorageSetup(pageUrl)) {
+    handleStorageSetup(pageUrl);
   } else {
     const graffiti = new GraffitiDecentralized();
     app.use(GraffitiPlugin, { graffiti });
@@ -34,8 +40,8 @@ if (window.parent === window) {
     handleAudit(pageUrl);
   }
 } else {
-  listenToParent((origin) => {
-    activateStorageAccess().then(() => {
+  listenToParent((origin, pageUrl) => {
+    activateStorageAccess(pageUrl).then(() => {
       const graffiti = new GraffitiDecentralized();
       app.use(GraffitiPlugin, { graffiti });
       ruleStore.activate();

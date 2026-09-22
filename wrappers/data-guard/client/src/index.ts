@@ -69,7 +69,13 @@ export class GraffitiGuarded extends Graffiti {
     iframe.addEventListener("load", () => {
       // Bootstrap the guard with the browser-reported embedding origin, which
       // the RPC handshake verifies internally but does not expose to the host.
-      iframe.contentWindow?.postMessage({ type: "graffiti-guard:connect" }, hostUrl.origin);
+      iframe.contentWindow?.postMessage(
+        {
+          type: "graffiti-guard:connect",
+          pageUrl: window.location.href,
+        },
+        hostUrl.origin,
+      );
     });
     const showConnectionError = () => {
       if (connected || connectionErrorShown) return;
