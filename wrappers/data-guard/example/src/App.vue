@@ -67,13 +67,12 @@ async function logOut() {
       </ul>
       <ul>
         <li>
-          <button
-            type="button"
+          <a
             class="secondary outline"
-            @click="guardedGraffiti.audit(guardedSession)"
+            :href="guardedGraffiti.auditUrl(guardedSession)"
           >
             Audit
-          </button>
+          </a>
         </li>
         <li v-if="session === undefined"><small>Restoring session…</small></li>
         <li v-else-if="session === null">

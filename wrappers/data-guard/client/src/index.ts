@@ -135,7 +135,7 @@ export class GraffitiGuarded extends Graffiti {
         typeof event.data.actor === "string" &&
         Array.isArray(event.data.source)
       ) {
-        this.audit(event.data);
+        window.location.assign(this.auditUrl(event.data));
       }
     };
     window.addEventListener("message", onMessage);
@@ -168,13 +168,16 @@ export class GraffitiGuarded extends Graffiti {
     return Promise.resolve();
   };
 
-  /** Open the host-owned audit panel without exposing audit data to this app. */
-  audit(session?: GraffitiGuardSession) {
+  /** Link to the host-owned audit panel without exposing audit data to this app. */
+  auditUrl(scope?: {
+    actor?: string;
+    source?: GraffitiGuardSourceSegment[];
+  }) {
     const auditUrl = new URL(this.hostUrl);
     auditUrl.searchParams.set("redirectUrl", window.location.href);
-    auditUrl.searchParams.set("source", JSON.stringify(session?.source ?? []));
-    if (session?.actor) auditUrl.searchParams.set("actor", session.actor);
-    window.location.assign(auditUrl.href);
+    auditUrl.searchParams.set("source", JSON.stringify(scope?.source ?? []));
+    if (scope?.actor) auditUrl.searchParams.set("actor", scope.actor);
+    return auditUrl.href;
   }
 
   destroy() {
