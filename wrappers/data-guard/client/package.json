@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-data-guard",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Ask for permission before a site accesses Graffiti",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
