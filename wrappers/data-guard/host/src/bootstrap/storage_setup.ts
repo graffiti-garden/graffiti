@@ -9,7 +9,9 @@ export function isStorageSetup(url: URL) {
 }
 
 export function handleStorageSetup(url: URL) {
-  const redirectUrl = URL.parse(url.searchParams.get("redirectUrl") ?? "");
+  const redirectUrl = parseUrl(
+    new URLSearchParams(url.hash.slice(1)).get("redirectUrl"),
+  );
   if (
     redirectUrl?.protocol !== "http:" &&
     redirectUrl?.protocol !== "https:"
@@ -23,4 +25,11 @@ export function handleStorageSetup(url: URL) {
     `graffiti-guard-storage-setup=1; Max-Age=31536000; Path=/` +
     `; SameSite=${secure ? "None" : "Lax"}${secure}`;
   show(StorageAccess, { setup: true, redirectUrl: redirectUrl.href });
+}
+
+function parseUrl(value: string | null) {
+  if (!value) return;
+  try {
+    return new URL(value);
+  } catch {}
 }

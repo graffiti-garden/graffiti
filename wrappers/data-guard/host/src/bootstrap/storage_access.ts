@@ -1,12 +1,14 @@
 import StorageAccess from "../ui/StorageAccess.vue";
 import { clear, show } from "../ui/show.js";
-import { setVisible } from "./protocol.js";
+import { requestStorageSetup, setVisible } from "./protocol.js";
 
 const storageTypes = {
   cookies: true,
   indexedDB: true,
   localStorage: true,
 } as const;
+
+const storageSetupKey = "graffiti-guard:storage-setup";
 
 type StorageAccessHandle = {
   indexedDB?: IDBFactory;
@@ -27,44 +29,92 @@ export function activateStorageAccess(pageUrl?: string) {
 }
 
 async function activate(pageUrl?: string) {
+  // Keep this reference before Storage Access can replace window.localStorage
+  // with an unpartitioned handle. This transient state belongs to the guard,
+  // partitioned by the embedding site, rather than to the embedding client.
+  const partitionedStorage = getLocalStorage();
+  const storageSetupAttempted =
+    getStorageItem(partitionedStorage, storageSetupKey) === "1";
   const storageDocument = document as StorageDocument;
   const request = storageDocument.requestStorageAccess?.bind(document);
   if (!request) return;
   try {
     await requestAndInstall(request);
+    removeStorageItem(partitionedStorage, storageSetupKey);
     return;
   } catch {}
   try {
-    if (await storageDocument.hasStorageAccess?.()) return;
+    if (await storageDocument.hasStorageAccess?.()) {
+      removeStorageItem(partitionedStorage, storageSetupKey);
+      return;
+    }
   } catch {}
   const setupUrl = storageSetupUrl(pageUrl);
   await new Promise<void>((resolve) => {
     const onContinue = async () => {
-      show(StorageAccess, { busy: true, onContinue });
+      show(StorageAccess, {
+        busy: true,
+        finishing: storageSetupAttempted,
+        onContinue,
+      });
       try {
         await requestAndInstall(request);
+        removeStorageItem(partitionedStorage, storageSetupKey);
         clear();
         setVisible(false);
         resolve();
       } catch (error) {
-        if (setupUrl && openStorageSetup(setupUrl)) return;
-        show(StorageAccess, { error: true, onContinue, setupUrl });
+        if (setupUrl && !storageSetupAttempted) {
+          setStorageItem(partitionedStorage, storageSetupKey, "1");
+          requestStorageSetup(setupUrl);
+          // Older clients ignore the navigation request, so retain the manual
+          // recovery screen as a backward-compatible fallback.
+          window.setTimeout(() => {
+            if (document.visibilityState === "visible") {
+              show(StorageAccess, { error: true, onContinue, setupUrl });
+            }
+          }, 1000);
+          return;
+        }
+        show(StorageAccess, {
+          error: true,
+          finishing: storageSetupAttempted,
+          onContinue,
+          setupUrl,
+        });
       }
     };
     setVisible(true);
-    show(StorageAccess, { onContinue });
+    show(StorageAccess, { finishing: storageSetupAttempted, onContinue });
   });
 }
 
-function openStorageSetup(setupUrl: string) {
+function getLocalStorage() {
   try {
-    if (!window.top || window.top === window) return false;
-    window.top.location.href = setupUrl;
-    return true;
-  } catch {
-    // A browser may consume the user activation after showing a native denial.
-    return false;
-  }
+    return window.localStorage;
+  } catch {}
+}
+
+function getStorageItem(storage: Storage | undefined, key: string) {
+  try {
+    return storage?.getItem(key);
+  } catch {}
+}
+
+function setStorageItem(
+  storage: Storage | undefined,
+  key: string,
+  value: string,
+) {
+  try {
+    storage?.setItem(key, value);
+  } catch {}
+}
+
+function removeStorageItem(storage: Storage | undefined, key: string) {
+  try {
+    storage?.removeItem(key);
+  } catch {}
 }
 
 function storageSetupUrl(pageUrl?: string) {
@@ -73,7 +123,7 @@ function storageSetupUrl(pageUrl?: string) {
   setupUrl.search = "";
   setupUrl.hash = "";
   setupUrl.searchParams.set("guardStorageSetup", "1");
-  setupUrl.searchParams.set("redirectUrl", pageUrl);
+  setupUrl.hash = new URLSearchParams({ redirectUrl: pageUrl }).toString();
   return setupUrl.href;
 }
 
