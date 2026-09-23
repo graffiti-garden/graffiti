@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-data-guard
 
+## 0.2.2
+
+### Patch Changes
+
+- 662af40: Improve cookie setup on browsers with cross-site tracking protection by guiding users through the required confirmation steps, automatically opening first-party setup, and preserving clear retry and recovery paths.
+
 ## 0.2.1
 
 ### Patch Changes
