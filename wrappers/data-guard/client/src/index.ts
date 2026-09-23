@@ -137,6 +137,20 @@ export class GraffitiGuarded extends Graffiti {
           );
         }
       } else if (
+        event.data.type === "graffiti-guard:open-storage-setup" &&
+        typeof event.data.url === "string"
+      ) {
+        try {
+          const setupUrl = new URL(event.data.url);
+          if (
+            setupUrl.origin !== hostUrl.origin ||
+            setupUrl.searchParams.get("guardStorageSetup") !== "1"
+          ) {
+            return;
+          }
+          window.location.assign(setupUrl);
+        } catch {}
+      } else if (
         event.data.type === "graffiti-guard:open-audit" &&
         typeof event.data.actor === "string" &&
         Array.isArray(event.data.source)
