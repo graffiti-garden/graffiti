@@ -1,9 +1,9 @@
 export const visibilityEvents = new EventTarget();
+let parentOrigin: string | undefined;
 
 export function listenToParent(
   connect: (origin: string, pageUrl?: string) => void,
 ) {
-  let origin: string | undefined;
   window.addEventListener("message", (event) => {
     if (
       event.source !== window.parent ||
@@ -17,26 +17,26 @@ export function listenToParent(
     // and RPC messages to the actual embedding origin.
     if (event.data.type === "graffiti-guard:connect") {
       if (!event.origin || event.origin === "null") return;
-      if (origin && origin !== event.origin) return;
-      if (!origin) {
-        origin = event.origin;
+      if (parentOrigin && parentOrigin !== event.origin) return;
+      if (!parentOrigin) {
+        parentOrigin = event.origin;
         // Acknowledge before storage initialization, which may wait for user
         // interaction. The embedder can distinguish a responsive guard from
         // a URL the browser refused to load (for example, an untrusted local
         // HTTPS certificate).
         window.parent.postMessage(
           { type: "graffiti-guard:connected" },
-          origin,
+          parentOrigin,
         );
-        const pageUrl = URL.parse(event.data.pageUrl);
+        const pageUrl = parseUrl(event.data.pageUrl);
         connect(
-          origin,
-          pageUrl?.origin === origin ? pageUrl.href : undefined,
+          parentOrigin,
+          pageUrl?.origin === parentOrigin ? pageUrl.href : undefined,
         );
       }
     } else if (
-      origin &&
-      event.origin === origin &&
+      parentOrigin &&
+      event.origin === parentOrigin &&
       event.data.type === "graffiti-guard:shown"
     ) {
       visibilityEvents.dispatchEvent(new Event("shown"));
@@ -44,19 +44,29 @@ export function listenToParent(
   });
 }
 
+function parseUrl(value: unknown) {
+  if (typeof value !== "string") return;
+  try {
+    return new URL(value);
+  } catch {}
+}
+
 export function setVisible(visible: boolean) {
-  window.parent.postMessage(
-    { type: "graffiti-guard:set-visible", visible },
-    "*",
-  );
+  postToParent({ type: "graffiti-guard:set-visible", visible });
+}
+
+export function requestStorageSetup(url: string) {
+  postToParent({ type: "graffiti-guard:open-storage-setup", url });
 }
 
 export function requestAudit(
   actor: string,
   source: { id: string; name: string }[],
 ) {
-  window.parent.postMessage(
-    { type: "graffiti-guard:open-audit", actor, source },
-    "*",
-  );
+  postToParent({ type: "graffiti-guard:open-audit", actor, source });
+}
+
+function postToParent(message: object) {
+  if (!parentOrigin) return;
+  window.parent.postMessage(message, parentOrigin);
 }

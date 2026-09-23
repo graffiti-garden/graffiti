@@ -6,6 +6,7 @@ const props = defineProps<{
   setupUrl?: string;
   setup?: boolean;
   redirectUrl?: string;
+  finishing?: boolean;
 }>();
 
 const guardHost = window.location.host;
@@ -17,10 +18,15 @@ const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
       open
       aria-modal="true"
       aria-labelledby="storage-access-title"
-      :aria-describedby="setup ? undefined : 'storage-access-description'"
+      aria-describedby="storage-access-description"
     >
       <template v-if="setup">
-        <h1 id="storage-access-title">Continue to the app</h1>
+        <h1 id="storage-access-title">Continue cookie setup</h1>
+        <p id="storage-access-description">
+          For your privacy, your browser requires this extra step before
+          allowing <strong>{{ appHost }}</strong> to use cookies from
+          <strong>{{ guardHost }}</strong>.
+        </p>
         <a class="button" :href="redirectUrl">Continue to {{ appHost }}</a>
       </template>
       <template v-else-if="error">
@@ -30,19 +36,35 @@ const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
           Your browser may need you to open it directly before cookies can be
           allowed.
         </p>
-        <a v-if="setupUrl" class="button" :href="setupUrl" target="_top">
+        <template v-if="finishing">
+          <button type="button" @click="onContinue">Try again</button>
+          <a
+            v-if="setupUrl"
+            class="recovery-link"
+            :href="setupUrl"
+            target="_top"
+          >
+            Restart cookie setup
+          </a>
+        </template>
+        <a v-else-if="setupUrl" class="button" :href="setupUrl" target="_top">
           Continue
         </a>
         <button v-else type="button" @click="onContinue">Try again</button>
       </template>
       <template v-else>
-        <h1 id="storage-access-title">Allow cookies to continue</h1>
-        <p id="storage-access-description">
+        <h1 id="storage-access-title">
+          {{ finishing ? "One last confirmation" : "Allow cookies to continue" }}
+        </h1>
+        <p v-if="finishing" id="storage-access-description">
+          Your browser will ask for permission next. Choose Allow to finish.
+        </p>
+        <p v-else id="storage-access-description">
           This site is built on the <a href="https://graffiti.garden" target="_blank">Graffiti</a> infrastructure.
           To use the app, you must allow cookies from <strong>{{ guardHost }}</strong>.
         </p>
         <button type="button" :disabled="busy" @click="onContinue">
-          {{ busy ? "Waiting for your browser…" : "Allow cookies and continue" }}
+          {{ busy ? "Waiting for your browser…" : finishing ? "Continue" : "Allow cookies and continue" }}
         </button>
       </template>
     </dialog>
@@ -112,6 +134,13 @@ button:disabled {
   opacity: 0.7;
 }
 
+.recovery-link {
+  display: block;
+  width: max-content;
+  margin: 1rem 0 0 auto;
+  font-size: 0.9em;
+}
+
 @media (max-width: 34rem) {
   .backdrop {
     padding: 0.75rem;
@@ -126,6 +155,11 @@ button:disabled {
   .button {
     width: 100%;
     box-sizing: border-box;
+    text-align: center;
+  }
+
+  .recovery-link {
+    width: 100%;
     text-align: center;
   }
 }
