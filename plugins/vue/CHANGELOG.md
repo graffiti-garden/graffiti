@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-vue
 
+## 1.3.1
+
+### Patch Changes
+
+- e3d3846: Expose errors from Vue object, media, and identity lookups through composable refs and component slots instead of console logs. Failed lookups resolve to `null`; not-found results leave `error` as `null`.
+
 ## 1.3.0
 
 ### Minor Changes
