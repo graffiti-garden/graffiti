@@ -16,11 +16,12 @@ const props = defineProps<{
 defineSlots<{
     default?(props: {
         media: (GraffitiMedia & { dataUrl: string }) | null | undefined;
+        error: Error | null;
         poll: () => Promise<void>;
     }): any;
 }>();
 
-const { media, poll } = useGraffitiGetMedia(
+const { media, error, poll } = useGraffitiGetMedia(
     toRef(props, "url"),
     toRef(props, "accept"),
     toRef(props, "session"),
@@ -34,7 +35,7 @@ function downloadMedia() {
 </script>
 
 <template>
-    <slot :media="media" :poll="poll">
+    <slot :media="media" :error="error" :poll="poll">
         <img
             v-if="media?.data.type.startsWith('image/')"
             :src="media.dataUrl"
@@ -65,6 +66,9 @@ function downloadMedia() {
             :alt="`PDF by ${media.actor}`"
         />
         <button v-else-if="media" @click="downloadMedia">Download media</button>
+        <p v-else-if="error">
+            <em>Media could not be loaded</em>
+        </p>
         <p v-else-if="media === null">
             <em>Media not found</em>
         </p>

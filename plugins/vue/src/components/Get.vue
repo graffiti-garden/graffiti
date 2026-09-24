@@ -18,11 +18,12 @@ const props = defineProps<{
 defineSlots<{
     default?(props: {
         object: GraffitiObject<Schema> | undefined | null;
+        error: Error | null;
         poll: () => Promise<void>;
     }): any;
 }>();
 
-const { object, poll } = useGraffitiGet<Schema>(
+const { object, error, poll } = useGraffitiGet<Schema>(
     toRef(() => props.url),
     toRef(() => props.schema),
     toRef(() => props.session),
@@ -30,7 +31,8 @@ const { object, poll } = useGraffitiGet<Schema>(
 </script>
 
 <template>
-    <slot :object="object" :poll="poll">
-        <ObjectInfo :object="object" />
+    <slot :object="object" :error="error" :poll="poll">
+        <p v-if="error"><em>Graffiti object could not be loaded</em></p>
+        <ObjectInfo v-else :object="object" />
     </slot>
 </template>

@@ -7,6 +7,7 @@ export function useResolveString(
   resolve: (input: string) => Promise<string>,
 ) {
   const output = ref<string | null | undefined>(undefined);
+  const error = ref<Error | null>(null);
 
   watch(
     () => toValue(input),
@@ -15,6 +16,7 @@ export function useResolveString(
       onInvalidate(() => {
         active = false;
       });
+      error.value = null;
       if (!input) {
         output.value = input;
         return;
@@ -35,7 +37,7 @@ export function useResolveString(
             (err instanceof Error && err.name === "GraffitiErrorNotFound")
           )
         ) {
-          console.error(err);
+          error.value = err instanceof Error ? err : new Error(String(err));
         }
       }
     },
@@ -44,6 +46,7 @@ export function useResolveString(
 
   return {
     output,
+    error,
   };
 }
 

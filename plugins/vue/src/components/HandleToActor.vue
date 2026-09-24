@@ -6,11 +6,12 @@ import { useGraffitiHandleToActor } from "../composables/handle-to-actor";
 const props = defineProps<{ handle: string }>();
 const handle = toRef(props, "handle");
 
-const { actor } = useGraffitiHandleToActor(handle);
+const { actor, error } = useGraffitiHandleToActor(handle);
 </script>
 
 <template>
-    <slot :actor="actor">
-        <span> {{ displayOutput(actor) }} </span>
+    <slot :actor="actor" :error="error">
+        <span v-if="error">Could not load account</span>
+        <span v-else>{{ displayOutput(actor) }}</span>
     </slot>
 </template>
