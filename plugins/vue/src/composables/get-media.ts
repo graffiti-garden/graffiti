@@ -24,10 +24,11 @@ import { useGraffitiSynchronize } from "../globals";
  * If you need deep reactivity, wrap your argument in a getter.
  *
  * @returns
- * - `media`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
- * the retrieved Graffiti media, if it exists. The media will include a `dataUrl` property
- * that can be used to directly display the media in a template. If the media has been deleted,
- * the result is `null`. If the media is still being fetched, the result is `undefined`.
+ * - `media`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) containing
+ * the retrieved media, `undefined` while loading, or `null` if not found or the fetch fails.
+ * Retrieved media includes a `dataUrl` for display in a template.
+ * - `error`: A ref containing the fetch error for failures other than not found,
+ * or `null` otherwise.
  * - `poll`: A function that can be called to manually check if the media has changed.
  */
 export function useGraffitiGetMedia(
@@ -36,12 +37,14 @@ export function useGraffitiGetMedia(
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ): {
   media: Ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>;
+  error: Ref<Error | null>;
   poll: () => Promise<void>;
 } {
   const graffiti = useGraffitiSynchronize();
   const media = ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>(
     undefined,
   );
+  const error = ref<Error | null>(null);
 
   // The "poll counter" is a hack to get
   // watch to refresh
@@ -75,6 +78,7 @@ export function useGraffitiGetMedia(
         URL.revokeObjectURL(media.value.dataUrl);
       }
       media.value = undefined;
+      error.value = null;
 
       let active = true;
       onInvalidate(() => {
@@ -94,13 +98,14 @@ export function useGraffitiGetMedia(
       } catch (e) {
         if (!active) return;
         if (
-          e instanceof GraffitiErrorNotFound ||
-          (e instanceof Error && e.name === "GraffitiErrorNotFound")
+          !(
+            e instanceof GraffitiErrorNotFound ||
+            (e instanceof Error && e.name === "GraffitiErrorNotFound")
+          )
         ) {
-          media.value = null;
-        } else {
-          console.error(e);
+          error.value = e instanceof Error ? e : new Error(String(e));
         }
+        media.value = null;
       } finally {
         resolvePoll();
       }
@@ -117,6 +122,7 @@ export function useGraffitiGetMedia(
 
   return {
     media,
+    error,
     poll,
   };
 }

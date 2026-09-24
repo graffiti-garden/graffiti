@@ -26,9 +26,10 @@ import { useGraffitiSynchronize } from "../globals";
  * If you need deep reactivity, wrap your argument in a getter.
  *
  * @returns
- * - `object`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
- * the retrieved Graffiti object, if it exists. If the object cannot be found,
- * the result is `null`. If the object is still being fetched, the result is `undefined`.
+ * - `object`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) containing
+ * the retrieved object, `undefined` while loading, or `null` if not found or the fetch fails.
+ * - `error`: A ref containing the fetch error for failures other than not found,
+ * or `null` otherwise.
  * - `poll`: A function that can be called to manually check if the object has changed.
  */
 export function useGraffitiGet<Schema extends JSONSchema>(
@@ -37,11 +38,13 @@ export function useGraffitiGet<Schema extends JSONSchema>(
   session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
 ): {
   object: Ref<GraffitiObject<Schema> | null | undefined>;
+  error: Ref<Error | null>;
   poll: () => Promise<void>;
 } {
   const graffiti = useGraffitiSynchronize();
 
   const object: Ref<GraffitiObject<Schema> | null | undefined> = ref(undefined);
+  const error = ref<Error | null>(null);
   let poll_ = async () => {};
   const poll = async () => poll_();
 
@@ -59,6 +62,7 @@ export function useGraffitiGet<Schema extends JSONSchema>(
 
       // Reset the object value (undefined = "loading")
       object.value = undefined;
+      error.value = null;
 
       // Initialize a new iterator
       const myIterator = graffiti.synchronizeGet<Schema>(...args);
@@ -74,13 +78,20 @@ export function useGraffitiGet<Schema extends JSONSchema>(
       // Listen to the iterator in the background,
       // it will receive results from polling below
       (async () => {
-        for await (const result of myIterator) {
-          if (!active) return;
-          if (result.tombstone) {
-            object.value = null;
-          } else {
-            object.value = result.object;
+        try {
+          for await (const result of myIterator) {
+            if (!active) return;
+            error.value = null;
+            if (result.tombstone) {
+              object.value = null;
+            } else {
+              object.value = result.object;
+            }
           }
+        } catch (e) {
+          if (!active) return;
+          object.value = null;
+          error.value = e instanceof Error ? e : new Error(String(e));
         }
       })();
 
@@ -89,17 +100,21 @@ export function useGraffitiGet<Schema extends JSONSchema>(
       poll_ = async () => {
         if (polling || !active) return;
         polling = true;
+        if (error.value) object.value = undefined;
+        error.value = null;
         try {
           await graffiti.get<Schema>(...args);
         } catch (e) {
+          if (!active) return;
           if (
             !(
               e instanceof GraffitiErrorNotFound ||
               (e instanceof Error && e.name === "GraffitiErrorNotFound")
             )
           ) {
-            console.error(e);
+            error.value = e instanceof Error ? e : new Error(String(e));
           }
+          object.value = null;
         }
 
         // Wait for sync to receive the update
@@ -113,6 +128,7 @@ export function useGraffitiGet<Schema extends JSONSchema>(
 
   return {
     object,
+    error,
     poll,
   };
 }

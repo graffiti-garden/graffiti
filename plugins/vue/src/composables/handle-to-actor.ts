@@ -18,15 +18,16 @@ import { useResolveString } from "./resolve-string";
  * If you need deep reactivity, wrap your argument in a getter.
  *
  * @returns
- * - `actor`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) that contains
- * the retrieved actor, if it exists. If the actor cannot be found, the result
- * is `null`. If the actor is still being fetched, the result is `undefined`.
+ * - `actor`: A [ref](https://vuejs.org/api/reactivity-core.html#ref) containing
+ * the retrieved actor, `undefined` while loading, or `null` if not found or the lookup fails.
+ * - `error`: A ref containing the lookup error for failures other than not found,
+ * or `null` otherwise.
  */
 export function useGraffitiHandleToActor(handle: MaybeRefOrGetter<string>) {
   const graffiti = useGraffiti();
-  const { output } = useResolveString(
+  const { output, error } = useResolveString(
     handle,
     graffiti.handleToActor.bind(graffiti),
   );
-  return { actor: output };
+  return { actor: output, error };
 }
