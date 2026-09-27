@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-vue
 
+## 1.4.0
+
+### Minor Changes
+
+- 4f190db: Expose whole-discovery failures through `error`, keep the initial loading state until discovery completes, and make overlapping Get and Discover polls wait for the active poll.
+
 ## 1.3.1
 
 ### Patch Changes
