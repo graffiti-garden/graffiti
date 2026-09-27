@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-vue
 
+## 1.4.1
+
+### Patch Changes
+
+- 7196fe2: Use a native download link for media fallback instead of navigating the document to its blob URL.
+
 ## 1.4.0
 
 ### Minor Changes
