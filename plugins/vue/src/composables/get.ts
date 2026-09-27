@@ -31,6 +31,7 @@ import { useGraffitiSynchronize } from "../globals";
  * - `error`: A ref containing the fetch error for failures other than not found,
  * or `null` otherwise.
  * - `poll`: A function that can be called to manually check if the object has changed.
+ * If a poll is already running, it waits for that poll.
  */
 export function useGraffitiGet<Schema extends JSONSchema>(
   url: MaybeRefOrGetter<GraffitiObjectUrl | string>,
@@ -96,32 +97,36 @@ export function useGraffitiGet<Schema extends JSONSchema>(
       })();
 
       // Then set up a polling function
-      let polling = false;
-      poll_ = async () => {
-        if (polling || !active) return;
-        polling = true;
-        if (error.value) object.value = undefined;
-        error.value = null;
-        try {
-          await graffiti.get<Schema>(...args);
-        } catch (e) {
-          if (!active) return;
-          if (
-            !(
-              e instanceof GraffitiErrorNotFound ||
-              (e instanceof Error && e.name === "GraffitiErrorNotFound")
-            )
-          ) {
-            error.value = e instanceof Error ? e : new Error(String(e));
+      let pollPromise: Promise<void> | undefined;
+      poll_ = () => {
+        if (!active) return Promise.resolve();
+        if (pollPromise) return pollPromise;
+        pollPromise = (async () => {
+          if (error.value) object.value = undefined;
+          error.value = null;
+          try {
+            await graffiti.get<Schema>(...args);
+          } catch (e) {
+            if (!active) return;
+            if (
+              !(
+                e instanceof GraffitiErrorNotFound ||
+                (e instanceof Error && e.name === "GraffitiErrorNotFound")
+              )
+            ) {
+              error.value = e instanceof Error ? e : new Error(String(e));
+            }
+            object.value = null;
           }
-          object.value = null;
-        }
 
-        // Wait for sync to receive the update
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        polling = false;
+          // Wait for sync to receive the update
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        })().finally(() => {
+          pollPromise = undefined;
+        });
+        return pollPromise;
       };
-      poll();
+      void poll();
     },
     { immediate: true },
   );
