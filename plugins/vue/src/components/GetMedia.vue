@@ -26,12 +26,6 @@ const { media, error, poll } = useGraffitiGetMedia(
     toRef(props, "accept"),
     toRef(props, "session"),
 );
-
-function downloadMedia() {
-    if (media.value) {
-        window.location.href = media.value.dataUrl;
-    }
-}
 </script>
 
 <template>
@@ -65,7 +59,7 @@ function downloadMedia() {
             type="application/pdf"
             :alt="`PDF by ${media.actor}`"
         />
-        <button v-else-if="media" @click="downloadMedia">Download media</button>
+        <a v-else-if="media" :href="media.dataUrl" download>Download media</a>
         <p v-else-if="error">
             <em>Media could not be loaded</em>
         </p>
