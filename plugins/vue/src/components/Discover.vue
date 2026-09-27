@@ -18,12 +18,13 @@ const props = defineProps<{
 defineSlots<{
     default?(props: {
         objects: GraffitiObject<Schema>[];
+        error: Error | null;
         poll: () => Promise<void>;
         isFirstPoll: boolean;
     }): any;
 }>();
 
-const { objects, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
+const { objects, error, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
     toRef(() => props.channels),
     toRef(() => props.schema),
     toRef(() => props.session),
@@ -32,8 +33,9 @@ const { objects, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
 </script>
 
 <template>
-    <slot :objects="objects" :poll="poll" :isFirstPoll="isFirstPoll">
-        <ul v-if="!isFirstPoll">
+    <slot :objects="objects" :error="error" :poll="poll" :isFirstPoll="isFirstPoll">
+        <p v-if="error"><em>Graffiti discovery failed; retrying...</em></p>
+        <ul v-else-if="!isFirstPoll">
             <li v-for="object in objects" :key="object.url">
                 <ObjectInfo :object="object" />
             </li>
