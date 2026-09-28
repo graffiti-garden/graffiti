@@ -1,5 +1,11 @@
 # @graffiti-garden/implementation-local
 
+## 1.3.1
+
+### Patch Changes
+
+- c445cd7: Use an HTML dialog for local login while retaining the OAuth-like page reload.
+
 ## 1.3.0
 
 ### Minor Changes
