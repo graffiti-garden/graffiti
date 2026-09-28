@@ -255,7 +255,13 @@ export class GraffitiSynchronize implements Graffiti {
     waitForListeners = false,
   ) {
     for (const callback of this.callbacks) {
-      callback(objectUpdate);
+      try {
+        callback(objectUpdate);
+      } catch (error) {
+        // A broken listener must not make an already completed Graffiti
+        // operation appear to have failed or prevent other listeners updating.
+        console.error("Graffiti synchronize listener failed", error);
+      }
     }
     if (waitForListeners) {
       // Wait for the listeners to receive
