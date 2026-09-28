@@ -1,4 +1,4 @@
-import { it, expect, describe, assert, beforeAll } from "vitest";
+import { it, expect, describe, assert, beforeAll, vi } from "vitest";
 import {
   GraffitiErrorNotFound,
   type GraffitiSession,
@@ -227,6 +227,40 @@ describe.concurrent("synchronizeDiscover", () => {
     expect(allowedResult.value.object.allowed).toEqual([session2.actor]);
     expect(allowedResult.value.object.channels).toEqual(channels);
   });
+});
+
+it("a broken synchronization listener does not reject a completed post or block others", async () => {
+  class TestSynchronize extends GraffitiSynchronize {
+    addBrokenListener() {
+      const callback = () => { throw new TypeError("broken listener"); };
+      this.callbacks.add(callback);
+      return () => this.callbacks.delete(callback);
+    }
+  }
+  const graffiti = new TestSynchronize(new GraffitiLocal());
+  const object = randomPostObject();
+  const removeBad = graffiti.addBrokenListener();
+  const good = graffiti.synchronizeDiscover(object.channels, {});
+  const goodNext = good.next();
+  const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+  try {
+    const posted = await graffiti.post<{}>(object, await useSession1());
+    const received = await goodNext;
+    assert(!received.done && !received.value.tombstone);
+    expect(received.value.object.url).toBe(posted.url);
+    expect(logged).toHaveBeenCalledWith(
+      "Graffiti synchronize listener failed",
+      expect.any(TypeError),
+    );
+    await expect(graffiti.get(posted, {})).resolves.toMatchObject({
+      url: posted.url,
+    });
+  } finally {
+    removeBad();
+    await good.return({ cursor: "" });
+    logged.mockRestore();
+  }
 });
 
 describe.concurrent("synchronizeGet", () => {
