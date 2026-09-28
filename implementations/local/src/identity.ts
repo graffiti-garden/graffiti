@@ -14,8 +14,8 @@ const DID_LOCAL_PREFIX = "did:local:";
  * It is completely insecure and should only be used
  * for testing and demonstrations.
  *
- * It uses `localStorage` to store login state and
- * window prompts rather than an oauth flow for log in.
+ * It uses `localStorage` to store login state and a simple
+ * dialog rather than an oauth flow for log in.
  * It can be used in node.js but will not persist
  * login state and a proposed username must be provided.
  */
@@ -88,8 +88,20 @@ export class GraffitiLocalIdentity {
     let handle = actor ? await this.actorToHandle(actor) : undefined;
 
     if (typeof window !== "undefined") {
-      const response = window.prompt("Choose a username to log in.", handle);
-      handle = response ?? undefined;
+      const dialog = document.createElement("dialog");
+      dialog.innerHTML = `<form method="dialog"><label>Username <input required></label> <button value="login">Log in</button> <button value="cancel" formnovalidate>Cancel</button></form>`;
+      const input = dialog.querySelector("input")!;
+      input.value = handle ?? "";
+      document.body.append(dialog);
+      handle = await new Promise<string | undefined>((resolve) => {
+        dialog.addEventListener("close", () => {
+          const chosen = dialog.returnValue === "login" ? input.value.trim() : "";
+          dialog.remove();
+          resolve(chosen || undefined);
+        }, { once: true });
+        dialog.showModal();
+        input.focus();
+      });
     }
 
     if (!handle) {
