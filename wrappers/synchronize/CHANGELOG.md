@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-synchronize
 
+## 1.3.1
+
+### Patch Changes
+
+- 10d32c3: Keep completed Graffiti operations successful when a synchronization listener throws, while continuing to update other listeners.
+
 ## 1.3.0
 
 ### Minor Changes
