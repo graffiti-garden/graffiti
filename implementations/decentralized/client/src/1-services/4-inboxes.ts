@@ -138,6 +138,7 @@ export class Inboxes {
     body: Uint8Array<ArrayBuffer> | undefined,
     inboxToken?: string | null,
     cursor?: string,
+    signal?: AbortSignal,
   ) {
     const response = await fetchWithErrorHandling(
       `${inboxUrl}/${type}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
@@ -152,6 +153,7 @@ export class Inboxes {
             : {}),
         },
         body,
+        signal,
       },
     );
     const retryAfterHeader = response.headers.get("Retry-After");
@@ -439,22 +441,38 @@ export class Inboxes {
       // Update how many we've seen
       cacheNumSeen += labeledMessages.length;
 
+      // Fetch the next page while the caller processes the current page.
+      const prefetchController = new AbortController();
+      // Otherwise get another response (after waiting for rate-limit)
+      const nextPage = hasMore
+        ? waitFor(waitTil)
+            .then(() => this.fetchMessageBatch(
+              inboxUrl,
+              type,
+              undefined, // Body is never past the first time
+              inboxToken,
+              cursor,
+              prefetchController.signal,
+            ))
+            // A consumer may stop before awaiting this request.
+            .then((value) => ({ value }), (error) => ({ error }))
+        : null;
+
       // Return the values
-      for (const m of labeledMessages) yield m;
+      let consumedPage = false;
+      try {
+        for (const m of labeledMessages) yield m;
+        consumedPage = true;
+      } finally {
+        if (!consumedPage) prefetchController.abort();
+      }
 
       if (!hasMore) break;
 
-      // Otherwise get another response (after waiting for rate-limit)
-      await waitFor(waitTil);
-      const out = await this.fetchMessageBatch(
-        inboxUrl,
-        type,
-        undefined, // Body is never past the first time
-        inboxToken,
-        cursor,
-      );
-      response = out.response;
-      waitTil = out.waitTil;
+      const out = await nextPage!;
+      if ("error" in out) throw out.error;
+      response = out.value.response;
+      waitTil = out.value.waitTil;
     }
 
     const outputCursor: infer_<typeof CursorSchema> = {
