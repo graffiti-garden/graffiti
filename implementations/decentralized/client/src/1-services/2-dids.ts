@@ -14,6 +14,8 @@ export class DecentralizedIdentifiers {
     { cache: true },
   );
 
+  protected readonly inFlight = new Map<string, Promise<DIDDocument>>();
+
   async resolve(did: string): Promise<DIDDocument> {
     if (
       !Object.keys(this.methods).some((method) =>
@@ -23,11 +25,21 @@ export class DecentralizedIdentifiers {
       throw new Error(`Unrecognized DID method: ${did}`);
     }
 
-    const { didDocument } = await this.resolver.resolve(did);
-    if (!didDocument) {
-      throw new GraffitiErrorNotFound(`DID not found: ${did}`);
-    }
+    const inFlight = this.inFlight.get(did);
+    if (inFlight) return inFlight;
 
-    return didDocument;
+    const resolution = this.resolver.resolve(did).then(({ didDocument }) => {
+      if (!didDocument) {
+        throw new GraffitiErrorNotFound(`DID not found: ${did}`);
+      }
+      return didDocument;
+    });
+    this.inFlight.set(did, resolution);
+
+    try {
+      return await resolution;
+    } finally {
+      this.inFlight.delete(did);
+    }
   }
 }
