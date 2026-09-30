@@ -24,7 +24,6 @@ export function didTests() {
 
     test("coalesces simultaneous resolutions", async () => {
       const dids = new DecentralizedIdentifiers();
-      const resolver = (dids as unknown as { resolver: Resolver }).resolver;
       const did = "did:web:example.com";
       const found: DIDResolutionResult = {
         didDocument: { id: did },
@@ -32,9 +31,10 @@ export function didTests() {
         didResolutionMetadata: {},
       };
       let finish!: (result: DIDResolutionResult) => void;
-      const lookup = vi.spyOn(resolver, "resolve").mockImplementation(
+      const lookup = vi.fn<Resolver["resolve"]>().mockImplementation(
         () => new Promise((resolve) => { finish = resolve; }),
       );
+      Object.defineProperty(dids, "resolver", { value: { resolve: lookup } });
 
       const first = dids.resolve(did);
       const second = dids.resolve(did);
@@ -53,20 +53,20 @@ export function didTests() {
 
     test("retries a failed resolution", async () => {
       const dids = new DecentralizedIdentifiers();
-      const resolver = (dids as unknown as { resolver: Resolver }).resolver;
       const did = "did:web:example.com";
       const found: DIDResolutionResult = {
         didDocument: { id: did },
         didDocumentMetadata: {},
         didResolutionMetadata: {},
       };
-      const lookup = vi.spyOn(resolver, "resolve")
+      const lookup = vi.fn<Resolver["resolve"]>()
         .mockResolvedValueOnce({
           didDocument: null,
           didDocumentMetadata: {},
           didResolutionMetadata: { error: "notFound" },
         })
         .mockResolvedValueOnce(found);
+      Object.defineProperty(dids, "resolver", { value: { resolve: lookup } });
 
       const failed = await Promise.allSettled([
         dids.resolve(did),
