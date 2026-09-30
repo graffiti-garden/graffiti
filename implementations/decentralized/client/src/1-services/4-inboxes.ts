@@ -416,13 +416,11 @@ export class Inboxes {
       );
 
       // First cache the messages with their labels
-      await Promise.all(
-        labeledMessages.map((m: LabeledMessageBase) =>
-          cache.messages.set(
-            getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
-            m,
-          ),
-        ),
+      await cache.messages.setMany(
+        labeledMessages.map((m: LabeledMessageBase) => [
+          getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
+          m,
+        ]),
       );
       // Then store all the messageids
       messageIds = [
@@ -637,6 +635,7 @@ type Cache = {
   messages: {
     get(k: string): Promise<LabeledMessageBase | null | undefined>;
     set(k: string, value: LabeledMessageBase | null): Promise<void>;
+    setMany(entries: [string, LabeledMessageBase][]): Promise<void>;
     del(k: string): Promise<void>;
   };
   messageIds: {
@@ -702,6 +701,14 @@ async function createCache(): Promise<Cache> {
         set: async (k, v) => {
           await db.put("m", v, k);
         },
+        setMany: async (entries) => {
+          if (entries.length === 0) return;
+          const tx = db.transaction("m", "readwrite");
+          await Promise.all([
+            ...entries.map(([k, v]) => tx.store.put(v, k)),
+            tx.done,
+          ]);
+        },
         del: (k) => db.delete("m", k),
       },
       messageIds: {
@@ -730,6 +737,9 @@ async function createCache(): Promise<Cache> {
     messages: {
       get: async (k) => m.get(k),
       set: async (k, v) => void m.set(k, v),
+      setMany: async (entries) => {
+        for (const [k, v] of entries) m.set(k, v);
+      },
       del: async (k) => void m.delete(k),
     },
     messageIds: {
