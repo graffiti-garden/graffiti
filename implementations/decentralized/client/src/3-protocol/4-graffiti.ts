@@ -133,7 +133,7 @@ export interface GraffitiDecentralizedOptions {
   defaultInboxEndpoints?: string[];
 }
 
-const CONCURRENCY = 64;
+const CONCURRENCY = 128;
 const LOCAL_STORAGE_REMEMBERED_HANDLE_KEY = "graffiti-login-remembered-handle";
 
 export class GraffitiDecentralized implements Graffiti {
