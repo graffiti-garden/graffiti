@@ -11,6 +11,14 @@ database_id = "9b0f6062-5479-4d8e-8fba-5322a150b690"
 binding = "STORAGE"
 bucket_name = "graffiti-bucket"
 
+[[durable_objects.bindings]]
+name = "BUCKETS"
+class_name = "StorageBucketDO"
+
+[[migrations]]
+tag = "storage-buckets-v1"
+new_sqlite_classes = ["StorageBucketDO"]
+
 [vars]
 BASE_HOST = "graffiti.actor"
 

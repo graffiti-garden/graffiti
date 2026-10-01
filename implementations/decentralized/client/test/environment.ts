@@ -54,6 +54,7 @@ export class DecentralizedTestEnvironment {
     await build({
       bundle: true,
       entryPoints: [join(SERVER_ROOT, "worker/index.ts")],
+      external: ["cloudflare:workers"],
       format: "esm",
       outfile: workerBundle,
       platform: "browser",
@@ -65,6 +66,7 @@ export class DecentralizedTestEnvironment {
       bindings: { BASE_HOST: "localhost:5173" },
       compatibilityDate: "2025-12-26",
       d1Databases: { DB: "graffiti-test-db" },
+      durableObjects: { BUCKETS: { className: "StorageBucketDO", useSQLite: true } },
       modules: true,
       r2Buckets: { STORAGE: "graffiti-test-storage" },
       script,
