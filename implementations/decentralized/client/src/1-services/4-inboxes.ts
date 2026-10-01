@@ -138,6 +138,7 @@ export class Inboxes {
     body: Uint8Array<ArrayBuffer> | undefined,
     inboxToken?: string | null,
     cursor?: string,
+    signal?: AbortSignal,
   ) {
     const response = await fetchWithErrorHandling(
       `${inboxUrl}/${type}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
@@ -152,6 +153,7 @@ export class Inboxes {
             : {}),
         },
         body,
+        signal,
       },
     );
     const retryAfterHeader = response.headers.get("Retry-After");
@@ -414,13 +416,11 @@ export class Inboxes {
       );
 
       // First cache the messages with their labels
-      await Promise.all(
-        labeledMessages.map((m: LabeledMessageBase) =>
-          cache.messages.set(
-            getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
-            m,
-          ),
-        ),
+      await cache.messages.setMany(
+        labeledMessages.map((m: LabeledMessageBase) => [
+          getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
+          m,
+        ]),
       );
       // Then store all the messageids
       messageIds = [
@@ -439,22 +439,38 @@ export class Inboxes {
       // Update how many we've seen
       cacheNumSeen += labeledMessages.length;
 
+      // Fetch the next page while the caller processes the current page.
+      const prefetchController = new AbortController();
+      // Otherwise get another response (after waiting for rate-limit)
+      const nextPage = hasMore
+        ? waitFor(waitTil)
+            .then(() => this.fetchMessageBatch(
+              inboxUrl,
+              type,
+              undefined, // Body is never past the first time
+              inboxToken,
+              cursor,
+              prefetchController.signal,
+            ))
+            // A consumer may stop before awaiting this request.
+            .then((value) => ({ value }), (error) => ({ error }))
+        : null;
+
       // Return the values
-      for (const m of labeledMessages) yield m;
+      let consumedPage = false;
+      try {
+        for (const m of labeledMessages) yield m;
+        consumedPage = true;
+      } finally {
+        if (!consumedPage) prefetchController.abort();
+      }
 
       if (!hasMore) break;
 
-      // Otherwise get another response (after waiting for rate-limit)
-      await waitFor(waitTil);
-      const out = await this.fetchMessageBatch(
-        inboxUrl,
-        type,
-        undefined, // Body is never past the first time
-        inboxToken,
-        cursor,
-      );
-      response = out.response;
-      waitTil = out.waitTil;
+      const out = await nextPage!;
+      if ("error" in out) throw out.error;
+      response = out.value.response;
+      waitTil = out.value.waitTil;
     }
 
     const outputCursor: infer_<typeof CursorSchema> = {
@@ -619,6 +635,7 @@ type Cache = {
   messages: {
     get(k: string): Promise<LabeledMessageBase | null | undefined>;
     set(k: string, value: LabeledMessageBase | null): Promise<void>;
+    setMany(entries: [string, LabeledMessageBase][]): Promise<void>;
     del(k: string): Promise<void>;
   };
   messageIds: {
@@ -684,6 +701,14 @@ async function createCache(): Promise<Cache> {
         set: async (k, v) => {
           await db.put("m", v, k);
         },
+        setMany: async (entries) => {
+          if (entries.length === 0) return;
+          const tx = db.transaction("m", "readwrite");
+          await Promise.all([
+            ...entries.map(([k, v]) => tx.store.put(v, k)),
+            tx.done,
+          ]);
+        },
         del: (k) => db.delete("m", k),
       },
       messageIds: {
@@ -712,6 +737,9 @@ async function createCache(): Promise<Cache> {
     messages: {
       get: async (k) => m.get(k),
       set: async (k, v) => void m.set(k, v),
+      setMany: async (entries) => {
+        for (const [k, v] of entries) m.set(k, v);
+      },
       del: async (k) => void m.delete(k),
     },
     messageIds: {
