@@ -1,9 +1,12 @@
 import type { Context } from "hono";
 
+import type { StorageBucketDO } from "./api/storage-buckets/bucket-do";
+
 export type Bindings = {
   ASSETS: Fetcher;
   DB: D1Database;
   STORAGE: R2Bucket;
+  BUCKETS: DurableObjectNamespace<StorageBucketDO>;
   BASE_HOST: string;
 };
 

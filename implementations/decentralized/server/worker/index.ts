@@ -7,6 +7,8 @@ import indexers from "./api/inboxes/index";
 import handleDids from "./app/handles/dids";
 import { cors } from "hono/cors";
 
+export { StorageBucketDO } from "./api/storage-buckets/bucket-do";
+
 const router = new Hono<{ Bindings: Bindings }>();
 
 const noCors = cors({

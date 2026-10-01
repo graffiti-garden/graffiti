@@ -53,51 +53,27 @@ async function verifyBucketControl(
   }
 }
 
-function getBucketKey(bucketId: string, key: string) {
-  return `${bucketId}/${key}`;
+function bucket(context: Context<{ Bindings: Bindings }>, bucketId: string) {
+  return context.env.BUCKETS.get(context.env.BUCKETS.idFromName(bucketId));
 }
 
 export async function getValue(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
   key: string,
-  ifNoneMatch: string | undefined,
+  ifNoneMatch?: string,
 ) {
-  const bucketKey = getBucketKey(bucketId, key);
-
-  const result = await context.env.STORAGE.get(bucketKey, {
-    onlyIf: {
-      etagDoesNotMatch: ifNoneMatch,
-    },
-  });
-
-  if (!result) {
-    throw new HTTPException(404, { message: "Value not found" });
-  }
-
-  const headers = new Headers();
-  headers.set("ETag", result.etag);
-  if (!("body" in result)) {
-    return new Response(null, { status: 304, headers });
-  }
-
-  return new Response(result.body, { headers });
+  return bucket(context, bucketId).getValue(key, ifNoneMatch);
 }
 
 export async function putValue(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
   key: string,
-  body: ReadableStream<Uint8Array<ArrayBuffer>>,
   userId: number,
 ) {
-  const bucketKey = getBucketKey(bucketId, key);
-
   await verifyBucketControl(context, bucketId, userId);
-
-  await context.env.STORAGE.put(bucketKey, body);
-
-  return context.body(null, 201);
+  return bucket(context, bucketId).putValue(key, context.req.raw);
 }
 
 export async function deleteValue(
@@ -107,11 +83,7 @@ export async function deleteValue(
   userId: number,
 ) {
   await verifyBucketControl(context, bucketId, userId);
-
-  const bucketKey = getBucketKey(bucketId, key);
-  await context.env.STORAGE.delete(bucketKey);
-
-  return context.body(null, 204);
+  return bucket(context, bucketId).deleteValue(key);
 }
 
 export async function exportKeys(
@@ -121,13 +93,5 @@ export async function exportKeys(
   userId: number,
 ) {
   await verifyBucketControl(context, bucketId, userId);
-
-  const prefix = `${bucketId}/`;
-  const listed = await context.env.STORAGE.list({ prefix, cursor });
-  const keys = listed.objects.map((o) => o.key.slice(prefix.length));
-
-  return {
-    keys,
-    cursor: listed.truncated ? listed.cursor : null,
-  };
+  return bucket(context, bucketId).exportKeys(cursor);
 }

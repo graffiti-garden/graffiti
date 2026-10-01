@@ -113,7 +113,7 @@ storageBucket.openapi(putValueRoute, async (c) => {
     });
   }
   const { userId } = await verifySessionHeader(c);
-  return await putValue(c, bucketId, key, body, userId);
+  return await putValue(c, bucketId, key, userId);
 });
 
 const deleteValueRoute = createRoute({

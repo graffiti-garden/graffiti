@@ -62,6 +62,30 @@ export function storageBucketTests(
       ).rejects.toThrow();
     });
 
+    test("overwrites across the small and large storage cutoff", async () => {
+      const key = crypto.randomUUID();
+      const small = new Uint8Array([1, 2, 3]);
+      const large = new Uint8Array(32 * 1024 + 1).fill(42);
+      const otherLarge = new Uint8Array(32 * 1024 + 1).fill(43);
+
+      await storageBuckets.put(storageBucketEndpoint, key, large, storageBucketToken);
+      expect(await storageBuckets.get(storageBucketEndpoint, key)).toEqual(large);
+
+      await storageBuckets.put(storageBucketEndpoint, key, otherLarge, storageBucketToken);
+      expect(await storageBuckets.get(storageBucketEndpoint, key)).toEqual(otherLarge);
+
+      await storageBuckets.put(storageBucketEndpoint, key, small, storageBucketToken);
+      expect(await storageBuckets.get(storageBucketEndpoint, key)).toEqual(small);
+
+      await storageBuckets.put(storageBucketEndpoint, key, large, storageBucketToken);
+      expect(await storageBuckets.get(storageBucketEndpoint, key)).toEqual(large);
+
+      await storageBuckets.delete(storageBucketEndpoint, key, storageBucketToken);
+      await expect(storageBuckets.get(storageBucketEndpoint, key)).rejects.toThrow(
+        GraffitiErrorNotFound,
+      );
+    });
+
     test("unauthorized", async () => {
       const key = Math.random().toString(36).substring(2, 15);
       const input = "Hello world";
