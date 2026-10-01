@@ -249,6 +249,7 @@ export async function queryMessages(
   objectSchema: Schema | boolean,
   userId?: number,
   sinceSeq: number = 0,
+  limit: number = INBOX_QUERY_LIMIT,
 ) {
   if (tags.length === 0)
     return { results: [], hasMore: false, lastSeq: sinceSeq };
@@ -301,7 +302,7 @@ export async function queryMessages(
     ...tags,
     sinceSeq,
     ...(userId ? [userId] : []),
-    INBOX_QUERY_LIMIT + 1,
+    limit + 1,
   ];
 
   const res = await context.env.DB.prepare(sql)
@@ -315,8 +316,8 @@ export async function queryMessages(
       label: number | null;
     }>();
 
-  const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
-  const resultsRaw = res.results.slice(0, INBOX_QUERY_LIMIT);
+  const hasMore = res.results.length === limit + 1;
+  const resultsRaw = res.results.slice(0, limit);
 
   const lastSeq = resultsRaw.length
     ? resultsRaw[resultsRaw.length - 1].message_seq
