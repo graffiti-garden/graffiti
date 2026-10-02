@@ -66,6 +66,15 @@ export async function getValue(
   return bucket(context, bucketId).getValue(key, ifNoneMatch);
 }
 
+export async function getValues(
+  context: Context<{ Bindings: Bindings }>,
+  bucketId: string,
+  keys: string[],
+  maxValueBytes: number,
+) {
+  return bucket(context, bucketId).getValues(keys, maxValueBytes);
+}
+
 export async function putValue(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
