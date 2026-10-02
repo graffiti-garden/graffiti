@@ -9,6 +9,7 @@ export const EXPORT_PAGE_SIZE = 100;
 
 // NULL value means the bytes live in R2. Even an empty SQLite value is non-NULL.
 type Entry = { value: ArrayBuffer | null; etag: string | null };
+type BatchEntry = Entry & { key: string };
 
 function notFound() {
   return new Response("Value not found", { status: 404 });
@@ -76,6 +77,42 @@ export class StorageBucketDO extends DurableObject<Bindings> {
     const headers = { ETag: result.etag };
     if (!("body" in result)) return new Response(null, { status: 304, headers });
     return new Response(result.body, { headers });
+  }
+
+  async getValues(keys: string[], maxValueBytes: number) {
+    // One SQLite statement for all keys in this bucket. The route bounds both
+    // the number of keys and the maximum bytes returned by this request.
+    const placeholders = keys.map(() => "?").join(", ");
+    const rows = this.sql
+      .exec<BatchEntry>(
+        `SELECT key, value, etag FROM entries WHERE key IN (${placeholders})`,
+        ...keys,
+      )
+      .toArray();
+    const entries = new Map(rows.map((row) => [row.key, row]));
+
+    return Promise.all(keys.map(async (key) => {
+      const entry = entries.get(key);
+      if (!entry) return { status: 404 as const };
+      if (entry.value !== null) {
+        const value = new Uint8Array(entry.value);
+        return value.byteLength > maxValueBytes
+          ? { status: 413 as const }
+          : { status: 200 as const, value, etag: entry.etag! };
+      }
+
+      const object = await this.env.STORAGE.get(`${this.bucketId}/${key}`);
+      if (!object) return { status: 404 as const };
+      if (object.size > maxValueBytes) {
+        await object.body.cancel();
+        return { status: 413 as const };
+      }
+      return {
+        status: 200 as const,
+        value: new Uint8Array(await object.arrayBuffer()),
+        etag: object.etag,
+      };
+    }));
   }
 
   async putValue(key: string, request: Request) {
