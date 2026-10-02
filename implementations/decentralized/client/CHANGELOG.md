@@ -1,5 +1,11 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.1.2
+
+### Patch Changes
+
+- 5fe01ce: Batch same-bucket storage verification reads during discover to reduce network requests, with an ordinary GET fallback for bucket servers that do not support batches.
+
 ## 0.1.1
 
 ### Patch Changes
