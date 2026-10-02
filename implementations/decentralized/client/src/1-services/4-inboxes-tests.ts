@@ -163,6 +163,37 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         cursor = pageResult.cursor;
       }
 
+      // Opting into the finite stream keeps the paged API intact. Each
+      // length-prefixed CBOR frame is a complete query page.
+      const streamed = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/cbor",
+          Accept: "application/vnd.graffiti.inbox-stream",
+          Authorization: `Bearer ${inboxToken}`,
+        },
+        body: dagCborEncode({ tags: [tags[1]], schema: {} }).slice(),
+      });
+      expect(streamed.status).toBe(200);
+      expect(streamed.headers.get("Content-Type")).toContain("application/vnd.graffiti.inbox-stream");
+      const frames = new Uint8Array(await streamed.arrayBuffer());
+      const sizes: number[] = [];
+      let offset = 0;
+      while (offset < frames.length) {
+        const size = new DataView(frames.buffer).getUint32(offset);
+        offset += 4;
+        const page = dagCborDecode(frames.subarray(offset, offset + size)) as {
+          results: unknown[];
+          hasMore: boolean;
+          cursor: string;
+        };
+        sizes.push(page.results.length);
+        expect(page.hasMore).toBe(offset + size < frames.length);
+        expect(page.cursor).toBeTruthy();
+        offset += size;
+      }
+      expect(sizes).toEqual([10, 201]);
+
       const iterator = inboxes.query(
         inboxEndpoint,
         [randomBytes(), tags[1], randomBytes()],

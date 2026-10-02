@@ -29,6 +29,9 @@ const RATE_LIMIT_SECONDS = 1; // 1 second
 // this lets the "loop" start faster (inbox -> DID -> storage)
 // while limiting the number of requests for large queries.
 const QUERY_PAGE_LIMITS = [10, 100, 500] as const;
+const QUERY_STREAM_CONTENT_TYPE = "application/vnd.graffiti.inbox-stream";
+// The first stream frame has 10 results; subsequent database reads use 500.
+const QUERY_STREAM_PAGE_LIMIT = 500;
 
 function getInboxId(context: Context<{ Bindings: Bindings }>) {
   return getId(context, "inbox");
@@ -270,6 +273,9 @@ const queryRoute = createRoute({
         "application/cbor": {
           schema: QueryResultsSchema,
         },
+        [QUERY_STREAM_CONTENT_TYPE]: {
+          schema: z.string().openapi({ format: "binary" }),
+        },
       },
     },
     401: { description: "Invalid authorization" },
@@ -333,46 +339,79 @@ inbox.openapi(queryRoute, async (c) => {
   }
 
   const createdAt = Date.now();
+  const streaming = c.req.header("Accept")?.split(",").some(
+    (type) => type.trim().split(";")[0] === QUERY_STREAM_CONTENT_TYPE,
+  ) ?? false;
 
-  const { results, hasMore, lastSeq } = await queryMessages(
-    c,
-    inboxId,
-    tags,
-    objectSchema,
-    userId,
-    sinceSeq,
-    QUERY_PAGE_LIMITS[pageSizeStep],
+  async function nextPage(after: number, limit: number, step: number) {
+    const { results, hasMore, lastSeq } = await queryMessages(
+      c, inboxId, tags!, objectSchema, userId, after, limit,
+    );
+    const waitTil = hasMore ? undefined : Date.now() + RATE_LIMIT_SECONDS * 1000;
+    const cursorCBOR: z.infer<typeof QueryCursorSchema> = {
+      tags: tags!,
+      objectSchema,
+      sinceSeq: lastSeq,
+      createdAt,
+      pageSizeStep: Math.min(step + 1, QUERY_PAGE_LIMITS.length - 1),
+      ...(waitTil === undefined ? {} : { waitTil }),
+    };
+    const page: z.infer<typeof QueryResultsSchema> & { waitTil?: number } = {
+      results,
+      hasMore,
+      cursor: encodeBase64(dagCborEncode(cursorCBOR)),
+      ...(streaming && waitTil !== undefined ? { waitTil } : {}),
+    };
+    return { page, lastSeq };
+  }
+
+  // Query the first page before returning a response, so authentication and
+  // query errors still have their normal HTTP status.
+  const first = await nextPage(
+    sinceSeq ?? 0,
+    streaming ? QUERY_PAGE_LIMITS[0] : QUERY_PAGE_LIMITS[pageSizeStep],
+    pageSizeStep,
   );
+  if (!streaming) {
+    return c.body(dagCborEncode(first.page).slice(), 200, {
+      "Content-Type": "application/cbor",
+      Vary: "Accept",
+      ...(!first.page.hasMore ? { "Retry-After": String(RATE_LIMIT_SECONDS) } : {}),
+    });
+  }
 
-  // Construct a cursor
-  const cursorCBOR: z.infer<typeof QueryCursorSchema> = {
-    tags,
-    objectSchema,
-    sinceSeq: lastSeq,
-    createdAt,
-    pageSizeStep: Math.min(pageSizeStep + 1, QUERY_PAGE_LIMITS.length - 1),
-    ...(!hasMore
-      ? {
-          waitTil: Date.now() + RATE_LIMIT_SECONDS * 1000,
+  let page = first.page;
+  let after = first.lastSeq;
+  let step = Math.min(pageSizeStep + 1, QUERY_PAGE_LIMITS.length - 1);
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const bytes = dagCborEncode(page);
+        const frame = new Uint8Array(4 + bytes.length);
+        new DataView(frame.buffer).setUint32(0, bytes.length);
+        frame.set(bytes, 4);
+        controller.enqueue(frame);
+        if (!page.hasMore) {
+          controller.close();
+          return;
         }
-      : {}),
-  };
-  const cursorBytes = dagCborEncode(cursorCBOR);
-  const cursor = encodeBase64(cursorBytes);
-
-  const queryResults: z.infer<typeof QueryResultsSchema> = {
-    results,
-    hasMore,
-    cursor,
-  };
-
-  return c.body(dagCborEncode(queryResults).slice(), 200, {
-    "Content-Type": "application/cbor",
-    ...(!hasMore
-      ? {
-          "Retry-After": String(RATE_LIMIT_SECONDS),
-        }
-      : {}),
+        // Keep database reads inside the Worker. Each frame is a complete
+        // page, so the client can process it while the next read starts.
+        const next = await nextPage(after, QUERY_STREAM_PAGE_LIMIT, step);
+        if (cancelled) return;
+        page = next.page;
+        after = next.lastSeq;
+        step = Math.min(step + 1, QUERY_PAGE_LIMITS.length - 1);
+      } catch (error) {
+        if (!cancelled) controller.error(error);
+      }
+    },
+    cancel() { cancelled = true; },
+  });
+  return c.body(stream, 200, {
+    "Content-Type": QUERY_STREAM_CONTENT_TYPE,
+    Vary: "Accept",
   });
 });
 

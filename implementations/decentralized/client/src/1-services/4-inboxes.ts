@@ -30,6 +30,8 @@ import {
   union,
 } from "zod/mini";
 
+const QUERY_STREAM_CONTENT_TYPE = "application/vnd.graffiti.inbox-stream";
+
 export class Inboxes {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
   protected cache_: Promise<Cache> | null = null;
@@ -146,6 +148,7 @@ export class Inboxes {
         method: "POST",
         headers: {
           "Content-Type": "application/cbor",
+          ...(type === "query" ? { Accept: QUERY_STREAM_CONTENT_TYPE } : {}),
           ...(inboxToken
             ? {
                 Authorization: `Bearer ${inboxToken}`,
@@ -383,94 +386,112 @@ export class Inboxes {
       waitTil = out.waitTil;
     }
 
+    // An older server may ignore Accept and return ordinary CBOR pages.
+    const streamedPages = firstResponse.headers.get("Content-Type")?.startsWith(
+      QUERY_STREAM_CONTENT_TYPE,
+    ) ? readStreamedBatches(firstResponse) : null;
+    let streamedPage = streamedPages ? await streamedPages.next() : null;
+
     // Continue streaming results
     let response = firstResponse;
     let cursor: string;
     const version = cachedMessageIds?.version ?? crypto.randomUUID();
     let messageIds = cachedMessageIds?.messageIds ?? [];
-    while (true) {
-      const blob = await response.blob();
-      const decoded = dagCborDecode(await blob.arrayBuffer());
-      const {
-        results,
-        hasMore,
-        cursor: nextCursor,
-      } = MessageResultSchema.parse(decoded);
-      cursor = nextCursor;
+    try {
+      while (true) {
+        if (streamedPage?.done) throw new Error("Inbox stream ended before its final page");
+        const decoded = streamedPages
+          ? streamedPage!.value
+          : dagCborDecode(await response.arrayBuffer());
+        const {
+          results,
+          hasMore,
+          cursor: nextCursor,
+          waitTil: pageWaitTil,
+        } = MessageResultSchema.parse(decoded);
+        cursor = nextCursor;
+        waitTil = pageWaitTil ?? waitTil;
 
-      const labeledMessages: LabeledMessage<Schema>[] = results.map(
-        (result) => {
-          const object =
-            result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
-          if (!validator(object)) {
-            throw new Error("Server returned data that does not match schema");
-          }
-          return {
-            ...result,
-            [LABELED_MESSAGE_MESSAGE_KEY]: {
-              ...result[LABELED_MESSAGE_MESSAGE_KEY],
-              [MESSAGE_OBJECT_KEY]: object,
-            },
-          };
-        },
-      );
+        const labeledMessages: LabeledMessage<Schema>[] = results.map(
+          (result) => {
+            const object =
+              result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
+            if (!validator(object)) {
+              throw new Error("Server returned data that does not match schema");
+            }
+            return {
+              ...result,
+              [LABELED_MESSAGE_MESSAGE_KEY]: {
+                ...result[LABELED_MESSAGE_MESSAGE_KEY],
+                [MESSAGE_OBJECT_KEY]: object,
+              },
+            };
+          },
+        );
 
-      // First cache the messages with their labels
-      await cache.messages.setMany(
-        labeledMessages.map((m: LabeledMessageBase) => [
-          getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
-          m,
-        ]),
-      );
-      // Then store all the messageids
-      messageIds = [
-        ...messageIds,
-        ...labeledMessages.map(
-          (m: LabeledMessageBase) => m[LABELED_MESSAGE_ID_KEY],
-        ),
-      ];
-      await cache.messageIds.set(messageIdsCacheKey, {
-        cursor,
-        version,
-        messageIds,
-        waitTil,
-      });
+        // First cache the messages with their labels
+        await cache.messages.setMany(
+          labeledMessages.map((m: LabeledMessageBase) => [
+            getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
+            m,
+          ]),
+        );
+        // Then store all the messageids
+        messageIds = [
+          ...messageIds,
+          ...labeledMessages.map(
+            (m: LabeledMessageBase) => m[LABELED_MESSAGE_ID_KEY],
+          ),
+        ];
+        await cache.messageIds.set(messageIdsCacheKey, {
+          cursor,
+          version,
+          messageIds,
+          waitTil,
+        });
 
-      // Update how many we've seen
-      cacheNumSeen += labeledMessages.length;
+        // Update how many we've seen
+        cacheNumSeen += labeledMessages.length;
 
-      // Fetch the next page while the caller processes the current page.
-      const prefetchController = new AbortController();
-      // Otherwise get another response (after waiting for rate-limit)
-      const nextPage = hasMore
-        ? waitFor(waitTil)
-            .then(() => this.fetchMessageBatch(
-              inboxUrl,
-              type,
-              undefined, // Body is never past the first time
-              inboxToken,
-              cursor,
-              prefetchController.signal,
-            ))
-            // A consumer may stop before awaiting this request.
-            .then((value) => ({ value }), (error) => ({ error }))
-        : null;
+        // Fetch the next page while the caller processes the current page.
+        const prefetchController = new AbortController();
+        // Otherwise get another response (after waiting for rate-limit)
+        const nextPage = hasMore && !streamedPages
+          ? waitFor(waitTil)
+              .then(() => this.fetchMessageBatch(
+                inboxUrl,
+                type,
+                undefined, // Body is never past the first time
+                inboxToken,
+                cursor,
+                prefetchController.signal,
+              ))
+              // A consumer may stop before awaiting this request.
+              .then((value) => ({ value }), (error) => ({ error }))
+          : null;
 
-      // Return the values
-      let consumedPage = false;
-      try {
-        for (const m of labeledMessages) yield m;
-        consumedPage = true;
-      } finally {
-        if (!consumedPage) prefetchController.abort();
+        // Return the values
+        let consumedPage = false;
+        try {
+          for (const m of labeledMessages) yield m;
+          consumedPage = true;
+        } finally {
+          if (!consumedPage) prefetchController.abort();
+        }
+
+        if (!hasMore) break;
+
+        if (streamedPages) {
+          streamedPage = await streamedPages.next();
+          continue;
+        }
+        const out = await nextPage!;
+        if ("error" in out) throw out.error;
+        response = out.value.response;
+        waitTil = out.value.waitTil;
       }
-
-      if (!hasMore) break;
-
-      const out = await nextPage!;
-      if ("error" in out) throw out.error;
-      response = out.value.response;
-      waitTil = out.value.waitTil;
+    } finally {
+      await streamedPages?.return(undefined);
     }
 
     const outputCursor: infer_<typeof CursorSchema> = {
@@ -590,7 +611,52 @@ const MessageResultSchema = strictObject({
   results: array(LabeledMessageBaseSchema),
   hasMore: boolean(),
   cursor: string(),
+  waitTil: optional(number()),
 });
+
+// Each stream frame is a four-byte big-endian length followed by one CBOR
+// query page. Read exactly one frame at a time so results can be yielded before
+// the rest of the response arrives.
+async function* readStreamedBatches(response: Response) {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Inbox stream has no body");
+  let chunk: Uint8Array = new Uint8Array(0);
+  let offset = 0;
+  async function readBytes(length: number): Promise<Uint8Array | null> {
+    const bytes = new Uint8Array(length);
+    let filled = 0;
+    while (filled < length) {
+      if (offset === chunk.length) {
+        const next = await reader!.read();
+        if (next.done) {
+          if (filled === 0) return null;
+          throw new Error("Incomplete inbox stream frame");
+        }
+        chunk = next.value;
+        offset = 0;
+      }
+      const count = Math.min(length - filled, chunk.length - offset);
+      bytes.set(chunk.subarray(offset, offset + count), filled);
+      filled += count;
+      offset += count;
+    }
+    return bytes;
+  }
+  try {
+    while (true) {
+      const header = await readBytes(4);
+      if (!header) return;
+      const length = new DataView(header.buffer).getUint32(0);
+      if (length > 64 * 1024 * 1024) throw new Error("Inbox stream frame too large");
+      const bytes = await readBytes(length);
+      if (!bytes) throw new Error("Incomplete inbox stream frame");
+      yield MessageResultSchema.parse(dagCborDecode(bytes));
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 
 const CursorSchema = strictObject({
   messageIdsCacheKey: string(),
