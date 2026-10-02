@@ -24,6 +24,11 @@ import { encodeBase64, decodeBase64 } from "../../app/auth/utils";
 const MESSAGE_RETENTION_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_MESSAGE_SIZE_BYTES = 32 * 1024; // 32 KiB
 const RATE_LIMIT_SECONDS = 1; // 1 second
+// Inbox returns 10 results for a fast initial response,
+// then 100, then pages of 500 after that. Based on testing
+// this lets the "loop" start faster (inbox -> DID -> storage)
+// while limiting the number of requests for large queries.
+const QUERY_PAGE_LIMITS = [10, 100, 500] as const;
 
 function getInboxId(context: Context<{ Bindings: Bindings }>) {
   return getId(context, "inbox");
@@ -57,6 +62,7 @@ const QueryCursorSchema = z.object({
   objectSchema: ObjectSchemaSchema,
   createdAt: z.number(),
   waitTil: z.number().optional(),
+  pageSizeStep: z.int().min(0).max(QUERY_PAGE_LIMITS.length - 1).optional(),
 });
 
 const QueryResultsSchema = z.object({
@@ -288,6 +294,7 @@ inbox.openapi(queryRoute, async (c) => {
   let objectSchema: {};
   let tags: Uint8Array[] | undefined = undefined;
   let sinceSeq: number | undefined = undefined;
+  let pageSizeStep = 0;
   if (cursorParam) {
     let createdAt: number;
     let waitTil: number | undefined;
@@ -300,6 +307,8 @@ inbox.openapi(queryRoute, async (c) => {
       objectSchema = cursorParsed.objectSchema;
       createdAt = cursorParsed.createdAt;
       waitTil = cursorParsed.waitTil;
+      // Cursors issued before adaptive paging have no page-size step.
+      pageSizeStep = cursorParsed.pageSizeStep ?? QUERY_PAGE_LIMITS.length - 1;
     } catch {
       throw new HTTPException(410, { message: "Invalid cursor" });
     }
@@ -332,6 +341,7 @@ inbox.openapi(queryRoute, async (c) => {
     objectSchema,
     userId,
     sinceSeq,
+    QUERY_PAGE_LIMITS[pageSizeStep],
   );
 
   // Construct a cursor
@@ -340,6 +350,7 @@ inbox.openapi(queryRoute, async (c) => {
     objectSchema,
     sinceSeq: lastSeq,
     createdAt,
+    pageSizeStep: Math.min(pageSizeStep + 1, QUERY_PAGE_LIMITS.length - 1),
     ...(!hasMore
       ? {
           waitTil: Date.now() + RATE_LIMIT_SECONDS * 1000,

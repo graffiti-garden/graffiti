@@ -3,6 +3,7 @@ import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "./4-inboxes";
 import { GraffitiErrorUnauthorized } from "./utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import type { GraffitiObjectBase } from "@graffiti-garden/api";
+import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
 
 export function inboxTests(inboxEndpoint: string, inboxToken: string) {
   describe("Inboxes", async () => {
@@ -136,6 +137,30 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
             allowed: ["did:example2"],
           },
         });
+      }
+
+      let cursor: string | undefined;
+      for (const [page, expectedCount] of [10, 100, 101].entries()) {
+        const response = await fetch(
+          `${inboxEndpoint}/query${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/cbor",
+              Authorization: `Bearer ${inboxToken}`,
+            },
+            body: cursor ? undefined : dagCborEncode({ tags: [tags[1]], schema: {} }).slice(),
+          },
+        );
+        expect(response.status).toBe(200);
+        const pageResult = dagCborDecode(new Uint8Array(await response.arrayBuffer())) as {
+          results: unknown[];
+          hasMore: boolean;
+          cursor: string;
+        };
+        expect(pageResult.results).toHaveLength(expectedCount);
+        expect(pageResult.hasMore).toBe(page < 2);
+        cursor = pageResult.cursor;
       }
 
       const iterator = inboxes.query(
