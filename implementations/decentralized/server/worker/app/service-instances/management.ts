@@ -23,11 +23,21 @@ serviceInstances.post("/:type/create", async (c) => {
   const serviceId = randomBase64();
   const createdAt = Date.now();
 
-  await c.env.DB.prepare(
-    `INSERT INTO ${table} (${idName}, user_id, created_at) VALUES (?, ?, ?)`,
-  )
-    .bind(serviceId, userId, createdAt)
-    .run();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO ${table} (${idName}, user_id, created_at) VALUES (?, ?, ?)`,
+    )
+      .bind(serviceId, userId, createdAt)
+      .run();
+  } catch (error: any) {
+    if (String(error?.message || "").includes(`${table}.user_id`)) {
+      const name = type === "bucket" ? "a storage bucket" : "an inbox";
+      throw new HTTPException(409, {
+        message: `This account already has ${name}. Log out to create another account.`,
+      });
+    }
+    throw error;
+  }
 
   return c.json({ serviceId, createdAt });
 });

@@ -18,6 +18,19 @@ const actorManagement = new Hono<{ Bindings: Bindings }>();
 
 actorManagement.post("/create", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  // Check before publishing a DID to PLC. The database index also prevents
+  // another actor from being stored if two requests arrive together.
+  const existingActor = await c.env.DB.prepare(
+    "SELECT did FROM actors WHERE user_id = ?",
+  )
+    .bind(userId)
+    .first();
+  if (existingActor) {
+    throw new HTTPException(409, {
+      message:
+        "This account already has an actor. Remove it or log out to create another account.",
+    });
+  }
   const body = await c.req.json();
   const services = OptionalServicesSchema.parse(body.services);
   const alsoKnownAs = OptionalAlsoKnownAsSchema.parse(body.alsoKnownAs);
@@ -161,6 +174,18 @@ actorManagement.get("/actor/:did", async (c) => {
 
 actorManagement.post("/import", async (c) => {
   const { userId } = await verifySessionCookie(c);
+  // Import rotates the DID on PLC, so reject a second actor before doing that.
+  const existingActor = await c.env.DB.prepare(
+    "SELECT did FROM actors WHERE user_id = ?",
+  )
+    .bind(userId)
+    .first();
+  if (existingActor) {
+    throw new HTTPException(409, {
+      message:
+        "This account already has an actor. Remove it before importing another.",
+    });
+  }
   const body = await c.req.json();
   const { did, cid: prev, secretKey } = body;
   const oldSecretKey = base64url.decode(secretKey);

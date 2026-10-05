@@ -43,9 +43,10 @@ router.post("/register", async (c) => {
       .run();
   } catch (error: any) {
     const msg = String(error?.message || "");
-    if (msg.includes("max_handles_reached")) {
-      throw new HTTPException(400, {
-        message: "You have reached the maximum number of handles.",
+    if (msg.includes("handles.user_id")) {
+      throw new HTTPException(409, {
+        message:
+          "This account already has a handle. Log out to create another account.",
       });
     } else if (msg.includes("UNIQUE")) {
       throw new HTTPException(400, { message: "Handle already exists." });
