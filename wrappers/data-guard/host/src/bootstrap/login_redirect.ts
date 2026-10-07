@@ -7,14 +7,25 @@ const storageKey = "graffiti-guard-redirect-url";
 const storageMaxAge = 10 * 60 * 1000;
 
 export function isLoginRedirect(url: URL) {
-  return url.searchParams.get("guardLogin") === "1" || getStoredUrl() !== null;
+  return (
+    new URLSearchParams(url.hash.slice(1)).get("guardLogin") === "1" ||
+    // Older clients use search searchParams
+    // TODO: once clients update, delete this fix
+    url.searchParams.get("guardLogin") === "1" ||
+    getStoredUrl() !== null
+  );
 }
 
 export async function handleLoginRedirect(url: URL) {
   const redirectUrl = getRedirectUrl(url);
   if (!redirectUrl) return status("Missing redirect URL.");
   const graffiti = new GraffitiDecentralized();
-  const starting = url.searchParams.get("guardLogin") === "1";
+  const fragmentParams = new URLSearchParams(url.hash.slice(1));
+  const starting =
+    fragmentParams.get("guardLogin") === "1" ||
+    // Older clients use search searchParams
+    // TODO: once clients update, delete this fix
+    url.searchParams.get("guardLogin") === "1";
   let initialized = false;
   let ready = false;
   const redirect = () => {
@@ -38,12 +49,23 @@ export async function handleLoginRedirect(url: URL) {
     redirect();
   });
   if (starting) {
-    await graffiti.login(url.searchParams.get("suggestedActor") ?? undefined);
+    await graffiti.login(
+      fragmentParams.get("suggestedActor") ??
+        // Older clients use search searchParams
+        // TODO: once clients update, delete this fix
+        url.searchParams.get("suggestedActor") ??
+        undefined,
+    );
   }
 }
 
 export function getRedirectUrl(url: URL) {
-  const encodedRedirect = url.searchParams.get("redirectUrl");
+  // Older clients put the return URL in the query string.
+  const encodedRedirect =
+    new URLSearchParams(url.hash.slice(1)).get("redirectUrl") ??
+    // Older clients use search searchParams
+    // TODO: once clients update, delete this fix
+    url.searchParams.get("redirectUrl");
   if (encodedRedirect === null) return getStoredUrl();
   const parsedRedirect = URL.parse(encodedRedirect);
   if (

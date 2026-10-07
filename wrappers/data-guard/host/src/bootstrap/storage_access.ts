@@ -121,9 +121,10 @@ function storageSetupUrl(pageUrl?: string) {
   if (!pageUrl) return;
   const setupUrl = new URL(window.location.href);
   setupUrl.search = "";
-  setupUrl.hash = "";
-  setupUrl.searchParams.set("guardStorageSetup", "1");
-  setupUrl.hash = new URLSearchParams({ redirectUrl: pageUrl }).toString();
+  setupUrl.hash = new URLSearchParams({
+    guardStorageSetup: "1",
+    redirectUrl: pageUrl,
+  }).toString();
   return setupUrl.href;
 }
 

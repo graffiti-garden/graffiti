@@ -58,6 +58,27 @@ describe("guard sources", () => {
     });
   });
 
+  it("reads a large audit return URL from the fragment", () => {
+    const returnUrl = `https://app.example/#${"x".repeat(100_000)}`;
+    const url = new URL("https://guard.graffiti.garden/");
+    url.hash = new URLSearchParams({
+      redirectUrl: returnUrl,
+      actor: "actor:one",
+      source: JSON.stringify([{ id: "chat", name: "Chat" }]),
+    }).toString();
+
+    expect(url.pathname + url.search).toBe("/");
+    expect(auditOptions(url)).toEqual({
+      actor: "actor:one",
+      redirectUrl: new URL(returnUrl),
+      source: {
+        key: '["https://app.example","chat"]',
+        origin: "https://app.example",
+        path: [{ id: "chat", name: "Chat" }],
+      },
+    });
+  });
+
   it("ignores unsafe audit redirects and their source filter", () => {
     const url = new URL(
       "https://guard.graffiti.garden/?redirectUrl=javascript:alert(1)&source=[]",
