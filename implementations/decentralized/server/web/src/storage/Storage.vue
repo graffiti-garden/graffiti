@@ -1,6 +1,6 @@
 <template>
     <header>
-        <h2>{{ type === "inbox" ? "Inbox" : "Storage Bucket" }}</h2>
+        <h2>{{ type === "inbox" ? "Inboxes" : "Storage Bucket" }}</h2>
         <nav
             v-if="services?.every((service) => service.serviceId === 'shared')"
         >
@@ -11,7 +11,9 @@
                             {{
                                 creating
                                     ? "Creating..."
-                                    : `Create New ${type === "inbox" ? "Inbox" : "Storage Bucket"}`
+                                    : type === "inbox"
+                                      ? "Create Personal Inbox"
+                                      : "Create New Storage Bucket"
                             }}
                         </button>
                     </form>
@@ -30,7 +32,7 @@
     <p v-else-if="services.every((service) => service.serviceId === 'shared')">
         <em
             >You have no
-            {{ type === "inbox" ? "inbox" : "storage bucket" }}.</em
+            {{ type === "inbox" ? "personal inbox" : "storage bucket" }}.</em
         >
     </p>
     <ul v-if="services?.length" class="cards">

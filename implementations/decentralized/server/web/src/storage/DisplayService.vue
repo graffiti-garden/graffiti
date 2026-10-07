@@ -1,14 +1,19 @@
 <template>
     <article>
-        <p v-if="service.serviceId === 'shared'">
-            Shared inbox (available to everyone)
-        </p>
+        <h2 v-if="service.type === 'inbox'">
+            {{
+                service.serviceId === "shared"
+                    ? "Shared inbox"
+                    : "Personal inbox"
+            }}
+        </h2>
         <h2>
             <span>
                 {{ url }}
             </span>
             <CopyButton :text="url" />
         </h2>
+        <p v-if="service.serviceId === 'shared'">Available to everyone.</p>
         <p>
             <a
                 :href="`/${service.type === 'inbox' ? 'i' : 's'}/${service.serviceId}/docs`"

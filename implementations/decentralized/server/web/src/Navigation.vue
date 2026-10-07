@@ -27,7 +27,7 @@
                         </li>
                         <li>
                             <RouterLink :to="{ name: 'inboxes' }">
-                                Inbox
+                                Inboxes
                             </RouterLink>
                         </li>
                         <li><Logout /></li>
