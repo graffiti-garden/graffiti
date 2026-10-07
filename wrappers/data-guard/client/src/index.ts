@@ -142,9 +142,11 @@ export class GraffitiGuarded extends Graffiti {
       ) {
         try {
           const setupUrl = new URL(event.data.url);
+          const setupParams = new URLSearchParams(setupUrl.hash.slice(1));
           if (
             setupUrl.origin !== hostUrl.origin ||
-            setupUrl.searchParams.get("guardStorageSetup") !== "1"
+            (setupParams.get("guardStorageSetup") !== "1" &&
+              setupUrl.searchParams.get("guardStorageSetup") !== "1")
           ) {
             return;
           }
@@ -181,9 +183,14 @@ export class GraffitiGuarded extends Graffiti {
 
   login: Graffiti["login"] = (actor) => {
     const loginUrl = new URL(this.hostUrl);
-    loginUrl.searchParams.set("guardLogin", "1");
-    loginUrl.searchParams.set("redirectUrl", window.location.href);
-    if (actor) loginUrl.searchParams.set("suggestedActor", actor);
+    // The guard reads this state in the browser; keep it out of the HTTP request.
+    // This allows for very long redirectUrls
+    const params = new URLSearchParams({
+      guardLogin: "1",
+      redirectUrl: window.location.href,
+    });
+    if (actor) params.set("suggestedActor", actor);
+    loginUrl.hash = params.toString();
     window.location.assign(loginUrl.href);
     return Promise.resolve();
   };
@@ -194,9 +201,12 @@ export class GraffitiGuarded extends Graffiti {
     source?: GraffitiGuardSourceSegment[];
   }) {
     const auditUrl = new URL(this.hostUrl);
-    auditUrl.searchParams.set("redirectUrl", window.location.href);
-    auditUrl.searchParams.set("source", JSON.stringify(scope?.source ?? []));
-    if (scope?.actor) auditUrl.searchParams.set("actor", scope.actor);
+    const params = new URLSearchParams({
+      redirectUrl: window.location.href,
+      source: JSON.stringify(scope?.source ?? []),
+    });
+    if (scope?.actor) params.set("actor", scope.actor);
+    auditUrl.hash = params.toString();
     return auditUrl.href;
   }
 

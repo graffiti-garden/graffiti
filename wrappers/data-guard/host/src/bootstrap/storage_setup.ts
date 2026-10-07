@@ -5,7 +5,12 @@ import { show } from "../ui/show.js";
 const setupParameter = "guardStorageSetup";
 
 export function isStorageSetup(url: URL) {
-  return url.searchParams.get(setupParameter) === "1";
+  return (
+    new URLSearchParams(url.hash.slice(1)).get(setupParameter) === "1" ||
+    // Older clients use search searchParams
+    // TODO: once clients update, delete this fix
+    url.searchParams.get(setupParameter) === "1"
+  );
 }
 
 export function handleStorageSetup(url: URL) {

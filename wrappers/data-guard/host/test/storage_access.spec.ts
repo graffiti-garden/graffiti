@@ -169,7 +169,7 @@ describe("storage access", () => {
       error: true,
       finishing: true,
       setupUrl:
-        "https://guard.example/?guardStorageSetup=1#redirectUrl=https%3A%2F%2Fapp.example%2Fpage",
+        "https://guard.example/#guardStorageSetup=1&redirectUrl=https%3A%2F%2Fapp.example%2Fpage",
     });
     expect(environment.parent.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "graffiti-guard:open-storage-setup" }),
