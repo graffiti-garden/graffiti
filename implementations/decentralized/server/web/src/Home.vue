@@ -6,7 +6,7 @@
         identity and participate in the Graffiti ecosystem.
     </p>
 
-    <p>
+    <p v-if="hasHandle === false">
         <RouterLink :to="{ name: 'create' }" role="button">
             Create a Graffiti identity
         </RouterLink>
@@ -58,5 +58,14 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from "vue";
+import { fetchFromSelf } from "./globals";
+
 const baseHost = window.location.host;
+const hasHandle = ref<boolean>();
+fetchFromSelf("/app/handles/list")
+    .then(({ handles }) => {
+        hasHandle.value = handles.length > 0;
+    })
+    .catch(console.error);
 </script>

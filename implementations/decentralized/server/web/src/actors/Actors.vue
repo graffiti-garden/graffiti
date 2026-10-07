@@ -1,10 +1,10 @@
 <template>
     <header>
-        <h2>Actors</h2>
-        <nav aria-label="Actor actions">
+        <h2>Actor</h2>
+        <nav v-if="actors?.length === 0" aria-label="Actor actions">
             <ul>
                 <li>
-                    <button @click="createActor" :disabled="creating">
+                    <button @click="createActor" :disabled="creating || importing">
                         {{
                             creating
                                 ? "Creating New Actor..."
@@ -13,7 +13,7 @@
                     </button>
                 </li>
                 <li>
-                    <button :disabled="importing" @click="importActor">
+                    <button :disabled="creating || importing" @click="importActor">
                         {{ importing ? "Importing Actor..." : "Import Actor" }}
                     </button>
                 </li>
@@ -24,17 +24,17 @@
         <em>Loading...</em>
     </p>
     <template v-else-if="actors === null">
-        <p><em>Error loading actors!</em></p>
+        <p><em>Error loading actor!</em></p>
         <button @click="fetchActors">Retry</button>
     </template>
     <p v-else-if="actors.length === 0">
-        <em>You have no actors.</em>
+        <em>You have no actor.</em>
     </p>
     <ul v-else class="cards">
-        <li v-for="actor in actors" :key="actor.did">
+        <li>
             <DisplayActor
-                :actor="actor"
-                :onRemove="() => actors?.splice(actors.indexOf(actor), 1)"
+                :actor="actors[0]"
+                :onRemove="() => actors?.splice(0, 1)"
             />
         </li>
     </ul>
@@ -51,9 +51,7 @@ function fetchActors() {
     actors.value = undefined;
     fetchFromSelf("/app/actors/list")
         .then((value: { actors: Array<Actor> }) => {
-            actors.value = value.actors.sort(
-                (a, b) => b.createdAt - a.createdAt,
-            );
+            actors.value = value.actors;
         })
         .catch((error) => {
             console.error(error);

@@ -1,5 +1,8 @@
 <template>
     <article>
+        <p v-if="service.serviceId === 'shared'">
+            Shared inbox (available to everyone)
+        </p>
         <h2>
             <span>
                 {{ url }}

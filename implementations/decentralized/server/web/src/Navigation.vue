@@ -12,22 +12,22 @@
                     <ul>
                         <li>
                             <RouterLink :to="{ name: 'handles' }">
-                                Handles
+                                Handle
                             </RouterLink>
                         </li>
                         <li>
                             <RouterLink :to="{ name: 'actors' }">
-                                Actors
+                                Actor
                             </RouterLink>
                         </li>
                         <li>
                             <RouterLink :to="{ name: 'storage' }">
-                                Storage Buckets
+                                Storage Bucket
                             </RouterLink>
                         </li>
                         <li>
                             <RouterLink :to="{ name: 'inboxes' }">
-                                Inboxes
+                                Inbox
                             </RouterLink>
                         </li>
                         <li><Logout /></li>

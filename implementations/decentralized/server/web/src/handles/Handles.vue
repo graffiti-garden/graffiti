@@ -1,11 +1,11 @@
 <template>
     <header>
-        <h2>Handles</h2>
-        <nav>
+        <h2>Handle</h2>
+        <nav v-if="handles?.length === 0">
             <ul>
                 <li>
                     <RouterLink :to="{ name: 'register-handle' }" role="button">
-                        Register New Handle
+                        Register Handle
                     </RouterLink>
                 </li>
             </ul>
@@ -15,17 +15,17 @@
         <em>Loading...</em>
     </p>
     <template v-else-if="handles === null">
-        <p><em>Error loading handles!</em></p>
+        <p><em>Error loading handle!</em></p>
         <button @click="fetchHandles">Retry</button>
     </template>
     <p v-else-if="handles.length === 0">
-        <em>You have no handles.</em>
+        <em>You have no handle.</em>
     </p>
     <ul v-else class="cards">
-        <li v-for="handle in handles" :key="handle.name">
+        <li>
             <DisplayHandle
-                :handle="handle"
-                :onUnregister="() => onUnregister(handle)"
+                :handle="handles[0]"
+                :onUnregister="onUnregister"
             />
         </li>
     </ul>
@@ -42,9 +42,7 @@ function fetchHandles() {
     handles.value = undefined;
     fetchFromSelf("/app/handles/list")
         .then((value: { handles: Array<Handle> }) => {
-            handles.value = value.handles.sort(
-                (a, b) => b.createdAt - a.createdAt,
-            );
+            handles.value = value.handles;
         })
         .catch((error) => {
             console.error(error);
@@ -53,10 +51,7 @@ function fetchHandles() {
 }
 fetchHandles();
 
-function onUnregister(handle: Handle) {
-    handles.value?.splice(
-        handles.value.findIndex((h) => h.name === handle.name),
-        1,
-    );
+function onUnregister() {
+    handles.value = [];
 }
 </script>

@@ -1,7 +1,9 @@
 <template>
     <header>
-        <h2>{{ type === "inbox" ? "Inboxes" : "Storage Buckets" }}</h2>
-        <nav>
+        <h2>{{ type === "inbox" ? "Inbox" : "Storage Bucket" }}</h2>
+        <nav
+            v-if="services?.every((service) => service.serviceId === 'shared')"
+        >
             <ul>
                 <li>
                     <form @submit.prevent="createService">
@@ -22,16 +24,16 @@
         <em>Loading...</em>
     </p>
     <template v-else-if="services === null">
-        <p><em>Error loading services!</em></p>
+        <p><em>Error loading {{ type === "inbox" ? "inbox" : "storage bucket" }}!</em></p>
         <button @click="fetchServices">Retry</button>
     </template>
-    <p v-else-if="services.length === 0">
+    <p v-else-if="services.every((service) => service.serviceId === 'shared')">
         <em
             >You have no
-            {{ type === "inbox" ? "inboxes" : "storage buckets" }}.</em
+            {{ type === "inbox" ? "inbox" : "storage bucket" }}.</em
         >
     </p>
-    <ul v-else class="cards">
+    <ul v-if="services?.length" class="cards">
         <li v-for="service in services" :key="service.serviceId">
             <DisplayService
                 :service="service"
