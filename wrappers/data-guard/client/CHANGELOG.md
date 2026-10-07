@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-data-guard
 
+## 0.2.3
+
+### Patch Changes
+
+- 527ea56: Put data guard requests in hash rather than query parameters to avoid URI length issues.
+
 ## 0.2.2
 
 ### Patch Changes
