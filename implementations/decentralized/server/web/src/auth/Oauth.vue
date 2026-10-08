@@ -16,57 +16,46 @@
                 <template v-if="userServiceEndpoints === undefined">
                     <p><em>Loading...</em></p>
                 </template>
+                <template v-else-if="userServiceEndpoints === null">
+                    <p><em>Could not check service access.</em></p>
+                    <button @click="loadUserServiceEndpoints">Retry</button>
+                    <button class="secondary" @click="handleDeny">Cancel</button>
+                </template>
                 <template v-else-if="hasUnauthorizedRequestedScope">
                     <p>
                         <em>
-                            The account you are logged in as does not have
-                            access to the requested services.
+                            None of your logged-in accounts has access to the
+                            requested services.
                         </em>
                     </p>
 
-                    <p v-if="accountHandlesWithActor.length === 0">
-                        There are no handles associated with the logged in
-                        account. Please log out and back in with a different
-                        account.
-                    </p>
-                    <template v-else>
-                        <p>
-                            Your logged-in account is associated with the
-                            following
-                            <RouterLink
-                                :to="{ name: 'handles' }"
-                                target="_blank"
-                            >
-                                handles</RouterLink
-                            >:
-                        </p>
+                    <Login class="secondary account-login">
+                        Log in with another account
+                    </Login>
+
+                    <template v-if="accountOptions.length">
+                        <p class="account-or">or</p>
                         <ul class="account-handles">
                             <li
-                                v-for="handle in accountHandlesWithActor"
-                                :key="handle"
+                                v-for="account in accountOptions"
+                                :key="account.id"
                             >
                                 <button
-                                    type="button"
-                                    @click="handleSelectHandle(handle)"
+                                    :disabled="!account.did"
+                                    @click="handleSelectActor(account.did)"
                                 >
-                                    Continue as <code>{{ handle }}</code>
+                                    Continue as <code>{{ account.label }}</code>
                                 </button>
                             </li>
                         </ul>
-
-                        <p>
-                            If you are trying to access services associated with
-                            a handle not listed here, please log out and log
-                            back in with the right account.
-                        </p>
                     </template>
 
-                    <Logout />
                     <button class="secondary" @click="handleDeny">
                         Cancel
                     </button>
                 </template>
                 <template v-else>
+                    <p>Continuing as {{ accountLabel(currentAccount) }}</p>
                     <section class="requested-scopes">
                         <p v-if="requestedScopes.length === 0">
                             <em>No scopes were requested.</em>
@@ -103,15 +92,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import Login from "./Login.vue";
-import { fetchFromSelf, isLoggedIn, selectedAccount } from "../globals";
+import {
+    accountLabel,
+    accounts,
+    currentAccount,
+    fetchFromSelf,
+    isLoggedIn,
+    selectedAccount,
+    selectAccount,
+} from "../globals";
 import { useRouter } from "vue-router";
 import { serviceIdToUrl } from "../../../shared/service-urls";
-import { didToHandle, handleNameToHandle } from "../../../shared/did-schemas";
+import { didToHandle } from "../../../shared/did-schemas";
 import "./floating-panel.css";
-import Logout from "./Logout.vue";
 import type { Actor } from "../actors/types";
 import { fetchActorDidData } from "../actors/plc-directory";
-import type { Handle } from "../handles/types";
 
 // Extract the redirectUri from the search params
 const redirectUri = new URLSearchParams(window.location.search).get(
@@ -156,13 +151,6 @@ function displayNameFromAlsoKnownAs(alsoKnownAs: Array<string> | undefined) {
     return didToHandle(did);
 }
 
-function handlesFromAlsoKnownAs(alsoKnownAs: Array<string> | undefined) {
-    if (!alsoKnownAs) return [];
-    return alsoKnownAs
-        .filter((value) => value.startsWith("did:web:"))
-        .map((did) => didToHandle(did));
-}
-
 function serviceKindFromEndpoint(endpoint: string) {
     const baseHost = window.location.host;
     const sharedInboxEndpoint = serviceIdToUrl("shared", "inbox", baseHost);
@@ -172,72 +160,47 @@ function serviceKindFromEndpoint(endpoint: string) {
     return "other";
 }
 
-const userServiceEndpoints = ref<Array<string> | undefined>(undefined);
+const userServiceEndpoints = ref<Array<string> | null | undefined>(undefined);
 const endpointToActorName = ref(new Map<string, string>());
-const accountHandles = ref<Array<string>>([]);
-const handleToActorDid = ref(new Map<string, string>());
+const accountOptions = ref<Array<{ id: number; label: string; did?: string }>>([]);
 
-async function loadUserServiceEndpoints() {
-    const accountId = selectedAccount.value;
-    userServiceEndpoints.value = undefined;
-    endpointToActorName.value = new Map();
-    accountHandles.value = [];
-    handleToActorDid.value = new Map();
+async function serviceEndpointsForAccount(accountId: number) {
+    const headers = { "X-Graffiti-Account": String(accountId) };
+    const [bucketServices, inboxServices] = (await Promise.all([
+        fetchFromSelf("/app/service-instances/bucket/list", { headers }),
+        fetchFromSelf("/app/service-instances/inbox/list", { headers }),
+    ])) as [Array<{ serviceId: string }>, Array<{ serviceId: string }>];
     const baseHost = window.location.host;
+    return [
+        ...bucketServices.map(({ serviceId }) =>
+            serviceIdToUrl(serviceId, "bucket", baseHost),
+        ),
+        ...inboxServices.map(({ serviceId }) =>
+            serviceIdToUrl(serviceId, "inbox", baseHost),
+        ),
+        serviceIdToUrl("shared", "inbox", baseHost),
+    ];
+}
 
+async function actorsForAccount(accountId: number) {
+    const { actors } = (await fetchFromSelf("/app/actors/list", {
+        headers: { "X-Graffiti-Account": String(accountId) },
+    })) as { actors: Array<Actor> };
+    return actors;
+}
+
+async function loadActorNames(accountId: number) {
     try {
-        const [bucketServices, inboxServices, actorsResult, handlesResult] =
-            (await Promise.all([
-                fetchFromSelf("/app/service-instances/bucket/list"),
-                fetchFromSelf("/app/service-instances/inbox/list"),
-                fetchFromSelf("/app/actors/list"),
-                fetchFromSelf("/app/handles/list"),
-            ])) as [
-                Array<{ serviceId: string; createdAt: number }>,
-                Array<{ serviceId: string; createdAt: number }>,
-                { actors: Array<Actor> },
-                { handles: Array<Handle> },
-            ];
-
+        const actors = await actorsForAccount(accountId);
         const actorDidData = await Promise.all(
-            actorsResult.actors.map((actor) => fetchActorDidData(actor)),
+            actors.map((actor) => fetchActorDidData(actor)),
         );
-        // Ignore a response for an account the user has since switched away from.
         if (selectedAccount.value !== accountId) return;
         const actorNames = new Map<string, string>();
-        const handleActors = new Map<string, string>();
-        const allHandles = new Set(
-            handlesResult.handles.map((handle) =>
-                handleNameToHandle(handle.name, baseHost),
-            ),
-        );
-        for (const handle of handlesResult.handles) {
-            const handleString = handleNameToHandle(handle.name, baseHost);
-            const actorDid = handle.alsoKnownAs?.find(
-                (value) =>
-                    value.startsWith("did:") && !value.startsWith("did:web:"),
-            );
-            if (actorDid && !handleActors.has(handleString)) {
-                handleActors.set(handleString, actorDid);
-            }
-        }
-        for (const [index, actorData] of actorDidData.entries()) {
-            const actorDid = actorsResult.actors[index]?.did;
+        for (const actorData of actorDidData) {
             const displayName = displayNameFromAlsoKnownAs(
                 actorData.alsoKnownAs,
             );
-            for (const actorHandle of handlesFromAlsoKnownAs(
-                actorData.alsoKnownAs,
-            )) {
-                allHandles.add(actorHandle);
-                if (
-                    actorDid &&
-                    !actorDid.startsWith("did:web:") &&
-                    !handleActors.has(actorHandle)
-                ) {
-                    handleActors.set(actorHandle, actorDid);
-                }
-            }
             if (!displayName) continue;
             for (const service of Object.values(actorData.services ?? {})) {
                 if (!actorNames.has(service.endpoint)) {
@@ -246,38 +209,83 @@ async function loadUserServiceEndpoints() {
             }
         }
         endpointToActorName.value = actorNames;
-        handleToActorDid.value = handleActors;
-        accountHandles.value = Array.from(allHandles).sort((a, b) =>
-            a.localeCompare(b),
-        );
+    } catch (error) {
+        console.error(error);
+    }
+}
 
-        userServiceEndpoints.value = [
-            ...bucketServices.map(({ serviceId }) =>
-                serviceIdToUrl(serviceId, "bucket", baseHost),
-            ),
-            ...inboxServices.map(({ serviceId }) =>
-                serviceIdToUrl(serviceId, "inbox", baseHost),
-            ),
-            serviceIdToUrl("shared", "inbox", baseHost),
-        ];
+async function loadAccountOptions(accountId: number) {
+    const options = await Promise.all(
+        (accounts.value ?? []).map(async (account) => {
+            let did: string | undefined;
+            try {
+                did = (await actorsForAccount(account.id))[0]?.did;
+            } catch (error) {
+                console.error(error);
+            }
+            return { id: account.id, label: accountLabel(account), did };
+        }),
+    );
+    if (selectedAccount.value === accountId) accountOptions.value = options;
+}
+
+async function loadUserServiceEndpoints() {
+    const accountId = selectedAccount.value;
+    if (accountId === undefined) return;
+    userServiceEndpoints.value = undefined;
+    endpointToActorName.value = new Map();
+    accountOptions.value = [];
+
+    try {
+        const serviceEndpoints = await serviceEndpointsForAccount(accountId);
+
+        // If this account lacks a requested service, check whether another
+        // logged-in account can approve the whole request.
+        if (selectedAccount.value !== accountId) return;
+        const lacksRequestedService = requestedScopes.some(
+            (scope) => !serviceEndpoints.includes(scope),
+        );
+        if (lacksRequestedService) {
+            for (const account of accounts.value ?? []) {
+                if (account.id === accountId) continue;
+                const otherServices = await serviceEndpointsForAccount(
+                    account.id,
+                );
+                if (selectedAccount.value !== accountId) return;
+                if (
+                    requestedScopes.every((scope) =>
+                        otherServices.includes(scope),
+                    )
+                ) {
+                    selectAccount(account.id);
+                    return;
+                }
+            }
+        }
+
+        if (selectedAccount.value !== accountId) return;
+        userServiceEndpoints.value = serviceEndpoints;
+        // Actor details are only needed for display, not for checking access.
+        if (lacksRequestedService) {
+            void loadAccountOptions(accountId);
+        } else {
+            void loadActorNames(accountId);
+        }
     } catch (error) {
         if (selectedAccount.value !== accountId) return;
         console.error(error);
-        userServiceEndpoints.value = [];
+        userServiceEndpoints.value = null;
     }
 }
 
 const hasUnauthorizedRequestedScope = computed(() => {
-    if (userServiceEndpoints.value === undefined) return false;
+    if (
+        userServiceEndpoints.value === undefined ||
+        userServiceEndpoints.value === null
+    ) return false;
     const ownServices = new Set(userServiceEndpoints.value);
     return requestedScopes.some(
         (requestedScope) => !ownServices.has(requestedScope),
-    );
-});
-
-const accountHandlesWithActor = computed(() => {
-    return accountHandles.value.filter((handle) =>
-        handleToActorDid.value.has(handle),
     );
 });
 
@@ -333,17 +341,15 @@ watch(
         } else {
             userServiceEndpoints.value = undefined;
             endpointToActorName.value = new Map();
-            accountHandles.value = [];
-            handleToActorDid.value = new Map();
+            accountOptions.value = [];
         }
     },
     { immediate: true },
 );
 
-function handleSelectHandle(handle: string) {
-    if (!redirectUriObject) return router.push("/");
-    const actorDid = handleToActorDid.value.get(handle);
+function handleSelectActor(actorDid: string | undefined) {
     if (!actorDid) return;
+    if (!redirectUriObject) return router.push("/");
     const redirectUrl = new URL(redirectUriObject.toString());
     redirectUrl.searchParams.set("actor", encodeURIComponent(actorDid));
     window.location.replace(redirectUrl.toString());
@@ -374,6 +380,11 @@ function handleDeny() {
 </script>
 
 <style scoped>
+.account-login,
+.account-or {
+    margin: 0;
+}
+
 .requested-scopes {
     width: 100%;
     text-align: left;
@@ -416,5 +427,18 @@ function handleDeny() {
     width: 100%;
     text-align: left;
     margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.account-handles li,
+.account-handles button {
+    margin: 0;
+}
+
+.account-handles li {
+    list-style: none;
 }
 </style>

@@ -9,7 +9,7 @@
                 >
                     <small>Current account</small>
                     <p><strong>{{ accountLabel(currentAccount) }}</strong></p>
-                    <Logout class="secondary" label="Log Out" />
+                    <Logout class="secondary" />
                 </article>
                 <ul v-if="otherAccounts.length" class="other-accounts">
                     <li v-for="account in otherAccounts" :key="account.id">

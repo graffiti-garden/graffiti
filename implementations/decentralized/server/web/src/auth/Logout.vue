@@ -1,10 +1,11 @@
 <template>
     <button
         :disabled="loggingOut"
-        :aria-label="defaultLabel"
+        :aria-label="ariaLabel"
         @click="handleLogout"
     >
-        {{ loggingOut ? "Logging out…" : (label ?? defaultLabel) }}
+        <template v-if="loggingOut">Logging out…</template>
+        <slot v-else>{{ props.all ? ariaLabel : "Log Out" }}</slot>
         <StatusIcon v-if="loggingOut" status="loading" />
     </button>
 </template>
@@ -14,9 +15,9 @@ import { computed, ref } from "vue";
 import { accountLabel, accounts, currentAccount, fetchFromSelf, refreshAccounts } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
 
-const props = defineProps<{ all?: boolean; label?: string }>();
+const props = defineProps<{ all?: boolean }>();
 const loggingOut = ref(false);
-const defaultLabel = computed(() =>
+const ariaLabel = computed(() =>
     props.all ? "Log Out of All Accounts" : `Log Out of ${accountLabel(currentAccount.value)}`,
 );
 

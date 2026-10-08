@@ -1,6 +1,7 @@
 <template>
     <button @click="handleLogin" :disabled="loggingIn">
-        {{ loggingIn ? "Logging in…" : "Log In" }}
+        <template v-if="loggingIn">Logging in…</template>
+        <slot v-else>Log In</slot>
         <StatusIcon v-if="loggingIn" status="loading" />
     </button>
 </template>
