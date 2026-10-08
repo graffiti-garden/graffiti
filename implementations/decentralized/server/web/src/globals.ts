@@ -1,9 +1,9 @@
 import { computed, ref } from "vue";
 
-export type Account = { id: number; handle: string | null };
+export type Account = { id: number; handle: string };
 
-export function accountLabel(account: Account | undefined) {
-  return account?.handle ?? (account ? `Account #${account.id}` : "");
+export function accountHandle(account: Account | undefined) {
+  return account?.handle ?? "";
 }
 
 // accounts = undefined -> loading

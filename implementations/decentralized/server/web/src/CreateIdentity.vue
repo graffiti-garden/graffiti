@@ -6,11 +6,10 @@
                 v-if="!passkeyCreated"
                 :onRegister="registerAccount"
                 :onCancel="onCancel"
-                createAccount
             />
             <template v-else>
                 Created account with handle
-                <code>{{ handleNameToHandle(handleName!, baseHost) }}</code>
+                <code>{{ localNameToHandle(chosenLocalName!, baseHost) }}</code>
                 <StatusIcon status="ok" />
             </template>
         </li>
@@ -65,31 +64,12 @@
             Created actor
             <StatusIcon status="ok" />
         </li>
-        <li
-            v-if="passkeyCreated && bucketId && inboxId && actor && !linked"
-            v-scroll-into-view
-        >
-            <span v-if="errorString === null">
-                Linking actor to handle...
-                <StatusIcon status="loading" />
-            </span>
-            <span v-else>
-                Error linking actor to handle
-                <StatusIcon status="error" />
-                {{ errorString }}
-                <button @click="linkActorToHandle">Retry</button>
-            </span>
-        </li>
-        <li v-else-if="linked">
-            Linked actor to handle
-            <StatusIcon status="ok" />
-        </li>
     </ol>
 
-    <template v-if="linked">
+    <template v-if="actor">
         <p>
             Graffiti identity created with handle
-            <code>{{ handleNameToHandle(handleName!, baseHost) }}</code>
+            <code>{{ localNameToHandle(chosenLocalName!, baseHost) }}</code>
         </p>
 
         <template v-if="redirect">
@@ -123,7 +103,7 @@ import { startRegistration } from "@simplewebauthn/browser";
 import { serviceIdToUrl } from "../../shared/service-urls";
 import StatusIcon from "./utils/StatusIcon.vue";
 import { useRouter } from "vue-router";
-import { handleNameToHandle, handleNameToDid } from "../../shared/did-schemas";
+import { localNameToHandle, localNameToDid } from "../../shared/did-schemas";
 
 const redirectUriEncoded = new URLSearchParams(window.location.search).get(
     "redirect_uri",
@@ -151,14 +131,13 @@ const baseHost = window.location.host;
 
 const errorString = ref<string | null>(null);
 
-const handleName = ref<string | undefined>(undefined);
+const chosenLocalName = ref<string | undefined>(undefined);
 const passkeyCreated = ref(false);
 const bucketId = ref<string | undefined>(undefined);
 const inboxId = ref<string | undefined>(undefined);
 const actor = ref<string | undefined>(undefined);
-const linked = ref<boolean>(false);
 
-async function registerAccount(name: string) {
+async function registerAccount(localName: string) {
     // Account creation uses the temporary session, even when another account
     // is already selected in this browser.
     const fetchForNewAccount = (path: string, options?: RequestInit) =>
@@ -169,7 +148,7 @@ async function registerAccount(name: string) {
         optionsJSON = await fetchForNewAccount("/app/webauthn/register/challenge", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name }),
+            body: JSON.stringify({ localName }),
         });
     } catch (error: any) {
         alert(`Failed to register passkey. ${error.message}`);
@@ -206,7 +185,7 @@ async function registerAccount(name: string) {
         console.error("Failed to refresh accounts after registration.", error);
     }
 
-    handleName.value = name;
+    chosenLocalName.value = localName;
     passkeyCreated.value = true;
     createBucket();
     return true;
@@ -261,7 +240,7 @@ async function createActor() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            alsoKnownAs: [handleNameToDid(handleName.value!, baseHost)],
+            alsoKnownAs: [localNameToDid(chosenLocalName.value!, baseHost)],
             services: {
                 graffitiStorageBucket: {
                     type: "GraffitiStorageBucket",
@@ -288,24 +267,6 @@ async function createActor() {
             throw error;
         });
 
-    linkActorToHandle();
-}
-
-async function linkActorToHandle() {
-    errorString.value = null;
-
-    await fetchFromSelf(`/app/handles/handle/${handleName.value}`, {
-        method: "PUT",
-        body: JSON.stringify({ alsoKnownAs: [actor.value] }),
-        headers: {
-            "Content-Type": "application/json",
-        },
-    }).catch((error) => {
-        errorString.value = error.message;
-        throw error;
-    });
-
-    linked.value = true;
 }
 </script>
 

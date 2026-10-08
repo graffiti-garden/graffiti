@@ -21,22 +21,37 @@ function servicesToDidService(services: z.infer<typeof ServicesSchema>) {
 export type OptionalAlsoKnownAs = z.infer<typeof OptionalAlsoKnownAsSchema>;
 export type OptionalServices = z.infer<typeof OptionalServicesSchema>;
 
-export function handleNameToLink(handleName: string, baseHost: string) {
+export function localNameToDocumentUrl(localName: string, baseHost: string) {
   if (baseHost.startsWith("localhost:")) {
-    return `https://${baseHost}/app/handles/handle/${handleName}/did.json`;
+    return `https://${baseHost}/app/handles/handle/${localName}/did.json`;
   } else {
-    return `https://${handleName}.${baseHost}/.well-known/did.json`;
+    return `https://${localName}.${baseHost}/.well-known/did.json`;
   }
 }
-export function handleNameToHandle(handleName: string, baseHost: string) {
+export function localNameToHandle(localName: string, baseHost: string) {
   if (baseHost.startsWith("localhost:")) {
-    return `${encodeURIComponent(baseHost)}:app:handles:handle:${handleName}`;
+    return `${encodeURIComponent(baseHost)}:app:handles:handle:${localName}`;
   } else {
-    return `${handleName}.${baseHost}`;
+    return `${localName}.${baseHost}`;
   }
 }
-export function handleNameToDid(handleName: string, baseHost: string) {
-  return `did:web:${handleNameToHandle(handleName, baseHost)}`;
+export function localNameToDid(localName: string, baseHost: string) {
+  return `did:web:${localNameToHandle(localName, baseHost)}`;
+}
+export function identifierToDid(identifier: string, baseHost: string) {
+  return identifier.startsWith("did:web:")
+    ? identifier
+    : localNameToDid(identifier, baseHost);
+}
+export function identifierToHandle(identifier: string, baseHost: string) {
+  return identifier.startsWith("did:web:")
+    ? didToHandle(identifier)
+    : localNameToHandle(identifier, baseHost);
+}
+export function identifierToDocumentUrl(identifier: string, baseHost: string) {
+  return identifier.startsWith("did:web:")
+    ? didWebToUrl(identifier)
+    : localNameToDocumentUrl(identifier, baseHost);
 }
 export function didToHandle(did: string) {
   const match = did.match(/^did:web:(.+)$/);
@@ -44,6 +59,25 @@ export function didToHandle(did: string) {
     throw new Error(`Invalid DID format: ${did}`);
   }
   return match[1];
+}
+export function didWebToUrl(did: string) {
+  const [domain, ...path] = didToHandle(did).split(":");
+  const host = domain.match(/^([a-z0-9.-]+)(?:%3A([0-9]+))?$/i);
+  const validDomain = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
+  const validPath = /^(?:[a-zA-Z0-9._~-]|%[0-9a-fA-F]{2})+$/;
+  if (
+    !host ||
+    !validDomain.test(host[1]) ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(host[1]) ||
+    path.some(
+      (part) => !validPath.test(part) || [".", ".."].includes(decodeURIComponent(part)),
+    )
+  ) {
+    throw new Error(`Invalid DID:web value: ${did}`);
+  }
+  const url = new URL(`https://${host[1]}${host[2] ? `:${host[2]}` : ""}`);
+  url.pathname = `/${path.length ? path.join("/") : ".well-known"}/did.json`;
+  return url.toString();
 }
 export function constructDidDocument(args: {
   did: string;

@@ -19,10 +19,11 @@ import {
 import { HTTPException } from "hono/http-exception";
 import {
   CHALLENGE_MAX_AGE,
-  getHandleName,
+  getAccountHandle,
   prepareHandleInsertFromReservation,
   reserveHandle,
 } from "../handles/registration";
+import { localNameToHandle } from "../../../shared/did-schemas";
 
 const webauthn = new Hono<{ Bindings: Bindings }>();
 
@@ -35,16 +36,18 @@ function getRp(context: Context) {
 webauthn.post("/register/challenge", async (c) => {
   let sessionId: number;
   let userId: number;
-  let name: string;
+  let handle: string;
+  const host = new URL(getOrigin(c)).host;
   if (c.req.header("X-Graffiti-Account") !== undefined) {
     // An existing account can still add another passkey.
     const result = await verifySessionCookie(c);
     sessionId = result.sessionId;
     userId = result.userId;
-    name = (await getHandleName(c.env.DB, userId)) ?? `Account #${userId}`;
+    handle = await getAccountHandle(c.env.DB, userId, host);
   } else {
-    // The challenge is provided with a name for a new handle
-    name = (await c.req.json()).name;
+    // New accounts choose a local name before creating their passkey.
+    const localName = (await c.req.json()).localName;
+    handle = localNameToHandle(localName, host);
 
     // Reuse the temporary session when a passkey prompt is cancelled and retried.
     try {
@@ -56,7 +59,7 @@ webauthn.post("/register/challenge", async (c) => {
 
     // Temporarily reserve the handle for this session
     // so it doesn't get scooped while the user is in the passkey prompt.
-    await reserveHandle(c.env.DB, name, sessionId);
+    await reserveHandle(c.env.DB, localName, sessionId);
 
     // Create a new user ID for this registration attempt.
     const result = await c.env.DB.prepare(
@@ -72,14 +75,13 @@ webauthn.post("/register/challenge", async (c) => {
 
   const { rpId } = getRp(c);
 
-  const host = new URL(getOrigin(c)).host;
   const options = await generateRegistrationOptions({
     rpName: host,
     rpID: rpId,
     attestationType: "none",
-    // The user's chosen name is what is displayed in their passkey
-    userDisplayName: name,
-    userName: name,
+    // The handle is what is displayed in the passkey prompt.
+    userDisplayName: handle,
+    userName: handle,
     // The credential's user ID stays the same when its handle changes.
     userID: Uint8Array.from(new TextEncoder().encode(userId.toString())),
   });
@@ -198,7 +200,7 @@ webauthn.post("/register/verify", async (c) => {
   } catch (error) {
     if (
       creating &&
-      String(error).includes("NOT NULL constraint failed: handles.name")
+      String(error).includes("NOT NULL constraint failed: handles.identifier")
     ) {
       return c.text("Handle reservation expired. Please start again.", 409);
     }
@@ -309,14 +311,10 @@ webauthn.post("/authenticate/verify", async (c) => {
 webauthn.get("/accounts", async (c) => {
   c.header("Cache-Control", "no-store");
   const ids = await listSessionAccounts(c);
+  const host = new URL(getOrigin(c)).host;
   const accounts = await Promise.all(
     ids.map(async (id) => {
-      const handle = await c.env.DB.prepare(
-        "SELECT name FROM handles WHERE user_id = ?",
-      )
-        .bind(id)
-        .first<{ name: string }>();
-      return { id, handle: handle?.name ?? null };
+      return { id, handle: await getAccountHandle(c.env.DB, id, host) };
     }),
   );
   return c.json({ accounts });

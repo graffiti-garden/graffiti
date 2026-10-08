@@ -1,43 +1,45 @@
 import { HTTPException } from "hono/http-exception";
+import { identifierToHandle } from "../../../shared/did-schemas";
 
 export const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // Passkey challenges and handle reservations
 
-export async function getHandleName(db: D1Database, userId: number) {
-  const handle = await db.prepare("SELECT name FROM handles WHERE user_id = ?")
+export async function getAccountHandle(db: D1Database, userId: number, baseHost: string) {
+  const row = await db.prepare("SELECT identifier FROM handles WHERE user_id = ?")
     .bind(userId)
-    .first<{ name: string }>();
-  return handle?.name;
+    .first<{ identifier: string }>();
+  if (!row) throw new Error("Account has no handle.");
+  return identifierToHandle(row.identifier, baseHost);
 }
 
 export async function isHandleAvailable(
   db: D1Database,
-  name: string,
+  localName: string,
   sessionId = -1,
 ) {
   const info = await db.prepare(
-    `SELECT 1 FROM handles WHERE name = ?
+    `SELECT 1 FROM handles WHERE identifier = ?
      UNION SELECT 1 FROM handle_reservations
      WHERE name = ? AND created_at > ? AND session_id <> ?`,
   )
-    .bind(name, name, Date.now() - CHALLENGE_MAX_AGE, sessionId)
+    .bind(localName, localName, Date.now() - CHALLENGE_MAX_AGE, sessionId)
     .first();
   return !info;
 }
 
-function checkHandleName(name: string) {
-  if (typeof name !== "string" || !/^[a-z0-9_-]{1,64}$/.test(name)) {
+function checkLocalName(localName: string) {
+  if (typeof localName !== "string" || !/^[a-z0-9_-]{1,64}$/.test(localName)) {
     throw new HTTPException(400, { message: "Handle is invalid." });
   }
 }
 
 export async function reserveHandle(
   db: D1Database,
-  name: string,
+  localName: string,
   sessionId: number,
 ) {
-  checkHandleName(name);
-  const existing = await db.prepare("SELECT 1 FROM handles WHERE name = ?")
-    .bind(name)
+  checkLocalName(localName);
+  const existing = await db.prepare("SELECT 1 FROM handles WHERE identifier = ?")
+    .bind(localName)
     .first();
   if (existing) {
     throw new HTTPException(409, { message: "Handle already exists." });
@@ -53,7 +55,7 @@ export async function reserveHandle(
      WHERE handle_reservations.session_id = excluded.session_id
         OR handle_reservations.created_at <= ?`,
   )
-    .bind(name, sessionId, now, now - CHALLENGE_MAX_AGE)
+    .bind(localName, sessionId, now, now - CHALLENGE_MAX_AGE)
     .run();
   if (!reserved.meta.changes) {
     throw new HTTPException(409, { message: "Handle is being registered." });
@@ -63,7 +65,7 @@ export async function reserveHandle(
   await db.prepare(
     "DELETE FROM handle_reservations WHERE session_id = ? AND name <> ?",
   )
-    .bind(sessionId, name)
+    .bind(sessionId, localName)
     .run();
 }
 
@@ -76,7 +78,7 @@ export function prepareHandleInsertFromReservation(
 ) {
   const now = Date.now();
   return db.prepare(
-    `INSERT INTO handles (user_id, name, created_at)
+    `INSERT INTO handles (user_id, identifier, created_at)
      VALUES (?, (
        SELECT name FROM handle_reservations
        WHERE session_id = ? AND created_at > ?
@@ -84,32 +86,26 @@ export function prepareHandleInsertFromReservation(
   ).bind(userId, sessionId, now - CHALLENGE_MAX_AGE, now);
 }
 
-// The ordinary register endpoint refuses handles still reserved by someone
-// creating a passkey.
-export function prepareHandleInsertFromName(
+export function prepareHandleReplacement(
   db: D1Database,
   userId: number,
-  name: string,
-  options: {
-    services?: string | null;
-    alsoKnownAs?: string | null;
-  } = {},
+  identifier: string,
+  sessionId: number,
 ) {
-  checkHandleName(name);
   const now = Date.now();
-  return db.prepare(
-    `INSERT INTO handles (user_id, name, created_at, services, also_known_as)
-     SELECT ?, ?, ?, ?, ?
-     WHERE NOT EXISTS (
-       SELECT 1 FROM handle_reservations WHERE name = ? AND created_at > ?
-     )`,
-  ).bind(
-    userId,
-    name,
-    now,
-    options.services ?? null,
-    options.alsoKnownAs ?? null,
-    name,
-    now - CHALLENGE_MAX_AGE,
-  );
+  // An external DID is verified by its document. A local name must still be
+  // reserved by this session when the row is replaced; otherwise NULL makes
+  // the insert fail and rolls back the actor CID update in the same batch.
+  const insert = identifier.startsWith("did:web:")
+    ? db.prepare(
+        `INSERT INTO handles (identifier, user_id, created_at) VALUES (?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET identifier = excluded.identifier, created_at = excluded.created_at`,
+      ).bind(identifier, userId, now)
+    : db.prepare(
+        `INSERT INTO handles (identifier, user_id, created_at)
+         VALUES ((SELECT name FROM handle_reservations
+                  WHERE name = ? AND session_id = ? AND created_at > ?), ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET identifier = excluded.identifier, created_at = excluded.created_at`,
+      ).bind(identifier, sessionId, now - CHALLENGE_MAX_AGE, userId, now);
+  return insert;
 }

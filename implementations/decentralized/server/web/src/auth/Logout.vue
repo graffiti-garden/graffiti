@@ -12,13 +12,13 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { accountLabel, accounts, currentAccount, fetchFromSelf, refreshAccounts } from "../globals";
+import { accountHandle, accounts, currentAccount, fetchFromSelf, refreshAccounts } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
 
 const props = defineProps<{ all?: boolean }>();
 const loggingOut = ref(false);
 const ariaLabel = computed(() =>
-    props.all ? "Log Out of All Accounts" : `Log Out of ${accountLabel(currentAccount.value)}`,
+    props.all ? "Log Out of All Accounts" : `Log Out of ${accountHandle(currentAccount.value)}`,
 );
 
 async function handleLogout() {

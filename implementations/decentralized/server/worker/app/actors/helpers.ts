@@ -95,15 +95,24 @@ export async function publishDid(args: {
   did?: string;
   alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
   services: z.infer<typeof OptionalServicesSchema>;
+  verificationMethods?: Record<string, string>;
   oldSecretKey: Uint8Array;
   newRotationKey: string;
   prev?: string;
 }) {
-  let { alsoKnownAs, services, oldSecretKey, newRotationKey, did, prev } = args;
+  let {
+    alsoKnownAs,
+    services,
+    verificationMethods,
+    oldSecretKey,
+    newRotationKey,
+    did,
+    prev,
+  } = args;
   const unsignedOperation = {
     type: "plc_operation",
     rotationKeys: [newRotationKey],
-    verificationMethods: {},
+    verificationMethods: verificationMethods ?? {},
     alsoKnownAs: alsoKnownAs ?? [],
     services: services ?? {},
     prev: prev ?? null,
@@ -131,4 +140,34 @@ export async function publishDid(args: {
   }
 
   return { did, cid };
+}
+
+export type Actor = { did: string; secret_key: number[]; cid: string };
+
+// Replace the actor's handle while preserving the rest of its published PLC document.
+export async function publishActorHandle(actor: Actor, nextHandleDid: string) {
+  const response = await fetch(`https://plc.directory/${actor.did}/data`);
+  if (!response.ok) {
+    throw new HTTPException(502, { message: "Could not read the actor's PLC document." });
+  }
+  const data = await response.json() as {
+    did?: string;
+    services?: unknown;
+    verificationMethods?: Record<string, string>;
+  };
+  if (data.did !== actor.did) {
+    throw new HTTPException(502, { message: "Actor DID mismatch." });
+  }
+  const services = OptionalServicesSchema.parse(data.services);
+  const secretKey = Uint8Array.from(actor.secret_key);
+  // A handle change does not need to rotate the actor's key.
+  return publishDid({
+    did: actor.did,
+    alsoKnownAs: [nextHandleDid],
+    services,
+    verificationMethods: data.verificationMethods,
+    oldSecretKey: secretKey,
+    newRotationKey: deriveRotationPublicKey(secretKey),
+    prev: actor.cid,
+  });
 }

@@ -1,15 +1,6 @@
 <template>
     <header>
         <h2>Handle</h2>
-        <nav v-if="handles?.length === 0">
-            <ul>
-                <li>
-                    <RouterLink :to="{ name: 'register-handle' }" role="button">
-                        Register Handle
-                    </RouterLink>
-                </li>
-            </ul>
-        </nav>
     </header>
     <p v-if="handles === undefined">
         <em>Loading...</em>
@@ -18,15 +9,9 @@
         <p><em>Error loading handle!</em></p>
         <button @click="fetchHandles">Retry</button>
     </template>
-    <p v-else-if="handles.length === 0">
-        <em>You have no handle.</em>
-    </p>
-    <ul v-else class="cards">
+    <ul v-else-if="handles.length" class="cards">
         <li>
-            <DisplayHandle
-                :handle="handles[0]"
-                :onUnregister="onUnregister"
-            />
+            <DisplayHandle :record="handles[0]" />
         </li>
     </ul>
 </template>
@@ -34,14 +19,14 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { fetchFromSelf } from "../globals";
-import type { Handle } from "./types";
+import type { HandleRecord } from "./types";
 import DisplayHandle from "./DisplayHandle.vue";
 
-const handles = ref<Array<Handle> | undefined | null>(undefined);
+const handles = ref<Array<HandleRecord> | undefined | null>(undefined);
 function fetchHandles() {
     handles.value = undefined;
     fetchFromSelf("/app/handles/list")
-        .then((value: { handles: Array<Handle> }) => {
+        .then((value: { handles: Array<HandleRecord> }) => {
             handles.value = value.handles;
         })
         .catch((error) => {
@@ -50,8 +35,4 @@ function fetchHandles() {
         });
 }
 fetchHandles();
-
-function onUnregister() {
-    handles.value = [];
-}
 </script>

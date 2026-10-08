@@ -1,6 +1,6 @@
 <template>
     <details ref="menu" class="account-switcher" @toggle="onToggle">
-        <summary role="button">{{ accountLabel(currentAccount) }}</summary>
+        <summary role="button">{{ accountHandle(currentAccount) }}</summary>
         <div ref="accountMenu" class="account-menu">
             <div class="account-group">
                 <article
@@ -8,7 +8,7 @@
                     :class="{ connected: otherAccounts.length }"
                 >
                     <small>Current account</small>
-                    <p><strong>{{ accountLabel(currentAccount) }}</strong></p>
+                    <p><strong>{{ accountHandle(currentAccount) }}</strong></p>
                     <Logout class="secondary" />
                 </article>
                 <ul v-if="otherAccounts.length" class="other-accounts">
@@ -16,10 +16,10 @@
                         <button
                             type="button"
                             class="secondary"
-                            :aria-label="`Switch to ${accountLabel(account)}`"
+                            :aria-label="`Switch to ${accountHandle(account)}`"
                             @click="selectAccount(account.id)"
                         >
-                            {{ accountLabel(account) }}
+                            {{ accountHandle(account) }}
                         </button>
                     </li>
                 </ul>
@@ -38,7 +38,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
-    accountLabel,
+    accountHandle,
     accounts,
     currentAccount,
     selectedAccount,

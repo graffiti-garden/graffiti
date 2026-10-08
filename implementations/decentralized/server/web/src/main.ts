@@ -30,18 +30,14 @@ const routes = [
         component: () => import("./handles/Handles.vue"),
       },
       {
+        name: "replace-handle",
+        path: "/handles/replace",
+        component: () => import("./handles/ReplaceHandle.vue"),
+      },
+      {
         name: "actors",
         path: "/actors",
         component: () => import("./actors/Actors.vue"),
-      },
-      {
-        name: "register-handle",
-        path: "/handles/register",
-        component: () => import("./handles/RegisterHandle.vue"),
-        props: {
-          onRegister: () => router.push({ name: "handles" }),
-          onCancel: () => router.push({ name: "handles" }),
-        },
       },
       {
         name: "storage",

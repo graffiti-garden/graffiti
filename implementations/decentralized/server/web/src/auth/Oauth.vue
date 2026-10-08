@@ -44,7 +44,7 @@
                                     :disabled="!account.did"
                                     @click="handleSelectActor(account.did)"
                                 >
-                                    Continue as <code>{{ account.label }}</code>
+                                    Continue as <code>{{ account.handle }}</code>
                                 </button>
                             </li>
                         </ul>
@@ -55,7 +55,7 @@
                     </button>
                 </template>
                 <template v-else>
-                    <p>Continuing as {{ accountLabel(currentAccount) }}</p>
+                    <p>Continuing as {{ accountHandle(currentAccount) }}</p>
                     <section class="requested-scopes">
                         <p v-if="requestedScopes.length === 0">
                             <em>No scopes were requested.</em>
@@ -93,7 +93,7 @@
 import { computed, ref, watch } from "vue";
 import Login from "./Login.vue";
 import {
-    accountLabel,
+    accountHandle,
     accounts,
     currentAccount,
     fetchFromSelf,
@@ -162,7 +162,7 @@ function serviceKindFromEndpoint(endpoint: string) {
 
 const userServiceEndpoints = ref<Array<string> | null | undefined>(undefined);
 const endpointToActorName = ref(new Map<string, string>());
-const accountOptions = ref<Array<{ id: number; label: string; did?: string }>>([]);
+const accountOptions = ref<Array<{ id: number; handle: string; did?: string }>>([]);
 
 async function serviceEndpointsForAccount(accountId: number) {
     const headers = { "X-Graffiti-Account": String(accountId) };
@@ -223,7 +223,7 @@ async function loadAccountOptions(accountId: number) {
             } catch (error) {
                 console.error(error);
             }
-            return { id: account.id, label: accountLabel(account), did };
+            return { id: account.id, handle: accountHandle(account), did };
         }),
     );
     if (selectedAccount.value === accountId) accountOptions.value = options;
