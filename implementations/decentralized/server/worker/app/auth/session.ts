@@ -8,7 +8,7 @@ import { LRUCache } from "lru-cache";
 const CACHE_CAPACITY = 1000;
 const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
-const COOKIE_NAME = "session";
+const TEMP_COOKIE_NAME = "session";
 const TEMP_USER_ID = -1;
 
 const sessionCache = new LRUCache<
@@ -128,14 +128,16 @@ export async function deleteSessionToken(
   await context.env.DB.prepare(`DELETE FROM sessions WHERE session_id = ?`)
     .bind(sessionId)
     .run();
+  sessionCache.delete(token);
   return { sessionId, userId };
 }
 
 function setTokenCookie(
   context: Context<{ Bindings: Bindings }>,
+  name: string,
   token: string,
 ) {
-  setCookie(context, COOKIE_NAME, token, {
+  setCookie(context, name, token, {
     maxAge: INACTIVITY_TIMEOUT_MS / 1000,
     path: "/",
     sameSite: "lax",
@@ -145,41 +147,87 @@ function setTokenCookie(
 }
 
 export async function createSessionCookie(
-  ...args: Parameters<typeof createSessionToken>
+  context: Context<{ Bindings: Bindings }>,
+  userId: number,
 ) {
-  const { sessionId, token } = await createSessionToken(...args);
-  setTokenCookie(args[0], token);
+  const { sessionId, token } = await createSessionToken(context, userId);
+  setTokenCookie(context, `account_${userId}`, token);
   return sessionId;
 }
 
 export async function createTempSessionCookie(
   context: Context<{ Bindings: Bindings }>,
 ) {
-  return await createSessionCookie(context, TEMP_USER_ID);
+  const { sessionId, token } = await createSessionToken(context, TEMP_USER_ID);
+  setTokenCookie(context, TEMP_COOKIE_NAME, token);
+  return sessionId;
 }
 
-export async function verifySessionCookie(
+async function verifyCookieSession(
   context: Context<{ Bindings: Bindings }>,
-  options?: {
-    allowTemp?: boolean;
-  },
+  userId: number,
 ) {
-  const token = getCookie(context, COOKIE_NAME);
+  const name =
+    userId === TEMP_USER_ID ? TEMP_COOKIE_NAME : `account_${userId}`;
+  const token = getCookie(context, name);
   if (!token) {
     throw new HTTPException(401, { message: "Not logged in." });
   }
 
   let result: Awaited<ReturnType<typeof verifySessionToken>>;
   try {
-    result = await verifySessionToken(context, token, options);
+    result = await verifySessionToken(context, token, {
+      allowTemp: userId === TEMP_USER_ID,
+    });
+    if (result.userId !== userId) {
+      throw new HTTPException(401, { message: "Wrong account session." });
+    }
   } catch (error) {
-    deleteCookie(context, COOKIE_NAME);
+    deleteCookie(context, name);
     throw error;
   }
 
-  setTokenCookie(context, token);
+  setTokenCookie(context, name, token);
 
   return result;
+}
+
+export async function verifySessionCookie(
+  context: Context<{ Bindings: Bindings }>,
+  userId = Number(context.req.header("X-Graffiti-Account")),
+) {
+  if (!Number.isSafeInteger(userId) || userId < 1) {
+    throw new HTTPException(401, { message: "Not logged in." });
+  }
+  // The account ID selects a cookie; the token in that cookie proves ownership.
+  return verifyCookieSession(context, userId);
+}
+
+export async function verifyTempSessionCookie(
+  context: Context<{ Bindings: Bindings }>,
+) {
+  // Passkey challenges use this cookie even when another account is signed in.
+  return verifyCookieSession(context, TEMP_USER_ID);
+}
+
+export async function listSessionAccounts(
+  context: Context<{ Bindings: Bindings }>,
+) {
+  const ids: number[] = [];
+  for (const name of Object.keys(getCookie(context))) {
+    const match = /^account_([1-9][0-9]*)$/.exec(name);
+    if (!match) continue;
+    try {
+      const userId = Number(match[1]);
+      await verifySessionCookie(context, userId);
+      ids.push(userId);
+    } catch (error) {
+      if (!(error instanceof HTTPException && error.status === 401)) {
+        throw error;
+      }
+    }
+  }
+  return ids;
 }
 
 export async function getHeaderToken(context: Context<{ Bindings: Bindings }>) {
@@ -207,13 +255,23 @@ export async function verifySessionHeader(
 export async function deleteSessionCookie(
   context: Context<{ Bindings: Bindings }>,
 ) {
-  const token = getCookie(context, COOKIE_NAME);
-  if (!token) {
-    throw new HTTPException(401, { message: "Not logged in." });
-  }
-  const result = await deleteSessionToken(context, token);
-  deleteCookie(context, COOKIE_NAME);
+  const { userId } = await verifySessionCookie(context);
+  const name = `account_${userId}`;
+  const result = await deleteSessionToken(context, getCookie(context, name)!);
+  deleteCookie(context, name);
   return result;
+}
+
+export async function deleteTempSessionCookie(
+  context: Context<{ Bindings: Bindings }>,
+) {
+  const { sessionId } = await verifyTempSessionCookie(context);
+  const token = getCookie(context, TEMP_COOKIE_NAME)!;
+  await context.env.DB.prepare("DELETE FROM sessions WHERE session_id = ?")
+    .bind(sessionId)
+    .run();
+  sessionCache.delete(token);
+  deleteCookie(context, TEMP_COOKIE_NAME);
 }
 
 async function hashSecret(secret: Uint8Array) {

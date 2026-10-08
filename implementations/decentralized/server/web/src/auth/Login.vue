@@ -11,9 +11,10 @@ import {
     startAuthentication,
     type AuthenticationResponseJSON,
 } from "@simplewebauthn/browser";
-import { isLoggedIn, fetchFromSelf } from "../globals";
+import { fetchFromSelf, refreshAccounts } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
 
+const emit = defineEmits<{ (e: "success"): void }>();
 const loggingIn = ref(false);
 
 async function handleLogin() {
@@ -41,13 +42,15 @@ async function handleLogin() {
     }
 
     try {
-        await fetchFromSelf("/app/webauthn/authenticate/verify", {
+        const result = await fetchFromSelf("/app/webauthn/authenticate/verify", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(authenticationResponse),
         });
+        await refreshAccounts(result.accountId);
+        emit("success");
     } catch (error: any) {
         alert(`Failed to log in. ${error.message}`);
         loggingIn.value = false;
@@ -55,6 +58,5 @@ async function handleLogin() {
     }
 
     loggingIn.value = false;
-    isLoggedIn.value = true;
 }
 </script>

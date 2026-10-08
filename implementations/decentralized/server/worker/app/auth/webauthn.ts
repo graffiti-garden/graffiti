@@ -11,7 +11,10 @@ import {
   createSessionCookie,
   createTempSessionCookie,
   deleteSessionCookie,
+  deleteTempSessionCookie,
+  listSessionAccounts,
   verifySessionCookie,
+  verifyTempSessionCookie,
 } from "./session";
 import { HTTPException } from "hono/http-exception";
 
@@ -27,13 +30,13 @@ function getRp(context: Context) {
 webauthn.get("/register/challenge", async (c) => {
   let sessionId: number;
   let userId: number;
-  try {
+  if (c.req.header("X-Graffiti-Account") !== undefined) {
     // If adding a registration to an existing user,
     // we get the existing session
     const result = await verifySessionCookie(c);
     sessionId = result.sessionId;
     userId = result.userId;
-  } catch (error) {
+  } else {
     // Create a user
     const result = await c.env.DB.prepare(
       `INSERT INTO users (created_at) VALUES (?) RETURNING user_id`,
@@ -78,7 +81,11 @@ webauthn.get("/register/challenge", async (c) => {
 });
 
 webauthn.post("/register/verify", async (c) => {
-  const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
+  // A signed-in account can add a passkey; a new account uses the temp cookie.
+  const { sessionId, userId: sessionUserId } =
+    c.req.header("X-Graffiti-Account") === undefined
+      ? await verifyTempSessionCookie(c)
+      : await verifySessionCookie(c);
 
   // Fetch and delete the challenge
   const registrationOptions = await c.env.DB.prepare(
@@ -159,8 +166,9 @@ webauthn.post("/register/verify", async (c) => {
     .run();
 
   // Store a proper session for the user
+  if (sessionUserId === -1) await deleteTempSessionCookie(c);
   await createSessionCookie(c, userId);
-  return c.json({ message: "Passkey registered successfully." });
+  return c.json({ message: "Passkey registered successfully.", accountId: userId });
 });
 
 webauthn.get("/authenticate/challenge", async (c) => {
@@ -185,7 +193,7 @@ webauthn.get("/authenticate/challenge", async (c) => {
 });
 
 webauthn.post("/authenticate/verify", async (c) => {
-  const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
+  const { sessionId } = await verifyTempSessionCookie(c);
 
   // Find and delete the challenge
   const result = await c.env.DB.prepare(
@@ -250,9 +258,28 @@ webauthn.post("/authenticate/verify", async (c) => {
   }
 
   // Delete the temp cookie
-  deleteSessionCookie(c);
+  await deleteTempSessionCookie(c);
   await createSessionCookie(c, userPasskey.user_id);
-  return c.json({ message: "Passkey authenticated successfully." });
+  return c.json({
+    message: "Passkey authenticated successfully.",
+    accountId: userPasskey.user_id,
+  });
+});
+
+webauthn.get("/accounts", async (c) => {
+  c.header("Cache-Control", "no-store");
+  const ids = await listSessionAccounts(c);
+  const accounts = await Promise.all(
+    ids.map(async (id) => {
+      const handle = await c.env.DB.prepare(
+        "SELECT name FROM handles WHERE user_id = ?",
+      )
+        .bind(id)
+        .first<{ name: string }>();
+      return { id, handle: handle?.name ?? null };
+    }),
+  );
+  return c.json({ accounts });
 });
 
 webauthn.get("/logged-in", async (c) => {

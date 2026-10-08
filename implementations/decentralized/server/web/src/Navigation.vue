@@ -5,7 +5,7 @@
                 <RouterLink :to="{ name: 'home' }"> {{ host }} </RouterLink>
             </h1>
 
-            <details v-if="$route.name !== 'create'" :open="navOpen">
+            <details v-if="$route.name !== 'create'" class="menu" :open="navOpen">
                 <summary @click.prevent="navOpen = !navOpen">Menu</summary>
 
                 <nav :class="{ open: navOpen }">
@@ -30,14 +30,14 @@
                                 Inboxes
                             </RouterLink>
                         </li>
-                        <li><Logout /></li>
+                        <li><AccountSwitcher /></li>
                     </ul>
                 </nav>
             </details>
         </header>
 
         <main>
-            <RouterView />
+            <RouterView :key="selectedAccount" />
         </main>
     </template>
     <template v-else-if="isLoggedIn === false">
@@ -57,9 +57,9 @@
 
 <script setup lang="ts">
 import { RouterView } from "vue-router";
-import { isLoggedIn } from "./globals";
+import { isLoggedIn, selectedAccount } from "./globals";
 import LoginGuard from "./auth/LoginGuard.vue";
-import Logout from "./auth/Logout.vue";
+import AccountSwitcher from "./auth/AccountSwitcher.vue";
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import StatusIcon from "./utils/StatusIcon.vue";
@@ -78,6 +78,9 @@ const syncNav = () => {
 watch(isLoggedIn, (newVal) => {
     if (newVal) syncNav();
 });
+watch(selectedAccount, () => {
+    if (!mq.matches) navOpen.value = false;
+});
 onMounted(() => {
     syncNav();
     mq.addEventListener("change", syncNav);
@@ -91,15 +94,15 @@ const host = window.location.host;
 </script>
 
 <style scoped>
-details {
+details.menu {
     display: contents;
 }
-details[open]::details-content {
+details.menu[open]::details-content {
     display: contents;
 }
 
 @media (min-width: 800px) {
-    summary {
+    .menu > summary {
         display: none;
     }
 }
@@ -118,7 +121,7 @@ details[open]::details-content {
         grid-area: title;
     }
 
-    details summary {
+    .menu > summary {
         text-align: right;
         user-select: none;
         grid-area: menu;

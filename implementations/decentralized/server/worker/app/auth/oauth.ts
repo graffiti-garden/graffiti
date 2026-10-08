@@ -15,7 +15,7 @@ const AUTHORIZATION_CODE_EXPIRATION_MS = 60 * 10 * 1000; // 10 minutes
 // This is called once a user clicks logs in and clicks
 // "Authorize" in the server-side web app.
 oauth.get("/authorize", async (c) => {
-  const { redirect_uri, state } = c.req.query();
+  const { redirect_uri, state, account } = c.req.query();
   if (!redirect_uri) {
     throw new HTTPException(400, {
       message: "Missing redirect_uri parameter",
@@ -26,7 +26,7 @@ oauth.get("/authorize", async (c) => {
 
   let userId: number;
   try {
-    const ids = await verifySessionCookie(c);
+    const ids = await verifySessionCookie(c, account ? Number(account) : undefined);
     userId = ids.userId;
   } catch (error) {
     url.searchParams.set("error", "access_denied");

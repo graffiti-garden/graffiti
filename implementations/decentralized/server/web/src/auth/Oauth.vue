@@ -103,7 +103,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import Login from "./Login.vue";
-import { fetchFromSelf, isLoggedIn } from "../globals";
+import { fetchFromSelf, isLoggedIn, selectedAccount } from "../globals";
 import { useRouter } from "vue-router";
 import { serviceIdToUrl } from "../../../shared/service-urls";
 import { didToHandle, handleNameToHandle } from "../../../shared/did-schemas";
@@ -178,6 +178,7 @@ const accountHandles = ref<Array<string>>([]);
 const handleToActorDid = ref(new Map<string, string>());
 
 async function loadUserServiceEndpoints() {
+    const accountId = selectedAccount.value;
     userServiceEndpoints.value = undefined;
     endpointToActorName.value = new Map();
     accountHandles.value = [];
@@ -201,6 +202,8 @@ async function loadUserServiceEndpoints() {
         const actorDidData = await Promise.all(
             actorsResult.actors.map((actor) => fetchActorDidData(actor)),
         );
+        // Ignore a response for an account the user has since switched away from.
+        if (selectedAccount.value !== accountId) return;
         const actorNames = new Map<string, string>();
         const handleActors = new Map<string, string>();
         const allHandles = new Set(
@@ -258,6 +261,7 @@ async function loadUserServiceEndpoints() {
             serviceIdToUrl("shared", "inbox", baseHost),
         ];
     } catch (error) {
+        if (selectedAccount.value !== accountId) return;
         console.error(error);
         userServiceEndpoints.value = [];
     }
@@ -322,8 +326,8 @@ const requestedScopeDisplay = computed(() => {
 });
 
 watch(
-    () => isLoggedIn.value,
-    (loggedIn) => {
+    [isLoggedIn, selectedAccount],
+    ([loggedIn]) => {
         if (loggedIn === true) {
             loadUserServiceEndpoints();
         } else {
@@ -351,6 +355,9 @@ function handleApprove() {
     const url = new URL("/app/oauth/authorize", window.location.origin);
     url.searchParams.set("redirect_uri", redirectUriObject.toString());
     url.searchParams.set("state", state);
+    if (selectedAccount.value) {
+        url.searchParams.set("account", String(selectedAccount.value));
+    }
     window.location.replace(url.toString());
 }
 

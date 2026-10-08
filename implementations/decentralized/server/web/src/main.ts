@@ -1,24 +1,15 @@
 import { createApp } from "vue";
 import "@picocss/pico/css/pico.classless.fuchsia.css";
 import { createRouter, createWebHistory, RouterView } from "vue-router";
-import { fetchFromSelf, isLoggedIn } from "./globals";
+import { refreshAccounts } from "./globals";
 import "./style.css";
 
 // See if we are logged in
 function checkLoggedInStatus() {
-  fetchFromSelf("/app/webauthn/logged-in")
-    .then(() => {
-      isLoggedIn.value = true;
-    })
-    .catch(() => {
-      // Any 401 will automatically set isLoggedIn to false,
-      // but if its a different error, retry after 1 second
-      if (isLoggedIn.value === undefined) {
-        setTimeout(() => {
-          checkLoggedInStatus();
-        }, 1000);
-      }
-    });
+  refreshAccounts().catch(() => {
+    // If the function errors, retry every second, its likely a network disconnection
+    setTimeout(checkLoggedInStatus, 1000);
+  });
 }
 checkLoggedInStatus();
 
@@ -65,6 +56,11 @@ const routes = [
         props: { type: "inbox" },
       },
     ],
+  },
+  {
+    name: "add-account",
+    path: "/add-account",
+    component: () => import("./auth/LoginGuard.vue"),
   },
   { path: "/oauth", component: () => import("./auth/Oauth.vue") },
 ];

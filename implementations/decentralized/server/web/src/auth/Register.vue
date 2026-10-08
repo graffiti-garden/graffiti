@@ -11,17 +11,23 @@ import {
     startRegistration,
     type RegistrationResponseJSON,
 } from "@simplewebauthn/browser";
-import { isLoggedIn, fetchFromSelf } from "../globals";
+import { fetchFromSelf, refreshAccounts } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
 
+const emit = defineEmits<{ (e: "success"): void }>();
 const registering = ref(false);
+
+// Registration creates a new account even when another account is selected.
+// Its requests must use the temporary session, not that account's session.
+const fetchForNewAccount = (path: string, options?: RequestInit) =>
+    fetchFromSelf(path, options, false);
 
 async function handleRegister() {
     registering.value = true;
 
     let optionsJSON: any;
     try {
-        optionsJSON = await fetchFromSelf("/app/webauthn/register/challenge");
+        optionsJSON = await fetchForNewAccount("/app/webauthn/register/challenge");
     } catch (error: any) {
         alert(`Failed to register passkey. ${error.message}`);
         registering.value = false;
@@ -40,13 +46,15 @@ async function handleRegister() {
 
     // Verify the passkey registration
     try {
-        await fetchFromSelf("/app/webauthn/register/verify", {
+        const result = await fetchForNewAccount("/app/webauthn/register/verify", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(registrationResponse),
         });
+        await refreshAccounts(result.accountId);
+        emit("success");
     } catch (error: any) {
         alert(`Failed to register passkey. ${error.message}`);
         registering.value = false;
@@ -54,6 +62,5 @@ async function handleRegister() {
     }
 
     registering.value = false;
-    isLoggedIn.value = true;
 }
 </script>
