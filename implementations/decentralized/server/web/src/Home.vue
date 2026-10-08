@@ -6,14 +6,8 @@
         identity and participate in the Graffiti ecosystem.
     </p>
 
-    <p v-if="hasHandle === false">
-        <RouterLink :to="{ name: 'create' }" role="button">
-            Create a Graffiti identity
-        </RouterLink>
-    </p>
-
     <p>
-        Alternatively you may create or manage the individual components that
+        You can modify or migrate the individual components that
         make up a Graffiti identity. An identity is comprised of the following
         components:
     </p>

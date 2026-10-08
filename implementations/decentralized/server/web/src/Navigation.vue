@@ -1,5 +1,5 @@
 <template>
-    <template v-if="isLoggedIn">
+    <template v-if="isLoggedIn || $route.name === 'create'">
         <header>
             <h1>
                 <RouterLink :to="{ name: 'home' }"> {{ host }} </RouterLink>
@@ -37,7 +37,7 @@
         </header>
 
         <main>
-            <RouterView :key="selectedAccount" />
+            <RouterView :key="$route.name === 'create' ? 'create' : selectedAccount" />
         </main>
     </template>
     <template v-else-if="isLoggedIn === false">

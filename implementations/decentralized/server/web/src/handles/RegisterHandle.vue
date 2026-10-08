@@ -75,13 +75,7 @@
                 "
                 type="submit"
             >
-                {{
-                    registering
-                        ? "Registering..."
-                        : registered
-                          ? "Registered"
-                          : "Register"
-                }}
+                {{ submitLabel }}
                 <StatusIcon v-if="registering" status="loading" />
             </button>
         </div>
@@ -89,16 +83,24 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { fetchFromSelf } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
 
 const props = defineProps<{
-    onRegister: (handle: string) => void;
+    onRegister: (handle: string) => void | Promise<boolean>;
     onCancel: () => void;
+    createAccount?: boolean;
 }>();
 
 const registered = ref(false);
+const registering = ref(false);
+const submitLabel = computed(() => {
+    if (registering.value)
+        return props.createAccount ? "Creating Account..." : "Registering...";
+    if (registered.value) return props.createAccount ? "Created" : "Registered";
+    return props.createAccount ? "Continue" : "Register";
+});
 
 const baseHost = window.location.host;
 
@@ -160,20 +162,21 @@ async function checkHandleAvailability(handleName: string, mySeq: number) {
     }
 }
 
-const registering = ref(false);
 async function registerHandle() {
     registering.value = true;
     const name = handleName.value;
     try {
-        await fetchFromSelf("/app/handles/register", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ name }),
-        });
+        if (!props.createAccount) {
+            await fetchFromSelf("/app/handles/register", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ name }),
+            });
+        }
+        if ((await props.onRegister(name)) === false) return;
         registered.value = true;
-        props.onRegister(name);
     } catch (error) {
         alert(error);
     } finally {

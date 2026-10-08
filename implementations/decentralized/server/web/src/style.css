@@ -23,6 +23,18 @@
     }
 }
 
+/* Let the page scroll past the open account menu. */
+#app > header:has(.account-switcher[open]) {
+    position: static;
+}
+
+@media (min-width: 800px) {
+    /* The page's own content may already extend farther than the dropdown. */
+    #app:has(.account-switcher[open]) {
+        min-height: var(--account-menu-bottom, 0px);
+    }
+}
+
 .router-link-active {
     text-decoration: none;
 }

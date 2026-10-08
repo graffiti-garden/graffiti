@@ -1,7 +1,7 @@
 <template>
-    <details ref="menu" class="account-switcher">
+    <details ref="menu" class="account-switcher" @toggle="onToggle">
         <summary role="button">{{ accountLabel(currentAccount) }}</summary>
-        <div class="account-menu">
+        <div ref="accountMenu" class="account-menu">
             <div class="account-group">
                 <article
                     class="current-account"
@@ -47,6 +47,7 @@ import {
 import Logout from "./Logout.vue";
 
 const menu = ref<HTMLDetailsElement>();
+const accountMenu = ref<HTMLElement>();
 const router = useRouter();
 const otherAccounts = computed(() =>
     accounts.value?.filter((account) => account.id !== selectedAccount.value) ?? [],
@@ -61,8 +62,32 @@ function closeOnOutsideClick(event: PointerEvent) {
     }
 }
 
-onMounted(() => document.addEventListener("pointerdown", closeOnOutsideClick));
-onUnmounted(() => document.removeEventListener("pointerdown", closeOnOutsideClick));
+function onToggle() {
+    if (menu.value?.open && window.matchMedia("(max-width: 799px)").matches) {
+        window.scrollTo(0, 0);
+    }
+}
+
+// The desktop dropdown overlays the page, so include its bottom edge in the
+// page's minimum height when it is open.
+let menuObserver: ResizeObserver | undefined;
+onMounted(() => {
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    menuObserver = new ResizeObserver(() => {
+        const app = document.getElementById("app");
+        if (!app || !accountMenu.value) return;
+        app.style.setProperty(
+            "--account-menu-bottom",
+            `${accountMenu.value.getBoundingClientRect().bottom - app.getBoundingClientRect().top + 8}px`,
+        );
+    });
+    if (accountMenu.value) menuObserver.observe(accountMenu.value);
+});
+onUnmounted(() => {
+    document.removeEventListener("pointerdown", closeOnOutsideClick);
+    menuObserver?.disconnect();
+    document.getElementById("app")?.style.removeProperty("--account-menu-bottom");
+});
 </script>
 
 <style scoped>
@@ -72,6 +97,8 @@ onUnmounted(() => document.removeEventListener("pointerdown", closeOnOutsideClic
 }
 .account-switcher > summary {
     white-space: nowrap;
+    width: fit-content;
+    margin-left: auto;
 }
 .account-switcher[open] > summary {
     margin-bottom: 0;

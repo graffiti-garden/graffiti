@@ -17,8 +17,13 @@ import {
   verifyTempSessionCookie,
 } from "./session";
 import { HTTPException } from "hono/http-exception";
+import {
+  CHALLENGE_MAX_AGE,
+  getHandleName,
+  prepareHandleInsertFromReservation,
+  reserveHandle,
+} from "../handles/registration";
 
-const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 const webauthn = new Hono<{ Bindings: Bindings }>();
 
 function getRp(context: Context) {
@@ -27,41 +32,55 @@ function getRp(context: Context) {
   return { rpId, origin };
 }
 
-webauthn.get("/register/challenge", async (c) => {
+webauthn.post("/register/challenge", async (c) => {
   let sessionId: number;
   let userId: number;
+  let name: string;
   if (c.req.header("X-Graffiti-Account") !== undefined) {
-    // If adding a registration to an existing user,
-    // we get the existing session
+    // An existing account can still add another passkey.
     const result = await verifySessionCookie(c);
     sessionId = result.sessionId;
     userId = result.userId;
+    name = (await getHandleName(c.env.DB, userId)) ?? `Account #${userId}`;
   } else {
-    // Create a user
+    // The challenge is provided with a name for a new handle
+    name = (await c.req.json()).name;
+
+    // Reuse the temporary session when a passkey prompt is cancelled and retried.
+    try {
+      sessionId = (await verifyTempSessionCookie(c)).sessionId;
+    } catch (error) {
+      if (!(error instanceof HTTPException && error.status === 401)) throw error;
+      sessionId = await createTempSessionCookie(c);
+    }
+
+    // Temporarily reserve the handle for this session
+    // so it doesn't get scooped while the user is in the passkey prompt.
+    await reserveHandle(c.env.DB, name, sessionId);
+
+    // Create a new user ID for this registration attempt.
     const result = await c.env.DB.prepare(
-      `INSERT INTO users (created_at) VALUES (?) RETURNING user_id`,
+      "INSERT INTO users (created_at) VALUES (?) RETURNING user_id",
     )
       .bind(Date.now())
       .first<{ user_id: number }>();
     if (!result) {
       throw new HTTPException(500, { message: "Failed to create user." });
     }
-
     userId = result.user_id;
-    sessionId = await createTempSessionCookie(c);
   }
 
   const { rpId } = getRp(c);
 
-  const origin = new URL(getOrigin(c));
-  const host = origin.host;
-  const displayName = `${host} account #${userId}`;
+  const host = new URL(getOrigin(c)).host;
   const options = await generateRegistrationOptions({
     rpName: host,
     rpID: rpId,
     attestationType: "none",
-    userDisplayName: displayName,
-    userName: displayName,
+    // The user's chosen name is what is displayed in their passkey
+    userDisplayName: name,
+    userName: name,
+    // The credential's user ID stays the same when its handle changes.
     userID: Uint8Array.from(new TextEncoder().encode(userId.toString())),
   });
 
@@ -109,6 +128,10 @@ webauthn.post("/register/verify", async (c) => {
   if (Date.now() - createdAt > CHALLENGE_MAX_AGE) {
     return c.text("Challenge expired.", 400);
   }
+  const creating = sessionUserId === -1;
+  if (!creating && sessionUserId !== userId) {
+    return c.text("Invalid registration session.", 401);
+  }
 
   const { rpId, origin } = getRp(c);
 
@@ -140,19 +163,19 @@ webauthn.post("/register/verify", async (c) => {
     },
   } = verification;
   const credentialId = response.id;
-  await c.env.DB.prepare(
-    `INSERT INTO passkeys (
-      credential_id,
-      user_id,
-      public_key,
-      counter,
-      credential_type,
-      device_type,
-      backed_up,
-      created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
+  const statements = [
+    c.env.DB.prepare(
+      `INSERT INTO passkeys (
+        credential_id,
+        user_id,
+        public_key,
+        counter,
+        credential_type,
+        device_type,
+        backed_up,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
       credentialId,
       userId,
       publicKey,
@@ -162,8 +185,25 @@ webauthn.post("/register/verify", async (c) => {
       credentialDeviceType,
       credentialBackedUp,
       Date.now(),
-    )
-    .run();
+    ),
+  ];
+
+  if (creating) {
+    statements.push(
+      prepareHandleInsertFromReservation(c.env.DB, userId, sessionId),
+    );
+  }
+  try {
+    await c.env.DB.batch(statements);
+  } catch (error) {
+    if (
+      creating &&
+      String(error).includes("NOT NULL constraint failed: handles.name")
+    ) {
+      return c.text("Handle reservation expired. Please start again.", 409);
+    }
+    throw error;
+  }
 
   // Store a proper session for the user
   if (sessionUserId === -1) await deleteTempSessionCookie(c);

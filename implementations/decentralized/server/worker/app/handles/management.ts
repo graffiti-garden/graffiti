@@ -1,24 +1,27 @@
 import { Hono } from "hono";
 import type { Bindings } from "../../env";
-import { verifySessionCookie } from "../auth/session";
+import { verifySessionCookie, verifyTempSessionCookie } from "../auth/session";
 import { HTTPException } from "hono/http-exception";
 import {
   OptionalAlsoKnownAsSchema,
   OptionalServicesSchema,
 } from "../../../shared/did-schemas";
 import { getDid } from "./dids";
+import { isHandleAvailable, prepareHandleInsertFromName } from "./registration";
 
 const router = new Hono<{ Bindings: Bindings }>();
 
 router.get("/available/:handle-name", async (c) => {
   const handleName = c.req.param("handle-name");
-  const info = await c.env.DB.prepare(
-    "SELECT created_at FROM handles WHERE name = ?",
-  )
-    .bind(handleName)
-    .first();
-
-  return c.json({ available: !info });
+  let sessionId = -1;
+  try {
+    sessionId = (await verifyTempSessionCookie(c)).sessionId;
+  } catch (error) {
+    if (!(error instanceof HTTPException && error.status === 401)) throw error;
+  }
+  return c.json({
+    available: await isHandleAvailable(c.env.DB, handleName, sessionId),
+  });
 });
 
 router.post("/register", async (c) => {
@@ -30,18 +33,16 @@ router.post("/register", async (c) => {
 
   // Attempt to store the handle
   try {
-    await c.env.DB.prepare(
-      "INSERT INTO handles (user_id, name, created_at, services, also_known_as) VALUES (?, ?, ?, ?, ?)",
-    )
-      .bind(
-        userId,
-        handleName,
-        Date.now(),
-        services ? JSON.stringify(services) : null,
-        alsoKnownAs ? JSON.stringify(alsoKnownAs) : null,
-      )
-      .run();
+    const insert = prepareHandleInsertFromName(c.env.DB, userId, handleName, {
+      services: services ? JSON.stringify(services) : null,
+      alsoKnownAs: alsoKnownAs ? JSON.stringify(alsoKnownAs) : null,
+    });
+    const result = await insert.run();
+    if (!result.meta.changes) {
+      throw new HTTPException(409, { message: "Handle is being registered." });
+    }
   } catch (error: any) {
+    if (error instanceof HTTPException) throw error;
     const msg = String(error?.message || "");
     if (msg.includes("handles.user_id")) {
       throw new HTTPException(409, {

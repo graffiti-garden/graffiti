@@ -18,14 +18,15 @@
         </header>
 
         <main>
-            <Register @success="leaveIfAddingAccount" />
+            <RouterLink :to="{ name: 'create' }" role="button">
+                Create Account
+            </RouterLink>
             <Login class="secondary" @success="leaveIfAddingAccount" />
         </main>
     </dialog>
 </template>
 
 <script setup lang="ts">
-import Register from "./Register.vue";
 import Login from "./Login.vue";
 import { useRoute, useRouter } from "vue-router";
 import "./floating-panel.css";

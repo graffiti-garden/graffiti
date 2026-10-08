@@ -1,10 +1,20 @@
 <template>
     <h2>Create a Graffiti identity</h2>
-    <ol start="2">
+    <ol>
         <li>
-            <RegisterHandle :onRegister="onRegister" :onCancel="onCancel" />
+            <RegisterHandle
+                v-if="!passkeyCreated"
+                :onRegister="registerAccount"
+                :onCancel="onCancel"
+                createAccount
+            />
+            <template v-else>
+                Created account with handle
+                <code>{{ handleNameToHandle(handleName!, baseHost) }}</code>
+                <StatusIcon status="ok" />
+            </template>
         </li>
-        <li v-if="handleName && !bucketId" v-scroll-into-view>
+        <li v-if="passkeyCreated && !bucketId" v-scroll-into-view>
             <span v-if="errorString === null">
                 Creating storage bucket...
                 <StatusIcon status="loading" />
@@ -20,7 +30,7 @@
             Created storage bucket
             <StatusIcon status="ok" />
         </li>
-        <li v-if="handleName && bucketId && !inboxId" v-scroll-into-view>
+        <li v-if="passkeyCreated && bucketId && !inboxId" v-scroll-into-view>
             <span v-if="errorString === null">
                 Creating inbox...
                 <StatusIcon status="loading" />
@@ -37,7 +47,7 @@
             <StatusIcon status="ok" />
         </li>
         <li
-            v-if="handleName && bucketId && inboxId && !actor"
+            v-if="passkeyCreated && bucketId && inboxId && !actor"
             v-scroll-into-view
         >
             <span v-if="errorString === null">
@@ -56,7 +66,7 @@
             <StatusIcon status="ok" />
         </li>
         <li
-            v-if="handleName && bucketId && inboxId && actor && !linked"
+            v-if="passkeyCreated && bucketId && inboxId && actor && !linked"
             v-scroll-into-view
         >
             <span v-if="errorString === null">
@@ -108,7 +118,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import RegisterHandle from "./handles/RegisterHandle.vue";
-import { fetchFromSelf } from "./globals";
+import { fetchFromSelf, refreshAccounts, selectAccount } from "./globals";
+import { startRegistration } from "@simplewebauthn/browser";
 import { serviceIdToUrl } from "../../shared/service-urls";
 import StatusIcon from "./utils/StatusIcon.vue";
 import { useRouter } from "vue-router";
@@ -141,14 +152,64 @@ const baseHost = window.location.host;
 const errorString = ref<string | null>(null);
 
 const handleName = ref<string | undefined>(undefined);
+const passkeyCreated = ref(false);
 const bucketId = ref<string | undefined>(undefined);
 const inboxId = ref<string | undefined>(undefined);
 const actor = ref<string | undefined>(undefined);
 const linked = ref<boolean>(false);
 
-async function onRegister(name: string) {
+async function registerAccount(name: string) {
+    // Account creation uses the temporary session, even when another account
+    // is already selected in this browser.
+    const fetchForNewAccount = (path: string, options?: RequestInit) =>
+        fetchFromSelf(path, options, false);
+
+    let optionsJSON: any;
+    try {
+        optionsJSON = await fetchForNewAccount("/app/webauthn/register/challenge", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name }),
+        });
+    } catch (error: any) {
+        alert(`Failed to register passkey. ${error.message}`);
+        return false;
+    }
+
+    let response;
+    try {
+        response = await startRegistration({ optionsJSON });
+    } catch (error) {
+        // Cancelling the prompt leaves the handle field editable.
+        console.error(error);
+        return false;
+    }
+
+    let accountId: number;
+    try {
+        const result = await fetchForNewAccount("/app/webauthn/register/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(response),
+        });
+        accountId = result.accountId;
+    } catch (error: any) {
+        alert(`Failed to register passkey. ${error.message}`);
+        return false;
+    }
+
+    // The account exists now, even if reloading the account list fails.
+    selectAccount(accountId);
+    try {
+        await refreshAccounts(accountId);
+    } catch (error) {
+        console.error("Failed to refresh accounts after registration.", error);
+    }
+
     handleName.value = name;
+    passkeyCreated.value = true;
     createBucket();
+    return true;
 }
 
 const router = useRouter();
@@ -249,18 +310,16 @@ async function linkActorToHandle() {
 </script>
 
 <style>
-ol > li:has(> header) {
-    display: contents;
-}
-
-ol > li > header > h3::before {
-    content: "1. ";
-}
-
 ol {
-    list-style-position: inside;
-    padding-left: 0;
+    padding-left: 1.5rem;
     margin-top: 2rem;
+}
+
+/* Match the heading while choosing a handle; use a normal marker once created. */
+ol > li:first-child:has(> header)::marker {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--pico-h3-color);
 }
 
 a[role="button"].return {
