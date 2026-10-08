@@ -1,6 +1,8 @@
 <template>
     <details ref="menu" class="account-switcher" @toggle="onToggle">
-        <summary role="button">{{ accountHandle(currentAccount) }}</summary>
+        <summary role="button" :title="accountHandle(currentAccount)">
+            <span class="account-name">{{ accountHandle(currentAccount) }}</span>
+        </summary>
         <div ref="accountMenu" class="account-menu">
             <div class="account-group">
                 <article
@@ -64,7 +66,7 @@ function closeOnOutsideClick(event: PointerEvent) {
 
 function onToggle() {
     if (menu.value?.open && window.matchMedia("(max-width: 799px)").matches) {
-        window.scrollTo(0, 0);
+        window.scrollTo({ top: 0, behavior: "instant" });
     }
 }
 
@@ -96,9 +98,21 @@ onUnmounted(() => {
     margin-bottom: 0;
 }
 .account-switcher > summary {
-    white-space: nowrap;
-    width: fit-content;
+    display: flex;
+    align-items: center;
+    width: max-content;
+    max-width: calc(100vw - 2rem);
     margin-left: auto;
+    padding: 0.375rem 0.75rem;
+}
+.account-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.account-switcher > summary::after {
+    flex: none;
 }
 .account-switcher[open] > summary {
     margin-bottom: 0;
@@ -157,8 +171,12 @@ onUnmounted(() => {
 }
 
 @media (max-width: 799px) {
+    .account-switcher {
+        width: 100%;
+    }
     .account-menu {
         position: static;
+        width: 100%;
         margin-top: 0.5rem;
     }
 }

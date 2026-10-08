@@ -1,5 +1,5 @@
 <template>
-    <h2>A Graffiti Provider</h2>
+    <h2 class="page-title">A Graffiti Provider</h2>
     <p>
         {{ baseHost }} provides everything you need to create a
         <a href="https://graffiti.garden" target="_blank">Graffiti</a>
@@ -7,59 +7,59 @@
     </p>
 
     <p>
-        You can modify or migrate the individual components that
-        make up a Graffiti identity. An identity is comprised of the following
-        components:
+        Your Graffiti identity consists of a <a href="#handle">Handle</a>,
+        <a href="#actor">Actor</a>, <a href="#bucket">Bucket</a>, and
+        <a href="#inboxes">Inboxes</a>. Below, you can inspect and modify each
+        service. You may also migrate any of these services to another provider
+        at any time.
     </p>
 
-    <ul>
-        <li>
-            <RouterLink :to="{ name: 'handles' }">Handle</RouterLink>: A
-            human-readable and globally unique username, such as
-            <code>example.{{ baseHost }}</code
-            >.
-        </li>
-        <li>
-            <RouterLink :to="{ name: 'actors' }">Actor</RouterLink>: A
-            <a href="https://www.w3.org/TR/did-1.0/"
-                >decentralized identifier</a
-            >
-            that permanently represents you, even if you change your handle.
-        </li>
-        <li>
-            <RouterLink :to="{ name: 'storage' }">Storage Bucket</RouterLink>: A
-            simple file hosting service where your posts, images, and other
-            media are stored.
-        </li>
-        <li>
-            <RouterLink :to="{ name: 'inboxes' }">Inbox</RouterLink>: An
-            email-like inbox where you can receive messages from other Graffiti
-            users.
-        </li>
-    </ul>
-
     <aside>
-        If you are unhappy with {{ baseHost }} you may migrate any and all
-        services to another provider at any time. The open source code for this
-        project is
+        The open source code for this project is
         <a
             target="_blank"
             href="https://github.com/graffiti-garden/graffiti/tree/main/implementations/decentralized/server"
         >
             available on GitHub
-        </a>
+        </a>.
     </aside>
+
+    <section id="handle"><Handles @loaded="sectionLoaded('handle')" /></section>
+    <section id="actor"><Actors @loaded="sectionLoaded('actor')" /></section>
+    <section id="bucket"><Storage type="bucket" @loaded="sectionLoaded('bucket')" /></section>
+    <section id="inboxes"><Storage type="inbox" @loaded="sectionLoaded('inboxes')" /></section>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import { fetchFromSelf } from "./globals";
+import { nextTick } from "vue";
+import Handles from "./handles/Handles.vue";
+import Actors from "./actors/Actors.vue";
+import Storage from "./storage/Storage.vue";
 
 const baseHost = window.location.host;
-const hasHandle = ref<boolean>();
-fetchFromSelf("/app/handles/list")
-    .then(({ handles }) => {
-        hasHandle.value = handles.length > 0;
-    })
-    .catch(console.error);
+const loadedSections = new Set<string>();
+let initialHashHandled = false;
+
+async function sectionLoaded(section: string) {
+    loadedSections.add(section);
+    if (initialHashHandled || loadedSections.size !== 4) return;
+    initialHashHandled = true;
+
+    // The sections above the link target can grow when their data arrives.
+    await nextTick();
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
+}
 </script>
+
+<style scoped>
+.page-title {
+    font-size: 2.5rem;
+}
+
+section {
+    scroll-margin-top: 8rem;
+    border-top: 1px solid var(--pico-muted-border-color);
+    margin-top: 2rem;
+    padding-top: 2rem;
+}
+</style>

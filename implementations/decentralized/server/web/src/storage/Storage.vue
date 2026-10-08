@@ -1,6 +1,6 @@
 <template>
     <header>
-        <h2>{{ type === "inbox" ? "Inboxes" : "Storage Bucket" }}</h2>
+        <h2>{{ type === "inbox" ? "Inboxes" : "Bucket" }}</h2>
         <nav
             v-if="services?.every((service) => service.serviceId === 'shared')"
         >
@@ -21,6 +21,15 @@
             </ul>
         </nav>
     </header>
+
+    <p v-if="type === 'inbox'">
+        You can receive messages from other Graffiti users through your
+        personal inbox or the shared inbox.
+    </p>
+    <p v-else>
+        Your bucket is a simple file hosting service where your posts, images,
+        and other media are stored.
+    </p>
 
     <p v-if="services === undefined">
         <em>Loading...</em>
@@ -51,6 +60,7 @@ import { fetchFromSelf } from "../globals";
 import type { Service } from "./types";
 import DisplayService from "./DisplayService.vue";
 
+const emit = defineEmits(["loaded"]);
 const services = ref<Array<Service> | null | undefined>(undefined);
 
 const props = defineProps<{
@@ -78,7 +88,8 @@ function fetchServices() {
         .catch((error) => {
             console.error(error);
             services.value = null;
-        });
+        })
+        .finally(() => emit("loaded"));
 }
 fetchServices();
 

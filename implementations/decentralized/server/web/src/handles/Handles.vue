@@ -2,6 +2,10 @@
     <header>
         <h2>Handle</h2>
     </header>
+    <p>
+        Your handle is a human-readable and globally unique username, such as
+        <code>example.{{ baseHost }}</code>.
+    </p>
     <p v-if="handles === undefined">
         <em>Loading...</em>
     </p>
@@ -22,6 +26,8 @@ import { fetchFromSelf } from "../globals";
 import type { HandleRecord } from "./types";
 import DisplayHandle from "./DisplayHandle.vue";
 
+const emit = defineEmits(["loaded"]);
+const baseHost = window.location.host;
 const handles = ref<Array<HandleRecord> | undefined | null>(undefined);
 function fetchHandles() {
     handles.value = undefined;
@@ -32,7 +38,8 @@ function fetchHandles() {
         .catch((error) => {
             console.error(error);
             handles.value = null;
-        });
+        })
+        .finally(() => emit("loaded"));
 }
 fetchHandles();
 </script>

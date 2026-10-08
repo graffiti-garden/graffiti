@@ -25,36 +25,14 @@ const routes = [
         component: () => import("./CreateIdentity.vue"),
       },
       {
-        name: "handles",
-        path: "/handles",
-        component: () => import("./handles/Handles.vue"),
-      },
-      {
         name: "replace-handle",
         path: "/handles/replace",
         component: () => import("./handles/ReplaceHandle.vue"),
       },
       {
-        name: "actors",
-        path: "/actors",
-        component: () => import("./actors/Actors.vue"),
-      },
-      {
         name: "replace-actor",
         path: "/actors/replace",
         component: () => import("./actors/ReplaceActor.vue"),
-      },
-      {
-        name: "storage",
-        path: "/storage",
-        component: () => import("./storage/Storage.vue"),
-        props: { type: "bucket" },
-      },
-      {
-        name: "inboxes",
-        path: "/inboxes",
-        component: () => import("./storage/Storage.vue"),
-        props: { type: "inbox" },
       },
     ],
   },

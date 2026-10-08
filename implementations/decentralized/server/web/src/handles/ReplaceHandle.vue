@@ -1,5 +1,5 @@
 <template>
-    <p><RouterLink :to="{ name: 'handles' }">← Back to handle</RouterLink></p>
+    <p><RouterLink :to="{ name: 'home', hash: '#handle' }">← Back to handle</RouterLink></p>
     <header>
         <h2>Replace handle</h2>
     </header>
@@ -27,7 +27,7 @@
             <p v-if="actor === undefined"><em>Loading actor...</em></p>
             <p v-else-if="actorError" role="alert">{{ actorError }}</p>
             <p v-else-if="actor === null">
-                Create or attach an <RouterLink :to="{ name: 'actors' }">actor</RouterLink>
+                Create or attach an <RouterLink :to="{ name: 'home', hash: '#actor' }">actor</RouterLink>
                 before replacing your handle.
             </p>
             <RegisterHandle
@@ -44,7 +44,7 @@
             <p v-if="actor === undefined"><em>Loading actor...</em></p>
             <p v-else-if="actorError" role="alert">{{ actorError }}</p>
             <p v-else-if="actor === null">
-                Create or attach an <RouterLink :to="{ name: 'actors' }">actor</RouterLink>
+                Create or attach an <RouterLink :to="{ name: 'home', hash: '#actor' }">actor</RouterLink>
                 before using a custom domain.
             </p>
             <form v-else @submit.prevent="verifyDomain">
@@ -209,7 +209,7 @@ async function replaceHandle(identifier: string) {
         body: JSON.stringify({ identifier }),
     });
     await refreshAccounts().catch(console.error);
-    await router.push({ name: "handles" });
+    await router.push({ name: "home", hash: "#handle" });
     return true;
 }
 

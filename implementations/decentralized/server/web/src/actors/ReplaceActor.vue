@@ -1,5 +1,5 @@
 <template>
-    <p><RouterLink :to="{ name: 'actors' }">← Back to actor</RouterLink></p>
+    <p><RouterLink :to="{ name: 'home', hash: '#actor' }">← Back to actor</RouterLink></p>
     <header>
         <h2>{{ currentActor ? "Replace actor" : "Choose actor" }}</h2>
     </header>
@@ -214,7 +214,7 @@ async function createActor() {
                 replace: !!currentActor.value,
             }),
         });
-        await router.push({ name: "actors" });
+        await router.push({ name: "home", hash: "#actor" });
     } catch (cause) {
         error.value = String(cause);
     } finally {
@@ -244,7 +244,7 @@ async function importActor() {
                 replace: !!currentActor.value,
             }),
         });
-        await router.push({ name: "actors" });
+        await router.push({ name: "home", hash: "#actor" });
     } catch (cause) {
         error.value = String(cause);
     } finally {
@@ -261,7 +261,7 @@ async function attachActor() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ did: externalDid.value, replace: !!currentActor.value }),
         });
-        await router.push({ name: "actors" });
+        await router.push({ name: "home", hash: "#actor" });
     } catch (cause) {
         error.value = String(cause);
     } finally {
