@@ -18,7 +18,7 @@ export async function fetchActorDidData(
     if (json.did !== actor.did) {
         throw new Error(`DID mismatch: ${json.did} !== ${actor.did}`);
     }
-    if (!json.rotationKeys.includes(actor.rotationKey)) {
+    if (actor.rotationKey && !json.rotationKeys.includes(actor.rotationKey)) {
         throw new Error(`Rotation key mismatch for ${actor.did}`);
     }
 

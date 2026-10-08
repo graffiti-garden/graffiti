@@ -13,16 +13,14 @@ export class Handles {
   actorToHandle: Graffiti["actorToHandle"] = async (actor) => {
     const actorDocument = await this.services.dids.resolve(actor);
 
-    const handleDid = actorDocument.alsoKnownAs?.at(0);
+    const handleDid = actorDocument.alsoKnownAs?.find((alias) =>
+      alias.startsWith(HANDLE_DID_PREFIX),
+    );
     if (!handleDid) {
       throw new GraffitiErrorNotFound(
         `Handle for actor DID ${actor} not found`,
       );
     }
-    if (!handleDid.startsWith(HANDLE_DID_PREFIX)) {
-      throw new Error(`Handle DID ${handleDid} is not a valid handle`);
-    }
-
     const handle = handleDid.slice(HANDLE_DID_PREFIX.length);
 
     const handleDocument = await this.services.dids.resolve(handleDid);

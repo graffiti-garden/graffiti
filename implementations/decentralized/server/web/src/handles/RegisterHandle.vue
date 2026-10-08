@@ -91,7 +91,9 @@ import StatusIcon from "../utils/StatusIcon.vue";
 const props = defineProps<{
     onRegister: (localName: string) => void | Promise<boolean>;
     onCancel?: () => void;
+    onInput?: (localName: string) => void;
     replace?: boolean;
+    continueOnly?: boolean;
 }>();
 
 const registered = ref(false);
@@ -100,7 +102,7 @@ const submitLabel = computed(() => {
     if (registering.value)
         return props.replace ? "Replacing handle..." : "Creating Account...";
     if (registered.value) return props.replace ? "Replaced" : "Created";
-    return props.replace ? "Replace handle" : "Continue";
+    return props.continueOnly ? "Continue" : props.replace ? "Replace handle" : "Continue";
 });
 
 const baseHost = window.location.host;
@@ -122,6 +124,7 @@ let requestSeq = 0;
 watch(
     localName,
     (newLocalName) => {
+        props.onInput?.(newLocalName);
         const normalizedName = newLocalName.toLowerCase();
         if (normalizedName !== newLocalName) {
             localName.value = normalizedName;

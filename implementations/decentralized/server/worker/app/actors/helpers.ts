@@ -91,13 +91,21 @@ async function deriveCid(signedOperation: {}) {
   return cid.toString();
 }
 
+export async function fetchActorCid(did: string) {
+  const response = await fetch(`https://plc.directory/${did}/log/last`);
+  if (!response.ok) {
+    throw new HTTPException(502, { message: "Could not read the actor's latest PLC operation." });
+  }
+  return deriveCid(await response.json());
+}
+
 export async function publishDid(args: {
   did?: string;
   alsoKnownAs: z.infer<typeof OptionalAlsoKnownAsSchema>;
   services: z.infer<typeof OptionalServicesSchema>;
   verificationMethods?: Record<string, string>;
   oldSecretKey: Uint8Array;
-  newRotationKey: string;
+  rotationKeys: string[];
   prev?: string;
 }) {
   let {
@@ -105,13 +113,13 @@ export async function publishDid(args: {
     services,
     verificationMethods,
     oldSecretKey,
-    newRotationKey,
+    rotationKeys,
     did,
     prev,
   } = args;
   const unsignedOperation = {
     type: "plc_operation",
-    rotationKeys: [newRotationKey],
+    rotationKeys,
     verificationMethods: verificationMethods ?? {},
     alsoKnownAs: alsoKnownAs ?? [],
     services: services ?? {},
@@ -124,8 +132,6 @@ export async function publishDid(args: {
   if (!did) {
     did = await deriveDid(signedOperation);
   }
-  const cid = await deriveCid(signedOperation);
-
   // Publish the DID to the directory
   const result = await fetch(`https://plc.directory/${did}`, {
     method: "POST",
@@ -139,35 +145,67 @@ export async function publishDid(args: {
     });
   }
 
-  return { did, cid };
+  return { did };
 }
 
-export type Actor = { did: string; secret_key: number[]; cid: string };
+export type Actor = { did: string; secret_key: number[] | null };
 
-// Replace the actor's handle while preserving the rest of its published PLC document.
-export async function publishActorHandle(actor: Actor, nextHandleDid: string) {
-  const response = await fetch(`https://plc.directory/${actor.did}/data`);
+// Keep the account's handle ahead of other did:web aliases. Graffiti clients
+// use the first did:web alias as the actor's handle.
+export function withFirstWebHandle(aliases: string[], handleDid: string) {
+  const result = aliases.filter((alias) => alias !== handleDid);
+  const firstWeb = result.findIndex((alias) => alias.startsWith("did:web:"));
+  result.splice(firstWeb < 0 ? result.length : firstWeb, 0, handleDid);
+  return result;
+}
+
+// PLC updates contain the entire document, including fields this application
+// does not edit. Read them before publishing so other services keep their keys
+// and settings.
+export async function fetchActorData(did: string) {
+  const response = await fetch(`https://plc.directory/${did}/data`);
   if (!response.ok) {
     throw new HTTPException(502, { message: "Could not read the actor's PLC document." });
   }
-  const data = await response.json() as {
-    did?: string;
-    services?: unknown;
-    verificationMethods?: Record<string, string>;
-  };
-  if (data.did !== actor.did) {
-    throw new HTTPException(502, { message: "Actor DID mismatch." });
+  const data = await response.json() as Record<string, unknown>;
+  if (data.did !== did || !Array.isArray(data.rotationKeys) ||
+      !data.rotationKeys.every((key) => typeof key === "string")) {
+    throw new HTTPException(502, { message: "Invalid actor PLC document." });
   }
-  const services = OptionalServicesSchema.parse(data.services);
+  return {
+    rotationKeys: data.rotationKeys as string[],
+    verificationMethods: z.record(z.string(), z.string()).parse(data.verificationMethods),
+    alsoKnownAs: OptionalAlsoKnownAsSchema.parse(data.alsoKnownAs) ?? [],
+    services: OptionalServicesSchema.parse(data.services),
+  };
+}
+
+// Replace the actor's handle while preserving the rest of its published PLC document.
+export async function publishActorHandle(
+  actor: Actor,
+  previousHandleDid: string,
+  nextHandleDid: string,
+) {
+  if (!actor.secret_key) {
+    throw new HTTPException(409, { message: "This actor is managed elsewhere." });
+  }
+  const data = await fetchActorData(actor.did);
+  const prev = await fetchActorCid(actor.did);
   const secretKey = Uint8Array.from(actor.secret_key);
+  if (!data.rotationKeys.includes(deriveRotationPublicKey(secretKey))) {
+    throw new HTTPException(409, { message: "This provider no longer controls the actor." });
+  }
   // A handle change does not need to rotate the actor's key.
   return publishDid({
     did: actor.did,
-    alsoKnownAs: [nextHandleDid],
-    services,
+    alsoKnownAs: withFirstWebHandle(
+      data.alsoKnownAs.filter((alias) => alias !== previousHandleDid),
+      nextHandleDid,
+    ),
+    services: data.services,
     verificationMethods: data.verificationMethods,
     oldSecretKey: secretKey,
-    newRotationKey: deriveRotationPublicKey(secretKey),
-    prev: actor.cid,
+    rotationKeys: data.rotationKeys,
+    prev,
   });
 }

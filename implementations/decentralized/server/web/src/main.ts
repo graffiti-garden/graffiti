@@ -40,6 +40,11 @@ const routes = [
         component: () => import("./actors/Actors.vue"),
       },
       {
+        name: "replace-actor",
+        path: "/actors/replace",
+        component: () => import("./actors/ReplaceActor.vue"),
+      },
+      {
         name: "storage",
         path: "/storage",
         component: () => import("./storage/Storage.vue"),

@@ -12,7 +12,7 @@
                 or would you like to use a custom domain like <code>alice.com</code>?
             </p>
             <div class="choices">
-                <button type="button" :aria-pressed="choice === 'local'" @click="choice = 'local'">
+                <button type="button" :aria-pressed="choice === 'local'" @click="chooseLocal">
                     <strong>.{{ baseHost }} handle</strong>
                     <span>Free and hosted by us.</span>
                 </button>
@@ -24,7 +24,19 @@
         </li>
 
         <li v-if="choice === 'local'" v-scroll-into-view>
-            <RegisterHandle replace :onRegister="replaceHandle" />
+            <p v-if="actor === undefined"><em>Loading actor...</em></p>
+            <p v-else-if="actorError" role="alert">{{ actorError }}</p>
+            <p v-else-if="actor === null">
+                Create or attach an <RouterLink :to="{ name: 'actors' }">actor</RouterLink>
+                before replacing your handle.
+            </p>
+            <RegisterHandle
+                v-else
+                replace
+                :continueOnly="!actor.rotationKey"
+                :onInput="() => pendingLocalName = null"
+                :onRegister="replaceLocalHandle"
+            />
         </li>
 
         <li v-else-if="choice === 'custom'" v-scroll-into-view>
@@ -32,7 +44,7 @@
             <p v-if="actor === undefined"><em>Loading actor...</em></p>
             <p v-else-if="actorError" role="alert">{{ actorError }}</p>
             <p v-else-if="actor === null">
-                Create or import an <RouterLink :to="{ name: 'actors' }">actor</RouterLink>
+                Create or attach an <RouterLink :to="{ name: 'actors' }">actor</RouterLink>
                 before using a custom domain.
             </p>
             <form v-else @submit.prevent="verifyDomain">
@@ -55,21 +67,39 @@
                     <p>Publish this exact JSON at <a :href="documentUrl" target="_blank"><code>{{ documentUrl }}</code></a>:</p>
                     <pre><code>{{ documentText }}</code></pre>
                     <CopyButton :text="documentText" />
+                    <p>If your <code>did.json</code> lists other actors, put <code>{{ actor.did }}</code> first in <code>alsoKnownAs</code>. Graffiti clients use the first actor.</p>
                     <p>Once the file is available, verify it before replacing your handle.</p>
                     <button :disabled="verifying" type="submit">
                         {{ verifying ? "Verifying..." : "Verify domain" }}
                     </button>
                 </template>
             </form>
-            <p v-if="error" role="alert">{{ error }}</p>
+            <p v-if="error && !verifiedDid" role="alert">{{ error }}</p>
         </li>
 
-        <li v-if="choice === 'custom' && verifiedDid" v-scroll-into-view>
+        <li v-if="choice === 'custom' && verifiedDid && actor?.rotationKey" v-scroll-into-view>
             <h3>Replace handle</h3>
             <p>Domain verified.</p>
             <button :disabled="replacing" @click="replaceCustomHandle">
                 {{ replacing ? "Replacing handle..." : "Replace handle" }}
             </button>
+            <p v-if="error" role="alert">{{ error }}</p>
+        </li>
+        <li v-if="actor && !actor.rotationKey && nextHandleDid" v-scroll-into-view>
+            <h3>Update your actor</h3>
+            <p>
+                Graffiti does not hold this actor's private key. At the provider
+                managing <code>{{ actor.did }}</code>, replace your old Graffiti
+                alias in <code>alsoKnownAs</code> with
+                <code>{{ nextHandleDid }}</code>. Make it the first <code>did:web:</code>
+                alias and keep any other aliases.
+            </p>
+            <CopyButton :text="nextHandleDid" />
+            <p>Once that change is published, verify it to replace your handle.</p>
+            <button :disabled="replacing" @click="replaceExternalActorHandle">
+                {{ replacing ? "Verifying..." : "Verify actor and replace handle" }}
+            </button>
+            <p v-if="error" role="alert">{{ error }}</p>
         </li>
     </ol>
 </template>
@@ -77,7 +107,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { constructDidDocument, didWebToUrl } from "../../../shared/did-schemas";
+import { constructDidDocument, didWebToUrl, localNameToDid } from "../../../shared/did-schemas";
 import { fetchFromSelf, refreshAccounts } from "../globals";
 import CopyButton from "../utils/CopyButton.vue";
 import RegisterHandle from "./RegisterHandle.vue";
@@ -86,26 +116,37 @@ const router = useRouter();
 const baseHost = window.location.host;
 const choice = ref<"local" | "custom" | null>(null);
 const domain = ref("");
-const actor = ref<string | null | undefined>(undefined);
+const actor = ref<{ did: string; rotationKey: string | null } | null | undefined>(undefined);
 const actorError = ref("");
 const error = ref("");
 const verifying = ref(false);
 const replacing = ref(false);
 const verifiedDid = ref<string | null>(null);
+const pendingLocalName = ref<string | null>(null);
 
-async function chooseCustom() {
-    choice.value = "custom";
+async function loadActor() {
     actor.value = undefined;
     actorError.value = "";
-    error.value = "";
-    verifiedDid.value = null;
     try {
-        const result: { actors: Array<{ did: string }> } = await fetchFromSelf("/app/actors/list");
-        actor.value = result.actors[0]?.did ?? null;
+        const result: { actors: Array<{ did: string; rotationKey: string | null }> } = await fetchFromSelf("/app/actors/list");
+        actor.value = result.actors[0] ?? null;
     } catch (cause) {
         actorError.value = String(cause);
         actor.value = null;
     }
+}
+loadActor();
+
+function chooseLocal() {
+    choice.value = "local";
+    error.value = "";
+    pendingLocalName.value = null;
+}
+
+function chooseCustom() {
+    choice.value = "custom";
+    error.value = "";
+    verifiedDid.value = null;
 }
 
 // The input is only a domain. The DID and document URL are derived from it.
@@ -125,10 +166,16 @@ const documentText = computed(() => {
     if (!domainDid.value || !actor.value) return "";
     return JSON.stringify(constructDidDocument({
         did: domainDid.value,
-        alsoKnownAs: [actor.value],
+        alsoKnownAs: [actor.value.did],
         services: undefined,
     }), null, 2);
 });
+
+const nextHandleDid = computed(() =>
+    choice.value === "local" && pendingLocalName.value
+        ? localNameToDid(pendingLocalName.value, baseHost)
+        : choice.value === "custom" ? verifiedDid.value : null,
+);
 
 watch(domain, () => {
     verifiedDid.value = null;
@@ -140,6 +187,7 @@ async function verifyDomain() {
     if (!did) return;
     verifying.value = true;
     error.value = "";
+    verifiedDid.value = null;
     try {
         await fetchFromSelf("/app/handles/verify-external", {
             method: "POST",
@@ -165,6 +213,26 @@ async function replaceHandle(identifier: string) {
     return true;
 }
 
+async function replaceLocalHandle(identifier: string) {
+    if (actor.value?.rotationKey) return replaceHandle(identifier);
+    pendingLocalName.value = identifier;
+    return false;
+}
+
+async function replaceExternalActorHandle() {
+    const identifier = choice.value === "local" ? pendingLocalName.value : verifiedDid.value;
+    if (!identifier) return;
+    replacing.value = true;
+    error.value = "";
+    try {
+        await replaceHandle(identifier);
+    } catch (cause) {
+        error.value = String(cause);
+    } finally {
+        replacing.value = false;
+    }
+}
+
 async function replaceCustomHandle() {
     if (!verifiedDid.value || verifiedDid.value !== domainDid.value) return;
     replacing.value = true;
@@ -180,39 +248,6 @@ async function replaceCustomHandle() {
 </script>
 
 <style scoped>
-.choices {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-    gap: 1rem;
-}
-
-.choices button {
-    padding: 1.5rem;
-    text-align: left;
-    color: inherit;
-    background: transparent;
-    border-color: var(--pico-muted-border-color);
-}
-
-.choices button:is(:hover, :focus, [aria-pressed="true"]) {
-    border-color: var(--pico-primary);
-}
-
-.choices span {
-    display: block;
-    font-size: 0.85em;
-}
-
-.steps > li + li {
-    margin-top: 2rem;
-}
-
-.steps > li::marker {
-    font-size: 1.5rem;
-    font-weight: bold;
-    color: var(--pico-h3-color);
-}
-
 pre {
     white-space: pre-wrap;
     overflow-wrap: anywhere;

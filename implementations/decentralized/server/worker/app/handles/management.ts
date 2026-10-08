@@ -9,7 +9,7 @@ import {
   prepareHandleReplacement,
   reserveHandle,
 } from "./registration";
-import { publishActorHandle, type Actor } from "../actors/helpers";
+import { fetchActorData, publishActorHandle, type Actor } from "../actors/helpers";
 
 const router = new Hono<{ Bindings: Bindings }>();
 
@@ -88,8 +88,8 @@ router.post("/verify-external", async (c) => {
   return c.json({ verified: true });
 });
 
-// Replace a local handle or register an external DID. The actor's
-// alsoKnownAs is updated first so the new handle and actor point to each other.
+// Replace a local handle or register an external DID. Update the actor's
+// alsoKnownAs here when we hold its key, or verify the change made elsewhere.
 router.post("/change", async (c) => {
   const { userId, sessionId } = await verifySessionCookie(c);
   const { identifier } = await c.req.json();
@@ -102,19 +102,22 @@ router.post("/change", async (c) => {
   )
     .bind(userId)
     .first<{ identifier: string }>();
+  if (!previous) {
+    throw new HTTPException(409, { message: "This account has no handle." });
+  }
   if (previous?.identifier === identifier) return c.json({ updated: true });
 
   const actor = await c.env.DB.prepare(
-    "SELECT did, secret_key, cid FROM actors WHERE user_id = ?",
+    "SELECT did, secret_key FROM actors WHERE user_id = ?",
   )
     .bind(userId)
     .first<Actor>();
   const did = identifierToDid(identifier, new URL(getOrigin(c)).host);
 
+  if (!actor) {
+    throw new HTTPException(409, { message: "Create an actor before replacing your handle." });
+  }
   if (external) {
-    if (!actor) {
-      throw new HTTPException(409, { message: "Create an actor before using an external handle." });
-    }
     // The document may point to multiple actors, but this provider stores each
     // handle only once. Check before publishing the actor's PLC update.
     const occupied = await c.env.DB.prepare(
@@ -138,14 +141,19 @@ router.post("/change", async (c) => {
       sessionId,
     );
 
-    if (actor) {
-      const { cid } = await publishActorHandle(actor, did);
-      await c.env.DB.batch([
-        updateHandle,
-        c.env.DB.prepare("UPDATE actors SET cid = ? WHERE user_id = ?")
-          .bind(cid, userId),
-      ]);
+    if (actor.secret_key) {
+      const previousDid = identifierToDid(previous.identifier, new URL(getOrigin(c)).host);
+      await publishActorHandle(actor, previousDid, did);
+      await updateHandle.run();
     } else {
+      // We cannot edit an actor managed elsewhere. Its owner must publish the
+      // new handle first; verify that change before replacing our handle row.
+      const data = await fetchActorData(actor.did);
+      if (data.alsoKnownAs.find((alias) => alias.startsWith("did:web:")) !== did) {
+        throw new HTTPException(409, {
+          message: `Make ${did} the first did:web entry in the actor's alsoKnownAs before replacing your handle.`,
+        });
+      }
       await updateHandle.run();
     }
   } catch (error) {

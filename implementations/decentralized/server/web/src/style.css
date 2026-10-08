@@ -105,6 +105,39 @@ main h2 {
     border-color: var(--pico-secondary-hover-border);
 }
 
+.choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+}
+
+.choices button {
+    padding: 1.5rem;
+    text-align: left;
+    color: inherit;
+    background: transparent;
+    border-color: var(--pico-muted-border-color);
+}
+
+.choices button:is(:hover, :focus, [aria-pressed="true"]) {
+    border-color: var(--pico-primary);
+}
+
+.choices span {
+    display: block;
+    font-size: 0.85em;
+}
+
+.steps > li + li {
+    margin-top: 2rem;
+}
+
+.steps > li::marker {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--pico-h3-color);
+}
+
 aside {
     color: var(--pico-muted-color);
     font-style: italic;

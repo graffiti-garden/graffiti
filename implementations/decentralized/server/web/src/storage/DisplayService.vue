@@ -58,7 +58,7 @@ function deleteService() {
 
     if (
         !confirm(
-            "Are you sure you want to delete this service? It CANNOT be undone.",
+            `Delete this service? This cannot be undone. If your actor's DID points to ${url.value}, update the DID separately; deleting the service will not change it.`,
         )
     ) {
         deleting.value = false;
