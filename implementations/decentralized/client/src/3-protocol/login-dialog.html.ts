@@ -37,7 +37,21 @@ export const template = `<template id="graffiti-login-welcome">
     </button>
   </form>
 
-  <p>
-    Don't&nbsp;have&nbsp;a Graffiti&nbsp;handle? <a id="graffiti-login-new">Create&nbsp;one</a>.
-  </p>
+  <div style="display: grid; gap: 0.5em">
+    <p><a href="#" id="graffiti-login-forgot">Forgot your handle?</a></p>
+    <p>Don't&nbsp;have&nbsp;a Graffiti&nbsp;handle? <a id="graffiti-login-new">Create&nbsp;one</a>.</p>
+  </div>
+</template>
+
+<template id="graffiti-login-provider">
+  <h1>
+    <a target="_blank" href="https://graffiti.garden">Graffiti Log&nbsp;In</a>
+  </h1>
+
+  <form id="graffiti-login-provider-form">
+    <label for="graffiti-provider">Where did you create your Graffiti account?</label>
+    <input id="graffiti-provider" type="text" autocapitalize="none" spellcheck="false" required>
+    <button type="submit">Continue to provider</button>
+  </form>
+  <p><a href="#" id="graffiti-login-provider-back">← Back</a></p>
 </template>`;

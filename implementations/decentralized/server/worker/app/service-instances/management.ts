@@ -15,7 +15,7 @@ function idNameFromType(type: string) {
 }
 
 serviceInstances.post("/:type/create", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const type = c.req.param("type");
   const table = tableFromType(type);
   const idName = idNameFromType(type);
@@ -23,29 +23,49 @@ serviceInstances.post("/:type/create", async (c) => {
   const serviceId = randomBase64();
   const createdAt = Date.now();
 
-  await c.env.DB.prepare(
-    `INSERT INTO ${table} (${idName}, user_id, created_at) VALUES (?, ?, ?)`,
-  )
-    .bind(serviceId, userId, createdAt)
-    .run();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO ${table} (${idName}, account_id, created_at) VALUES (?, ?, ?)`,
+    )
+      .bind(serviceId, accountId, createdAt)
+      .run();
+  } catch (error: any) {
+    if (String(error?.message || "").includes(`${table}.account_id`)) {
+      const name = type === "bucket" ? "a storage bucket" : "an inbox";
+      throw new HTTPException(409, {
+        message: `This account already has ${name}. Log out to create another account.`,
+      });
+    }
+    throw error;
+  }
 
   return c.json({ serviceId, createdAt });
 });
 
 serviceInstances.delete("/:type/service/:service-id", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const type = c.req.param("type");
   const serviceId = c.req.param("service-id");
   const table = tableFromType(type);
   const idName = idNameFromType(type);
 
-  const result = await c.env.DB.prepare(
-    `DELETE FROM ${table} WHERE ${idName} = ? AND user_id = ? RETURNING user_id`,
-  )
-    .bind(serviceId, userId)
-    .first();
+  if (type === "bucket") {
+    const owned = await c.env.DB.prepare(
+      "SELECT 1 FROM storage_buckets WHERE bucket_id = ? AND account_id = ?",
+    )
+      .bind(serviceId, accountId)
+      .first();
+    if (!owned) {
+      throw new HTTPException(404, { message: "Instance not found" });
+    }
+    await c.env.BUCKETS.get(c.env.BUCKETS.idFromName(serviceId)).deleteBucket();
+  }
 
-  // TODO: If it is a bucket, delete all the items in storage
+  const result = await c.env.DB.prepare(
+    `DELETE FROM ${table} WHERE ${idName} = ? AND account_id = ? RETURNING account_id`,
+  )
+    .bind(serviceId, accountId)
+    .first();
 
   if (!result) {
     throw new HTTPException(404, { message: "Instance not found" });
@@ -55,15 +75,15 @@ serviceInstances.delete("/:type/service/:service-id", async (c) => {
 });
 
 serviceInstances.get("/:type/list", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const type = c.req.param("type");
   const table = tableFromType(type);
   const idName = idNameFromType(type);
 
   const instances = await c.env.DB.prepare(
-    `SELECT ${idName}, created_at FROM ${table} WHERE user_id = ?`,
+    `SELECT ${idName}, created_at FROM ${table} WHERE account_id = ?`,
   )
-    .bind(userId)
+    .bind(accountId)
     .all<{ [idName]: string; created_at: number }>();
 
   return c.json(

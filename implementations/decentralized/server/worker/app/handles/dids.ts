@@ -2,10 +2,8 @@ import { Hono, type Context } from "hono";
 import { getOrigin, type Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import {
-  OptionalAlsoKnownAsSchema,
-  OptionalServicesSchema,
   constructDidDocument,
-  handleNameToDid,
+  localNameToDid,
 } from "../../../shared/did-schemas";
 
 const handleDids = new Hono<{ Bindings: Bindings }>();
@@ -15,18 +13,20 @@ export async function getDid(c: Context<{ Bindings: Bindings }>) {
     "Cache-Control",
     "public, max-age=3600, stale-while-revalidate=86400",
   );
-  const handleName = c.req.param("handle-name");
-  if (!handleName) {
+  const localName = c.req.param("local-name");
+  if (!localName) {
     throw new HTTPException(400, {
-      message: "Handle name is required.",
+      message: "Handle is required.",
     });
   }
 
   const result = await c.env.DB.prepare(
-    "SELECT services, also_known_as FROM handles WHERE name = ?",
+    `SELECT actors.did AS actor FROM handles
+     LEFT JOIN actors ON actors.account_id = handles.account_id
+     WHERE handles.identifier = ?`,
   )
-    .bind(handleName)
-    .first<{ services: string; also_known_as: string }>();
+    .bind(localName)
+    .first<{ actor: string | null }>();
 
   if (!result) {
     throw new HTTPException(404, {
@@ -34,19 +34,23 @@ export async function getDid(c: Context<{ Bindings: Bindings }>) {
     });
   }
 
-  const alsoKnownAs = OptionalAlsoKnownAsSchema.parse(
-    result.also_known_as ? JSON.parse(result.also_known_as) : undefined,
-  );
-  const services = OptionalServicesSchema.parse(
-    result.services ? JSON.parse(result.services) : undefined,
-  );
   const origin = getOrigin(c);
-  const host = new URL(origin).host;
-  const did = handleNameToDid(handleName, host);
+  const requestHost = new URL(origin).host;
+  // Subdomain requests already include the handle in their host name.
+  const host = requestHost.endsWith(`.${c.env.BASE_HOST}`)
+    ? c.env.BASE_HOST
+    : requestHost;
+  const did = localNameToDid(localName, host);
 
-  return c.json(constructDidDocument({ did, services, alsoKnownAs }));
+  // The handle points to this account's actor; the actor's PLC document holds
+  // the service endpoints.
+  return c.json(constructDidDocument({
+    did,
+    services: undefined,
+    alsoKnownAs: result.actor ? [result.actor] : undefined,
+  }));
 }
 
-handleDids.get("/:handle-name/.well-known/did.json", getDid);
+handleDids.get("/:local-name/.well-known/did.json", getDid);
 
 export default handleDids;

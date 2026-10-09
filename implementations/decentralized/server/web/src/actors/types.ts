@@ -1,5 +1,5 @@
 export interface Actor {
   did: string;
   createdAt: number;
-  rotationKey: string;
+  rotationKey: string | null;
 }

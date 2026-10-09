@@ -7,68 +7,62 @@
             <CopyButton :text="actor.did" />
         </h2>
 
-        <p v-if="documentStatus === 'loading'">
-            <em>Loading...</em>
-        </p>
-        <template v-else-if="documentStatus === 'error'">
-            <p>
-                <em>Error fetching actor document</em>
+        <template v-if="!editing">
+            <nav>
+                <ul>
+                    <li v-if="actor.rotationKey">
+                        <button :disabled="loadingEditor" @click="editActor">
+                            {{ loadingEditor ? "Loading..." : "Edit" }}
+                        </button>
+                    </li>
+                    <li v-if="actor.rotationKey">
+                        <button :disabled="exporting" @click="exportActor">
+                            {{ exporting ? "Exporting..." : "Export private key" }}
+                        </button>
+                    </li>
+                    <li v-if="actor.rotationKey">
+                        <button
+                            :disabled="!exported || removingKey"
+                            @click="stopManagingKey"
+                        >
+                            {{ removingKey ? "Removing key..." : exported ? "Manage private key myself" : "Manage private key myself (export first)" }}
+                        </button>
+                    </li>
+                    <li>
+                        <button v-if="actor.rotationKey && !exported" disabled>
+                            Replace actor (export first)
+                        </button>
+                        <RouterLink
+                            v-else
+                            :to="{ name: 'replace-actor', state: { exportedActorDid: exported ? actor.did : undefined } }"
+                            role="button"
+                        >
+                            Replace actor
+                        </RouterLink>
+                    </li>
+                </ul>
+            </nav>
+            <p v-if="!actor.rotationKey">
+                This actor's private key is managed elsewhere.
             </p>
-            <button @click="() => fetchActor()">Retry</button>
         </template>
-        <template v-else>
-            <template v-if="!editing">
-                <pre><code>{{ JSON.stringify(
-                constructDidDocument({
-                    did: actor.did,
-                    alsoKnownAs,
-                    services
-                }),
-                null, 2) }}</code></pre>
-                <nav>
-                    <ul>
-                        <li>
-                            <button @click="editing = true">Edit</button>
-                        </li>
-                        <li>
-                            <button @click="exportActor">Export</button>
-                        </li>
-                        <li>
-                            <button
-                                :disabled="!exported || removing"
-                                @click="removeActor"
-                            >
-                                {{
-                                    !exported
-                                        ? "Remove (export first)"
-                                        : removing
-                                          ? "Removing..."
-                                          : "Remove"
-                                }}
-                            </button>
-                        </li>
-                    </ul>
-                </nav>
-            </template>
-            <form v-else @submit.prevent="saveActor">
-                <EditDid
-                    v-model:alsoKnownAs="editingAlsoKnownAs"
-                    v-model:services="editingServices"
-                />
-                <button type="submit" :disabled="saving">
-                    {{ saving ? "Saving..." : "Save" }}
-                </button>
-                <button type="button" @click="editing = false">Cancel</button>
-            </form>
-        </template>
+        <form v-else @submit.prevent="saveActor">
+            <EditDid
+                v-model:alsoKnownAs="editingAlsoKnownAs"
+                v-model:services="editingServices"
+            />
+            <button type="submit" :disabled="saving">
+                {{ saving ? "Saving..." : "Save" }}
+            </button>
+            <button type="button" @click="editing = false">Cancel</button>
+        </form>
     </article>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, toRef } from "vue";
 import type { Actor } from "./types";
 import {
-    constructDidDocument,
     type OptionalAlsoKnownAs,
     type OptionalServices,
 } from "../../../shared/did-schemas";
@@ -76,48 +70,38 @@ import EditDid from "./EditDid.vue";
 import { fetchFromSelf } from "../globals";
 import CopyButton from "../utils/CopyButton.vue";
 import { fetchActorDidData } from "./plc-directory";
+import { exportPrivateKey } from "./export-private-key";
 
 const props = defineProps<{
     actor: Actor;
-    onRemove: () => void;
 }>();
-let actor = props.actor;
-
-const documentStatus = ref<"loading" | "error" | "success">("loading");
-const alsoKnownAs = ref<OptionalAlsoKnownAs>(undefined);
-const services = ref<OptionalServices>(undefined);
-async function fetchActor() {
-    documentStatus.value = "loading";
-    try {
-        const data = await fetchActorDidData(actor);
-        alsoKnownAs.value = data.alsoKnownAs;
-        services.value = data.services;
-        documentStatus.value = "success";
-    } catch (error) {
-        console.error(error);
-        documentStatus.value = "error";
-    }
-}
-fetchActor();
+const actor = toRef(props, "actor");
+const host = window.location.host;
 
 const editing = ref(false);
+const loadingEditor = ref(false);
 const editingAlsoKnownAs = ref<OptionalAlsoKnownAs>(undefined);
 const editingServices = ref<OptionalServices>(undefined);
-watch(editing, () => {
-    if (editing.value) {
-        editingAlsoKnownAs.value =
-            JSON.parse(JSON.stringify(alsoKnownAs.value ?? null)) ?? undefined;
-        editingServices.value =
-            JSON.parse(JSON.stringify(services.value ?? null)) ?? undefined;
+async function editActor() {
+    loadingEditor.value = true;
+    try {
+        const data = await fetchActorDidData(actor.value);
+        editingAlsoKnownAs.value = data.alsoKnownAs;
+        editingServices.value = data.services;
+        editing.value = true;
+    } catch (error) {
+        alert(error);
+    } finally {
+        loadingEditor.value = false;
     }
-});
+}
 
 const saving = ref(false);
 function saveActor() {
     if (!editing.value) return;
     saving.value = true;
 
-    fetchFromSelf(`/app/actors/actor/${actor.did}`, {
+    fetchFromSelf(`/app/actors/actor/${actor.value.did}`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
@@ -127,14 +111,9 @@ function saveActor() {
             services: editingServices.value,
         }),
     })
-        .then(({ rotationKey }) => {
+        .then(() => {
             editing.value = false;
             exported.value = false;
-            actor = {
-                ...actor,
-                rotationKey,
-            };
-            fetchActor();
         })
         .catch((error) => {
             alert(error);
@@ -146,63 +125,41 @@ function saveActor() {
 
 const exporting = ref(false);
 const exported = ref(false);
-function exportActor() {
+async function exportActor() {
     exporting.value = true;
-
-    if (
-        !confirm(
-            "Be careful exporting! Anyone with the export file can take control of the actor.",
-        )
-    ) {
+    try {
+        if (await exportPrivateKey(actor.value.did)) exported.value = true;
+    } catch (error) {
+        alert(error);
+    } finally {
         exporting.value = false;
-        return;
     }
-
-    fetchFromSelf(`/app/actors/actor/${actor.did}`)
-        .then((result) => {
-            // Turn the result into a json file and download it
-            const blob = new Blob([JSON.stringify(result)], {
-                type: "application/json",
-            });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${actor.did}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            exported.value = true;
-        })
-        .catch((error) => {
-            alert(error);
-        })
-        .finally(() => {
-            exporting.value = false;
-        });
 }
 
-const removing = ref(false);
-function removeActor() {
-    removing.value = true;
+const removingKey = ref(false);
+function stopManagingKey() {
+    removingKey.value = true;
     if (
         !confirm(
-            "Removing an actor will just remove it from this system. Its properties will be restored on plc.directory and control of the actor can be restored by importing the export file.",
+            `Remove ${host}'s copy of your actor's private key? The actor will remain on your account, but you will need the exported key to edit its DID elsewhere.`,
         )
     ) {
-        removing.value = false;
+        removingKey.value = false;
         return;
     }
 
-    fetchFromSelf(`/app/actors/actor/${actor.did}`, {
+    fetchFromSelf(`/app/actors/actor/${actor.value.did}/key`, {
         method: "DELETE",
     })
         .then(() => {
-            props.onRemove();
+            actor.value.rotationKey = null;
+            exported.value = false;
         })
         .catch((error) => {
             alert(error);
         })
         .finally(() => {
-            removing.value = false;
+            removingKey.value = false;
         });
 }
 </script>

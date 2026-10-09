@@ -1,11 +1,19 @@
 <template>
     <article>
+        <h2 v-if="service.type === 'inbox'">
+            {{
+                service.serviceId === "shared"
+                    ? "Shared inbox"
+                    : "Personal inbox"
+            }}
+        </h2>
         <h2>
             <span>
                 {{ url }}
             </span>
             <CopyButton :text="url" />
         </h2>
+        <p v-if="service.serviceId === 'shared'">Available to everyone.</p>
         <p>
             <a
                 :href="`/${service.type === 'inbox' ? 'i' : 's'}/${service.serviceId}/docs`"
@@ -50,7 +58,7 @@ function deleteService() {
 
     if (
         !confirm(
-            "Are you sure you want to delete this service? It CANNOT be undone.",
+            `Delete this service? This cannot be undone. If your actor's DID points to ${url.value}, update the DID separately; deleting the service will not change it.`,
         )
     ) {
         deleting.value = false;

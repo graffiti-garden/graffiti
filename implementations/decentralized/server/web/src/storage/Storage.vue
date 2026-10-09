@@ -1,7 +1,9 @@
 <template>
     <header>
-        <h2>{{ type === "inbox" ? "Inboxes" : "Storage Buckets" }}</h2>
-        <nav>
+        <h2>{{ type === "inbox" ? "Inboxes" : "Bucket" }}</h2>
+        <nav
+            v-if="services?.every((service) => service.serviceId === 'shared')"
+        >
             <ul>
                 <li>
                     <form @submit.prevent="createService">
@@ -9,7 +11,9 @@
                             {{
                                 creating
                                     ? "Creating..."
-                                    : `Create New ${type === "inbox" ? "Inbox" : "Storage Bucket"}`
+                                    : type === "inbox"
+                                      ? "Create Personal Inbox"
+                                      : "Create New Storage Bucket"
                             }}
                         </button>
                     </form>
@@ -18,20 +22,29 @@
         </nav>
     </header>
 
+    <p v-if="type === 'inbox'">
+        You can receive messages from other Graffiti users through your
+        personal inbox or the shared inbox.
+    </p>
+    <p v-else>
+        Your bucket is a simple file hosting service where your posts, images,
+        and other media are stored.
+    </p>
+
     <p v-if="services === undefined">
         <em>Loading...</em>
     </p>
     <template v-else-if="services === null">
-        <p><em>Error loading services!</em></p>
+        <p><em>Error loading {{ type === "inbox" ? "inbox" : "storage bucket" }}!</em></p>
         <button @click="fetchServices">Retry</button>
     </template>
-    <p v-else-if="services.length === 0">
+    <p v-else-if="services.every((service) => service.serviceId === 'shared')">
         <em
             >You have no
-            {{ type === "inbox" ? "inboxes" : "storage buckets" }}.</em
+            {{ type === "inbox" ? "personal inbox" : "storage bucket" }}.</em
         >
     </p>
-    <ul v-else class="cards">
+    <ul v-if="services?.length" class="cards">
         <li v-for="service in services" :key="service.serviceId">
             <DisplayService
                 :service="service"
@@ -47,6 +60,7 @@ import { fetchFromSelf } from "../globals";
 import type { Service } from "./types";
 import DisplayService from "./DisplayService.vue";
 
+const emit = defineEmits(["loaded"]);
 const services = ref<Array<Service> | null | undefined>(undefined);
 
 const props = defineProps<{
@@ -74,7 +88,8 @@ function fetchServices() {
         .catch((error) => {
             console.error(error);
             services.value = null;
-        });
+        })
+        .finally(() => emit("loaded"));
 }
 fetchServices();
 

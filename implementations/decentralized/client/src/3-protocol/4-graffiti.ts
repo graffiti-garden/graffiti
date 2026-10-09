@@ -220,7 +220,7 @@ export class GraffitiDecentralized implements Graffiti {
       }
 
       if (handle) {
-        await this.rememberHandleInPasswordManager(handle, actor);
+        this.rememberHandleInBrowserStorage(handle);
       }
     });
 
@@ -282,8 +282,7 @@ export class GraffitiDecentralized implements Graffiti {
           "#username",
         ) as HTMLInputElement | null;
         const rememberedHandle =
-          proposedHandle ||
-          (await this.getRememberedHandleFromPasswordManager());
+          proposedHandle || this.getRememberedHandleFromBrowserStorage();
         if (input) input.value = rememberedHandle ?? "";
         input?.addEventListener("focus", () => input?.select());
         setTimeout(() => input?.focus(), 0);
@@ -327,6 +326,12 @@ export class GraffitiDecentralized implements Graffiti {
               console.error(e);
               this.login_(handle);
             }
+          });
+        template
+          ?.querySelector("#graffiti-login-forgot")
+          ?.addEventListener("click", (e) => {
+            e.preventDefault();
+            void this.loginWithoutHandle();
           });
       } else {
         template = await this.modal?.displayTemplate("graffiti-login-welcome");
@@ -396,79 +401,44 @@ export class GraffitiDecentralized implements Graffiti {
     }
   }
 
-  protected async rememberHandleInPasswordManager(
-    handle: string,
-    actor: string,
-  ) {
-    if (typeof window === "undefined") return;
+  protected async loginWithoutHandle() {
+    const template = await this.modal?.displayTemplate("graffiti-login-provider");
+    const defaultProvider = new URL("/", this.identityCreatorEndpoint);
+    const provider = template?.querySelector("#graffiti-provider") as HTMLInputElement | null;
+    if (provider) provider.value = defaultProvider.host;
+    provider?.addEventListener("focus", () => provider.select());
+    setTimeout(() => provider?.focus(), 0);
 
-    const credentials = window.navigator.credentials;
+    template
+      ?.querySelector("#graffiti-login-provider-form")
+      ?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        try {
+          const domain = provider?.value.trim() ?? "";
+          const origin = domain === defaultProvider.host
+            ? defaultProvider
+            : new URL(`https://${domain}`);
+          if (
+            !origin.hostname || origin.username || origin.password ||
+            origin.pathname !== "/" || origin.search || origin.hash
+          ) throw new Error("Invalid provider domain");
 
-    const PasswordCredentialConstructor = (
-      window as unknown as {
-        PasswordCredential?: new (data: {
-          id: string;
-          password: string;
-          name?: string;
-        }) => Credential;
-      }
-    ).PasswordCredential;
-
-    if (!credentials?.store || !PasswordCredentialConstructor) {
-      this.rememberHandleInBrowserStorage(handle);
-      return;
-    }
-
-    try {
-      const credential = new PasswordCredentialConstructor({
-        id: handle,
-        // Graffiti logins use external authorization; this stable placeholder
-        // allows browsers/password managers to persist the handle.
-        password: "no-password",
-        name: handle,
+          const url = new URL("/forgot-handle", origin);
+          url.searchParams.set("redirect_uri", window.location.toString());
+          window.location.assign(url.toString());
+        } catch {
+          alert("Enter a valid provider domain.");
+        }
       });
-      await credentials.store(credential);
-    } catch (error) {
-      console.error("Failed to remember handle in password manager:", error);
-      this.rememberHandleInBrowserStorage(handle);
-    }
-  }
 
-  protected async getRememberedHandleFromPasswordManager() {
-    if (typeof window === "undefined") return undefined;
+    template
+      ?.querySelector("#graffiti-login-provider-back")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        void this.login_("");
+      });
 
-    const credentials = window.navigator.credentials;
-    const PasswordCredentialConstructor = (
-      window as unknown as {
-        PasswordCredential?: new (data: {
-          id: string;
-          password: string;
-          name?: string;
-        }) => Credential;
-      }
-    ).PasswordCredential;
-    if (!credentials?.get || !PasswordCredentialConstructor) {
-      return this.getRememberedHandleFromBrowserStorage();
-    }
-
-    try {
-      const credential = await credentials.get({
-        password: true,
-        mediation: "optional",
-      } as any);
-      if (
-        credential &&
-        "id" in credential &&
-        typeof credential.id === "string"
-      ) {
-        return credential.id;
-      }
-    } catch (error) {
-      console.error("Failed to load handle from password manager:", error);
-      return this.getRememberedHandleFromBrowserStorage();
-    }
-
-    return undefined;
+    await this.modal?.open();
   }
 
   protected rememberHandleInBrowserStorage(handle: string) {

@@ -1,24 +1,15 @@
 import { createApp } from "vue";
 import "@picocss/pico/css/pico.classless.fuchsia.css";
 import { createRouter, createWebHistory, RouterView } from "vue-router";
-import { fetchFromSelf, isLoggedIn } from "./globals";
+import { refreshAccounts } from "./globals";
 import "./style.css";
 
 // See if we are logged in
 function checkLoggedInStatus() {
-  fetchFromSelf("/app/webauthn/logged-in")
-    .then(() => {
-      isLoggedIn.value = true;
-    })
-    .catch(() => {
-      // Any 401 will automatically set isLoggedIn to false,
-      // but if its a different error, retry after 1 second
-      if (isLoggedIn.value === undefined) {
-        setTimeout(() => {
-          checkLoggedInStatus();
-        }, 1000);
-      }
-    });
+  refreshAccounts().catch(() => {
+    // If the function errors, retry every second, its likely a network disconnection
+    setTimeout(checkLoggedInStatus, 1000);
+  });
 }
 checkLoggedInStatus();
 
@@ -34,37 +25,25 @@ const routes = [
         component: () => import("./CreateIdentity.vue"),
       },
       {
-        name: "handles",
-        path: "/handles",
-        component: () => import("./handles/Handles.vue"),
+        name: "replace-handle",
+        path: "/handles/replace",
+        component: () => import("./handles/ReplaceHandle.vue"),
       },
       {
-        name: "actors",
-        path: "/actors",
-        component: () => import("./actors/Actors.vue"),
-      },
-      {
-        name: "register-handle",
-        path: "/handles/register",
-        component: () => import("./handles/RegisterHandle.vue"),
-        props: {
-          onRegister: () => router.push({ name: "handles" }),
-          onCancel: () => router.push({ name: "handles" }),
-        },
-      },
-      {
-        name: "storage",
-        path: "/storage",
-        component: () => import("./storage/Storage.vue"),
-        props: { type: "bucket" },
-      },
-      {
-        name: "inboxes",
-        path: "/inboxes",
-        component: () => import("./storage/Storage.vue"),
-        props: { type: "inbox" },
+        name: "replace-actor",
+        path: "/actors/replace",
+        component: () => import("./actors/ReplaceActor.vue"),
       },
     ],
+  },
+  {
+    name: "add-account",
+    path: "/add-account",
+    component: () => import("./auth/LoginGuard.vue"),
+  },
+  {
+    path: "/forgot-handle",
+    component: () => import("./auth/ForgotHandle.vue"),
   },
   { path: "/oauth", component: () => import("./auth/Oauth.vue") },
 ];

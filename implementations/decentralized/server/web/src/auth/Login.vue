@@ -1,6 +1,7 @@
 <template>
     <button @click="handleLogin" :disabled="loggingIn">
-        {{ loggingIn ? "Logging in…" : "Log In" }}
+        <template v-if="loggingIn">Logging in…</template>
+        <slot v-else>Log In</slot>
         <StatusIcon v-if="loggingIn" status="loading" />
     </button>
 </template>
@@ -11,9 +12,11 @@ import {
     startAuthentication,
     type AuthenticationResponseJSON,
 } from "@simplewebauthn/browser";
-import { isLoggedIn, fetchFromSelf } from "../globals";
+import { fetchFromSelf, refreshAccounts } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
+import { signalPasskeyHandle } from "./passkey-handle";
 
+const emit = defineEmits<{ (e: "success", accountId: number): void }>();
 const loggingIn = ref(false);
 
 async function handleLogin() {
@@ -41,13 +44,16 @@ async function handleLogin() {
     }
 
     try {
-        await fetchFromSelf("/app/webauthn/authenticate/verify", {
+        const result = await fetchFromSelf("/app/webauthn/authenticate/verify", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(authenticationResponse),
         });
+        await refreshAccounts(result.accountId);
+        void signalPasskeyHandle(result.accountId).catch(console.error);
+        emit("success", result.accountId);
     } catch (error: any) {
         alert(`Failed to log in. ${error.message}`);
         loggingIn.value = false;
@@ -55,6 +61,5 @@ async function handleLogin() {
     }
 
     loggingIn.value = false;
-    isLoggedIn.value = true;
 }
 </script>

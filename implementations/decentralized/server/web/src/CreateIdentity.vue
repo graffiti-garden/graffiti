@@ -1,10 +1,19 @@
 <template>
     <h2>Create a Graffiti identity</h2>
-    <ol start="2">
+    <ol>
         <li>
-            <RegisterHandle :onRegister="onRegister" :onCancel="onCancel" />
+            <RegisterHandle
+                v-if="!passkeyCreated"
+                :onRegister="registerAccount"
+                :onCancel="onCancel"
+            />
+            <template v-else>
+                Created account with handle
+                <code>{{ localNameToHandle(chosenLocalName!, baseHost) }}</code>
+                <StatusIcon status="ok" />
+            </template>
         </li>
-        <li v-if="handleName && !bucketId" v-scroll-into-view>
+        <li v-if="passkeyCreated && !bucketId" v-scroll-into-view>
             <span v-if="errorString === null">
                 Creating storage bucket...
                 <StatusIcon status="loading" />
@@ -20,7 +29,7 @@
             Created storage bucket
             <StatusIcon status="ok" />
         </li>
-        <li v-if="handleName && bucketId && !inboxId" v-scroll-into-view>
+        <li v-if="passkeyCreated && bucketId && !inboxId" v-scroll-into-view>
             <span v-if="errorString === null">
                 Creating inbox...
                 <StatusIcon status="loading" />
@@ -37,7 +46,7 @@
             <StatusIcon status="ok" />
         </li>
         <li
-            v-if="handleName && bucketId && inboxId && !actor"
+            v-if="passkeyCreated && bucketId && inboxId && !actor"
             v-scroll-into-view
         >
             <span v-if="errorString === null">
@@ -55,31 +64,12 @@
             Created actor
             <StatusIcon status="ok" />
         </li>
-        <li
-            v-if="handleName && bucketId && inboxId && actor && !linked"
-            v-scroll-into-view
-        >
-            <span v-if="errorString === null">
-                Linking actor to handle...
-                <StatusIcon status="loading" />
-            </span>
-            <span v-else>
-                Error linking actor to handle
-                <StatusIcon status="error" />
-                {{ errorString }}
-                <button @click="linkActorToHandle">Retry</button>
-            </span>
-        </li>
-        <li v-else-if="linked">
-            Linked actor to handle
-            <StatusIcon status="ok" />
-        </li>
     </ol>
 
-    <template v-if="linked">
+    <template v-if="actor">
         <p>
             Graffiti identity created with handle
-            <code>{{ handleNameToHandle(handleName!, baseHost) }}</code>
+            <code>{{ localNameToHandle(chosenLocalName!, baseHost) }}</code>
         </p>
 
         <template v-if="redirect">
@@ -108,11 +98,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import RegisterHandle from "./handles/RegisterHandle.vue";
-import { fetchFromSelf } from "./globals";
+import { fetchFromSelf, refreshAccounts, selectAccount } from "./globals";
+import { startRegistration } from "@simplewebauthn/browser";
 import { serviceIdToUrl } from "../../shared/service-urls";
 import StatusIcon from "./utils/StatusIcon.vue";
 import { useRouter } from "vue-router";
-import { handleNameToHandle, handleNameToDid } from "../../shared/did-schemas";
+import { localNameToHandle, localNameToDid } from "../../shared/did-schemas";
 
 const redirectUriEncoded = new URLSearchParams(window.location.search).get(
     "redirect_uri",
@@ -124,6 +115,9 @@ const redirect = computed(() => {
                 ? decodeURIComponent(redirectUriEncoded)
                 : redirectUriEncoded;
             const url = new URL(redirectUri);
+            if (url.protocol !== "https:" && url.protocol !== "http:") {
+                return null;
+            }
             if (actor.value) {
                 url.searchParams.set("actor", encodeURIComponent(actor.value));
             }
@@ -140,15 +134,64 @@ const baseHost = window.location.host;
 
 const errorString = ref<string | null>(null);
 
-const handleName = ref<string | undefined>(undefined);
+const chosenLocalName = ref<string | undefined>(undefined);
+const passkeyCreated = ref(false);
 const bucketId = ref<string | undefined>(undefined);
 const inboxId = ref<string | undefined>(undefined);
 const actor = ref<string | undefined>(undefined);
-const linked = ref<boolean>(false);
 
-async function onRegister(name: string) {
-    handleName.value = name;
+async function registerAccount(localName: string) {
+    // Account creation uses the temporary session, even when another account
+    // is already selected in this browser.
+    const fetchForNewAccount = (path: string, options?: RequestInit) =>
+        fetchFromSelf(path, options, false);
+
+    let optionsJSON: any;
+    try {
+        optionsJSON = await fetchForNewAccount("/app/webauthn/register/challenge", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ localName }),
+        });
+    } catch (error: any) {
+        alert(`Failed to register passkey. ${error.message}`);
+        return false;
+    }
+
+    let response;
+    try {
+        response = await startRegistration({ optionsJSON });
+    } catch (error) {
+        // Cancelling the prompt leaves the handle field editable.
+        console.error(error);
+        return false;
+    }
+
+    let accountId: number;
+    try {
+        const result = await fetchForNewAccount("/app/webauthn/register/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(response),
+        });
+        accountId = result.accountId;
+    } catch (error: any) {
+        alert(`Failed to register passkey. ${error.message}`);
+        return false;
+    }
+
+    // The account exists now, even if reloading the account list fails.
+    selectAccount(accountId);
+    try {
+        await refreshAccounts(accountId);
+    } catch (error) {
+        console.error("Failed to refresh accounts after registration.", error);
+    }
+
+    chosenLocalName.value = localName;
+    passkeyCreated.value = true;
     createBucket();
+    return true;
 }
 
 const router = useRouter();
@@ -200,7 +243,7 @@ async function createActor() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            alsoKnownAs: [handleNameToDid(handleName.value!, baseHost)],
+            alsoKnownAs: [localNameToDid(chosenLocalName.value!, baseHost)],
             services: {
                 graffitiStorageBucket: {
                     type: "GraffitiStorageBucket",
@@ -227,40 +270,20 @@ async function createActor() {
             throw error;
         });
 
-    linkActorToHandle();
-}
-
-async function linkActorToHandle() {
-    errorString.value = null;
-
-    await fetchFromSelf(`/app/handles/handle/${handleName.value}`, {
-        method: "PUT",
-        body: JSON.stringify({ alsoKnownAs: [actor.value] }),
-        headers: {
-            "Content-Type": "application/json",
-        },
-    }).catch((error) => {
-        errorString.value = error.message;
-        throw error;
-    });
-
-    linked.value = true;
 }
 </script>
 
 <style>
-ol > li:has(> header) {
-    display: contents;
-}
-
-ol > li > header > h3::before {
-    content: "1. ";
-}
-
 ol {
-    list-style-position: inside;
-    padding-left: 0;
+    padding-left: 1.5rem;
     margin-top: 2rem;
+}
+
+/* Match the heading while choosing a handle; use a normal marker once created. */
+ol > li:first-child:has(> header)::marker {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--pico-h3-color);
 }
 
 a[role="button"].return {

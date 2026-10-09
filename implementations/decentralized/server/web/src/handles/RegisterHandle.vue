@@ -9,7 +9,7 @@
                 <span class="prefix">@</span>
 
                 <input
-                    v-model="handleName"
+                    v-model="localName"
                     :style="{ width: Math.max(inputHandleWidth, 1) + 'px' }"
                     required
                     v-focus
@@ -21,7 +21,7 @@
                     aria-describedby="handle-status"
                 />
                 <span class="mirror" ref="mirrorHandleEl" aria-hidden="true">{{
-                    handleName
+                    localName
                 }}</span>
 
                 <span class="suffix" aria-hidden="true">.{{ baseHost }}</span>
@@ -59,9 +59,10 @@
 
         <div class="controls">
             <button
+                v-if="onCancel"
                 type="button"
                 class="secondary"
-                @click="() => onCancel()"
+                @click="onCancel"
                 :class="{ hidden: registered }"
                 :disabled="registering || registered"
             >
@@ -75,13 +76,7 @@
                 "
                 type="submit"
             >
-                {{
-                    registering
-                        ? "Registering..."
-                        : registered
-                          ? "Registered"
-                          : "Register"
-                }}
+                {{ submitLabel }}
                 <StatusIcon v-if="registering" status="loading" />
             </button>
         </div>
@@ -89,20 +84,30 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { fetchFromSelf } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
 
 const props = defineProps<{
-    onRegister: (handle: string) => void;
-    onCancel: () => void;
+    onRegister: (localName: string) => void | Promise<boolean>;
+    onCancel?: () => void;
+    onInput?: (localName: string) => void;
+    replace?: boolean;
+    continueOnly?: boolean;
 }>();
 
 const registered = ref(false);
+const registering = ref(false);
+const submitLabel = computed(() => {
+    if (registering.value)
+        return props.replace ? "Replacing handle..." : "Creating Account...";
+    if (registered.value) return props.replace ? "Replaced" : "Created";
+    return props.continueOnly ? "Continue" : props.replace ? "Replace handle" : "Continue";
+});
 
 const baseHost = window.location.host;
 
-const handleName = ref("");
+const localName = ref("");
 
 // and disable the register button if checking/unavailable
 type AvailabilityStatus =
@@ -117,22 +122,23 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let requestSeq = 0;
 
 watch(
-    handleName,
-    (newHandleName) => {
-        const normalizedHandleName = newHandleName.toLowerCase();
-        if (normalizedHandleName !== newHandleName) {
-            handleName.value = normalizedHandleName;
+    localName,
+    (newLocalName) => {
+        props.onInput?.(newLocalName);
+        const normalizedName = newLocalName.toLowerCase();
+        if (normalizedName !== newLocalName) {
+            localName.value = normalizedName;
             return;
         }
         const mySeq = ++requestSeq;
         if (debounceTimer) clearTimeout(debounceTimer);
 
-        if (!newHandleName) {
+        if (!newLocalName) {
             availabilityStatus.value = "idle";
-        } else if (newHandleName.length > 64) {
+        } else if (newLocalName.length > 64) {
             errorStatus.value = "Handle is too long";
             availabilityStatus.value = "error";
-        } else if (!newHandleName.match(/^[a-z0-9_-]+$/)) {
+        } else if (!newLocalName.match(/^[a-z0-9_-]+$/)) {
             errorStatus.value =
                 "Handle can only contain lowercase letters, numbers, underscores, and hyphens";
             availabilityStatus.value = "error";
@@ -140,17 +146,17 @@ watch(
             availabilityStatus.value = "checking";
             debounceTimer = setTimeout(() => {
                 if (mySeq !== requestSeq) return;
-                checkHandleAvailability(newHandleName, mySeq);
+                checkHandleAvailability(newLocalName, mySeq);
             }, 500);
         }
     },
     { flush: "post" },
 );
 
-async function checkHandleAvailability(handleName: string, mySeq: number) {
+async function checkHandleAvailability(localName: string, mySeq: number) {
     try {
         const { available } = await fetchFromSelf(
-            `/app/handles/available/${handleName}`,
+            `/app/handles/available/${localName}`,
         );
         if (mySeq !== requestSeq) return;
         availabilityStatus.value = available ? "available" : "unavailable";
@@ -160,20 +166,12 @@ async function checkHandleAvailability(handleName: string, mySeq: number) {
     }
 }
 
-const registering = ref(false);
 async function registerHandle() {
     registering.value = true;
-    const name = handleName.value;
+    const name = localName.value;
     try {
-        await fetchFromSelf("/app/handles/register", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ name }),
-        });
+        if ((await props.onRegister(name)) === false) return;
         registered.value = true;
-        props.onRegister(name);
     } catch (error) {
         alert(error);
     } finally {
@@ -183,7 +181,7 @@ async function registerHandle() {
 
 const mirrorHandleEl = ref<HTMLElement | null>(null);
 const inputHandleWidth = ref(0);
-watch(handleName, () => {
+watch(localName, () => {
     nextTick(() => {
         inputHandleWidth.value = (mirrorHandleEl.value?.offsetWidth ?? 0) + 2;
     });
@@ -262,6 +260,10 @@ watch(handleName, () => {
 .controls {
     display: flex;
     justify-content: space-between;
+}
+
+.controls button:last-child {
+    margin-left: auto;
 }
 
 .hidden {

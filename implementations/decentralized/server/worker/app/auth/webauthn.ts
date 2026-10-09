@@ -11,11 +11,20 @@ import {
   createSessionCookie,
   createTempSessionCookie,
   deleteSessionCookie,
+  deleteTempSessionCookie,
+  listSessionAccounts,
   verifySessionCookie,
+  verifyTempSessionCookie,
 } from "./session";
 import { HTTPException } from "hono/http-exception";
+import {
+  CHALLENGE_MAX_AGE,
+  getAccountHandle,
+  prepareHandleInsertFromReservation,
+  reserveHandle,
+} from "../handles/registration";
+import { localNameToHandle } from "../../../shared/did-schemas";
 
-const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // 15 minutes
 const webauthn = new Hono<{ Bindings: Bindings }>();
 
 function getRp(context: Context) {
@@ -24,70 +33,94 @@ function getRp(context: Context) {
   return { rpId, origin };
 }
 
-webauthn.get("/register/challenge", async (c) => {
+webauthn.post("/register/challenge", async (c) => {
   let sessionId: number;
-  let userId: number;
-  try {
-    // If adding a registration to an existing user,
-    // we get the existing session
+  let accountId: number;
+  let handle: string;
+  const host = new URL(getOrigin(c)).host;
+  if (c.req.header("X-Graffiti-Account") !== undefined) {
+    // An existing account can still add another passkey.
     const result = await verifySessionCookie(c);
     sessionId = result.sessionId;
-    userId = result.userId;
-  } catch (error) {
-    // Create a user
-    const result = await c.env.DB.prepare(
-      `INSERT INTO users (created_at) VALUES (?) RETURNING user_id`,
-    )
-      .bind(Date.now())
-      .first<{ user_id: number }>();
-    if (!result) {
-      throw new HTTPException(500, { message: "Failed to create user." });
+    accountId = result.accountId;
+    handle = await getAccountHandle(c.env.DB, accountId, host);
+  } else {
+    // New accounts choose a local name before creating their passkey.
+    const localName = (await c.req.json()).localName;
+    handle = localNameToHandle(localName, host);
+
+    // Reuse the temporary session when a passkey prompt is cancelled and retried.
+    try {
+      sessionId = (await verifyTempSessionCookie(c)).sessionId;
+    } catch (error) {
+      if (!(error instanceof HTTPException && error.status === 401)) throw error;
+      sessionId = await createTempSessionCookie(c);
     }
 
-    userId = result.user_id;
-    sessionId = await createTempSessionCookie(c);
+    // Temporarily reserve the handle for this session
+    // so it doesn't get scooped while the person is in the passkey prompt.
+    await reserveHandle(c.env.DB, localName, sessionId);
+
+    // Create a new account ID for this registration attempt.
+    const result = await c.env.DB.prepare(
+      "INSERT INTO accounts (created_at) VALUES (?) RETURNING account_id",
+    )
+      .bind(Date.now())
+      .first<{ account_id: number }>();
+    if (!result) {
+      throw new HTTPException(500, { message: "Failed to create account." });
+    }
+    accountId = result.account_id;
   }
 
   const { rpId } = getRp(c);
 
-  const origin = new URL(getOrigin(c));
-  const host = origin.host;
-  const displayName = `${host} account #${userId}`;
   const options = await generateRegistrationOptions({
     rpName: host,
     rpID: rpId,
     attestationType: "none",
-    userDisplayName: displayName,
-    userName: displayName,
-    userID: Uint8Array.from(new TextEncoder().encode(userId.toString())),
+    // General login does not ask for an account first, so new passkeys must be discoverable.
+    authenticatorSelection: {
+      residentKey: "required",
+      userVerification: "preferred",
+    },
+    // The handle is what is displayed in the passkey prompt.
+    userDisplayName: handle,
+    userName: handle,
+    // WebAuthn calls this a user ID; here it is the stable account ID.
+    userID: Uint8Array.from(new TextEncoder().encode(accountId.toString())),
   });
 
   // Store the challenge for later
   await c.env.DB.prepare(
     `INSERT OR REPLACE INTO passkey_registration_challenges (
       session_id,
-      user_id,
+      account_id,
       challenge,
       created_at
     ) VALUES (?, ?, ?, ?)`,
   )
-    .bind(sessionId, userId, options.challenge, Date.now())
+    .bind(sessionId, accountId, options.challenge, Date.now())
     .run();
 
   return c.json(options);
 });
 
 webauthn.post("/register/verify", async (c) => {
-  const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
+  // A signed-in account can add a passkey; a new account uses the temp cookie.
+  const { sessionId, accountId: sessionAccountId } =
+    c.req.header("X-Graffiti-Account") === undefined
+      ? await verifyTempSessionCookie(c)
+      : await verifySessionCookie(c);
 
   // Fetch and delete the challenge
   const registrationOptions = await c.env.DB.prepare(
     `DELETE FROM passkey_registration_challenges
      WHERE session_id = ?
-     RETURNING challenge, user_id, created_at`,
+     RETURNING challenge, account_id, created_at`,
   )
     .bind(sessionId)
-    .first<{ challenge: string; user_id: number; created_at: number }>();
+    .first<{ challenge: string; account_id: number; created_at: number }>();
 
   if (!registrationOptions) {
     return c.text("Challenge not found.", 404);
@@ -95,12 +128,16 @@ webauthn.post("/register/verify", async (c) => {
 
   const {
     challenge,
-    user_id: userId,
+    account_id: accountId,
     created_at: createdAt,
   } = registrationOptions;
 
   if (Date.now() - createdAt > CHALLENGE_MAX_AGE) {
     return c.text("Challenge expired.", 400);
+  }
+  const creating = sessionAccountId === -1;
+  if (!creating && sessionAccountId !== accountId) {
+    return c.text("Invalid registration session.", 401);
   }
 
   const { rpId, origin } = getRp(c);
@@ -133,21 +170,21 @@ webauthn.post("/register/verify", async (c) => {
     },
   } = verification;
   const credentialId = response.id;
-  await c.env.DB.prepare(
-    `INSERT INTO passkeys (
-      credential_id,
-      user_id,
-      public_key,
-      counter,
-      credential_type,
-      device_type,
-      backed_up,
-      created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  )
-    .bind(
+  const statements = [
+    c.env.DB.prepare(
+      `INSERT INTO passkeys (
+        credential_id,
+        account_id,
+        public_key,
+        counter,
+        credential_type,
+        device_type,
+        backed_up,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
       credentialId,
-      userId,
+      accountId,
       publicKey,
       counter,
       // Are the values below necessary?
@@ -155,12 +192,30 @@ webauthn.post("/register/verify", async (c) => {
       credentialDeviceType,
       credentialBackedUp,
       Date.now(),
-    )
-    .run();
+    ),
+  ];
 
-  // Store a proper session for the user
-  await createSessionCookie(c, userId);
-  return c.json({ message: "Passkey registered successfully." });
+  if (creating) {
+    statements.push(
+      prepareHandleInsertFromReservation(c.env.DB, accountId, sessionId),
+    );
+  }
+  try {
+    await c.env.DB.batch(statements);
+  } catch (error) {
+    if (
+      creating &&
+      String(error).includes("NOT NULL constraint failed: handles.identifier")
+    ) {
+      return c.text("Handle reservation expired. Please start again.", 409);
+    }
+    throw error;
+  }
+
+  // Store a proper session for the account
+  if (sessionAccountId === -1) await deleteTempSessionCookie(c);
+  await createSessionCookie(c, accountId);
+  return c.json({ message: "Passkey registered successfully.", accountId });
 });
 
 webauthn.get("/authenticate/challenge", async (c) => {
@@ -185,7 +240,7 @@ webauthn.get("/authenticate/challenge", async (c) => {
 });
 
 webauthn.post("/authenticate/verify", async (c) => {
-  const { sessionId } = await verifySessionCookie(c, { allowTemp: true });
+  const { sessionId } = await verifyTempSessionCookie(c);
 
   // Find and delete the challenge
   const result = await c.env.DB.prepare(
@@ -207,18 +262,18 @@ webauthn.post("/authenticate/verify", async (c) => {
   const response = await c.req.json();
   const credentialId = response.id;
 
-  const userPasskey = await c.env.DB.prepare(
-    `SELECT user_id, public_key, counter FROM passkeys WHERE credential_id = ?`,
+  const passkey = await c.env.DB.prepare(
+    `SELECT account_id, public_key, counter FROM passkeys WHERE credential_id = ?`,
   )
     .bind(credentialId)
     .first<{
-      user_id: number;
+      account_id: number;
       public_key: ArrayBuffer;
       counter: number;
     }>();
 
-  if (!userPasskey) {
-    return c.text("User not found.", 404);
+  if (!passkey) {
+    return c.text("Passkey not found.", 404);
   }
 
   const verification = await verifyAuthenticationResponse({
@@ -228,8 +283,8 @@ webauthn.post("/authenticate/verify", async (c) => {
     expectedChallenge: challenge,
     credential: {
       id: credentialId,
-      counter: userPasskey.counter,
-      publicKey: new Uint8Array(userPasskey.public_key),
+      counter: passkey.counter,
+      publicKey: new Uint8Array(passkey.public_key),
     },
     requireUserVerification: false,
   });
@@ -241,7 +296,7 @@ webauthn.post("/authenticate/verify", async (c) => {
   const { newCounter } = verification.authenticationInfo;
 
   // Update the counter if necessary
-  if (userPasskey.counter !== newCounter) {
+  if (passkey.counter !== newCounter) {
     await c.env.DB.prepare(
       `UPDATE passkeys SET counter = ? WHERE credential_id = ?`,
     )
@@ -250,9 +305,24 @@ webauthn.post("/authenticate/verify", async (c) => {
   }
 
   // Delete the temp cookie
-  deleteSessionCookie(c);
-  await createSessionCookie(c, userPasskey.user_id);
-  return c.json({ message: "Passkey authenticated successfully." });
+  await deleteTempSessionCookie(c);
+  await createSessionCookie(c, passkey.account_id);
+  return c.json({
+    message: "Passkey authenticated successfully.",
+    accountId: passkey.account_id,
+  });
+});
+
+webauthn.get("/accounts", async (c) => {
+  c.header("Cache-Control", "no-store");
+  const ids = await listSessionAccounts(c);
+  const host = new URL(getOrigin(c)).host;
+  const accounts = await Promise.all(
+    ids.map(async (id) => {
+      return { id, handle: await getAccountHandle(c.env.DB, id, host) };
+    }),
+  );
+  return c.json({ accounts });
 });
 
 webauthn.get("/logged-in", async (c) => {

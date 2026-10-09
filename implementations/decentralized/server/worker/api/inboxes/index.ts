@@ -187,12 +187,12 @@ inbox.openapi(messageRoute, async (c) => {
   try {
     token = await getHeaderToken(c);
   } catch {} // Not to worry if not present
-  const userId = token ? (await verifySessionHeader(c)).userId : undefined;
+  const accountId = token ? (await verifySessionHeader(c)).accountId : undefined;
   const inboxId = getInboxId(c);
 
   const { messageId } = c.req.valid("param");
 
-  const message = await getMessage(c, inboxId, messageId, userId);
+  const message = await getMessage(c, inboxId, messageId, accountId);
   return c.body(dagCborEncode(message).slice(), 200, {
     "Content-Type": "application/cbor",
   });
@@ -229,7 +229,7 @@ const labelRoute = createRoute({
 });
 
 inbox.openapi(labelRoute, async (c) => {
-  const { userId } = await verifySessionHeader(c);
+  const { accountId } = await verifySessionHeader(c);
   const inboxId = getInboxId(c);
   const { messageId } = c.req.valid("param");
   const bodyBlob = await c.req.blob();
@@ -241,7 +241,7 @@ inbox.openapi(labelRoute, async (c) => {
   } catch (e) {
     throw new HTTPException(400, { message: "Invalid label body format" });
   }
-  await labelMessage(c, inboxId, messageId, labelBody.l, userId);
+  await labelMessage(c, inboxId, messageId, labelBody.l, accountId);
   return c.body(null, 200);
 });
 
@@ -285,7 +285,7 @@ inbox.openapi(queryRoute, async (c) => {
     token = await getHeaderToken(c);
   } catch {} // Not to worry if not present
 
-  const userId = token ? (await verifySessionHeader(c)).userId : undefined;
+  const accountId = token ? (await verifySessionHeader(c)).accountId : undefined;
 
   const inboxId = getInboxId(c);
 
@@ -339,7 +339,7 @@ inbox.openapi(queryRoute, async (c) => {
     inboxId,
     tags,
     objectSchema,
-    userId,
+    accountId,
     sinceSeq,
     QUERY_PAGE_LIMITS[pageSizeStep],
   );
@@ -405,7 +405,7 @@ const exportRoute = createRoute({
 
 // Export messages
 inbox.openapi(exportRoute, async (c) => {
-  const { userId } = await verifySessionHeader(c);
+  const { accountId } = await verifySessionHeader(c);
   const inboxId = getInboxId(c);
   const { cursor: cursorParam } = c.req.valid("query");
 
@@ -435,7 +435,7 @@ inbox.openapi(exportRoute, async (c) => {
   const { results, lastSeq, hasMore } = await exportMessages(
     c,
     inboxId,
-    userId,
+    accountId,
     sinceSeq,
   );
 

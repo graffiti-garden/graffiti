@@ -76,3 +76,13 @@ For first time deployments:
 4. Run `npm run deploy` to deploy the application.
 
 In the future, simply run `npm run deploy` to update the application.
+
+## OAuth TODOs
+
+- **Service scopes:** An OAuth token can access all services belonging to its
+  account, even if the client requested only one. However, this is not much of an issue as an account only ever has three services: one bucket, personal inbox, and shared inbox, and presumably access to one is granted
+  with access to the others.
+- **PKCE:** A code seen in an OAuth redirect URL could be exchanged by someone
+  other than the client, for example a malicious browser extension or a local
+  redirect interceptor. This is a less likely path in the current flow. Later,
+  bind each code to a client-held verifier using S256 PKCE.

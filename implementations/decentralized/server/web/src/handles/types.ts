@@ -1,11 +1,4 @@
-import type {
-  OptionalAlsoKnownAs,
-  OptionalServices,
-} from "../../../shared/did-schemas";
-
-export interface Handle {
-  name: string;
+export interface HandleRecord {
+  identifier: string;
   createdAt: number;
-  alsoKnownAs: OptionalAlsoKnownAs;
-  services: OptionalServices;
 }

@@ -42,7 +42,8 @@ dialog {
         width: 100%;
     }
 
-    button {
+    button,
+    a[role="button"] {
         font-size: 1.5rem;
         width: 100%;
     }

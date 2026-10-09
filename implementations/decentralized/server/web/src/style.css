@@ -1,8 +1,14 @@
+html {
+    scroll-behavior: smooth;
+}
+
 #app {
     > header {
         position: sticky;
         top: 0;
         z-index: 10;
+        align-items: center;
+        row-gap: 0.25rem;
         backdrop-filter: blur(10px);
         background: color-mix(
             in srgb,
@@ -13,13 +19,24 @@
 
         h1 {
             font-size: 1.5rem;
-            margin-top: 1rem;
-            margin-bottom: 1rem;
+            margin-block: 0.5rem;
         }
     }
     > :is(header, main) {
         padding-left: 1rem;
         padding-right: 1rem;
+    }
+}
+
+/* Let the page scroll past the open account menu. */
+#app > header:has(.account-switcher[open]) {
+    position: static;
+}
+
+@media (min-width: 800px) {
+    /* The page's own content may already extend farther than the dropdown. */
+    #app:has(.account-switcher[open]) {
+        min-height: var(--account-menu-bottom, 0px);
     }
 }
 
@@ -45,6 +62,8 @@ article header {
 }
 
 #app > main {
+    max-width: 60rem;
+    margin-inline: auto;
     padding-bottom: 2rem;
     padding-top: 1rem;
 }
@@ -91,6 +110,39 @@ main h2 {
 .secondary:hover {
     background: var(--pico-secondary-hover-background);
     border-color: var(--pico-secondary-hover-border);
+}
+
+.choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+}
+
+.choices button {
+    padding: 1.5rem;
+    text-align: left;
+    color: inherit;
+    background: transparent;
+    border-color: var(--pico-muted-border-color);
+}
+
+.choices button:is(:hover, :focus, [aria-pressed="true"]) {
+    border-color: var(--pico-primary);
+}
+
+.choices span {
+    display: block;
+    font-size: 0.85em;
+}
+
+.steps > li + li {
+    margin-top: 2rem;
+}
+
+.steps > li::marker {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--pico-h3-color);
 }
 
 aside {
