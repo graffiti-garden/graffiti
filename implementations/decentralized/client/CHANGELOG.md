@@ -1,5 +1,12 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.1.3
+
+### Patch Changes
+
+- 3ce161f: Let people who forgot their handle choose a Graffiti provider and log in with a passkey.
+- a87f397: Remember the last logged-in handle in localStorage instead of saving a placeholder password.
+
 ## 0.1.2
 
 ### Patch Changes

@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.3.0",
-    "@graffiti-garden/implementation-decentralized": "^0.1.2",
+    "@graffiti-garden/implementation-decentralized": "^0.1.3",
     "@graffiti-garden/wrapper-iframe-rpc": "^0.1.1",
     "@graffiti-garden/wrapper-vue": "^1.4.1",
     "ajv": "^8.20.0",
