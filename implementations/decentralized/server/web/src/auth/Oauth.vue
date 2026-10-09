@@ -112,6 +112,15 @@ import { fetchActorDidData } from "../actors/plc-directory";
 const redirectUri = new URLSearchParams(window.location.search).get(
     "redirect_uri",
 );
+// These Data Guards ask for permission before a site accesses private data.
+// Auto-approve only their exact OAuth callback URLs, and only after checking
+// that the selected account owns every requested service.
+const trustedDataGuardRedirectUris = [
+    "https://guard.graffiti.garden/",
+];
+const isTrustedDataGuard =
+    redirectUri !== null && trustedDataGuardRedirectUris.includes(redirectUri);
+let autoApprovalAttempted = false;
 
 // If there is no redirect URI, redirect to the home page
 const router = useRouter();
@@ -277,6 +286,10 @@ async function loadUserServiceEndpoints() {
             void loadAccountOptions(accountId);
         } else {
             void loadActorNames(accountId);
+            if (isTrustedDataGuard && !autoApprovalAttempted) {
+                autoApprovalAttempted = true;
+                void handleApprove();
+            }
         }
     } catch (error) {
         if (selectedAccount.value !== accountId) return;
