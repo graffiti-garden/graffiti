@@ -191,8 +191,8 @@ storageBucket.openapi(putValueRoute, async (c) => {
       message: "Missing body",
     });
   }
-  const { userId } = await verifySessionHeader(c);
-  return await putValue(c, bucketId, key, userId);
+  const { accountId } = await verifySessionHeader(c);
+  return await putValue(c, bucketId, key, accountId);
 });
 
 const deleteValueRoute = createRoute({
@@ -215,8 +215,8 @@ const deleteValueRoute = createRoute({
 storageBucket.openapi(deleteValueRoute, async (c) => {
   const { key } = c.req.valid("param");
   const bucketId = getBucketId(c);
-  const { userId } = await verifySessionHeader(c);
-  return await deleteValue(c, bucketId, key, userId);
+  const { accountId } = await verifySessionHeader(c);
+  return await deleteValue(c, bucketId, key, accountId);
 });
 
 storageBucket.openapi(
@@ -253,8 +253,8 @@ storageBucket.openapi(
   async (c) => {
     const { cursor } = c.req.valid("query");
     const bucketId = getBucketId(c);
-    const { userId } = await verifySessionHeader(c);
-    const output = await exportKeys(c, bucketId, cursor, userId);
+    const { accountId } = await verifySessionHeader(c);
+    const output = await exportKeys(c, bucketId, cursor, accountId);
     return c.body(dagCborEncode(output).slice(), 200, {
       "Content-Type": "application/cbor",
     });

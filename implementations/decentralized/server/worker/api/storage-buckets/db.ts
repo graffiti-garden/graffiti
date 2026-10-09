@@ -6,7 +6,7 @@ import { LRUCache } from "lru-cache";
 const BUCKET_INFO_CACHE_CAPACITY = 1000;
 const bucketInfoCache = new LRUCache<
   string,
-  { value: { userId: number; bucketSeq: number } | null }
+  { value: { accountId: number; bucketSeq: number } | null }
 >({ max: BUCKET_INFO_CACHE_CAPACITY });
 
 async function getBucketInfo(
@@ -19,14 +19,14 @@ async function getBucketInfo(
     return cached.value;
   } else {
     const result = await context.env.DB.prepare(
-      "SELECT user_id, bucket_seq FROM storage_buckets WHERE bucket_id = ?",
+      "SELECT account_id, bucket_seq FROM storage_buckets WHERE bucket_id = ?",
     )
       .bind(bucketId)
-      .first<{ user_id: number; bucket_seq: number }>();
+      .first<{ account_id: number; bucket_seq: number }>();
 
     const output = result
       ? {
-          userId: result.user_id,
+          accountId: result.account_id,
           bucketSeq: result.bucket_seq,
         }
       : null;
@@ -40,15 +40,15 @@ async function getBucketInfo(
 async function verifyBucketControl(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
-  userId: number,
+  accountId: number,
 ) {
   const info = await getBucketInfo(context, bucketId);
   if (!info) {
     throw new HTTPException(404, { message: "Bucket not found" });
   }
-  if (info.userId !== userId) {
+  if (info.accountId !== accountId) {
     throw new HTTPException(403, {
-      message: "User does not have access to the bucket",
+      message: "Account does not have access to the bucket",
     });
   }
 }
@@ -79,9 +79,9 @@ export async function putValue(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
   key: string,
-  userId: number,
+  accountId: number,
 ) {
-  await verifyBucketControl(context, bucketId, userId);
+  await verifyBucketControl(context, bucketId, accountId);
   return bucket(context, bucketId).putValue(key, context.req.raw);
 }
 
@@ -89,9 +89,9 @@ export async function deleteValue(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
   key: string,
-  userId: number,
+  accountId: number,
 ) {
-  await verifyBucketControl(context, bucketId, userId);
+  await verifyBucketControl(context, bucketId, accountId);
   return bucket(context, bucketId).deleteValue(key);
 }
 
@@ -99,8 +99,8 @@ export async function exportKeys(
   context: Context<{ Bindings: Bindings }>,
   bucketId: string,
   cursor: string | undefined,
-  userId: number,
+  accountId: number,
 ) {
-  await verifyBucketControl(context, bucketId, userId);
+  await verifyBucketControl(context, bucketId, accountId);
   return bucket(context, bucketId).exportKeys(cursor);
 }

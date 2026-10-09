@@ -3,9 +3,9 @@ import { identifierToHandle } from "../../../shared/did-schemas";
 
 export const CHALLENGE_MAX_AGE = 15 * 60 * 1000; // Passkey challenges and handle reservations
 
-export async function getAccountHandle(db: D1Database, userId: number, baseHost: string) {
-  const row = await db.prepare("SELECT identifier FROM handles WHERE user_id = ?")
-    .bind(userId)
+export async function getAccountHandle(db: D1Database, accountId: number, baseHost: string) {
+  const row = await db.prepare("SELECT identifier FROM handles WHERE account_id = ?")
+    .bind(accountId)
     .first<{ identifier: string }>();
   if (!row) throw new Error("Account has no handle.");
   return identifierToHandle(row.identifier, baseHost);
@@ -73,22 +73,22 @@ export async function reserveHandle(
 // handle insert then fails, rolling back the passkey insert in the same batch.
 export function prepareHandleInsertFromReservation(
   db: D1Database,
-  userId: number,
+  accountId: number,
   sessionId: number,
 ) {
   const now = Date.now();
   return db.prepare(
-    `INSERT INTO handles (user_id, identifier, created_at)
+    `INSERT INTO handles (account_id, identifier, created_at)
      VALUES (?, (
        SELECT name FROM handle_reservations
        WHERE session_id = ? AND created_at > ?
      ), ?)`,
-  ).bind(userId, sessionId, now - CHALLENGE_MAX_AGE, now);
+  ).bind(accountId, sessionId, now - CHALLENGE_MAX_AGE, now);
 }
 
 export function prepareHandleReplacement(
   db: D1Database,
-  userId: number,
+  accountId: number,
   identifier: string,
   sessionId: number,
 ) {
@@ -98,14 +98,14 @@ export function prepareHandleReplacement(
   // the insert fail and rolls back the actor CID update in the same batch.
   const insert = identifier.startsWith("did:web:")
     ? db.prepare(
-        `INSERT INTO handles (identifier, user_id, created_at) VALUES (?, ?, ?)
-         ON CONFLICT(user_id) DO UPDATE SET identifier = excluded.identifier, created_at = excluded.created_at`,
-      ).bind(identifier, userId, now)
+        `INSERT INTO handles (identifier, account_id, created_at) VALUES (?, ?, ?)
+         ON CONFLICT(account_id) DO UPDATE SET identifier = excluded.identifier, created_at = excluded.created_at`,
+      ).bind(identifier, accountId, now)
     : db.prepare(
-        `INSERT INTO handles (identifier, user_id, created_at)
+        `INSERT INTO handles (identifier, account_id, created_at)
          VALUES ((SELECT name FROM handle_reservations
                   WHERE name = ? AND session_id = ? AND created_at > ?), ?, ?)
-         ON CONFLICT(user_id) DO UPDATE SET identifier = excluded.identifier, created_at = excluded.created_at`,
-      ).bind(identifier, sessionId, now - CHALLENGE_MAX_AGE, userId, now);
+         ON CONFLICT(account_id) DO UPDATE SET identifier = excluded.identifier, created_at = excluded.created_at`,
+      ).bind(identifier, sessionId, now - CHALLENGE_MAX_AGE, accountId, now);
   return insert;
 }

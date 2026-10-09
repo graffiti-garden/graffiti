@@ -24,10 +24,10 @@ oauth.get("/authorize", async (c) => {
 
   const url = new URL(redirect_uri);
 
-  let userId: number;
+  let accountId: number;
   try {
     const ids = await verifySessionCookie(c, account ? Number(account) : undefined);
-    userId = ids.userId;
+    accountId = ids.accountId;
   } catch (error) {
     url.searchParams.set("error", "access_denied");
     url.searchParams.set("error_description", "User denied access");
@@ -40,9 +40,9 @@ oauth.get("/authorize", async (c) => {
 
   // Store the authorization code in the database
   await c.env.DB.prepare(
-    "INSERT INTO oauth_codes (code, redirect_uri, user_id, created_at) VALUES (?, ?, ?, ?)",
+    "INSERT INTO oauth_codes (code, redirect_uri, account_id, created_at) VALUES (?, ?, ?, ?)",
   )
-    .bind(code, redirect_uri, userId, createdAt)
+    .bind(code, redirect_uri, accountId, createdAt)
     .run();
 
   // Redirect back with the code and state
@@ -68,10 +68,10 @@ oauth.post("/token", async (c) => {
 
   // Fetch and delete the code from the database
   const result = await c.env.DB.prepare(
-    "DELETE FROM oauth_codes WHERE code = ? RETURNING user_id, redirect_uri, created_at",
+    "DELETE FROM oauth_codes WHERE code = ? RETURNING account_id, redirect_uri, created_at",
   )
     .bind(code)
-    .first<{ user_id: number; redirect_uri: string; created_at: number }>();
+    .first<{ account_id: number; redirect_uri: string; created_at: number }>();
 
   if (!result) {
     throw new HTTPException(401, {
@@ -95,7 +95,7 @@ oauth.post("/token", async (c) => {
   }
 
   // Create a session token
-  const { token } = await createSessionToken(c, result.user_id);
+  const { token } = await createSessionToken(c, result.account_id);
 
   // Return the access token
   return c.json({ access_token: token, token_type: "bearer" });

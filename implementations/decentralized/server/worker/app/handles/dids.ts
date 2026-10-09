@@ -22,7 +22,7 @@ export async function getDid(c: Context<{ Bindings: Bindings }>) {
 
   const result = await c.env.DB.prepare(
     `SELECT actors.did AS actor FROM handles
-     LEFT JOIN actors ON actors.user_id = handles.user_id
+     LEFT JOIN actors ON actors.account_id = handles.account_id
      WHERE handles.identifier = ?`,
   )
     .bind(localName)

@@ -28,19 +28,19 @@ function checkReplacement(existing: { did: string } | null, replace: boolean) {
   }
 }
 
-async function checkActorAvailable(db: D1Database, did: string, userId: number) {
+async function checkActorAvailable(db: D1Database, did: string, accountId: number) {
   const owner = await db.prepare(
-    "SELECT 1 FROM actors WHERE did = ? AND user_id <> ?",
-  ).bind(did, userId).first();
+    "SELECT 1 FROM actors WHERE did = ? AND account_id <> ?",
+  ).bind(did, accountId).first();
   if (owner) {
     throw new HTTPException(409, { message: "Another account already uses this actor." });
   }
 }
 
-async function accountHandleDid(db: D1Database, userId: number, host: string) {
+async function accountHandleDid(db: D1Database, accountId: number, host: string) {
   const handle = await db.prepare(
-    "SELECT identifier FROM handles WHERE user_id = ?",
-  ).bind(userId).first<{ identifier: string }>();
+    "SELECT identifier FROM handles WHERE account_id = ?",
+  ).bind(accountId).first<{ identifier: string }>();
   if (!handle) {
     throw new HTTPException(409, { message: "This account has no handle." });
   }
@@ -49,7 +49,7 @@ async function accountHandleDid(db: D1Database, userId: number, host: string) {
 
 async function saveActor(
   db: D1Database,
-  userId: number,
+  accountId: number,
   did: string,
   secretKey: Uint8Array | null,
   replace: boolean,
@@ -57,24 +57,24 @@ async function saveActor(
   const createdAt = Date.now();
   if (replace) {
     await db.prepare(
-      "UPDATE actors SET did = ?, secret_key = ?, created_at = ? WHERE user_id = ?",
-    ).bind(did, secretKey, createdAt, userId).run();
+      "UPDATE actors SET did = ?, secret_key = ?, created_at = ? WHERE account_id = ?",
+    ).bind(did, secretKey, createdAt, accountId).run();
   } else {
     await db.prepare(
-      "INSERT INTO actors (did, user_id, secret_key, created_at) VALUES (?, ?, ?, ?)",
-    ).bind(did, userId, secretKey, createdAt).run();
+      "INSERT INTO actors (did, account_id, secret_key, created_at) VALUES (?, ?, ?, ?)",
+    ).bind(did, accountId, secretKey, createdAt).run();
   }
   return createdAt;
 }
 
 actorManagement.post("/create", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   // Check before publishing a DID to PLC. The database index also prevents
   // another actor from being stored if two requests arrive together.
   const existingActor = await c.env.DB.prepare(
-    "SELECT did FROM actors WHERE user_id = ?",
+    "SELECT did FROM actors WHERE account_id = ?",
   )
-    .bind(userId)
+    .bind(accountId)
     .first<{ did: string }>();
   const body = await c.req.json();
   const replace = body.replace === true;
@@ -82,7 +82,7 @@ actorManagement.post("/create", async (c) => {
   const services = OptionalServicesSchema.parse(body.services);
   const alsoKnownAs = withFirstWebHandle(
     OptionalAlsoKnownAsSchema.parse(body.alsoKnownAs) ?? [],
-    await accountHandleDid(c.env.DB, userId, new URL(getOrigin(c)).host),
+    await accountHandleDid(c.env.DB, accountId, new URL(getOrigin(c)).host),
   );
 
   // Generate a key pair
@@ -97,7 +97,7 @@ actorManagement.post("/create", async (c) => {
   });
 
   // Keep one actor on the account while replacing its DID.
-  const createdAt = await saveActor(c.env.DB, userId, did, secretKey, replace);
+  const createdAt = await saveActor(c.env.DB, accountId, did, secretKey, replace);
 
   return c.json({
     did,
@@ -107,19 +107,19 @@ actorManagement.post("/create", async (c) => {
 });
 
 actorManagement.put("/actor/:did", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const did = c.req.param("did");
   const body = await c.req.json();
   const services = OptionalServicesSchema.parse(body.services);
   const alsoKnownAs = withFirstWebHandle(
     OptionalAlsoKnownAsSchema.parse(body.alsoKnownAs) ?? [],
-    await accountHandleDid(c.env.DB, userId, new URL(getOrigin(c)).host),
+    await accountHandleDid(c.env.DB, accountId, new URL(getOrigin(c)).host),
   );
 
   const dbResult = await c.env.DB.prepare(
-    "SELECT secret_key FROM actors WHERE did = ? AND user_id = ?",
+    "SELECT secret_key FROM actors WHERE did = ? AND account_id = ?",
   )
-    .bind(did, userId)
+    .bind(did, accountId)
     .first<{ secret_key: number[] | null }>();
   if (!dbResult) {
     throw new HTTPException(404, {
@@ -153,14 +153,14 @@ actorManagement.put("/actor/:did", async (c) => {
 });
 
 actorManagement.delete("/actor/:did/key", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const did = c.req.param("did");
 
   // Removing our copy of the key does not remove the actor from the account.
   const result = await c.env.DB.prepare(
-    "UPDATE actors SET secret_key = NULL WHERE did = ? AND user_id = ? AND secret_key IS NOT NULL RETURNING did",
+    "UPDATE actors SET secret_key = NULL WHERE did = ? AND account_id = ? AND secret_key IS NOT NULL RETURNING did",
   )
-    .bind(did, userId)
+    .bind(did, accountId)
     .first();
   if (!result) {
     throw new HTTPException(404, { message: "Actor not found" });
@@ -170,12 +170,12 @@ actorManagement.delete("/actor/:did/key", async (c) => {
 });
 
 actorManagement.get("/list", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
 
   const result = await c.env.DB.prepare(
-    "SELECT did, created_at, secret_key FROM actors WHERE user_id = ?",
+    "SELECT did, created_at, secret_key FROM actors WHERE account_id = ?",
   )
-    .bind(userId)
+    .bind(accountId)
     .all<{
       did: string;
       created_at: number;
@@ -195,14 +195,14 @@ actorManagement.get("/list", async (c) => {
 
 // export
 actorManagement.get("/actor/:did", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const did = c.req.param("did");
 
   // Export the actor
   const result = await c.env.DB.prepare(
-    "SELECT did, created_at, secret_key FROM actors WHERE did = ? AND user_id = ?",
+    "SELECT did, created_at, secret_key FROM actors WHERE did = ? AND account_id = ?",
   )
-    .bind(did, userId)
+    .bind(did, accountId)
     .first<{
       did: string;
       created_at: number;
@@ -224,14 +224,14 @@ actorManagement.get("/actor/:did", async (c) => {
 });
 
 actorManagement.post("/import", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const body = await c.req.json();
   const replace = body.replace === true;
   // Check before changing PLC. The account's actor is replaced in one database update.
   const existingActor = await c.env.DB.prepare(
-    "SELECT did, secret_key FROM actors WHERE user_id = ?",
+    "SELECT did, secret_key FROM actors WHERE account_id = ?",
   )
-    .bind(userId)
+    .bind(accountId)
     .first<{ did: string; secret_key: number[] | null }>();
   checkReplacement(existingActor, replace);
   if (existingActor && existingActor.did === body.did && existingActor.secret_key) {
@@ -241,7 +241,7 @@ actorManagement.post("/import", async (c) => {
   if (typeof did !== "string" || !/^did:plc:[a-z2-7]{24}$/.test(did)) {
     throw new HTTPException(400, { message: "Enter a valid actor DID." });
   }
-  await checkActorAvailable(c.env.DB, did, userId);
+  await checkActorAvailable(c.env.DB, did, accountId);
   const oldSecretKey = base64url.decode(secretKey);
 
   // Generate a new key pair
@@ -264,7 +264,7 @@ actorManagement.post("/import", async (c) => {
     did,
     alsoKnownAs: withFirstWebHandle(
       [...new Set([...data.alsoKnownAs, ...aliases])],
-      await accountHandleDid(c.env.DB, userId, new URL(getOrigin(c)).host),
+      await accountHandleDid(c.env.DB, accountId, new URL(getOrigin(c)).host),
     ),
     services: data.services,
     verificationMethods: data.verificationMethods,
@@ -276,7 +276,7 @@ actorManagement.post("/import", async (c) => {
   });
 
   // Import or replace the account's actor.
-  const createdAt = await saveActor(c.env.DB, userId, did, newSecretKey, replace);
+  const createdAt = await saveActor(c.env.DB, accountId, did, newSecretKey, replace);
 
   // Return the imported actor
   return c.json({
@@ -287,24 +287,24 @@ actorManagement.post("/import", async (c) => {
 });
 
 actorManagement.post("/attach", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const { did, replace } = await c.req.json();
   if (typeof did !== "string" || !/^did:plc:[a-z2-7]{24}$/.test(did)) {
     throw new HTTPException(400, { message: "Enter a valid actor DID." });
   }
   const existingActor = await c.env.DB.prepare(
-    "SELECT did FROM actors WHERE user_id = ?",
-  ).bind(userId).first<{ did: string }>();
+    "SELECT did FROM actors WHERE account_id = ?",
+  ).bind(accountId).first<{ did: string }>();
   checkReplacement(existingActor, replace === true);
-  await checkActorAvailable(c.env.DB, did, userId);
-  const handleDid = await accountHandleDid(c.env.DB, userId, new URL(getOrigin(c)).host);
+  await checkActorAvailable(c.env.DB, did, accountId);
+  const handleDid = await accountHandleDid(c.env.DB, accountId, new URL(getOrigin(c)).host);
   const data = await fetchActorData(did);
   if (data.alsoKnownAs.find((alias) => alias.startsWith("did:web:")) !== handleDid) {
     throw new HTTPException(409, {
       message: `Make ${handleDid} the first did:web entry in the actor's alsoKnownAs before attaching it.`,
     });
   }
-  const createdAt = await saveActor(c.env.DB, userId, did, null, replace === true);
+  const createdAt = await saveActor(c.env.DB, accountId, did, null, replace === true);
   return c.json({ did, createdAt, rotationKey: null });
 });
 

@@ -58,7 +58,7 @@ export const LabeledMessageSchema = z.object({
 
 const inboxInfoCache = new LRUCache<
   string,
-  { value: { userId: number; inboxSeq: number } | null }
+  { value: { accountId: number; inboxSeq: number } | null }
 >({ max: INBOX_INFO_CACHE_CAPACITY });
 
 async function getInboxInfo(
@@ -67,7 +67,7 @@ async function getInboxInfo(
 ) {
   if (inboxId === "shared")
     return {
-      userId: 0,
+      accountId: 0,
       inboxSeq: 0,
     };
 
@@ -77,14 +77,14 @@ async function getInboxInfo(
     return cached.value;
   } else {
     const result = await context.env.DB.prepare(
-      "SELECT user_id, inbox_seq FROM inboxes WHERE inbox_id = ?",
+      "SELECT account_id, inbox_seq FROM inboxes WHERE inbox_id = ?",
     )
       .bind(inboxId)
-      .first<{ user_id: number; inbox_seq: number }>();
+      .first<{ account_id: number; inbox_seq: number }>();
 
     const output = result
       ? {
-          userId: result.user_id,
+          accountId: result.account_id,
           inboxSeq: result.inbox_seq,
         }
       : null;
@@ -101,7 +101,7 @@ export async function sendMessage(
   message: z.infer<typeof MessageSchema>,
   messageId_?: string,
 ) {
-  // Determine if the inbox is under the user's control,
+  // Determine if the inbox is under the account's control,
   // which we will later use to determine if we can label the message
   const info = await getInboxInfo(context, inboxId);
   if (!info) {
@@ -189,11 +189,11 @@ export async function getMessage(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
   messageId: string,
-  userId?: number,
+  accountId?: number,
 ) {
   const info = await getInboxInfo(context, inboxId);
 
-  if (!info || !(info.userId === userId || info.userId === 0)) {
+  if (!info || !(info.accountId === accountId || info.accountId === 0)) {
     throw new HTTPException(403, {
       message: "Cannot read someone else's inbox",
     });
@@ -209,11 +209,11 @@ export async function getMessage(
     l.label AS label
   FROM inbox_messages m
   LEFT JOIN inbox_message_labels l
-    ON m.message_seq = l.message_seq AND l.user_id = ?
+    ON m.message_seq = l.message_seq AND l.account_id = ?
   WHERE inbox_seq = ? AND message_id = ?
   `,
   )
-    .bind(userId, inboxSeq, messageId)
+    .bind(accountId, inboxSeq, messageId)
     .first<{
       tags: ArrayBuffer;
       object: string;
@@ -247,7 +247,7 @@ export async function queryMessages(
   inboxId: string,
   tags: Uint8Array[],
   objectSchema: Schema | boolean,
-  userId?: number,
+  accountId?: number,
   sinceSeq: number = 0,
   limit: number = INBOX_QUERY_LIMIT,
 ) {
@@ -264,7 +264,7 @@ export async function queryMessages(
   }
 
   const info = await getInboxInfo(context, inboxId);
-  if (!info || !(info.userId === userId || info.userId === 0)) {
+  if (!info || !(info.accountId === accountId || info.accountId === 0)) {
     throw new HTTPException(403, {
       message: "Cannot query someone else's inbox",
     });
@@ -285,13 +285,13 @@ export async function queryMessages(
       m.tags,
       m.object,
       m.metadata,`,
-    userId ? `l.label AS label` : `NULL as label`,
+    accountId ? `l.label AS label` : `NULL as label`,
     `FROM message_candidates c
     JOIN inbox_messages m
       ON m.message_seq = c.message_seq`,
-    userId
+    accountId
       ? `LEFT JOIN inbox_message_labels l
-      ON c.message_seq = l.message_seq AND l.user_id = ?`
+      ON c.message_seq = l.message_seq AND l.account_id = ?`
       : ``,
     `ORDER BY m.message_seq ASC
     LIMIT ?`,
@@ -301,7 +301,7 @@ export async function queryMessages(
     inboxSeq,
     ...tags,
     sinceSeq,
-    ...(userId ? [userId] : []),
+    ...(accountId ? [accountId] : []),
     limit + 1,
   ];
 
@@ -352,10 +352,10 @@ export async function labelMessage(
   inboxId: string,
   messageId: string,
   label: number,
-  userId: number,
+  accountId: number,
 ) {
   const info = await getInboxInfo(context, inboxId);
-  if (!info || !(info.userId === userId || info.userId === 0)) {
+  if (!info || !(info.accountId === accountId || info.accountId === 0)) {
     throw new HTTPException(403, {
       message: "Cannot label a message in someone else's inbox",
     });
@@ -379,20 +379,20 @@ export async function labelMessage(
     `
     INSERT INTO inbox_message_labels (
       message_seq,
-      user_id,
+      account_id,
       label
     ) VALUES (?, ?, ?)
-    ON CONFLICT (message_seq, user_id) DO UPDATE SET label = EXCLUDED.label;
+    ON CONFLICT (message_seq, account_id) DO UPDATE SET label = EXCLUDED.label;
   `,
   )
-    .bind(messageSeq, userId, label)
+    .bind(messageSeq, accountId, label)
     .run();
 }
 
 export async function exportMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
-  userId: number,
+  accountId: number,
   sinceSeq: number = 0,
 ) {
   const info = await getInboxInfo(context, inboxId);
@@ -401,7 +401,7 @@ export async function exportMessages(
       message: "Cannot export from the shared inbox",
     });
   }
-  if (!info || info.userId !== userId) {
+  if (!info || info.accountId !== accountId) {
     throw new HTTPException(403, {
       message: "Cannot export from someone else's inbox",
     });
@@ -419,13 +419,13 @@ export async function exportMessages(
       l.label AS label
     FROM inbox_messages
     LEFT JOIN inbox_message_labels l
-      ON message_seq = l.message_seq AND l.user_id = ?
+      ON message_seq = l.message_seq AND l.account_id = ?
     WHERE inbox_seq = ? AND message_seq > ?
     ORDER BY message_seq ASC
     LIMIT ?
   `,
   )
-    .bind(userId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
+    .bind(accountId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
       message_seq: number;
       message_id: string;

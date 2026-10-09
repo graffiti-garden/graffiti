@@ -73,14 +73,14 @@ router.get("/available/:local-name", async (c) => {
 });
 
 router.post("/verify-external", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const { did } = await c.req.json();
   if (typeof did !== "string" || !did.startsWith("did:web:")) {
     throw new HTTPException(400, { message: "Custom domain is required." });
   }
   const actor = await c.env.DB.prepare(
-    "SELECT did FROM actors WHERE user_id = ?",
-  ).bind(userId).first<{ did: string }>();
+    "SELECT did FROM actors WHERE account_id = ?",
+  ).bind(accountId).first<{ did: string }>();
   if (!actor) {
     throw new HTTPException(409, { message: "Create an actor before using an external handle." });
   }
@@ -91,16 +91,16 @@ router.post("/verify-external", async (c) => {
 // Replace a local handle or register an external DID. Update the actor's
 // alsoKnownAs here when we hold its key, or verify the change made elsewhere.
 router.post("/change", async (c) => {
-  const { userId, sessionId } = await verifySessionCookie(c);
+  const { accountId, sessionId } = await verifySessionCookie(c);
   const { identifier } = await c.req.json();
   if (typeof identifier !== "string") {
     throw new HTTPException(400, { message: "Handle is required." });
   }
   const external = identifier.startsWith("did:web:");
   const previous = await c.env.DB.prepare(
-    "SELECT identifier FROM handles WHERE user_id = ?",
+    "SELECT identifier FROM handles WHERE account_id = ?",
   )
-    .bind(userId)
+    .bind(accountId)
     .first<{ identifier: string }>();
   if (!previous) {
     throw new HTTPException(409, { message: "This account has no handle." });
@@ -108,9 +108,9 @@ router.post("/change", async (c) => {
   if (previous?.identifier === identifier) return c.json({ updated: true });
 
   const actor = await c.env.DB.prepare(
-    "SELECT did, secret_key FROM actors WHERE user_id = ?",
+    "SELECT did, secret_key FROM actors WHERE account_id = ?",
   )
-    .bind(userId)
+    .bind(accountId)
     .first<Actor>();
   const did = identifierToDid(identifier, new URL(getOrigin(c)).host);
 
@@ -121,8 +121,8 @@ router.post("/change", async (c) => {
     // The document may point to multiple actors, but this provider stores each
     // handle only once. Check before publishing the actor's PLC update.
     const occupied = await c.env.DB.prepare(
-      "SELECT 1 FROM handles WHERE identifier = ? AND user_id <> ?",
-    ).bind(identifier, userId).first();
+      "SELECT 1 FROM handles WHERE identifier = ? AND account_id <> ?",
+    ).bind(identifier, accountId).first();
     if (occupied) {
       throw new HTTPException(409, {
         message: "Another account on this provider already uses this handle.",
@@ -136,7 +136,7 @@ router.post("/change", async (c) => {
   try {
     const updateHandle = prepareHandleReplacement(
       c.env.DB,
-      userId,
+      accountId,
       identifier,
       sessionId,
     );
@@ -177,11 +177,11 @@ router.post("/change", async (c) => {
 router.get("/handle/:local-name/did.json", getDid);
 
 router.get("/list", async (c) => {
-  const { userId } = await verifySessionCookie(c);
+  const { accountId } = await verifySessionCookie(c);
   const result = await c.env.DB.prepare(
-    "SELECT identifier, created_at FROM handles WHERE user_id = ?",
+    "SELECT identifier, created_at FROM handles WHERE account_id = ?",
   )
-    .bind(userId)
+    .bind(accountId)
     .all<{
       identifier: string;
       created_at: number;

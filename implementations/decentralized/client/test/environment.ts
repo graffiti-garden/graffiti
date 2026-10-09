@@ -33,7 +33,7 @@ function createUser(index: number) {
     inboxId,
     secret,
     token,
-    userId: index,
+    accountId: index,
   };
 }
 
@@ -75,7 +75,15 @@ export class DecentralizedTestEnvironment {
     await this.miniflare.ready;
 
     const database = await this.miniflare.getD1Database("DB");
-    for (const migration of ["0001.sql", "0002_handles_lowercase.sql"]) {
+    for (const migration of [
+      "0001.sql",
+      "0002_handles_lowercase.sql",
+      "0003_single_identity.sql",
+      "0004_handle_reservations.sql",
+      "0005_handles.sql",
+      "0006_actors.sql",
+      "0007_rename_user_to_account.sql",
+    ]) {
       const sql = await readFile(
         join(SERVER_ROOT, "migrations", migration),
         "utf8",
@@ -97,27 +105,27 @@ export class DecentralizedTestEnvironment {
       );
       await database
         .prepare(
-          "INSERT INTO users (user_id, created_at) VALUES (?, ?)",
+          "INSERT INTO accounts (account_id, created_at) VALUES (?, ?)",
         )
-        .bind(user.userId, now)
+        .bind(user.accountId, now)
         .run();
       await database
         .prepare(
-          "INSERT INTO sessions (session_id, user_id, secret_hash, last_verified_at, created_at) VALUES (?, ?, ?, ?, ?)",
+          "INSERT INTO sessions (session_id, account_id, secret_hash, last_verified_at, created_at) VALUES (?, ?, ?, ?, ?)",
         )
-        .bind(user.userId, user.userId, hash, now, now)
+        .bind(user.accountId, user.accountId, hash, now, now)
         .run();
       await database
         .prepare(
-          "INSERT INTO storage_buckets (bucket_id, user_id, created_at) VALUES (?, ?, ?)",
+          "INSERT INTO storage_buckets (bucket_id, account_id, created_at) VALUES (?, ?, ?)",
         )
-        .bind(user.bucketId, user.userId, now)
+        .bind(user.bucketId, user.accountId, now)
         .run();
       await database
         .prepare(
-          "INSERT INTO inboxes (inbox_id, user_id, created_at) VALUES (?, ?, ?)",
+          "INSERT INTO inboxes (inbox_id, account_id, created_at) VALUES (?, ?, ?)",
         )
-        .bind(user.inboxId, user.userId, now)
+        .bind(user.inboxId, user.accountId, now)
         .run();
     }
 
