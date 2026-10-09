@@ -19,7 +19,9 @@ const AUTHORIZATION_CODE_EXPIRATION_MS = 60 * 10 * 1000; // 10 minutes
 // Cross origin fetches are blocked.
 oauth.post("/authorize", async (c) => {
   const origin = c.req.header("Origin");
-  if (origin && origin !== getOrigin(c)) {
+  // Compare with the request origin; Wrangler rewrites both when Vite proxies
+  // the local HTTPS site to the HTTP development Worker.
+  if (origin && origin !== new URL(c.req.url).origin) {
     throw new HTTPException(403, { message: "Invalid origin" });
   }
   const { accountId } = await verifySessionCookie(c);

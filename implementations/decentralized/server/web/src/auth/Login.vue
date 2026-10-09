@@ -16,7 +16,7 @@ import { fetchFromSelf, refreshAccounts } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
 import { signalPasskeyHandle } from "./passkey-handle";
 
-const emit = defineEmits<{ (e: "success"): void }>();
+const emit = defineEmits<{ (e: "success", accountId: number): void }>();
 const loggingIn = ref(false);
 
 async function handleLogin() {
@@ -53,7 +53,7 @@ async function handleLogin() {
         });
         await refreshAccounts(result.accountId);
         void signalPasskeyHandle(result.accountId).catch(console.error);
-        emit("success");
+        emit("success", result.accountId);
     } catch (error: any) {
         alert(`Failed to log in. ${error.message}`);
         loggingIn.value = false;

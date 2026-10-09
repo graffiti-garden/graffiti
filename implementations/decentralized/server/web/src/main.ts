@@ -41,6 +41,10 @@ const routes = [
     path: "/add-account",
     component: () => import("./auth/LoginGuard.vue"),
   },
+  {
+    path: "/forgot-handle",
+    component: () => import("./auth/ForgotHandle.vue"),
+  },
   { path: "/oauth", component: () => import("./auth/Oauth.vue") },
 ];
 const router = createRouter({

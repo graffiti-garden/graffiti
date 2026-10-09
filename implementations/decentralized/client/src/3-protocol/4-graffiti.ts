@@ -327,6 +327,12 @@ export class GraffitiDecentralized implements Graffiti {
               this.login_(handle);
             }
           });
+        template
+          ?.querySelector("#graffiti-login-forgot")
+          ?.addEventListener("click", (e) => {
+            e.preventDefault();
+            void this.loginWithoutHandle();
+          });
       } else {
         template = await this.modal?.displayTemplate("graffiti-login-welcome");
         template
@@ -393,6 +399,46 @@ export class GraffitiDecentralized implements Graffiti {
 
       await this.sessions.login(actor);
     }
+  }
+
+  protected async loginWithoutHandle() {
+    const template = await this.modal?.displayTemplate("graffiti-login-provider");
+    const defaultProvider = new URL("/", this.identityCreatorEndpoint);
+    const provider = template?.querySelector("#graffiti-provider") as HTMLInputElement | null;
+    if (provider) provider.value = defaultProvider.host;
+    provider?.addEventListener("focus", () => provider.select());
+    setTimeout(() => provider?.focus(), 0);
+
+    template
+      ?.querySelector("#graffiti-login-provider-form")
+      ?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        try {
+          const domain = provider?.value.trim() ?? "";
+          const origin = domain === defaultProvider.host
+            ? defaultProvider
+            : new URL(`https://${domain}`);
+          if (
+            !origin.hostname || origin.username || origin.password ||
+            origin.pathname !== "/" || origin.search || origin.hash
+          ) throw new Error("Invalid provider domain");
+
+          const url = new URL("/forgot-handle", origin);
+          url.searchParams.set("redirect_uri", window.location.toString());
+          window.location.assign(url.toString());
+        } catch {
+          alert("Enter a valid provider domain.");
+        }
+      });
+
+    template
+      ?.querySelector("#graffiti-login-provider-back")
+      ?.addEventListener("click", (event) => {
+        event.preventDefault();
+        void this.login_("");
+      });
+
+    await this.modal?.open();
   }
 
   protected rememberHandleInBrowserStorage(handle: string) {
