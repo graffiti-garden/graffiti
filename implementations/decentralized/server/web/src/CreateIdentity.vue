@@ -115,6 +115,9 @@ const redirect = computed(() => {
                 ? decodeURIComponent(redirectUriEncoded)
                 : redirectUriEncoded;
             const url = new URL(redirectUri);
+            if (url.protocol !== "https:" && url.protocol !== "http:") {
+                return null;
+            }
             if (actor.value) {
                 url.searchParams.set("actor", encodeURIComponent(actor.value));
             }

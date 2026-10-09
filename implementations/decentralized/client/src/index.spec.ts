@@ -107,6 +107,52 @@ describe("GraffitiDecentralized Tests", () => {
     () => sessions[1],
   );
 
+  test("OAuth codes require approval from the selected account", async () => {
+    const account = decentralizedTestUsers[0];
+    const redirectUri = "https://client.example/callback";
+    const endpoint = "https://localhost:5173/app/oauth/authorize";
+    const cookie = `account_${account.accountId}=${account.token}`;
+    const headers = {
+      Cookie: cookie,
+      "X-Graffiti-Account": String(account.accountId),
+      "Content-Type": "application/json",
+      Origin: "https://localhost:5173",
+    };
+    const request = (scope: string[], requestHeaders: HeadersInit = headers) =>
+      fetch(endpoint, {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({ redirect_uri: redirectUri, state: "test-state", scope }),
+      });
+
+    const navigation = await fetch(
+      `${endpoint}?account=${account.accountId}&redirect_uri=${encodeURIComponent(redirectUri)}`,
+      { headers: { Cookie: cookie } },
+    );
+    expect(navigation.status).toBe(404);
+
+    expect((await request([account.bucketEndpoint], { Cookie: cookie })).status).toBe(401);
+    expect((await request([account.bucketEndpoint], {
+      ...headers,
+      Origin: "https://attacker.example",
+    })).status).toBe(403);
+    expect((await request([decentralizedTestUsers[1].bucketEndpoint])).status).toBe(403);
+
+    const approval = await request([account.bucketEndpoint]);
+    expect(approval.status).toBe(200);
+    const { redirectUri: callback } = await approval.json() as { redirectUri: string };
+    const code = new URL(callback).searchParams.get("code");
+    expect(code).toBeTruthy();
+    expect(new URL(callback).searchParams.get("state")).toBe("test-state");
+
+    const exchange = await fetch("https://localhost:5173/app/oauth/token", {
+      method: "POST",
+      body: new URLSearchParams({ code: code!, redirect_uri: redirectUri }),
+    });
+    expect(exchange.status).toBe(200);
+    expect((await exchange.json()).access_token).toBeTypeOf("string");
+  });
+
   test("deleting a bucket removes its values and rejects requests to its old URL", async () => {
     const account = decentralizedTestUsers[0];
     const smallKey = crypto.randomUUID();

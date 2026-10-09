@@ -80,7 +80,7 @@
                             </ul>
                         </details>
                     </section>
-                    <button @click="handleApprove">Approve</button>
+                    <button @click="handleApprove" :disabled="approving">Approve</button>
                     <button class="secondary" @click="handleDeny">Deny</button>
                 </template>
             </template>
@@ -122,6 +122,12 @@ if (redirectUri === null) {
 } else {
     try {
         redirectUriObject = new URL(redirectUri);
+        if (
+            redirectUriObject.protocol !== "https:" &&
+            redirectUriObject.protocol !== "http:"
+        ) {
+            throw new Error("Invalid redirect URI protocol");
+        }
     } catch (error) {
         console.error("Invalid redirect URI");
         console.error(error);
@@ -161,6 +167,7 @@ function serviceKindFromEndpoint(endpoint: string) {
 }
 
 const userServiceEndpoints = ref<Array<string> | null | undefined>(undefined);
+const approving = ref(false);
 const endpointToActorName = ref(new Map<string, string>());
 const accountOptions = ref<Array<{ id: number; handle: string; did?: string }>>([]);
 
@@ -355,16 +362,24 @@ function handleSelectActor(actorDid: string | undefined) {
     window.location.replace(redirectUrl.toString());
 }
 
-function handleApprove() {
-    // On approval, redirect to the authorize endpoint
+async function handleApprove() {
     if (!redirectUriObject) return router.push("/");
-    const url = new URL("/app/oauth/authorize", window.location.origin);
-    url.searchParams.set("redirect_uri", redirectUriObject.toString());
-    url.searchParams.set("state", state);
-    if (selectedAccount.value) {
-        url.searchParams.set("account", String(selectedAccount.value));
+    approving.value = true;
+    try {
+        const { redirectUri } = await fetchFromSelf("/app/oauth/authorize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                redirect_uri: redirectUriObject.toString(),
+                state,
+                scope: requestedScopes,
+            }),
+        });
+        window.location.replace(redirectUri);
+    } catch (error: any) {
+        alert(`Authorization failed. ${error.message}`);
+        approving.value = false;
     }
-    window.location.replace(url.toString());
 }
 
 function handleDeny() {

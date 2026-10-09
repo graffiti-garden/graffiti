@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { Bindings } from "../../env";
+import { getOrigin, type Bindings } from "../../env";
 import {
   createSessionToken,
   deleteSessionToken,
@@ -7,6 +7,8 @@ import {
 } from "./session";
 import { HTTPException } from "hono/http-exception";
 import { randomBase64 } from "./utils";
+import { serviceIdToUrl } from "../../../shared/service-urls";
+import { z } from "zod";
 
 const oauth = new Hono<{ Bindings: Bindings }>();
 
@@ -14,24 +16,43 @@ const AUTHORIZATION_CODE_EXPIRATION_MS = 60 * 10 * 1000; // 10 minutes
 
 // This is called once a user clicks logs in and clicks
 // "Authorize" in the server-side web app.
-oauth.get("/authorize", async (c) => {
-  const { redirect_uri, state, account } = c.req.query();
-  if (!redirect_uri) {
-    throw new HTTPException(400, {
-      message: "Missing redirect_uri parameter",
-    });
+// Cross origin fetches are blocked.
+oauth.post("/authorize", async (c) => {
+  const origin = c.req.header("Origin");
+  if (origin && origin !== getOrigin(c)) {
+    throw new HTTPException(403, { message: "Invalid origin" });
   }
+  const { accountId } = await verifySessionCookie(c);
+
+  const parsed = z.object({
+    redirect_uri: z.url(),
+    state: z.string(),
+    scope: z.array(z.string()),
+  }).safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    throw new HTTPException(400, { message: "Invalid authorization request" });
+  }
+  const { redirect_uri, state, scope } = parsed.data;
 
   const url = new URL(redirect_uri);
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new HTTPException(400, { message: "Invalid redirect URI" });
+  }
 
-  let accountId: number;
-  try {
-    const ids = await verifySessionCookie(c, account ? Number(account) : undefined);
-    accountId = ids.accountId;
-  } catch (error) {
-    url.searchParams.set("error", "access_denied");
-    url.searchParams.set("error_description", "User denied access");
-    return c.redirect(url.toString());
+  const baseHost = new URL(getOrigin(c)).host;
+  const [buckets, inboxes] = await Promise.all([
+    c.env.DB.prepare("SELECT bucket_id FROM storage_buckets WHERE account_id = ?")
+      .bind(accountId).all<{ bucket_id: string }>(),
+    c.env.DB.prepare("SELECT inbox_id FROM inboxes WHERE account_id = ?")
+      .bind(accountId).all<{ inbox_id: string }>(),
+  ]);
+  const services = new Set([
+    ...buckets.results.map(({ bucket_id }) => serviceIdToUrl(bucket_id, "bucket", baseHost)),
+    ...inboxes.results.map(({ inbox_id }) => serviceIdToUrl(inbox_id, "inbox", baseHost)),
+    serviceIdToUrl("shared", "inbox", baseHost),
+  ]);
+  if (scope.some((endpoint) => !services.has(endpoint))) {
+    throw new HTTPException(403, { message: "Account does not own the requested services" });
   }
 
   // Create an authorization code
@@ -45,10 +66,10 @@ oauth.get("/authorize", async (c) => {
     .bind(code, redirect_uri, accountId, createdAt)
     .run();
 
-  // Redirect back with the code and state
+  // The browser will navigate to this URL after receiving the response.
   url.searchParams.set("code", code);
   url.searchParams.set("state", state);
-  return c.redirect(url.toString());
+  return c.json({ redirectUri: url.toString() });
 });
 
 oauth.post("/token", async (c) => {
