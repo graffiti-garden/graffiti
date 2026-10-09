@@ -49,13 +49,23 @@ serviceInstances.delete("/:type/service/:service-id", async (c) => {
   const table = tableFromType(type);
   const idName = idNameFromType(type);
 
+  if (type === "bucket") {
+    const owned = await c.env.DB.prepare(
+      "SELECT 1 FROM storage_buckets WHERE bucket_id = ? AND account_id = ?",
+    )
+      .bind(serviceId, accountId)
+      .first();
+    if (!owned) {
+      throw new HTTPException(404, { message: "Instance not found" });
+    }
+    await c.env.BUCKETS.get(c.env.BUCKETS.idFromName(serviceId)).deleteBucket();
+  }
+
   const result = await c.env.DB.prepare(
     `DELETE FROM ${table} WHERE ${idName} = ? AND account_id = ? RETURNING account_id`,
   )
     .bind(serviceId, accountId)
     .first();
-
-  // TODO: If it is a bucket, delete all the items in storage
 
   if (!result) {
     throw new HTTPException(404, { message: "Instance not found" });

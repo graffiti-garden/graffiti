@@ -24,6 +24,7 @@ export class StorageBucketDO extends DurableObject<Bindings> {
   protected sql: SqlStorage;
   protected writes: Promise<void> = Promise.resolve();
   protected bucketId: string;
+  protected deleted: boolean;
 
   constructor(
     state: DurableObjectState,
@@ -35,6 +36,10 @@ export class StorageBucketDO extends DurableObject<Bindings> {
     this.sql.exec(
       "CREATE TABLE IF NOT EXISTS entries (key TEXT PRIMARY KEY, value BLOB, etag TEXT, CHECK ((value IS NULL) = (etag IS NULL))) WITHOUT ROWID",
     );
+    // Keep the deletion marker in the bucket itself. A worker may have cached
+    // its old database row, but it must not be able to write into it again.
+    this.sql.exec("CREATE TABLE IF NOT EXISTS deleted_bucket (id INTEGER PRIMARY KEY)");
+    this.deleted = this.sql.exec("SELECT 1 FROM deleted_bucket").toArray().length > 0;
   }
 
   private entry(key: string) {
@@ -60,6 +65,7 @@ export class StorageBucketDO extends DurableObject<Bindings> {
   }
 
   async getValue(key: string, ifNoneMatch?: string) {
+    if (this.deleted) return new Response("Bucket not found", { status: 404 });
     const entry = this.entry(key);
     if (entry && entry.value !== null) {
       const etag = entry.etag!;
@@ -80,6 +86,7 @@ export class StorageBucketDO extends DurableObject<Bindings> {
   }
 
   async getValues(keys: string[], maxValueBytes: number) {
+    if (this.deleted) return keys.map(() => ({ status: 404 as const }));
     // One SQLite statement for all keys in this bucket. The route bounds both
     // the number of keys and the maximum bytes returned by this request.
     const placeholders = keys.map(() => "?").join(", ");
@@ -154,6 +161,7 @@ export class StorageBucketDO extends DurableObject<Bindings> {
   }
 
   private async put(key: string, request: Request) {
+    if (this.deleted) return new Response("Bucket not found", { status: 404 });
     const bucketKey = `${this.bucketId}/${key}`;
     if (!request.body) return new Response("Missing body", { status: 400 });
     const lengthHeader = request.headers.get("Content-Length");
@@ -192,6 +200,7 @@ export class StorageBucketDO extends DurableObject<Bindings> {
   }
 
   private async delete(key: string) {
+    if (this.deleted) return new Response("Bucket not found", { status: 404 });
     const bucketKey = `${this.bucketId}/${key}`;
     // Delete R2 first so a failed R2 delete cannot produce a false 404.
     await this.env.STORAGE.delete(bucketKey);
@@ -201,6 +210,7 @@ export class StorageBucketDO extends DurableObject<Bindings> {
 
   async exportKeys(cursor?: string) {
     await this.writes;
+    if (this.deleted) return { keys: [], cursor: null };
     const rows = this.sql
       .exec<{ key: string }>(
         "SELECT key FROM entries WHERE key > ? ORDER BY key LIMIT ?",
@@ -213,5 +223,28 @@ export class StorageBucketDO extends DurableObject<Bindings> {
       keys,
       cursor: rows.length > EXPORT_PAGE_SIZE ? keys.at(-1)! : null,
     };
+  }
+
+  async deleteBucket() {
+    return this.write(async () => {
+      // Reject future reads and writes before removing the stored bytes. If
+      // R2 fails, the service row remains and deletion can be retried.
+      this.sql.exec("INSERT OR IGNORE INTO deleted_bucket (id) VALUES (1)");
+      this.deleted = true;
+
+      while (true) {
+        const keys = this.sql
+          .exec<{ key: string }>("SELECT key FROM entries LIMIT ?", EXPORT_PAGE_SIZE)
+          .toArray()
+          .map(({ key }) => key);
+        if (!keys.length) break;
+
+        await this.env.STORAGE.delete(keys.map((key) => `${this.bucketId}/${key}`));
+        this.sql.exec(
+          `DELETE FROM entries WHERE key IN (${keys.map(() => "?").join(", ")})`,
+          ...keys,
+        );
+      }
+    });
   }
 }

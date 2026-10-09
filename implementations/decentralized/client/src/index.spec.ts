@@ -13,7 +13,8 @@ import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
 import { Sessions } from "./3-protocol/1-sessions";
-import { afterAll, beforeAll, describe } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { decode as dagCborDecode, encode as dagCborEncode } from "@ipld/dag-cbor";
 import { Handles } from "./3-protocol/2-handles";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
@@ -105,6 +106,61 @@ describe("GraffitiDecentralized Tests", () => {
     () => sessions[0],
     () => sessions[1],
   );
+
+  test("deleting a bucket removes its values and rejects requests to its old URL", async () => {
+    const account = decentralizedTestUsers[0];
+    const smallKey = crypto.randomUUID();
+    const largeKey = crypto.randomUUID();
+    const largeValue = new Uint8Array(32 * 1024 + 1).fill(7);
+    const authorization = { Authorization: `Bearer ${account.token}` };
+
+    for (const [key, value] of [
+      [smallKey, new Uint8Array([1, 2, 3])],
+      [largeKey, largeValue],
+    ] as const) {
+      const response = await fetch(`${account.bucketEndpoint}/value/${key}`, {
+        method: "PUT",
+        headers: authorization,
+        body: value,
+      });
+      expect(response.status).toBe(201);
+    }
+
+    const r2Key = `${account.bucketId}/${largeKey}`;
+    expect(await environment.storedR2ObjectExists(r2Key)).toBe(true);
+
+    const deletion = await fetch(
+      `https://localhost:5173/app/service-instances/bucket/service/${account.bucketId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Cookie: `account_${account.accountId}=${account.token}`,
+          "X-Graffiti-Account": String(account.accountId),
+        },
+      },
+    );
+    expect(deletion.status).toBe(200);
+
+    expect(await environment.storedR2ObjectExists(r2Key)).toBe(false);
+    for (const key of [smallKey, largeKey]) {
+      const response = await fetch(`${account.bucketEndpoint}/value/${key}`);
+      expect(response.status).toBe(404);
+    }
+    const batch = await fetch(`${account.bucketEndpoint}/values`, {
+      method: "POST",
+      headers: { "Content-Type": "application/cbor" },
+      body: dagCborEncode({ keys: [smallKey, largeKey], maxValueBytes: largeValue.length }).slice(),
+    });
+    expect((dagCborDecode(await batch.arrayBuffer()) as { results: { status: number }[] }).results)
+      .toEqual([{ status: 404 }, { status: 404 }]);
+
+    const putAfterDeletion = await fetch(`${account.bucketEndpoint}/value/${smallKey}`, {
+      method: "PUT",
+      headers: authorization,
+      body: new Uint8Array([4]),
+    });
+    expect(putAfterDeletion.status).toBe(404);
+  });
 
   // How to log in/out vvv
   async function login(handle: string) {

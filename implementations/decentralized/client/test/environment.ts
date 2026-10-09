@@ -143,6 +143,12 @@ export class DecentralizedTestEnvironment {
     }
   }
 
+  async storedR2ObjectExists(key: string): Promise<boolean> {
+    if (!this.miniflare) throw new Error("Miniflare did not start");
+    const storage = await this.miniflare.getR2Bucket("STORAGE");
+    return (await storage.head(key)) !== null;
+  }
+
   private installMocks() {
     const documents = new Map<string, DIDDocument>();
     for (const user of decentralizedTestUsers) {
