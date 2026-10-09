@@ -83,6 +83,7 @@ export class DecentralizedTestEnvironment {
       "0005_handles.sql",
       "0006_actors.sql",
       "0007_rename_user_to_account.sql",
+      "0008_session_kinds.sql",
     ]) {
       const sql = await readFile(
         join(SERVER_ROOT, "migrations", migration),
@@ -111,9 +112,9 @@ export class DecentralizedTestEnvironment {
         .run();
       await database
         .prepare(
-          "INSERT INTO sessions (session_id, account_id, secret_hash, last_verified_at, created_at) VALUES (?, ?, ?, ?, ?)",
+          "INSERT INTO sessions (session_id, account_id, secret_hash, last_verified_at, created_at, kind) VALUES (?, ?, ?, ?, ?, ?)",
         )
-        .bind(user.accountId, user.accountId, hash, now, now)
+        .bind(user.accountId, user.accountId, hash, now, now, "browser")
         .run();
       await database
         .prepare(

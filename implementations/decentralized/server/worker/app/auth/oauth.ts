@@ -116,7 +116,7 @@ oauth.post("/token", async (c) => {
   }
 
   // Create a session token
-  const { token } = await createSessionToken(c, result.account_id);
+  const { token } = await createSessionToken(c, result.account_id, "oauth");
 
   // Return the access token
   return c.json({ access_token: token, token_type: "bearer" });

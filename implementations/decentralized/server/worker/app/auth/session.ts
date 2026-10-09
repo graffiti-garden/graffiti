@@ -10,15 +10,17 @@ const INACTIVITY_TIMEOUT_MS = 1000 * 60 * 60 * 24 * 10; // 10 days
 const ACTIVITY_CHECK_INTERVAL_MS = 1000 * 60 * 60; // 1 hour
 const TEMP_COOKIE_NAME = "session";
 const TEMP_ACCOUNT_ID = -1;
+type SessionKind = "browser" | "oauth" | null;
 
 const sessionCache = new LRUCache<
   string,
-  { accountId: number; lastVerifiedAt: number }
+  { accountId: number; lastVerifiedAt: number; kind: SessionKind }
 >({ max: CACHE_CAPACITY, ttl: INACTIVITY_TIMEOUT_MS });
 
 export async function createSessionToken(
   context: Context<{ Bindings: Bindings }>,
   accountId: number,
+  kind: "browser" | "oauth",
 ) {
   // Create a session for the corresponding account
   const secret = randomBytes();
@@ -27,9 +29,9 @@ export async function createSessionToken(
 
   // Store the session for verification
   const result = await context.env.DB.prepare(
-    `INSERT INTO sessions (account_id, secret_hash, created_at, last_verified_at) VALUES (?, ?, ?, ?) RETURNING session_id`,
+    `INSERT INTO sessions (account_id, secret_hash, created_at, last_verified_at, kind) VALUES (?, ?, ?, ?, ?) RETURNING session_id`,
   )
-    .bind(accountId, secretHash, createdAt, createdAt)
+    .bind(accountId, secretHash, createdAt, createdAt, kind)
     .first<{ session_id: number }>();
   const sessionId = result?.session_id;
   if (!sessionId) {
@@ -38,11 +40,11 @@ export async function createSessionToken(
 
   const secretBase64 = encodeBase64(secret);
 
-  // Store the session as a cookie
+  // The caller sends this token as either a browser cookie or an OAuth token.
   const token = sessionId + "." + secretBase64;
 
   // Store the session in the cache
-  sessionCache.set(token, { accountId, lastVerifiedAt: createdAt });
+  sessionCache.set(token, { accountId, lastVerifiedAt: createdAt, kind });
 
   return { sessionId, token };
 }
@@ -56,6 +58,7 @@ export async function verifySessionToken(
 ) {
   let accountId: number;
   let lastVerifiedAt: number;
+  let kind: SessionKind;
   const [sessionIdString, secretBase64] = token.split(".");
   const sessionId = Number(sessionIdString);
 
@@ -64,6 +67,7 @@ export async function verifySessionToken(
   if (cached) {
     accountId = cached.accountId;
     lastVerifiedAt = cached.lastVerifiedAt;
+    kind = cached.kind;
   } else {
     let secret: Uint8Array;
     try {
@@ -74,19 +78,20 @@ export async function verifySessionToken(
     const secretHash = await hashSecret(secret);
 
     const result = await context.env.DB.prepare(
-      `SELECT account_id, last_verified_at FROM sessions WHERE session_id = ? AND secret_hash = ?`,
+      `SELECT account_id, last_verified_at, kind FROM sessions WHERE session_id = ? AND secret_hash = ?`,
     )
       .bind(sessionId, secretHash)
-      .first<{ account_id: number; last_verified_at: number }>();
+      .first<{ account_id: number; last_verified_at: number; kind: SessionKind }>();
 
     if (!result) {
       throw new HTTPException(401, { message: "Invalid session." });
     }
     lastVerifiedAt = result.last_verified_at;
     accountId = result.account_id;
+    kind = result.kind;
 
     // Store in the cache
-    sessionCache.set(token, { accountId, lastVerifiedAt });
+    sessionCache.set(token, { accountId, lastVerifiedAt, kind });
   }
 
   const now = Date.now();
@@ -118,14 +123,14 @@ export async function verifySessionToken(
     }
 
     // Update the cache
-    sessionCache.set(token, { accountId, lastVerifiedAt: now });
+    sessionCache.set(token, { accountId, lastVerifiedAt: now, kind });
   }
 
   if (accountId === TEMP_ACCOUNT_ID && !options?.allowTemp) {
     throw new HTTPException(401, { message: "Temporary account not allowed." });
   }
 
-  return { accountId, sessionId };
+  return { accountId, sessionId, kind };
 }
 
 export async function deleteSessionToken(
@@ -158,7 +163,7 @@ export async function createSessionCookie(
   context: Context<{ Bindings: Bindings }>,
   accountId: number,
 ) {
-  const { sessionId, token } = await createSessionToken(context, accountId);
+  const { sessionId, token } = await createSessionToken(context, accountId, "browser");
   setTokenCookie(context, `account_${accountId}`, token);
   return sessionId;
 }
@@ -166,7 +171,7 @@ export async function createSessionCookie(
 export async function createTempSessionCookie(
   context: Context<{ Bindings: Bindings }>,
 ) {
-  const { sessionId, token } = await createSessionToken(context, TEMP_ACCOUNT_ID);
+  const { sessionId, token } = await createSessionToken(context, TEMP_ACCOUNT_ID, "browser");
   setTokenCookie(context, TEMP_COOKIE_NAME, token);
   return sessionId;
 }
@@ -187,7 +192,7 @@ async function verifyCookieSession(
     result = await verifySessionToken(context, token, {
       allowTemp: accountId === TEMP_ACCOUNT_ID,
     });
-    if (result.accountId !== accountId) {
+    if (result.accountId !== accountId || result.kind !== "browser") {
       throw new HTTPException(401, { message: "Wrong account session." });
     }
   } catch (error) {
