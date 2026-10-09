@@ -103,11 +103,19 @@ export async function verifySessionToken(
   }
 
   if (now - lastVerifiedAt >= ACTIVITY_CHECK_INTERVAL_MS) {
-    await context.env.DB.prepare(
-      `UPDATE sessions SET last_verified_at = ? WHERE session_id = ?`,
+    const secretHash = await hashSecret(decodeBase64(secretBase64));
+    const update = await context.env.DB.prepare(
+      `UPDATE sessions SET last_verified_at = ? WHERE session_id = ? AND secret_hash = ?`,
     )
-      .bind(now, sessionId)
+      .bind(now, sessionId, secretHash)
       .run();
+
+    // Another Worker may have deleted this session while it was cached here.
+    // Check during the update we already make each hour, without adding reads.
+    if (!update.meta.changes) {
+      sessionCache.delete(token);
+      throw new HTTPException(401, { message: "Invalid session." });
+    }
 
     // Update the cache
     sessionCache.set(token, { accountId, lastVerifiedAt: now });
