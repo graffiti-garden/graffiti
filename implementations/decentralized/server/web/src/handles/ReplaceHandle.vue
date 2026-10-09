@@ -108,9 +108,10 @@
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { constructDidDocument, didWebToUrl, localNameToDid } from "../../../shared/did-schemas";
-import { fetchFromSelf, refreshAccounts } from "../globals";
+import { fetchFromSelf, refreshAccounts, selectedAccount } from "../globals";
 import CopyButton from "../utils/CopyButton.vue";
 import RegisterHandle from "./RegisterHandle.vue";
+import { signalPasskeyHandle } from "../auth/passkey-handle";
 
 const router = useRouter();
 const baseHost = window.location.host;
@@ -208,7 +209,14 @@ async function replaceHandle(identifier: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier }),
     });
-    await refreshAccounts().catch(console.error);
+    try {
+        await refreshAccounts();
+        if (selectedAccount.value) {
+            void signalPasskeyHandle(selectedAccount.value).catch(console.error);
+        }
+    } catch (error) {
+        console.error(error);
+    }
     await router.push({ name: "home", hash: "#handle" });
     return true;
 }

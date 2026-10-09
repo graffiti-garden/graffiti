@@ -14,6 +14,7 @@ import {
 } from "@simplewebauthn/browser";
 import { fetchFromSelf, refreshAccounts } from "../globals";
 import StatusIcon from "../utils/StatusIcon.vue";
+import { signalPasskeyHandle } from "./passkey-handle";
 
 const emit = defineEmits<{ (e: "success"): void }>();
 const loggingIn = ref(false);
@@ -51,6 +52,7 @@ async function handleLogin() {
             body: JSON.stringify(authenticationResponse),
         });
         await refreshAccounts(result.accountId);
+        void signalPasskeyHandle(result.accountId).catch(console.error);
         emit("success");
     } catch (error: any) {
         alert(`Failed to log in. ${error.message}`);

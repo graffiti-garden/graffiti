@@ -79,6 +79,11 @@ webauthn.post("/register/challenge", async (c) => {
     rpName: host,
     rpID: rpId,
     attestationType: "none",
+    // General login does not ask for an account first, so new passkeys must be discoverable.
+    authenticatorSelection: {
+      residentKey: "required",
+      userVerification: "preferred",
+    },
     // The handle is what is displayed in the passkey prompt.
     userDisplayName: handle,
     userName: handle,
