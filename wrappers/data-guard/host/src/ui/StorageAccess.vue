@@ -64,7 +64,10 @@ const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
           To use the app, you must allow cookies from <strong>{{ guardHost }}</strong>.
         </p>
         <button type="button" :disabled="busy" @click="onContinue">
-          {{ busy ? "Waiting for your browser…" : finishing ? "Continue" : "Allow cookies and continue" }}
+          <span v-if="busy">
+            Waiting for your browser<span class="loading-dots" aria-hidden="true" />
+          </span>
+          <span v-else>{{ finishing ? "Continue" : "Allow cookies and continue" }}</span>
         </button>
       </template>
     </dialog>
@@ -75,6 +78,7 @@ const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
   position: fixed;
   inset: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   overflow: auto;
   padding: 1rem;
@@ -83,7 +87,7 @@ const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
 
 dialog {
   position: static;
-  width: min(34rem, calc(100vw - 2rem));
+  width: min(34rem, 100%);
   margin: 0;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
@@ -112,14 +116,20 @@ strong {
 button,
 .button {
   display: block;
-  margin: 2rem 0 0 auto;
+  width: 100%;
+  margin: 2rem 0 0;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  padding: 0.4rem 0.75rem;
+  padding: 0.75rem 1rem;
   color: var(--accent-button-text);
   background: var(--accent-button-background);
   font: inherit;
+  font-size: 1.375rem;
+  line-height: 1.3;
+  text-align: center;
   text-decoration: none;
+  overflow-wrap: anywhere;
+  cursor: pointer;
 }
 
 button:hover:not(:disabled),
@@ -136,9 +146,12 @@ button:disabled {
 
 .recovery-link {
   display: block;
-  width: max-content;
-  margin: 1rem 0 0 auto;
-  font-size: 0.9em;
+  width: 100%;
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  font-size: 1.05rem;
+  line-height: 1.3;
+  text-align: center;
 }
 
 @media (max-width: 34rem) {
@@ -147,20 +160,7 @@ button:disabled {
   }
 
   dialog {
-    width: 100%;
     padding: 1.25rem;
-  }
-
-  button,
-  .button {
-    width: 100%;
-    box-sizing: border-box;
-    text-align: center;
-  }
-
-  .recovery-link {
-    width: 100%;
-    text-align: center;
   }
 }
 </style>

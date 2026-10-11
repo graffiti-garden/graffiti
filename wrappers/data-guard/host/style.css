@@ -69,6 +69,27 @@ button {
   text-decoration: underline 2px;
 }
 
+.loading-dots::after {
+  display: inline-block;
+  width: 3ch;
+  animation: loading-dots 0.7s linear infinite;
+  content: ".";
+  text-align: left;
+}
+
+@keyframes loading-dots {
+  0%, 100% { content: "."; }
+  33% { content: ".."; }
+  66% { content: "..."; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-dots::after {
+    animation: none;
+    content: "…";
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --brand-color: #ca7acc;
