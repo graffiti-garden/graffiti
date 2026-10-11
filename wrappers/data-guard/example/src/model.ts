@@ -15,7 +15,12 @@ export const messageSchema: JSONSchema = {
         content: { type: "string" },
         published: { type: "string" },
         inReplyTo: { type: "string" },
+        topic: { type: "string" },
         mentions: {
+          type: "array",
+          items: { type: "string" },
+        },
+        tags: {
           type: "array",
           items: { type: "string" },
         },
@@ -58,7 +63,9 @@ export interface MessageValue {
   content: string;
   published: string;
   inReplyTo: string;
+  topic?: string;
   mentions: string[];
+  tags?: string[];
   replies: boolean;
   id: string;
   attachment?: MessageAttachment;

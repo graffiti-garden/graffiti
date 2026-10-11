@@ -26,7 +26,7 @@ const wrapper = useTemplateRef<HTMLElement>("wrapper");
 const centeredStyle = ref<Record<string, string>>({});
 
 function positionCentered() {
-  if (!props.centered || !wrapper.value) return;
+  if ((!props.centered && !window.matchMedia("(max-width: 46rem)").matches) || !wrapper.value) return;
   const boundary =
     wrapper.value.closest<HTMLElement>("dialog, .record-table") ??
     document.documentElement;
@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
       :id="tooltip"
       class="tooltip"
       role="tooltip"
-      :style="centered ? centeredStyle : undefined"
+      :style="centeredStyle"
     >
       <slot name="details" :pinned="pinned" />
     </span>
@@ -122,14 +122,14 @@ onBeforeUnmount(() => {
 .value-bubble :deep(code), .value-bubble :deep(.label) { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .value-bubble :deep(.uuid) { overflow-wrap: normal; white-space: nowrap; }
 .value-bubble :deep(code) { color: var(--secondary-color); font-size: 0.82em; }
-.tooltip { position: absolute; top: calc(100% - 1px); left: 0; z-index: 10; width: max-content; min-width: 100%; max-width: min(30rem, calc(100vw - 2rem)); box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 0 0.3rem 0.3rem 0.3rem; padding: 0.3rem 0.45rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 25%); font-size: 0.8rem; overflow-wrap: anywhere; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; }
+.tooltip { position: absolute; top: calc(100% - 1px); left: 0; z-index: 10; display: none; width: max-content; min-width: 100%; max-width: min(30rem, calc(100vw - 2rem)); box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 0 0.3rem 0.3rem 0.3rem; padding: 0.3rem 0.45rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0.2rem 0.6rem rgb(0 0 0 / 25%); font-size: 0.8rem; overflow-wrap: anywhere; white-space: normal; pointer-events: none; }
 .centered.pinned > .tooltip { left: var(--tooltip-center, 50%); width: var(--tooltip-width, min(30rem, calc(100vw - 2rem))); min-width: 0; max-width: none; transform: translateX(-50%); border: 2px solid color-mix(in srgb, var(--text-color) 48%, var(--border-color)); border-radius: 0.4rem; padding: 0.6rem; box-shadow: 0 0.35rem 1rem rgb(0 0 0 / 32%); text-align: left; }
 .centered.pinned.flush > .tooltip { padding: 0; }
 .tooltip :deep(code) { overflow-wrap: anywhere; white-space: normal; }
-.disclosure:not(.suppressed):hover > .tooltip, .disclosure:not(.suppressed) > .value-bubble:focus-visible + .tooltip, .disclosure.pinned > .tooltip { opacity: 1; visibility: visible; }
+.disclosure:not(.suppressed):hover > .tooltip, .disclosure:not(.suppressed) > .value-bubble:focus-visible + .tooltip, .disclosure.pinned > .tooltip { display: block; }
 .disclosure.pinned > .tooltip { pointer-events: auto; }
 
 @media (max-width: 46rem) {
-  .centered.pinned > .tooltip { max-height: calc(100dvh - 2rem); overflow: auto; }
+  .disclosure > .tooltip { left: var(--tooltip-center, 50%); width: var(--tooltip-width, min(30rem, calc(100vw - 2rem))); min-width: 0; max-width: none; transform: translateX(-50%); border-radius: 0.4rem; }
 }
 </style>

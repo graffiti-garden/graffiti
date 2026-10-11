@@ -105,9 +105,9 @@ onBeforeUnmount(() => clearTimeout(confirmationTimer));
 </template>
 
 <style scoped>
-.summary { position: relative; width: 100%; border: 1px solid var(--border-color); border-radius: 0.5rem; background: color-mix(in srgb, var(--background-color-interactive) 62%, var(--background-color)); }
+.summary { position: relative; min-width: 0; width: 100%; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 0.5rem; background: color-mix(in srgb, var(--background-color-interactive) 62%, var(--background-color)); }
 .summary-main { position: relative; border-radius: inherit; padding: 0.75rem 1.1rem 1.5rem; }
-.summary-line { position: relative; line-height: 1.45; }
+.summary-line { position: relative; line-height: 1.45; overflow-wrap: anywhere; }
 .summary-line > strong { margin-right: 0.35rem; }
 details { position: relative; border: 0; border-top: 1px solid transparent; background: transparent; font-size: 1rem; cursor: default; }
 details[open] { border-top-color: var(--border-color); padding: 0 1.1rem 1rem; }
@@ -128,5 +128,14 @@ summary:hover, summary:focus-visible { border-color: var(--border-color-hover); 
 .prompt-status p { margin: 0; }
 button.deny { color: var(--text-color); background: var(--background-color-interactive); }
 button.deny:hover { color: var(--text-color); background: var(--background-color-interactive-hover); }
-@media (max-width: 42rem) { .decision-actions { flex-direction: column-reverse; } }
+@media (max-width: 42rem) {
+  .summary-main { padding: 0.65rem 0.7rem 1.25rem; }
+  details[open] { padding: 0 0.7rem 0.75rem; }
+  .detail-content { gap: 0.55rem; padding-top: 1.6rem; }
+  .prompt-actions.after-details { padding-top: 0.5rem; }
+  .remember-decision { gap: 0.6rem; margin-bottom: 1rem; padding: 0.6rem 0.7rem; font-size: 1rem; }
+  .remember-decision input { width: 1.35rem; height: 1.35rem; }
+  .decision-actions { gap: 0.6rem; flex-direction: column-reverse; }
+  .decision-actions button { padding: 0.5rem 0.75rem; font-size: 1.125rem; }
+}
 </style>

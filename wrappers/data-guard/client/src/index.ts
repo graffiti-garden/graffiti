@@ -58,10 +58,10 @@ export class GraffitiGuarded extends Graffiti {
       background: "transparent",
       border: "0",
       display: "none",
-      height: "100vh",
+      height: CSS.supports("height", "100dvh") ? "100dvh" : "100vh",
       inset: "0",
       position: "fixed",
-      width: "100vw",
+      width: "100%",
       zIndex: "2147483647",
     });
     let connected = false;
