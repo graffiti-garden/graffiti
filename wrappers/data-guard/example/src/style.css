@@ -3,10 +3,6 @@
   --pico-spacing: 0.85rem;
 }
 
-body {
-  min-width: 20rem;
-}
-
 body > #app > header {
   padding-top: 1rem;
 }
@@ -122,5 +118,15 @@ nav button {
   .feed-header,
   .message-meta {
     align-items: flex-start;
+  }
+
+  nav,
+  nav ul,
+  .feed-header {
+    flex-wrap: wrap;
+  }
+
+  nav ul {
+    min-width: 0;
   }
 }

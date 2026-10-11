@@ -83,8 +83,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.backdrop { position: fixed; inset: 0; display: grid; align-items: start; justify-items: center; overflow: auto; scrollbar-gutter: stable both-edges; padding: 1rem; background: transparent; }
-dialog { position: static; display: flex; flex-direction: column; width: min(42rem, calc(100vw - 2rem)); overflow: visible; margin: 0; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0 2.5rem rgb(0 0 0 / 90%); font-size: 1.5rem; outline: none; animation: prompt-enter 140ms ease-out; transition: opacity 140ms ease-in, transform 140ms ease-in; }
+.backdrop { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; justify-items: center; overflow-x: hidden; overflow-y: auto; padding: 1rem; background: transparent; }
+dialog { position: static; display: flex; min-width: 0; max-width: 100%; box-sizing: border-box; flex-direction: column; width: min(42rem, 100%); overflow: visible; margin: 0; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0 2.5rem rgb(0 0 0 / 90%); font-size: 1.5rem; outline: none; animation: prompt-enter 140ms ease-out; transition: opacity 140ms ease-in, transform 140ms ease-in; }
 .backdrop.confirming { pointer-events: none; }
 .backdrop.confirming dialog { opacity: 0; transform: translateY(-0.3rem) scale(0.99); }
 header { position: relative; display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 2.5rem; }
@@ -100,12 +100,22 @@ h1 { flex: 1; margin: 0; color: var(--title-color); font-size: 2rem; line-height
 .guard-menu :is(button, a) { display: block; width: auto; border: 0; border-radius: 0; padding: 0.5rem 0.75rem; color: var(--text-color); background: transparent; font-size: 1.15rem; font-weight: 400; line-height: normal; text-align: left; white-space: nowrap; cursor: pointer; }
 .guard-menu :is(button, a):hover, .guard-menu :is(button, a):focus-visible { color: var(--text-color); background: var(--background-color-interactive-hover); text-decoration: none; }
 .guard-menu .graffiti-link { border-top: 1px solid var(--border-color); color: var(--link-color); font-weight: 650; }
-.content { display: flex; flex-direction: column; gap: 1.5rem; }
+.content { display: flex; min-width: 0; flex-direction: column; gap: 1.5rem; }
 footer { margin-top: 2.5rem; }
 .actions { width: 100%; }
 button, :deep(button) { border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.25rem 0.5rem; color: var(--accent-button-text); background: var(--accent-button-background); font: inherit; cursor: pointer; }
 button:hover, :deep(button:hover) { border-color: var(--border-color-hover); background: var(--accent-button-background-hover); text-decoration: none; }
-@media (max-width: 42rem) { .backdrop { padding: 0.75rem; } dialog { width: 100%; } .actions :deep(button) { width: 100%; } }
+@media (max-width: 42rem) {
+  .backdrop { padding: 0.75rem 0.75rem max(0.75rem, env(safe-area-inset-bottom)); }
+  dialog { padding: 0.75rem; font-size: 1.125rem; }
+  header { gap: 0.5rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.55rem; line-height: 1.15; }
+  .content { gap: 1rem; }
+  footer { margin-top: 1.25rem; }
+  .guard-menu { max-width: calc(100vw - 1.5rem); }
+  .guard-menu :is(button, a) { white-space: normal; }
+  .actions :deep(button) { width: 100%; }
+}
 @media (prefers-reduced-motion: reduce) { dialog { animation: none; transition: none; } }
 @keyframes prompt-enter { from { opacity: 0; transform: translateY(0.3rem) scale(0.99); } }
 </style>

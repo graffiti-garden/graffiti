@@ -132,4 +132,11 @@ button.context-help-button:hover, button.context-help-button:focus-visible, .con
 .context-help-text::after { bottom: -0.37rem; border-top: 0.4rem solid var(--background-color); border-right-width: 0.39rem; border-left-width: 0.39rem; }
 .context-help:hover .context-help-text, .context-help:focus-within .context-help-text, .context-help.open .context-help-text { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); transition-delay: 0s; }
 code { word-break: break-all; }
+@media (max-width: 42rem) {
+  .data { min-width: 0; margin-top: 0.35rem; }
+  .term { position: relative; }
+  .context-help { position: static; }
+  .context-help-text { top: calc(100% + 0.3rem); right: 0; bottom: auto; left: 0; width: 100%; max-width: 100%; }
+  .context-help-text::before, .context-help-text::after { display: none; }
+}
 </style>

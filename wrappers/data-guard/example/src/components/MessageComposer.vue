@@ -16,9 +16,11 @@ const graffiti = useGraffiti();
 const content = ref(
   "Hello world, this is a sort of long piece text just to test what happens with wrapping, hope it works!!! and im going to keep going for a little bit... okkkkk now its.... good",
 );
+const topic = ref("Mobile layout");
 const mention = ref(
   "did:plc:numtqzbw74lmrguyvpzq6uf5, did:plc:ewvi7nxzyoun6zhxrhs64oiz, did:web:graffiti.garden",
 );
+const tags = ref("example, nested");
 const attachment = ref<File>();
 const privateAttachment = ref(false);
 const fileInput = useTemplateRef("fileInput");
@@ -34,6 +36,10 @@ function selectAttachment(event: Event) {
   if (!attachment.value) privateAttachment.value = false;
 }
 
+function commaSeparated(value: string) {
+  return value.split(",").map((part) => part.trim()).filter(Boolean);
+}
+
 async function send() {
   if (!canSend.value) return;
   busy.value = true;
@@ -42,11 +48,10 @@ async function send() {
   let mediaUrl: string | undefined;
 
   try {
+    const trimmedTopic = topic.value.trim();
+    const parsedTags = commaSeparated(tags.value);
     const mentions = await Promise.all(
-      mention.value
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean)
+      commaSeparated(mention.value)
         .map((value) =>
           value.startsWith("did:") ? value : graffiti.handleToActor(value),
         ),
@@ -78,7 +83,9 @@ async function send() {
           inReplyTo:
             props.inReplyTo ??
             "graffiti:did!plc!numtqzbw74lmrguyvpzq6uf5:uEiBQi0oYnjV_A-EOuv0Vwpz7ExiNmZ2YlAm4liR4jZq-dQ",
+          ...(trimmedTopic ? { topic: trimmedTopic } : {}),
           mentions,
+          ...(parsedTags.length ? { tags: parsedTags } : {}),
           replies: false,
           id: crypto.randomUUID(),
           ...(media ? { attachment: media } : {}),
@@ -90,7 +97,9 @@ async function send() {
     );
 
     content.value = "";
+    topic.value = "";
     mention.value = "";
+    tags.value = "";
     attachment.value = undefined;
     privateAttachment.value = false;
     if (fileInput.value) fileInput.value.value = "";
@@ -122,11 +131,29 @@ async function send() {
       </label>
       <div class="composer-options">
         <label>
+          Topic <small>(optional)</small>
+          <input
+            v-model="topic"
+            type="text"
+            placeholder="Mobile layout"
+            :disabled="busy"
+          />
+        </label>
+        <label>
           Mention people <small>(comma-separated, optional)</small>
           <input
             v-model="mention"
             type="text"
             placeholder="handles or DIDs"
+            :disabled="busy"
+          />
+        </label>
+        <label>
+          Tags <small>(comma-separated, optional)</small>
+          <input
+            v-model="tags"
+            type="text"
+            placeholder="example, nested"
             :disabled="busy"
           />
         </label>

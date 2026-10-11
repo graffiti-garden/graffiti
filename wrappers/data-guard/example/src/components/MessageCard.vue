@@ -79,6 +79,9 @@ async function remove() {
     <p v-if="current.value.content" class="message-content">
       {{ current.value.content }}
     </p>
+    <p v-if="current.value.topic" class="topic">
+      <small>Topic: {{ current.value.topic }}</small>
+    </p>
     <p v-if="current.value.mentions?.length" class="mentions">
       <small>
         Mentioned:
@@ -86,6 +89,9 @@ async function remove() {
           <GraffitiActorToHandle :actor="actor" />
         </template>
       </small>
+    </p>
+    <p v-if="current.value.tags?.length" class="tags">
+      <small>Tags: {{ current.value.tags.join(", ") }}</small>
     </p>
     <AttachmentView
       v-if="current.value.attachment"

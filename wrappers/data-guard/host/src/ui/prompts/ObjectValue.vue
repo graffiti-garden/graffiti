@@ -23,6 +23,10 @@ function container(value: any) {
   return value !== null && typeof value === "object";
 }
 
+function hasChildren(value: any) {
+  return container(value) && entries(value).length > 0;
+}
+
 function keyLabel(key: string | number, parent: any) {
   return Array.isArray(parent) ? `${Number(key) + 1}.` : key;
 }
@@ -80,13 +84,13 @@ function resizeWithKeyboard(event: KeyboardEvent) {
       v-for="([key, item], index) in entries(value)"
       :key="key"
       class="row"
-      :class="{ interactive: rowInteractive(index) }"
+      :class="{ interactive: rowInteractive(index), 'has-children': hasChildren(item) }"
       role="row"
     >
       <span class="key" role="rowheader">
         {{ keyLabel(key, value) }}
       </span>
-      <div class="value" role="cell">
+      <div class="value" :class="{ 'nested-value': hasChildren(item) }" role="cell">
         <StructuredValue v-if="!container(item)" :value="item" :field="String(key)" />
         <ObjectValue
           v-else
@@ -137,4 +141,25 @@ function resizeWithKeyboard(event: KeyboardEvent) {
 .column-resizer:active::after,
 .column-resizer:focus-visible::after { background: color-mix(in srgb, var(--text-color) 40%, var(--border-color)); }
 .column-resizer:focus-visible { outline: none; }
+@media (max-width: 42rem) {
+  .table.nested { --branch-color: var(--spine-color, var(--border-color)); --branch-indent: 0.6rem; --branch-top: 0.9rem; --parent-spine-width: var(--spine-width, 2px); border: 0; border-radius: 0; padding-left: var(--branch-indent); }
+  .table:not(.nested) > .heading + .row { border-start-start-radius: 0.35rem; border-start-end-radius: 0.35rem; }
+  .table.nested > .row { --row-edge-color: var(--border-color); border-left: 2px solid var(--row-edge-color); border-radius: 0; }
+  .table.nested > .row.interactive { --row-edge-color: color-mix(in srgb, var(--border-color) 55%, var(--background-color)); }
+  .heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .row { position: relative; display: block; }
+  .table > .row + .row { border-top: 1px solid var(--border-color); }
+  .row.has-children { --spine-color: var(--row-edge-color, var(--border-color)); --spine-width: 2px; border-left: var(--spine-width) solid var(--spine-color); }
+  .table:not(.nested) > .row.has-children { --spine-color: color-mix(in srgb, var(--accent-button-background) 75%, var(--border-color)); --spine-width: 3px; }
+  .key, .table.array > .row > .key { display: block; border-right: 0; padding: 0.35rem 0.5rem 0; color: var(--secondary-color); font-size: 0.85rem; line-height: 1.2; }
+  .table.nested > .row > .key { position: relative; }
+  .table.nested > .row > .key::before { position: absolute; top: var(--branch-top); left: calc(0px - var(--branch-indent) - 2px); width: var(--branch-indent); border-top: 2px solid var(--branch-color); content: ""; }
+  /* Hide the parent spine below the final branch, leaving a break before the next group. */
+  .table.nested > .row:last-of-type::after { position: absolute; top: calc(var(--branch-top) + 2px); bottom: 0; left: calc(0px - var(--branch-indent) - var(--parent-spine-width) - 2px); z-index: 1; width: calc(var(--parent-spine-width) + 1px); background: var(--background-color); content: ""; }
+  .row.has-children > .key { border-bottom: 1px solid var(--border-color); padding: 0.35rem 0.5rem; color: var(--text-color); background: inherit; font-size: 1rem; line-height: 1.35; }
+  .table:not(.nested) > .heading + .row.has-children > .key { border-start-end-radius: 0.35rem; }
+  .value { padding: 0.15rem 0.5rem 0.45rem; }
+  .value.nested-value { padding: 0; background: var(--background-color); }
+  .table > .column-resizer, .table > .column-resizer:hover, .table > .column-resizer:focus-visible { display: none; }
+}
 </style>
