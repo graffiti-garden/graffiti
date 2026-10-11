@@ -33,7 +33,7 @@ export async function handleLoginRedirect(url: URL) {
     clearStoredUrl();
     window.location.assign(redirectUrl);
   };
-  status(starting ? "Opening login..." : "Completing login...");
+  status(starting ? "Opening login" : "Completing login", true);
   graffiti.sessionEvents.addEventListener("login", (event) => {
     if (!(event instanceof CustomEvent)) return;
     const detail = event.detail as GraffitiLoginEvent["detail"];
@@ -115,6 +115,6 @@ function clearStoredUrl() {
   localStorage.removeItem(storageKey);
 }
 
-function status(message: string) {
-  show(Status, { message });
+function status(message: string, loading = false) {
+  show(Status, { message, loading });
 }
