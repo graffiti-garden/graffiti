@@ -20,6 +20,10 @@ import { GraffitiRuleStore } from "./core/rules.js";
 import App from "./ui/App.vue";
 import { ask } from "./ui/ask.js";
 
+const standalone = window.parent === window;
+// Embedded guard pages need a transparent canvas; standalone pages do not.
+if (standalone) document.documentElement.classList.add("standalone");
+
 const ruleStore = new GraffitiRuleStore();
 const app = createApp(App, { ruleStore });
 // The storage-access prompt uses this root before Graffiti can safely touch
@@ -28,7 +32,7 @@ const app = createApp(App, { ruleStore });
 app.mount("#app");
 const pageUrl = new URL(window.location.href);
 
-if (window.parent === window) {
+if (standalone) {
   if (isLoginRedirect(pageUrl)) {
     void handleLoginRedirect(pageUrl);
   } else if (isStorageSetup(pageUrl)) {

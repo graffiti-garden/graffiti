@@ -12,6 +12,11 @@ main {
   background: transparent;
 }
 
+html.standalone,
+html.standalone body {
+  background: var(--background-color);
+}
+
 :root {
   /* Keep Firefox's embedded document canvas transparent. Popup colors still
      follow the user's preference through the media query below. */
@@ -91,6 +96,10 @@ button {
 }
 
 @media (prefers-color-scheme: dark) {
+  html.standalone {
+    color-scheme: dark;
+  }
+
   :root {
     --brand-color: #ca7acc;
     --brand-color-hover: #a95bac;
