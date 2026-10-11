@@ -58,7 +58,8 @@ export class GraffitiGuarded extends Graffiti {
       background: "transparent",
       border: "0",
       display: "none",
-      height: CSS.supports("height", "100dvh") ? "100dvh" : "100vh",
+      // Prompts scroll inside this frame, so size it for visible browser controls.
+      height: CSS.supports("height", "100svh") ? "100svh" : "100vh",
       inset: "0",
       position: "fixed",
       width: "100%",
