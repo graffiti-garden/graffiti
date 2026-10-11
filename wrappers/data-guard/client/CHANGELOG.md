@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-data-guard
 
+## 0.2.4
+
+### Patch Changes
+
+- 55e0021: Size permission prompts to the small viewport so mobile browser controls do not cut off the bottom of the dialog.
+
 ## 0.2.3
 
 ### Patch Changes
