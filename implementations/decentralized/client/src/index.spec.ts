@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe } from "vitest";
 import { Handles } from "./3-protocol/2-handles";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
-import { inboxTests } from "./1-services/4-inboxes-tests";
+import { inboxTests, inboxUnitTests } from "./1-services/4-inboxes-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
@@ -174,3 +174,5 @@ describe("GraffitiDecentralized Tests", () => {
     });
   }
 });
+
+inboxUnitTests();

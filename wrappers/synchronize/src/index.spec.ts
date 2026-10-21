@@ -41,6 +41,19 @@ describe.concurrent("synchronizeDiscover", () => {
     session2 = await useSession2();
   });
 
+  it("closes while waiting for an update", async () => {
+    const iterator = graffiti.synchronizeDiscover <{}>([randomString()], {});
+    const next = iterator.next();
+    const closed = await Promise.race([
+      iterator.return(null),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("return() remained pending")), 1000),
+      ),
+    ]);
+    expect(closed.done).toBe(true);
+    await expect(next).resolves.toMatchObject({ done: true });
+  });
+
   it("get", async () => {
     const graffiti1 = useGraffiti();
 
