@@ -1,5 +1,13 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.1.4
+
+### Patch Changes
+
+- 0373b56: Release inbox query locks after each cached page so an open discovery stream does not block other tabs. Bound stalled inbox requests and lock waits, and handle background labeling failures.
+  
+  Allow synchronization listeners to close while waiting for updates, and close Vue discovery and synchronization streams independently.
+
 ## 0.1.3
 
 ### Patch Changes

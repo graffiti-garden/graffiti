@@ -1,5 +1,16 @@
 # @graffiti-garden/wrapper-vue
 
+## 1.4.2
+
+### Patch Changes
+
+- 0373b56: Release inbox query locks after each cached page so an open discovery stream does not block other tabs. Bound stalled inbox requests and lock waits, and handle background labeling failures.
+  
+  Allow synchronization listeners to close while waiting for updates, and close Vue discovery and synchronization streams independently.
+- 5c35a50: Reuse recently loaded images across `useGraffitiGetMedia` instances, while letting `poll()` fetch fresh media.
+- Updated dependencies [0373b56]
+  - @graffiti-garden/wrapper-synchronize@1.3.2
+
 ## 1.4.1
 
 ### Patch Changes
