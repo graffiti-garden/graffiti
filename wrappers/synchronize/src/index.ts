@@ -172,9 +172,12 @@ export class GraffitiSynchronize implements Graffiti {
       },
     );
 
-    return (async function* () {
-      for await (const i of repeater) yield i;
-    })();
+    // Return the repeater directly so return() can cancel a pending next().
+    // An async generator wrapper queues return() behind that next(), which
+    // otherwise waits forever when no more objects arrive.
+    // Repeater's asyncDispose return type differs from AsyncGenerator's, but
+    // its next/return/throw behavior is compatible.
+    return repeater as unknown as AsyncGenerator<GraffitiObjectStreamSuccess<Schema>>;
   }
 
   /**

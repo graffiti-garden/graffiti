@@ -63,9 +63,11 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
   // Maintain iterators for disposal
   let syncIterator: AsyncGenerator<GraffitiObjectStreamSuccess<Schema>>;
   let discoverIterator: GraffitiObjectStream<Schema>;
-  onScopeDispose(async () => {
-    await syncIterator?.return(null);
-    await discoverIterator?.return({ cursor: "" });
+  // Close both streams independently so an idle sync listener cannot delay
+  // disposal of an in-flight discovery stream.
+  onScopeDispose(() => {
+    void discoverIterator?.return({ cursor: "" }).catch(console.error);
+    void syncIterator?.return(null).catch(console.error);
   });
 
   const refresh = ref(0);
@@ -90,11 +92,11 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
       // Set up automatic iterator cleanup
       let active = true;
       let restartTimer: ReturnType<typeof setTimeout> | undefined;
-      onInvalidate(async () => {
+      onInvalidate(() => {
         active = false;
         if (restartTimer !== undefined) clearTimeout(restartTimer);
-        await mySyncIterator.return(null);
-        await myDiscoverIterator?.return({ cursor: "" });
+        void myDiscoverIterator?.return({ cursor: "" }).catch(console.error);
+        void mySyncIterator.return(null).catch(console.error);
       });
       function restartWatch(timeout = 0) {
         if (restartTimer !== undefined) clearTimeout(restartTimer);

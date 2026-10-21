@@ -1,4 +1,4 @@
-import type { JSONSchema, GraffitiObject } from "@graffiti-garden/api";
+import type { JSONSchema } from "@graffiti-garden/api";
 import {
   getAuthorizationEndpoint,
   fetchWithErrorHandling,
@@ -16,19 +16,75 @@ import {
 import {
   type infer as infer_,
   string,
-  url,
-  array,
-  optional,
-  nullable,
   strictObject,
   looseObject,
   nonnegative,
   int,
   boolean,
-  custom,
-  number,
   union,
 } from "zod/mini";
+import {
+  LabeledMessageBaseSchema,
+  SendResponseSchema,
+  MessageResultSchema,
+  LABELED_MESSAGE_MESSAGE_KEY,
+  MESSAGE_OBJECT_KEY,
+} from "./4-inboxes/messages";
+import type {
+  LabeledMessageBase,
+  LabeledMessage,
+  Message,
+} from "./4-inboxes/messages";
+import {
+  canUseIDB,
+  createCache,
+  getMessageCacheKey,
+  getMessageIdsCacheKey,
+  replayQuery,
+  storeQueryPage,
+} from "./4-inboxes/cache";
+import type { Cache, CacheQueryValue } from "./4-inboxes/cache";
+
+export {
+  Uint8ArraySchema,
+  TagsSchema,
+  MESSAGE_TAGS_KEY,
+  MESSAGE_OBJECT_KEY,
+  MESSAGE_METADATA_KEY,
+  MessageBaseSchema,
+  LABELED_MESSAGE_ID_KEY,
+  LABELED_MESSAGE_MESSAGE_KEY,
+  LABELED_MESSAGE_LABEL_KEY,
+  LabeledMessageBaseSchema,
+} from "./4-inboxes/messages";
+export type { Message, LabeledMessage } from "./4-inboxes/messages";
+
+// One batch may be slow on a mobile connection. This bounds the network request
+// and response-body read, not IndexedDB or time spent yielding messages.
+const INBOX_REQUEST_TIMEOUT_MS = 30_000;
+// A stalled tab should not make peers wait indefinitely. This only bounds
+// lock acquisition; the request above bounds work after acquisition.
+const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
+
+type StreamSource<Schema extends JSONSchema> =
+  | {
+      kind: "query";
+      inboxUrl: string;
+      body: Uint8Array<ArrayBuffer>;
+      schema: Schema;
+      inboxToken?: string | null;
+    }
+  | {
+      kind: "continue";
+      inboxUrl: string;
+      cursor: infer_<typeof CursorSchema>;
+      inboxToken?: string | null;
+    }
+  | {
+      kind: "export";
+      inboxUrl: string;
+      inboxToken: string;
+    };
 
 export class Inboxes {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
@@ -140,6 +196,8 @@ export class Inboxes {
     cursor?: string,
     signal?: AbortSignal,
   ) {
+    // Keep the deadline active while the response body is being read, too.
+    const timeout = AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS);
     const response = await fetchWithErrorHandling(
       `${inboxUrl}/${type}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
       {
@@ -153,7 +211,7 @@ export class Inboxes {
             : {}),
         },
         body,
-        signal,
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       },
     );
     const retryAfterHeader = response.headers.get("Retry-After");
@@ -169,318 +227,254 @@ export class Inboxes {
     return { response, waitTil };
   }
 
-  protected async *yieldFromCache(
-    cache: Cache,
-    inboxUrl: string,
+  protected async withQueryLock<T>(
     messageIdsCacheKey: string,
-    cachedMessageIds: CacheQueryValue,
-    cacheNumSeen: number = 0,
-  ): AsyncGenerator<LabeledMessageBase> {
-    // Filter out all messageIds before
-    // the number already seen
-    const messageIds = cachedMessageIds.messageIds.slice(cacheNumSeen);
+    useLock: boolean,
+    work: () => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (!useLock) return work();
 
-    // Get all the messages pointed to in the cache
-    const messages = await Promise.all(
-      messageIds.map(async (id) => {
-        const message = await cache.messages.get(
-          getMessageCacheKey(inboxUrl, id),
-        );
-        if (!message) {
-          // Something is very wrong with the cache,
-          // it refers to message IDs that are not cached
-          try {
-            await cache.messageIds.del(messageIdsCacheKey);
-          } catch {}
-          throw new Error("Cache out of sync - perhaps clear browser storage");
-        }
-        return message;
-      }),
-    );
-
-    yield* messages;
-  }
-
-  protected async *lockedMessageStreamer<Schema extends JSONSchema>(
-    ...args: Parameters<typeof this.messageStreamer<Schema>>
-  ): MessageStream<Schema> {
-    if (typeof window === "undefined" || !(await canUseIDB())) {
-      // TODO: implement locking in node as well, but not
-      // high priority since most use will be in browser
-      const streamer = this.messageStreamer<Schema>(...args);
-      while (true) {
-        const next = await streamer.next();
-        if (next.done) return next.value;
-        yield next.value;
-      }
-    }
-
-    // Request the lock
-    const messageIdsCacheKey = await args[0];
-    const lockKey = `graffiti:inbox:${messageIdsCacheKey}`;
-    let releaseLock = () => {};
-    let hasLock: boolean = false;
-    await new Promise<void>((resolvehasLock) => {
-      window.navigator.locks.request(
-        lockKey,
+    // The lock follows one page of network and cache work; yielding cannot
+    // prolong it.
+    const timeout = AbortSignal.timeout(INBOX_LOCK_WAIT_TIMEOUT_MS);
+    let acquired = false;
+    try {
+      return await window.navigator.locks.request(
+        `graffiti:inbox:${messageIdsCacheKey}`,
         {
           mode: "exclusive",
-          ifAvailable: true,
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         },
-        async (lock) => {
-          // Immediately return whether we
-          // acquired the lock or not
-          hasLock = !!lock;
-          resolvehasLock();
-
-          // Then wait for the release to be called
-          await new Promise<void>((r) => (releaseLock = r));
+        async () => {
+          acquired = true;
+          return work();
         },
       );
-    });
-    if (hasLock) {
-      // If we have the lock, simply proceed with the regular streamer
-      try {
-        const streamer = this.messageStreamer<Schema>(...args);
-        while (true) {
-          const next = await streamer.next();
-          if (next.done) return next.value;
-          yield next.value;
-        }
-      } finally {
-        // Release the lock when all done
-        releaseLock();
+    } catch (error) {
+      if (!acquired && timeout.aborted) {
+        throw new Error("Timed out waiting for another tab's inbox query", {
+          cause: error,
+        });
       }
+      throw error;
     }
-
-    // Someone else has the lock,
-    // so wait until the lock is released,
-    // then just return from the cache
-    releaseLock();
-    await window.navigator.locks.request(lockKey, () => {});
-
-    // TODO: the arguments here are brittle
-    // at some point, refactor things
-    const inboxUrl = args[1];
-    const objectSchema = args[5] ?? {};
-    const cacheVersion = args[6];
-    const cacheNumSeen = args[7];
-
-    const cache = await this.cache;
-    const cachedMessageIds = await cache.messageIds.get(messageIdsCacheKey);
-    if (!cachedMessageIds) {
-      throw new Error("Cache not found");
-    }
-    if (
-      cacheVersion !== undefined &&
-      cacheVersion !== cachedMessageIds.version
-    ) {
-      throw new GraffitiErrorCursorExpired("Cursor is stale");
-    }
-
-    const iterator = this.yieldFromCache(
-      cache,
-      inboxUrl,
-      messageIdsCacheKey,
-      cachedMessageIds,
-      cacheNumSeen,
-    );
-    for await (const m of iterator) yield m as LabeledMessage<Schema>;
-
-    const outputCursor: infer_<typeof CursorSchema> = {
-      numSeen: cachedMessageIds.messageIds.length,
-      version: cachedMessageIds.version,
-      messageIdsCacheKey,
-      objectSchema,
-    };
-
-    return JSON.stringify(outputCursor);
   }
 
   protected async *messageStreamer<Schema extends JSONSchema>(
-    messageIdsCacheKey_: Promise<string>,
-    inboxUrl: string,
-    type: "export" | "query",
-    body: Uint8Array<ArrayBuffer> | undefined,
-    inboxToken?: string | null,
-    objectSchema: Schema = {} as Schema,
-    cacheVersion?: string,
-    cacheNumSeen: number = 0,
+    source: StreamSource<Schema>,
   ): MessageStream<Schema> {
+    const { inboxUrl, inboxToken } = source;
+    const type = source.kind === "export" ? "export" : "query";
+    // Continuations carry their validated schema in the cursor; export uses
+    // the empty schema. Both callers instantiate this stream with Schema = {}.
+    const objectSchema = (
+      source.kind === "query"
+        ? source.schema
+        : source.kind === "continue" ? source.cursor.objectSchema : {}
+    ) as Schema;
     const validator = await compileGraffitiObjectSchema(objectSchema);
-    const messageIdsCacheKey = await messageIdsCacheKey_;
+    const body = source.kind === "query" ? source.body : undefined;
+    const messageIdsCacheKey = source.kind === "continue"
+      ? source.cursor.messageIdsCacheKey
+      : await getMessageIdsCacheKey(inboxUrl, type, body);
+    const cacheVersion = source.kind === "continue"
+      ? source.cursor.version
+      : undefined;
+    // Opening IndexedDB can wait on another tab, so do it before holding a lock.
     const cache = await this.cache;
+    // TODO: implement locking in node as well, but not
+    // high priority since most use will be in browser
+    const useLock = typeof window !== "undefined" && (await canUseIDB());
+    const initialQuery = await cache.messageIds.get(messageIdsCacheKey);
+    // Version identifies a query history; generation changes on each page
+    // written to that history, including an empty page.
+    let seenGeneration = initialQuery?.generation;
+    let seenVersion = initialQuery?.version;
+    let numSeen = source.kind === "continue" ? source.cursor.numSeen : 0;
+    let firstPage = true;
 
-    let cachedMessageIds = await cache.messageIds.get(messageIdsCacheKey);
-    if (
-      cacheVersion !== undefined &&
-      cacheVersion !== cachedMessageIds?.version
-    ) {
-      throw new GraffitiErrorCursorExpired("Cursor is stale");
-    }
+    // Advance one page at most. Recheck the cache under the lock so a tab
+    // waiting for another tab's fetch can reuse its result.
+    const fetchPage = async (signal?: AbortSignal): Promise<CacheQueryValue> => {
+      while (true) {
+        signal?.throwIfAborted();
+        const step = await this.withQueryLock(
+          messageIdsCacheKey,
+          useLock,
+          async () => {
+            signal?.throwIfAborted();
+            // A different tab may have fetched a page while we waited for the lock.
+            let query = await cache.messageIds.get(messageIdsCacheKey);
+            if (cacheVersion !== undefined && cacheVersion !== query?.version) {
+              throw new GraffitiErrorCursorExpired("Cursor is stale");
+            }
+            if (query?.version !== seenVersion) {
+              // A cache reset after this stream yielded messages would replay
+              // them. Report the stale cursor as a midstream expiry instead.
+              if (!firstPage) throw new GraffitiErrorCursorExpired("Cursor is stale");
+              numSeen = 0;
+            }
+            if (query?.generation && query.generation !== seenGeneration) {
+              return { query };
+            }
 
-    // If we are rate-limited, wait
-    let waitTil = cachedMessageIds?.waitTil;
-    await waitFor(waitTil);
+            // A cached Retry-After should not keep other tabs waiting on this lock.
+            if (query?.waitTil !== undefined && query.waitTil > Date.now()) {
+              return { waitTil: query.waitTil };
+            }
 
-    // See if the cursor is still active by
-    // requesting an initial batch of messages
-    const cachedCursor = cachedMessageIds?.cursor;
-    let firstResponse: Response | undefined = undefined;
-    try {
-      const out = await this.fetchMessageBatch(
-        inboxUrl,
-        type,
-        body,
-        inboxToken,
-        cachedCursor,
-      );
-      firstResponse = out.response;
-      waitTil = out.waitTil;
-    } catch (e) {
-      if (!(e instanceof GraffitiErrorCursorExpired && cachedCursor)) {
-        console.error(
-          "Unexpected error in stream, waiting 5 seconds before continuing...",
+            // See if the cursor is still active by requesting the next batch.
+            let batch: { response: Response; waitTil?: number };
+            try {
+              batch = await this.fetchMessageBatch(
+                inboxUrl,
+                type,
+                firstPage ? body : undefined, // Later pages send no body.
+                inboxToken,
+                query?.cursor,
+                signal,
+              );
+            } catch (error) {
+              if (
+                !(error instanceof GraffitiErrorCursorExpired && query?.cursor)
+              ) {
+                // Preserve the old initial-page error backoff, but wait only
+                // after releasing the Web Lock.
+                if (firstPage && !signal?.aborted) {
+                  return { initialFetchError: error };
+                }
+                throw error;
+              }
+              // Only an initial cached cursor is retried. A cursor that
+              // expires midstream must be reported to the caller.
+              if (!firstPage) throw error;
+
+              // The cursor is stale. A continuation must report that to its caller.
+              await cache.messageIds.del(messageIdsCacheKey);
+              if (cacheVersion !== undefined) throw error;
+              query = undefined;
+              numSeen = 0;
+              batch = await this.fetchMessageBatch(
+                inboxUrl,
+                type,
+                body,
+                inboxToken,
+                undefined,
+                signal,
+              );
+            }
+
+            const decoded = dagCborDecode(
+              new Uint8Array(await batch.response.arrayBuffer()),
+            );
+            const { results, hasMore, cursor } =
+              MessageResultSchema.parse(decoded);
+            const labeledMessages: LabeledMessage<Schema>[] = results.map(
+              (result) => {
+                const object =
+                  result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
+                if (!validator(object)) {
+                  throw new Error("Server returned data that does not match schema");
+                }
+                return {
+                  ...result,
+                  [LABELED_MESSAGE_MESSAGE_KEY]: {
+                    ...result[LABELED_MESSAGE_MESSAGE_KEY],
+                    [MESSAGE_OBJECT_KEY]: object,
+                  },
+                };
+              },
+            );
+
+            query = await storeQueryPage(
+              cache,
+              inboxUrl,
+              messageIdsCacheKey,
+              query,
+              {
+                messages: labeledMessages,
+                cursor,
+                hasMore,
+                waitTil: batch.waitTil,
+              },
+            );
+            return { query };
+          },
+          signal,
         );
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        throw e;
-      }
 
-      // The cursor is stale
-      await cache.messageIds.del(messageIdsCacheKey);
-      if (cacheVersion === undefined) {
-        // The query is not a continuation
-        // so we can effectively ignore the error
-        cachedMessageIds = undefined;
-      } else {
-        // Otherwise propogate it up so the
-        // consumer can clear their message history
-        throw e;
+        if ("initialFetchError" in step) {
+          console.error(
+            "Unexpected error in stream, waiting 5 seconds before continuing...",
+          );
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          throw step.initialFetchError;
+        }
+        if ("waitTil" in step) {
+          await waitFor(step.waitTil);
+          continue;
+        }
+        return step.query;
       }
-    }
+    };
 
-    if (firstResponse !== undefined && cachedMessageIds) {
-      // Cursor is valid! Yield from the cache
-      const iterator = this.yieldFromCache(
+    type PageResult = { query: CacheQueryValue } | { error: unknown };
+    let nextPage: Promise<PageResult> | undefined;
+    while (true) {
+      const result = nextPage
+        ? await nextPage
+        : await fetchPage().then(
+            (query) => ({ query }),
+            (error) => ({ error }),
+          );
+      nextPage = undefined;
+      if ("error" in result) throw result.error;
+
+      const query = result.query;
+      // Replay all unseen messages after releasing the lock.
+      const messages = await replayQuery(
         cache,
         inboxUrl,
         messageIdsCacheKey,
-        cachedMessageIds,
-        cacheNumSeen,
+        query,
+        numSeen,
       );
-      for await (const m of iterator) yield m as LabeledMessage<Schema>;
-    }
-
-    if (firstResponse === undefined) {
-      // The cursor was stale: try again
-      const out = await this.fetchMessageBatch(
-        inboxUrl,
-        type,
-        body,
-        inboxToken,
-      );
-      firstResponse = out.response;
-      waitTil = out.waitTil;
-    }
-
-    // Continue streaming results
-    let response = firstResponse;
-    let cursor: string;
-    const version = cachedMessageIds?.version ?? crypto.randomUUID();
-    let messageIds = cachedMessageIds?.messageIds ?? [];
-    while (true) {
-      const blob = await response.blob();
-      const decoded = dagCborDecode(await blob.arrayBuffer());
-      const {
-        results,
-        hasMore,
-        cursor: nextCursor,
-      } = MessageResultSchema.parse(decoded);
-      cursor = nextCursor;
-
-      const labeledMessages: LabeledMessage<Schema>[] = results.map(
-        (result) => {
-          const object =
-            result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
-          if (!validator(object)) {
-            throw new Error("Server returned data that does not match schema");
-          }
-          return {
-            ...result,
-            [LABELED_MESSAGE_MESSAGE_KEY]: {
-              ...result[LABELED_MESSAGE_MESSAGE_KEY],
-              [MESSAGE_OBJECT_KEY]: object,
-            },
-          };
-        },
-      );
-
-      // First cache the messages with their labels
-      await cache.messages.setMany(
-        labeledMessages.map((m: LabeledMessageBase) => [
-          getMessageCacheKey(inboxUrl, m[LABELED_MESSAGE_ID_KEY]),
-          m,
-        ]),
-      );
-      // Then store all the messageids
-      messageIds = [
-        ...messageIds,
-        ...labeledMessages.map(
-          (m: LabeledMessageBase) => m[LABELED_MESSAGE_ID_KEY],
-        ),
-      ];
-      await cache.messageIds.set(messageIdsCacheKey, {
-        cursor,
-        version,
-        messageIds,
-        waitTil,
-      });
-
-      // Update how many we've seen
-      cacheNumSeen += labeledMessages.length;
-
-      // Fetch the next page while the caller processes the current page.
+      numSeen = query.messageIds.length;
+      seenGeneration = query.generation;
+      seenVersion = query.version;
+      firstPage = false;
+      // The current page's lock is released. Fetch the next page while the
+      // caller processes these messages; closing the stream aborts that fetch.
       const prefetchController = new AbortController();
-      // Otherwise get another response (after waiting for rate-limit)
-      const nextPage = hasMore
-        ? waitFor(waitTil)
-            .then(() => this.fetchMessageBatch(
-              inboxUrl,
-              type,
-              undefined, // Body is never past the first time
-              inboxToken,
-              cursor,
-              prefetchController.signal,
-            ))
-            // A consumer may stop before awaiting this request.
-            .then((value) => ({ value }), (error) => ({ error }))
-        : null;
-
-      // Return the values
+      if (query.hasMore) {
+        // The caller may close before awaiting this request; handle rejection
+        // here so an aborted prefetch does not become unhandled.
+        nextPage = fetchPage(prefetchController.signal).then(
+          (query) => ({ query }),
+          (error) => ({ error }),
+        );
+      }
       let consumedPage = false;
       try {
-        for (const m of labeledMessages) yield m;
+        for (const message of messages) {
+          yield message as LabeledMessage<Schema>;
+        }
         consumedPage = true;
       } finally {
         if (!consumedPage) prefetchController.abort();
       }
 
-      if (!hasMore) break;
-
-      const out = await nextPage!;
-      if ("error" in out) throw out.error;
-      response = out.value.response;
-      waitTil = out.value.waitTil;
+      if (!query.hasMore) {
+        const outputCursor: infer_<typeof CursorSchema> = {
+          numSeen,
+          version: query.version,
+          messageIdsCacheKey,
+          objectSchema,
+        };
+        return JSON.stringify(outputCursor);
+      }
     }
-
-    const outputCursor: infer_<typeof CursorSchema> = {
-      numSeen: cacheNumSeen,
-      version,
-      messageIdsCacheKey,
-      objectSchema,
-    };
-
-    return JSON.stringify(outputCursor);
   }
 
   query<Schema extends JSONSchema>(
@@ -490,21 +484,17 @@ export class Inboxes {
     inboxToken?: string | null,
   ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
-
-    const body = dagCborEncode({
+    const body = new Uint8Array(dagCborEncode({
       tags,
       schema: objectSchema,
-    });
-
-    const messageIdsCacheKey = getMessageIdsCacheKey(inboxUrl, "query", body);
-    return this.lockedMessageStreamer<Schema>(
-      messageIdsCacheKey,
+    }));
+    return this.messageStreamer<Schema>({
+      kind: "query",
       inboxUrl,
-      "query",
-      new Uint8Array(body),
+      body,
+      schema: objectSchema,
       inboxToken,
-      objectSchema,
-    );
+    });
   }
 
   continueQuery(
@@ -515,82 +505,24 @@ export class Inboxes {
     verifyHTTPSEndpoint(inboxUrl);
 
     const decodedCursor = JSON.parse(cursor);
-    const { messageIdsCacheKey, numSeen, objectSchema, version } =
-      CursorSchema.parse(decodedCursor);
-
-    return this.lockedMessageStreamer<{}>(
-      Promise.resolve(messageIdsCacheKey),
+    const parsedCursor = CursorSchema.parse(decodedCursor);
+    return this.messageStreamer<{}>({
+      kind: "continue",
       inboxUrl,
-      "query",
-      undefined,
+      cursor: parsedCursor,
       inboxToken,
-      objectSchema,
-      version,
-      numSeen,
-    );
+    });
   }
 
   export(inboxUrl: string, inboxToken: string): MessageStream<{}> {
     verifyHTTPSEndpoint(inboxUrl);
-    const messageIdsCacheKey = getMessageIdsCacheKey(inboxUrl, "export");
-    return this.lockedMessageStreamer<{}>(
-      messageIdsCacheKey,
+    return this.messageStreamer<{}>({
+      kind: "export",
       inboxUrl,
-      "export",
-      undefined,
       inboxToken,
-    );
+    });
   }
 }
-
-const GraffitiObjectSchema = strictObject({
-  value: looseObject({}),
-  channels: array(string()),
-  allowed: optional(nullable(array(url()))),
-  url: url(),
-  actor: url(),
-});
-export const Uint8ArraySchema = custom<Uint8Array>(
-  (v): v is Uint8Array => v instanceof Uint8Array,
-);
-export const TagsSchema = array(Uint8ArraySchema);
-
-export const MESSAGE_TAGS_KEY = "t";
-export const MESSAGE_OBJECT_KEY = "o";
-export const MESSAGE_METADATA_KEY = "m";
-export const MessageBaseSchema = strictObject({
-  [MESSAGE_TAGS_KEY]: TagsSchema,
-  [MESSAGE_OBJECT_KEY]: GraffitiObjectSchema,
-  [MESSAGE_METADATA_KEY]: Uint8ArraySchema,
-});
-type MessageBase = infer_<typeof MessageBaseSchema>;
-
-export const LABELED_MESSAGE_ID_KEY = "id";
-export const LABELED_MESSAGE_MESSAGE_KEY = "m";
-export const LABELED_MESSAGE_LABEL_KEY = "l";
-export const LabeledMessageBaseSchema = strictObject({
-  [LABELED_MESSAGE_ID_KEY]: string(),
-  [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
-  [LABELED_MESSAGE_LABEL_KEY]: number(),
-});
-type LabeledMessageBase = infer_<typeof LabeledMessageBaseSchema>;
-
-export type Message<Schema extends JSONSchema> = MessageBase & {
-  [MESSAGE_OBJECT_KEY]: GraffitiObject<Schema>;
-};
-export type LabeledMessage<Schema extends JSONSchema> = LabeledMessageBase & {
-  [LABELED_MESSAGE_MESSAGE_KEY]: {
-    [MESSAGE_OBJECT_KEY]: GraffitiObject<Schema>;
-  };
-};
-
-const SendResponseSchema = strictObject({ id: string() });
-
-const MessageResultSchema = strictObject({
-  results: array(LabeledMessageBaseSchema),
-  hasMore: boolean(),
-  cursor: string(),
-});
 
 const CursorSchema = strictObject({
   messageIdsCacheKey: string(),
@@ -602,153 +534,6 @@ const CursorSchema = strictObject({
 export interface MessageStream<
   Schema extends JSONSchema,
 > extends AsyncGenerator<LabeledMessage<Schema>, string> {}
-
-type CacheQueryValue = {
-  cursor: string;
-  version: string;
-  messageIds: string[];
-  waitTil?: number;
-};
-
-async function canUseIDB(): Promise<boolean> {
-  try {
-    if (!globalThis.indexedDB) return false;
-
-    // Small probe database
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("__idb_probe__", 1);
-      req.onupgradeneeded = () => req.result.createObjectStore("k");
-      req.onsuccess = () => {
-        req.result.close();
-        resolve();
-      };
-      req.onerror = () => reject(req.error);
-    });
-
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-type Cache = {
-  messages: {
-    get(k: string): Promise<LabeledMessageBase | null | undefined>;
-    set(k: string, value: LabeledMessageBase | null): Promise<void>;
-    setMany(entries: [string, LabeledMessageBase][]): Promise<void>;
-    del(k: string): Promise<void>;
-  };
-  messageIds: {
-    get(k: string): Promise<CacheQueryValue | undefined>;
-    set(k: string, value: CacheQueryValue): Promise<void>;
-    del(k: string): Promise<void>;
-  };
-};
-
-function getMessageCacheKey(inboxUrl: string, messageId: string) {
-  return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
-}
-async function getMessageIdsCacheKey(
-  inboxUrl: string,
-  type: "query" | "export",
-  body?: Uint8Array,
-): Promise<string> {
-  const cacheIdData = dagCborEncode({
-    inboxUrl,
-    type,
-    body: body ?? null,
-  });
-  return crypto.subtle
-    .digest("SHA-256", new Uint8Array(cacheIdData))
-    .then((bytes) =>
-      Array.from(new Uint8Array(bytes))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join(""),
-    );
-}
-
-async function resetCacheDB() {
-  await new Promise<void>((resolve) => {
-    const req = indexedDB.deleteDatabase("graffiti-inbox-cache");
-    req.onsuccess = () => resolve();
-    req.onerror = () => resolve(); // best effort
-    req.onblocked = () => resolve(); // best effort
-  });
-}
-
-async function createCache(): Promise<Cache> {
-  if (await canUseIDB()) {
-    const { openDB } = await import("idb");
-    const db = await openDB("graffiti-inbox-cache", 1, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains("m")) db.createObjectStore("m");
-        if (!db.objectStoreNames.contains("q")) db.createObjectStore("q");
-      },
-    });
-
-    return {
-      messages: {
-        get: async (k) => {
-          try {
-            return db.get("m", k);
-          } catch (error) {
-            console.error("Error getting message from cache:", error);
-            console.error("resetting cache...");
-            await resetCacheDB();
-            return undefined;
-          }
-        },
-        set: async (k, v) => {
-          await db.put("m", v, k);
-        },
-        setMany: async (entries) => {
-          if (entries.length === 0) return;
-          const tx = db.transaction("m", "readwrite");
-          await Promise.all([
-            ...entries.map(([k, v]) => tx.store.put(v, k)),
-            tx.done,
-          ]);
-        },
-        del: (k) => db.delete("m", k),
-      },
-      messageIds: {
-        get: async (k) => {
-          try {
-            return await db.get("q", k);
-          } catch (error) {
-            console.error("Error getting message IDs from cache:", error);
-            console.error("resetting cache...");
-            await resetCacheDB();
-            return undefined;
-          }
-        },
-        set: async (k, v) => {
-          await db.put("q", v, k);
-        },
-        del: (k) => db.delete("q", k),
-      },
-    };
-  }
-
-  const m = new Map<string, LabeledMessageBase | null>();
-  const q = new Map<string, CacheQueryValue>();
-
-  return {
-    messages: {
-      get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, v),
-      setMany: async (entries) => {
-        for (const [k, v] of entries) m.set(k, v);
-      },
-      del: async (k) => void m.delete(k),
-    },
-    messageIds: {
-      get: async (k) => q.get(k),
-      set: async (k, v) => void q.set(k, v),
-      del: async (k) => void q.delete(k),
-    },
-  };
-}
 
 async function waitFor(waitTil?: number) {
   if (waitTil !== undefined) {

@@ -1191,6 +1191,19 @@ export class GraffitiDecentralized implements Graffiti {
     }
   }
 
+  // Labeling is advisory and should not hold up discovery, but its failure
+  // must be handled even if the caller has already stopped reading the stream.
+  protected labelInboxMessage(
+    inboxEndpoint: string,
+    messageId: string,
+    label: number,
+    inboxToken?: string | null,
+  ): void {
+    void this.inboxes.label(inboxEndpoint, messageId, label, inboxToken).catch(
+      (error) => console.error("Could not label inbox message:", error),
+    );
+  }
+
   protected async processOneLabeledMessage<Schema extends JSONSchema>(
     inboxEndpoint: string,
     result: LabeledMessage<Schema>,
@@ -1214,7 +1227,7 @@ export class GraffitiDecentralized implements Graffiti {
       const metadataRaw = dagCborDecode(metadataBytes);
       metadata = MessageMetadataSchema.parse(metadataRaw);
     } catch (e) {
-      this.inboxes.label(
+      this.labelInboxMessage(
         inboxEndpoint,
         messageId,
         MESSAGE_LABEL_INVALID,
@@ -1267,7 +1280,7 @@ export class GraffitiDecentralized implements Graffiti {
       // device and the device cache is out of date.
       if (past[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH) {
         // Label the message as trash
-        this.inboxes.label(
+        this.labelInboxMessage(
           inboxEndpoint,
           tombstonedMessageId,
           MESSAGE_LABEL_TRASH,
@@ -1343,7 +1356,7 @@ export class GraffitiDecentralized implements Graffiti {
     if (tombstonedMessageId) {
       if (validationError instanceof GraffitiErrorNotFound) {
         // Not found == The tombstone is correct
-        this.inboxes
+        void this.inboxes
           // Get the referenced message
           .get(inboxEndpoint, tombstonedMessageId, inboxToken)
           .then((result) => {
@@ -1356,7 +1369,7 @@ export class GraffitiDecentralized implements Graffiti {
               result[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH
             ) {
               // If valid but not yet trash, label the message as trash
-              this.inboxes.label(
+              this.labelInboxMessage(
                 inboxEndpoint,
                 tombstonedMessageId,
                 MESSAGE_LABEL_TRASH,
@@ -1365,13 +1378,16 @@ export class GraffitiDecentralized implements Graffiti {
             }
 
             // Then, label the tombstone message as trash
-            this.inboxes.label(
+            this.labelInboxMessage(
               inboxEndpoint,
               messageId,
               MESSAGE_LABEL_TRASH,
               inboxToken,
             );
-          });
+          })
+          .catch((error) =>
+            console.error("Could not inspect tombstone message:", error),
+          );
 
         return {
           messageId,
@@ -1385,7 +1401,7 @@ export class GraffitiDecentralized implements Graffiti {
       } else {
         console.error("Recieved an incorrect tombstone object");
         console.error(validationError);
-        this.inboxes.label(
+        this.labelInboxMessage(
           inboxEndpoint,
           messageId,
           MESSAGE_LABEL_INVALID,
@@ -1394,7 +1410,7 @@ export class GraffitiDecentralized implements Graffiti {
       }
     } else {
       if (validationError === undefined) {
-        this.inboxes.label(
+        this.labelInboxMessage(
           inboxEndpoint,
           messageId,
           MESSAGE_LABEL_VALID,
@@ -1411,7 +1427,7 @@ export class GraffitiDecentralized implements Graffiti {
       } else if (validationError instanceof GraffitiErrorNotFound) {
         // Item was deleted before we got a chance to
         // validate it. Just label the message as trash.
-        this.inboxes.label(
+        this.labelInboxMessage(
           inboxEndpoint,
           messageId,
           MESSAGE_LABEL_TRASH,
@@ -1420,7 +1436,7 @@ export class GraffitiDecentralized implements Graffiti {
       } else {
         console.error("Recieved an incorrect object");
         console.error(validationError);
-        this.inboxes.label(
+        this.labelInboxMessage(
           inboxEndpoint,
           messageId,
           MESSAGE_LABEL_INVALID,

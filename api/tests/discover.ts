@@ -450,6 +450,38 @@ export const graffitiDiscoverTests = (
       await expect(iterator4.next()).resolves.toHaveProperty("done", true);
     });
 
+    it("concurrent discovery streams progress independently", async () => {
+      const graffiti1 = useGraffiti();
+      const graffiti2 = useGraffiti();
+      const object = randomPostObject();
+      const posted = await graffiti1.post<{}>(object, session1);
+      const first = graffiti1.discover<{}>(object.channels, {});
+      const second = graffiti2.discover<{}>(object.channels, {});
+
+      try {
+        const [firstResult, secondResult] = await Promise.all([
+          first.next(),
+          second.next(),
+        ]);
+        assert(!firstResult.done && !firstResult.value.error);
+        assert(!secondResult.done && !secondResult.value.error);
+        expect(firstResult.value.object).toEqual(posted);
+        expect(secondResult.value.object).toEqual(posted);
+
+        const [firstEnd, secondEnd] = await Promise.all([
+          first.next(),
+          second.next(),
+        ]);
+        expect(firstEnd.done).toBe(true);
+        expect(secondEnd.done).toBe(true);
+      } finally {
+        await Promise.allSettled([
+          first.return({ cursor: "" }),
+          second.return({ cursor: "" }),
+        ]);
+      }
+    });
+
     for (const continueType of ["cursor"] as const) {
       describe(`continue discover with ${continueType}`, () => {
         it("discover for deleted content", async () => {
