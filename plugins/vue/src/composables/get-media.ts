@@ -11,8 +11,8 @@ import { useGraffitiSynchronize } from "../globals";
 // Cache media in-memory for up to 5 minutes
 // Polling clears this. This may show deleted media but saves
 // a lot on performance (e.g. same profile picture shown in many places)
-const CACHE_LIFETIME_MS = 5 * 60 * 1000;
-const CACHE_MAX_BYTES = 128 * 1024 * 1024; // Per session
+const CACHE_LIFETIME_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_MAX_BYTES = 128 * 1024 * 1024; // 128mb per session
 
 type CacheEntry = {
   promise: Promise<GraffitiMedia>;
