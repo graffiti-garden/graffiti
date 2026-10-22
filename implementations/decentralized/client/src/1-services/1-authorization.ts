@@ -188,7 +188,7 @@ export class Authorization {
 
     // Either redirect (browser) or print the URL and wait (node)
     if (typeof window !== "undefined") {
-      window.location.href = redirectTo.toString();
+      window.location.replace(redirectTo.toString());
     } else {
       console.log("Please open the following URL in your browser:");
       console.log(redirectTo.toString());
