@@ -151,7 +151,7 @@ export class GraffitiGuarded extends Graffiti {
           ) {
             return;
           }
-          window.location.assign(setupUrl);
+          window.location.replace(setupUrl);
         } catch {}
       } else if (
         event.data.type === "graffiti-guard:open-audit" &&

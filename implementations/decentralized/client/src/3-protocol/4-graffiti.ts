@@ -358,9 +358,22 @@ export class GraffitiDecentralized implements Graffiti {
         "redirect_uri",
         encodeURIComponent(window.location.toString()),
       );
-      template
-        ?.querySelector("#graffiti-login-new")
-        ?.setAttribute("href", createUrl.toString());
+      const createLink = template?.querySelector<HTMLAnchorElement>(
+        "#graffiti-login-new",
+      );
+      createLink?.setAttribute("href", createUrl.toString());
+      createLink?.addEventListener("click", (event) => {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) return;
+        event.preventDefault();
+        window.location.replace(createUrl.toString());
+      });
 
       await this.modal?.open();
     } else {
@@ -425,7 +438,7 @@ export class GraffitiDecentralized implements Graffiti {
 
           const url = new URL("/forgot-handle", origin);
           url.searchParams.set("redirect_uri", window.location.toString());
-          window.location.assign(url.toString());
+          window.location.replace(url.toString());
         } catch {
           alert("Enter a valid provider domain.");
         }
