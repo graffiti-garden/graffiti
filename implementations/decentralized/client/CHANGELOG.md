@@ -1,5 +1,11 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.1.7
+
+### Patch Changes
+
+- d1c0a93: Replace the guard's temporary login entry when opening account creation or handle recovery, while preserving app history for direct clients.
+
 ## 0.1.6
 
 ### Patch Changes
