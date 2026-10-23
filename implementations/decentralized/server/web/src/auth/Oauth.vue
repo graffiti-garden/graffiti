@@ -127,7 +127,7 @@ const router = useRouter();
 
 let redirectUriObject: URL | undefined;
 if (redirectUri === null) {
-    router.push("/");
+    router.replace("/");
 } else {
     try {
         redirectUriObject = new URL(redirectUri);
@@ -138,9 +138,10 @@ if (redirectUri === null) {
             throw new Error("Invalid redirect URI protocol");
         }
     } catch (error) {
+        redirectUriObject = undefined;
         console.error("Invalid redirect URI");
         console.error(error);
-        router.push("/");
+        router.replace("/");
     }
 }
 
@@ -369,14 +370,14 @@ watch(
 
 function handleSelectActor(actorDid: string | undefined) {
     if (!actorDid) return;
-    if (!redirectUriObject) return router.push("/");
+    if (!redirectUriObject) return router.replace("/");
     const redirectUrl = new URL(redirectUriObject.toString());
     redirectUrl.searchParams.set("actor", encodeURIComponent(actorDid));
     window.location.replace(redirectUrl.toString());
 }
 
 async function handleApprove() {
-    if (!redirectUriObject) return router.push("/");
+    if (!redirectUriObject) return router.replace("/");
     approving.value = true;
     try {
         const { redirectUri } = await fetchFromSelf("/app/oauth/authorize", {
@@ -397,7 +398,7 @@ async function handleApprove() {
 
 function handleDeny() {
     // On rejection, redirect back with an error
-    if (!redirectUriObject) return router.push("/");
+    if (!redirectUriObject) return router.replace("/");
     redirectUriObject.searchParams.set("error", "access_denied");
     redirectUriObject.searchParams.set(
         "error_description",
