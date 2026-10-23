@@ -131,6 +131,8 @@ const MESSAGE_LABEL_INVALID = 3;
 export interface GraffitiDecentralizedOptions {
   identityCreatorEndpoint?: string;
   defaultInboxEndpoints?: string[];
+  /** For login hosts that already have the application in the preceding history entry. */
+  replaceInitialLoginHistoryEntry?: boolean;
 }
 
 const CONCURRENCY = 128;
@@ -181,6 +183,9 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly defaultInboxEndpoints: string[];
   protected readonly identityCreatorEndpoint: string;
   constructor(options?: GraffitiDecentralizedOptions) {
+    if (options?.replaceInitialLoginHistoryEntry) {
+      this.sessions.initialAuthorizationNavigation = "replace";
+    }
     this.defaultInboxEndpoints = options?.defaultInboxEndpoints ?? [
       "https://graffiti.actor/i/shared",
     ];
@@ -358,22 +363,9 @@ export class GraffitiDecentralized implements Graffiti {
         "redirect_uri",
         encodeURIComponent(window.location.toString()),
       );
-      const createLink = template?.querySelector<HTMLAnchorElement>(
-        "#graffiti-login-new",
-      );
-      createLink?.setAttribute("href", createUrl.toString());
-      createLink?.addEventListener("click", (event) => {
-        if (
-          event.defaultPrevented ||
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey
-        ) return;
-        event.preventDefault();
-        window.location.replace(createUrl.toString());
-      });
+      template
+        ?.querySelector("#graffiti-login-new")
+        ?.setAttribute("href", createUrl.toString());
 
       await this.modal?.open();
     } else {
@@ -438,7 +430,7 @@ export class GraffitiDecentralized implements Graffiti {
 
           const url = new URL("/forgot-handle", origin);
           url.searchParams.set("redirect_uri", window.location.toString());
-          window.location.replace(url.toString());
+          window.location.assign(url.toString());
         } catch {
           alert("Enter a valid provider domain.");
         }

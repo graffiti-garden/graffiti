@@ -41,6 +41,7 @@ export const DID_SERVICE_ID_GRAFFITI_SHARED_INBOX_PREFIX =
 
 export class Sessions {
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
+  initialAuthorizationNavigation: "assign" | "replace" = "assign";
 
   constructor(
     protected readonly services: {
@@ -87,8 +88,9 @@ export class Sessions {
           const url = new URL(window.location.toString());
           url.searchParams.delete("actor");
           window.history.replaceState({}, "", url.toString());
-          // Complete the login
-          loginPromise = this.login(actor);
+          // The original app entry was kept when opening account creation or
+          // recovery, so OAuth reuses this callback entry.
+          loginPromise = this.login(actor, "replace");
         } catch (error) {
           console.error("Error decoding actor:", error);
         }
@@ -124,9 +126,13 @@ export class Sessions {
   protected inProgressLogout: infer_<typeof InProgressSchema> | undefined =
     undefined;
 
-  async login(actor: string) {
+  async login(
+    actor: string,
+    initialAuthorizationNavigation: "assign" | "replace" =
+      this.initialAuthorizationNavigation,
+  ) {
     try {
-      await this.login_(actor);
+      await this.login_(actor, initialAuthorizationNavigation);
     } catch (e) {
       const loginEvent: GraffitiLoginEvent = new CustomEvent("login", {
         detail: {
@@ -137,7 +143,10 @@ export class Sessions {
       this.sessionEvents.dispatchEvent(loginEvent);
     }
   }
-  protected async login_(actor: string) {
+  protected async login_(
+    actor: string,
+    initialAuthorizationNavigation: "assign" | "replace",
+  ) {
     // First look to see if we're already logged in
     const existingSession = this.loggedInSessions.find(
       (session) => session.actor === actor,
@@ -257,6 +266,7 @@ export class Sessions {
       firstAuthorizationEndpoint,
       actor,
       firstServices.map((s) => s.endpoint),
+      initialAuthorizationNavigation,
     );
   }
 
@@ -367,6 +377,7 @@ export class Sessions {
         authorizationEndpoint,
         actor,
         services.map((s) => s.endpoint),
+        "replace",
       );
     }
   }

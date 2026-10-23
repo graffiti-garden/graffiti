@@ -19,7 +19,9 @@ export function isLoginRedirect(url: URL) {
 export async function handleLoginRedirect(url: URL) {
   const redirectUrl = getRedirectUrl(url);
   if (!redirectUrl) return status("Missing redirect URL.");
-  const graffiti = new GraffitiDecentralized();
+  const graffiti = new GraffitiDecentralized({
+    replaceInitialLoginHistoryEntry: true,
+  });
   const fragmentParams = new URLSearchParams(url.hash.slice(1));
   const starting =
     fragmentParams.get("guardLogin") === "1" ||

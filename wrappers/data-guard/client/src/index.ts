@@ -151,7 +151,7 @@ export class GraffitiGuarded extends Graffiti {
           ) {
             return;
           }
-          window.location.replace(setupUrl);
+          window.location.assign(setupUrl);
         } catch {}
       } else if (
         event.data.type === "graffiti-guard:open-audit" &&
@@ -192,7 +192,7 @@ export class GraffitiGuarded extends Graffiti {
     });
     if (actor) params.set("suggestedActor", actor);
     loginUrl.hash = params.toString();
-    window.location.replace(loginUrl.href);
+    window.location.assign(loginUrl.href);
     return Promise.resolve();
   };
 
