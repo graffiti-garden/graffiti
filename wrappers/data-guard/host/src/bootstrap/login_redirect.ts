@@ -31,7 +31,7 @@ export async function handleLoginRedirect(url: URL) {
   const redirect = () => {
     if (!initialized || !ready) return;
     clearStoredUrl();
-    window.location.assign(redirectUrl);
+    window.location.replace(redirectUrl);
   };
   status(starting ? "Opening login" : "Completing login", true);
   graffiti.sessionEvents.addEventListener("login", (event) => {
