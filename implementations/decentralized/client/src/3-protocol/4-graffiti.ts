@@ -182,8 +182,11 @@ export class GraffitiDecentralized implements Graffiti {
 
   protected readonly defaultInboxEndpoints: string[];
   protected readonly identityCreatorEndpoint: string;
+  protected readonly replaceInitialLoginHistoryEntry: boolean;
   constructor(options?: GraffitiDecentralizedOptions) {
-    if (options?.replaceInitialLoginHistoryEntry) {
+    this.replaceInitialLoginHistoryEntry =
+      options?.replaceInitialLoginHistoryEntry ?? false;
+    if (this.replaceInitialLoginHistoryEntry) {
       this.sessions.initialAuthorizationNavigation = "replace";
     }
     this.defaultInboxEndpoints = options?.defaultInboxEndpoints ?? [
@@ -363,9 +366,24 @@ export class GraffitiDecentralized implements Graffiti {
         "redirect_uri",
         encodeURIComponent(window.location.toString()),
       );
-      template
-        ?.querySelector("#graffiti-login-new")
-        ?.setAttribute("href", createUrl.toString());
+      const createLink = template?.querySelector<HTMLAnchorElement>(
+        "#graffiti-login-new",
+      );
+      createLink?.setAttribute("href", createUrl.toString());
+      if (this.replaceInitialLoginHistoryEntry) {
+        createLink?.addEventListener("click", (event) => {
+          if (
+            event.defaultPrevented ||
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) return;
+          event.preventDefault();
+          window.location.replace(createUrl.toString());
+        });
+      }
 
       await this.modal?.open();
     } else {
@@ -430,7 +448,11 @@ export class GraffitiDecentralized implements Graffiti {
 
           const url = new URL("/forgot-handle", origin);
           url.searchParams.set("redirect_uri", window.location.toString());
-          window.location.assign(url.toString());
+          if (this.replaceInitialLoginHistoryEntry) {
+            window.location.replace(url.toString());
+          } else {
+            window.location.assign(url.toString());
+          }
         } catch {
           alert("Enter a valid provider domain.");
         }
