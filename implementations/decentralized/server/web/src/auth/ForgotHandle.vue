@@ -1,7 +1,7 @@
 <template>
     <dialog open>
         <header>
-            <a :href="returnToApp?.toString() ?? '/'">← Back</a>
+            <a :href="returnToApp?.toString() ?? '/'" @click="handleBack">← Back</a>
             <h1>Forgot your handle?</h1>
         </header>
 
@@ -31,6 +31,19 @@ if (typeof redirectUri === "string") {
     } catch {}
 }
 
+function handleBack(event: MouseEvent) {
+    if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+    ) return;
+    event.preventDefault();
+    window.location.replace(returnToApp?.toString() ?? "/");
+}
+
 async function returnActor(accountId: number) {
     if (!returnToApp) return;
     try {
@@ -42,7 +55,7 @@ async function returnActor(accountId: number) {
         const url = new URL(returnToApp);
         // The client handles this actor callback as it does after account creation.
         url.searchParams.set("actor", encodeURIComponent(actor));
-        window.location.assign(url.toString());
+        window.location.replace(url.toString());
     } catch (error) {
         alert(`Failed to continue. ${error instanceof Error ? error.message : String(error)}`);
     }

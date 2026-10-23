@@ -131,6 +131,8 @@ const MESSAGE_LABEL_INVALID = 3;
 export interface GraffitiDecentralizedOptions {
   identityCreatorEndpoint?: string;
   defaultInboxEndpoints?: string[];
+  /** For login hosts that already have the application in the preceding history entry. */
+  replaceInitialLoginHistoryEntry?: boolean;
 }
 
 const CONCURRENCY = 128;
@@ -181,6 +183,9 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly defaultInboxEndpoints: string[];
   protected readonly identityCreatorEndpoint: string;
   constructor(options?: GraffitiDecentralizedOptions) {
+    if (options?.replaceInitialLoginHistoryEntry) {
+      this.sessions.initialAuthorizationNavigation = "replace";
+    }
     this.defaultInboxEndpoints = options?.defaultInboxEndpoints ?? [
       "https://graffiti.actor/i/shared",
     ];

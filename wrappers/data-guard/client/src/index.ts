@@ -192,7 +192,7 @@ export class GraffitiGuarded extends Graffiti {
     });
     if (actor) params.set("suggestedActor", actor);
     loginUrl.hash = params.toString();
-    window.location.replace(loginUrl.href);
+    window.location.assign(loginUrl.href);
     return Promise.resolve();
   };
 

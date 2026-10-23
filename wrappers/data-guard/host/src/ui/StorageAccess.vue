@@ -11,6 +11,21 @@ const props = defineProps<{
 
 const guardHost = window.location.host;
 const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
+
+function continueToApp(event: MouseEvent) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) return;
+  const url = props.redirectUrl;
+  if (!url) return;
+  event.preventDefault();
+  window.location.replace(url);
+}
 </script>
 <template>
   <div class="backdrop">
@@ -27,7 +42,7 @@ const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
           allowing <strong>{{ appHost }}</strong> to use cookies from
           <strong>{{ guardHost }}</strong>.
         </p>
-        <a class="button" :href="redirectUrl">Continue to {{ appHost }}</a>
+        <a class="button" :href="redirectUrl" @click="continueToApp">Continue to {{ appHost }}</a>
       </template>
       <template v-else-if="error">
         <h1 id="storage-access-title">Cookies weren’t allowed</h1>
