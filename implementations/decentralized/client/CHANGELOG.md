@@ -1,5 +1,11 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.1.5
+
+### Patch Changes
+
+- d4108bd: Replace login navigation history entries so the browser Back button does not return to the login flow after an app resumes.
+
 ## 0.1.4
 
 ### Patch Changes
