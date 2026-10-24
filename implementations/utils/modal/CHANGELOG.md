@@ -1,5 +1,11 @@
 # @graffiti-garden/modal
 
+## 1.2.0
+
+### Minor Changes
+
+- d905b62: Improve keyboard and screen reader access in Graffiti login, data guard prompts, media previews, and permission management. Add an optional accessible name for modal dialogs.
+
 ## 1.1.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-vue
 
+## 1.4.3
+
+### Patch Changes
+
+- d905b62: Improve keyboard and screen reader access in Graffiti login, data guard prompts, media previews, and permission management. Add an optional accessible name for modal dialogs.
+
 ## 1.4.2
 
 ### Patch Changes

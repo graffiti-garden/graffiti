@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-data-guard
 
+## 0.2.7
+
+### Patch Changes
+
+- d905b62: Improve keyboard and screen reader access in Graffiti login, data guard prompts, media previews, and permission management. Add an optional accessible name for modal dialogs.
+
 ## 0.2.6
 
 ### Patch Changes
