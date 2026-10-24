@@ -1,7 +1,19 @@
 <template>
-    <dialog open>
+    <main v-if="showTrustedProgress" class="trusted-progress">
+        <h1 aria-live="polite">
+            Completing login<span class="loading-dots" aria-hidden="true" />
+        </h1>
+    </main>
+    <dialog v-else open>
         <header>
-            <h1>
+            <h1 v-if="isTrustedDataGuard && isLoggedIn === false">
+                Log in to Graffiti
+            </h1>
+            <h1 v-else-if="isTrustedDataGuard && hasUnauthorizedRequestedScope">
+                Choose a Graffiti account
+            </h1>
+            <h1 v-else-if="isTrustedDataGuard">Could not connect to Graffiti</h1>
+            <h1 v-else>
                 Authorize
                 <code>{{ redirectUriObject?.hostname }}</code>
                 to access your Graffiti data?
@@ -53,6 +65,11 @@
                     <button class="secondary" @click="handleDeny">
                         Cancel
                     </button>
+                </template>
+                <template v-else-if="isTrustedDataGuard && approvalError">
+                    <p role="alert">{{ approvalError }}</p>
+                    <button @click="handleApprove" :disabled="approving">Try again</button>
+                    <button class="secondary" @click="handleDeny">Cancel</button>
                 </template>
                 <template v-else>
                     <p>Continuing as {{ accountHandle(currentAccount) }}</p>
@@ -178,6 +195,7 @@ function serviceKindFromEndpoint(endpoint: string) {
 
 const userServiceEndpoints = ref<Array<string> | null | undefined>(undefined);
 const approving = ref(false);
+const approvalError = ref<string | null>(null);
 const endpointToActorName = ref(new Map<string, string>());
 const accountOptions = ref<Array<{ id: number; handle: string; did?: string }>>([]);
 
@@ -310,6 +328,17 @@ const hasUnauthorizedRequestedScope = computed(() => {
     );
 });
 
+// A guard callback is auto-approved only after the selected account is known
+// to own every requested service. Show choices or errors when action is needed.
+const showTrustedProgress = computed(
+    () =>
+        isTrustedDataGuard &&
+        isLoggedIn.value !== false &&
+        userServiceEndpoints.value !== null &&
+        !hasUnauthorizedRequestedScope.value &&
+        !approvalError.value,
+);
+
 const requestedScopeDisplay = computed(() => {
     return requestedScopes.map((endpoint) => {
         const kind = serviceKindFromEndpoint(endpoint);
@@ -379,6 +408,7 @@ function handleSelectActor(actorDid: string | undefined) {
 async function handleApprove() {
     if (!redirectUriObject) return router.replace("/");
     approving.value = true;
+    approvalError.value = null;
     try {
         const { redirectUri } = await fetchFromSelf("/app/oauth/authorize", {
             method: "POST",
@@ -391,7 +421,11 @@ async function handleApprove() {
         });
         window.location.replace(redirectUri);
     } catch (error: any) {
-        alert(`Authorization failed. ${error.message}`);
+        if (isTrustedDataGuard) {
+            approvalError.value = `Could not connect to Graffiti. ${error.message}`;
+        } else {
+            alert(`Authorization failed. ${error.message}`);
+        }
         approving.value = false;
     }
 }
@@ -409,6 +443,52 @@ function handleDeny() {
 </script>
 
 <style scoped>
+.trusted-progress {
+    display: grid;
+    min-height: 100dvh;
+    box-sizing: border-box;
+    place-items: center;
+    text-align: center;
+}
+
+.trusted-progress h1 {
+    margin: 0;
+    color: #101418;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+    /* Pico changes the root rem size; use the guard's rendered 24–32px range. */
+    font-size: clamp(24px, 6vw, 32px);
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.loading-dots::after {
+    display: inline-block;
+    width: 3ch;
+    animation: loading-dots 0.7s linear infinite;
+    content: ".";
+    text-align: left;
+}
+
+@keyframes loading-dots {
+    0%, 100% { content: "."; }
+    33% { content: ".."; }
+    66% { content: "..."; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-dots::after {
+        animation: none;
+        content: "…";
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    .trusted-progress h1 {
+        color: #f8f9fa;
+    }
+}
+
 .account-login,
 .account-or {
     margin: 0;
