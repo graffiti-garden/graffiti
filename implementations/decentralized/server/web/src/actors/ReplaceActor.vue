@@ -84,11 +84,11 @@
             <h3 v-scroll-into-view>Update actor and services</h3>
             <p>At the provider managing <code>{{ externalDid }}</code>, make your handle the first <code>did:web:</code> entry in <code>alsoKnownAs</code>. This is required to verify the actor:</p>
             <pre><code>{{ accountData.alsoKnownAs[0] }}</code></pre>
-            <CopyButton :text="accountData.alsoKnownAs[0]" />
+            <CopyButton :text="accountData.alsoKnownAs[0]" label="handle alias" />
             <p>Optional: if you want to use services hosted here, add the applicable entries below under <code>services</code>. Keep any external service entries you use.</p>
             <p>Graffiti clients still need a storage bucket, personal inbox, and shared inbox in the actor's DID. These can be hosted anywhere.</p>
             <pre><code>{{ JSON.stringify(accountData.services, null, 2) }}</code></pre>
-            <CopyButton :text="JSON.stringify(accountData.services, null, 2)" />
+            <CopyButton :text="JSON.stringify(accountData.services, null, 2)" label="service entries" />
         </li>
 
         <li v-if="choice === 'external' && externalReady">

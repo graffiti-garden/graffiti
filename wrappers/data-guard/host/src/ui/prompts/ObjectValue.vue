@@ -75,11 +75,28 @@ function resizeWithKeyboard(event: KeyboardEvent) {
     :class="{ nested, array: Array.isArray(value) }"
     :style="Array.isArray(value) ? undefined : `--property-column: ${propertyColumn}%`"
     role="table"
+    :aria-label="Array.isArray(value) ? 'List items' : field ? `${field} properties` : 'Data properties'"
   >
     <div v-if="!nested && !Array.isArray(value)" class="heading" role="row">
       <span class="heading-key" role="columnheader">Property</span>
       <span class="heading-value" role="columnheader">Value</span>
     </div>
+    <button
+      v-if="!Array.isArray(value)"
+      type="button"
+      class="column-resizer"
+      role="separator"
+      aria-label="Resize property column"
+      aria-orientation="vertical"
+      aria-valuemin="18"
+      aria-valuemax="55"
+      :aria-valuenow="Math.round(propertyColumn)"
+      @pointerdown="startResize"
+      @pointermove="resize"
+      @pointerup="resizing = false"
+      @pointercancel="resizing = false"
+      @keydown="resizeWithKeyboard"
+    />
     <div
       v-for="([key, item], index) in entries(value)"
       :key="key"
@@ -100,22 +117,6 @@ function resizeWithKeyboard(event: KeyboardEvent) {
         />
       </div>
     </div>
-    <button
-      v-if="!Array.isArray(value)"
-      type="button"
-      class="column-resizer"
-      role="separator"
-      aria-label="Resize property column"
-      aria-orientation="vertical"
-      aria-valuemin="18"
-      aria-valuemax="55"
-      :aria-valuenow="Math.round(propertyColumn)"
-      @pointerdown="startResize"
-      @pointermove="resize"
-      @pointerup="resizing = false"
-      @pointercancel="resizing = false"
-      @keydown="resizeWithKeyboard"
-    />
   </div>
 </template>
 

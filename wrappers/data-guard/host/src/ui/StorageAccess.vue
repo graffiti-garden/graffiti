@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, useTemplateRef, watch } from "vue";
+import { visibilityEvents } from "../bootstrap/protocol.js";
+
 const props = defineProps<{
   busy?: boolean;
   error?: boolean;
@@ -11,6 +14,22 @@ const props = defineProps<{
 
 const guardHost = window.location.host;
 const appHost = props.redirectUrl ? new URL(props.redirectUrl).host : "";
+const dialog = useTemplateRef("dialog");
+const title = useTemplateRef("title");
+
+function focusTitle() {
+  void nextTick(() => title.value?.focus());
+}
+
+onMounted(() => {
+  dialog.value?.showModal();
+  visibilityEvents.addEventListener("shown", focusTitle);
+});
+onBeforeUnmount(() => {
+  visibilityEvents.removeEventListener("shown", focusTitle);
+  if (dialog.value?.open) dialog.value.close();
+});
+watch(() => [props.error, props.setup, props.finishing], focusTitle);
 
 function continueToApp(event: MouseEvent) {
   if (
@@ -28,15 +47,17 @@ function continueToApp(event: MouseEvent) {
 }
 </script>
 <template>
-  <div class="backdrop">
-    <dialog
-      open
-      aria-modal="true"
-      aria-labelledby="storage-access-title"
-      aria-describedby="storage-access-description"
-    >
+  <dialog
+    ref="dialog"
+    class="backdrop"
+    aria-modal="true"
+    aria-labelledby="storage-access-title"
+    aria-describedby="storage-access-description"
+    @cancel.prevent
+  >
+    <div class="storage-card">
       <template v-if="setup">
-        <h1 id="storage-access-title">Continue cookie setup</h1>
+        <h1 id="storage-access-title" ref="title" tabindex="-1">Continue cookie setup</h1>
         <p id="storage-access-description">
           For your privacy, your browser requires this extra step before
           allowing <strong>{{ appHost }}</strong> to use cookies from
@@ -45,7 +66,7 @@ function continueToApp(event: MouseEvent) {
         <a class="button" :href="redirectUrl" @click="continueToApp">Continue to {{ appHost }}</a>
       </template>
       <template v-else-if="error">
-        <h1 id="storage-access-title">Cookies weren’t allowed</h1>
+        <h1 id="storage-access-title" ref="title" tabindex="-1">Cookies weren’t allowed</h1>
         <p id="storage-access-description">
           This app needs cookies from <strong>{{ guardHost }}</strong> to work.
           Your browser may need you to open it directly before cookies can be
@@ -68,7 +89,7 @@ function continueToApp(event: MouseEvent) {
         <button v-else type="button" @click="onContinue">Try again</button>
       </template>
       <template v-else>
-        <h1 id="storage-access-title">
+        <h1 id="storage-access-title" ref="title" tabindex="-1">
           {{ finishing ? "One last confirmation" : "Allow cookies to continue" }}
         </h1>
         <p v-if="finishing" id="storage-access-description">
@@ -85,8 +106,8 @@ function continueToApp(event: MouseEvent) {
           <span v-else>{{ finishing ? "Continue" : "Allow cookies and continue" }}</span>
         </button>
       </template>
-    </dialog>
-  </div>
+    </div>
+  </dialog>
 </template>
 <style scoped>
 .backdrop {
@@ -94,16 +115,27 @@ function continueToApp(event: MouseEvent) {
   inset: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  place-items: center;
-  overflow: auto;
+  /* Center short prompts while keeping the top of tall prompts reachable. */
+  align-items: safe center;
+  justify-items: center;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0;
+  border: 0;
   padding: 1rem;
   background: transparent;
 }
+.backdrop:not([open]) { display: none; }
+.backdrop::backdrop { background: transparent; }
 
-dialog {
-  position: static;
+.storage-card {
   width: min(34rem, 100%);
-  margin: 0;
+  box-sizing: border-box;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
   padding: 1.5rem;
@@ -119,6 +151,7 @@ h1 {
   font-size: 2rem;
   line-height: 1.05;
 }
+h1[tabindex="-1"]:focus { outline: none; }
 
 p {
   line-height: 1.5;
@@ -174,7 +207,7 @@ button:disabled {
     padding: 0.75rem;
   }
 
-  dialog {
+  .storage-card {
     padding: 1.25rem;
   }
 }

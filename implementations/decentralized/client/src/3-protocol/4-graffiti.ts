@@ -167,6 +167,7 @@ export class GraffitiDecentralized implements Graffiti {
     typeof window === "undefined"
       ? undefined
       : new GraffitiModal({
+          ariaLabel: "Graffiti Log In",
           useTemplateHTML: () =>
             import("./login-dialog.html").then(({ template }) => template),
           onManualClose: () => {
@@ -218,6 +219,7 @@ export class GraffitiDecentralized implements Graffiti {
         return;
       }
 
+      this.modal?.close();
       const actor = detail.session.actor;
 
       let handle: string | undefined;
@@ -284,6 +286,7 @@ export class GraffitiDecentralized implements Graffiti {
   protected async login_(proposedHandle?: string) {
     if (typeof window !== "undefined") {
       let template: HTMLElement | undefined;
+      let focusAfterOpen: HTMLElement | null = null;
       if (proposedHandle !== undefined) {
         template = await this.modal?.displayTemplate("graffiti-login-handle");
         const input = template?.querySelector(
@@ -293,7 +296,7 @@ export class GraffitiDecentralized implements Graffiti {
           proposedHandle || this.getRememberedHandleFromBrowserStorage();
         if (input) input.value = rememberedHandle ?? "";
         input?.addEventListener("focus", () => input?.select());
-        setTimeout(() => input?.focus(), 0);
+        focusAfterOpen = input;
 
         template
           ?.querySelector("#graffiti-login-handle-form")
@@ -349,16 +352,6 @@ export class GraffitiDecentralized implements Graffiti {
             e.preventDefault();
             this.login_("");
           });
-
-        setTimeout(
-          () =>
-            (
-              template?.querySelector(
-                "#graffiti-login-new",
-              ) as HTMLAnchorElement
-            )?.focus(),
-          0,
-        );
       }
 
       const createUrl = new URL(this.identityCreatorEndpoint);
@@ -370,6 +363,7 @@ export class GraffitiDecentralized implements Graffiti {
         "#graffiti-login-new",
       );
       createLink?.setAttribute("href", createUrl.toString());
+      if (proposedHandle === undefined) focusAfterOpen = createLink ?? null;
       if (this.replaceInitialLoginHistoryEntry) {
         createLink?.addEventListener("click", (event) => {
           if (
@@ -386,6 +380,7 @@ export class GraffitiDecentralized implements Graffiti {
       }
 
       await this.modal?.open();
+      focusAfterOpen?.focus();
     } else {
       // Node.js environment
       const readline = await import("readline").catch((e) => {
@@ -430,7 +425,6 @@ export class GraffitiDecentralized implements Graffiti {
     const provider = template?.querySelector("#graffiti-provider") as HTMLInputElement | null;
     if (provider) provider.value = defaultProvider.host;
     provider?.addEventListener("focus", () => provider.select());
-    setTimeout(() => provider?.focus(), 0);
 
     template
       ?.querySelector("#graffiti-login-provider-form")
@@ -466,6 +460,7 @@ export class GraffitiDecentralized implements Graffiti {
       });
 
     await this.modal?.open();
+    provider?.focus();
   }
 
   protected rememberHandleInBrowserStorage(handle: string) {

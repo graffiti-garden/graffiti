@@ -10,11 +10,14 @@ export class GraffitiModal {
   constructor(options: {
     useTemplateHTML: () => Promise<string> | string;
     onManualClose?: () => any;
+    ariaLabel?: string;
   }) {
     this.useTemplateHTML = options.useTemplateHTML;
     this.onManualClose = options.onManualClose;
 
     this.dialog.className = "graffiti-modal";
+    this.dialog.setAttribute("aria-label", options.ariaLabel ?? "Graffiti dialog");
+    this.dialog.addEventListener("cancel", () => this.onManualClose?.());
 
     // Click outside of dialog to close
     this.dialog.addEventListener("click", (e) => {
@@ -90,9 +93,8 @@ export class GraffitiModal {
           style = style.replace("url(graffiti.jpg)", `url(${image})`);
 
           const sheet = new CSSStyleSheet();
-          sheet.replace(style).then(() => {
-            this.shadow.adoptedStyleSheets = [sheet];
-          });
+          await sheet.replace(style);
+          this.shadow.adoptedStyleSheets = [sheet];
 
           return main;
         },
@@ -103,8 +105,7 @@ export class GraffitiModal {
 
   async open() {
     await this.main;
-    this.dialog.showModal();
-    this.dialog.focus();
+    if (!this.dialog.open) this.dialog.showModal();
   }
 
   close() {

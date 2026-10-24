@@ -23,25 +23,37 @@ export async function handleLoginRedirect(url: URL) {
     replaceInitialLoginHistoryEntry: true,
   });
   const fragmentParams = new URLSearchParams(url.hash.slice(1));
+  // The decentralized client resumes account creation and OAuth callbacks
+  // itself. Opening the login modal here briefly shows it over that redirect.
+  const continuingLogin = ["actor", "code", "error"].some((param) =>
+    url.searchParams.has(param),
+  );
   const starting =
-    fragmentParams.get("guardLogin") === "1" ||
-    // Older clients use search searchParams
-    // TODO: once clients update, delete this fix
-    url.searchParams.get("guardLogin") === "1";
+    !continuingLogin &&
+    (fragmentParams.get("guardLogin") === "1" ||
+      // Older clients use search searchParams
+      // TODO: once clients update, delete this fix
+      url.searchParams.get("guardLogin") === "1");
   let initialized = false;
   let ready = false;
-  const redirect = () => {
-    if (!initialized || !ready) return;
+  const returnToApp = () => {
     clearStoredUrl();
     window.location.replace(redirectUrl);
+  };
+  const redirect = () => {
+    if (!initialized || !ready) return;
+    returnToApp();
   };
   status(starting ? "Opening login" : "Completing login", true);
   graffiti.sessionEvents.addEventListener("login", (event) => {
     if (!(event instanceof CustomEvent)) return;
     const detail = event.detail as GraffitiLoginEvent["detail"];
-    if (detail.error && !("manual" in detail && detail.manual)) return;
+    if (detail.error) {
+      if ("manual" in detail && detail.manual) returnToApp();
+      return;
+    }
     // Ignore restored sessions while opening the login UI. A later manual
-    // login or cancellation is what authorizes returning to the application.
+    // login is what authorizes returning to the application.
     if (!initialized && starting) return;
     ready = true;
     redirect();

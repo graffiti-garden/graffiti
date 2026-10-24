@@ -1,5 +1,5 @@
 <template>
-    <dialog open>
+    <dialog open aria-labelledby="login-guard-title">
         <header>
             <button
                 v-if="addingAccount"
@@ -9,7 +9,7 @@
             >
                 ← Back
             </button>
-            <h1>Welcome to {{ host }}</h1>
+            <h1 id="login-guard-title">Welcome to {{ host }}</h1>
             <h2>
                 A
                 <a href="https://graffiti.garden" target="_blank">Graffiti</a>

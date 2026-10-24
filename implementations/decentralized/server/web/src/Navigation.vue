@@ -16,9 +16,9 @@
         <LoginGuard />
     </template>
     <template v-else>
-        <dialog open>
+        <dialog open aria-labelledby="provider-loading-title">
             <header>
-                <h1>Loading {{ host }}...</h1>
+                <h1 id="provider-loading-title">Loading {{ host }}...</h1>
             </header>
             <main>
                 <StatusIcon status="loading" />

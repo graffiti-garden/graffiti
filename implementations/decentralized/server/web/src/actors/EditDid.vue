@@ -60,14 +60,16 @@ const renameSvcKey = (oldKey: string, newKey: string) => {
 
         <ul>
             <li v-for="(u, i) in aka" :key="i">
+                <label :for="`actor-alias-${i}`">Alias {{ i + 1 }}</label>
                 <input
+                    :id="`actor-alias-${i}`"
                     type="url"
                     placeholder="did:…"
                     v-model="aka[i]"
                     v-focus
                     required
                 />
-                <button type="button" @click="delAka(i)">Remove</button>
+                <button type="button" @click="delAka(i)">Remove alias {{ i + 1 }}</button>
             </li>
             <li>
                 <button type="button" @click="addAka">Add Alias</button>
@@ -84,7 +86,7 @@ const renameSvcKey = (oldKey: string, newKey: string) => {
                 <dt>
                     <input
                         :defaultValue="k"
-                        aria-label="Service key"
+                        :aria-label="`Service key ${k}`"
                         placeholder="serviceKey"
                         v-focus
                         @focus="($event.target as HTMLInputElement)?.select()"
@@ -99,7 +101,7 @@ const renameSvcKey = (oldKey: string, newKey: string) => {
                 <dd>
                     <label>
                         Type
-                        <input v-model="v.type" required />
+                        <input v-model="v.type" :aria-label="`Type for service ${k}`" required />
                     </label>
 
                     <label>
@@ -108,6 +110,7 @@ const renameSvcKey = (oldKey: string, newKey: string) => {
                             type="url"
                             placeholder="https://…"
                             v-model="v.endpoint"
+                            :aria-label="`Endpoint for service ${k}`"
                             required
                         />
                     </label>

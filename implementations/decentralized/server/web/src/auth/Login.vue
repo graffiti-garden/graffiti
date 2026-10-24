@@ -4,6 +4,7 @@
         <slot v-else>Log In</slot>
         <StatusIcon v-if="loggingIn" status="loading" />
     </button>
+    <span class="visually-hidden" role="status">{{ loggingIn ? "Waiting for passkey authentication." : "" }}</span>
 </template>
 
 <script setup lang="ts">
