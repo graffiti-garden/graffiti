@@ -75,7 +75,7 @@
         </p>
 
         <template v-if="redirect">
-            <a class="return" role="button" :href="redirect" v-focus>
+            <a class="return" role="button" :href="redirect" @click="returnToApplication" v-focus>
                 Return to application
             </a>
             <aside v-scroll-into-view>
@@ -211,6 +211,21 @@ async function onCancel() {
     } else {
         router.push({ name: "home" });
     }
+}
+
+function returnToApplication(event: MouseEvent) {
+    if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+    ) return;
+    const url = redirect.value;
+    if (!url) return;
+    event.preventDefault();
+    window.location.replace(url);
 }
 
 async function createBucket() {

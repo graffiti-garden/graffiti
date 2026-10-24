@@ -1,5 +1,23 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.1.7
+
+### Patch Changes
+
+- d1c0a93: Replace the guard's temporary login entry when opening account creation or handle recovery, while preserving app history for direct clients.
+
+## 0.1.6
+
+### Patch Changes
+
+- af8e732: Keep the application in Back-button history when login, account creation, handle recovery, or cookie setup begins, while replacing temporary guard and OAuth pages.
+
+## 0.1.5
+
+### Patch Changes
+
+- d4108bd: Replace login navigation history entries so the browser Back button does not return to the login flow after an app resumes.
+
 ## 0.1.4
 
 ### Patch Changes

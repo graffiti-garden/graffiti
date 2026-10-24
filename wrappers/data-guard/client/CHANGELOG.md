@@ -1,5 +1,17 @@
 # @graffiti-garden/wrapper-data-guard
 
+## 0.2.6
+
+### Patch Changes
+
+- af8e732: Keep the application in Back-button history when login, account creation, handle recovery, or cookie setup begins, while replacing temporary guard and OAuth pages.
+
+## 0.2.5
+
+### Patch Changes
+
+- d4108bd: Replace login navigation history entries so the browser Back button does not return to the login flow after an app resumes.
+
 ## 0.2.4
 
 ### Patch Changes

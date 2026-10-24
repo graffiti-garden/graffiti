@@ -19,7 +19,9 @@ export function isLoginRedirect(url: URL) {
 export async function handleLoginRedirect(url: URL) {
   const redirectUrl = getRedirectUrl(url);
   if (!redirectUrl) return status("Missing redirect URL.");
-  const graffiti = new GraffitiDecentralized();
+  const graffiti = new GraffitiDecentralized({
+    replaceInitialLoginHistoryEntry: true,
+  });
   const fragmentParams = new URLSearchParams(url.hash.slice(1));
   // The decentralized client resumes account creation and OAuth callbacks
   // itself. Opening the login modal here briefly shows it over that redirect.
@@ -36,7 +38,7 @@ export async function handleLoginRedirect(url: URL) {
   let ready = false;
   const returnToApp = () => {
     clearStoredUrl();
-    window.location.assign(redirectUrl);
+    window.location.replace(redirectUrl);
   };
   const redirect = () => {
     if (!initialized || !ready) return;

@@ -30,6 +30,21 @@ onBeforeUnmount(() => {
   if (dialog.value?.open) dialog.value.close();
 });
 watch(() => [props.error, props.setup, props.finishing], focusTitle);
+
+function continueToApp(event: MouseEvent) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  ) return;
+  const url = props.redirectUrl;
+  if (!url) return;
+  event.preventDefault();
+  window.location.replace(url);
+}
 </script>
 <template>
   <dialog
@@ -48,7 +63,7 @@ watch(() => [props.error, props.setup, props.finishing], focusTitle);
           allowing <strong>{{ appHost }}</strong> to use cookies from
           <strong>{{ guardHost }}</strong>.
         </p>
-        <a class="button" :href="redirectUrl">Continue to {{ appHost }}</a>
+        <a class="button" :href="redirectUrl" @click="continueToApp">Continue to {{ appHost }}</a>
       </template>
       <template v-else-if="error">
         <h1 id="storage-access-title" ref="title" tabindex="-1">Cookies weren’t allowed</h1>
