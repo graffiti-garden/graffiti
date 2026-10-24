@@ -31,6 +31,9 @@ export class GraffitiGuarded extends Graffiti {
   private readonly onMessage!: (event: MessageEvent) => void;
   private readonly connectionTimeout!: number;
   private destroyed = false;
+  private returnFocus: HTMLElement | null = null;
+  private readonly backgroundInert = new Map<HTMLElement, boolean>();
+  private backgroundObserver: MutationObserver | undefined;
 
   constructor(options: GraffitiGuardedOptions = {}) {
     super();
@@ -58,7 +61,7 @@ export class GraffitiGuarded extends Graffiti {
       background: "transparent",
       border: "0",
       display: "none",
-      // Prompts scroll inside this frame, so size it for visible browser controls.
+      // Keep the overlay within the visible viewport when browser controls move.
       height: CSS.supports("height", "100svh") ? "100svh" : "100vh",
       inset: "0",
       position: "fixed",
@@ -128,10 +131,8 @@ export class GraffitiGuarded extends Graffiti {
         event.data.type === "graffiti-guard:set-visible" &&
         typeof event.data.visible === "boolean"
       ) {
-        iframe.style.display = event.data.visible ? "block" : "none";
-        iframe.setAttribute("aria-hidden", String(!event.data.visible));
+        this.setGuardVisible(event.data.visible);
         if (event.data.visible) {
-          iframe.focus();
           remoteWindow.postMessage(
             { type: "graffiti-guard:shown" },
             hostUrl.origin,
@@ -211,11 +212,62 @@ export class GraffitiGuarded extends Graffiti {
     return auditUrl.href;
   }
 
+  private setGuardVisible(visible: boolean) {
+    if (visible) {
+      if (this.iframe.style.display === "block") return;
+      const focused = document.activeElement;
+      this.returnFocus =
+        focused instanceof HTMLElement && focused !== this.iframe
+          ? focused
+          : null;
+      this.inertBackground();
+      this.backgroundObserver = new MutationObserver(() => this.inertBackground());
+      this.backgroundObserver.observe(document.body, { childList: true });
+      this.iframe.style.display = "block";
+      this.iframe.setAttribute("aria-hidden", "false");
+      this.iframe.focus();
+      return;
+    }
+
+    if (this.iframe.style.display === "none") return;
+
+    this.iframe.style.display = "none";
+    this.iframe.setAttribute("aria-hidden", "true");
+    this.backgroundObserver?.disconnect();
+    this.backgroundObserver = undefined;
+    for (const [element, wasInert] of this.backgroundInert) {
+      element.inert = wasInert;
+    }
+    this.backgroundInert.clear();
+    const target = this.returnFocus;
+    this.returnFocus = null;
+    if (target?.isConnected && !target.inert && target !== document.body) {
+      target.focus({ preventScroll: true });
+    } else {
+      const previousTabindex = document.body.getAttribute("tabindex");
+      document.body.tabIndex = -1;
+      document.body.focus({ preventScroll: true });
+      if (previousTabindex === null) document.body.removeAttribute("tabindex");
+      else document.body.setAttribute("tabindex", previousTabindex);
+    }
+  }
+
+  private inertBackground() {
+    for (const child of Array.from(document.body.children)) {
+      if (child === this.iframe || !(child instanceof HTMLElement)) continue;
+      if (!this.backgroundInert.has(child)) {
+        this.backgroundInert.set(child, child.inert);
+      }
+      child.inert = true;
+    }
+  }
+
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
     window.clearTimeout(this.connectionTimeout);
     window.removeEventListener("message", this.onMessage);
+    if (this.iframe.style.display === "block") this.setGuardVisible(false);
     this.rpc.destroy();
     this.iframe.remove();
     if (instance === this) instance = undefined;

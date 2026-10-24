@@ -4,7 +4,7 @@
             <a :href="`https://plc.directory/${actor.did}`" target="_blank">
                 {{ actor.did }}
             </a>
-            <CopyButton :text="actor.did" />
+            <CopyButton :text="actor.did" label="actor DID" />
         </h2>
 
         <template v-if="!editing">

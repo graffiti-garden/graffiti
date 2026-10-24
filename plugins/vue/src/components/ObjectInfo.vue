@@ -95,6 +95,7 @@ async function deleteObject(
         <button
             v-if="$graffitiSession.value?.actor === object.actor"
             :disabled="deleting"
+            :aria-label="`Delete object ${object.url}`"
             @click="deleteObject(object, $graffitiSession.value)"
         >
             {{ deleting ? "Deleting..." : "Delete" }}

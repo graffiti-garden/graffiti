@@ -25,7 +25,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    display: flex;
+    display: none;
     flex-direction: column;
     justify-content: flex-start;
     align-items: center;
@@ -277,8 +277,17 @@
 }
 
 .graffiti-modal[open] {
+    display: flex;
     pointer-events: inherit;
     opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .graffiti-modal,
+    .graffiti-modal button,
+    .graffiti-modal input {
+        transition: none;
+    }
 }
 
 .graffiti-modal::backdrop {

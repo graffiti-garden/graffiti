@@ -10,6 +10,7 @@ const props = defineProps<{
   reviewPermissions: () => void;
 }>();
 const frame = useTemplateRef("frame");
+const titleElement = useTemplateRef("titleElement");
 const options = useTemplateRef("options");
 
 function clickAway(event: PointerEvent) {
@@ -23,37 +24,35 @@ function escape() {
   else props.cancel();
 }
 
-function focusFrame() {
-  void nextTick(() => frame.value?.focus());
+function focusTitle() {
+  void nextTick(() => titleElement.value?.focus());
 }
 
 onMounted(() => {
-  focusFrame();
-  visibilityEvents.addEventListener("shown", focusFrame);
+  frame.value?.showModal();
+  focusTitle();
+  visibilityEvents.addEventListener("shown", focusTitle);
   document.addEventListener("pointerdown", clickAway);
 });
 onBeforeUnmount(() => {
-  visibilityEvents.removeEventListener("shown", focusFrame);
+  visibilityEvents.removeEventListener("shown", focusTitle);
   document.removeEventListener("pointerdown", clickAway);
+  if (frame.value?.open) frame.value.close();
 });
 </script>
 
 <template>
-  <div
+  <dialog
+    ref="frame"
     class="backdrop"
     :class="{ confirming }"
+    aria-labelledby="guard-prompt-title"
     @pointerdown.self="props.cancel()"
+    @cancel.prevent="escape"
   >
-    <dialog
-      ref="frame"
-      open
-      aria-modal="true"
-      aria-labelledby="guard-prompt-title"
-      tabindex="-1"
-      @keydown.esc="escape"
-    >
+    <div class="prompt-card">
       <header>
-        <h1 id="guard-prompt-title">{{ title }}</h1>
+        <h1 id="guard-prompt-title" ref="titleElement" tabindex="-1">{{ title }}</h1>
         <details ref="options" class="guard-options">
           <summary aria-label="More guard options"><span aria-hidden="true">⋯</span></summary>
           <div class="guard-menu">
@@ -78,17 +77,20 @@ onBeforeUnmount(() => {
       <footer>
         <div class="actions"><slot name="actions" /></div>
       </footer>
-    </dialog>
-  </div>
+    </div>
+  </dialog>
 </template>
 
 <style scoped>
-.backdrop { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; justify-items: center; overflow-x: hidden; overflow-y: auto; padding: 1rem; background: transparent; }
-dialog { position: static; display: flex; min-width: 0; max-width: 100%; box-sizing: border-box; flex-direction: column; width: min(42rem, 100%); overflow: visible; margin: 0; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0 2.5rem rgb(0 0 0 / 90%); font-size: 1.5rem; outline: none; animation: prompt-enter 140ms ease-out; transition: opacity 140ms ease-in, transform 140ms ease-in; }
+.backdrop { position: fixed; inset: 0; display: block; width: 100%; height: 100%; max-width: none; max-height: none; box-sizing: border-box; overflow-x: hidden; overflow-y: auto; margin: 0; border: 0; padding: 1rem; background: transparent; }
+.backdrop:not([open]) { display: none; }
+.backdrop::backdrop { background: transparent; }
+.prompt-card { display: flex; min-width: 0; max-width: 100%; box-sizing: border-box; flex-direction: column; width: min(42rem, 100%); margin: 0 auto; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; color: var(--text-color); background: var(--background-color); box-shadow: 0 0 2.5rem rgb(0 0 0 / 90%); font-size: 1.5rem; animation: prompt-enter 140ms ease-out; transition: opacity 140ms ease-in, transform 140ms ease-in; }
 .backdrop.confirming { pointer-events: none; }
-.backdrop.confirming dialog { opacity: 0; transform: translateY(-0.3rem) scale(0.99); }
+.backdrop.confirming .prompt-card { opacity: 0; transform: translateY(-0.3rem) scale(0.99); }
 header { position: relative; display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 2.5rem; }
 h1 { flex: 1; margin: 0; color: var(--title-color); font-size: 2rem; line-height: 1.05; }
+h1[tabindex="-1"]:focus { outline: none; }
 .guard-options { position: relative; flex: none; }
 .guard-options summary { display: grid; width: 2rem; height: 2rem; place-items: center; border-radius: 0.4rem; color: var(--secondary-color); background: transparent; list-style: none; cursor: pointer; }
 .guard-options summary::-webkit-details-marker { display: none; }
@@ -107,7 +109,7 @@ button, :deep(button) { border: 1px solid var(--border-color); border-radius: 0.
 button:hover, :deep(button:hover) { border-color: var(--border-color-hover); background: var(--accent-button-background-hover); text-decoration: none; }
 @media (max-width: 42rem) {
   .backdrop { padding: 0.75rem 0.75rem max(0.75rem, env(safe-area-inset-bottom)); }
-  dialog { padding: 0.75rem; font-size: 1.125rem; }
+  .prompt-card { padding: 0.75rem; font-size: 1.125rem; }
   header { gap: 0.5rem; margin-bottom: 1rem; }
   h1 { font-size: 1.55rem; line-height: 1.15; }
   .content { gap: 1rem; }
@@ -116,6 +118,6 @@ button:hover, :deep(button:hover) { border-color: var(--border-color-hover); bac
   .guard-menu :is(button, a) { white-space: normal; }
   .actions :deep(button) { width: 100%; }
 }
-@media (prefers-reduced-motion: reduce) { dialog { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .prompt-card { animation: none; transition: none; } }
 @keyframes prompt-enter { from { opacity: 0; transform: translateY(0.3rem) scale(0.99); } }
 </style>

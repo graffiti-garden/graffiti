@@ -67,7 +67,7 @@ const sort = ref<{ key: SortKey; descending: boolean }>({
   key: "createdAt",
   descending: true,
 });
-const columnWidths = ref([11, 12, 34, 21, 14, 8]);
+const columnWidths = ref([10, 10, 30, 19, 19, 12]);
 const permissionTable = useTemplateRef<HTMLElement>("permissionTable");
 const resizing = ref<{
   index: number;
@@ -242,6 +242,12 @@ function changeSort(key: SortKey) {
   page.value = 1;
 }
 
+function selectSort(key: SortKey) {
+  if (!key) return;
+  sort.value = { key, descending: false };
+  page.value = 1;
+}
+
 function sortIndicator(key: SortKey) {
   if (sort.value.key !== key) return "";
   return sort.value.descending ? "↓" : "↑";
@@ -355,6 +361,22 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
           </div>
         </header>
 
+        <div class="mobile-sort">
+          <label for="permissions-sort">Sort permissions by</label>
+          <select
+            id="permissions-sort"
+            :value="sort.key"
+            @change="selectSort(($event.target as HTMLSelectElement).value as SortKey)"
+          >
+            <option v-for="column in columns.filter((item) => item[1])" :key="column[1]" :value="column[1]">
+              {{ column[0] }}
+            </option>
+          </select>
+          <button type="button" :aria-label="sort.descending ? 'Sort ascending' : 'Sort descending'" @click="sort.descending = !sort.descending">
+            {{ sort.descending ? "Descending" : "Ascending" }}
+          </button>
+        </div>
+
         <p v-if="!filteredRules.length" class="empty">No permissions found.</p>
         <div
           v-else
@@ -369,6 +391,8 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
               :key="column[0]"
               class="heading-cell"
               role="columnheader"
+              :aria-label="column[0] || 'Actions'"
+              :aria-sort="sort.key === column[1] ? (sort.descending ? 'descending' : 'ascending') : undefined"
             >
               <button
                 v-if="column[1]"
@@ -391,12 +415,15 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
             role="row"
           >
             <strong class="decision-cell" role="cell">
+              <span class="mobile-label" aria-hidden="true">Decision: </span>
               {{ accessRuleDecision(rule) }}
             </strong>
             <span class="operation-cell" role="cell">
+              <span class="mobile-label" aria-hidden="true">Action: </span>
               {{ accessRuleAction(rule) }}
             </span>
             <span class="data-cell" role="cell">
+              <span class="mobile-label" aria-hidden="true">Data: </span>
               <PermissionDataValue
                 v-if="rule.kind === 'permission'"
                 :permission="rule.permission"
@@ -405,15 +432,18 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
               <span v-else>Entire site</span>
             </span>
             <span class="source-cell" role="cell">
+              <span class="mobile-label" aria-hidden="true">Site: </span>
               {{ sourceLabel(accessRuleSource(rule)) }}
             </span>
             <span class="time-cell" role="cell">
+              <span class="mobile-label" aria-hidden="true">Added: </span>
               <TimestampValue :value="new Date(accessRulePublished(rule))" />
             </span>
             <span class="action-cell" role="cell">
               <button
                 type="button"
                 class="danger compact"
+                :aria-label="`Revoke ${accessRuleAction(rule).toLowerCase()} permission for ${sourceLabel(accessRuleSource(rule))}`"
                 :disabled="busy || ruleActor(rule) !== activeSession.actor"
                 @click="revoke(rule)"
               >
@@ -428,7 +458,7 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
             type="button"
             class="table-resizer"
             role="separator"
-            aria-label="Resize table columns"
+            :aria-label="`Resize ${columns[index - 1][0]} and ${columns[index][0] || 'Actions'} columns`"
             aria-orientation="vertical"
             :aria-valuemin="MIN_COLUMN_WIDTH"
             :aria-valuemax="columnWidths[index - 1] + columnWidths[index] - MIN_COLUMN_WIDTH"
@@ -479,6 +509,7 @@ button.quiet:hover { color: var(--link-hover-color); text-decoration: underline;
 .section-header { display: flex; min-height: 2rem; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.55rem; }
 .section-header h2 { color: var(--title-color); font-size: 1rem; }
 .section-actions { display: flex; gap: 0.8rem; }
+.mobile-sort, .mobile-label { display: none; }
 .record-table { position: relative; border: 1px solid var(--border-color); border-radius: 0.55rem; }
 .table-heading, .record-row { display: grid; align-items: stretch; }
 .table-heading { position: sticky; top: 0; z-index: 3; border-bottom: 1px solid var(--border-color); border-radius: 0.5rem 0.5rem 0 0; color: var(--secondary-color); background: color-mix(in srgb, var(--background-color-interactive) 88%, var(--background-color)); box-shadow: 0 1px 0 var(--border-color); font-size: 0.74rem; font-weight: 700; }
@@ -498,7 +529,7 @@ button.quiet:hover { color: var(--link-hover-color); text-decoration: underline;
 .data-cell, .time-cell { overflow: visible; }
 .source-cell, .time-cell { color: var(--secondary-color); }
 .action-cell { justify-content: flex-end; }
-button.compact { padding: 0.3rem 0.48rem; font-size: 0.78rem; }
+button.compact { padding: 0.3rem 0.48rem; font-size: 0.78rem; white-space: nowrap; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 0.8rem; margin-top: 1rem; color: var(--secondary-color); font-size: 0.85rem; }
 .pagination button { padding: 0.35rem 0.6rem; }
 .empty { margin: 1rem 0; border: 1px dashed var(--border-color); border-radius: 0.5rem; padding: 1.5rem; color: var(--secondary-color); text-align: center; }
@@ -506,10 +537,14 @@ button.compact { padding: 0.3rem 0.48rem; font-size: 0.78rem; }
 .error { margin-bottom: 0.75rem; color: var(--warning-color); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-@media (max-width: 46rem) {
+@media (max-width: 76rem) {
   .content-layout { grid-template-columns: 1fr; }
   .facets { position: static; border-right: 0; border-bottom: 1px solid var(--border-color); padding: 0 0 1rem; }
-  .table-heading, .table-resizer { display: none; }
+  .table-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .table-heading button, .table-resizer { display: none; }
+  .mobile-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+  .mobile-sort select { width: auto; min-width: 8rem; margin: 0; }
+  .mobile-label { display: inline; margin-right: 0.35rem; font-weight: 650; }
   .record-row { grid-template-columns: minmax(0, 1fr) auto !important; gap: 0.2rem 0.6rem; padding: 0.65rem; }
   .record-row > * { border-right: 0 !important; padding: 0.1rem 0; }
   .decision-cell { grid-column: 1; grid-row: 1; }

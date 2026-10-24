@@ -11,7 +11,7 @@
             <span>
                 {{ url }}
             </span>
-            <CopyButton :text="url" />
+            <CopyButton :text="url" :label="`${service.type} URL`" />
         </h2>
         <p v-if="service.serviceId === 'shared'">Available to everyone.</p>
         <p>

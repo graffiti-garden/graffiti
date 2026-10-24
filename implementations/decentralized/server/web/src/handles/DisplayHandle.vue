@@ -4,7 +4,7 @@
             <a :href="documentUrl" target="_blank">
                 {{ fullHandle }}
             </a>
-            <CopyButton :text="fullHandle" />
+            <CopyButton :text="fullHandle" label="handle" />
         </h2>
         <RouterLink :to="{ name: 'replace-handle' }" role="button">
             Replace handle

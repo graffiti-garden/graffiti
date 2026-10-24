@@ -20,6 +20,8 @@ const pageNumber = ref(1);
 const pageCount = ref(0);
 const loading = ref(true);
 const error = ref("");
+const pageText = ref("");
+const textLoading = ref(false);
 
 let pdf: any;
 let rendering: any;
@@ -42,6 +44,7 @@ watch(
     pageCount.value = 0;
     pageNumber.value = 1;
     error.value = "";
+    pageText.value = "";
     loading.value = true;
     if (!(data instanceof Blob)) return;
 
@@ -75,9 +78,21 @@ async function renderPage() {
 
   const id = ++renderId;
   rendering?.cancel();
+  pageText.value = "";
+  textLoading.value = true;
   try {
     const page = await pdf.getPage(pageNumber.value);
     if (id !== renderId) return;
+    void page.getTextContent().then(
+      (content: { items: Array<{ str?: string }> }) => {
+        if (id !== renderId) return;
+        pageText.value = content.items.map((item) => item.str ?? "").join(" ").trim();
+        textLoading.value = false;
+      },
+      () => {
+        if (id === renderId) textLoading.value = false;
+      },
+    );
     const viewport = page.getViewport({ scale: 1.25 });
     const outputScale = Math.min(window.devicePixelRatio || 1, 2);
     const target = canvas.value;
@@ -95,6 +110,7 @@ async function renderPage() {
   } catch (cause) {
     if (!(cause instanceof RenderingCancelledException)) {
       error.value = cause instanceof Error ? cause.message : "Unable to display PDF.";
+      textLoading.value = false;
     }
   }
 }
@@ -107,7 +123,7 @@ async function renderPage() {
       <em>{{ error }}</em>
       <a :href="url" :download="name">Download {{ name }}</a>
     </template>
-    <canvas ref="canvas" :hidden="loading || Boolean(error)" />
+    <canvas ref="canvas" :hidden="loading || Boolean(error)" aria-hidden="true" />
     <nav v-if="!loading && !error && pageCount > 1" aria-label="PDF pages">
       <button type="button" :disabled="pageNumber === 1" @click="pageNumber--">
         Previous
@@ -121,6 +137,15 @@ async function renderPage() {
         Next
       </button>
     </nav>
+    <details v-if="!loading && !error" class="page-text">
+      <summary>Read text from PDF page {{ pageNumber }}</summary>
+      <p v-if="textLoading" role="status">Extracting page text…</p>
+      <p v-else-if="pageText">{{ pageText }}</p>
+      <template v-else>
+        <p>No selectable text was found on this page.</p>
+        <a :href="url" :download="name">Download {{ name }} to inspect it in another viewer</a>
+      </template>
+    </details>
   </div>
 </template>
 
@@ -128,4 +153,6 @@ async function renderPage() {
 .pdf-viewer { display: flex; width: 100%; gap: 0.6rem; margin-top: 0.5rem; flex-direction: column; align-items: center; }
 canvas { display: block; max-width: 100%; height: auto !important; border: 1px solid var(--border-color); border-radius: 0.4rem; background: white; }
 nav { display: flex; align-items: center; justify-content: center; gap: 0.75rem; font-size: 1rem; }
+.page-text { width: 100%; font-size: 0.9rem; }
+.page-text p { margin: 0.5rem 0; white-space: pre-wrap; }
 </style>

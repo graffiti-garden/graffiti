@@ -19,6 +19,7 @@ const filename = computed(
     `download${mimeData[type.value]?.extensions?.[0] ?? ""}`,
 );
 const size = computed(() => props.media?.data?.size);
+const previewLabel = computed(() => `${props.description || type.value || "File"}: ${filename.value}`);
 
 watch(
   () => props.media,
@@ -39,14 +40,14 @@ watch(
     class="media"
     :class="{ image: url && type.startsWith('image/') }"
   >
-    <img v-if="url && type.startsWith('image/')" :src="url" alt="Media preview" />
-    <video v-else-if="url && type.startsWith('video/')" :src="url" controls />
-    <audio v-else-if="url && type.startsWith('audio/')" :src="url" controls preload="metadata" />
+    <img v-if="url && type.startsWith('image/')" :src="url" :alt="`Preview of ${previewLabel}`" />
+    <video v-else-if="url && type.startsWith('video/')" :src="url" :aria-label="previewLabel" controls />
+    <audio v-else-if="url && type.startsWith('audio/')" :src="url" :aria-label="previewLabel" controls preload="metadata" />
     <iframe
       v-else-if="url && type.startsWith('text/')"
       :src="url"
       sandbox="allow-scripts"
-      title="Document preview"
+      :title="`Document preview: ${filename}`"
     />
     <PdfView
       v-else-if="url && type.startsWith('application/pdf')"
@@ -61,7 +62,7 @@ watch(
           ({{ formatBytes(size) }})
         </span>
       </span>
-      <span class="download-action">Click to download</span>
+      <span class="download-action">Download file</span>
     </a>
     <em v-else-if="media === null">Media not found</em>
     <em v-else>Media loading...</em>

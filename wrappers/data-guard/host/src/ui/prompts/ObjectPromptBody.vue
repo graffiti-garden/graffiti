@@ -3,6 +3,7 @@ import {
   computed,
   onBeforeUnmount,
   ref,
+  useId,
   useTemplateRef,
   watch,
 } from "vue";
@@ -32,13 +33,18 @@ const operation = computed(
   () => ({ post: "post", get: "access", delete: "delete" })[props.action],
 );
 const channelHelpOpen = ref(false);
+const channelHelpId = useId();
 const channelHelp = useTemplateRef<HTMLElement>("channelHelp");
 
 function hideChannelHelp() {
   channelHelpOpen.value = false;
-  if (channelHelp.value?.contains(document.activeElement)) {
-    (document.activeElement as HTMLElement).blur();
-  }
+}
+
+function closeChannelHelpWithEscape(event: KeyboardEvent) {
+  if (!channelHelpOpen.value) return;
+  event.stopPropagation();
+  event.preventDefault();
+  hideChannelHelp();
 }
 
 function closeChannelHelp(event: PointerEvent) {
@@ -84,18 +90,20 @@ onBeforeUnmount(() =>
             ref="channelHelp"
             class="context-help"
             :class="{ open: channelHelpOpen }"
-            @keydown.esc.stop="hideChannelHelp"
+            @keydown.esc="closeChannelHelpWithEscape"
           >
             <button
               type="button"
               class="context-help-button"
               aria-label="What are channels?"
               :aria-expanded="channelHelpOpen"
+              :aria-controls="channelHelpId"
+              :aria-describedby="channelHelpOpen ? channelHelpId : undefined"
               @click="toggleChannelHelp"
             >
               ?
             </button>
-            <span class="context-help-text" role="tooltip">
+            <span class="context-help-text" role="tooltip" :id="channelHelpId">
               A channel is a label that identifies where data can be found.
               Data can only be found by searching one of its channels.
             </span>
@@ -130,7 +138,7 @@ button.context-help-button:hover, button.context-help-button:focus-visible, .con
 .context-help-text::before, .context-help-text::after { position: absolute; left: 1.25rem; width: 0; height: 0; transform: translateX(-50%); border-right: 0.44rem solid transparent; border-left: 0.44rem solid transparent; content: ""; }
 .context-help-text::before { bottom: -0.45rem; border-top: 0.45rem solid var(--border-color-hover); }
 .context-help-text::after { bottom: -0.37rem; border-top: 0.4rem solid var(--background-color); border-right-width: 0.39rem; border-left-width: 0.39rem; }
-.context-help:hover .context-help-text, .context-help:focus-within .context-help-text, .context-help.open .context-help-text { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); transition-delay: 0s; }
+.context-help:hover .context-help-text, .context-help.open .context-help-text { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); transition-delay: 0s; }
 code { word-break: break-all; }
 @media (max-width: 42rem) {
   .data { min-width: 0; margin-top: 0.35rem; }

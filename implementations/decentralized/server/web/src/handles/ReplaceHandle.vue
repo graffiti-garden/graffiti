@@ -66,7 +66,7 @@
                 <template v-if="domainDid">
                     <p>Publish this exact JSON at <a :href="documentUrl" target="_blank"><code>{{ documentUrl }}</code></a>:</p>
                     <pre><code>{{ documentText }}</code></pre>
-                    <CopyButton :text="documentText" />
+                    <CopyButton :text="documentText" label="DID document" />
                     <p>If your <code>did.json</code> lists other actors, put <code>{{ actor.did }}</code> first in <code>alsoKnownAs</code>. Graffiti clients use the first actor.</p>
                     <p>Once the file is available, verify it before replacing your handle.</p>
                     <button :disabled="verifying" type="submit">
@@ -94,7 +94,7 @@
                 <code>{{ nextHandleDid }}</code>. Make it the first <code>did:web:</code>
                 alias and keep any other aliases.
             </p>
-            <CopyButton :text="nextHandleDid" />
+            <CopyButton :text="nextHandleDid" label="new handle alias" />
             <p>Once that change is published, verify it to replace your handle.</p>
             <button :disabled="replacing" @click="replaceExternalActorHandle">
                 {{ replacing ? "Verifying..." : "Verify actor and replace handle" }}

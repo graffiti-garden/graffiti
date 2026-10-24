@@ -1,5 +1,7 @@
 <template>
     <h2>Create a Graffiti identity</h2>
+    <p class="visually-hidden" role="status">{{ progressMessage }}</p>
+    <p v-if="errorString" class="visually-hidden" role="alert">{{ errorString }}</p>
     <ol>
         <li>
             <RegisterHandle
@@ -139,6 +141,14 @@ const passkeyCreated = ref(false);
 const bucketId = ref<string | undefined>(undefined);
 const inboxId = ref<string | undefined>(undefined);
 const actor = ref<string | undefined>(undefined);
+const progressMessage = computed(() => {
+    if (actor.value) return "Graffiti identity created. Return to the application or home page.";
+    if (errorString.value) return "Identity creation needs attention.";
+    if (inboxId.value) return "Creating actor.";
+    if (bucketId.value) return "Creating inbox.";
+    if (passkeyCreated.value) return "Creating storage bucket.";
+    return "Choose a handle to create an identity.";
+});
 
 async function registerAccount(localName: string) {
     // Account creation uses the temporary session, even when another account

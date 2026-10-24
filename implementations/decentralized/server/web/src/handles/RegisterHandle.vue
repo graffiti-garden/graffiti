@@ -4,11 +4,13 @@
         <aside>Handles can always be changed later.</aside>
     </header>
     <form @submit.prevent="registerHandle">
-        <label>
-            <div class="handle-control" :data-status="availabilityStatus">
-                <span class="prefix">@</span>
+        <div>
+            <label class="handle-control" :data-status="availabilityStatus">
+                <span class="visually-hidden">Handle</span>
+                <span class="prefix" aria-hidden="true">@</span>
 
                 <input
+                    id="graffiti-handle-name"
                     v-model="localName"
                     :style="{ width: Math.max(inputHandleWidth, 1) + 'px' }"
                     required
@@ -19,6 +21,7 @@
                     spellcheck="false"
                     inputmode="text"
                     aria-describedby="handle-status"
+                    :aria-invalid="availabilityStatus === 'unavailable' ? 'true' : undefined"
                 />
                 <span class="mirror" ref="mirrorHandleEl" aria-hidden="true">{{
                     localName
@@ -39,7 +42,7 @@
                                 : null
                     "
                 />
-            </div>
+            </label>
 
             <output id="handle-status" role="status" aria-live="polite">
                 <span v-if="availabilityStatus === 'checking'">
@@ -55,7 +58,7 @@
                     {{ errorStatus }}
                 </span>
             </output>
-        </label>
+        </div>
 
         <div class="controls">
             <button
@@ -200,12 +203,13 @@ watch(localName, () => {
 }
 
 .handle-control {
+    --handle-border-color: var(--pico-form-element-border-color);
+
     display: flex;
     align-items: center;
     margin-top: 0.5rem;
 
-    border: var(--pico-border-width, 1px) solid
-        var(--pico-form-element-border-color);
+    border: var(--pico-border-width, 1px) solid var(--handle-border-color);
     border-radius: var(--pico-border-radius);
     background: var(--pico-form-element-background-color);
     padding: 0rem 0.5rem;
@@ -227,7 +231,9 @@ watch(localName, () => {
 }
 
 .handle-control:focus-within {
-    border-color: var(--pico-form-element-active-border-color);
+    --handle-border-color: var(--pico-form-element-active-border-color);
+
+    box-shadow: inset 0 0 0 2px var(--handle-border-color);
 }
 
 .prefix,
@@ -250,11 +256,11 @@ watch(localName, () => {
 
 /* Border feedback */
 .handle-control[data-status="available"] {
-    border-color: var(--pico-form-element-valid-border-color);
+    --handle-border-color: var(--pico-form-element-valid-border-color);
 }
 .handle-control[data-status="unavailable"],
 .handle-control[data-status="error"] {
-    border-color: var(--pico-form-element-invalid-border-color);
+    --handle-border-color: var(--pico-form-element-invalid-border-color);
 }
 
 .controls {
