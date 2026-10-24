@@ -1,5 +1,13 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.1.8
+
+### Patch Changes
+
+- d905b62: Improve keyboard and screen reader access in Graffiti login, data guard prompts, media previews, and permission management. Add an optional accessible name for modal dialogs.
+- Updated dependencies [d905b62]
+  - @graffiti-garden/modal@1.2.0
+
 ## 0.1.7
 
 ### Patch Changes
