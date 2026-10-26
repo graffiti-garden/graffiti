@@ -255,8 +255,9 @@ export abstract class Graffiti {
    * {@link GraffitiObjectStreamReturn.cursor | `cursor`} string.
    * The continuation will return new objects that have been {@link post | `post`ed}
    * that match the original stream, and also returns the
-   * {@link GraffitiObjectBase.url | `url`}s of objects that
-   * have been {@link delete | `delete`d}, as marked by a `tombstone`.
+   * objects that have been {@link delete | `delete`d}, as marked by a
+   * `tombstone`. The tombstone contains the original object, masked for the
+   * querying actor.
    *
    * @throws {@link GraffitiErrorCursorExpired} upon iteration
    * if the cursor is invalid or expired.

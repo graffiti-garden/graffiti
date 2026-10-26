@@ -1,8 +1,5 @@
 import { it, expect, describe, assert, beforeAll, vi } from "vitest";
-import {
-  GraffitiErrorNotFound,
-  type GraffitiSession,
-} from "@graffiti-garden/api";
+import { type GraffitiSession } from "@graffiti-garden/api";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import {
   randomPostObject,
@@ -97,54 +94,21 @@ describe.concurrent("synchronizeDiscover", () => {
 
     await graffiti.delete(posted, session);
 
-    // If you just start synchronizing after the first post,
-    // it won't show the deletion because it never saw the object.
-    await expect(
-      // @ts-ignore
-      Promise.race([
-        beforeButAfter,
-        new Promise((resolve, reject) => setTimeout(reject, 100, "Timeout")),
-      ]),
-    ).rejects.toThrow("Timeout");
+    // A full tombstone can be matched even by a listener that did not see
+    // the post before it was deleted.
+    const laterResult = await beforeButAfter;
+    assert(!laterResult.done && !laterResult.value.error);
+    assert(laterResult.value.tombstone);
+    expect(laterResult.value.object).toMatchObject({
+      url: posted.url,
+      value: oldValue,
+      channels: channels.slice(1),
+    });
 
     const result = await next;
     assert(!result.done && !result.value.error, "Error in before");
     assert(result.value.tombstone, "Before is not tombstone");
-    expect(result.value.object.url).toEqual(posted.url);
-  });
-
-  it("get deletion in another instance", async () => {
-    // Begin discovering and find nothing
-    const object = randomPostObject();
-    const posted = await graffiti.post<{}>(object, session);
-
-    // Now sync a get
-    const getIterator = graffiti.synchronizeGet(posted, {});
-    const next = getIterator.next();
-
-    // The sync will not pick up on it since it is not
-    // actively listening
-    await expect(
-      Promise.race([
-        next,
-        new Promise((resolve, rejects) => setTimeout(rejects, 100, "Timeout")),
-      ]),
-    ).rejects.toThrow("Timeout");
-
-    // Delete the object in another graffiti instance
-    const graffiti2 = useGraffiti();
-    await graffiti2.delete(posted, session);
-
-    // Call get in the original instance
-    await expect(graffiti.get(posted, {})).rejects.toThrow(
-      GraffitiErrorNotFound,
-    );
-
-    // And then the sync will pick up on it from the continue
-    const syncResult = await next;
-    assert(!syncResult.done && !syncResult.value.error);
-    expect(syncResult.value.tombstone).toBe(true);
-    expect(syncResult.value.object.url).toEqual(posted.url);
+    expect(result.value.object).toEqual(laterResult.value.object);
   });
 
   it("synchronize happens before posters", async () => {

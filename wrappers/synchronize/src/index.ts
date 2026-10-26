@@ -10,7 +10,6 @@ import type {
 } from "@graffiti-garden/api";
 import {
   compileGraffitiObjectSchema,
-  GraffitiErrorNotFound,
   isActorAllowedGraffitiObject,
   maskGraffitiObject,
   unpackObjectUrl,
@@ -65,6 +64,7 @@ export interface GraffitiSynchronizeOptions {
  * Whenever a change is made via {@link post} and {@link delete} or
  * received from {@link get}, {@link discover}, and {@link continueDiscover},
  * those changes are forwarded to the appropriate synchronize method.
+ * Failed `get` and `delete` calls do not emit synchronization events.
  * Each synchronize method returns an iterator that streams these changes
  * continually until the user calls `return` on the iterator or `break`s out of the loop,
  * allowing for live updates without additional polling.
@@ -136,34 +136,32 @@ export class GraffitiSynchronize implements Graffiti {
     channels: string[],
     schema: Schema,
     session?: GraffitiSession | null,
-    seenUrls: Set<string> = new Set<string>(),
   ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
     const repeater = new Repeater<GraffitiObjectStreamSuccess<Schema>>(
       async (push, stop) => {
         const validate = await compileGraffitiObjectSchema(schema);
         const callback: GraffitiSynchronizeCallback = (objectUpdate) => {
-          if (objectUpdate?.tombstone) {
-            if (seenUrls.has(objectUpdate.object.url)) {
-              push(objectUpdate);
-            }
-          } else if (
-            objectUpdate &&
-            matchObject(objectUpdate.object) &&
-            (this.options.omniscient ||
-              isActorAllowedGraffitiObject(objectUpdate.object, session))
-          ) {
-            // Deep clone the object to prevent mutation
-            let object = JSON.parse(
-              JSON.stringify(objectUpdate.object),
-            ) as GraffitiObjectBase;
-            if (!this.options.omniscient) {
-              object = maskGraffitiObject(object, channels, session?.actor);
-            }
-            if (validate(object)) {
-              push({ object });
-              seenUrls.add(object.url);
-            }
+          if (
+            !matchObject(objectUpdate.object) ||
+            (!this.options.omniscient &&
+              !isActorAllowedGraffitiObject(objectUpdate.object, session))
+          )
+            return;
+
+          // Deep clone the object to prevent mutation by a listener.
+          let object = JSON.parse(
+            JSON.stringify(objectUpdate.object),
+          ) as GraffitiObjectBase;
+          if (!this.options.omniscient) {
+            object = maskGraffitiObject(object, channels, session?.actor);
           }
+          if (!validate(object)) return;
+
+          push(
+            objectUpdate.tombstone
+              ? { tombstone: true, object }
+              : { object },
+          );
         };
 
         this.callbacks.add(callback);
@@ -225,13 +223,7 @@ export class GraffitiSynchronize implements Graffiti {
     function matchObject(object: GraffitiObjectBase) {
       return object.url === url;
     }
-    return this.synchronize<Schema>(
-      matchObject,
-      [],
-      schema,
-      session,
-      new Set<string>([url]),
-    );
+    return this.synchronize<Schema>(matchObject, [], schema, session);
   }
 
   /**
@@ -292,22 +284,9 @@ export class GraffitiSynchronize implements Graffiti {
   }
 
   get: Graffiti["get"] = async (...args) => {
-    try {
-      const object = await this.graffiti.get(...args);
-      this.synchronizeDispatch({ object });
-      return object;
-    } catch (error) {
-      if (
-        error instanceof GraffitiErrorNotFound ||
-        (error instanceof Error && error.name === "GraffitiErrorNotFound")
-      ) {
-        this.synchronizeDispatch({
-          tombstone: true,
-          object: { url: unpackObjectUrl(args[0]) },
-        });
-      }
-      throw error;
-    }
+    const object = await this.graffiti.get(...args);
+    this.synchronizeDispatch({ object });
+    return object;
   };
 
   // @ts-ignore
@@ -318,23 +297,9 @@ export class GraffitiSynchronize implements Graffiti {
   };
 
   delete: Graffiti["delete"] = async (...args) => {
-    const update = {
-      tombstone: true,
-      object: { url: unpackObjectUrl(args[0]) },
-    } as const;
-    try {
-      const oldObject = await this.graffiti.delete(...args);
-      await this.synchronizeDispatch(update, true);
-      return oldObject;
-    } catch (error) {
-      if (
-        error instanceof GraffitiErrorNotFound ||
-        (error instanceof Error && error.name === "GraffitiErrorNotFound")
-      ) {
-        await this.synchronizeDispatch(update, true);
-      }
-      throw error;
-    }
+    const oldObject = await this.graffiti.delete(...args);
+    await this.synchronizeDispatch({ tombstone: true, object: oldObject }, true);
+    return oldObject;
   };
 
   protected objectStream<Schema extends JSONSchema>(

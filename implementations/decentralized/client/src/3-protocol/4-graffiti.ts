@@ -791,7 +791,7 @@ export class GraffitiDecentralized implements Graffiti {
     },
     session?: GraffitiSession | null,
   ): GraffitiObjectStream<Schema> {
-    const tombstones = new Map<string, boolean>();
+    const lastTombstoneState = new Map<string, boolean>();
 
     let allInboxes: { serviceEndpoint: string; token?: string }[];
     if (session) {
@@ -877,52 +877,34 @@ export class GraffitiDecentralized implements Graffiti {
               next.index,
             );
           const { object, tombstone, tags: receivedTags } = next.result.value;
-          if (tombstone) {
-            if (tombstones.get(object.url) === true) continue;
-            tombstones.set(object.url, true);
+          // Inbox announcements can omit channel names, so recover the queried
+          // channels from their tags before applying the usual object mask.
+          const matchedChannels = channels.filter((_, index) =>
+            receivedTags.some(
+              (receivedTag) =>
+                tags[index].length === receivedTag.length &&
+                tags[index].every((byte, i) => byte === receivedTag[i]),
+            ),
+          );
+          if (matchedChannels.length === 0) {
             yield {
-              tombstone,
-              object: { url: object.url },
+              error: new Error("Inbox returned object without matching channels"),
+              origin: allInboxes[next.index].serviceEndpoint,
             };
-          } else {
-            // Filter already seen
-            if (tombstones.get(object.url) === false) continue;
-
-            // Fill in the matched channels
-            const matchedTagIndices = tags.reduce<number[]>(
-              (acc, tag, tagIndex) => {
-                for (const receivedTag of receivedTags) {
-                  if (
-                    tag.length === receivedTag.length &&
-                    tag.every((b, i) => receivedTag[i] === b)
-                  ) {
-                    acc.push(tagIndex);
-                    break;
-                  }
-                }
-                return acc;
-              },
-              [],
-            );
-            const matchedChannels = matchedTagIndices.map(
-              (index) => channels[index],
-            );
-            if (matchedChannels.length === 0) {
-              yield {
-                error: new Error(
-                  "Inbox returned object without matching channels",
-                ),
-                origin: allInboxes[next.index].serviceEndpoint,
-              };
-            }
-            tombstones.set(object.url, false);
-            yield {
-              object: {
-                ...object,
-                channels: matchedChannels,
-              },
-            };
+            continue;
           }
+          const maskedObject = maskGraffitiObject(
+            { ...object, channels: matchedChannels },
+            matchedChannels,
+            session?.actor,
+          ) as typeof object;
+          // The same inbox item can arrive through multiple inboxes.
+          const deleted = tombstone === true;
+          if (lastTombstoneState.get(object.url) === deleted) continue;
+          lastTombstoneState.set(object.url, deleted);
+          yield deleted
+            ? { tombstone: true, object: maskedObject }
+            : { object: maskedObject };
         }
       }
     } catch (e) {
@@ -1271,16 +1253,17 @@ export class GraffitiDecentralized implements Graffiti {
       MESSAGE_DATA_ANNOUNCEMENTS_KEY in metadata
         ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY]
         : undefined;
+    const resultBase = {
+      messageId,
+      object,
+      storageBucketKey,
+      allowedTickets,
+      tags: receivedTags,
+      announcements,
+    };
 
     if (label === MESSAGE_LABEL_VALID) {
-      return {
-        messageId,
-        object,
-        storageBucketKey,
-        allowedTickets,
-        tags: receivedTags,
-        announcements,
-      };
+      return resultBase;
     } else if (label === MESSAGE_LABEL_TRASH) {
       // If it is simply trash, just continue.
       if (!tombstonedMessageId) return;
@@ -1311,15 +1294,7 @@ export class GraffitiDecentralized implements Graffiti {
       }
 
       // Return the tombstone
-      return {
-        messageId,
-        tombstone: true,
-        object,
-        storageBucketKey,
-        allowedTickets,
-        tags: receivedTags,
-        announcements,
-      };
+      return { ...resultBase, tombstone: true };
     }
 
     // Otherwise, unlabeled: try to validate the object
@@ -1411,15 +1386,7 @@ export class GraffitiDecentralized implements Graffiti {
             console.error("Could not inspect tombstone message:", error),
           );
 
-        return {
-          messageId,
-          tombstone: true,
-          object,
-          storageBucketKey,
-          allowedTickets,
-          tags: receivedTags,
-          announcements,
-        };
+        return { ...resultBase, tombstone: true };
       } else {
         console.error("Recieved an incorrect tombstone object");
         console.error(validationError);
@@ -1438,14 +1405,7 @@ export class GraffitiDecentralized implements Graffiti {
           MESSAGE_LABEL_VALID,
           inboxToken,
         );
-        return {
-          messageId,
-          object,
-          storageBucketKey,
-          tags: receivedTags,
-          allowedTickets,
-          announcements,
-        };
+        return resultBase;
       } else if (validationError instanceof GraffitiErrorNotFound) {
         // Item was deleted before we got a chance to
         // validate it. Just label the message as trash.

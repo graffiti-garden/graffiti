@@ -261,8 +261,8 @@ export interface GraffitiObjectStreamEntry<Schema extends JSONSchema> {
 /**
  * A result from a {@link GraffitiObjectStream} that indicated
  * an object has been deleted since the original stream was run.
- * Only sparse metadata about the deleted object is returned to respect
- * the deleting actor's privacy.
+ * The original object is returned, masked to the same visibility as a
+ * discovery result.
  *
  * @internal
  */
@@ -277,15 +277,13 @@ export interface GraffitiObjectStreamTombstone {
    */
   tombstone: true;
   /**
-   * Sparse metadata about the deleted object. The full object is not returned
-   * to respect an actor's privacy.
+   * The deleted object, with channels and `allowed` masked for the querying
+   * actor.
+   * A continuation may report a deletion even when the original post was not
+   * returned by an earlier discovery, so consumers must not assume that they
+   * previously saw this object's value.
    */
-  object: {
-    /**
-     * The {@link GraffitiObjectBase.url | `url`} of the deleted object.
-     */
-    url: string;
-  };
+  object: GraffitiObjectBase;
 }
 
 /**

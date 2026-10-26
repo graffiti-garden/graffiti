@@ -330,7 +330,7 @@ export class GraffitiLocalObjects {
         yield tombstone
           ? {
               tombstone: true,
-              object: { url },
+              object: masked,
             }
           : { object: masked };
       }
