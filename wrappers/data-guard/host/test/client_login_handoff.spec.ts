@@ -63,8 +63,6 @@ it("carries the requested login ID through a reload, only for the chosen account
 
   const first = new GraffitiGuarded({ hostUrl: "https://guard.example" });
   await first.login({ state: "login-42" });
-  // Firefox must release the embedded origin before it becomes the login page.
-  expect(frames[0].remove).toHaveBeenCalledBefore(assign);
   const nonce = new URLSearchParams(new URL(assign.mock.calls[0][0]).hash.slice(1))
     .get("loginNonce");
   expect(nonce).toBeTruthy();

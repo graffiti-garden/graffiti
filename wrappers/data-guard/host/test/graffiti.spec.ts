@@ -52,8 +52,9 @@ describe("GuardedGraffiti audit finalization", () => {
     ).rejects.toBe(operationError);
   });
 
-  it("authorizes private objects yielded by discoveries and continuations", async () => {
+  it.each([false, true])("authorizes private discovery and continuation results (tombstone=%s)", async tombstone => {
     const entry = {
+      ...(tombstone ? { tombstone: true as const } : {}),
       object: {
         url: "graffiti:private",
         value: {},
@@ -105,14 +106,14 @@ describe("GuardedGraffiti audit finalization", () => {
     expect(guard.succeed).toHaveBeenCalledTimes(3);
   });
 
-  it("passes public and upstream entries through and yields denials as errors", async () => {
+  it.each([false, true])("passes public and upstream entries through and yields denials as errors (tombstone=%s)", async privateTombstone => {
     const upstreamError = {
       error: new Error("upstream failed"),
       origin: "https://storage.example",
     };
     const tombstone = {
       tombstone: true as const,
-      object: { url: "graffiti:deleted" },
+      object: { url: "graffiti:deleted", value: {}, channels: [], actor: "actor:one" },
     };
     const publicUndefined = {
       object: {
@@ -130,6 +131,7 @@ describe("GuardedGraffiti audit finalization", () => {
       },
     };
     const privateObject = {
+      ...(privateTombstone ? { tombstone: true as const } : {}),
       object: {
         ...publicUndefined.object,
         url: "graffiti:private",

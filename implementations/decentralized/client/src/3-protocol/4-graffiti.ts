@@ -173,7 +173,7 @@ export class GraffitiDecentralized implements Graffiti {
             import("./login-dialog.html").then(({ template }) => template),
           onManualClose: () => {
             const attempt = this.sessions.loginAttempts.current;
-            if (attempt) this.sessions.loginAttempts.complete(attempt, {
+            if (attempt) this.sessions.loginAttempts.finish(attempt, {
               error: new Error("User cancelled login"),
             });
           },
@@ -194,9 +194,9 @@ export class GraffitiDecentralized implements Graffiti {
     this.identityCreatorEndpoint =
       options?.identityCreatorEndpoint ?? "https://graffiti.actor/create";
 
-    this.sessions.onLoginComplete = () => this.modal?.close();
+    this.sessions.onLoginFinish = () => this.modal?.close();
     if (this.modal) {
-      this.sessions.loginAttempts.onError = async (attempt, error, actor) => {
+      this.sessions.onLoginError = async (attempt, error, actor) => {
         alert("Login failed: " + error.message);
         let handle: string | undefined;
         try {
@@ -283,7 +283,7 @@ export class GraffitiDecentralized implements Graffiti {
     try {
       await this.login_(attempt, proposedHandle);
     } catch (error) {
-      this.sessions.loginAttempts.complete(attempt, {
+      this.sessions.loginAttempts.finish(attempt, {
         error: error instanceof Error ? error : new Error(String(error)),
       });
     }
@@ -350,7 +350,7 @@ export class GraffitiDecentralized implements Graffiti {
           ?.addEventListener("click", (e) => {
             e.preventDefault();
             void this.loginWithoutHandle(attempt).catch((error) => {
-              this.sessions.loginAttempts.complete(attempt, {
+              this.sessions.loginAttempts.finish(attempt, {
                 error: error instanceof Error ? error : new Error(String(error)),
               });
             });
@@ -369,7 +369,7 @@ export class GraffitiDecentralized implements Graffiti {
       const createUrl = new URL(this.identityCreatorEndpoint);
       createUrl.searchParams.set(
         "redirect_uri",
-        encodeURIComponent(window.location.toString()),
+        encodeURIComponent(this.sessions.loginAttempts.returnUrl(attempt)),
       );
       const createLink = template?.querySelector<HTMLAnchorElement>(
         "#graffiti-login-new",
@@ -460,7 +460,7 @@ export class GraffitiDecentralized implements Graffiti {
           ) throw new Error("Invalid provider domain");
 
           const url = new URL("/forgot-handle", origin);
-          url.searchParams.set("redirect_uri", window.location.toString());
+          url.searchParams.set("redirect_uri", this.sessions.loginAttempts.returnUrl(attempt));
           this.sessions.loginAttempts.save(attempt);
           if (this.replaceInitialLoginHistoryEntry) {
             window.location.replace(url.toString());

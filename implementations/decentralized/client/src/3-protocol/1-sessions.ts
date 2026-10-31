@@ -27,7 +27,7 @@ import {
   object,
   url,
 } from "zod/mini";
-import { LoginAttempts, AuthorizationProgressSchema, type LoginAttempt } from "./login-attempt";
+import { LoginAttempts, AuthorizationProgressSchema, LOGIN_ATTEMPT_PARAM, type LoginAttempt } from "./login-attempt";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 export const DID_SERVICE_TYPE_GRAFFITI_INBOX = "GraffitiInbox";
@@ -40,7 +40,9 @@ export const DID_SERVICE_ID_GRAFFITI_SHARED_INBOX_PREFIX =
 export class Sessions {
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
   readonly loginAttempts: LoginAttempts;
-  onLoginComplete?: () => void;
+  onLoginFinish?: () => void;
+  /** Keep a failed attempt open for the UI to retry; otherwise finish with an error. */
+  onLoginError?: (attempt: LoginAttempt, error: Error, actor?: string) => void;
   initialAuthorizationNavigation: "assign" | "replace" = "assign";
 
   constructor(
@@ -53,8 +55,9 @@ export class Sessions {
   ) {
     this.loginAttempts = new LoginAttempts(this.sessionEvents, (attempt) => {
       services.authorization.endLogin(attempt.id);
-      this.onLoginComplete?.();
+      this.onLoginFinish?.();
     });
+    let initializationError: Error | undefined;
     const initializedPromise = new Promise<void>((resolve) => {
       this.services.authorization.eventTarget.addEventListener(
         "initialized",
@@ -62,8 +65,7 @@ export class Sessions {
           if (!(e instanceof CustomEvent)) return;
           const parsed = InitializedEventDetailSchema.safeParse(e.detail);
           if (!parsed.success) return;
-          const error = parsed.data?.error;
-          if (error) console.error(error);
+          initializationError ??= parsed.data?.error;
           resolve();
         },
       );
@@ -80,29 +82,41 @@ export class Sessions {
       const actorEncoded = new URLSearchParams(window.location.search).get(
         "actor",
       );
-      // Only an OAuth or account return resumes the saved attempt. A normal
-      // visit (including Back from an abandoned provider) allows a fresh login.
-      const savedAttempt = this.loginAttempts.current;
-      if (savedAttempt && !services.authorization.completingLogin && !actorEncoded) {
-        services.authorization.endLogin(savedAttempt.id);
-        this.loginAttempts.discard();
-      }
-      if (actorEncoded) {
-        try {
+      // Only an identified redirect resumes an attempt; ordinary loads just restore sessions.
+      const attemptId = services.authorization.completingLoginId ??
+        (actorEncoded ? new URL(window.location.href).searchParams.get(LOGIN_ATTEMPT_PARAM) : null);
+      try {
+        if (attemptId) {
+          this.loginAttempts.restore(attemptId);
+          if (!this.loginAttempts.current) {
+            services.authorization.endLogin(attemptId);
+            throw new Error("Login expired or missing login attempt. Please start again.");
+          }
+        }
+        if (actorEncoded) {
           // Strip it from the URL
           const url = new URL(window.location.toString());
           url.searchParams.delete("actor");
+          url.searchParams.delete(LOGIN_ATTEMPT_PARAM);
           window.history.replaceState({}, "", url.toString());
           // The original app entry was kept when opening account creation or
           // recovery, so OAuth reuses this callback entry.
-          const attempt = this.loginAttempts.current ?? this.loginAttempts.begin();
-          // Let callers subscribe before a cached session can complete login.
-          loginPromise = Promise.resolve().then(() =>
-            this.login(decodeURIComponent(actorEncoded), attempt, "replace"),
-          ).catch(error => this.loginAttempts.fail(attempt, error));
-        } catch (error) {
-          console.error("Error handling login redirect:", error);
+          let attempt = this.loginAttempts.current;
+          // Only start an uncorrelated account return after initialization succeeds.
+          loginPromise = initializedPromise.then(() => {
+            if (initializationError) {
+              if (attempt) this.loginAttempts.finish(attempt, { error: initializationError });
+              return;
+            }
+            attempt ??= this.loginAttempts.begin();
+            return this.login(decodeURIComponent(actorEncoded), attempt, "replace");
+          }).catch(error => {
+            if (attempt) this.handleLoginError(attempt, error);
+            else initializationError = error instanceof Error ? error : new Error(String(error));
+          });
         }
+      } catch (error) {
+        initializationError = error instanceof Error ? error : new Error(String(error));
       }
     }
 
@@ -125,6 +139,7 @@ export class Sessions {
       // Send own initialized event
       const initializedEvent: GraffitiSessionInitializedEvent = new CustomEvent(
         "initialized",
+        { detail: initializationError ? { error: initializationError } : undefined },
       );
       this.sessionEvents.dispatchEvent(initializedEvent);
     })();
@@ -140,7 +155,22 @@ export class Sessions {
     try {
       await this.login_(actor, attempt, initialAuthorizationNavigation);
     } catch (error) {
-      this.loginAttempts.fail(attempt, error, actor);
+      this.handleLoginError(attempt, error, actor);
+    }
+  }
+
+  private handleLoginError(attempt: LoginAttempt, error: unknown, actor?: string) {
+    if (this.loginAttempts.current !== attempt) return;
+    const failure = error instanceof Error ? error : new Error(String(error));
+    attempt.authorization = undefined;
+    if (this.onLoginError) {
+      this.loginAttempts.save(attempt);
+      this.onLoginError(attempt, failure, actor);
+    } else {
+      this.loginAttempts.finish(attempt, {
+        error: failure,
+        session: actor ? { actor } : undefined,
+      });
     }
   }
 
@@ -154,7 +184,7 @@ export class Sessions {
       (session) => session.actor === actor,
     );
     if (existingSession) {
-      this.loginAttempts.complete(attempt, { session: { actor } });
+      this.loginAttempts.finish(attempt, { session: { actor } });
       return;
     }
 
@@ -268,7 +298,7 @@ export class Sessions {
     try {
       await this.onLogin_(parsed.data, attempt);
     } catch (error) {
-      this.loginAttempts.fail(attempt, error, attempt.authorization?.actor);
+      this.handleLoginError(attempt, error, attempt.authorization?.actor);
     }
   }
   protected async onLogin_(
@@ -310,7 +340,7 @@ export class Sessions {
       sessions.push(session);
       this.loggedInSessions = sessions;
 
-      this.loginAttempts.complete(attempt, { session: { actor } });
+      this.loginAttempts.finish(attempt, { session: { actor } });
     } else {
       this.loginAttempts.save(attempt);
 

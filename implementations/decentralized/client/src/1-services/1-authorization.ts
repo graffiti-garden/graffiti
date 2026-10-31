@@ -20,23 +20,30 @@ import {
 } from "zod/mini";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Socket } from "node:net";
+import { PendingLoginStorage } from "./pending-login-storage";
 
 const AUTHORIZATION_ENDPOINT_METHOD_PREFIX_OAUTH2 = "oauth2:";
-const SESSION_STORAGE_OAUTH2_KEY = "graffiti-auth-oauth2-data";
+const pendingOAuth = new PendingLoginStorage("graffiti-pending-oauth:");
 
 export class Authorization {
   eventTarget: EventTarget = new EventTarget();
   private activeLoginId?: string;
-  readonly completingLogin: boolean;
+  private activeState?: string;
+  readonly completingLoginId?: string;
 
   constructor() {
     // Extract oauth redirect synchronously so the route
     // can be changed before any SPA routers (e.g. vue router)
     // start messing with things
-    const oauthPromise = this.completeOauth();
-    // completeOauth() is intentionally not async. If the oauth
-    // returns a promise rather than undefined it means it is completing a login
-    this.completingLogin = oauthPromise !== undefined;
+    let oauthPromise: Promise<void> | undefined;
+    let error: Error | undefined;
+    try {
+      oauthPromise = this.completeOauth();
+    } catch (e) {
+      error = e instanceof Error ? e : new Error(String(e));
+    }
+    // A promise means a recognized redirect is resuming this particular login.
+    this.completingLoginId = oauthPromise ? this.activeLoginId : undefined;
 
     (async () => {
       // Allow listeners to be added first
@@ -46,7 +53,9 @@ export class Authorization {
       await oauthPromise;
 
       // Send an initialized event
-      const initializedEvent: InitializedEvent = new CustomEvent("initialized");
+      const initializedEvent: InitializedEvent = new CustomEvent("initialized", {
+        detail: error ? { error } : undefined,
+      });
       this.eventTarget.dispatchEvent(initializedEvent);
     })();
   }
@@ -82,7 +91,7 @@ export class Authorization {
     if (typeof window !== "undefined") {
       // If in a browser, prepare for a redirect by
       // storing the configuration, expected state,
-      // current URL, and endpoints in session storage
+      // current URL, and endpoints under this OAuth state
       redirectUri = window.location.href;
       const data: infer_<typeof OAuth2LoginDataSchema> = {
         loginId,
@@ -91,10 +100,8 @@ export class Authorization {
         state,
         serviceEndpoints,
       };
-      window.sessionStorage.setItem(
-        SESSION_STORAGE_OAUTH2_KEY,
-        JSON.stringify(data),
-      );
+      pendingOAuth.save(state, data);
+      this.activeState = state;
     } else {
       // Otherwise, in node, start a local server to receive the callback
       const http = await import("node:http").catch((e) => {
@@ -213,34 +220,22 @@ export class Authorization {
   endLogin(loginId: string) {
     if (this.activeLoginId !== loginId) return;
     this.activeLoginId = undefined;
-    if (typeof window !== "undefined") window.sessionStorage.removeItem(SESSION_STORAGE_OAUTH2_KEY);
+    if (this.activeState) pendingOAuth.remove(this.activeState);
+    this.activeState = undefined;
   }
 
   protected completeOauth() {
     if (typeof window === "undefined") return;
+    const callbackUrl = new URL(window.location.href);
+    const params = callbackUrl.searchParams;
+    if (!params.has("code") && !params.has("error") && !params.has("actor")) return;
 
-    // Look in session storage to see if we have a pending login
-    const data = window.sessionStorage.getItem(SESSION_STORAGE_OAUTH2_KEY);
-    if (!data) return;
-
-    let json: unknown;
-    try {
-      json = JSON.parse(data);
-    } catch {
-      console.error("Invalid OAuth2 login data in session storage.");
-      window.sessionStorage.removeItem(SESSION_STORAGE_OAUTH2_KEY);
-      return;
-    }
-
-    const parseResult = OAuth2LoginDataSchema.safeParse(json);
-    if (!parseResult.success) {
-      console.error(
-        "Invalid OAuth2 login data structure in session storage.",
-        parseResult.error,
-      );
-      window.sessionStorage.removeItem(SESSION_STORAGE_OAUTH2_KEY);
-      return;
-    }
+    const stateId = params.get("state");
+    if (!stateId) return;
+    const data = pendingOAuth.load(stateId);
+    if (!data) throw new Error("Login expired or missing authorization state. Please start again.");
+    const parseResult = OAuth2LoginDataSchema.safeParse(data);
+    if (!parseResult.success) throw new Error("Invalid login authorization state. Please start again.");
 
     const {
       loginId,
@@ -251,40 +246,36 @@ export class Authorization {
     } = parseResult.data;
     this.activeLoginId = loginId;
 
-    try {
-      // Make sure that we redirected back to the correct page
-      const expectedUrl = new URL(redirectUri);
-      const callbackUrl = new URL(window.location.href);
-      if (expectedUrl.pathname !== callbackUrl.pathname) return;
-      // Make sure it is actually an oauth call
-      const params = callbackUrl.searchParams;
-      if (!params.has("code") && !params.has("error")) return;
+    // Make sure that we redirected back to the correct page
+    const expectedUrl = new URL(redirectUri);
+    if (expectedUrl.pathname !== callbackUrl.pathname) throw new Error("Login returned to the wrong page.");
+    pendingOAuth.remove(stateId);
 
-      // Restore the hash and query parameters to the expected URL,
-      // removing the code, state, and error parameters
-      window.history.replaceState({}, document.title, expectedUrl.toString());
-      window.sessionStorage.removeItem(SESSION_STORAGE_OAUTH2_KEY);
+    // Restore the hash and query parameters to the expected URL,
+    // removing the code, state, and error parameters
+    const selectedActor = params.get("actor");
+    if (selectedActor) expectedUrl.searchParams.set("actor", selectedActor);
+    window.history.replaceState({}, document.title, expectedUrl.toString());
+    // Graffiti providers can return a different account instead of granting a token.
+    if (selectedActor) return Promise.resolve();
 
-      return new Promise<void>((resolve) => setTimeout(resolve, 0))
-        .then(() => this.getAuthorizationConfiguration(authorizationEndpoint))
-        .then((configuration) =>
-          this.onCallbackUrl({
-            loginId,
-            callbackUrl,
-            configuration,
-            expectedState: state,
-            serviceEndpoints,
-          }),
-        )
-        .catch((e) => {
-          if (this.activeLoginId !== loginId) return;
-          const error = e instanceof Error ? e : new Error("Unknown error");
-          const detail: LoginEvent["detail"] = { loginId, error };
-          this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
-        });
-    } catch (e) {
-      console.error(e);
-    }
+    return new Promise<void>((resolve) => setTimeout(resolve, 0))
+      .then(() => this.getAuthorizationConfiguration(authorizationEndpoint))
+      .then((configuration) =>
+        this.onCallbackUrl({
+          loginId,
+          callbackUrl,
+          configuration,
+          expectedState: state,
+          serviceEndpoints,
+        }),
+      )
+      .catch((e) => {
+        if (this.activeLoginId !== loginId) return;
+        const error = e instanceof Error ? e : new Error("Unknown error");
+        const detail: LoginEvent["detail"] = { loginId, error };
+        this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
+      });
   }
 
   protected async onCallbackUrl(args: {
@@ -302,6 +293,8 @@ export class Authorization {
       serviceEndpoints,
     } = args;
 
+    // Resumption may have been rejected by Sessions while initialization was pending.
+    if (this.activeLoginId !== loginId) return;
     const response = await authorizationCodeGrant(configuration, callbackUrl, {
       expectedState,
     });

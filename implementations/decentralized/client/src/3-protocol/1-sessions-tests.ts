@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { GraffitiLoginEvent, GraffitiLogoutEvent } from "@graffiti-garden/api";
+import type { GraffitiLoginEvent, GraffitiLogoutEvent, GraffitiSessionInitializedEvent } from "@graffiti-garden/api";
 import { Authorization } from "../1-services/1-authorization";
 import { Sessions } from "./1-sessions";
-import type { LoginAttempt } from "./login-attempt";
+import { LOGIN_ATTEMPT_PARAM, type LoginAttempt } from "./login-attempt";
 import { GraffitiDecentralized } from "./4-graffiti";
 import * as browserStorage from "./browser-storage";
 import * as modal from "@graffiti-garden/modal";
@@ -18,6 +18,8 @@ export function sessionTests() {
     function storage() {
       const values = new Map<string, string>();
       return {
+        get length() { return values.size; },
+        key: (i: number) => [...values.keys()][i] ?? null,
         getItem: (key: string) => values.get(key) ?? null,
         setItem: (key: string, value: string) => { values.set(key, value); },
         removeItem: (key: string) => { values.delete(key); },
@@ -83,7 +85,7 @@ export function sessionTests() {
       expect(events).toEqual([]);
       graffiti.sessionEvents.dispatchEvent(new CustomEvent("login", { detail: { session: { actor: "did:example:other" } } }));
       expect(mocks.close).not.toHaveBeenCalled();
-      graffiti.manager.loginAttempts.complete(attempt, { session: { actor: "did:example:alice" } });
+      graffiti.manager.loginAttempts.finish(attempt, { session: { actor: "did:example:alice" } });
       expect(events.at(-1)).toEqual({ session: { actor: "did:example:alice" }, state: "retry" });
       expect(mocks.close).toHaveBeenCalledOnce();
     });
@@ -100,9 +102,9 @@ export function sessionTests() {
       expect(graffiti.shown).toEqual([]);
     });
 
-    function sessionFixture(completingLogin = false) {
+    function sessionFixture(completingLoginId?: string, initializationError?: Error) {
       const authorization = {
-        eventTarget: new EventTarget(), login: vi.fn(), logout: vi.fn(), endLogin: vi.fn(), completingLogin,
+        eventTarget: new EventTarget(), login: vi.fn(), logout: vi.fn(), endLogin: vi.fn(), completingLoginId,
       };
       const sessions = new Sessions({
         authorization: authorization as unknown as Authorization,
@@ -116,10 +118,37 @@ export function sessionTests() {
       });
       const events: GraffitiLoginEvent["detail"][] = [];
       sessions.sessionEvents.addEventListener("login", event => events.push((event as GraffitiLoginEvent).detail));
-      const ready = new Promise<void>(resolve => sessions.sessionEvents.addEventListener("initialized", () => resolve(), { once: true }));
-      authorization.eventTarget.dispatchEvent(new CustomEvent("initialized"));
+      const ready = new Promise<GraffitiSessionInitializedEvent["detail"]>(resolve => sessions.sessionEvents.addEventListener("initialized", event => resolve((event as GraffitiSessionInitializedEvent).detail), { once: true }));
+      authorization.eventTarget.dispatchEvent(new CustomEvent("initialized", {
+        detail: initializationError ? { error: initializationError } : undefined,
+      }));
       return { sessions, authorization, events, ready };
     }
+
+    it("restores sessions without accessing redirect storage on an ordinary load", async () => {
+      const first = sessionFixture();
+      await first.ready;
+      const attempt = first.sessions.loginAttempts.begin("login");
+      await first.sessions.login("did:example:alice", attempt);
+      first.authorization.eventTarget.dispatchEvent(new CustomEvent("login", {
+        detail: { loginId: attempt.id, token: "token" },
+      }));
+      // Ordinary restoration must not depend on either pending-login store.
+      for (const name of ["sessionStorage", "localStorage"]) {
+        Object.defineProperty(window, name, {
+          configurable: true,
+          get() { throw new Error("Ordinary restoration must not access pending-login storage"); },
+        });
+      }
+      const graffiti = new Probe();
+      vi.spyOn(graffiti, "actorToHandle").mockResolvedValue("alice");
+      const events: GraffitiLoginEvent["detail"][] = [];
+      graffiti.sessionEvents.addEventListener("login", event => events.push((event as GraffitiLoginEvent).detail));
+      await new Promise<void>(resolve => graffiti.sessionEvents.addEventListener("initialized", () => resolve(), { once: true }));
+      expect(events).toEqual([{ session: { actor: "did:example:alice" } }]);
+      expect(graffiti.manager.loginAttempts.current).toBeUndefined();
+      expect(window.history.replaceState).not.toHaveBeenCalled();
+    });
 
     it("resumes authorization with its request after reload, then restores without it", async () => {
       const first = sessionFixture();
@@ -128,7 +157,7 @@ export function sessionTests() {
       await first.sessions.login("did:example:alice", attempt);
       expect(first.authorization.login.mock.calls[0][1]).toBe(attempt.id);
       expect(window.localStorage.getItem("graffiti-login-in-progress")).toBeNull();
-      const resumed = sessionFixture(true);
+      const resumed = sessionFixture(attempt.id);
       resumed.authorization.eventTarget.dispatchEvent(new CustomEvent("login", {
         detail: { loginId: attempt.id, token: "token" },
       }));
@@ -136,7 +165,7 @@ export function sessionTests() {
       expect(resumed.events.filter(e => e.state)).toEqual([
         { session: { actor: "did:example:alice" }, state: "redirect" },
       ]);
-      expect(window.sessionStorage.getItem("graffiti-login-attempt")).toBeNull();
+      expect(window.localStorage.getItem(`graffiti-pending-attempt:${attempt.id}`)).toBeNull();
       const restored = sessionFixture();
       await restored.ready;
       expect(restored.events).toEqual([{ session: { actor: "did:example:alice" } }]);
@@ -149,11 +178,45 @@ export function sessionTests() {
       await first.ready;
       const attempt = first.sessions.loginAttempts.begin("create");
       first.sessions.loginAttempts.save(attempt);
-      window.location = new URL("https://app.example/?actor=did%3Aexample%3Aalice") as any;
+      window.location = new URL(first.sessions.loginAttempts.returnUrl(attempt)) as any;
+      (window.location as unknown as URL).searchParams.set("actor", "did:example:alice");
       const resumed = sessionFixture();
       await resumed.ready;
       expect(resumed.sessions.loginAttempts.current?.state).toBe("create");
       expect(resumed.authorization.login.mock.calls[0][1]).toBe(attempt.id);
+    });
+
+    it.each([false, true])("handles failed account-return initialization without leaving an active attempt (restored=%s)", async restored => {
+      let saved: LoginAttempt | undefined;
+      if (restored) {
+        const first = sessionFixture();
+        await first.ready;
+        saved = first.sessions.loginAttempts.begin("create");
+        first.sessions.loginAttempts.save(saved);
+        window.location = new URL(first.sessions.loginAttempts.returnUrl(saved)) as any;
+      }
+      (window.location as unknown as URL).searchParams.set("actor", "did:example:alice");
+      const error = new Error("Login could not be restored");
+      const failed = sessionFixture(undefined, error);
+      // An unidentified return must not create an attempt while initialization is pending.
+      if (!restored) expect(failed.sessions.loginAttempts.current).toBeUndefined();
+      expect(await failed.ready).toEqual({ error });
+      expect(failed.authorization.login).not.toHaveBeenCalled();
+      expect(failed.events).toEqual(restored ? [{ error, state: "create" }] : []);
+      expect(failed.sessions.loginAttempts.current).toBeUndefined();
+      expect(failed.authorization.endLogin.mock.calls).toEqual(saved ? [[saved.id]] : []);
+      if (saved) expect(window.localStorage.getItem(`graffiti-pending-attempt:${saved.id}`)).toBeNull();
+      expect(failed.sessions.loginAttempts.begin("fresh").state).toBe("fresh");
+    });
+
+    it("reports missing account-creation state instead of beginning an unrelated login", async () => {
+      window.location = new URL(`https://app.example/?actor=did%3Aexample%3Aalice&${LOGIN_ATTEMPT_PARAM}=missing`) as any;
+      const resumed = sessionFixture();
+      const detail = await resumed.ready;
+      expect(detail?.error?.message).toContain("missing login attempt");
+      expect(resumed.authorization.login).not.toHaveBeenCalled();
+      expect(resumed.events).toEqual([]);
+      expect(resumed.sessions.loginAttempts.current).toBeUndefined();
     });
 
     it("ignores a late authorization callback for a cancelled attempt with the same actor", async () => {
@@ -161,7 +224,7 @@ export function sessionTests() {
       await ready;
       const first = sessions.loginAttempts.begin("old");
       await sessions.login("did:example:alice", first);
-      sessions.loginAttempts.complete(first, { error: new Error("Cancelled") });
+      sessions.loginAttempts.finish(first, { error: new Error("Cancelled") });
       expect(authorization.endLogin.mock.calls).toEqual([[first.id]]);
       const second = sessions.loginAttempts.begin("new");
       await sessions.login("did:example:alice", second);
@@ -175,20 +238,22 @@ export function sessionTests() {
     it("keeps independent pending login attempts in separate tabs", async () => {
       const first = sessionFixture();
       await first.ready;
-      const firstStorage = window.sessionStorage;
-      first.sessions.loginAttempts.save(first.sessions.loginAttempts.begin("tab-one"));
+      const attempt = first.sessions.loginAttempts.begin("tab-one");
+      first.sessions.loginAttempts.save(attempt);
       Object.assign(window, { sessionStorage: storage() });
       const second = sessionFixture();
       await second.ready;
-      expect(second.sessions.loginAttempts.current).toBeUndefined();
-      second.sessions.loginAttempts.save(second.sessions.loginAttempts.begin("tab-two"));
-      Object.assign(window, { sessionStorage: firstStorage });
-      const resumed = sessionFixture(true);
+      const secondAttempt = second.sessions.loginAttempts.begin("tab-two");
+      second.sessions.loginAttempts.save(secondAttempt);
+      const resumed = sessionFixture(attempt.id);
       await resumed.ready;
       expect(resumed.sessions.loginAttempts.current?.state).toBe("tab-one");
+      const other = sessionFixture(secondAttempt.id);
+      await other.ready;
+      expect(other.sessions.loginAttempts.current?.state).toBe("tab-two");
     });
 
-    it.each(["", "?actor="])("abandons a saved authorization on a normal visit (%s)", async search => {
+    it.each(["", "?actor="])("does not resume an abandoned attempt on an ordinary visit (%s)", async search => {
       const first = sessionFixture();
       await first.ready;
       const attempt = first.sessions.loginAttempts.begin("abandoned");
@@ -197,10 +262,10 @@ export function sessionTests() {
       const next = sessionFixture();
       await next.ready;
       expect(next.sessions.loginAttempts.current).toBeUndefined();
-      expect(next.authorization.endLogin.mock.calls).toEqual([[attempt.id]]);
-      expect(window.sessionStorage.getItem("graffiti-login-attempt")).toBeNull();
+      expect(next.authorization.endLogin).not.toHaveBeenCalled();
       expect(next.events).toEqual([]);
       expect(next.sessions.loginAttempts.begin("fresh").state).toBe("fresh");
+      expect(window.localStorage.getItem(`graffiti-pending-attempt:${attempt.id}`)).not.toBeNull();
     });
 
     it.each([undefined, 0, 1])("keeps logout correlation through multiple providers (failed step=%s)", async failedStep => {
@@ -247,13 +312,14 @@ export function sessionTests() {
     it("reports a malformed account return without blocking a fresh login", async () => {
       const first = sessionFixture();
       await first.ready;
-      first.sessions.loginAttempts.save(first.sessions.loginAttempts.begin("create"));
-      window.location = new URL("https://app.example/?actor=%25") as any;
+      const attempt = first.sessions.loginAttempts.begin("create");
+      first.sessions.loginAttempts.save(attempt);
+      window.location = new URL(`https://app.example/?actor=%25&${LOGIN_ATTEMPT_PARAM}=${attempt.id}`) as any;
       const resumed = sessionFixture();
       await resumed.ready;
       expect(resumed.events).toEqual([{ error: expect.any(URIError), state: "create" }]);
       expect(resumed.sessions.loginAttempts.begin("fresh").state).toBe("fresh");
-      expect(window.sessionStorage.getItem("graffiti-login-attempt")).toBeNull();
+      expect(window.localStorage.getItem(`graffiti-pending-attempt:${attempt.id}`)).toBeNull();
     });
 
     it("keeps simultaneous logouts independent", async () => {

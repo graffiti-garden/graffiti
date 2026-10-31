@@ -207,9 +207,6 @@ export class GraffitiGuarded extends Graffiti {
     params.set("loginNonce", nonce);
     if (options?.state !== undefined) params.set("state", options.state);
     loginUrl.hash = params.toString();
-    // Firefox can lose the top-level login's sessionStorage if an iframe from
-    // the same origin has already accessed it. Remove the iframe before leaving.
-    this.destroy();
     window.location.assign(loginUrl.href);
     return Promise.resolve();
   };
@@ -287,6 +284,6 @@ export class GraffitiGuarded extends Graffiti {
     if (this.iframe.style.display === "block") this.setGuardVisible(false);
     this.rpc.destroy();
     this.iframe.remove();
-    instance = undefined;
+    if (instance === this) instance = undefined;
   }
 }

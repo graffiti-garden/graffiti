@@ -1,148 +1,101 @@
-import type { GraffitiLoginEvent } from "@graffiti-garden/api";
+import type { Graffiti, GraffitiLoginEvent, GraffitiSessionInitializedEvent } from "@graffiti-garden/api";
 import { storeLoginResult } from "./login-result.js";
 export { takeLoginResult } from "./login-result.js";
-import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 import Status from "../ui/Status.vue";
 import { show } from "../ui/show.js";
 
-const storageKey = "graffiti-guard-redirect-url";
-const storageMaxAge = 10 * 60 * 1000;
+const redirectMaxAge = 10 * 60 * 1000;
+const statePrefix = "graffiti-guard-login:";
 const noncePattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Redirect = {
+  nonce: string;
   redirectUrl: string;
-  expiresAt: number;
-  state?: string;
   appState?: string;
+  expiresAt: number;
 };
 
-export function isLoginRedirect(url: URL) {
-  return (
-    new URLSearchParams(url.hash.slice(1)).get("guardLogin") === "1" ||
-    getStoredRedirect() !== null
-  );
-}
+/** Install on every standalone visit: login results identify their own return destination. */
+export function handleLoginRedirect(
+  url: URL,
+  createGraffiti: () => Graffiti,
+  onReady: () => void,
+) {
+  const params = new URLSearchParams(url.hash.slice(1));
+  let login: Parameters<Graffiti["login"]>[0];
+  if (params.get("guardLogin") === "1") {
+    const redirectUrl = getRedirectUrl(url);
+    if (!redirectUrl) return status("Login expired or missing return URL. Please start again.");
+    const nonce = params.get("loginNonce");
+    // The implementation carries this opaque return context through its login flow.
+    const state = statePrefix + JSON.stringify({
+      nonce: nonce && noncePattern.test(nonce) ? nonce : crypto.randomUUID(),
+      redirectUrl,
+      appState: params.get("state") ?? undefined,
+      expiresAt: Date.now() + redirectMaxAge,
+    } satisfies Redirect);
+    login = { state, actor: params.get("suggestedActor") || undefined };
+    // Consume the start instruction before the implementation can save this page's URL.
+    const cleanUrl = new URL(url);
+    cleanUrl.hash = "";
+    window.history.replaceState({}, "", cleanUrl.href);
+  }
 
-export function handleLoginRedirect(url: URL) {
-  const redirect = getRedirect(url);
-  if (!redirect) return status("Missing redirect URL.");
-  const { redirectUrl, state, appState } = redirect;
-  if (!state) return status("Login expired. Please start again.");
-  const graffiti = new GraffitiDecentralized({
-    replaceInitialLoginHistoryEntry: true,
-  });
-  const fragmentParams = new URLSearchParams(url.hash.slice(1));
-  // The decentralized client resumes account creation and OAuth callbacks
-  // itself. Opening the login modal here briefly shows it over that redirect.
-  const starting = !isLoginCallback(url);
+  const graffiti = createGraffiti();
   let initialized = false;
   let finished = false;
   let result: GraffitiLoginEvent["detail"] | undefined;
-  const returnToApp = (loginResult: GraffitiLoginEvent["detail"]) => {
-    if (finished) return;
-    finished = true;
-    storeLoginResult(state, new URL(redirectUrl).origin, { ...loginResult, state: appState });
-    clearStoredRedirect();
-    window.location.replace(redirectUrl);
-  };
   const finish = () => {
-    if (!initialized || !result) return;
-    returnToApp(result);
+    if (finished || !result || (!initialized && !result.error)) return;
+    const redirect = readRedirect(result.state!);
+    finished = true;
+    if (!redirect) return status("Login expired or missing return URL. Please start again.");
+    storeLoginResult(redirect.nonce, new URL(redirect.redirectUrl).origin, {
+      ...result, state: redirect.appState,
+    });
+    window.location.replace(redirect.redirectUrl);
   };
-  status(starting ? "Opening login" : "Completing login", true);
+  status(login ? "Opening login" : "Loading", true);
   graffiti.sessionEvents.addEventListener("login", (event) => {
-    if (!(event instanceof CustomEvent)) return;
+    if (!(event instanceof CustomEvent) || finished) return;
     const detail = event.detail as GraffitiLoginEvent["detail"];
-    // Restored sessions are not the login that opened this guard page.
-    if (detail.state !== state) return;
-    if (detail.error) {
-      returnToApp(detail);
-      return;
-    }
+    // Only our namespaced state describes a return to an app.
+    if (!detail.state?.startsWith(statePrefix)) return;
     result = detail;
     finish();
   });
-  graffiti.sessionEvents.addEventListener("initialized", () => {
+  graffiti.sessionEvents.addEventListener("initialized", (event) => {
     initialized = true;
     finish();
-    if (!starting) return;
-    const actor = fragmentParams.get("suggestedActor") ?? undefined;
-    // Restored sessions have finished before this dialog opens.
-    void graffiti.login({ ...(actor ? { actor } : {}), state });
+    if (finished) return;
+    const error = (event as GraffitiSessionInitializedEvent).detail?.error;
+    if (error) return status(error.message);
+    if (login) void graffiti.login(login);
+    else onReady();
   }, { once: true });
 }
 
 export function getRedirectUrl(url: URL) {
-  return getRedirect(url)?.redirectUrl ?? null;
+  const params = new URLSearchParams(url.hash.slice(1));
+  return httpUrl(params.get("redirectUrl"));
 }
 
-function getRedirect(url: URL): Redirect | null {
-  const encodedRedirect = new URLSearchParams(url.hash.slice(1)).get("redirectUrl");
-  if (encodedRedirect === null) return getStoredRedirect();
-  const parsedRedirect = URL.parse(encodedRedirect);
-  if (
-    parsedRedirect?.protocol !== "http:" &&
-    parsedRedirect?.protocol !== "https:"
-  ) {
-    return null;
-  }
-  const redirectUrl = parsedRedirect.href;
-  // Callbacks can retain the original login parameters. Reuse the saved
-  // request instead of treating the return as a new login.
-  const stored = getStoredRedirect();
-  if (
-    stored?.redirectUrl === redirectUrl &&
-    isLoginCallback(url)
-  ) {
-    return stored;
-  }
-  const nonce = new URLSearchParams(url.hash.slice(1)).get("loginNonce");
-  const redirect: Redirect = {
-    redirectUrl,
-    expiresAt: Date.now() + storageMaxAge,
-    state: nonce && noncePattern.test(nonce) ? nonce : crypto.randomUUID(),
-    appState: new URLSearchParams(url.hash.slice(1)).get("state") ?? undefined,
-  };
-  const value = JSON.stringify(redirect);
-  sessionStorage.setItem(storageKey, value);
-  return redirect;
+function httpUrl(value: unknown) {
+  const url = typeof value === "string" ? URL.parse(value) : null;
+  return url?.protocol === "http:" || url?.protocol === "https:" ? url.href : null;
 }
 
-function isLoginCallback(url: URL) {
-  const params = url.searchParams;
-  return !!params.get("actor") || params.has("code") || params.has("error");
-}
-
-function getStoredRedirect(): Redirect | null {
-  const value = sessionStorage.getItem(storageKey);
-  if (!value) return null;
+function readRedirect(state: string): Redirect | undefined {
   try {
-    const stored = JSON.parse(value);
-    const parsedRedirect =
-      typeof stored.redirectUrl === "string"
-        ? URL.parse(stored.redirectUrl)
-        : null;
-    if (
-      (parsedRedirect?.protocol === "http:" ||
-        parsedRedirect?.protocol === "https:") &&
-      typeof stored.expiresAt === "number" &&
-      stored.expiresAt > Date.now()
-    ) {
-      return {
-        redirectUrl: parsedRedirect.href,
-        expiresAt: stored.expiresAt,
-        ...(typeof stored.state === "string" ? { state: stored.state } : {}),
-        ...(typeof stored.appState === "string" ? { appState: stored.appState } : {}),
-      };
+    const record = JSON.parse(state.slice(statePrefix.length));
+    const redirectUrl = httpUrl(record?.redirectUrl);
+    if (redirectUrl && typeof record.nonce === "string" && noncePattern.test(record.nonce) &&
+        Number.isFinite(record.expiresAt) && record.expiresAt > Date.now() &&
+        (record.appState === undefined || typeof record.appState === "string")) {
+      return { ...record, redirectUrl };
     }
-  } catch {}
-  clearStoredRedirect();
-  return null;
-}
-
-function clearStoredRedirect() {
-  sessionStorage.removeItem(storageKey);
+  } catch { /* Ignore malformed return state. */ }
 }
 
 function status(message: string, loading = false) {

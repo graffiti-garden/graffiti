@@ -1,23 +1,29 @@
 import type { GraffitiLoginEvent } from "@graffiti-garden/api";
 import { array, enum as enum_, object, optional, string, tuple, url, type infer as infer_ } from "zod/mini";
 
-const LOGIN_ATTEMPT_KEY = "graffiti-login-attempt";
+import { PendingLoginStorage } from "../1-services/pending-login-storage";
+
+const pendingAttempts = new PendingLoginStorage("graffiti-pending-attempt:");
+export const LOGIN_ATTEMPT_PARAM = "graffitiLoginAttempt";
 
 /** One explicit login, including retries and redirects; never a restored session. */
 export class LoginAttempts {
   current: LoginAttempt | undefined;
-  onError?: (attempt: LoginAttempt, error: Error, actor?: string) => void;
 
   constructor(
     private events: EventTarget,
-    private onComplete?: (attempt: LoginAttempt) => void,
-  ) {
-    if (typeof window === "undefined") return;
-    const saved = window.sessionStorage.getItem(LOGIN_ATTEMPT_KEY);
-    if (saved) {
-      try { this.current = LoginAttemptSchema.parse(JSON.parse(saved)); }
-      catch { window.sessionStorage.removeItem(LOGIN_ATTEMPT_KEY); }
-    }
+    private onFinish?: (attempt: LoginAttempt) => void,
+  ) {}
+
+  restore(id: string) {
+    const parsed = LoginAttemptSchema.safeParse(pendingAttempts.load(id));
+    if (parsed.success && parsed.data.id === id) this.current = parsed.data;
+  }
+
+  returnUrl(attempt: LoginAttempt) {
+    const url = new URL(window.location.href);
+    url.searchParams.set(LOGIN_ATTEMPT_PARAM, attempt.id);
+    return url.toString();
   }
 
   begin(state?: string): LoginAttempt {
@@ -28,26 +34,17 @@ export class LoginAttempts {
 
   save(attempt: LoginAttempt) {
     if (this.current !== attempt) return;
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(LOGIN_ATTEMPT_KEY, JSON.stringify(attempt));
-    }
+    pendingAttempts.save(attempt.id, attempt);
   }
 
-  /** Clear the current attempt without emitting a login result. */
-  discard() {
-    this.current = undefined;
-    if (typeof window !== "undefined") {
-      window.sessionStorage.removeItem(LOGIN_ATTEMPT_KEY);
-    }
-  }
-
-  complete(
+  finish(
     attempt: LoginAttempt,
     detail: GraffitiLoginEvent["detail"],
   ) {
     if (this.current !== attempt) return;
-    this.discard();
-    this.onComplete?.(attempt);
+    pendingAttempts.remove(attempt.id);
+    this.current = undefined;
+    this.onFinish?.(attempt);
     this.events.dispatchEvent(new CustomEvent("login", {
       detail: {
         ...detail,
@@ -55,22 +52,6 @@ export class LoginAttempts {
       },
     }));
   }
-
-  fail(attempt: LoginAttempt, error: unknown, actor?: string) {
-    if (this.current !== attempt) return;
-    const failure = error instanceof Error ? error : new Error(String(error));
-    attempt.authorization = undefined;
-    if (this.onError) {
-      this.save(attempt);
-      this.onError(attempt, failure, actor);
-    } else {
-      this.complete(attempt, {
-        error: failure,
-        session: actor ? { actor } : undefined,
-      });
-    }
-  }
-
 }
 
 // Each authorization endpoint maps to its services (buckets and inboxes).
