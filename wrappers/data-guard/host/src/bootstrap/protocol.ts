@@ -2,7 +2,7 @@ export const visibilityEvents = new EventTarget();
 let parentOrigin: string | undefined;
 
 export function listenToParent(
-  connect: (origin: string, pageUrl?: string) => void,
+  connect: (origin: string, pageUrl?: string, loginNonce?: string) => void,
 ) {
   window.addEventListener("message", (event) => {
     if (
@@ -32,6 +32,9 @@ export function listenToParent(
         connect(
           parentOrigin,
           pageUrl?.origin === parentOrigin ? pageUrl.href : undefined,
+          typeof event.data.loginNonce === "string"
+            ? event.data.loginNonce
+            : undefined,
         );
       }
     } else if (

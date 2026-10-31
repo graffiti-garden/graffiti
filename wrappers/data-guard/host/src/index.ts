@@ -6,6 +6,7 @@ import { handleAudit } from "./bootstrap/audit.js";
 import {
   handleLoginRedirect,
   isLoginRedirect,
+  takeLoginResult,
 } from "./bootstrap/login_redirect.js";
 import { listenToParent } from "./bootstrap/protocol.js";
 import {
@@ -44,7 +45,7 @@ if (standalone) {
     handleAudit(pageUrl);
   }
 } else {
-  listenToParent((origin, pageUrl) => {
+  listenToParent((origin, pageUrl, loginNonce) => {
     activateStorageAccess(pageUrl).then(() => {
       const graffiti = new GraffitiDecentralized();
       app.use(GraffitiPlugin, { graffiti });
@@ -53,6 +54,7 @@ if (standalone) {
       serveGraffiti(new GuardedGraffiti(graffiti, guard)).connect({
         remoteWindow: window.parent,
         allowedOrigins: [origin],
+        initialLoginResult: () => loginNonce ? takeLoginResult(loginNonce, origin) : undefined,
       });
     });
   });

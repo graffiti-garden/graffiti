@@ -59,10 +59,12 @@ export class Guard {
     if (method === "discover" || method === "continueDiscover") {
       return undefined;
     }
-    const actor = actorFromArgs(args);
+    // Logout accepts options after its session; other methods place the session last.
+    const sessionArgs = method === "logout" ? args.slice(0, 1) : args;
+    const actor = actorFromArgs(sessionArgs);
     if (!actor) return undefined;
-    const session = sessionFromArgs(args)!;
-    const source = sourceFromArgs(this.origin, args);
+    const session = sessionFromArgs(sessionArgs)!;
+    const source = sourceFromArgs(this.origin, sessionArgs);
     await this.db.load(source, session);
     if (await this.db.isSourceBlocked(source, actor)) throw sourceBlocked();
     const prepared = await this.prepare(method, args as any[]);

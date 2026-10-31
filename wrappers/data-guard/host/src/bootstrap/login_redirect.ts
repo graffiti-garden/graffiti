@@ -1,86 +1,85 @@
 import type { GraffitiLoginEvent } from "@graffiti-garden/api";
+import { storeLoginResult } from "./login-result.js";
+export { takeLoginResult } from "./login-result.js";
 import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
 import Status from "../ui/Status.vue";
 import { show } from "../ui/show.js";
 
 const storageKey = "graffiti-guard-redirect-url";
 const storageMaxAge = 10 * 60 * 1000;
+const noncePattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type Redirect = {
+  redirectUrl: string;
+  expiresAt: number;
+  state?: string;
+  requestId?: string;
+};
 
 export function isLoginRedirect(url: URL) {
   return (
     new URLSearchParams(url.hash.slice(1)).get("guardLogin") === "1" ||
-    // Older clients use search searchParams
-    // TODO: once clients update, delete this fix
-    url.searchParams.get("guardLogin") === "1" ||
-    getStoredUrl() !== null
+    getStoredRedirect() !== null
   );
 }
 
-export async function handleLoginRedirect(url: URL) {
-  const redirectUrl = getRedirectUrl(url);
-  if (!redirectUrl) return status("Missing redirect URL.");
+export function handleLoginRedirect(url: URL) {
+  const redirect = getRedirect(url);
+  if (!redirect) return status("Missing redirect URL.");
+  const { redirectUrl, state, requestId } = redirect;
+  if (!state) return status("Login expired. Please start again.");
   const graffiti = new GraffitiDecentralized({
     replaceInitialLoginHistoryEntry: true,
   });
   const fragmentParams = new URLSearchParams(url.hash.slice(1));
   // The decentralized client resumes account creation and OAuth callbacks
   // itself. Opening the login modal here briefly shows it over that redirect.
-  const continuingLogin = ["actor", "code", "error"].some((param) =>
-    url.searchParams.has(param),
-  );
-  const starting =
-    !continuingLogin &&
-    (fragmentParams.get("guardLogin") === "1" ||
-      // Older clients use search searchParams
-      // TODO: once clients update, delete this fix
-      url.searchParams.get("guardLogin") === "1");
+  const starting = !isLoginCallback(url);
   let initialized = false;
-  let ready = false;
-  const returnToApp = () => {
-    clearStoredUrl();
+  let finished = false;
+  let result: GraffitiLoginEvent["detail"] | undefined;
+  const returnToApp = (loginResult: GraffitiLoginEvent["detail"]) => {
+    if (finished) return;
+    finished = true;
+    storeLoginResult(state, new URL(redirectUrl).origin, { ...loginResult, requestId });
+    clearStoredRedirect();
     window.location.replace(redirectUrl);
   };
-  const redirect = () => {
-    if (!initialized || !ready) return;
-    returnToApp();
+  const finish = () => {
+    if (!initialized || !result) return;
+    returnToApp(result);
   };
   status(starting ? "Opening login" : "Completing login", true);
   graffiti.sessionEvents.addEventListener("login", (event) => {
     if (!(event instanceof CustomEvent)) return;
     const detail = event.detail as GraffitiLoginEvent["detail"];
+    // Restored sessions are not the login that opened this guard page.
+    if (detail.requestId !== state) return;
     if (detail.error) {
-      if ("manual" in detail && detail.manual) returnToApp();
+      returnToApp(detail);
       return;
     }
-    // Ignore restored sessions while opening the login UI. A later manual
-    // login is what authorizes returning to the application.
-    if (!initialized && starting) return;
-    ready = true;
-    redirect();
+    result = detail;
+    finish();
   });
   graffiti.sessionEvents.addEventListener("initialized", () => {
     initialized = true;
-    redirect();
-  });
-  if (starting) {
-    await graffiti.login(
-      fragmentParams.get("suggestedActor") ??
-        // Older clients use search searchParams
-        // TODO: once clients update, delete this fix
-        url.searchParams.get("suggestedActor") ??
-        undefined,
-    );
-  }
+    finish();
+    if (!starting) return;
+    const actor = fragmentParams.get("suggestedActor") ?? undefined;
+    // Restored sessions have finished before this dialog opens.
+    void graffiti.login({ ...(actor ? { actor } : {}), requestId: state });
+  }, { once: true });
 }
 
 export function getRedirectUrl(url: URL) {
-  // Older clients put the return URL in the query string.
-  const encodedRedirect =
-    new URLSearchParams(url.hash.slice(1)).get("redirectUrl") ??
-    // Older clients use search searchParams
-    // TODO: once clients update, delete this fix
-    url.searchParams.get("redirectUrl");
-  if (encodedRedirect === null) return getStoredUrl();
+  return getRedirect(url)?.redirectUrl ?? null;
+}
+
+function getRedirect(url: URL): Redirect | null {
+  const encodedRedirect = new URLSearchParams(url.hash.slice(1)).get("redirectUrl");
+  if (encodedRedirect === null) return getStoredRedirect();
   const parsedRedirect = URL.parse(encodedRedirect);
   if (
     parsedRedirect?.protocol !== "http:" &&
@@ -89,21 +88,34 @@ export function getRedirectUrl(url: URL) {
     return null;
   }
   const redirectUrl = parsedRedirect.href;
-  const value = JSON.stringify({
+  // Callbacks can retain the original login parameters. Reuse the saved
+  // request instead of treating the return as a new login.
+  const stored = getStoredRedirect();
+  if (
+    stored?.redirectUrl === redirectUrl &&
+    isLoginCallback(url)
+  ) {
+    return stored;
+  }
+  const nonce = new URLSearchParams(url.hash.slice(1)).get("loginNonce");
+  const redirect: Redirect = {
     redirectUrl,
     expiresAt: Date.now() + storageMaxAge,
-  });
+    state: nonce && noncePattern.test(nonce) ? nonce : crypto.randomUUID(),
+    requestId: new URLSearchParams(url.hash.slice(1)).get("requestId") ?? undefined,
+  };
+  const value = JSON.stringify(redirect);
   sessionStorage.setItem(storageKey, value);
-  localStorage.setItem(storageKey, value);
-  return redirectUrl;
+  return redirect;
 }
 
-function getStoredUrl() {
-  return read(sessionStorage) ?? read(localStorage);
+function isLoginCallback(url: URL) {
+  const params = url.searchParams;
+  return !!params.get("actor") || params.has("code") || params.has("error");
 }
 
-function read(storage: Storage) {
-  const value = storage.getItem(storageKey);
+function getStoredRedirect(): Redirect | null {
+  const value = sessionStorage.getItem(storageKey);
   if (!value) return null;
   try {
     const stored = JSON.parse(value);
@@ -117,16 +129,20 @@ function read(storage: Storage) {
       typeof stored.expiresAt === "number" &&
       stored.expiresAt > Date.now()
     ) {
-      return parsedRedirect.href;
+      return {
+        redirectUrl: parsedRedirect.href,
+        expiresAt: stored.expiresAt,
+        ...(typeof stored.state === "string" ? { state: stored.state } : {}),
+        ...(typeof stored.requestId === "string" ? { requestId: stored.requestId } : {}),
+      };
     }
   } catch {}
-  clearStoredUrl();
+  clearStoredRedirect();
   return null;
 }
 
-function clearStoredUrl() {
+function clearStoredRedirect() {
   sessionStorage.removeItem(storageKey);
-  localStorage.removeItem(storageKey);
 }
 
 function status(message: string, loading = false) {

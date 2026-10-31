@@ -34,19 +34,21 @@ describe("login redirects", () => {
     expect(getRedirectUrl(new URL("https://guard.example/"))).toBe(returnUrl);
   });
 
-  it("accepts and normalizes only HTTP redirects", () => {
-    expect(isLoginRedirect(new URL("https://guard.example/?guardLogin=1"))).toBe(true);
+  it("accepts and normalizes only HTTP fragment redirects", () => {
+    expect(isLoginRedirect(new URL("https://guard.example/?guardLogin=1"))).toBe(false);
+    expect(getRedirectUrl(new URL("https://guard.example/?redirectUrl=https%3A%2F%2Fapp.example"))).toBeNull();
+    expect(isLoginRedirect(new URL("https://guard.example/#guardLogin=1"))).toBe(true);
     expect(
       getRedirectUrl(
         new URL(
-          "https://guard.example/?redirectUrl=HTTPS%3A%2F%2FExample.com%3A443%2Fchat",
+          "https://guard.example/#redirectUrl=HTTPS%3A%2F%2FExample.com%3A443%2Fchat",
         ),
       ),
     ).toBe("https://example.com/chat");
     expect(
       getRedirectUrl(
         new URL(
-          "https://guard.example/?redirectUrl=javascript%3Aalert(document.domain)",
+          "https://guard.example/#redirectUrl=javascript%3Aalert(document.domain)",
         ),
       ),
     ).toBeNull();
@@ -63,10 +65,8 @@ describe("login redirects", () => {
       expiresAt: Date.now() + 60_000,
     });
     sessionStorage.setItem("graffiti-guard-redirect-url", value);
-    localStorage.setItem("graffiti-guard-redirect-url", value);
 
     expect(getRedirectUrl(new URL("https://guard.example/"))).toBeNull();
     expect(sessionStorage.getItem("graffiti-guard-redirect-url")).toBeNull();
-    expect(localStorage.getItem("graffiti-guard-redirect-url")).toBeNull();
   });
 });

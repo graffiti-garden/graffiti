@@ -28,7 +28,7 @@ it("acknowledges the embedding origin before connecting", async () => {
     { type: "graffiti-guard:connected" },
     "https://app.example",
   );
-  expect(connect).toHaveBeenCalledWith("https://app.example", undefined);
+  expect(connect).toHaveBeenCalledWith("https://app.example", undefined, undefined);
 });
 
 it("passes through a page URL only for the embedding origin", async () => {
@@ -58,6 +58,33 @@ it("passes through a page URL only for the embedding origin", async () => {
   expect(connect).toHaveBeenCalledWith(
     "https://app.example",
     "https://app.example/page",
+    undefined,
+  );
+});
+
+it("passes a login nonce only from the verified embedding parent", async () => {
+  const parent = { postMessage: vi.fn() };
+  let onMessage: ((event: MessageEvent) => void) | undefined;
+  vi.stubGlobal("window", {
+    parent,
+    addEventListener: vi.fn((type, listener) => {
+      if (type === "message") onMessage = listener;
+    }),
+  });
+  const { listenToParent } = await import("../src/bootstrap/protocol.js");
+  const connect = vi.fn();
+  listenToParent(connect);
+
+  onMessage?.({
+    source: parent,
+    origin: "https://app.example",
+    data: { type: "graffiti-guard:connect", loginNonce: "nonce" },
+  } as unknown as MessageEvent);
+
+  expect(connect).toHaveBeenCalledWith(
+    "https://app.example",
+    undefined,
+    "nonce",
   );
 });
 

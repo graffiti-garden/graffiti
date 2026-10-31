@@ -7,6 +7,7 @@ import type {
 import { decodeBase64, encodeBase64 } from "./utilities";
 
 const DID_LOCAL_PREFIX = "did:local:";
+const PENDING_LOGIN_KEY = "graffiti-local-pending-login";
 
 /**
  * A class that implements the login methods
@@ -40,15 +41,42 @@ export class GraffitiLocalIdentity {
   constructor() {
     // Look for any existing sessions
     const sessionRestorer = async () => {
+      // Correlate the explicit login across its reload, then forget the request ID.
+      let pending: { handle: string; requestId: string } | undefined;
+      if (typeof window !== "undefined") {
+        const saved = window.sessionStorage.getItem(PENDING_LOGIN_KEY);
+        window.sessionStorage.removeItem(PENDING_LOGIN_KEY);
+        if (saved) {
+          try {
+            const value: unknown = JSON.parse(saved);
+            if (value && typeof value === "object" &&
+                "handle" in value && typeof value.handle === "string" &&
+                "requestId" in value && typeof value.requestId === "string") {
+              pending = { handle: value.handle, requestId: value.requestId };
+            }
+          } catch { /* Ignore an invalid pending login. */ }
+        }
+      }
+
       // Allow listeners to be added first
       await Promise.resolve();
 
       // Restore previous sessions
-      for (const handle of this.getLoggedInHandles()) {
+      const handles = this.getLoggedInHandles();
+      for (const handle of handles) {
         const event: GraffitiLoginEvent = new CustomEvent("login", {
-          detail: { session: { actor: await this.handleToActor(handle) } },
+          detail: {
+            session: { actor: await this.handleToActor(handle) },
+            ...(pending?.handle === handle ? { requestId: pending.requestId } : {}),
+          },
         });
         this.sessionEvents.dispatchEvent(event);
+      }
+
+      if (pending && !handles.includes(pending.handle)) {
+        this.sessionEvents.dispatchEvent(new CustomEvent("login", {
+          detail: { error: new Error("Login session is no longer active"), requestId: pending.requestId },
+        }));
       }
 
       const event: GraffitiSessionInitializedEvent = new CustomEvent(
@@ -75,17 +103,40 @@ export class GraffitiLocalIdentity {
 
   protected setLoggedInHandles(handles: string[]) {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("graffiti-handles", handles.join(","));
+      window.localStorage.setItem("graffiti-handles", handles.map(encodeURIComponent).join(","));
     } else {
       this.loggedInHandles = handles;
     }
   }
 
-  login: Graffiti["login"] = async (actor) => {
+  private loggingIn = false;
+
+  login: Graffiti["login"] = async (options) => {
+    if (this.loggingIn) {
+      this.sessionEvents.dispatchEvent(new CustomEvent("login", {
+        detail: { error: new Error("A login is already in progress"), requestId: options?.requestId },
+      }));
+      return;
+    }
+    this.loggingIn = true;
+    let detail: GraffitiLoginEvent["detail"] | undefined;
+    try {
+      detail = await this.login_(options);
+    } catch (error) {
+      detail = { error: error instanceof Error ? error : new Error(String(error)) };
+    } finally {
+      this.loggingIn = false;
+    }
+    if (detail) this.sessionEvents.dispatchEvent(new CustomEvent("login", {
+      detail: { ...detail, requestId: options?.requestId },
+    }));
+  };
+
+  private async login_(options: Parameters<Graffiti["login"]>[0]) {
     // Wait a tick for the browser to update the UI
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    let handle = actor ? await this.actorToHandle(actor) : undefined;
+    let handle = options?.actor ? await this.actorToHandle(options.actor) : undefined;
 
     if (typeof window !== "undefined") {
       const dialog = document.createElement("dialog");
@@ -104,40 +155,39 @@ export class GraffitiLocalIdentity {
       });
     }
 
-    if (!handle) {
-      const detail: GraffitiLoginEvent["detail"] = {
-        error: new Error("No handle provided to login"),
-      };
-      const event: GraffitiLoginEvent = new CustomEvent("login", { detail });
-      this.sessionEvents.dispatchEvent(event);
-    } else {
-      const existingHandles = this.getLoggedInHandles();
-      if (!existingHandles.includes(handle)) {
-        this.setLoggedInHandles([...existingHandles, handle]);
-      }
-      // Refresh the page to simulate oauth
-      window.location.reload();
-    }
-  };
+    if (!handle) throw new Error("No handle provided to login");
 
-  logout: Graffiti["logout"] = async (session) => {
-    const handle = await this.actorToHandle(session.actor);
     const existingHandles = this.getLoggedInHandles();
-    const exists = existingHandles.includes(handle);
-    if (exists) {
-      this.setLoggedInHandles(existingHandles.filter((h) => h !== handle));
+    if (!existingHandles.includes(handle)) {
+      this.setLoggedInHandles([...existingHandles, handle]);
     }
+    if (typeof window === "undefined") {
+      return { session: { actor: await this.handleToActor(handle) } };
+    }
+    // Otherwise store the login for after refresh, then refresh
+    window.sessionStorage.removeItem(PENDING_LOGIN_KEY);
+    if (options?.requestId !== undefined) {
+      window.sessionStorage.setItem(PENDING_LOGIN_KEY, JSON.stringify({
+        handle, requestId: options.requestId,
+      }));
+    }
+    // Refresh the page to simulate oauth
+    window.location.reload();
+  }
 
-    const detail: GraffitiLogoutEvent["detail"] = exists
-      ? {
-          actor: session.actor,
-        }
-      : {
-          actor: session.actor,
-          error: new Error("Not logged in with that actor"),
-        };
-
-    const event: GraffitiLogoutEvent = new CustomEvent("logout", { detail });
-    this.sessionEvents.dispatchEvent(event);
+  logout: Graffiti["logout"] = async (session, options) => {
+    let detail: GraffitiLogoutEvent["detail"] = {
+      actor: session.actor,
+      requestId: options?.requestId,
+    };
+    try {
+      const handle = await this.actorToHandle(session.actor);
+      const existingHandles = this.getLoggedInHandles();
+      if (!existingHandles.includes(handle)) throw new Error("Not logged in with that actor");
+      this.setLoggedInHandles(existingHandles.filter((h) => h !== handle));
+    } catch (error) {
+      detail = { ...detail, error: error instanceof Error ? error : new Error(String(error)) };
+    }
+    this.sessionEvents.dispatchEvent(new CustomEvent("logout", { detail }));
   };
 }
