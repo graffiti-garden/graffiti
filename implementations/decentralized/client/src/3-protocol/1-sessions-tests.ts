@@ -59,21 +59,21 @@ export function sessionTests() {
       vi.spyOn(graffiti, "actorToHandle").mockImplementation(async () => { await waiting; return "alice"; });
       const events: GraffitiLoginEvent["detail"][] = [];
       graffiti.sessionEvents.addEventListener("login", event => events.push((event as GraffitiLoginEvent).detail));
-      const first = graffiti.login({ actor: "did:example:alice", requestId: "first" });
-      await graffiti.login({ requestId: "second" });
+      const first = graffiti.login({ actor: "did:example:alice", state: "first" });
+      await graffiti.login({ state: "second" });
       release();
       await first;
-      expect(events).toEqual([{ error: expect.any(Error), requestId: "second" }]);
-      expect(graffiti.shown.map(({ attempt }) => attempt.requestId)).toEqual(["first"]);
+      expect(events).toEqual([{ error: expect.any(Error), state: "second" }]);
+      expect(graffiti.shown.map(({ attempt }) => attempt.state)).toEqual(["first"]);
       mocks.cancel!();
-      expect(events[1]).toMatchObject({ error: expect.any(Error), requestId: "first" });
+      expect(events[1]).toMatchObject({ error: expect.any(Error), state: "first" });
     });
 
     it("keeps the request through a recoverable failure and does not close on restoration", async () => {
       const graffiti = new Probe();
       vi.spyOn(graffiti, "actorToHandle").mockResolvedValue("alice");
       vi.spyOn(graffiti.didService, "resolve").mockRejectedValue(new Error("Try again"));
-      await graffiti.login({ requestId: "retry" });
+      await graffiti.login({ state: "retry" });
       const attempt = graffiti.manager.loginAttempts.current!;
       const events: GraffitiLoginEvent["detail"][] = [];
       graffiti.sessionEvents.addEventListener("login", event => events.push((event as GraffitiLoginEvent).detail));
@@ -84,7 +84,7 @@ export function sessionTests() {
       graffiti.sessionEvents.dispatchEvent(new CustomEvent("login", { detail: { session: { actor: "did:example:other" } } }));
       expect(mocks.close).not.toHaveBeenCalled();
       graffiti.manager.loginAttempts.complete(attempt, { session: { actor: "did:example:alice" } });
-      expect(events.at(-1)).toEqual({ session: { actor: "did:example:alice" }, requestId: "retry" });
+      expect(events.at(-1)).toEqual({ session: { actor: "did:example:alice" }, state: "retry" });
       expect(mocks.close).toHaveBeenCalledOnce();
     });
 
@@ -93,7 +93,7 @@ export function sessionTests() {
       let release!: () => void;
       const waiting = new Promise<void>((resolve) => { release = resolve; });
       vi.spyOn(graffiti, "actorToHandle").mockImplementation(async () => { await waiting; return "alice"; });
-      const login = graffiti.login({ actor: "did:example:alice", requestId: "cancel" });
+      const login = graffiti.login({ actor: "did:example:alice", state: "cancel" });
       mocks.cancel!();
       release();
       await login;
@@ -133,15 +133,15 @@ export function sessionTests() {
         detail: { loginId: attempt.id, token: "token" },
       }));
       await resumed.ready;
-      expect(resumed.events.filter(e => e.requestId)).toEqual([
-        { session: { actor: "did:example:alice" }, requestId: "redirect" },
+      expect(resumed.events.filter(e => e.state)).toEqual([
+        { session: { actor: "did:example:alice" }, state: "redirect" },
       ]);
       expect(window.sessionStorage.getItem("graffiti-login-attempt")).toBeNull();
       const restored = sessionFixture();
       await restored.ready;
       expect(restored.events).toEqual([{ session: { actor: "did:example:alice" } }]);
       await restored.sessions.login("did:example:alice", restored.sessions.loginAttempts.begin("cached"));
-      expect(restored.events.at(-1)?.requestId).toBe("cached");
+      expect(restored.events.at(-1)?.state).toBe("cached");
     });
 
     it("carries the attempt through account creation before an actor is known", async () => {
@@ -152,7 +152,7 @@ export function sessionTests() {
       window.location = new URL("https://app.example/?actor=did%3Aexample%3Aalice") as any;
       const resumed = sessionFixture();
       await resumed.ready;
-      expect(resumed.sessions.loginAttempts.current?.requestId).toBe("create");
+      expect(resumed.sessions.loginAttempts.current?.state).toBe("create");
       expect(resumed.authorization.login.mock.calls[0][1]).toBe(attempt.id);
     });
 
@@ -168,7 +168,7 @@ export function sessionTests() {
       authorization.eventTarget.dispatchEvent(new CustomEvent("login", { detail: { loginId: first.id, token: "old-token" } }));
       expect(events).toHaveLength(1);
       authorization.eventTarget.dispatchEvent(new CustomEvent("login", { detail: { loginId: second.id, token: "new-token" } }));
-      expect(events.at(-1)).toEqual({ session: { actor: "did:example:alice" }, requestId: "new" });
+      expect(events.at(-1)).toEqual({ session: { actor: "did:example:alice" }, state: "new" });
       expect(authorization.endLogin.mock.calls).toEqual([[first.id], [second.id]]);
     });
 
@@ -185,7 +185,7 @@ export function sessionTests() {
       Object.assign(window, { sessionStorage: firstStorage });
       const resumed = sessionFixture(true);
       await resumed.ready;
-      expect(resumed.sessions.loginAttempts.current?.requestId).toBe("tab-one");
+      expect(resumed.sessions.loginAttempts.current?.state).toBe("tab-one");
     });
 
     it.each(["", "?actor="])("abandons a saved authorization on a normal visit (%s)", async search => {
@@ -200,7 +200,7 @@ export function sessionTests() {
       expect(next.authorization.endLogin.mock.calls).toEqual([[attempt.id]]);
       expect(window.sessionStorage.getItem("graffiti-login-attempt")).toBeNull();
       expect(next.events).toEqual([]);
-      expect(next.sessions.loginAttempts.begin("fresh").requestId).toBe("fresh");
+      expect(next.sessions.loginAttempts.begin("fresh").state).toBe("fresh");
     });
 
     it.each([undefined, 0, 1])("keeps logout correlation through multiple providers (failed step=%s)", async failedStep => {
@@ -222,25 +222,25 @@ export function sessionTests() {
       authorization.logout.mockImplementation(async () => {
         if (authorization.logout.mock.calls.length - 1 === failedStep) throw new Error("Revocation failed");
       });
-      await sessions.logout(actor, { requestId: "logout-request" });
+      await sessions.logout(actor, { state: "logout-request" });
       expect(authorization.logout.mock.calls).toEqual([
         ["oauth2:https://second.example", "second-token"],
         ["oauth2:https://provider.example", "first-token"],
       ].slice(0, failedStep === 0 ? 1 : 2));
       expect(events).toEqual([{
-        actor, requestId: "logout-request", ...(failedStep === undefined ? {} : { error: expect.any(Error) }),
+        actor, state: "logout-request", ...(failedStep === undefined ? {} : { error: expect.any(Error) }),
       }]);
       expect(() => sessions.resolveSession({ actor })).toThrow("Not logged in");
       expect(events.at(-1)).toEqual({ actor });
     });
 
-    it("returns the public logout request ID when the session is missing", async () => {
+    it("returns the public logout state when the session is missing", async () => {
       const graffiti = new Probe();
       const events: GraffitiLogoutEvent["detail"][] = [];
       graffiti.sessionEvents.addEventListener("logout", event => events.push((event as GraffitiLogoutEvent).detail));
-      await graffiti.logout({ actor: "did:example:missing" }, { requestId: "missing-request" });
+      await graffiti.logout({ actor: "did:example:missing" }, { state: "missing-request" });
       expect(events).toEqual([{
-        actor: "did:example:missing", requestId: "missing-request", error: expect.any(Error),
+        actor: "did:example:missing", state: "missing-request", error: expect.any(Error),
       }]);
     });
 
@@ -251,8 +251,8 @@ export function sessionTests() {
       window.location = new URL("https://app.example/?actor=%25") as any;
       const resumed = sessionFixture();
       await resumed.ready;
-      expect(resumed.events).toEqual([{ error: expect.any(URIError), requestId: "create" }]);
-      expect(resumed.sessions.loginAttempts.begin("fresh").requestId).toBe("fresh");
+      expect(resumed.events).toEqual([{ error: expect.any(URIError), state: "create" }]);
+      expect(resumed.sessions.loginAttempts.begin("fresh").state).toBe("fresh");
       expect(window.sessionStorage.getItem("graffiti-login-attempt")).toBeNull();
     });
 
@@ -272,14 +272,14 @@ export function sessionTests() {
       authorization.logout.mockImplementation(async () => { await waiting; });
       const events: GraffitiLogoutEvent["detail"][] = [];
       sessions.sessionEvents.addEventListener("logout", event => events.push((event as GraffitiLogoutEvent).detail));
-      const pending = actors.map((actor, index) => sessions.logout(actor, { requestId: `logout-${index}` }));
+      const pending = actors.map((actor, index) => sessions.logout(actor, { state: `logout-${index}` }));
       expect(authorization.logout.mock.calls).toEqual(actors.map(actor => [
         "oauth2:https://provider.example", actor + "-token",
       ]));
       expect(events).toEqual([]);
       release();
       await Promise.all(pending);
-      expect(events).toEqual(actors.map((actor, index) => ({ actor, requestId: `logout-${index}` })));
+      expect(events).toEqual(actors.map((actor, index) => ({ actor, state: `logout-${index}` })));
     });
   });
 }

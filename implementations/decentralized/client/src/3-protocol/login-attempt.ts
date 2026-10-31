@@ -20,9 +20,9 @@ export class LoginAttempts {
     }
   }
 
-  begin(requestId?: string): LoginAttempt {
+  begin(state?: string): LoginAttempt {
     if (this.current) throw new Error("A login is already in progress");
-    this.current = { id: crypto.randomUUID(), requestId };
+    this.current = { id: crypto.randomUUID(), state };
     return this.current;
   }
 
@@ -51,7 +51,7 @@ export class LoginAttempts {
     this.events.dispatchEvent(new CustomEvent("login", {
       detail: {
         ...detail,
-        requestId: attempt.requestId,
+        state: attempt.state,
       },
     }));
   }
@@ -95,7 +95,7 @@ export const AuthorizationProgressSchema = object({
 
 const LoginAttemptSchema = object({
   id: string(),
-  requestId: optional(string()),
+  state: optional(string()),
   authorization: optional(AuthorizationProgressSchema),
 });
 

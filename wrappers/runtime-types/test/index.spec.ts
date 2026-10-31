@@ -71,9 +71,9 @@ describe("GraffitiRuntimeTypes", () => {
     > = [
       ["login", methods.login, [actor]],
       ["login", methods.login, [{ actor: "not a URL" }]],
-      ["login", methods.login, [{ requestId: 3 }]],
+      ["login", methods.login, [{ state: 3 }]],
       ["logout", methods.logout, [{}]],
-      ["logout", methods.logout, [session, { requestId: 3 }]],
+      ["logout", methods.logout, [session, { state: 3 }]],
       ["handleToActor", methods.handleToActor, [42]],
       ["actorToHandle", methods.actorToHandle, ["not a URL"]],
       [
@@ -116,10 +116,10 @@ describe("GraffitiRuntimeTypes", () => {
     const accept = { types: ["text/plain"], maxBytes: 100 };
 
     await expect(wrapper.login({ actor })).resolves.toBeUndefined();
-    await expect(wrapper.login({ actor, requestId: "request-1" })).resolves.toBeUndefined();
+    await expect(wrapper.login({ actor, state: "request-1" })).resolves.toBeUndefined();
     await expect(wrapper.login()).resolves.toBeUndefined();
     await expect(wrapper.logout(session)).resolves.toBeUndefined();
-    await expect(wrapper.logout(session, { requestId: "logout-1" })).resolves.toBeUndefined();
+    await expect(wrapper.logout(session, { state: "logout-1" })).resolves.toBeUndefined();
     await expect(wrapper.handleToActor("alice.example")).resolves.toBe(actor);
     await expect(wrapper.actorToHandle(actor)).resolves.toBe("alice.example");
     await expect(wrapper.post<{}>(postObject, session)).resolves.toBe(
@@ -150,10 +150,10 @@ describe("GraffitiRuntimeTypes", () => {
     );
 
     expect(methods.login).toHaveBeenCalledWith({ actor });
-    expect(methods.login).toHaveBeenCalledWith({ actor, requestId: "request-1" });
+    expect(methods.login).toHaveBeenCalledWith({ actor, state: "request-1" });
     expect(methods.login).toHaveBeenCalledWith();
     expect(methods.logout).toHaveBeenCalledWith(session);
-    expect(methods.logout).toHaveBeenCalledWith(session, { requestId: "logout-1" });
+    expect(methods.logout).toHaveBeenCalledWith(session, { state: "logout-1" });
     expect(methods.handleToActor).toHaveBeenCalledWith("alice.example");
     expect(methods.actorToHandle).toHaveBeenCalledWith(actor);
     expect(methods.post).toHaveBeenCalledWith(postObject, session);

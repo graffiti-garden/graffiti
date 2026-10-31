@@ -205,7 +205,7 @@ export class GraffitiGuarded extends Graffiti {
     const nonce = crypto.randomUUID();
     sessionStorage.setItem(pendingLoginKey + this.hostUrl.origin, nonce);
     params.set("loginNonce", nonce);
-    if (options?.requestId !== undefined) params.set("requestId", options.requestId);
+    if (options?.state !== undefined) params.set("state", options.state);
     loginUrl.hash = params.toString();
     // Firefox can lose the top-level login's sessionStorage if an iframe from
     // the same origin has already accessed it. Remove the iframe before leaving.

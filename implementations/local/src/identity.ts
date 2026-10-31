@@ -41,8 +41,8 @@ export class GraffitiLocalIdentity {
   constructor() {
     // Look for any existing sessions
     const sessionRestorer = async () => {
-      // Correlate the explicit login across its reload, then forget the request ID.
-      let pending: { handle: string; requestId: string } | undefined;
+      // Correlate the explicit login across its reload, then forget the state.
+      let pending: { handle: string; state: string } | undefined;
       if (typeof window !== "undefined") {
         const saved = window.sessionStorage.getItem(PENDING_LOGIN_KEY);
         window.sessionStorage.removeItem(PENDING_LOGIN_KEY);
@@ -51,8 +51,8 @@ export class GraffitiLocalIdentity {
             const value: unknown = JSON.parse(saved);
             if (value && typeof value === "object" &&
                 "handle" in value && typeof value.handle === "string" &&
-                "requestId" in value && typeof value.requestId === "string") {
-              pending = { handle: value.handle, requestId: value.requestId };
+                "state" in value && typeof value.state === "string") {
+              pending = { handle: value.handle, state: value.state };
             }
           } catch { /* Ignore an invalid pending login. */ }
         }
@@ -67,7 +67,7 @@ export class GraffitiLocalIdentity {
         const event: GraffitiLoginEvent = new CustomEvent("login", {
           detail: {
             session: { actor: await this.handleToActor(handle) },
-            ...(pending?.handle === handle ? { requestId: pending.requestId } : {}),
+            ...(pending?.handle === handle ? { state: pending.state } : {}),
           },
         });
         this.sessionEvents.dispatchEvent(event);
@@ -75,7 +75,7 @@ export class GraffitiLocalIdentity {
 
       if (pending && !handles.includes(pending.handle)) {
         this.sessionEvents.dispatchEvent(new CustomEvent("login", {
-          detail: { error: new Error("Login session is no longer active"), requestId: pending.requestId },
+          detail: { error: new Error("Login session is no longer active"), state: pending.state },
         }));
       }
 
@@ -114,7 +114,7 @@ export class GraffitiLocalIdentity {
   login: Graffiti["login"] = async (options) => {
     if (this.loggingIn) {
       this.sessionEvents.dispatchEvent(new CustomEvent("login", {
-        detail: { error: new Error("A login is already in progress"), requestId: options?.requestId },
+        detail: { error: new Error("A login is already in progress"), state: options?.state },
       }));
       return;
     }
@@ -128,7 +128,7 @@ export class GraffitiLocalIdentity {
       this.loggingIn = false;
     }
     if (detail) this.sessionEvents.dispatchEvent(new CustomEvent("login", {
-      detail: { ...detail, requestId: options?.requestId },
+      detail: { ...detail, state: options?.state },
     }));
   };
 
@@ -166,9 +166,9 @@ export class GraffitiLocalIdentity {
     }
     // Otherwise store the login for after refresh, then refresh
     window.sessionStorage.removeItem(PENDING_LOGIN_KEY);
-    if (options?.requestId !== undefined) {
+    if (options?.state !== undefined) {
       window.sessionStorage.setItem(PENDING_LOGIN_KEY, JSON.stringify({
-        handle, requestId: options.requestId,
+        handle, state: options.state,
       }));
     }
     // Refresh the page to simulate oauth
@@ -178,7 +178,7 @@ export class GraffitiLocalIdentity {
   logout: Graffiti["logout"] = async (session, options) => {
     let detail: GraffitiLogoutEvent["detail"] = {
       actor: session.actor,
-      requestId: options?.requestId,
+      state: options?.state,
     };
     try {
       const handle = await this.actorToHandle(session.actor);

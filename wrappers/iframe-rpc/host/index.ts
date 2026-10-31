@@ -16,7 +16,7 @@ type ClientMethods = {
 type ConnectionState = {
   client?: ClientMethods;
   initialized: boolean;
-  requestPrefix: string;
+  statePrefix: string;
   destroy(): Promise<void>;
 };
 
@@ -72,16 +72,16 @@ export function serveGraffiti(graffiti: Graffiti) {
     for (const connection of connections) {
       let detail = event.detail;
       if (event.type === "login" || event.type === "logout") {
-        const { requestId, ...rest } = detail as GraffitiLoginEvent["detail"] | GraffitiLogoutEvent["detail"];
-        const ownId = typeof requestId === "string" &&
-            requestId.startsWith(connection.requestPrefix)
-          ? requestId.slice(connection.requestPrefix.length)
+        const { state, ...rest } = detail as GraffitiLoginEvent["detail"] | GraffitiLogoutEvent["detail"];
+        const ownState = typeof state === "string" &&
+            state.startsWith(connection.statePrefix)
+          ? state.slice(connection.statePrefix.length)
           : undefined;
         // Explicit results reach their caller even before session restoration finishes.
-        if (!connection.initialized && ownId === undefined) continue;
+        if (!connection.initialized && ownState === undefined) continue;
         // Failures belong to the caller; successful session changes are shared.
-        if (rest.error && requestId !== undefined && ownId === undefined) continue;
-        detail = ownId === undefined ? rest : { ...rest, requestId: ownId };
+        if (rest.error && state !== undefined && ownState === undefined) continue;
+        detail = ownState === undefined ? rest : { ...rest, state: ownState };
       } else if (!connection.initialized) continue;
       void connection.client?.sessionEvent(event.type, detail).catch(() => {});
     }
@@ -106,15 +106,15 @@ export function serveGraffiti(graffiti: Graffiti) {
 
     const state: ConnectionState = {
       initialized: false,
-      requestPrefix: `${crypto.randomUUID()}:`,
+      statePrefix: `${crypto.randomUUID()}:`,
       destroy: destroyConnection,
     };
     const streams = new Map<string, GraffitiObjectStream<{}>>();
     let connectionDestroyed = false;
 
-    function scopeRequest<T extends { requestId?: string }>(options?: T): T | undefined {
-      return typeof options?.requestId !== "string" ? options :
-        { ...options, requestId: state.requestPrefix + options.requestId };
+    function scopeState<T extends { state?: string }>(options?: T): T | undefined {
+      return typeof options?.state !== "string" ? options :
+        { ...options, state: state.statePrefix + options.state };
     }
 
     const connection = connectRpc<ClientMethods>({
@@ -128,10 +128,10 @@ export function serveGraffiti(graffiti: Graffiti) {
       methods: {
         ...rpcSimpleMethods,
         login(options?: Parameters<Graffiti["login"]>[0]) {
-          return graffiti.login(scopeRequest(options));
+          return graffiti.login(scopeState(options));
         },
         logout(session: GraffitiSession, options?: Parameters<Graffiti["logout"]>[1]) {
-          return graffiti.logout(session, scopeRequest(options));
+          return graffiti.logout(session, scopeState(options));
         },
         async postMedia(media: SerializedPostMedia, session: GraffitiSession) {
           const data = new Blob([media.data.buffer], { type: media.data.type });
@@ -171,7 +171,7 @@ export function serveGraffiti(graffiti: Graffiti) {
           state.initialized = true;
           let result = options.initialLoginResult?.();
           if (result && !result.error && !sessions.has(result.session.actor)) {
-            result = { error: new Error("Login session is no longer active"), requestId: result.requestId };
+            result = { error: new Error("Login session is no longer active"), state: result.state };
           }
           if (result) {
             await state.client?.sessionEvent("login", result);

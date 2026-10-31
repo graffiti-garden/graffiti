@@ -327,7 +327,7 @@ export class Sessions {
   }
 
   async logout(actor: string, options?: Parameters<Graffiti["logout"]>[1]) {
-    let detail: GraffitiLogoutEvent["detail"] = { actor, requestId: options?.requestId };
+    let detail: GraffitiLogoutEvent["detail"] = { actor, state: options?.state };
     try {
       const sessions = this.loggedInSessions;
       const session = sessions.find(session => session.actor === actor);

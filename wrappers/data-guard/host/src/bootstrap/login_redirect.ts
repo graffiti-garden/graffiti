@@ -14,7 +14,7 @@ type Redirect = {
   redirectUrl: string;
   expiresAt: number;
   state?: string;
-  requestId?: string;
+  appState?: string;
 };
 
 export function isLoginRedirect(url: URL) {
@@ -27,7 +27,7 @@ export function isLoginRedirect(url: URL) {
 export function handleLoginRedirect(url: URL) {
   const redirect = getRedirect(url);
   if (!redirect) return status("Missing redirect URL.");
-  const { redirectUrl, state, requestId } = redirect;
+  const { redirectUrl, state, appState } = redirect;
   if (!state) return status("Login expired. Please start again.");
   const graffiti = new GraffitiDecentralized({
     replaceInitialLoginHistoryEntry: true,
@@ -42,7 +42,7 @@ export function handleLoginRedirect(url: URL) {
   const returnToApp = (loginResult: GraffitiLoginEvent["detail"]) => {
     if (finished) return;
     finished = true;
-    storeLoginResult(state, new URL(redirectUrl).origin, { ...loginResult, requestId });
+    storeLoginResult(state, new URL(redirectUrl).origin, { ...loginResult, state: appState });
     clearStoredRedirect();
     window.location.replace(redirectUrl);
   };
@@ -55,7 +55,7 @@ export function handleLoginRedirect(url: URL) {
     if (!(event instanceof CustomEvent)) return;
     const detail = event.detail as GraffitiLoginEvent["detail"];
     // Restored sessions are not the login that opened this guard page.
-    if (detail.requestId !== state) return;
+    if (detail.state !== state) return;
     if (detail.error) {
       returnToApp(detail);
       return;
@@ -69,7 +69,7 @@ export function handleLoginRedirect(url: URL) {
     if (!starting) return;
     const actor = fragmentParams.get("suggestedActor") ?? undefined;
     // Restored sessions have finished before this dialog opens.
-    void graffiti.login({ ...(actor ? { actor } : {}), requestId: state });
+    void graffiti.login({ ...(actor ? { actor } : {}), state });
   }, { once: true });
 }
 
@@ -102,7 +102,7 @@ function getRedirect(url: URL): Redirect | null {
     redirectUrl,
     expiresAt: Date.now() + storageMaxAge,
     state: nonce && noncePattern.test(nonce) ? nonce : crypto.randomUUID(),
-    requestId: new URLSearchParams(url.hash.slice(1)).get("requestId") ?? undefined,
+    appState: new URLSearchParams(url.hash.slice(1)).get("state") ?? undefined,
   };
   const value = JSON.stringify(redirect);
   sessionStorage.setItem(storageKey, value);
@@ -133,7 +133,7 @@ function getStoredRedirect(): Redirect | null {
         redirectUrl: parsedRedirect.href,
         expiresAt: stored.expiresAt,
         ...(typeof stored.state === "string" ? { state: stored.state } : {}),
-        ...(typeof stored.requestId === "string" ? { requestId: stored.requestId } : {}),
+        ...(typeof stored.appState === "string" ? { appState: stored.appState } : {}),
       };
     }
   } catch {}

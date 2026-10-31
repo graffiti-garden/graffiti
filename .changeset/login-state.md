@@ -8,4 +8,4 @@
 ---
 
 - Accept login options instead of a positional actor.
-- Login and logout accept a request ID option, which is echoed on its success or error event, including through login redirects.
+- Login and logout accept a state option, which is echoed on its success or error event, including through login redirects.

@@ -215,7 +215,7 @@ describe("GraffitiDecentralized Tests", () => {
     expect(putAfterDeletion.status).toBe(404);
   });
 
-  test("login request ID belongs to an explicit request, not restored sessions", async () => {
+  test("login state belongs to an explicit request, not restored sessions", async () => {
     const actor = sessions[1].actor;
     const restored = new Sessions({
       dids: new DecentralizedIdentifiers(),
@@ -230,13 +230,13 @@ describe("GraffitiDecentralized Tests", () => {
     await new Promise<void>((resolve) =>
       restored.sessionEvents.addEventListener("initialized", () => resolve(), { once: true }));
     expect(restoredEvents.some((detail) => !detail.error && detail.session.actor === actor)).toBe(true);
-    expect(restoredEvents.every((detail) => !("requestId" in detail))).toBe(true);
+    expect(restoredEvents.every((detail) => !("state" in detail))).toBe(true);
 
     const selected = new Promise<GraffitiLoginEvent["detail"]>((resolve) =>
       restored.sessionEvents.addEventListener("login", (event) =>
         resolve((event as GraffitiLoginEvent).detail), { once: true }));
     await restored.login(actor, restored.loginAttempts.begin("selected-account"));
-    expect((await selected).requestId).toBe("selected-account");
+    expect((await selected).state).toBe("selected-account");
 
     await logout(actor);
     const completed = new Promise<GraffitiLoginEvent["detail"]>((resolve) => {
@@ -249,11 +249,11 @@ describe("GraffitiDecentralized Tests", () => {
       sessionMethods.sessionEvents.addEventListener("login", listener);
     });
     sessions[1] = await login(handles[1], "fresh-authorization");
-    expect((await completed).requestId).toBe("fresh-authorization");
+    expect((await completed).state).toBe("fresh-authorization");
   });
 
   // How to log in/out vvv
-  async function login(handle: string, requestId?: string) {
+  async function login(handle: string, state?: string) {
     const actor = await handleMethods.handleToActor(handle);
 
     return await new Promise<GraffitiSession>((resolve, reject) => {
@@ -283,7 +283,7 @@ describe("GraffitiDecentralized Tests", () => {
         30 * 1000,
       );
 
-      void sessionMethods.login(actor, sessionMethods.loginAttempts.begin(requestId));
+      void sessionMethods.login(actor, sessionMethods.loginAttempts.begin(state));
     });
   }
 

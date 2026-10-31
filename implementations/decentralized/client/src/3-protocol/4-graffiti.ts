@@ -259,12 +259,12 @@ export class GraffitiDecentralized implements Graffiti {
   login: Graffiti["login"] = async (options) => {
     let attempt: LoginAttempt;
     try {
-      attempt = this.sessions.loginAttempts.begin(options?.requestId);
+      attempt = this.sessions.loginAttempts.begin(options?.state);
     } catch (error) {
       this.sessionEvents.dispatchEvent(new CustomEvent("login", {
         detail: {
           error,
-          requestId: options?.requestId,
+          state: options?.state,
         },
       }));
       return;

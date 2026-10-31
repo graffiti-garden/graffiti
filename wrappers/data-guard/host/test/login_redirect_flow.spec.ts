@@ -65,13 +65,13 @@ it("returns only for the requested login after a guard page reload", async () =>
     guardLogin: "1",
     redirectUrl: appUrl,
     loginNonce: nonce,
-    requestId: "caller-id",
+    state: "caller-id",
   }).toString();
   handleLoginRedirect(start);
   expect(instances[0].login).not.toHaveBeenCalled();
   instances[0].sessionEvents.dispatchEvent(new Event("initialized"));
 
-  const state = instances[0].login.mock.calls[0][0].requestId;
+  const state = instances[0].login.mock.calls[0][0].state;
   expect(typeof state).toBe("string");
   expect(state).toBe(nonce);
   // OAuth returns to a fresh guard page, where existing accounts may restore.
@@ -83,7 +83,7 @@ it("returns only for the requested login after a guard page reload", async () =>
   expect(replace).not.toHaveBeenCalled();
 
   events.dispatchEvent(new CustomEvent("login", {
-    detail: { session: { actor: "did:example:chosen" }, requestId: state },
+    detail: { session: { actor: "did:example:chosen" }, state: state },
   }));
   expect(replace).not.toHaveBeenCalled();
   events.dispatchEvent(new Event("initialized"));
@@ -92,7 +92,7 @@ it("returns only for the requested login after a guard page reload", async () =>
   expect(replace).toHaveBeenCalledTimes(1);
   expect(takeLoginResult(nonce, "https://other.example")).toBeUndefined();
   expect(takeLoginResult(nonce, "https://app.example")).toEqual({
-    session: { actor: "did:example:chosen" }, requestId: "caller-id",
+    session: { actor: "did:example:chosen" }, state: "caller-id",
   });
   expect(takeLoginResult(nonce, "https://app.example")).toBeUndefined();
 });
@@ -111,43 +111,43 @@ it("returns a cancelled result only for the matching login", async () => {
     guardLogin: "1",
     redirectUrl: appUrl,
     loginNonce: nonce,
-    requestId: "caller-id",
+    state: "caller-id",
   }).toString();
   handleLoginRedirect(start);
   instances[0].sessionEvents.dispatchEvent(new Event("initialized"));
-  const state = instances[0].login.mock.calls[0][0].requestId;
+  const state = instances[0].login.mock.calls[0][0].state;
   instances[0].sessionEvents.dispatchEvent(new CustomEvent("login", {
     detail: { error: new Error("cancelled"), manual: true },
   }));
   expect(replace).not.toHaveBeenCalled();
   instances[0].sessionEvents.dispatchEvent(new CustomEvent("login", {
-    detail: { error: new Error("cancelled"), manual: true, requestId: state },
+    detail: { error: new Error("cancelled"), manual: true, state: state },
   }));
   expect(replace).toHaveBeenCalledWith(appUrl);
   expect(takeLoginResult(nonce, "https://app.example")).toEqual({
-    error: new Error("cancelled"), requestId: "caller-id",
+    error: new Error("cancelled"), state: "caller-id",
   });
 });
 
 it("returns a terminal failure with the matching request", () => {
   const start = new URL("https://guard.example/");
-  start.hash = new URLSearchParams({ guardLogin: "1", redirectUrl: appUrl, loginNonce: nonce, requestId: "caller-id" }).toString();
+  start.hash = new URLSearchParams({ guardLogin: "1", redirectUrl: appUrl, loginNonce: nonce, state: "caller-id" }).toString();
   handleLoginRedirect(start);
   instances[0].sessionEvents.dispatchEvent(new Event("initialized"));
-  const requestId = instances[0].login.mock.calls[0][0].requestId;
+  const state = instances[0].login.mock.calls[0][0].state;
   instances[0].sessionEvents.dispatchEvent(new CustomEvent("login", {
-    detail: { requestId, error: new Error("Login unavailable") },
+    detail: { state, error: new Error("Login unavailable") },
   }));
-  expect(takeLoginResult(nonce, "https://app.example")).toEqual({ error: new Error("Login unavailable"), requestId: "caller-id" });
+  expect(takeLoginResult(nonce, "https://app.example")).toEqual({ error: new Error("Login unavailable"), state: "caller-id" });
   expect(replace).toHaveBeenCalledWith(appUrl);
 });
 
 it.each(["", "?actor="])("reopens a saved redirect without a callback (%s)", search => {
   sessionStorage.setItem("graffiti-guard-redirect-url", JSON.stringify({
-    redirectUrl: appUrl, state: nonce, requestId: "caller-id", expiresAt: Date.now() + 60_000,
+    redirectUrl: appUrl, state: nonce, appState: "caller-id", expiresAt: Date.now() + 60_000,
   }));
   handleLoginRedirect(new URL(`https://guard.example/${search}`));
   instances[0].sessionEvents.dispatchEvent(new Event("initialized"));
   instances[0].sessionEvents.dispatchEvent(new Event("initialized"));
-  expect(instances[0].login).toHaveBeenCalledExactlyOnceWith({ requestId: nonce });
+  expect(instances[0].login).toHaveBeenCalledExactlyOnceWith({ state: nonce });
 });

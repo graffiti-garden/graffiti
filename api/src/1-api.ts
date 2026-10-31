@@ -362,10 +362,10 @@ export abstract class Graffiti {
    * The {@link GraffitiSession | session} object is returned
    * asynchronously via {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLoginEvent} with event type `login`.
-   * An optional caller-defined `requestId` is echoed on login events for this
+   * An optional caller-defined `state` is echoed on login events for this
    * request, including error events and logins completed after a login redirect.
    * Restoring an earlier session independently of a login request does not
-   * carry a request ID.
+   * carry state.
    *
    * @group 4 - Identity Methods
    */
@@ -384,7 +384,7 @@ export abstract class Graffiti {
       /**
        * A string echoed on this request's login event,
        * including error events. */
-      requestId?: string;
+      state?: string;
     },
   ): Promise<void>;
 
@@ -397,8 +397,8 @@ export abstract class Graffiti {
    * A confirmation will be returned asynchronously via
    * {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLogoutEvent} as event type `logout`.
-   * An optional `requestId` is echoed on this request's logout events,
-   * including error events. Automatic logout events do not carry a request ID.
+   * An optional `state` is echoed on this request's logout events,
+   * including error events. Automatic logout events do not carry state.
    *
    * @group 4 - Identity Methods
    */
@@ -409,7 +409,7 @@ export abstract class Graffiti {
     session: GraffitiSession,
     options?: {
       /** A string echoed on this request's logout event, including errors. */
-      requestId?: string;
+      state?: string;
     },
   ): Promise<void>;
 

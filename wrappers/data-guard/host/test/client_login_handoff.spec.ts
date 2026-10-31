@@ -62,14 +62,14 @@ it("carries the requested login ID through a reload, only for the chosen account
   });
 
   const first = new GraffitiGuarded({ hostUrl: "https://guard.example" });
-  await first.login({ requestId: "login-42" });
+  await first.login({ state: "login-42" });
   // Firefox must release the embedded origin before it becomes the login page.
   expect(frames[0].remove).toHaveBeenCalledBefore(assign);
   const nonce = new URLSearchParams(new URL(assign.mock.calls[0][0]).hash.slice(1))
     .get("loginNonce");
   expect(nonce).toBeTruthy();
   expect(storage.getItem("graffiti-guard-login:https://guard.example")).toBe(nonce);
-  expect(new URLSearchParams(new URL(assign.mock.calls[0][0]).hash.slice(1)).get("requestId"))
+  expect(new URLSearchParams(new URL(assign.mock.calls[0][0]).hash.slice(1)).get("state"))
     .toBe("login-42");
   first.destroy();
 
@@ -84,7 +84,7 @@ it("carries the requested login ID through a reload, only for the chosen account
     expect.objectContaining({ loginNonce: nonce }),
     "https://guard.example",
   );
-  const seen: { session: { actor: string }; requestId?: string }[] = [];
+  const seen: { session: { actor: string }; state?: string }[] = [];
   restored.sessionEvents.addEventListener("login", (event) => {
     seen.push((event as CustomEvent).detail);
   });
@@ -92,10 +92,10 @@ it("carries the requested login ID through a reload, only for the chosen account
   rpcEvents[2].dispatchEvent(new CustomEvent("login", {
     detail: { session: { actor: "actor-A" } },
   }));
-  const completion = { session: { actor: "actor-B" }, requestId: "login-42" };
+  const completion = { session: { actor: "actor-B" }, state: "login-42" };
   rpcEvents[2].dispatchEvent(new CustomEvent("login", { detail: completion }));
   expect(restored.sessionEvents).toBe(rpcEvents[2]); // No client-side event translation.
-  expect(seen.map(({ session, requestId }) => [session.actor, requestId])).toEqual([
+  expect(seen.map(({ session, state }) => [session.actor, state])).toEqual([
     ["actor-A", undefined],
     ["actor-B", "login-42"],
   ]);
@@ -111,6 +111,6 @@ it("carries the requested login ID through a reload, only for the chosen account
   rpcEvents[3].dispatchEvent(new CustomEvent("login", {
     detail: { session: { actor: "actor-B" } },
   }));
-  expect(laterEvents[0].detail.requestId).toBeUndefined();
+  expect(laterEvents[0].detail.state).toBeUndefined();
   later.destroy();
 });

@@ -53,14 +53,14 @@ const session = {
 describe("Guard", () => {
   it("checks the session's logout permission when options follow it", async () => {
     const { guard, prompts } = setup(false);
-    await expect(guard.authorize("logout", [session, { requestId: "logout-request" }])).rejects.toThrow();
+    await expect(guard.authorize("logout", [session, { state: "logout-request" }])).rejects.toThrow();
     expect(prompts()).toBe(1);
   });
 
   it("uses the session's source for logout with options", async () => {
     const { guard, prompts } = setup();
-    const first = await guard.authorize("logout", [session, { requestId: "first" }]);
-    const second = await guard.authorize("logout", [session, { requestId: "second" }]);
+    const first = await guard.authorize("logout", [session, { state: "first" }]);
+    const second = await guard.authorize("logout", [session, { state: "second" }]);
     expect(first?.request.actor).toBe(session.actor);
     expect(first?.request.source.path).toEqual(session.source);
     expect(second?.permission?.id).toBe(first?.permission?.id);

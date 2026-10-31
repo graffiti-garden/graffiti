@@ -310,12 +310,12 @@ export type GraffitiLoginEvent = CustomEvent<
   | {
       error: Error;
       session?: GraffitiSession;
-      requestId?: string;
+      state?: string;
     }
   | {
       error?: undefined;
       session: GraffitiSession;
-      requestId?: string;
+      state?: string;
     }
 >;
 
@@ -329,12 +329,12 @@ export type GraffitiLogoutEvent = CustomEvent<
   | {
       error: Error;
       actor?: string;
-      requestId?: string;
+      state?: string;
     }
   | {
       error?: undefined;
       actor: string;
-      requestId?: string;
+      state?: string;
     }
 >;
 

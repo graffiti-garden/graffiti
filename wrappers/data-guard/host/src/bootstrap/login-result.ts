@@ -10,7 +10,7 @@ export function storeLoginResult(nonce: string, origin: string, detail: LoginRes
   write(nonce, JSON.stringify({
     origin,
     expiresAt: Date.now() + maxAge * 1000,
-    requestId: detail.requestId,
+    state: detail.state,
     ...(detail.error ? { error: detail.error.message } : { actor: detail.session.actor }),
   }), maxAge);
 }
@@ -26,9 +26,9 @@ export function takeLoginResult(nonce: string, origin: string): LoginResult | un
     if (stored.origin !== origin) return;
     write(nonce, "", 0);
     if (typeof stored.expiresAt !== "number" || stored.expiresAt <= Date.now()) return;
-    const requestId = typeof stored.requestId === "string" ? stored.requestId : undefined;
-    if (typeof stored.error === "string") return { error: new Error(stored.error), requestId };
-    if (typeof stored.actor === "string") return { session: { actor: stored.actor }, requestId };
+    const state = typeof stored.state === "string" ? stored.state : undefined;
+    if (typeof stored.error === "string") return { error: new Error(stored.error), state };
+    if (typeof stored.actor === "string") return { session: { actor: stored.actor }, state };
   } catch {
     write(nonce, "", 0);
   }

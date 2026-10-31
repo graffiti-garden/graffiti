@@ -53,7 +53,7 @@ export const GraffitiMediaAcceptSchema = looseObject({
   maxBytes: optional(int().check(nonnegative())),
 });
 
-const requestOptionsSchema = looseObject({ requestId: optional(string()) });
+const requestOptionsSchema = looseObject({ state: optional(string()) });
 
 export class GraffitiRuntimeTypes implements Graffiti {
   sessionEvents: Graffiti["sessionEvents"];
