@@ -50,6 +50,7 @@ import {
 } from "../2-primitives/3-channel-attestations";
 import { AllowedAttestations } from "../2-primitives/4-allowed-attestations";
 
+import type { LoginAttempt } from "./login-attempt";
 import { Handles } from "./2-handles";
 import {
   Sessions,
@@ -171,13 +172,10 @@ export class GraffitiDecentralized implements Graffiti {
           useTemplateHTML: () =>
             import("./login-dialog.html").then(({ template }) => template),
           onManualClose: () => {
-            const event = new CustomEvent("login", {
-              detail: {
-                error: new Error("User cancelled login"),
-                manual: true,
-              },
+            const attempt = this.sessions.loginAttempts.current;
+            if (attempt) this.sessions.loginAttempts.finish(attempt, {
+              error: new Error("User cancelled login"),
             });
-            this.sessionEvents.dispatchEvent(event);
           },
         });
 
@@ -196,30 +194,24 @@ export class GraffitiDecentralized implements Graffiti {
     this.identityCreatorEndpoint =
       options?.identityCreatorEndpoint ?? "https://graffiti.actor/create";
 
+    this.sessions.onLoginFinish = () => this.modal?.close();
+    if (this.modal) {
+      this.sessions.onLoginError = async (attempt, error, actor) => {
+        alert("Login failed: " + error.message);
+        let handle: string | undefined;
+        try {
+          if (actor) handle = await this.actorToHandle(actor);
+        } catch (error) {
+          console.error("Failed to load handle from actor:", error);
+        }
+        await this.showLogin(attempt, handle);
+      };
+    }
+
     this.sessionEvents.addEventListener("login", async (event) => {
       if (!(event instanceof CustomEvent)) return;
       const detail = event.detail as GraffitiLoginEvent["detail"];
-
-      if (detail.error !== undefined) {
-        // If "manual", the window was closed by the user, nothing to do
-        if ("manual" in detail && detail.manual) return;
-
-        alert("Login failed: " + detail.error.message);
-        const actor = detail.session?.actor;
-        let handle: string | undefined;
-        if (actor) {
-          try {
-            handle = await this.actorToHandle(actor);
-          } catch (error) {
-            console.error("Failed to handle actor:", error);
-          }
-        }
-        // Open the login window again with the failed actor
-        this.login_(handle);
-        return;
-      }
-
-      this.modal?.close();
+      if (detail.error) return;
       const actor = detail.session.actor;
 
       let handle: string | undefined;
@@ -264,31 +256,46 @@ export class GraffitiDecentralized implements Graffiti {
   readonly sessionEvents: Graffiti["sessionEvents"] =
     this.sessions.sessionEvents;
 
-  login: Graffiti["login"] = async (actor?: string) => {
+  login: Graffiti["login"] = async (options) => {
+    let attempt: LoginAttempt;
     try {
-      let proposedHandle: string | undefined;
-      try {
-        proposedHandle = actor ? await this.actorToHandle(actor) : undefined;
-      } catch (error) {
-        console.error("Error fetching handle for actor:", error);
-      }
-
-      await this.login_(proposedHandle);
-    } catch (e) {
-      const loginError: GraffitiLoginEvent = new CustomEvent("login", {
+      attempt = this.sessions.loginAttempts.begin(options?.state);
+    } catch (error) {
+      this.sessionEvents.dispatchEvent(new CustomEvent("login", {
         detail: {
-          error: e instanceof Error ? e : new Error(String(e)),
+          error,
+          state: options?.state,
         },
-      });
-      this.sessionEvents.dispatchEvent(loginError);
+      }));
+      return;
     }
+    let proposedHandle: string | undefined;
+    try {
+      if (options?.actor) proposedHandle = await this.actorToHandle(options.actor);
+    } catch (error) {
+      console.error("Error fetching handle for actor:", error);
+    }
+    await this.showLogin(attempt, proposedHandle);
   };
-  protected async login_(proposedHandle?: string) {
+
+  private async showLogin(attempt: LoginAttempt, proposedHandle?: string) {
+    if (this.sessions.loginAttempts.current !== attempt) return;
+    try {
+      await this.login_(attempt, proposedHandle);
+    } catch (error) {
+      this.sessions.loginAttempts.finish(attempt, {
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+    }
+  }
+
+  protected async login_(attempt: LoginAttempt, proposedHandle?: string) {
     if (typeof window !== "undefined") {
       let template: HTMLElement | undefined;
       let focusAfterOpen: HTMLElement | null = null;
       if (proposedHandle !== undefined) {
         template = await this.modal?.displayTemplate("graffiti-login-handle");
+        if (this.sessions.loginAttempts.current !== attempt) return;
         const input = template?.querySelector(
           "#username",
         ) as HTMLInputElement | null;
@@ -311,7 +318,7 @@ export class GraffitiDecentralized implements Graffiti {
 
             if (!input?.value) {
               alert("No handle provided");
-              this.login_("");
+              this.showLogin(attempt, "");
               return;
             }
 
@@ -326,44 +333,53 @@ export class GraffitiDecentralized implements Graffiti {
               actor = await this.handleToActor(handle);
             } catch (e) {
               alert("Could not find an identity associated with that handle.");
-              this.login_(handle);
+              this.showLogin(attempt, handle);
               return;
             }
 
             try {
-              await this.sessions.login(actor);
+              await this.sessions.login(actor, attempt);
             } catch (e) {
               alert("Error logging in.");
               console.error(e);
-              this.login_(handle);
+              this.showLogin(attempt, handle);
             }
           });
         template
           ?.querySelector("#graffiti-login-forgot")
           ?.addEventListener("click", (e) => {
             e.preventDefault();
-            void this.loginWithoutHandle();
+            void this.loginWithoutHandle(attempt).catch((error) => {
+              this.sessions.loginAttempts.finish(attempt, {
+                error: error instanceof Error ? error : new Error(String(error)),
+              });
+            });
           });
       } else {
         template = await this.modal?.displayTemplate("graffiti-login-welcome");
+        if (this.sessions.loginAttempts.current !== attempt) return;
         template
           ?.querySelector("#graffiti-login-existing")
           ?.addEventListener("click", (e) => {
             e.preventDefault();
-            this.login_("");
+            this.showLogin(attempt, "");
           });
       }
 
       const createUrl = new URL(this.identityCreatorEndpoint);
       createUrl.searchParams.set(
         "redirect_uri",
-        encodeURIComponent(window.location.toString()),
+        encodeURIComponent(this.sessions.loginAttempts.returnUrl(attempt)),
       );
       const createLink = template?.querySelector<HTMLAnchorElement>(
         "#graffiti-login-new",
       );
       createLink?.setAttribute("href", createUrl.toString());
       if (proposedHandle === undefined) focusAfterOpen = createLink ?? null;
+      createLink?.addEventListener("click", (event) => {
+        if (this.sessions.loginAttempts.current !== attempt) event.preventDefault();
+        else this.sessions.loginAttempts.save(attempt);
+      });
       if (this.replaceInitialLoginHistoryEntry) {
         createLink?.addEventListener("click", (event) => {
           if (
@@ -379,6 +395,7 @@ export class GraffitiDecentralized implements Graffiti {
         });
       }
 
+      if (this.sessions.loginAttempts.current !== attempt) return;
       await this.modal?.open();
       focusAfterOpen?.focus();
     } else {
@@ -415,12 +432,13 @@ export class GraffitiDecentralized implements Graffiti {
       // Convert the handle to an actor
       const actor = await this.handleToActor(handle);
 
-      await this.sessions.login(actor);
+      await this.sessions.login(actor, attempt);
     }
   }
 
-  protected async loginWithoutHandle() {
+  protected async loginWithoutHandle(attempt: LoginAttempt) {
     const template = await this.modal?.displayTemplate("graffiti-login-provider");
+    if (this.sessions.loginAttempts.current !== attempt) return;
     const defaultProvider = new URL("/", this.identityCreatorEndpoint);
     const provider = template?.querySelector("#graffiti-provider") as HTMLInputElement | null;
     if (provider) provider.value = defaultProvider.host;
@@ -431,6 +449,7 @@ export class GraffitiDecentralized implements Graffiti {
       ?.addEventListener("submit", (event) => {
         event.preventDefault();
         try {
+          if (this.sessions.loginAttempts.current !== attempt) return;
           const domain = provider?.value.trim() ?? "";
           const origin = domain === defaultProvider.host
             ? defaultProvider
@@ -441,7 +460,8 @@ export class GraffitiDecentralized implements Graffiti {
           ) throw new Error("Invalid provider domain");
 
           const url = new URL("/forgot-handle", origin);
-          url.searchParams.set("redirect_uri", window.location.toString());
+          url.searchParams.set("redirect_uri", this.sessions.loginAttempts.returnUrl(attempt));
+          this.sessions.loginAttempts.save(attempt);
           if (this.replaceInitialLoginHistoryEntry) {
             window.location.replace(url.toString());
           } else {
@@ -456,9 +476,10 @@ export class GraffitiDecentralized implements Graffiti {
       ?.querySelector("#graffiti-login-provider-back")
       ?.addEventListener("click", (event) => {
         event.preventDefault();
-        void this.login_("");
+        void this.showLogin(attempt, "");
       });
 
+    if (this.sessions.loginAttempts.current !== attempt) return;
     await this.modal?.open();
     provider?.focus();
   }
@@ -487,8 +508,8 @@ export class GraffitiDecentralized implements Graffiti {
     }
   }
 
-  logout: Graffiti["logout"] = async (session) => {
-    await this.sessions.logout(session.actor);
+  logout: Graffiti["logout"] = async (session, options) => {
+    await this.sessions.logout(session.actor, options);
   };
 
   // @ts-ignore
@@ -791,7 +812,7 @@ export class GraffitiDecentralized implements Graffiti {
     },
     session?: GraffitiSession | null,
   ): GraffitiObjectStream<Schema> {
-    const tombstones = new Map<string, boolean>();
+    const lastTombstoneState = new Map<string, boolean>();
 
     let allInboxes: { serviceEndpoint: string; token?: string }[];
     if (session) {
@@ -877,52 +898,34 @@ export class GraffitiDecentralized implements Graffiti {
               next.index,
             );
           const { object, tombstone, tags: receivedTags } = next.result.value;
-          if (tombstone) {
-            if (tombstones.get(object.url) === true) continue;
-            tombstones.set(object.url, true);
+          // Inbox announcements can omit channel names, so recover the queried
+          // channels from their tags before applying the usual object mask.
+          const matchedChannels = channels.filter((_, index) =>
+            receivedTags.some(
+              (receivedTag) =>
+                tags[index].length === receivedTag.length &&
+                tags[index].every((byte, i) => byte === receivedTag[i]),
+            ),
+          );
+          if (matchedChannels.length === 0) {
             yield {
-              tombstone,
-              object: { url: object.url },
+              error: new Error("Inbox returned object without matching channels"),
+              origin: allInboxes[next.index].serviceEndpoint,
             };
-          } else {
-            // Filter already seen
-            if (tombstones.get(object.url) === false) continue;
-
-            // Fill in the matched channels
-            const matchedTagIndices = tags.reduce<number[]>(
-              (acc, tag, tagIndex) => {
-                for (const receivedTag of receivedTags) {
-                  if (
-                    tag.length === receivedTag.length &&
-                    tag.every((b, i) => receivedTag[i] === b)
-                  ) {
-                    acc.push(tagIndex);
-                    break;
-                  }
-                }
-                return acc;
-              },
-              [],
-            );
-            const matchedChannels = matchedTagIndices.map(
-              (index) => channels[index],
-            );
-            if (matchedChannels.length === 0) {
-              yield {
-                error: new Error(
-                  "Inbox returned object without matching channels",
-                ),
-                origin: allInboxes[next.index].serviceEndpoint,
-              };
-            }
-            tombstones.set(object.url, false);
-            yield {
-              object: {
-                ...object,
-                channels: matchedChannels,
-              },
-            };
+            continue;
           }
+          const maskedObject = maskGraffitiObject(
+            { ...object, channels: matchedChannels },
+            matchedChannels,
+            session?.actor,
+          ) as typeof object;
+          // The same inbox item can arrive through multiple inboxes.
+          const deleted = tombstone === true;
+          if (lastTombstoneState.get(object.url) === deleted) continue;
+          lastTombstoneState.set(object.url, deleted);
+          yield deleted
+            ? { tombstone: true, object: maskedObject }
+            : { object: maskedObject };
         }
       }
     } catch (e) {
@@ -1271,16 +1274,17 @@ export class GraffitiDecentralized implements Graffiti {
       MESSAGE_DATA_ANNOUNCEMENTS_KEY in metadata
         ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY]
         : undefined;
+    const resultBase = {
+      messageId,
+      object,
+      storageBucketKey,
+      allowedTickets,
+      tags: receivedTags,
+      announcements,
+    };
 
     if (label === MESSAGE_LABEL_VALID) {
-      return {
-        messageId,
-        object,
-        storageBucketKey,
-        allowedTickets,
-        tags: receivedTags,
-        announcements,
-      };
+      return resultBase;
     } else if (label === MESSAGE_LABEL_TRASH) {
       // If it is simply trash, just continue.
       if (!tombstonedMessageId) return;
@@ -1311,15 +1315,7 @@ export class GraffitiDecentralized implements Graffiti {
       }
 
       // Return the tombstone
-      return {
-        messageId,
-        tombstone: true,
-        object,
-        storageBucketKey,
-        allowedTickets,
-        tags: receivedTags,
-        announcements,
-      };
+      return { ...resultBase, tombstone: true };
     }
 
     // Otherwise, unlabeled: try to validate the object
@@ -1411,15 +1407,7 @@ export class GraffitiDecentralized implements Graffiti {
             console.error("Could not inspect tombstone message:", error),
           );
 
-        return {
-          messageId,
-          tombstone: true,
-          object,
-          storageBucketKey,
-          allowedTickets,
-          tags: receivedTags,
-          announcements,
-        };
+        return { ...resultBase, tombstone: true };
       } else {
         console.error("Recieved an incorrect tombstone object");
         console.error(validationError);
@@ -1438,14 +1426,7 @@ export class GraffitiDecentralized implements Graffiti {
           MESSAGE_LABEL_VALID,
           inboxToken,
         );
-        return {
-          messageId,
-          object,
-          storageBucketKey,
-          tags: receivedTags,
-          allowedTickets,
-          announcements,
-        };
+        return resultBase;
       } else if (validationError instanceof GraffitiErrorNotFound) {
         // Item was deleted before we got a chance to
         // validate it. Just label the message as trash.

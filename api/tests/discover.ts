@@ -432,7 +432,7 @@ export const graffitiDiscoverTests = (
       const next5 = await iterator3.next();
       assert(!next5.done && !next5.value.error);
       expect(next5.value.tombstone).toBe(true);
-      expect(next5.value.object.url).toEqual(posted.url);
+      expect(next5.value.object).toEqual(posted);
       await expect(iterator3.next()).resolves.toHaveProperty("done", true);
 
       // Wait for "labels" to propogate
@@ -446,7 +446,7 @@ export const graffitiDiscoverTests = (
       const next6 = await iterator4.next();
       assert(!next6.done && !next6.value.error);
       expect(next6.value.tombstone).toBe(true);
-      expect(next6.value.object.url).toEqual(posted.url);
+      expect(next6.value.object).toEqual(posted);
       await expect(iterator4.next()).resolves.toHaveProperty("done", true);
     });
 
@@ -505,7 +505,7 @@ export const graffitiDiscoverTests = (
           const value = await tombIterator.next();
           assert(!value.done && !value.value.error, "value is done");
           assert(value.value.tombstone, "value is not tombstone");
-          expect(value.value.object.url).toEqual(posted.url);
+          expect(value.value.object).toEqual(posted);
           const returnValue2 = await tombIterator.next();
           assert(returnValue2.done, "value2 is not done");
 
@@ -524,6 +524,36 @@ export const graffitiDiscoverTests = (
             "done",
             true,
           );
+        });
+
+        it("masks a private deletion notice for an approved recipient", async () => {
+          const object = randomPostObject();
+          object.allowed = [randomUrl(), session2.actor];
+          const posted = await graffiti.post<{}>(object, session1);
+          const discovery = graffiti.discover<{}>(
+            [object.channels[0]],
+            {},
+            session2,
+          );
+          const live = await discovery.next();
+          assert(!live.done && !live.value.error && !live.value.tombstone);
+          const discoveryEnd = await discovery.next();
+          assert(discoveryEnd.done);
+
+          await graffiti.delete(posted, session1);
+          const continuation = graffiti.continueDiscover<{}>(
+            discoveryEnd.value.cursor,
+            session2,
+          );
+          const deletion = await continuation.next();
+          assert(!deletion.done && !deletion.value.error);
+          assert(deletion.value.tombstone);
+          expect(deletion.value.object).toEqual({
+            ...posted,
+            channels: [object.channels[0]],
+            allowed: [session2.actor],
+          });
+          await expect(continuation.next()).resolves.toHaveProperty("done", true);
         });
 
         it("continue with wrong actor", async () => {

@@ -1,10 +1,14 @@
-import { Graffiti, type GraffitiSession } from "@graffiti-garden/api";
+import {
+  Graffiti,
+  type GraffitiSession,
+} from "@graffiti-garden/api";
 import { GraffitiRpcClient } from "@graffiti-garden/wrapper-iframe-rpc/client";
 
 declare const DATA_GUARD_DEFAULT_HOST_URL: string;
 
 let instance: GraffitiGuarded | undefined;
 const defaultConnectionTimeout = 10_000;
+const pendingLoginKey = "graffiti-guard-login:";
 
 export interface GraffitiGuardedOptions {
   hostUrl?: string | URL;
@@ -24,7 +28,7 @@ export type GraffitiGuardSession = GraffitiSession & {
 /** A Graffiti implementation backed by a sandboxed guard iframe. */
 // @ts-ignore Graffiti methods are delegated through the constructor proxy.
 export class GraffitiGuarded extends Graffiti {
-  readonly sessionEvents!: EventTarget;
+  readonly sessionEvents!: Graffiti["sessionEvents"];
   private readonly hostUrl!: URL;
   private readonly iframe!: HTMLIFrameElement;
   private readonly rpc!: GraffitiRpcClient;
@@ -43,6 +47,8 @@ export class GraffitiGuarded extends Graffiti {
       options.hostUrl?.toString() ?? DATA_GUARD_DEFAULT_HOST_URL,
       document.baseURI,
     );
+    const loginKey = pendingLoginKey + hostUrl.origin;
+    const loginNonce = sessionStorage.getItem(loginKey);
     const iframe = document.createElement("iframe");
     iframe.title = "Graffiti Guard";
     iframe.allow = "storage-access";
@@ -77,6 +83,7 @@ export class GraffitiGuarded extends Graffiti {
         {
           type: "graffiti-guard:connect",
           pageUrl: window.location.href,
+          ...(loginNonce ? { loginNonce } : {}),
         },
         hostUrl.origin,
       );
@@ -105,6 +112,10 @@ export class GraffitiGuarded extends Graffiti {
       channel: options.channel,
       timeout: options.timeout,
     });
+    this.sessionEvents = rpc.sessionEvents;
+    this.sessionEvents.addEventListener("initialized", () => {
+      if (sessionStorage.getItem(loginKey) === loginNonce) sessionStorage.removeItem(loginKey);
+    }, { once: true });
     const connectionTimeout = window.setTimeout(
       showConnectionError,
       options.timeout ?? defaultConnectionTimeout,
@@ -167,7 +178,6 @@ export class GraffitiGuarded extends Graffiti {
     this.hostUrl = hostUrl;
     this.iframe = iframe;
     this.rpc = rpc;
-    this.sessionEvents = rpc.sessionEvents;
     this.onMessage = onMessage;
     this.connectionTimeout = connectionTimeout;
 
@@ -183,7 +193,7 @@ export class GraffitiGuarded extends Graffiti {
     return instance;
   }
 
-  login: Graffiti["login"] = (actor) => {
+  login: Graffiti["login"] = (options) => {
     const loginUrl = new URL(this.hostUrl);
     // The guard reads this state in the browser; keep it out of the HTTP request.
     // This allows for very long redirectUrls
@@ -191,7 +201,11 @@ export class GraffitiGuarded extends Graffiti {
       guardLogin: "1",
       redirectUrl: window.location.href,
     });
-    if (actor) params.set("suggestedActor", actor);
+    if (options?.actor) params.set("suggestedActor", options.actor);
+    const nonce = crypto.randomUUID();
+    sessionStorage.setItem(pendingLoginKey + this.hostUrl.origin, nonce);
+    params.set("loginNonce", nonce);
+    if (options?.state !== undefined) params.set("state", options.state);
     loginUrl.hash = params.toString();
     window.location.assign(loginUrl.href);
     return Promise.resolve();

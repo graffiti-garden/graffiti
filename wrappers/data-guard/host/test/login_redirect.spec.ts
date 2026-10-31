@@ -1,22 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  getRedirectUrl,
-  isLoginRedirect,
-} from "../src/bootstrap/login_redirect.js";
-
-function memoryStorage() {
-  const values = new Map<string, string>();
-  return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => values.set(key, value),
-    removeItem: (key: string) => values.delete(key),
-  } as unknown as Storage;
-}
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getRedirectUrl } from "../src/bootstrap/login_redirect.js";
 
 beforeEach(() => {
-  vi.stubGlobal("sessionStorage", memoryStorage());
-  vi.stubGlobal("localStorage", memoryStorage());
+  vi.stubGlobal("window", { history: { replaceState: vi.fn() } });
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("login redirects", () => {
   it("restores a large return URL from the fragment without sending it to the guard", () => {
@@ -29,24 +18,25 @@ describe("login redirects", () => {
     }).toString();
 
     expect(loginUrl.pathname + loginUrl.search).toBe("/");
-    expect(isLoginRedirect(loginUrl)).toBe(true);
     expect(getRedirectUrl(loginUrl)).toBe(returnUrl);
-    expect(getRedirectUrl(new URL("https://guard.example/"))).toBe(returnUrl);
+    expect(getRedirectUrl(new URL("https://guard.example/"))).toBeNull();
+    expect(getRedirectUrl(new URL(loginUrl))).toBe(returnUrl);
+    expect(window.history.replaceState).not.toHaveBeenCalled();
   });
 
-  it("accepts and normalizes only HTTP redirects", () => {
-    expect(isLoginRedirect(new URL("https://guard.example/?guardLogin=1"))).toBe(true);
+  it("accepts and normalizes only HTTP fragment redirects", () => {
+    expect(getRedirectUrl(new URL("https://guard.example/?redirectUrl=https%3A%2F%2Fapp.example"))).toBeNull();
     expect(
       getRedirectUrl(
         new URL(
-          "https://guard.example/?redirectUrl=HTTPS%3A%2F%2FExample.com%3A443%2Fchat",
+          "https://guard.example/#redirectUrl=HTTPS%3A%2F%2FExample.com%3A443%2Fchat",
         ),
       ),
     ).toBe("https://example.com/chat");
     expect(
       getRedirectUrl(
         new URL(
-          "https://guard.example/?redirectUrl=javascript%3Aalert(document.domain)",
+          "https://guard.example/#redirectUrl=javascript%3Aalert(document.domain)",
         ),
       ),
     ).toBeNull();
@@ -55,18 +45,5 @@ describe("login redirects", () => {
         new URL("https://guard.example/#redirectUrl=javascript%3Aalert(1)"),
       ),
     ).toBeNull();
-  });
-
-  it("rejects and clears an unsafe stored redirect", () => {
-    const value = JSON.stringify({
-      redirectUrl: "javascript:alert(document.domain)",
-      expiresAt: Date.now() + 60_000,
-    });
-    sessionStorage.setItem("graffiti-guard-redirect-url", value);
-    localStorage.setItem("graffiti-guard-redirect-url", value);
-
-    expect(getRedirectUrl(new URL("https://guard.example/"))).toBeNull();
-    expect(sessionStorage.getItem("graffiti-guard-redirect-url")).toBeNull();
-    expect(localStorage.getItem("graffiti-guard-redirect-url")).toBeNull();
   });
 });

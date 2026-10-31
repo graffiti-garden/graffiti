@@ -157,7 +157,7 @@ async function run(operation: () => Promise<unknown>) {
 }
 
 function signIn() {
-  return graffiti.login(props.initialActor);
+  return graffiti.login(props.initialActor ? { actor: props.initialActor } : undefined);
 }
 
 function revoke(rule: AccessRule) {

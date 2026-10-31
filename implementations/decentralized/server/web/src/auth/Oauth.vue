@@ -402,6 +402,7 @@ function handleSelectActor(actorDid: string | undefined) {
     if (!redirectUriObject) return router.replace("/");
     const redirectUrl = new URL(redirectUriObject.toString());
     redirectUrl.searchParams.set("actor", encodeURIComponent(actorDid));
+    if (state) redirectUrl.searchParams.set("state", state);
     window.location.replace(redirectUrl.toString());
 }
 
@@ -434,6 +435,7 @@ function handleDeny() {
     // On rejection, redirect back with an error
     if (!redirectUriObject) return router.replace("/");
     redirectUriObject.searchParams.set("error", "access_denied");
+    if (state) redirectUriObject.searchParams.set("state", state);
     redirectUriObject.searchParams.set(
         "error_description",
         "The user denied the request",

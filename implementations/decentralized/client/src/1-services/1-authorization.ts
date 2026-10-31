@@ -20,18 +20,30 @@ import {
 } from "zod/mini";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Socket } from "node:net";
+import { PendingLoginStorage } from "./pending-login-storage";
 
 const AUTHORIZATION_ENDPOINT_METHOD_PREFIX_OAUTH2 = "oauth2:";
-const LOCAL_STORAGE_OAUTH2_KEY = "graffiti-auth-oauth2-data";
+const pendingOAuth = new PendingLoginStorage("graffiti-pending-oauth:");
 
 export class Authorization {
   eventTarget: EventTarget = new EventTarget();
+  private activeLoginId?: string;
+  private activeState?: string;
+  readonly completingLoginId?: string;
 
   constructor() {
     // Extract oauth redirect synchronously so the route
     // can be changed before any SPA routers (e.g. vue router)
     // start messing with things
-    const oauthPromise = this.completeOauth();
+    let oauthPromise: Promise<void> | undefined;
+    let error: Error | undefined;
+    try {
+      oauthPromise = this.completeOauth();
+    } catch (e) {
+      error = e instanceof Error ? e : new Error(String(e));
+    }
+    // A promise means a recognized redirect is resuming this particular login.
+    this.completingLoginId = oauthPromise ? this.activeLoginId : undefined;
 
     (async () => {
       // Allow listeners to be added first
@@ -41,15 +53,19 @@ export class Authorization {
       await oauthPromise;
 
       // Send an initialized event
-      const initializedEvent: InitializedEvent = new CustomEvent("initialized");
+      const initializedEvent: InitializedEvent = new CustomEvent("initialized", {
+        detail: error ? { error } : undefined,
+      });
       this.eventTarget.dispatchEvent(initializedEvent);
     })();
   }
 
   async login(...args: Parameters<typeof this.login_>): Promise<void> {
+    this.activeLoginId = args[1];
     try {
       await this.login_(...args);
     } catch (e) {
+      if (this.activeLoginId !== args[1]) return;
       const error = e instanceof Error ? e : new Error("Unknown error");
       const detail: LoginEvent["detail"] = { loginId: args[1], error };
       this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
@@ -65,6 +81,8 @@ export class Authorization {
       authorizationEndpoint,
     );
 
+    if (this.activeLoginId !== loginId) return;
+
     const scope = serviceEndpoints.map(encodeURIComponent).join(" ");
     const state = randomState();
 
@@ -73,7 +91,7 @@ export class Authorization {
     if (typeof window !== "undefined") {
       // If in a browser, prepare for a redirect by
       // storing the configuration, expected state,
-      // current URL, and endpoints in local storage
+      // current URL, and endpoints under this OAuth state
       redirectUri = window.location.href;
       const data: infer_<typeof OAuth2LoginDataSchema> = {
         loginId,
@@ -82,10 +100,8 @@ export class Authorization {
         state,
         serviceEndpoints,
       };
-      window.localStorage.setItem(
-        LOCAL_STORAGE_OAUTH2_KEY,
-        JSON.stringify(data),
-      );
+      pendingOAuth.save(state, data);
+      this.activeState = state;
     } else {
       // Otherwise, in node, start a local server to receive the callback
       const http = await import("node:http").catch((e) => {
@@ -159,7 +175,7 @@ export class Authorization {
             res.setHeader("Content-Type", "text/plain");
             res.end("Error processing OAuth callback.");
 
-            throw e;
+            reject(e);
           } finally {
             clearTimeout(timeout);
             server.off("request", onRequest);
@@ -201,31 +217,25 @@ export class Authorization {
     }
   }
 
+  endLogin(loginId: string) {
+    if (this.activeLoginId !== loginId) return;
+    this.activeLoginId = undefined;
+    if (this.activeState) pendingOAuth.remove(this.activeState);
+    this.activeState = undefined;
+  }
+
   protected completeOauth() {
     if (typeof window === "undefined") return;
+    const callbackUrl = new URL(window.location.href);
+    const params = callbackUrl.searchParams;
+    if (!params.has("code") && !params.has("error") && !params.has("actor")) return;
 
-    // Look in local storage to see if we have a pending login
-    const data = window.localStorage.getItem(LOCAL_STORAGE_OAUTH2_KEY);
-    if (!data) return;
-
-    let json: unknown;
-    try {
-      json = JSON.parse(data);
-    } catch {
-      console.error("Invalid OAuth2 login data in local storage.");
-      window.localStorage.removeItem(LOCAL_STORAGE_OAUTH2_KEY);
-      return;
-    }
-
-    const parseResult = OAuth2LoginDataSchema.safeParse(json);
-    if (!parseResult.success) {
-      console.error(
-        "Invalid OAuth2 login data structure in local storage.",
-        parseResult.error,
-      );
-      window.localStorage.removeItem(LOCAL_STORAGE_OAUTH2_KEY);
-      return;
-    }
+    const stateId = params.get("state");
+    if (!stateId) return;
+    const data = pendingOAuth.load(stateId);
+    if (!data) throw new Error("Login expired or missing authorization state. Please start again.");
+    const parseResult = OAuth2LoginDataSchema.safeParse(data);
+    if (!parseResult.success) throw new Error("Invalid login authorization state. Please start again.");
 
     const {
       loginId,
@@ -234,40 +244,38 @@ export class Authorization {
       state,
       serviceEndpoints,
     } = parseResult.data;
+    this.activeLoginId = loginId;
 
-    try {
-      // Make sure that we redirected back to the correct page
-      const expectedUrl = new URL(redirectUri);
-      const callbackUrl = new URL(window.location.href);
-      if (expectedUrl.pathname !== callbackUrl.pathname) return;
-      // Make sure it is actually an oauth call
-      const params = callbackUrl.searchParams;
-      if (!params.has("code") && !params.has("error")) return;
+    // Make sure that we redirected back to the correct page
+    const expectedUrl = new URL(redirectUri);
+    if (expectedUrl.pathname !== callbackUrl.pathname) throw new Error("Login returned to the wrong page.");
+    pendingOAuth.remove(stateId);
 
-      // Restore the hash and query parameters to the expected URL,
-      // removing the code, state, and error parameters
-      window.history.replaceState({}, document.title, expectedUrl.toString());
-      window.localStorage.removeItem(LOCAL_STORAGE_OAUTH2_KEY);
+    // Restore the hash and query parameters to the expected URL,
+    // removing the code, state, and error parameters
+    const selectedActor = params.get("actor");
+    if (selectedActor) expectedUrl.searchParams.set("actor", selectedActor);
+    window.history.replaceState({}, document.title, expectedUrl.toString());
+    // Graffiti providers can return a different account instead of granting a token.
+    if (selectedActor) return Promise.resolve();
 
-      return new Promise<void>((resolve) => setTimeout(resolve, 0))
-        .then(() => this.getAuthorizationConfiguration(authorizationEndpoint))
-        .then((configuration) =>
-          this.onCallbackUrl({
-            loginId,
-            callbackUrl,
-            configuration,
-            expectedState: state,
-            serviceEndpoints,
-          }),
-        )
-        .catch((e) => {
-          const error = e instanceof Error ? e : new Error("Unknown error");
-          const detail: LoginEvent["detail"] = { loginId, error };
-          this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
-        });
-    } catch (e) {
-      console.error(e);
-    }
+    return new Promise<void>((resolve) => setTimeout(resolve, 0))
+      .then(() => this.getAuthorizationConfiguration(authorizationEndpoint))
+      .then((configuration) =>
+        this.onCallbackUrl({
+          loginId,
+          callbackUrl,
+          configuration,
+          expectedState: state,
+          serviceEndpoints,
+        }),
+      )
+      .catch((e) => {
+        if (this.activeLoginId !== loginId) return;
+        const error = e instanceof Error ? e : new Error("Unknown error");
+        const detail: LoginEvent["detail"] = { loginId, error };
+        this.eventTarget.dispatchEvent(new CustomEvent("login", { detail }));
+      });
   }
 
   protected async onCallbackUrl(args: {
@@ -285,10 +293,13 @@ export class Authorization {
       serviceEndpoints,
     } = args;
 
+    // Resumption may have been rejected by Sessions while initialization was pending.
+    if (this.activeLoginId !== loginId) return;
     const response = await authorizationCodeGrant(configuration, callbackUrl, {
       expectedState,
     });
 
+    if (this.activeLoginId !== loginId) return;
     const token = response.access_token;
     const scope = response.scope;
     const grantedEndpoints =
@@ -311,30 +322,9 @@ export class Authorization {
     this.eventTarget.dispatchEvent(loginEvent);
   }
 
-  async logout(
-    authorizationEndpoint: string,
-    logoutId: string,
-    token: string,
-  ): Promise<void> {
-    try {
-      await this.logout_(authorizationEndpoint, logoutId, token);
-    } catch (e) {
-      const error = e instanceof Error ? e : new Error("Unknown error");
-      const detail: LogoutEvent["detail"] = { logoutId, error };
-      this.eventTarget.dispatchEvent(new CustomEvent("logout", { detail }));
-    }
-  }
-  protected async logout_(
-    authorizationEndpoint: string,
-    logoutId: string,
-    token: string,
-  ): Promise<void> {
-    const configuration = await this.getAuthorizationConfiguration(
-      authorizationEndpoint,
-    );
+  async logout(authorizationEndpoint: string, token: string): Promise<void> {
+    const configuration = await this.getAuthorizationConfiguration(authorizationEndpoint);
     await tokenRevocation(configuration, token);
-    const detail: LogoutEvent["detail"] = { logoutId };
-    this.eventTarget.dispatchEvent(new CustomEvent("logout", { detail }));
   }
 
   protected async getAuthorizationConfiguration(
@@ -376,11 +366,6 @@ export const LoginEventDetailSchema = intersection(
   ]),
 );
 
-export const LogoutEventDetailSchema = object({
-  logoutId: string(),
-  error: optional(instanceof_(Error)),
-});
-
 export const InitializedEventDetailSchema = optional(
   nullable(
     object({
@@ -390,7 +375,6 @@ export const InitializedEventDetailSchema = optional(
 );
 
 export type LoginEvent = CustomEvent<infer_<typeof LoginEventDetailSchema>>;
-export type LogoutEvent = CustomEvent<infer_<typeof LogoutEventDetailSchema>>;
 export type InitializedEvent = CustomEvent<
   infer_<typeof InitializedEventDetailSchema>
 >;

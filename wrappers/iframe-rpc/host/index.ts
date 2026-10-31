@@ -16,6 +16,7 @@ type ClientMethods = {
 type ConnectionState = {
   client?: ClientMethods;
   initialized: boolean;
+  statePrefix: string;
   destroy(): Promise<void>;
 };
 
@@ -32,8 +33,6 @@ const simpleMethods = [
   "get",
   "delete",
   "deleteMedia",
-  "login",
-  "logout",
   "actorToHandle",
   "handleToActor",
 ] as const;
@@ -45,13 +44,16 @@ export interface GraffitiRpcConnectionOptions {
   allowedOrigins?: (string | RegExp)[];
   channel?: string;
   timeout?: number;
+  /** A completed redirect login to deliver before ordinary session restoration. */
+  initialLoginResult?: () => GraffitiLoginEvent["detail"] | undefined;
 }
 
 /** Expose one Graffiti implementation through any number of iframe connections. */
 export function serveGraffiti(graffiti: Graffiti) {
   const sessions = new Map<string, GraffitiSession>();
   const connections = new Set<ConnectionState>();
-  let sourceInitialized = false;
+  let resolveInitialized!: () => void;
+  const initialized = new Promise<void>((resolve) => { resolveInitialized = resolve; });
   let destroyed = false;
 
   const forward = (event: Event) => {
@@ -64,15 +66,24 @@ export function serveGraffiti(graffiti: Graffiti) {
       const detail = event.detail as GraffitiLogoutEvent["detail"];
       if (!detail.error) sessions.delete(detail.actor);
     } else if (event.type === "initialized") {
-      sourceInitialized = true;
+      resolveInitialized();
     }
 
     for (const connection of connections) {
-      if (connection.initialized) {
-        void connection.client
-          ?.sessionEvent(event.type, event.detail)
-          .catch(() => {});
-      }
+      let detail = event.detail;
+      if (event.type === "login" || event.type === "logout") {
+        const { state, ...rest } = detail as GraffitiLoginEvent["detail"] | GraffitiLogoutEvent["detail"];
+        const ownState = typeof state === "string" &&
+            state.startsWith(connection.statePrefix)
+          ? state.slice(connection.statePrefix.length)
+          : undefined;
+        // Explicit results reach their caller even before session restoration finishes.
+        if (!connection.initialized && ownState === undefined) continue;
+        // Failures belong to the caller; successful session changes are shared.
+        if (rest.error && state !== undefined && ownState === undefined) continue;
+        detail = ownState === undefined ? rest : { ...rest, state: ownState };
+      } else if (!connection.initialized) continue;
+      void connection.client?.sessionEvent(event.type, detail).catch(() => {});
     }
   };
 
@@ -95,10 +106,16 @@ export function serveGraffiti(graffiti: Graffiti) {
 
     const state: ConnectionState = {
       initialized: false,
+      statePrefix: `${crypto.randomUUID()}:`,
       destroy: destroyConnection,
     };
     const streams = new Map<string, GraffitiObjectStream<{}>>();
     let connectionDestroyed = false;
+
+    function scopeState<T extends { state?: string }>(options?: T): T | undefined {
+      return typeof options?.state !== "string" ? options :
+        { ...options, state: state.statePrefix + options.state };
+    }
 
     const connection = connectRpc<ClientMethods>({
       messenger: new WindowMessenger({
@@ -110,6 +127,12 @@ export function serveGraffiti(graffiti: Graffiti) {
       timeout: options.timeout,
       methods: {
         ...rpcSimpleMethods,
+        login(options?: Parameters<Graffiti["login"]>[0]) {
+          return graffiti.login(scopeState(options));
+        },
+        logout(session: GraffitiSession, options?: Parameters<Graffiti["logout"]>[1]) {
+          return graffiti.logout(session, scopeState(options));
+        },
         async postMedia(media: SerializedPostMedia, session: GraffitiSession) {
           const data = new Blob([media.data.buffer], { type: media.data.type });
           return graffiti.postMedia({ ...media, data }, session);
@@ -142,13 +165,22 @@ export function serveGraffiti(graffiti: Graffiti) {
           streams.delete(id);
         },
         async initialize() {
+          await initialized;
+          if (state.initialized || connectionDestroyed) return;
+          // Forward live changes while replaying state and notifying initialized listeners.
+          state.initialized = true;
+          let result = options.initialLoginResult?.();
+          if (result && !result.error && !sessions.has(result.session.actor)) {
+            result = { error: new Error("Login session is no longer active"), state: result.state };
+          }
+          if (result) {
+            await state.client?.sessionEvent("login", result);
+          }
           for (const session of sessions.values()) {
+            if (result && !result.error && result.session.actor === session.actor) continue;
             await state.client?.sessionEvent("login", { session });
           }
-          if (sourceInitialized) {
-            await state.client?.sessionEvent("initialized");
-          }
-          state.initialized = true;
+          await state.client?.sessionEvent("initialized");
         },
         destroy() {
           window.setTimeout(() => void destroyConnection(), 0);

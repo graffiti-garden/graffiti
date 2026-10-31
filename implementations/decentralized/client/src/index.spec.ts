@@ -13,9 +13,10 @@ import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
 import { Sessions } from "./3-protocol/1-sessions";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { decode as dagCborDecode, encode as dagCborEncode } from "@ipld/dag-cbor";
 import { Handles } from "./3-protocol/2-handles";
+import { authorizationTests } from "./1-services/1-authorization-tests";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
 import { inboxTests, inboxUnitTests } from "./1-services/4-inboxes-tests";
@@ -23,6 +24,7 @@ import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
 import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
+import { sessionTests } from "./3-protocol/1-sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
@@ -31,6 +33,11 @@ import {
   decentralizedSharedInbox,
   decentralizedTestUsers,
 } from "../test/environment";
+
+// Copy native ESM exports so each test can replace and restore them with spies.
+vi.mock("openid-client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("openid-client")>(),
+}));
 
 describe("GraffitiDecentralized Tests", () => {
   const environment = new DecentralizedTestEnvironment();
@@ -208,8 +215,45 @@ describe("GraffitiDecentralized Tests", () => {
     expect(putAfterDeletion.status).toBe(404);
   });
 
+  test("login state belongs to an explicit request, not restored sessions", async () => {
+    const actor = sessions[1].actor;
+    const restored = new Sessions({
+      dids: new DecentralizedIdentifiers(),
+      authorization: new Authorization(),
+      inboxes: new Inboxes(),
+      storageBuckets: new StorageBuckets(),
+    });
+    const restoredEvents: GraffitiLoginEvent["detail"][] = [];
+    restored.sessionEvents.addEventListener("login", (event) => {
+      restoredEvents.push((event as GraffitiLoginEvent).detail);
+    });
+    await new Promise<void>((resolve) =>
+      restored.sessionEvents.addEventListener("initialized", () => resolve(), { once: true }));
+    expect(restoredEvents.some((detail) => !detail.error && detail.session.actor === actor)).toBe(true);
+    expect(restoredEvents.every((detail) => !("state" in detail))).toBe(true);
+
+    const selected = new Promise<GraffitiLoginEvent["detail"]>((resolve) =>
+      restored.sessionEvents.addEventListener("login", (event) =>
+        resolve((event as GraffitiLoginEvent).detail), { once: true }));
+    await restored.login(actor, restored.loginAttempts.begin("selected-account"));
+    expect((await selected).state).toBe("selected-account");
+
+    await logout(actor);
+    const completed = new Promise<GraffitiLoginEvent["detail"]>((resolve) => {
+      const listener = (event: Event) => {
+        const detail = (event as GraffitiLoginEvent).detail;
+        if (detail.session?.actor !== actor) return;
+        sessionMethods.sessionEvents.removeEventListener("login", listener);
+        resolve(detail);
+      };
+      sessionMethods.sessionEvents.addEventListener("login", listener);
+    });
+    sessions[1] = await login(handles[1], "fresh-authorization");
+    expect((await completed).state).toBe("fresh-authorization");
+  });
+
   // How to log in/out vvv
-  async function login(handle: string) {
+  async function login(handle: string, state?: string) {
     const actor = await handleMethods.handleToActor(handle);
 
     return await new Promise<GraffitiSession>((resolve, reject) => {
@@ -239,7 +283,7 @@ describe("GraffitiDecentralized Tests", () => {
         30 * 1000,
       );
 
-      void sessionMethods.login(actor);
+      void sessionMethods.login(actor, sessionMethods.loginAttempts.begin(state));
     });
   }
 
@@ -277,4 +321,6 @@ describe("GraffitiDecentralized Tests", () => {
   }
 });
 
+authorizationTests();
 inboxUnitTests();
+sessionTests();

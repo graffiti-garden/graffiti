@@ -5,7 +5,7 @@ import { createApp } from "vue";
 import { handleAudit } from "./bootstrap/audit.js";
 import {
   handleLoginRedirect,
-  isLoginRedirect,
+  takeLoginResult,
 } from "./bootstrap/login_redirect.js";
 import { listenToParent } from "./bootstrap/protocol.js";
 import {
@@ -33,18 +33,25 @@ app.mount("#app");
 const pageUrl = new URL(window.location.href);
 
 if (standalone) {
-  if (isLoginRedirect(pageUrl)) {
-    void handleLoginRedirect(pageUrl);
-  } else if (isStorageSetup(pageUrl)) {
+  if (isStorageSetup(pageUrl)) {
     handleStorageSetup(pageUrl);
   } else {
-    const graffiti = new GraffitiDecentralized();
-    app.use(GraffitiPlugin, { graffiti });
-    ruleStore.activate();
-    handleAudit(pageUrl);
+    handleLoginRedirect(
+      pageUrl,
+      () => {
+        const graffiti = new GraffitiDecentralized({ replaceInitialLoginHistoryEntry: true });
+        // Subscribe the UI before initialization can restore existing sessions.
+        app.use(GraffitiPlugin, { graffiti });
+        return graffiti;
+      },
+      () => {
+        ruleStore.activate();
+        handleAudit(pageUrl);
+      },
+    );
   }
 } else {
-  listenToParent((origin, pageUrl) => {
+  listenToParent((origin, pageUrl, loginNonce) => {
     activateStorageAccess(pageUrl).then(() => {
       const graffiti = new GraffitiDecentralized();
       app.use(GraffitiPlugin, { graffiti });
@@ -53,6 +60,7 @@ if (standalone) {
       serveGraffiti(new GuardedGraffiti(graffiti, guard)).connect({
         remoteWindow: window.parent,
         allowedOrigins: [origin],
+        initialLoginResult: () => loginNonce ? takeLoginResult(loginNonce, origin) : undefined,
       });
     });
   });

@@ -9,7 +9,6 @@ import { DecentralizedIdentifiers } from "../1-services/2-dids";
 import {
   InitializedEventDetailSchema,
   LoginEventDetailSchema,
-  LogoutEventDetailSchema,
   type Authorization,
 } from "../1-services/1-authorization";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
@@ -27,9 +26,8 @@ import {
   string,
   object,
   url,
-  tuple,
-  enum as enum_,
 } from "zod/mini";
+import { LoginAttempts, AuthorizationProgressSchema, LOGIN_ATTEMPT_PARAM, type LoginAttempt } from "./login-attempt";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 export const DID_SERVICE_TYPE_GRAFFITI_INBOX = "GraffitiInbox";
@@ -41,6 +39,10 @@ export const DID_SERVICE_ID_GRAFFITI_SHARED_INBOX_PREFIX =
 
 export class Sessions {
   sessionEvents: Graffiti["sessionEvents"] = new EventTarget();
+  readonly loginAttempts: LoginAttempts;
+  onLoginFinish?: () => void;
+  /** Keep a failed attempt open for the UI to retry; otherwise finish with an error. */
+  onLoginError?: (attempt: LoginAttempt, error: Error, actor?: string) => void;
   initialAuthorizationNavigation: "assign" | "replace" = "assign";
 
   constructor(
@@ -51,6 +53,11 @@ export class Sessions {
       readonly inboxes: Inboxes;
     },
   ) {
+    this.loginAttempts = new LoginAttempts(this.sessionEvents, (attempt) => {
+      services.authorization.endLogin(attempt.id);
+      this.onLoginFinish?.();
+    });
+    let initializationError: Error | undefined;
     const initializedPromise = new Promise<void>((resolve) => {
       this.services.authorization.eventTarget.addEventListener(
         "initialized",
@@ -58,8 +65,7 @@ export class Sessions {
           if (!(e instanceof CustomEvent)) return;
           const parsed = InitializedEventDetailSchema.safeParse(e.detail);
           if (!parsed.success) return;
-          const error = parsed.data?.error;
-          if (error) console.error(error);
+          initializationError ??= parsed.data?.error;
           resolve();
         },
       );
@@ -67,10 +73,6 @@ export class Sessions {
     this.services.authorization.eventTarget.addEventListener(
       "login",
       this.onLogin.bind(this),
-    );
-    this.services.authorization.eventTarget.addEventListener(
-      "logout",
-      this.onLogout.bind(this),
     );
 
     // Handle account registration redirect immediately,
@@ -80,20 +82,41 @@ export class Sessions {
       const actorEncoded = new URLSearchParams(window.location.search).get(
         "actor",
       );
-      if (actorEncoded) {
-        try {
-          // Get the actor
-          const actor = decodeURIComponent(actorEncoded);
+      // Only an identified redirect resumes an attempt; ordinary loads just restore sessions.
+      const attemptId = services.authorization.completingLoginId ??
+        (actorEncoded ? new URL(window.location.href).searchParams.get(LOGIN_ATTEMPT_PARAM) : null);
+      try {
+        if (attemptId) {
+          this.loginAttempts.restore(attemptId);
+          if (!this.loginAttempts.current) {
+            services.authorization.endLogin(attemptId);
+            throw new Error("Login expired or missing login attempt. Please start again.");
+          }
+        }
+        if (actorEncoded) {
           // Strip it from the URL
           const url = new URL(window.location.toString());
           url.searchParams.delete("actor");
+          url.searchParams.delete(LOGIN_ATTEMPT_PARAM);
           window.history.replaceState({}, "", url.toString());
           // The original app entry was kept when opening account creation or
           // recovery, so OAuth reuses this callback entry.
-          loginPromise = this.login(actor, "replace");
-        } catch (error) {
-          console.error("Error decoding actor:", error);
+          let attempt = this.loginAttempts.current;
+          // Only start an uncorrelated account return after initialization succeeds.
+          loginPromise = initializedPromise.then(() => {
+            if (initializationError) {
+              if (attempt) this.loginAttempts.finish(attempt, { error: initializationError });
+              return;
+            }
+            attempt ??= this.loginAttempts.begin();
+            return this.login(decodeURIComponent(actorEncoded), attempt, "replace");
+          }).catch(error => {
+            if (attempt) this.handleLoginError(attempt, error);
+            else initializationError = error instanceof Error ? error : new Error(String(error));
+          });
         }
+      } catch (error) {
+        initializationError = error instanceof Error ? error : new Error(String(error));
       }
     }
 
@@ -116,35 +139,44 @@ export class Sessions {
       // Send own initialized event
       const initializedEvent: GraffitiSessionInitializedEvent = new CustomEvent(
         "initialized",
+        { detail: initializationError ? { error: initializationError } : undefined },
       );
       this.sessionEvents.dispatchEvent(initializedEvent);
     })();
   }
 
-  protected inProgressLogin: infer_<typeof InProgressSchema> | undefined =
-    undefined;
-  protected inProgressLogout: infer_<typeof InProgressSchema> | undefined =
-    undefined;
-
   async login(
     actor: string,
+    attempt = this.loginAttempts.begin(),
     initialAuthorizationNavigation: "assign" | "replace" =
       this.initialAuthorizationNavigation,
   ) {
+    if (this.loginAttempts.current !== attempt) return;
     try {
-      await this.login_(actor, initialAuthorizationNavigation);
-    } catch (e) {
-      const loginEvent: GraffitiLoginEvent = new CustomEvent("login", {
-        detail: {
-          error: e instanceof Error ? e : new Error(String(e)),
-          session: { actor },
-        },
-      });
-      this.sessionEvents.dispatchEvent(loginEvent);
+      await this.login_(actor, attempt, initialAuthorizationNavigation);
+    } catch (error) {
+      this.handleLoginError(attempt, error, actor);
     }
   }
+
+  private handleLoginError(attempt: LoginAttempt, error: unknown, actor?: string) {
+    if (this.loginAttempts.current !== attempt) return;
+    const failure = error instanceof Error ? error : new Error(String(error));
+    attempt.authorization = undefined;
+    if (this.onLoginError) {
+      this.loginAttempts.save(attempt);
+      this.onLoginError(attempt, failure, actor);
+    } else {
+      this.loginAttempts.finish(attempt, {
+        error: failure,
+        session: actor ? { actor } : undefined,
+      });
+    }
+  }
+
   protected async login_(
     actor: string,
+    attempt: LoginAttempt,
     initialAuthorizationNavigation: "assign" | "replace",
   ) {
     // First look to see if we're already logged in
@@ -152,9 +184,7 @@ export class Sessions {
       (session) => session.actor === actor,
     );
     if (existingSession) {
-      this.sessionEvents.dispatchEvent(
-        new CustomEvent("login", { detail: { session: { actor } } }),
-      );
+      this.loginAttempts.finish(attempt, { session: { actor } });
       return;
     }
 
@@ -241,30 +271,16 @@ export class Sessions {
     );
     const servicesByAuthorization = [...servicesByAuthorizationMap.entries()];
 
-    const session: GraffitiSession = { actor };
-
-    const inProgressLogin: infer_<typeof InProgressSchema> = {
-      ...session,
-      tokens: [],
-      servicesByAuthorization,
-    };
-
-    if (typeof window !== "undefined") {
-      // Store the in-progress session in localStorage
-      window.localStorage.setItem(
-        LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY,
-        JSON.stringify(inProgressLogin),
-      );
-    } else {
-      this.inProgressLogin = inProgressLogin;
-    }
+    if (this.loginAttempts.current !== attempt) return;
+    attempt.authorization = { actor, tokens: [], servicesByAuthorization };
+    this.loginAttempts.save(attempt);
 
     // Start the login process with the first endpoint
     const [firstAuthorizationEndpoint, firstServices] =
       servicesByAuthorization[0];
     await this.services.authorization.login(
       firstAuthorizationEndpoint,
-      actor,
+      attempt.id,
       firstServices.map((s) => s.endpoint),
       initialAuthorizationNavigation,
     );
@@ -275,48 +291,25 @@ export class Sessions {
     const parsed = LoginEventDetailSchema.safeParse(event.detail);
     if (!parsed.success) return;
 
-    const actor = parsed.data.loginId;
-
+    const attempt = this.loginAttempts.current;
+    // Authorization identifies the attempt, so a late callback cannot complete
+    // a newer attempt for the same actor.
+    if (!attempt || parsed.data.loginId !== attempt.id) return;
     try {
-      await this.onLogin_(parsed.data);
-    } catch (e) {
-      const LoginEvent: GraffitiLoginEvent = new CustomEvent("login", {
-        detail: {
-          error: e instanceof Error ? e : new Error(String(e)),
-          session: { actor },
-        },
-      });
-      this.sessionEvents.dispatchEvent(LoginEvent);
+      await this.onLogin_(parsed.data, attempt);
+    } catch (error) {
+      this.handleLoginError(attempt, error, attempt.authorization?.actor);
     }
   }
-  protected async onLogin_(loginDetail: infer_<typeof LoginEventDetailSchema>) {
+  protected async onLogin_(
+    loginDetail: infer_<typeof LoginEventDetailSchema>,
+    attempt: LoginAttempt,
+  ) {
     if (loginDetail.error) throw loginDetail.error;
-
     const token = loginDetail.token;
-    const actor = loginDetail.loginId;
-
-    // Lookup the in-progress session
-    let inProgressLogin: infer_<typeof InProgressSchema>;
-    if (typeof window !== "undefined") {
-      const inProgressLoginString = window.localStorage.getItem(
-        LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY,
-      );
-      if (!inProgressLoginString) {
-        throw new Error("No in-progress login found");
-      }
-
-      const json = JSON.parse(inProgressLoginString);
-      inProgressLogin = InProgressSchema.parse(json);
-    } else {
-      if (!this.inProgressLogin) {
-        throw new Error("No in-progress login found");
-      }
-      inProgressLogin = this.inProgressLogin;
-    }
-
-    if (inProgressLogin.actor !== actor) {
-      throw new Error("Actor mismatch in login response - concurrent logins?");
-    }
+    const inProgressLogin = attempt.authorization;
+    if (!inProgressLogin) throw new Error("No in-progress authorization found");
+    const actor = inProgressLogin.actor;
 
     inProgressLogin.tokens.push(token);
 
@@ -324,13 +317,6 @@ export class Sessions {
       inProgressLogin.tokens.length ===
       inProgressLogin.servicesByAuthorization.length
     ) {
-      // Login complete!
-      if (typeof window === "undefined") {
-        this.inProgressLogin = undefined;
-      } else {
-        window.localStorage.removeItem(LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY);
-      }
-
       // Build the completed session
       const services = inProgressLogin.servicesByAuthorization.flatMap(
         ([authorizationEndpoint, services], index) =>
@@ -354,181 +340,50 @@ export class Sessions {
       sessions.push(session);
       this.loggedInSessions = sessions;
 
-      // Return the completed session
-      const loginEvent: GraffitiLoginEvent = new CustomEvent("login", {
-        detail: { session: { actor } },
-      });
-      this.sessionEvents.dispatchEvent(loginEvent);
+      this.loginAttempts.finish(attempt, { session: { actor } });
     } else {
-      // Store the in progress and continue
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY,
-          JSON.stringify(inProgressLogin),
-        );
-      } else {
-        this.inProgressLogin = inProgressLogin;
-      }
+      this.loginAttempts.save(attempt);
 
       // Continue to the next authorization endpoint
       const [authorizationEndpoint, services] =
         inProgressLogin.servicesByAuthorization[inProgressLogin.tokens.length];
       await this.services.authorization.login(
         authorizationEndpoint,
-        actor,
+        attempt.id,
         services.map((s) => s.endpoint),
         "replace",
       );
     }
   }
 
-  async logout(actor: string) {
+  async logout(actor: string, options?: Parameters<Graffiti["logout"]>[1]) {
+    let detail: GraffitiLogoutEvent["detail"] = { actor, state: options?.state };
     try {
-      await this.logout_(actor);
-    } catch (e) {
-      const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", {
-        detail: {
-          error:
-            e instanceof GraffitiErrorUnauthorized
-              ? // Unauthorized errors can be treated as successful logouts
-                undefined
-              : e instanceof Error
-                ? e
-                : new Error(String(e)),
-          actor,
-        },
-      });
-      this.sessionEvents.dispatchEvent(logoutEvent);
-    }
-  }
-  protected async logout_(actor: string) {
-    const session = this.loggedInSessions.find(
-      (session) => session.actor === actor,
-    );
-    if (!session) {
-      throw new Error(`No session found for actor ${actor}`);
-    }
+      const sessions = this.loggedInSessions;
+      const session = sessions.find(session => session.actor === actor);
+      if (!session) throw new Error(`No session found for actor ${actor}`);
 
-    // Remove the session(s)
-    this.loggedInSessions = this.loggedInSessions.filter(
-      (session) => session.actor !== actor,
-    );
+      this.loggedInSessions = sessions.filter(session => session.actor !== actor);
+      if (!session.tokens.length) throw new Error("No tokens found in session");
 
-    // Begin the logout
-    const token = session.tokens.pop();
-    if (!token) {
-      throw new Error("No tokens found in session");
-    }
-    // Store the in progress logout
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY,
-        JSON.stringify(session),
-      );
-    } else {
-      this.inProgressLogout = session;
-    }
-    const [authorizationEndpoint, _] =
-      session.servicesByAuthorization[session.tokens.length];
-    await this.services.authorization.logout(
-      authorizationEndpoint,
-      actor,
-      token,
-    );
-  }
-
-  protected async onLogout(event: unknown) {
-    if (!(event instanceof CustomEvent)) return;
-    const parsed = LogoutEventDetailSchema.safeParse(event.detail);
-    if (!parsed.success) return;
-
-    const actor = parsed.data.logoutId;
-
-    try {
-      await this.onLogout_(parsed.data);
-    } catch (e) {
-      const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", {
-        detail: {
-          error: e instanceof Error ? e : new Error(String(e)),
-          actor,
-        },
-      });
-      this.sessionEvents.dispatchEvent(logoutEvent);
-    }
-  }
-  protected async onLogout_(
-    logoutDetail: infer_<typeof LogoutEventDetailSchema>,
-  ) {
-    if (logoutDetail.error) throw logoutDetail.error;
-
-    const actor = logoutDetail.logoutId;
-
-    // Lookup the in-progress session
-    let inProgressLogout: infer_<typeof InProgressSchema>;
-    if (typeof window !== "undefined") {
-      const inProgressLogoutString = window.localStorage.getItem(
-        LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY,
-      );
-      if (!inProgressLogoutString) {
-        throw new Error("No in-progress logout found");
+      // Revocation does not redirect, so each logout keeps its progress in this call.
+      for (let index = session.tokens.length - 1; index >= 0; index--) {
+        const [authorizationEndpoint] = session.servicesByAuthorization[index];
+        await this.services.authorization.logout(authorizationEndpoint, session.tokens[index]);
       }
-
-      const json = JSON.parse(inProgressLogoutString);
-      inProgressLogout = InProgressSchema.parse(json);
-    } else {
-      if (!this.inProgressLogout) {
-        throw new Error("No in-progress logout found");
+    } catch (error) {
+      // Unauthorized errors can be treated as successful logouts.
+      if (!(error instanceof GraffitiErrorUnauthorized)) {
+        detail = { ...detail, error: error instanceof Error ? error : new Error(String(error)) };
       }
-      inProgressLogout = this.inProgressLogout;
     }
-
-    if (inProgressLogout.actor !== actor) {
-      throw new Error(
-        "Actor mismatch in logout response - concurrent logouts?",
-      );
-    }
-
-    const token = inProgressLogout.tokens.pop();
-    if (!token) {
-      // Logout complete
-      if (typeof window === "undefined") {
-        this.inProgressLogout = undefined;
-      } else {
-        window.localStorage.removeItem(LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY);
-      }
-
-      const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", {
-        detail: { actor },
-      });
-      this.sessionEvents.dispatchEvent(logoutEvent);
-    } else {
-      // Store the in progress and continue
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY,
-          JSON.stringify(inProgressLogout),
-        );
-      } else {
-        this.inProgressLogout = inProgressLogout;
-      }
-
-      // Continue to the next authorization endpoint
-      const [authorizationEndpoint, _] =
-        inProgressLogout.servicesByAuthorization[
-          inProgressLogout.tokens.length
-        ];
-      await this.services.authorization.logout(
-        authorizationEndpoint,
-        actor,
-        token,
-      );
-    }
+    this.sessionEvents.dispatchEvent(new CustomEvent("logout", { detail }));
   }
 
   protected get loggedInSessions(): StoredSession[] {
     if (typeof window === "undefined") return loggedInSessions_;
 
-    const data = getBrowserStorageItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
+    const data = getBrowserStorageItem(COOKIE_LOGGED_IN_SESSIONS_KEY);
     if (!data) return [];
 
     let json: unknown;
@@ -536,14 +391,14 @@ export class Sessions {
       json = JSON.parse(data);
     } catch {
       console.error("Error parsing stored session data");
-      removeBrowserStorageItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
+      removeBrowserStorageItem(COOKIE_LOGGED_IN_SESSIONS_KEY);
       return [];
     }
 
     const parsed = array(StoredSessionSchema).safeParse(json);
     if (!parsed.success) {
       console.error("Stored session data is invalid");
-      removeBrowserStorageItem(LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY);
+      removeBrowserStorageItem(COOKIE_LOGGED_IN_SESSIONS_KEY);
       return [];
     }
     return parsed.data;
@@ -555,7 +410,7 @@ export class Sessions {
     }
 
     setBrowserStorageItem(
-      LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY,
+      COOKIE_LOGGED_IN_SESSIONS_KEY,
       JSON.stringify(sessions),
     );
   }
@@ -576,38 +431,14 @@ export class Sessions {
 }
 let loggedInSessions_: StoredSession[] = [];
 
-const LOCAL_STORAGE_IN_PROGRESS_LOGIN_KEY = "graffiti-login-in-progress";
-const LOCAL_STORAGE_IN_PROGRESS_LOGOUT_KEY = "graffiti-logout-in-progress";
-const LOCAL_STORAGE_LOGGED_IN_SESSIONS_KEY = "graffiti-sessions-logged-in";
-
-const GraffitiSessionSchema = object({
-  actor: url(),
-});
-
+const COOKIE_LOGGED_IN_SESSIONS_KEY = "graffiti-sessions-logged-in";
 const ServiceSessionSchema = object({
   token: string(),
   serviceEndpoint: url(),
   authorizationEndpoint: url(),
 });
 
-const ServicesByAuthorizationSchema = array(
-  tuple([
-    url(), // Authorization endpoint
-    array(
-      object({
-        endpoint: url(), // Service endpoint
-        type: enum_(["bucket", "personal-inbox", "shared-inbox"]),
-      }),
-    ),
-  ]),
-);
-
-const InProgressSchema = extend(GraffitiSessionSchema, {
-  tokens: array(string()),
-  servicesByAuthorization: ServicesByAuthorizationSchema,
-});
-
-const StoredSessionSchema = extend(InProgressSchema, {
+const StoredSessionSchema = extend(AuthorizationProgressSchema, {
   storageBucket: ServiceSessionSchema,
   personalInbox: ServiceSessionSchema,
   sharedInboxes: array(ServiceSessionSchema),

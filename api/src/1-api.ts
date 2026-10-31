@@ -255,8 +255,9 @@ export abstract class Graffiti {
    * {@link GraffitiObjectStreamReturn.cursor | `cursor`} string.
    * The continuation will return new objects that have been {@link post | `post`ed}
    * that match the original stream, and also returns the
-   * {@link GraffitiObjectBase.url | `url`}s of objects that
-   * have been {@link delete | `delete`d}, as marked by a `tombstone`.
+   * objects that have been {@link delete | `delete`d}, as marked by a
+   * `tombstone`. The tombstone contains the original object, masked for the
+   * querying actor.
    *
    * @throws {@link GraffitiErrorCursorExpired} upon iteration
    * if the cursor is invalid or expired.
@@ -361,20 +362,30 @@ export abstract class Graffiti {
    * The {@link GraffitiSession | session} object is returned
    * asynchronously via {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLoginEvent} with event type `login`.
+   * An optional caller-defined `state` is echoed on login events for this
+   * request, including error events and logins completed after a login redirect.
+   * Restoring an earlier session independently of a login request does not
+   * carry state.
    *
    * @group 4 - Identity Methods
    */
   abstract login(
-    /**
-     * A suggested actor to login as. For example, if a user tries to
-     * edit a post but are not logged in, the interface can infer that
-     * they might want to log in as the actor who created the post
-     * they are attempting to edit.
-     *
-     * Even if provided, the implementation should allow the user
-     * to log in as a different actor if they choose.
-     */
-    actor?: string | null,
+    options?: {
+      /**
+       * A suggested actor to login as. For example, if a user tries to
+       * edit a post but are not logged in, the interface can infer that
+       * they might want to log in as the actor who created the post
+       * they are attempting to edit.
+       *
+       * Even if provided, the implementation should allow the user
+       * to log in as a different actor if they choose.
+       */
+      actor?: string;
+      /**
+       * A string echoed on this request's login event,
+       * including error events. */
+      state?: string;
+    },
   ): Promise<void>;
 
   /**
@@ -386,6 +397,8 @@ export abstract class Graffiti {
    * A confirmation will be returned asynchronously via
    * {@link Graffiti.sessionEvents | sessionEvents}
    * as a {@link GraffitiLogoutEvent} as event type `logout`.
+   * An optional `state` is echoed on this request's logout events,
+   * including error events. Automatic logout events do not carry state.
    *
    * @group 4 - Identity Methods
    */
@@ -394,6 +407,10 @@ export abstract class Graffiti {
      * The {@link GraffitiSession | session} object to logout.
      */
     session: GraffitiSession,
+    options?: {
+      /** A string echoed on this request's logout event, including errors. */
+      state?: string;
+    },
   ): Promise<void>;
 
   /**

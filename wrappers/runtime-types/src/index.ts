@@ -53,6 +53,8 @@ export const GraffitiMediaAcceptSchema = looseObject({
   maxBytes: optional(int().check(nonnegative())),
 });
 
+const requestOptionsSchema = looseObject({ state: optional(string()) });
+
 export class GraffitiRuntimeTypes implements Graffiti {
   sessionEvents: Graffiti["sessionEvents"];
 
@@ -61,12 +63,14 @@ export class GraffitiRuntimeTypes implements Graffiti {
   }
 
   login: Graffiti["login"] = (...args) => {
-    const typedArgs = tuple([optional(nullable(url()))]).parse(args);
+    const typedArgs = tuple([
+      optional(extend(requestOptionsSchema, { actor: optional(url()) })),
+    ]).parse(args);
     return this.graffiti.login(...typedArgs);
   };
 
   logout: Graffiti["logout"] = (...args) => {
-    const typedArgs = tuple([GraffitiSessionSchema]).parse(args);
+    const typedArgs = tuple([GraffitiSessionSchema, optional(requestOptionsSchema)]).parse(args);
     return this.graffiti.logout(...typedArgs);
   };
 

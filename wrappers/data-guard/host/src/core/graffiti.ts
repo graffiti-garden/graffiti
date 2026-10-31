@@ -100,7 +100,6 @@ export class GuardedGraffiti extends Graffiti {
           const result = next.value;
           if (
             !result.error &&
-            !result.tombstone &&
             result.object?.allowed != null
           ) {
             try {

@@ -203,8 +203,10 @@ export class DecentralizedTestEnvironment {
           this: Authorization,
           _authorizationEndpoint,
           loginId,
+          serviceEndpoints,
         ) {
-          const token = tokens.get(loginId);
+          const account = decentralizedTestUsers.find((user) => serviceEndpoints.includes(user.bucketEndpoint));
+          const token = account ? tokens.get(account.actor) : undefined;
           const detail = token
             ? { loginId, token }
             : { loginId, error: new Error(`Unknown test login: ${loginId}`) };
