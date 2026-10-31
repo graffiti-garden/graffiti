@@ -1,5 +1,20 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.2.0
+
+### Minor Changes
+
+- bc1b45b: - Return the masked original object in `continueDiscover` tombstones. This happens under the hood in implementations anyways and layers on top (e.g. syncrhonize) were doing in-memory caching to try to reverse it so they could correlate events. Now the agreement is explicit.
+- bc1b45b: - Accept login options instead of a positional actor.
+  - Login and logout accept a state option, which is echoed on its success or error event, including through login redirects.
+
+### Patch Changes
+
+- Updated dependencies [bc1b45b]
+- Updated dependencies [bc1b45b]
+  - @graffiti-garden/api@1.4.0
+  - @graffiti-garden/wrapper-runtime-types@0.2.0
+
 ## 0.1.8
 
 ### Patch Changes
