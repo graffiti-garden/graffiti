@@ -1,5 +1,16 @@
 # @graffiti-garden/wrapper-data-guard
 
+## 0.2.8
+
+### Patch Changes
+
+- bc1b45b: - Accept login options instead of a positional actor.
+  - Login and logout accept a state option, which is echoed on its success or error event, including through login redirects.
+- Updated dependencies [bc1b45b]
+- Updated dependencies [bc1b45b]
+  - @graffiti-garden/api@1.4.0
+  - @graffiti-garden/wrapper-iframe-rpc@0.2.0
+
 ## 0.2.7
 
 ### Patch Changes

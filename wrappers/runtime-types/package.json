@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-runtime-types",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Runtime argument validation for the Graffiti API",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -53,7 +53,7 @@
     "vitest": "^4.0.17"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^1.2.0",
+    "@graffiti-garden/api": "^1.4.0",
     "zod": "^4.3.5"
   }
 }

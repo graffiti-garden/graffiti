@@ -1,5 +1,17 @@
 # @graffiti-garden/wrapper-synchronize
 
+## 1.4.0
+
+### Minor Changes
+
+- bc1b45b: - Return the masked original object in `continueDiscover` tombstones. This happens under the hood in implementations anyways and layers on top (e.g. syncrhonize) were doing in-memory caching to try to reverse it so they could correlate events. Now the agreement is explicit.
+
+### Patch Changes
+
+- Updated dependencies [bc1b45b]
+- Updated dependencies [bc1b45b]
+  - @graffiti-garden/api@1.4.0
+
 ## 1.3.2
 
 ### Patch Changes
