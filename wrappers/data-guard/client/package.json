@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-data-guard",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "Ask for permission before a site accesses Graffiti",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.4.0",
-    "@graffiti-garden/wrapper-iframe-rpc": "^0.2.0"
+    "@graffiti-garden/wrapper-iframe-rpc": "^0.3.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

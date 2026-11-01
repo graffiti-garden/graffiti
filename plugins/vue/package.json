@@ -51,7 +51,7 @@
     "@graffiti-garden/wrapper-synchronize": "^1.4.0"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-decentralized": "^0.2.0",
+    "@graffiti-garden/implementation-decentralized": "^0.3.0",
     "@types/node": "^26.4.0",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/typescript-plugin": "3.3.11",
