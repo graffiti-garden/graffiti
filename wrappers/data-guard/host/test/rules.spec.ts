@@ -137,7 +137,7 @@ describe("Graffiti permission rules", () => {
     expect(rulesFromObjects([object], session.actor, source)).toEqual([]);
   });
 
-  it("rejects a policy record for a different site and a media receipt", () => {
+  it("rejects records for another site or without a confirmed permission action", () => {
     const value = {
       published: 10,
       site: { origin: source.origin, path: source.path },
@@ -160,13 +160,12 @@ describe("Graffiti permission rules", () => {
         },
       },
       {
-        url: "graffiti:media-receipt",
+        url: "graffiti:ordinary",
         actor: session.actor,
         channels: [source.key],
         value: {
           ...value,
           "via site": { name: "Chat", id: source.key },
-          _guard: { kind: "media-receipt" },
         },
       },
     ] as any;

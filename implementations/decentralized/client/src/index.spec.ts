@@ -1,8 +1,12 @@
 import type {
+  Graffiti,
+  JSONSchema,
   GraffitiLoginEvent,
   GraffitiLogoutEvent,
   GraffitiSession,
 } from "@graffiti-garden/api";
+import { GraffitiErrorNotFound } from "@graffiti-garden/api";
+import type { RecordKind } from "./3-protocol/3-object-encoding";
 import {
   graffitiCRUDTests,
   graffitiDiscoverTests,
@@ -99,7 +103,7 @@ describe("GraffitiDecentralized Tests", () => {
       { value: { text: "layered URL" }, channels: [session.actor] },
       session,
     );
-    const objectUrl = `${object.url}#graffiti.guard.receipt=graffiti%3Areceipt?another.layer=one%3Ftwo`;
+    const objectUrl = `${object.url}#first.layer=one?second.layer=one%3Ftwo`;
     expect((await graffiti.get({ url: objectUrl }, {}, session)).url).toBe(object.url);
     expect((await graffiti.delete(objectUrl, session)).url).toBe(object.url);
 
@@ -107,17 +111,100 @@ describe("GraffitiDecentralized Tests", () => {
       { data: new Blob(["media data"], { type: "text/plain" }), allowed: [] },
       session,
     );
-    const layeredMediaUrl = `${mediaUrl}?other.layer=one#graffiti.guard.receipt=graffiti%3Areceipt?third.layer=two`;
+    const layeredMediaUrl = `${mediaUrl}?first.layer=one#second.layer=two?third.layer=three`;
     await expect((await graffiti.getMedia(layeredMediaUrl, {}, session)).data.text()).resolves.toBe("media data");
     await expect(graffiti.deleteMedia(layeredMediaUrl, session)).resolves.toBeUndefined();
   });
 
+  test("preserves MIME parameters while matching exact types and wildcards", async () => {
+    const graffiti = useGraffiti();
+    const session = sessions[0];
+    const original = new Blob(["image"], { type: 'image/png; label="a,b;c"; custom=abcdef' });
+    const url = await graffiti.postMedia({ data: original }, session);
+    for (const type of ["image/png", "image/*", "*/*"]) {
+      const { data } = await graffiti.getMedia(url, { types: [type], maxBytes: 5 }, session);
+      expect(data.type).toBe(original.type);
+      expect(await data.text()).toBe("image");
+    }
+    await graffiti.deleteMedia(url, session);
+  });
+
   objectEncodingTests();
+
+  test.each([3, 4])("revalidates legacy invalid label 3, but skips current invalid label 4 (label %i)", async (label) => {
+    const writer = useGraffiti();
+    const session = sessions[0];
+    const object = await writer.post({ value: { text: "rollout check" }, channels: [], allowed: [] }, session);
+    const { personalInbox } = sessionMethods.resolveSession(session);
+    const inboxes = new Inboxes();
+    const messages = [];
+    for await (const message of inboxes.query(personalInbox.serviceEndpoint,
+      [new TextEncoder().encode(object.url)], {}, personalInbox.token)) {
+      messages.push(message);
+    }
+    expect(messages).toHaveLength(1);
+    const metadata = dagCborDecode(messages[0].m.m);
+    expect(metadata).toHaveProperty("r", 0);
+    expect(metadata).not.toHaveProperty("kind");
+    const messageId = messages[0].id;
+    // Old clients reject the unknown kind field and persist label 3 on the server.
+    await inboxes.label(personalInbox.serviceEndpoint, messageId, label, personalInbox.token);
+    const read = useGraffiti().get(object.url, {}, session);
+    if (label === 3) await expect(read).resolves.toEqual(object);
+    else await expect(read).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+    // Restore this known-valid fixture so it can be deleted normally.
+    await inboxes.label(personalInbox.serviceEndpoint, messageId, 1, personalInbox.token);
+    await writer.delete(object.url, session);
+  });
+
+  test("keeps new media records separate from ordinary objects", async () => {
+    const graffiti = useGraffiti();
+    const session = sessions[0];
+    const url = await graffiti.postMedia({ data: new Blob(["image"]) }, session);
+    await expect(graffiti.get(url, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+    await expect(graffiti.delete(url, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+    expect(await (await graffiti.getMedia(url, {}, session)).data.text()).toBe("image");
+    await graffiti.deleteMedia(url, session);
+  });
+
+  test("accepts legacy records but cannot turn a new post into an alias of old media", async () => {
+    // Produce the pre-kind wire format, including its original inbox metadata.
+    class LegacyWriter extends GraffitiDecentralized {
+      protected override postRecord<Schema extends JSONSchema>(
+        _kind: RecordKind | undefined,
+        ...args: Parameters<typeof Graffiti.prototype.post<Schema>>
+      ) {
+        return super.postRecord<Schema>(undefined, ...args);
+      }
+    }
+    const legacy = new LegacyWriter({ defaultInboxEndpoints: [decentralizedSharedInbox] });
+    const graffiti = useGraffiti();
+    const session = sessions[0];
+    const object = await legacy.post({ value: { text: "old note" }, channels: [] }, session);
+    const url = await legacy.postMedia({ data: new Blob(["old image"]), allowed: [] }, session);
+    expect(await graffiti.get(object.url, {}, session)).toEqual(object);
+    expect(await (await graffiti.getMedia(url, {}, session)).data.text()).toBe("old image");
+
+    // Legacy backing objects remain accessible. Copying their storage key into
+    // a new object must not grant a second route to the same file's bytes.
+    const descriptor = await graffiti.get(url, {}, session);
+    const fake = await graffiti.post({
+      value: { ...descriptor.value, kind: "media" }, channels: [],
+    }, session);
+    await expect(graffiti.getMedia(fake.url, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+    await expect(graffiti.deleteMedia(fake.url, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+    expect(await graffiti.get(fake.url, {}, session)).toEqual(fake);
+    expect(await (await graffiti.getMedia(url, {}, session)).data.text()).toBe("old image");
+    await graffiti.delete(fake.url, session);
+    await graffiti.delete(object.url, session);
+    await graffiti.deleteMedia(url, session);
+  });
 
   const useGraffiti = () =>
     new GraffitiDecentralized({
       defaultInboxEndpoints: [decentralizedSharedInbox],
     });
+  // @ts-ignore
   graffitiCRUDTests(
     useGraffiti,
     () => sessions[0],

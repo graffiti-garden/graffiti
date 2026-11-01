@@ -12,11 +12,6 @@ export function siteId(source: Source): string[] {
   return [source.origin, ...source.path.map(({ id }) => id)];
 }
 
-/** Store the whole path as one string without losing the boundaries between IDs. */
-export function siteKey(id: readonly string[]): string {
-  return JSON.stringify(id);
-}
-
 /**
  * Read/delete access follows the site hierarchy upward: a parent may handle
  * data created by its children, but a child gains no access to its parent's data.
@@ -52,10 +47,10 @@ export function viaSite(object: unknown): SiteProvenance | undefined {
 }
 
 /**
- * Build the value["via site"] stamp for new objects and media receipts from
+ * Build the "via site" stamp for new objects and media MIME parameters from
  * the requesting site's Source. The ID identifies the full nested site path;
  * name and optional URL describe the innermost site for display and linking.
- * This only builds the stamp; the caller adds it to the object being posted.
+ * This only builds the stamp; the caller stores it with the data being posted.
  */
 export function siteStamp(source: Source) {
   const segment = source.path.at(-1);
@@ -82,8 +77,8 @@ export function preparePost(object: unknown, source: Source) {
     throw new TypeError("A Graffiti post needs an object value.");
   }
   const value = snapshot.value;
-  // Only the guard may attribute a post to a site or mark it as a media receipt.
-  if (Object.hasOwn(value, "via site") || Object.hasOwn(value, "_guard")) {
+  // Only the guard may attribute a post to a site.
+  if (Object.hasOwn(value, "via site")) {
     throw new GraffitiErrorForbidden("Apps cannot set reserved guard fields.");
   }
   const confirm = value["confirm with guard"] === true;

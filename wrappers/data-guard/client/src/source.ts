@@ -2,6 +2,15 @@ import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
 
 export type GuardSourceSegment = { id: string; name: string; url?: string };
 
+/**
+ * Encode [browser origin, ...parent-assigned site IDs] as value["via site"].id.
+ * Hosts can pass this string to children before their scripts run. It describes
+ * their scope; the guard independently derives the scope used for authorization.
+ */
+export function encodeGuardSiteId(path: readonly string[]): string {
+  return JSON.stringify(path);
+}
+
 /** Guard-specific context; other Graffiti implementations may ignore it. */
 export type GuardLoginOptions = NonNullable<Parameters<Graffiti["login"]>[0]> & {
   source?: GuardSourceSegment[];

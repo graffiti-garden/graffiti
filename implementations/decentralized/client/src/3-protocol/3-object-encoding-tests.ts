@@ -4,6 +4,8 @@ import {
   encodeObjectUrl,
   decodeObjectUrl,
   ObjectEncoding,
+  RECORD_KIND_OBJECT,
+  RECORD_KIND_MEDIA,
   stripGraffitiUrlAddendums,
 } from "./3-object-encoding.js";
 import { randomBytes } from "@noble/hashes/utils.js";
@@ -119,6 +121,19 @@ export function objectEncodingTests() {
           allowedTicket: allowedTickets[index],
           allowedIndex: index,
         });
+      }
+    });
+
+    test("binds the announced record kind to the stored kind", async () => {
+      const encoded = await objectEncoding.encode<{}>({ value: {}, channels: [] }, actor, RECORD_KIND_MEDIA);
+      const stored = dagCborDecode(encoded.objectBytes);
+      expect(stored).toHaveProperty("r", 1);
+      expect(stored).not.toHaveProperty("kind");
+      await expect(objectEncoding.validate(encoded.object, encoded.tags, encoded.objectBytes, undefined, RECORD_KIND_MEDIA))
+        .resolves.toBeUndefined();
+      for (const kind of [undefined, RECORD_KIND_OBJECT] as const) {
+        await expect(objectEncoding.validate(encoded.object, encoded.tags, encoded.objectBytes, undefined, kind))
+          .rejects.toThrow("Record kind does not match storage value");
       }
     });
 

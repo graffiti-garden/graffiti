@@ -3,7 +3,6 @@ import {
   type GraffitiLoginEvent,
   type GraffitiLogoutEvent,
   type GraffitiObjectStream,
-  type GraffitiPostMedia,
   type GraffitiSession,
 } from "@graffiti-garden/api";
 import { requestLoginRedirect } from "../bootstrap/protocol.js";
@@ -11,7 +10,6 @@ import { askLogin } from "../ui/ask-login.js";
 import { sessionArgumentIndex, type GuardLoginOptions, type GuardSession } from "../../../client/src/source.js";
 import type { Guard } from "./guard.js";
 import { LoginAccess } from "./login-access.js";
-import { postMediaReceipt } from "./media-receipts.js";
 import { sessionFromArgs, snapshotSession, sourceFromContext, type Source } from "./source.js";
 
 export type GraffitiMethod = {
@@ -215,18 +213,7 @@ export class GuardedGraffiti extends Graffiti {
       // site grant as soon as the guard approves the sign-out request.
       this.loginAccess.clear(session.actor);
     }
-    let value: unknown = await implementation.apply(this.graffiti, forwardedArgs);
-    if (method === "postMedia" && typeof value === "string") {
-      const uploadSource = authorization?.source;
-      const [media, session] = forwardedArgs as [
-        GraffitiPostMedia,
-        Parameters<Graffiti["postMedia"]>[1],
-      ];
-      if (uploadSource && session) {
-        value = await postMediaReceipt(this.graffiti, value, media, uploadSource, session);
-      }
-    }
-    return value;
+    return await implementation.apply(this.graffiti, forwardedArgs);
   }
 
   private async *stream(

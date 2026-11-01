@@ -1,4 +1,4 @@
-import type { Graffiti } from "@graffiti-garden/api";
+import type { Graffiti, JSONSchema } from "@graffiti-garden/api";
 import { GraffitiRuntimeTypes } from "@graffiti-garden/wrapper-runtime-types";
 import { GraffitiLocalIdentity } from "./identity";
 import { GraffitiLocalObjects, type GraffitiLocalOptions } from "./objects";
@@ -58,7 +58,14 @@ class GraffitiLocal_ implements Graffiti {
       this.graffitiLocalObjects,
     );
 
-    this.graffitiLocalMedia = new GraffitiLocalMedia(this.graffitiLocalObjects);
+    // Reuse the record store while keeping media out of the object API.
+    this.graffitiLocalMedia = new GraffitiLocalMedia({
+      post: <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.post<Schema>>) =>
+        this.graffitiLocalObjects.postRecord<Schema>("media", ...args),
+      get: <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.get<Schema>>) =>
+        this.graffitiLocalObjects.getRecord<Schema>("media", ...args),
+      delete: (...args) => this.graffitiLocalObjects.deleteRecord("media", ...args),
+    });
     this.postMedia = this.graffitiLocalMedia.postMedia.bind(
       this.graffitiLocalMedia,
     );

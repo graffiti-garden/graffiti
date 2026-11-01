@@ -300,7 +300,7 @@ describe("GuardedGraffiti streams and posts", () => {
     expect(closed).toBe(true);
   });
 
-  it("applies ordinary read approval to policies while hiding media receipts", async () => {
+  it("applies ordinary read approval to policies", async () => {
     const base = {
       actor: "actor:one",
       channels: ["channel"],
@@ -320,13 +320,6 @@ describe("GuardedGraffiti streams and posts", () => {
         },
       },
     };
-    const receipt = {
-      object: {
-        ...base,
-        url: "graffiti:receipt",
-        value: { mediaUrl: "graffiti:file", _guard: { kind: "media-receipt" } },
-      },
-    };
     const ordinary = {
       object: { ...base, url: "graffiti:ordinary", value: { note: "visible" } },
     };
@@ -334,7 +327,6 @@ describe("GuardedGraffiti streams and posts", () => {
       sessionEvents: new EventTarget(),
       discover: async function* () {
         yield policy;
-        yield receipt;
         yield ordinary;
         return { cursor: "next" };
       },

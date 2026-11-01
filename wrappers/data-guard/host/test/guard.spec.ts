@@ -10,7 +10,7 @@ import type { Request } from "../src/core/db.js";
 import { MemoryRules } from "./memory-rules.js";
 import { Guard, type GuardAnswer } from "../src/core/guard.js";
 import { sourceFromContext, type Source } from "../src/core/source.js";
-import { appendMediaReceiptUrl, parseMediaReceiptUrl } from "../src/core/media-receipts.js";
+import { stampMedia } from "../src/core/media-provenance.js";
 
 const origin = "https://example.com";
 const actor = "actor:one";
@@ -58,13 +58,13 @@ function harness(
   const graffiti = {
     sessionEvents: new EventTarget(),
     get: async (url: string) => {
-      const found = objects.get(parseMediaReceiptUrl(url).canonicalUrl);
+      const found = objects.get(url);
       if (!found) throw new Error(`Missing object ${url}`);
       return found;
     },
     getMedia: async (url: string, accept: { maxBytes?: number }) => {
-      const found = media.get(parseMediaReceiptUrl(url).canonicalUrl);
-      if (!found) throw new GraffitiErrorNotFound(`Missing media ${url}`);
+      const found = media.get(url);
+      if (!found) throw new GraffitiErrorNotFound("Not media");
       if (accept.maxBytes !== undefined && found.data.size > accept.maxBytes) {
         throw new GraffitiErrorTooLarge("Media exceeds limit");
       }
@@ -93,18 +93,10 @@ async function receives(
   return false;
 }
 
-function receipt(mediaUrl: string, site: string[]) {
-  return {
-    url: `graffiti:receipt-${mediaUrl}`,
-    actor,
-    channels: [],
-    allowed: [],
-    value: {
-      mediaUrl,
-      "via site": { name: site.at(-1), id: JSON.stringify(site) },
-      _guard: { kind: "media-receipt" },
-    },
-  };
+function mediaBlob(site: string[]) {
+  return stampMedia(new Blob(["image"], { type: "image/png" }), sourceFromContext(site[0], {
+    source: site.slice(1).map(id => ({ id, name: id })),
+  }));
 }
 
 describe("site-scoped Guard permissions", () => {
@@ -213,10 +205,6 @@ describe("site-scoped Guard permissions", () => {
         sessionA,
       ], sourceA),
     ).rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    await expect(guard.authorize("post", [
-      { value: { action: "Trust", _guard: { confirm: true } }, channels: [] },
-      sessionA,
-    ], sourceA)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
   });
 
   it("automatically reads same-site and unstamped private objects, but asks for another site", async () => {
@@ -266,25 +254,6 @@ describe("site-scoped Guard permissions", () => {
       JSON.stringify(siteA),
       JSON.stringify(foreignSite),
     ]);
-  });
-
-  it("keeps generic object methods from reading or deleting an unstamped media descriptor", async () => {
-    const { guard, objects, media, prompts } = harness();
-    objects.set("graffiti:private-file", object("graffiti:private-file"));
-    objects.set("graffiti:public-file", object("graffiti:public-file", undefined, null));
-    objects.set("graffiti:ordinary", object("graffiti:ordinary"));
-    media.set("graffiti:private-file", { actor, data: new Blob(["image"]), allowed: [] });
-    media.set("graffiti:public-file", { actor, data: new Blob([]), allowed: null });
-
-    await expect(guard.authorize("get", ["graffiti:private-file", {}, sessionA], sourceA))
-      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    await expect(guard.authorize("delete", ["graffiti:private-file", sessionA], sourceA))
-      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    await expect(guard.authorize("delete", ["graffiti:public-file", sessionA], sourceA))
-      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    await guard.authorize("get", ["graffiti:ordinary", {}, sessionA], sourceA);
-    await guard.authorize("delete", ["graffiti:ordinary", sessionA], sourceA);
-    expect(prompts).toEqual([]);
   });
 
   it("keeps an item-only private read for this Guard session, including its deletion notice", async () => {
@@ -362,13 +331,11 @@ describe("site-scoped Guard permissions", () => {
     const { db, guard, objects, media, prompts } = harness(() => ({ allow: true, remember: true }));
     objects.set("first", object("first", siteB));
     objects.set("second", object("second", siteB));
-    media.set("graffiti:file", { actor, data: new Blob(["image"]), allowed: [] });
-    objects.set("graffiti:receipt-graffiti:file", receipt("graffiti:file", siteB) as never);
+    media.set("graffiti:file", { actor, data: mediaBlob(siteB), allowed: [] });
 
     await guard.authorize("get", ["first", {}, sessionA], sourceA);
     await guard.authorize("get", ["second", {}, sessionA], sourceA);
-    const mediaUrl = appendMediaReceiptUrl("graffiti:file", "graffiti:receipt-graffiti:file");
-    await guard.authorize("getMedia", [mediaUrl, {}, sessionA], sourceA);
+    await guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA);
 
     expect(prompts).toHaveLength(1);
     expect((await db.rulesSnapshot()).permissions).toMatchObject([
@@ -408,74 +375,45 @@ describe("site-scoped Guard permissions", () => {
     expect(prompts).toHaveLength(1);
   });
 
-  it("asks for an exact private file if no valid receipt establishes its source", async () => {
-    const { db, guard, media, prompts } = harness(() => ({ allow: true, remember: true }));
+  it("allows unstamped private files without a prompt or stored grant", async () => {
+    const { db, guard, media, prompts } = harness();
     media.set("graffiti:file", { actor, data: new Blob(["image"]), allowed: [] });
     await guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA);
-    await guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA);
-
-    expect(prompts).toHaveLength(1);
-    expect(prompts[0]).toMatchObject({
-      canRemember: false,
-      request: { mode: "read" },
-    });
-    expect(prompts[0].request.originSite).toBeUndefined();
+    await guard.authorize("deleteMedia", ["graffiti:file", sessionA], sourceA);
+    expect(prompts).toEqual([]);
     expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
-  it.each(["same site", "site grant", "remembered approval"])(
-    "remembers a media read allowed by %s when its receipt suffix is lost",
-    async (access) => {
-      const { db, guard, objects, media, prompts } = harness(() => ({ allow: true, remember: true }));
-      const file = "graffiti:file";
-      media.set(file, { actor, data: new Blob(["image"]), allowed: [] });
-      const from = access === "same site" ? siteA : siteB;
-      const proof = receipt(file, from);
-      objects.set(proof.url, proof as never);
-      if (access === "site grant") {
-        await db.remember({
-          source: sourceA, actor, method: "get", decision: "allow",
-          match: { kind: "site", site: JSON.stringify(siteB) },
-        });
-      }
+  it("remembers an exact private media read, without also allowing deletion", async () => {
+    const { db, guard, media, prompts } = harness();
+    const file = "graffiti:file";
+    media.set(file, { actor, data: mediaBlob(siteB), allowed: [] });
+    await guard.authorize("getMedia", [file, {}, sessionA], sourceA);
+    await guard.authorize("getMedia", [file, {}, sessionA], sourceA);
+    expect(prompts).toHaveLength(1);
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
+    await guard.authorize("deleteMedia", [file, sessionA], sourceA);
+    await guard.authorize("getMedia", [file, {}, { actor: "actor:two" }], sourceA);
+    expect(prompts.map(({ request }) => request.mode)).toEqual(["read", "delete", "read"]);
+  });
 
-      await guard.authorize("getMedia", [appendMediaReceiptUrl(file, proof.url), {}, sessionA], sourceA);
-      const initialPrompts = access === "remembered approval" ? 1 : 0;
-      expect(prompts).toHaveLength(initialPrompts);
-      const savedRules = await db.rulesSnapshot();
-      await Promise.all([
-        guard.authorize("getMedia", [file, {}, sessionA], sourceA),
-        guard.authorize("getMedia", [`${file}?other.layer=x`, {}, sessionA], sourceA),
-      ]);
-      expect(prompts).toHaveLength(initialPrompts);
-      expect(await db.rulesSnapshot()).toEqual(savedRules);
-
-      // Seeing a file grants neither deletion nor access from another site/account.
-      await guard.authorize("deleteMedia", [file, sessionA], sourceA);
-      await guard.authorize("getMedia", [file, {}, sessionA], rootSource);
-      await guard.authorize("getMedia", [file, {}, { actor: "actor:two" }], sourceA);
-      expect(prompts.slice(initialPrompts).map(({ request }) => request.mode))
-        .toEqual(["delete", "read", "read"]);
-    },
-  );
-
-  it("keeps a media descriptor closed when its bytes are temporarily unavailable", async () => {
+  it("handles ordinary objects without probing the media API", async () => {
     const db = new MemoryRules();
     databases.push(db);
-    const file = object("graffiti:file");
-    const fileReceipt = receipt(file.url, siteB);
+    const file = object("graffiti:ordinary");
+    const getMedia = vi.fn(() => { throw new Error("Unexpected media read"); });
     const graffiti = {
       sessionEvents: new EventTarget(),
-      get: async (url: string) => parseMediaReceiptUrl(url).canonicalUrl === file.url ? file : fileReceipt,
-      getMedia: async () => { throw new GraffitiErrorNotFound("Media bytes unavailable."); },
+      get: async () => file,
+      getMedia,
     } as unknown as Graffiti;
     const guard = new Guard(graffiti, db, origin, async () => {
-      throw new Error("The generic object path must not prompt for media metadata.");
+      throw new Error("Unstamped objects must not prompt.");
     });
 
-    const mediaUrl = appendMediaReceiptUrl(file.url, fileReceipt.url);
-    await expect(guard.authorize("get", [mediaUrl, {}, sessionA], sourceA))
-      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    await guard.authorize("get", [file.url, {}, sessionA], sourceA);
+    await guard.authorize("delete", [file.url, sessionA], sourceA);
+    expect(getMedia).not.toHaveBeenCalled();
   });
 
   it("lets a site delete its own or unstamped objects, and scopes cross-site deletion separately", async () => {
@@ -562,19 +500,6 @@ describe("site-scoped Guard permissions", () => {
       .rejects.toBeInstanceOf(GraffitiErrorForbidden);
     expect(getMedia).not.toHaveBeenCalled();
   });
-
-  it("never discloses or deletes media receipts through app object requests", async () => {
-    const { guard, objects, prompts } = harness();
-    const mediaReceipt = receipt("graffiti:file", siteA);
-    objects.set(mediaReceipt.url, mediaReceipt as never);
-
-    await expect(guard.authorize("get", [mediaReceipt.url, {}, sessionA], sourceA)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    await expect(guard.authorize("delete", [mediaReceipt.url, sessionA], sourceA)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    expect(await receives(guard, [["channel"], {}, sessionA], mediaReceipt, sourceA)).toBe(false);
-    expect(await receives(guard, [["channel"], {}, sessionA], mediaReceipt, sourceA, true)).toBe(false);
-    expect(prompts).toEqual([]);
-  });
-
   it("confirms an app's permission post and uses ordinary provenance for its reads and deletes", async () => {
     const { guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
     const proposed = {

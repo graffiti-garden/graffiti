@@ -1,8 +1,5 @@
 import {
   GraffitiErrorForbidden,
-  GraffitiErrorNotFound,
-  GraffitiErrorSchemaMismatch,
-  GraffitiErrorTooLarge,
   type Graffiti,
   type GraffitiMediaAccept,
   type GraffitiObject,
@@ -12,10 +9,11 @@ import {
 } from "@graffiti-garden/api";
 import type { GuardDB, Permission, Request } from "./db.js";
 import type { GraffitiArgs, GraffitiMethod } from "./graffiti.js";
-import { isMediaReceiptObject, parseMediaReceiptUrl, resolveMediaReceipt } from "./media-receipts.js";
+import { encodeGuardSiteId } from "../../../client/src/source.js";
+import { readMedia, stampMedia } from "./media-provenance.js";
 import { LoginAccess } from "./login-access.js";
 import { latestDecision } from "./permissions.js";
-import { isWithinSource, preparePost, siteKey, viaSite, type SiteProvenance } from "./provenance.js";
+import { isWithinSource, preparePost, viaSite, type SiteProvenance } from "./provenance.js";
 import { actorFromArgs, sessionFromArgs, snapshotSession, sourceFromContext, type Source } from "./source.js";
 
 export type GuardAnswer =
@@ -81,8 +79,7 @@ export class Guard {
     if (!prepared) return undefined;
     const logout = actor ? await this.authorizePrepared(source, actor, method, prepared) : undefined;
     if (method === "getMedia" && actor && prepared.itemKey) {
-      // Remember every disclosed file, including reads allowed by site grants.
-      // A later read may lose its receipt suffix, but this site already saw it.
+      // Remember files already disclosed to this site for this page session.
       this.itemReads.add(`${actor}\n${source.key}\n${prepared.itemKey}`);
     }
     // Execute the snapshotted inputs, never the caller's possibly mutated data.
@@ -109,7 +106,6 @@ export class Guard {
         const result = next.value;
         if (!result.error) {
           const object = result.object;
-          if (isMediaReceiptObject(object)) continue;
           if (object.allowed != null) {
             if (!session) continue;
             const actor = session.actor;
@@ -266,15 +262,6 @@ export class Guard {
       // Do not evaluate an app-supplied schema until private-read approval.
       // Otherwise schema mismatch becomes an oracle for a known private URL.
       const object = await this.graffiti.get(url, {}, session);
-      if (isMediaReceiptObject(object)) {
-        throw new GraffitiErrorForbidden("Media receipts are managed by the guard.");
-      }
-      // Some implementations store media descriptors as ordinary objects at
-      // the media URL. Do not let generic object methods bypass media grants
-      // (or leave uploaded bytes behind by deleting only the descriptor).
-      if (!viaSite(object) && (method === "delete" || object.allowed != null)) {
-        await this.rejectMediaDescriptor(url, object, session);
-      }
       if (method === "get") {
         return this.prepareObjectRead(object, source, [url, args[1], session]);
       }
@@ -288,45 +275,34 @@ export class Guard {
     if (method === "postMedia") {
       const media = snapshotMedia(args[0]);
       return {
-        args: [media, session],
+        args: [{ ...media, data: stampMedia(media.data, source) }, session],
         subject: mediaSubject(media),
       };
     }
     if (method === "getMedia" || method === "deleteMedia") {
-      const inputUrl = objectUrl(args[0]);
-      const { canonicalUrl, forwardUrl } = parseMediaReceiptUrl(inputUrl);
+      const url = objectUrl(args[0]);
       const accept = method === "getMedia"
         ? structuredClone(args[1] ?? {}) as GraffitiMediaAccept
         : {};
-      const media = await this.graffiti.getMedia(forwardUrl, accept, session);
-      // Public reads do not depend on provenance. Private reads and all
-      // deletions need it to decide whether this site already has permission.
-      const from = method === "deleteMedia" || media.allowed != null
-        ? await resolveMediaReceipt(this.graffiti, inputUrl, media, session)
-        : undefined;
-      const subject = mediaSubject(media, canonicalUrl);
+      // Preserve the caller's limits: the stamp changes neither bytes nor the
+      // base MIME type. This one read supplies both provenance and file bytes.
+      const { media, from } = readMedia(await this.graffiti.getMedia(url, accept, session));
+      const subject = mediaSubject(media, url);
       if (method === "getMedia") {
         const prepared: Prepared = {
-          args: [forwardUrl, accept, session],
+          args: [url, accept, session],
           subject,
           preview: { media },
           result: media,
-          itemKey: `media:${canonicalUrl}`,
+          itemKey: `media:${url}`,
         };
-        if (media.allowed != null && (!from || !isWithinSource(source, from.id))) {
-          // Without a receipt, a private file still needs exact approval.
+        if (media.allowed != null && from && !isWithinSource(source, from.id)) {
           prepared.mode = "read";
-          if (from) {
-            prepared.grant = { method: "get", match: siteMatch(from) };
-          }
+          prepared.grant = { method: "get", match: siteMatch(from) };
         }
         return prepared;
       }
-      const prepared = this.prepareDelete(subject, from, source, [forwardUrl, session], { media });
-      // A caller can strip the receipt from a URL. Missing provenance must
-      // therefore require exact-file approval, never automatic deletion.
-      if (!from) prepared.mode = "delete";
-      return prepared;
+      return this.prepareDelete(subject, from, source, [url, session], { media });
     }
     if (method === "logout") {
       return {
@@ -339,26 +315,6 @@ export class Guard {
       return undefined;
     }
     throw new Error(`Unsupported authenticated Graffiti method ${String(method)}.`);
-  }
-
-  private async rejectMediaDescriptor(
-    url: string,
-    object: GraffitiObject<{}>,
-    session: GraffitiSession | undefined,
-  ) {
-    try {
-      await this.graffiti.getMedia(url, { maxBytes: 0 }, session);
-    } catch (error) {
-      if (error instanceof GraffitiErrorSchemaMismatch) return;
-      if (error instanceof GraffitiErrorNotFound) {
-        // The descriptor may still exist while its bytes are temporarily
-        // unavailable. A valid receipt must keep generic object access closed.
-        if (!(await resolveMediaReceipt(this.graffiti, url, object, session))) return;
-      } else if (!(error instanceof GraffitiErrorTooLarge)) {
-        throw error;
-      }
-    }
-    throw new GraffitiErrorForbidden("Use the media methods for this URL.");
   }
 
   private prepareObjectRead(object: GraffitiObject<{}>, source: Source, args: unknown[]): Prepared {
@@ -389,8 +345,8 @@ export class Guard {
       subject,
       preview,
     };
-    // Unstamped objects are allowed. The media caller requires exact approval
-    // without a receipt, since callers can remove that part of a file URL.
+    // Unstamped objects and media are allowed. Provenance is stored with the
+    // data, so editing the URL cannot remove it.
     if (from && !isWithinSource(source, from.id)) {
       prepared.mode = "delete";
       prepared.grant = { method: "delete", match: siteMatch(from) };
@@ -401,7 +357,7 @@ export class Guard {
 
 
 function siteMatch(from: SiteProvenance): Permission["match"] {
-  return { kind: "site", site: siteKey(from.id), ...(from.name ? { name: from.name } : {}) };
+  return { kind: "site", site: encodeGuardSiteId(from.id), ...(from.name ? { name: from.name } : {}) };
 }
 
 function snapshotMedia(value: unknown): GraffitiPostMedia {

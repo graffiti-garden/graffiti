@@ -1,5 +1,6 @@
 import type { Source } from "./source.js";
-import { isWithinSource, siteId, siteKey } from "./provenance.js";
+import { encodeGuardSiteId } from "../../../client/src/source.js";
+import { isWithinSource, siteId } from "./provenance.js";
 
 const storageKey = "graffiti-guard:login-access-v3";
 
@@ -13,7 +14,7 @@ export class LoginAccess {
 
   grant(actor: string, source: Source) {
     const sites = this.sites(actor);
-    if (sites.some(site => siteKey(site) === source.key)) return;
+    if (sites.some(site => encodeGuardSiteId(site) === source.key)) return;
     sites.push(siteId(source));
     this.write(actor, sites);
   }
@@ -30,7 +31,7 @@ export class LoginAccess {
     // Keep the parent's inherited login when removing its last signed-in child.
     // The parent's approval also covers its ancestors, but not its children.
     const parent = siteId(source).slice(0, -1);
-    if (parent.length && !remaining.some(site => siteKey(site) === siteKey(parent))) remaining.push(parent);
+    if (parent.length && !remaining.some(site => encodeGuardSiteId(site) === encodeGuardSiteId(parent))) remaining.push(parent);
     this.write(actor, remaining);
   }
 

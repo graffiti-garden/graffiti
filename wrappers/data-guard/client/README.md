@@ -61,6 +61,19 @@ scope. The RPC relay supplies session restoration and pending request results
 even when the child appears later. Reuse its `stateId` after reload so a login
 redirect can return the caller's `state` to the same child.
 
+To expose a synchronous site ID, use the shared encoder with the full path:
+the embedding browser origin followed by each parent-assigned site ID.
+
+```ts
+import { encodeGuardSiteId } from "@graffiti-garden/wrapper-data-guard";
+
+const id = encodeGuardSiteId(["https://example.com", "document-123"]);
+```
+
+Pass this string to the child during startup. It matches `value["via site"].id`
+for that scope; inherited scopes reuse the parent's path. Names and URLs do not
+affect the ID. This exposes identity only, without granting permissions.
+
 These are guard conventions, not additional Graffiti API requirements. The
 guard supplies `guardSites` on sessions to describe approved descendant paths
 using IDs only. Nesting wrappers trim that information before forwarding it.

@@ -1,6 +1,6 @@
 import type { GraffitiSession } from "@graffiti-garden/api";
 import type { GraffitiMethod } from "./graffiti.js";
-import { sessionArgumentIndex, type GuardSourceSegment } from "../../../client/src/source.js";
+import { encodeGuardSiteId, sessionArgumentIndex, type GuardSourceSegment } from "../../../client/src/source.js";
 
 export type Source = {
   key: string;
@@ -33,7 +33,7 @@ export function sourceLabel(source: Source) {
 function sourceFromPath(origin: string, value: unknown): Source {
   const path = value === undefined ? [] : parsePath(value);
   return {
-    key: JSON.stringify([origin, ...path.map(({ id }) => id)]),
+    key: encodeGuardSiteId([origin, ...path.map(({ id }) => id)]),
     origin,
     path,
   };

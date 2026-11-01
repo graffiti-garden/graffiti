@@ -1,7 +1,7 @@
 import { Graffiti } from "@graffiti-garden/api";
 import { GraffitiRpcClient } from "@graffiti-garden/wrapper-iframe-rpc/client";
 import { withGuardSource, type GuardLoginOptions, type GuardSourceSegment } from "./source.js";
-export { withGuardSource } from "./source.js";
+export { encodeGuardSiteId, withGuardSource } from "./source.js";
 export type {
   GuardSourceSegment as GraffitiGuardSourceSegment,
   GuardSession as GraffitiGuardSession,

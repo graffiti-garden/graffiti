@@ -5,6 +5,7 @@ import { GuardedGraffiti } from "../src/core/graffiti.js";
 import { Guard } from "../src/core/guard.js";
 import { LoginAccess } from "../src/core/login-access.js";
 import { sourceFromContext } from "../src/core/source.js";
+import { stampMedia } from "../src/core/media-provenance.js";
 
 function memoryStorage() {
   const values = new Map<string, string>();
@@ -49,7 +50,10 @@ describe("login access", () => {
     const access = new LoginAccess(memoryStorage());
     access.grant("alice", source);
     const db = new MemoryRules();
-    const media = { data: new Blob(["private"]), actor: "alice", allowed: [] };
+    const media = {
+      data: stampMedia(new Blob(["private"]), sourceFromContext("https://other.example", {})),
+      actor: "alice", allowed: [],
+    };
     const graffiti = {
       sessionEvents: new EventTarget(), getMedia: vi.fn(async () => media),
     } as unknown as Graffiti;

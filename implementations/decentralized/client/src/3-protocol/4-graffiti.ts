@@ -64,6 +64,11 @@ import {
   stripGraffitiUrlAddendums,
   MAX_OBJECT_SIZE_BYTES,
   ObjectEncoding,
+  RECORD_KIND_KEY,
+  RECORD_KIND_OBJECT,
+  RECORD_KIND_MEDIA,
+  RecordKindSchema,
+  type RecordKind,
 } from "./3-object-encoding";
 
 import { GraffitiModal } from "@graffiti-garden/modal";
@@ -89,6 +94,7 @@ const Uint8ArraySchema = custom<Uint8Array>(
 const MESSAGE_DATA_STORAGE_BUCKET_KEY = "k";
 const MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY = "t";
 const MessageMetadataBaseSchema = strictObject({
+  [RECORD_KIND_KEY]: optional(RecordKindSchema),
   [MESSAGE_DATA_STORAGE_BUCKET_KEY]: string(),
   [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: optional(string()),
 });
@@ -128,7 +134,10 @@ type MessageMetadataAnnouncements = infer_<
 const MESSAGE_LABEL_UNLABELED = 0;
 const MESSAGE_LABEL_VALID = 1;
 const MESSAGE_LABEL_TRASH = 2;
-const MESSAGE_LABEL_INVALID = 3;
+// Older readers reject the new kind field and persist label 3. Revalidate those
+// records after upgrading; use a new label for failures under this format.
+const MESSAGE_LABEL_INVALID_LEGACY = 3;
+const MESSAGE_LABEL_INVALID = 4;
 
 export interface GraffitiDecentralizedOptions {
   identityCreatorEndpoint?: string;
@@ -140,6 +149,7 @@ export interface GraffitiDecentralizedOptions {
 const CONCURRENCY = 128;
 const LOCAL_STORAGE_REMEMBERED_HANDLE_KEY = "graffiti-login-remembered-handle";
 
+// @ts-ignore
 export class GraffitiDecentralized implements Graffiti {
   protected readonly dids = new DecentralizedIdentifiers();
   protected readonly authorization = new Authorization();
@@ -513,14 +523,19 @@ export class GraffitiDecentralized implements Graffiti {
     await this.sessions.logout(session.actor, options);
   };
 
-  // @ts-ignore
-  post: Graffiti["post"] = async (...args) => {
+  post = <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.post<Schema>>) =>
+    this.postRecord<Schema>(RECORD_KIND_OBJECT, ...args);
+
+  protected async postRecord<Schema extends JSONSchema>(
+    kind: RecordKind | undefined,
+    ...args: Parameters<typeof Graffiti.prototype.post<Schema>>
+  ) {
     const [partialObject, session] = args;
     const resolvedSession = this.sessions.resolveSession(session);
 
     // Encode the object
     const { object, tags, objectBytes, allowedTickets } =
-      await this.objectEncoding.encode<{}>(partialObject, session.actor);
+      await this.objectEncoding.encode<Schema>(partialObject, session.actor, kind);
 
     // Generate a random key under which to store the object
     // If the object is private, this means no one will be able to
@@ -550,12 +565,19 @@ export class GraffitiDecentralized implements Graffiti {
       allowedTickets,
       storageBucketKey,
       session,
+      kind,
     );
 
     return object;
-  };
+  }
 
-  get: Graffiti["get"] = async (...args) => {
+  get = <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.get<Schema>>) =>
+    this.getRecord<Schema>(RECORD_KIND_OBJECT, ...args);
+
+  protected async getRecord<Schema extends JSONSchema>(
+    kind: RecordKind,
+    ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
+  ) {
     const [url, schema, session] = args;
     let services: { token?: string; serviceEndpoint: string }[];
     const validator = await compileGraffitiObjectSchema(schema);
@@ -594,6 +616,7 @@ export class GraffitiDecentralized implements Graffiti {
 
       for await (const result of iterator) {
         if (result.object.url !== objectUrl) continue;
+        if (result.kind !== undefined && result.kind !== kind) continue;
         if (result.tombstone) {
           object = undefined;
         } else {
@@ -613,9 +636,11 @@ export class GraffitiDecentralized implements Graffiti {
     }
 
     throw new GraffitiErrorNotFound("Object not found");
-  };
+  }
 
-  delete: Graffiti["delete"] = async (url, session) => {
+  delete: Graffiti["delete"] = (...args) => this.deleteRecord(RECORD_KIND_OBJECT, ...args);
+
+  protected async deleteRecord(kind: RecordKind, ...[url, session]: Parameters<Graffiti["delete"]>) {
     const resolvedSession = this.sessions.resolveSession(session);
 
     const objectUrl = stripGraffitiUrlAddendums(unpackObjectUrl(url));
@@ -637,6 +662,7 @@ export class GraffitiDecentralized implements Graffiti {
     let existing: SingleEndpointQueryResult<{}> | undefined;
     for await (const result of iterator) {
       if (result.object.url !== objectUrl) continue;
+      if (result.kind !== undefined && result.kind !== kind) continue;
       if (result.tombstone) {
         existing = undefined;
       } else {
@@ -669,6 +695,7 @@ export class GraffitiDecentralized implements Graffiti {
       allowedTickets,
       storageBucketKey,
       session,
+      existing.kind,
       [
         ...(announcements ?? []),
         // Make sure we delete from our own inbox too
@@ -680,7 +707,7 @@ export class GraffitiDecentralized implements Graffiti {
     );
 
     return object;
-  };
+  }
 
   postMedia: Graffiti["postMedia"] = async (...args) => {
     const [media, session] = args;
@@ -704,8 +731,9 @@ export class GraffitiDecentralized implements Graffiti {
       resolvedSession.storageBucket.token,
     );
 
-    // Create an object
-    const { url } = await this.post<typeof MEDIA_OBJECT_SCHEMA>(
+    // Store the descriptor as media, outside the ordinary object API.
+    const { url } = await this.postRecord<typeof MEDIA_OBJECT_SCHEMA>(
+      RECORD_KIND_MEDIA,
       {
         value: {
           key,
@@ -731,7 +759,8 @@ export class GraffitiDecentralized implements Graffiti {
       throw new TypeError("maxBytes must be a nonnegative safe integer");
     }
 
-    const object = await this.get<typeof MEDIA_OBJECT_SCHEMA>(
+    const object = await this.getRecord<typeof MEDIA_OBJECT_SCHEMA>(
+      RECORD_KIND_MEDIA,
       mediaUrl,
       MEDIA_OBJECT_SCHEMA,
       session,
@@ -791,7 +820,7 @@ export class GraffitiDecentralized implements Graffiti {
 
     const resolvedSession = this.sessions.resolveSession(session);
 
-    const result = await this.delete(mediaUrl, session);
+    const result = await this.deleteRecord(RECORD_KIND_MEDIA, mediaUrl, session);
 
     if (!("key" in result.value && typeof result.value.key === "string"))
       throw new Error(
@@ -899,6 +928,7 @@ export class GraffitiDecentralized implements Graffiti {
               next.index,
             );
           const { object, tombstone, tags: receivedTags } = next.result.value;
+          if (next.result.value.kind === RECORD_KIND_MEDIA) continue;
           // Inbox announcements can omit channel names, so recover the queried
           // channels from their tags before applying the usual object mask.
           const matchedChannels = channels.filter((_, index) =>
@@ -987,11 +1017,15 @@ export class GraffitiDecentralized implements Graffiti {
     allowedTickets: Uint8Array[] | undefined,
     storageBucketKey: string,
     session: GraffitiSession,
+    kind?: RecordKind,
     priorAnnouncements?: MessageMetadataAnnouncements,
   ): Promise<void> {
     const resolvedSession = this.sessions.resolveSession(session);
 
     const metadataBase: MessageMetadataBase = {
+      // Retain kind for cached reads and tombstones after the record is gone.
+      // Initial validation checks it against the stored record's kind.
+      ...(kind === undefined ? {} : { [RECORD_KIND_KEY]: kind }),
       [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
     };
 
@@ -1241,7 +1275,8 @@ export class GraffitiDecentralized implements Graffiti {
     if (
       label !== MESSAGE_LABEL_VALID &&
       label !== MESSAGE_LABEL_UNLABELED &&
-      label !== MESSAGE_LABEL_TRASH
+      label !== MESSAGE_LABEL_TRASH &&
+      label !== MESSAGE_LABEL_INVALID_LEGACY
     )
       return;
 
@@ -1262,6 +1297,8 @@ export class GraffitiDecentralized implements Graffiti {
       return;
     }
 
+    if (label === MESSAGE_LABEL_INVALID_LEGACY && metadata[RECORD_KIND_KEY] === undefined) return;
+
     const {
       [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
       [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
@@ -1276,6 +1313,7 @@ export class GraffitiDecentralized implements Graffiti {
         ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY]
         : undefined;
     const resultBase = {
+      kind: metadata[RECORD_KIND_KEY],
       messageId,
       object,
       storageBucketKey,
@@ -1319,7 +1357,7 @@ export class GraffitiDecentralized implements Graffiti {
       return { ...resultBase, tombstone: true };
     }
 
-    // Otherwise, unlabeled: try to validate the object
+    // Validate new messages and retry kind-bearing records rejected by old readers.
     let validationError: unknown | undefined = undefined;
     try {
       const actor = object.actor;
@@ -1367,6 +1405,7 @@ export class GraffitiDecentralized implements Graffiti {
         receivedTags,
         objectBytes,
         privateObjectInfo,
+        metadata[RECORD_KIND_KEY],
       );
     } catch (e) {
       validationError = e;
@@ -1470,6 +1509,7 @@ const CursorSchema = strictObject({
 });
 
 interface SingleEndpointQueryResult<Schema extends JSONSchema> {
+  kind?: RecordKind;
   messageId: string;
   object: GraffitiObject<Schema>;
   storageBucketKey: string;
