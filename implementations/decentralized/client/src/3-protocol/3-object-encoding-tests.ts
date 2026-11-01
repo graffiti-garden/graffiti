@@ -4,6 +4,7 @@ import {
   encodeObjectUrl,
   decodeObjectUrl,
   ObjectEncoding,
+  stripGraffitiUrlAddendums,
 } from "./3-object-encoding.js";
 import { randomBytes } from "@noble/hashes/utils.js";
 import {
@@ -27,6 +28,20 @@ import {
 
 export function objectEncodingTests() {
   describe("object Urls", () => {
+    test("literal ? and # layers do not change the canonical Graffiti URL", () => {
+      const canonical = encodeObjectUrl("did:web:example.com/path?encoded", "content#encoded");
+      expect(stripGraffitiUrlAddendums(`${canonical}?first.layer=x%3Fy#second.layer=z`)).toBe(canonical);
+      expect(stripGraffitiUrlAddendums(`${canonical}#first.layer=x%23y?second.layer=z`)).toBe(canonical);
+      expect(decodeObjectUrl(canonical).actor).toBe("did:web:example.com/path?encoded");
+      expect(decodeObjectUrl(canonical).contentAddress).toBe("content#encoded");
+      expect(stripGraffitiUrlAddendums("https://example.com/file?size=large")).toBe(
+        "https://example.com/file?size=large",
+      );
+      expect(stripGraffitiUrlAddendums("https://example.com/file#preview")).toBe(
+        "https://example.com/file#preview",
+      );
+    });
+
     for (const actor of [
       "did:plc:alsdkjfkdjf",
       "did:web:example.com/someone",

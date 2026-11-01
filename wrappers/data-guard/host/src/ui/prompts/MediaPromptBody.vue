@@ -1,33 +1,38 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Request } from "../../core/db.js";
+import type { GuardAnswer } from "../../core/guard.js";
 import { formatBytes, mediaLabels } from "../media.js";
+import { originSiteLabel } from "../remember.js";
 import IdentityValue from "../values/IdentityValue.vue";
 import LinkValue from "../values/LinkValue.vue";
 import MediaView from "./MediaView.vue";
 import DetailList from "./shared/DetailList.vue";
 import PromptBody from "./shared/PromptBody.vue";
 
+type MediaSubject = {
+  type: string;
+  size: number;
+  name?: string;
+  actor?: string;
+  allowed?: string[] | null;
+  url?: string;
+};
+
 const props = defineProps<{
-  request: Request;
+  request: Request & { method: "getMedia" | "deleteMedia" };
   canRemember: boolean;
-  resolve: (answer: any) => void;
-  preview?: any;
-  action: "store" | "access" | "delete";
+  resolve: (answer: GuardAnswer) => void;
+  preview?: { media?: { data: Blob } };
 }>();
 
-const media = computed(() => props.request.subject as any);
+const media = computed(() => props.request.subject as MediaSubject);
 const labels = computed(() => mediaLabels(media.value.type));
-const creator = computed(() =>
-  media.value.actor ??
-  (props.request.method === "postMedia" ? props.request.actor : undefined),
-);
-const title = computed(
-  () =>
-    `Allow this site to ${props.action} this ${
-      props.action === "access" ? "private " : ""
-    }${labels.value.item}?`,
-);
+const verb = computed(() => ({ getMedia: "read", deleteMedia: "delete" })[props.request.method]);
+const creator = computed(() => media.value.actor);
+const title = computed(() => props.request.method === "getMedia"
+  ? `Allow this site to read this private ${labels.value.item}?`
+  : `Let this site delete this ${labels.value.item}?`);
 </script>
 
 <template>
@@ -36,10 +41,10 @@ const title = computed(
     :can-remember="canRemember"
     :resolve="resolve"
     :title="title"
-    summary=""
   >
     <template #summary>
-      <span>asks to {{ action }}:</span>
+      <span>asks to {{ verb }} this {{ labels.item }}<span v-if="request.originSite"> created on <strong>{{ originSiteLabel(request.originSite) }}</strong></span>:</span>
+      <span v-if="request.method === 'getMedia' && !request.originSite" class="unknown-origin">The site that uploaded this file could not be verified.</span>
       <MediaView
         :media="preview?.media"
         :name="media.name"
@@ -61,6 +66,7 @@ const title = computed(
         <dd v-else-if="media.allowed.length === 0"><em>Only you</em></dd>
         <dd v-else><ul class="actors"><li v-for="actor in media.allowed" :key="actor"><IdentityValue :actor="actor" /></li></ul></dd>
         <template v-if="media.url"><dt>URL</dt><dd><LinkValue :url="media.url" /></dd></template>
+        <template v-if="request.originSite"><dt>Site ID</dt><dd><code>{{ request.originSite.site }}</code></dd></template>
       </DetailList>
     </template>
   </PromptBody>
@@ -68,5 +74,6 @@ const title = computed(
 
 <style scoped>
 .actors { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
+.unknown-origin { display: block; margin-top: 0.5rem; color: var(--secondary-color); font-size: 0.9rem; }
 code { word-break: break-all; }
 </style>

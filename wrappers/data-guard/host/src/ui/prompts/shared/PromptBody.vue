@@ -14,11 +14,23 @@ const props = withDefaults(
     canRemember: boolean;
     resolve: (answer: GuardAnswer) => void;
     title: string;
-    summary: string;
+    summary?: string;
     details?: boolean;
   }>(),
   { details: true },
 );
+
+const approveLabel = computed(() => {
+  if (props.request.mode === "confirm") return "Post";
+  if (props.request.mode === "delete") return props.request.method === "deleteMedia" ? "Delete this file" : "Delete this item";
+  if (props.request.mode === "read") return "Approve";
+  return "Allow";
+});
+const denyLabel = computed(() => {
+  if (props.request.mode === "delete") return props.request.method === "deleteMedia" ? "Keep file" : "Keep item";
+  if (props.request.mode === "confirm") return "Cancel";
+  return "Deny";
+});
 
 const open = ref(false);
 const remember = ref(false);
@@ -86,8 +98,8 @@ onBeforeUnmount(() => clearTimeout(confirmationTimer));
           <span>{{ rememberDecisionLabel(request) }}</span>
         </label>
         <div class="decision-actions">
-          <button type="button" class="deny" :disabled="confirming" @click="decide(false)">Deny</button>
-          <button type="button" :disabled="confirming" @click="decide(true)">Allow</button>
+          <button type="button" class="deny" :disabled="confirming" @click="decide(false)">{{ denyLabel }}</button>
+          <button type="button" :disabled="confirming" @click="decide(true)">{{ approveLabel }}</button>
         </div>
         <div
           v-if="queueStatus || privateResult"
@@ -120,14 +132,11 @@ summary:hover, summary:focus-visible { border-color: var(--border-color-hover); 
 .prompt-actions.after-details { padding-top: 1.1rem; }
 .remember-decision { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 2.5rem; border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.8rem 1rem; color: var(--text-color); background: transparent; font-size: 1.25rem; line-height: 1.4; cursor: pointer; user-select: none; }
 .remember-decision:hover { border-color: var(--border-color-hover); background: var(--background-color-interactive-hover); }
-.remember-decision span { text-wrap: pretty; }
+.remember-decision span { min-width: 0; overflow-wrap: anywhere; text-wrap: pretty; }
 .remember-decision input { flex: none; width: 1.75rem; height: 1.75rem; margin: 0; accent-color: var(--accent-button-background); }
 .decision-actions { display: flex; justify-content: space-between; gap: 1rem; }
-.decision-actions button { min-width: 7rem; padding: 0.55rem 1.5rem; font-size: 1.6rem; }
 .prompt-status { display: grid; gap: 0.25rem; margin-top: 1rem; color: var(--secondary-color); font-size: 1rem; line-height: 1.4; text-align: center; }
 .prompt-status p { margin: 0; }
-button.deny { color: var(--text-color); background: var(--background-color-interactive); }
-button.deny:hover { color: var(--text-color); background: var(--background-color-interactive-hover); }
 @media (max-width: 42rem) {
   .summary-main { padding: 0.65rem 0.7rem 1.25rem; }
   details[open] { padding: 0 0.7rem 0.75rem; }
@@ -136,6 +145,5 @@ button.deny:hover { color: var(--text-color); background: var(--background-color
   .remember-decision { gap: 0.6rem; margin-bottom: 1rem; padding: 0.6rem 0.7rem; font-size: 1rem; }
   .remember-decision input { width: 1.35rem; height: 1.35rem; }
   .decision-actions { gap: 0.6rem; flex-direction: column-reverse; }
-  .decision-actions button { padding: 0.5rem 0.75rem; font-size: 1.125rem; }
 }
 </style>

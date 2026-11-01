@@ -92,6 +92,26 @@ describe("GraffitiDecentralized Tests", () => {
 
   // Protocol tests
   handleTests(handles[0]);
+  test("accepts layered Graffiti URL addendums for object and media lookups and deletion", async () => {
+    const graffiti = useGraffiti();
+    const session = sessions[0];
+    const object = await graffiti.post(
+      { value: { text: "layered URL" }, channels: [session.actor] },
+      session,
+    );
+    const objectUrl = `${object.url}#graffiti.guard.receipt=graffiti%3Areceipt?another.layer=one%3Ftwo`;
+    expect((await graffiti.get({ url: objectUrl }, {}, session)).url).toBe(object.url);
+    expect((await graffiti.delete(objectUrl, session)).url).toBe(object.url);
+
+    const mediaUrl = await graffiti.postMedia(
+      { data: new Blob(["media data"], { type: "text/plain" }), allowed: [] },
+      session,
+    );
+    const layeredMediaUrl = `${mediaUrl}?other.layer=one#graffiti.guard.receipt=graffiti%3Areceipt?third.layer=two`;
+    await expect((await graffiti.getMedia(layeredMediaUrl, {}, session)).data.text()).resolves.toBe("media data");
+    await expect(graffiti.deleteMedia(layeredMediaUrl, session)).resolves.toBeUndefined();
+  });
+
   objectEncodingTests();
 
   const useGraffiti = () =>

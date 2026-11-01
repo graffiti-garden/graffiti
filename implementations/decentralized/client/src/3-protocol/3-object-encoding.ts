@@ -347,6 +347,13 @@ const ObjectDataSchema = strictObject({
 
 export const GRAFFITI_OBJECT_URL_PREFIX = "graffiti:";
 
+/** Canonical components encode ? and #; a literal one begins wrapper addendums. */
+export function stripGraffitiUrlAddendums(url: string) {
+  if (!url.startsWith(GRAFFITI_OBJECT_URL_PREFIX)) return url;
+  const boundary = url.search(/[?#]/);
+  return boundary === -1 ? url : url.slice(0, boundary);
+}
+
 // Methods to encode and decode object URLs
 export function encodeObjectUrlComponent(value: string) {
   const replaced = value.replace(/:/g, "!").replace(/\//g, "~");

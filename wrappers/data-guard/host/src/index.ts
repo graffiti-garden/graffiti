@@ -12,19 +12,21 @@ import {
   handleStorageSetup,
   isStorageSetup,
 } from "./bootstrap/storage_setup.js";
-import { activateStorageAccess } from "./bootstrap/storage_access.js";
-import { GuardDB } from "./core/db.js";
+import { LoginAccess } from "./core/login-access.js";
+import { sourceFromContext } from "./core/source.js";
+import { activateStorageAccess, restoreStorageAccess, getLocalStorage } from "./bootstrap/storage_access.js";
 import { GuardedGraffiti } from "./core/graffiti.js";
 import { Guard } from "./core/guard.js";
 import { GraffitiRuleStore } from "./core/rules.js";
 import App from "./ui/App.vue";
 import { ask } from "./ui/ask.js";
+import { trackAuditSessions } from "./ui/audit.js";
 
 const standalone = window.parent === window;
 // Embedded guard pages need a transparent canvas; standalone pages do not.
 if (standalone) document.documentElement.classList.add("standalone");
 
-const ruleStore = new GraffitiRuleStore();
+const ruleStore = new GraffitiRuleStore(sourceFromContext(window.location.origin, {}));
 const app = createApp(App, { ruleStore });
 // The storage-access prompt uses this root before Graffiti can safely touch
 // browser storage. Graffiti-dependent prompt components are rendered only after
@@ -36,32 +38,38 @@ if (standalone) {
   if (isStorageSetup(pageUrl)) {
     handleStorageSetup(pageUrl);
   } else {
+    let auditSessions: ReturnType<typeof trackAuditSessions>;
     handleLoginRedirect(
       pageUrl,
       () => {
         const graffiti = new GraffitiDecentralized({ replaceInitialLoginHistoryEntry: true });
+        auditSessions = trackAuditSessions(graffiti);
         // Subscribe the UI before initialization can restore existing sessions.
         app.use(GraffitiPlugin, { graffiti });
         return graffiti;
       },
       () => {
         ruleStore.activate();
-        handleAudit(pageUrl);
+        handleAudit(pageUrl, auditSessions);
       },
     );
   }
 } else {
-  listenToParent((origin, pageUrl, loginNonce) => {
-    activateStorageAccess(pageUrl).then(() => {
-      const graffiti = new GraffitiDecentralized();
-      app.use(GraffitiPlugin, { graffiti });
-      ruleStore.activate();
-      const guard = new Guard(graffiti, new GuardDB(ruleStore), origin, ask);
-      serveGraffiti(new GuardedGraffiti(graffiti, guard)).connect({
-        remoteWindow: window.parent,
-        allowedOrigins: [origin],
-        initialLoginResult: () => loginNonce ? takeLoginResult(loginNonce, origin) : undefined,
-      });
+  listenToParent(async (origin, loginNonce) => {
+    let storageReady = await restoreStorageAccess();
+    if (!storageReady && loginNonce) storageReady = await activateStorageAccess();
+    // Public browsing starts anonymously; choose storage before creating any caches.
+    const graffiti = new GraffitiDecentralized();
+    app.use(GraffitiPlugin, { graffiti });
+    if (storageReady) ruleStore.activate();
+    const access = new LoginAccess(storageReady ? getLocalStorage() : undefined);
+    const guard = new Guard(graffiti, ruleStore, origin, ask, access);
+    const result = storageReady && loginNonce ? takeLoginResult(loginNonce, origin) : undefined;
+    const guarded = new GuardedGraffiti(graffiti, guard, access, origin, result);
+    serveGraffiti(guarded).connect({
+      remoteWindow: window.parent,
+      allowedOrigins: [origin],
+      stateId: origin,
     });
   });
 }

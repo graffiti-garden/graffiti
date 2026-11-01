@@ -15,7 +15,8 @@ export function isStorageSetup(url: URL) {
 
 export function handleStorageSetup(url: URL) {
   const redirectUrl = parseUrl(
-    new URLSearchParams(url.hash.slice(1)).get("redirectUrl"),
+    new URLSearchParams(url.hash.slice(1)).get("redirectUrl") ??
+      url.searchParams.get("redirectUrl"),
   );
   if (
     redirectUrl?.protocol !== "http:" &&
@@ -25,11 +26,16 @@ export function handleStorageSetup(url: URL) {
     return;
   }
 
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  prepareStorage(url);
+  show(StorageAccess, { setup: true, redirectUrl: redirectUrl.href });
+}
+
+/** Establish the first-party cookie during the normal login visit. */
+export function prepareStorage(url: URL) {
+  const secure = url.protocol === "https:" ? "; Secure" : "";
   document.cookie =
     `graffiti-guard-storage-setup=1; Max-Age=31536000; Path=/` +
     `; SameSite=${secure ? "None" : "Lax"}${secure}`;
-  show(StorageAccess, { setup: true, redirectUrl: redirectUrl.href });
 }
 
 function parseUrl(value: string | null) {

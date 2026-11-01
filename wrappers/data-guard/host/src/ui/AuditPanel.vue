@@ -3,19 +3,21 @@ import {
   GraffitiActorToHandle,
   useGraffiti,
   useGraffitiDiscover,
-  useGraffitiSession,
 } from "@graffiti-garden/wrapper-vue";
+import type { GraffitiSession } from "@graffiti-garden/api";
 import { computed, ref, useTemplateRef, watch } from "vue";
 import {
   ruleActor,
+  ruleChannel,
   ruleId,
   ruleSchema,
+  ruleSites,
   rulesFromObjects,
   type AccessRule,
 } from "../core/rules.js";
 import type { Source } from "../core/source.js";
 import { sourceLabel } from "../core/source.js";
-import PermissionDataValue from "./PermissionDataValue.vue";
+import { originSiteLabel } from "./remember.js";
 import TimestampValue from "./values/TimestampValue.vue";
 
 const PAGE_SIZE = 100;
@@ -23,26 +25,34 @@ const MIN_COLUMN_WIDTH = 6;
 const columns = [
   ["Decision", "decision"],
   ["Action", "action"],
-  ["Data", "data"],
-  ["Site", "source"],
+  ["Data created on", "data"],
+  ["Site requesting access", "source"],
   ["Added", "createdAt"],
   ["", ""],
 ] as const;
 type SortKey = (typeof columns)[number][1];
 
 const props = defineProps<{
+  sessions: ReadonlyMap<string, GraffitiSession>;
   initialSource?: Source;
   initialActor?: string;
   redirectUrl?: string;
 }>();
 
 const graffiti = useGraffiti();
-const session = useGraffitiSession();
-const actor = computed(() => props.initialActor ?? session.value?.actor);
-const activeSession = computed(() =>
-  session.value && session.value.actor === actor.value ? session.value : null,
-);
-const channels = computed(() => (actor.value ? [actor.value] : []));
+const actor = ref(props.initialActor);
+// Keep the selected account visible if its session expires, so the user can log
+// back in without silently switching to someone else's permissions.
+const actors = computed(() => [...new Set([
+  ...props.sessions.keys(), ...(actor.value ? [actor.value] : []),
+])]);
+watch(actors, (available) => {
+  if (!actor.value) actor.value = available[0];
+}, { immediate: true });
+const activeSession = computed(() => props.sessions.get(actor.value ?? "") ?? null);
+// The private account channel includes both directions, including older rules.
+// Site filtering below must not depend on a second channel on the data's site.
+const channels = computed(() => (activeSession.value ? [ruleChannel("actor", activeSession.value.actor)] : []));
 const schema = computed(() => ruleSchema(actor.value ?? ""));
 const { objects, isFirstPoll, poll } = useGraffitiDiscover(
   channels,
@@ -79,22 +89,29 @@ const resizing = ref<{
 const rules = computed(() =>
   actor.value ? rulesFromObjects(objects.value, actor.value) : [],
 );
-const sources = computed(() => {
-  const unique = new Map<string, Source>();
-  if (props.initialSource) unique.set(props.initialSource.key, props.initialSource);
+const sourceLabels = computed(() => {
+  const labels = new Map<string, string>();
+  for (const rule of rules.value) {
+    if (rule.kind !== "permission") continue;
+    const match = rule.permission.match;
+    if (!labels.has(match.site) || match.name) labels.set(match.site, originSiteLabel(match));
+  }
+  // An opened site or another rule can supply a name missing from an old rule.
   for (const rule of rules.value) {
     const source = accessRuleSource(rule);
-    if (!unique.has(source.key)) unique.set(source.key, source);
+    labels.set(source.key, sourceLabel(source));
   }
-  return [...unique.values()].sort((left, right) =>
-    sourceLabel(left).localeCompare(sourceLabel(right)),
-  );
+  if (props.initialSource) labels.set(props.initialSource.key, sourceLabel(props.initialSource));
+  return labels;
 });
+const sources = computed(() => [...sourceLabels.value]
+  .map(([key, label]) => ({ key, label }))
+  .sort((left, right) => left.label.localeCompare(right.label)));
 const filteredRules = computed(() =>
   rules.value.filter(
     (rule) =>
       !selectedSources.value.length ||
-      selectedSources.value.includes(accessRuleSource(rule).key),
+      ruleSites(rule).some(key => selectedSources.value.includes(key)),
   ),
 );
 const sortedRules = computed(() => {
@@ -117,11 +134,7 @@ const pagedRules = computed(() => {
   const start = (page.value - 1) * PAGE_SIZE;
   return sortedRules.value.slice(start, start + PAGE_SIZE);
 });
-const loading = computed(
-  () =>
-    session.value === undefined ||
-    Boolean(activeSession.value && isFirstPoll.value),
-);
+const loading = computed(() => Boolean(activeSession.value && isFirstPoll.value));
 const gridStyle = computed(() => ({
   gridTemplateColumns: columnWidths.value
     .map((width) => `${width}%`)
@@ -143,6 +156,17 @@ watch(
   { deep: true },
 );
 watch(pageCount, (count) => (page.value = Math.min(page.value, count)));
+watch(actor, (selected) => {
+  page.value = 1;
+  error.value = "";
+  // Preserve the choice through refresh or an implementation's login redirect.
+  const url = new URL(window.location.href);
+  const params = new URLSearchParams(url.hash.slice(1));
+  if (selected) params.set("actor", selected);
+  else params.delete("actor");
+  url.hash = params.toString();
+  window.history.replaceState(window.history.state, "", url);
+}, { immediate: true });
 
 async function run(operation: () => Promise<unknown>) {
   busy.value = true;
@@ -156,8 +180,8 @@ async function run(operation: () => Promise<unknown>) {
   }
 }
 
-function signIn() {
-  return graffiti.login(props.initialActor ? { actor: props.initialActor } : undefined);
+function logIn() {
+  return run(() => graffiti.login(actor.value ? { actor: actor.value } : undefined));
 }
 
 function revoke(rule: AccessRule) {
@@ -183,7 +207,7 @@ function clearSelections() {
 }
 
 function sourceCount(key: string) {
-  return rules.value.filter((rule) => accessRuleSource(rule).key === key).length;
+  return rules.value.filter((rule) => ruleSites(rule).includes(key)).length;
 }
 
 function accessRuleSource(rule: AccessRule) {
@@ -203,26 +227,15 @@ function accessRuleDecision(rule: AccessRule) {
 
 function accessRuleAction(rule: AccessRule) {
   if (rule.kind === "site-block") return "All requests";
-  return (
-    ({
-      post: "Create",
-      get: "Read",
-      delete: "Delete",
-      postMedia: "Upload",
-      getMedia: "View",
-      deleteMedia: "Delete",
-      logout: "Log out",
-    } as Record<string, string>)[rule.permission.method] ?? rule.permission.method
-  );
+  return {
+    get: "Read private data",
+    delete: "Delete data",
+  }[rule.permission.method];
 }
 
 function accessRuleDataLabel(rule: AccessRule) {
-  if (rule.kind === "site-block") return "Everything from this site";
-  const permission = rule.permission;
-  const match = permission.match;
-  if (match.kind === "logout") return "Session";
-  if ("url" in match) return match.url;
-  return JSON.stringify(match.example);
+  if (rule.kind === "site-block") return "Entire site";
+  return sourceLabels.value.get(rule.permission.match.site)!;
 }
 
 function accessRuleSortValue(rule: AccessRule, key: SortKey) {
@@ -308,16 +321,21 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
         <span aria-hidden="true">←</span> Return to site
       </a>
       <h1>Graffiti Data Guard</h1>
-      <GraffitiActorToHandle v-if="actor" v-slot="{ handle }" :actor="actor">
-        <p class="account">Permissions for {{ handle ?? actor }}</p>
-      </GraffitiActorToHandle>
+      <label v-if="actors.length" class="account">
+        Permissions for
+        <select v-model="actor" :disabled="busy">
+          <GraffitiActorToHandle v-for="(account, index) in actors" :key="account" :actor="account" v-slot="{ handle }">
+            <option :value="account">{{ handle ?? `Account ${index + 1}` }}{{ sessions.has(account) ? '' : ' (logged out)' }}</option>
+          </GraffitiActorToHandle>
+        </select>
+      </label>
     </header>
 
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="loading" class="empty" aria-live="polite">Loading permissions…</p>
     <section v-else-if="!activeSession" class="empty signed-out">
-      <p>Sign in to review these permissions.</p>
-      <button type="button" @click="signIn">Sign in</button>
+      <p>Log in to review these permissions.</p>
+      <button type="button" :disabled="busy" @click="logIn">Log in</button>
     </section>
 
     <div v-else class="content-layout">
@@ -334,7 +352,7 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
           <legend>Sites</legend>
           <label v-for="source in sources" :key="source.key" class="facet">
             <input v-model="selectedSources" type="checkbox" :value="source.key" />
-            <span class="facet-name">{{ sourceLabel(source) }}</span>
+            <span class="facet-name">{{ source.label }}</span>
             <span class="count">{{ sourceCount(source.key) }}</span>
           </label>
         </fieldset>
@@ -360,6 +378,8 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
             </button>
           </div>
         </header>
+
+        <p v-if="selectedSources.length" class="filter-hint">Includes access by the selected sites and access to data created on them.</p>
 
         <div class="mobile-sort">
           <label for="permissions-sort">Sort permissions by</label>
@@ -423,17 +443,18 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
               {{ accessRuleAction(rule) }}
             </span>
             <span class="data-cell" role="cell">
-              <span class="mobile-label" aria-hidden="true">Data: </span>
-              <PermissionDataValue
-                v-if="rule.kind === 'permission'"
-                :permission="rule.permission"
-                :session="activeSession"
-              />
-              <span v-else>Entire site</span>
+              <span class="mobile-label" aria-hidden="true">Data created on: </span>
+              <div>
+                {{ accessRuleDataLabel(rule) }}
+                <details v-if="rule.kind === 'permission'"><summary>Site ID</summary><code>{{ rule.permission.match.site }}</code></details>
+              </div>
             </span>
             <span class="source-cell" role="cell">
-              <span class="mobile-label" aria-hidden="true">Site: </span>
-              {{ sourceLabel(accessRuleSource(rule)) }}
+              <span class="mobile-label" aria-hidden="true">Site requesting access: </span>
+              <div>
+                {{ sourceLabel(accessRuleSource(rule)) }}
+                <details><summary>Site ID</summary><code>{{ accessRuleSource(rule).key }}</code></details>
+              </div>
             </span>
             <span class="time-cell" role="cell">
               <span class="mobile-label" aria-hidden="true">Added: </span>
@@ -487,7 +508,8 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
 .page-header { display: grid; justify-items: start; gap: 0.4rem; margin-bottom: 1rem; }
 .page-header h1, .page-header p, h2, p { margin: 0; }
 .page-header h1 { color: var(--title-color); font-size: clamp(1.65rem, 4vw, 2.35rem); line-height: 1.1; }
-.account { color: var(--secondary-color); font-size: 0.9rem; }
+.account { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; max-width: 100%; color: var(--secondary-color); font-size: 1rem; }
+.account select { min-width: 0; max-width: 100%; border: 1px solid var(--border-color); border-radius: 0.4rem; padding: 0.5rem 0.65rem; color: var(--text-color); background: var(--background-color-interactive); font: inherit; }
 .back-link { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--secondary-color); font-size: 0.85rem; }
 .back-link:hover { color: var(--link-hover-color); }
 button { border: 1px solid var(--border-color); border-radius: 0.4rem; padding: 0.42rem 0.68rem; color: var(--text-color); background: var(--background-color-interactive); font: inherit; cursor: pointer; text-decoration: none; }
@@ -527,6 +549,11 @@ button.quiet:hover { color: var(--link-hover-color); text-decoration: underline;
 .record-row > * { display: flex; min-width: 0; align-items: center; padding: 0.45rem 0.65rem; font-size: 0.84rem; overflow-wrap: anywhere; }
 .decision-cell { color: var(--title-color); font-size: 0.86rem; }
 .data-cell, .time-cell { overflow: visible; }
+.record-row details { margin-top: 0.3rem; }
+.record-row summary { color: var(--secondary-color); cursor: pointer; }
+.record-row code { white-space: normal; overflow-wrap: anywhere; }
+.data-cell > div, .source-cell > div { min-width: 0; }
+.filter-hint { margin-bottom: 0.75rem; color: var(--secondary-color); font-size: 0.85rem; }
 .source-cell, .time-cell { color: var(--secondary-color); }
 .action-cell { justify-content: flex-end; }
 button.compact { padding: 0.3rem 0.48rem; font-size: 0.78rem; white-space: nowrap; }

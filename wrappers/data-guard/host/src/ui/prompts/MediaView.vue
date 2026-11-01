@@ -19,20 +19,35 @@ const filename = computed(
     `download${mimeData[type.value]?.extensions?.[0] ?? ""}`,
 );
 const size = computed(() => props.media?.data?.size);
-const previewLabel = computed(() => `${props.description || type.value || "File"}: ${filename.value}`);
+const textPreview = ref<string>();
+const textTruncated = ref(false);
 
+// Render untrusted text as text; an iframe would execute uploaded HTML.
 watch(
-  () => props.media,
-  (media, _, cleanup) => {
-    url.value = media?.dataUrl ?? "";
-    if (!url.value && media?.data instanceof Blob) {
-      const objectUrl = URL.createObjectURL(media.data);
-      url.value = objectUrl;
-      cleanup(() => URL.revokeObjectURL(objectUrl));
-    }
+  () => props.media?.data,
+  async (data, _, cleanup) => {
+    url.value = "";
+    textPreview.value = undefined;
+    textTruncated.value = false;
+    if (!(data instanceof Blob)) return;
+    const objectUrl = URL.createObjectURL(data);
+    url.value = objectUrl;
+    let active = true;
+    cleanup(() => {
+      active = false;
+      URL.revokeObjectURL(objectUrl);
+    });
+    if (!data.type.startsWith("text/")) return;
+    const limit = 8192;
+    const preview = await data.slice(0, limit).text();
+    if (!active) return;
+    textPreview.value = preview;
+    textTruncated.value = data.size > limit;
   },
   { immediate: true },
 );
+const previewLabel = computed(() => `${props.description || type.value || "File"}: ${filename.value}`);
+
 </script>
 
 <template>
@@ -43,12 +58,11 @@ watch(
     <img v-if="url && type.startsWith('image/')" :src="url" :alt="`Preview of ${previewLabel}`" />
     <video v-else-if="url && type.startsWith('video/')" :src="url" :aria-label="previewLabel" controls />
     <audio v-else-if="url && type.startsWith('audio/')" :src="url" :aria-label="previewLabel" controls preload="metadata" />
-    <iframe
-      v-else-if="url && type.startsWith('text/')"
-      :src="url"
-      sandbox="allow-scripts"
-      :title="`Document preview: ${filename}`"
-    />
+    <div v-else-if="type.startsWith('text/')" class="text-preview">
+      <pre v-if="textPreview !== undefined">{{ textPreview }}</pre>
+      <em v-else>Loading text preview...</em>
+      <small v-if="textTruncated">Preview shows the first 8 KB.</small>
+    </div>
     <PdfView
       v-else-if="url && type.startsWith('application/pdf')"
       :media="media"
@@ -75,7 +89,9 @@ watch(
 img { display: block; width: auto; max-width: 100%; height: auto; max-height: min(45dvh, 22rem); border: 1px solid var(--border-color); border-radius: 0.4rem; background: var(--background-color); object-fit: contain; }
 video { display: block; width: 100%; max-height: min(45dvh, 22rem); border: 1px solid var(--border-color); border-radius: 0.4rem; background: var(--background-color); object-fit: contain; }
 audio { display: block; width: 100%; }
-iframe { display: block; width: 100%; height: min(45dvh, 22rem); border: 1px solid var(--border-color); border-radius: 0.4rem; background: white; }
+.text-preview { width: 100%; max-height: min(45dvh, 22rem); box-sizing: border-box; overflow: auto; border: 1px solid var(--border-color); border-radius: 0.4rem; padding: 0.5rem; background: var(--background-color); }
+.text-preview pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.text-preview small { display: block; margin-top: 0.5rem; color: var(--secondary-color); }
 .download { display: flex; width: 100%; box-sizing: border-box; align-items: center; gap: 0.25rem; padding: 0.8rem 1rem; border: 1px solid var(--border-color); border-radius: 0.5rem; flex-direction: column; color: inherit; background: var(--background-color); text-align: center; text-decoration: none; }
 .download:hover { border-color: var(--accent-button-background); background: color-mix(in srgb, var(--accent-button-background) 8%, var(--background-color)); }
 .download-title { font-size: 1.1em; text-transform: capitalize; }

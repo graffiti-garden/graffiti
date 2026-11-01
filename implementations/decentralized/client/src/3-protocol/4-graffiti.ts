@@ -61,6 +61,7 @@ import {
 } from "./1-sessions";
 import {
   decodeObjectUrl,
+  stripGraffitiUrlAddendums,
   MAX_OBJECT_SIZE_BYTES,
   ObjectEncoding,
 } from "./3-object-encoding";
@@ -576,7 +577,7 @@ export class GraffitiDecentralized implements Graffiti {
 
     // Search the inboxes for all objects
     // matching the tag, object.url
-    const objectUrl = unpackObjectUrl(url);
+    const objectUrl = stripGraffitiUrlAddendums(unpackObjectUrl(url));
     const tags = [new TextEncoder().encode(objectUrl)];
     for (const service of services) {
       let object: GraffitiObjectBase | undefined = undefined;
@@ -617,7 +618,7 @@ export class GraffitiDecentralized implements Graffiti {
   delete: Graffiti["delete"] = async (url, session) => {
     const resolvedSession = this.sessions.resolveSession(session);
 
-    const objectUrl = unpackObjectUrl(url);
+    const objectUrl = stripGraffitiUrlAddendums(unpackObjectUrl(url));
 
     const { actor } = decodeObjectUrl(objectUrl);
     if (actor !== session.actor) {

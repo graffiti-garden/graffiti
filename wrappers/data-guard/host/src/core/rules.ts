@@ -5,19 +5,20 @@ import type {
   JSONSchema,
 } from "@graffiti-garden/api";
 import { shallowReactive } from "vue";
-import type { Permission, SiteBlock } from "./db.js";
-import type { GraffitiMethod } from "./graffiti.js";
-import type { Source } from "./source.js";
+import type { GuardDB, Permission, SiteBlock } from "./db.js";
+import { matches } from "./permissions.js";
+import { siteStamp } from "./provenance.js";
+import { sourceFromContext, type Source } from "./source.js";
 
 export type StoredRuleValue = {
+  action: "Remember permission";
+  "confirm with guard": true;
+  "via site": ReturnType<typeof siteStamp>;
   published: number;
-  site: {
-    origin: string;
-    path: { id: string; name: string }[];
-  };
+  site: Pick<Source, "origin" | "path">;
   rule:
     | {
-        method: GraffitiMethod;
+        method: Permission["method"];
         decision: "allow" | "deny";
         match: Permission["match"];
       }
@@ -28,109 +29,28 @@ export type AccessRule =
   | { kind: "permission"; permission: Permission }
   | { kind: "site-block"; block: SiteBlock };
 
+/** An audit can show a rule from either site's perspective. */
+export function ruleSites(rule: AccessRule): string[] {
+  return rule.kind === "permission"
+    ? [rule.permission.source.key, rule.permission.match.site]
+    : [rule.block.source.key];
+}
+
+export function ruleChannel(kind: "site" | "actor", id: string) {
+  return `guard:permissions:${kind}:${id}`;
+}
+
 export function ruleSchema(actor: string): JSONSchema {
+  // Filter at discovery; rulesFromObjects validates the payload before use.
   return {
     properties: {
       actor: { const: actor },
       value: {
         type: "object",
-        required: ["published", "site", "rule"],
+        required: ["action", "confirm with guard"],
         properties: {
-          published: { type: "number" },
-          site: {
-            type: "object",
-            required: ["origin", "path"],
-            properties: {
-              origin: { type: "string" },
-              path: {
-                type: "array",
-                items: {
-                  type: "object",
-                  required: ["id", "name"],
-                  properties: {
-                    id: { type: "string" },
-                    name: { type: "string" },
-                  },
-                },
-              },
-            },
-          },
-          rule: {
-            anyOf: [
-              {
-                type: "object",
-                required: ["method", "decision", "match"],
-                properties: {
-                  method: {
-                    enum: [
-                      "post",
-                      "get",
-                      "delete",
-                      "postMedia",
-                      "getMedia",
-                      "deleteMedia",
-                      "logout",
-                    ],
-                  },
-                  decision: { enum: ["allow", "deny"] },
-                  match: {
-                    anyOf: [
-                      {
-                        type: "object",
-                        required: ["kind", "url"],
-                        properties: {
-                          kind: { const: "object" },
-                          url: { type: "string" },
-                        },
-                      },
-                      {
-                        type: "object",
-                        required: ["kind", "example"],
-                        properties: {
-                          kind: { const: "object" },
-                          example: {},
-                        },
-                      },
-                      {
-                        type: "object",
-                        required: ["kind", "url"],
-                        properties: {
-                          kind: { const: "media" },
-                          url: { type: "string" },
-                        },
-                      },
-                      {
-                        type: "object",
-                        required: ["kind", "example"],
-                        properties: {
-                          kind: { const: "media" },
-                          example: {
-                            type: "object",
-                            required: ["type", "size"],
-                            properties: {
-                              type: { type: "string" },
-                              size: { type: "number" },
-                              name: { type: "string" },
-                            },
-                          },
-                        },
-                      },
-                      {
-                        type: "object",
-                        required: ["kind"],
-                        properties: { kind: { const: "logout" } },
-                      },
-                    ],
-                  },
-                },
-              },
-              {
-                type: "object",
-                required: ["kind"],
-                properties: { kind: { const: "site-block" } },
-              },
-            ],
-          },
+          action: { const: "Remember permission" },
+          "confirm with guard": { const: true },
         },
       },
     },
@@ -142,12 +62,16 @@ export function rulesFromObjects(
   actor: string,
   expectedSource?: Source,
 ) {
+  // Discovery schemas narrow the search. Validate again here before a stored
+  // object is allowed to become an authorization rule.
   const rules: AccessRule[] = [];
   for (const object of objects) {
     if (object.actor !== actor) continue;
     if (!isRecord(object.value)) continue;
     const value = object.value as Partial<StoredRuleValue>;
     if (
+      value.action !== "Remember permission" ||
+      value["confirm with guard"] !== true ||
       typeof value.published !== "number" ||
       !isRecord(value.site) ||
       typeof value.site.origin !== "string" ||
@@ -156,24 +80,14 @@ export function rulesFromObjects(
     ) {
       continue;
     }
-    const path = value.site.path.filter(
-      (item): item is { id: string; name: string } =>
-        Boolean(
-          item &&
-            typeof item.id === "string" &&
-            typeof item.name === "string",
-        ),
-    );
-    if (path.length !== value.site.path.length) continue;
-    const source = {
-      key: JSON.stringify([value.site.origin, ...path.map(({ id }) => id)]),
-      origin: value.site.origin,
-      path,
-    };
+    let source: Source;
+    try {
+      source = sourceFromContext(value.site.origin, { source: value.site.path });
+    } catch { continue; }
     if (expectedSource && source.key !== expectedSource.key) continue;
     const rule = value.rule as Record<string, unknown>;
     if (
-      isGraffitiMethod(rule.method) &&
+      isPermissionMethod(rule.method) &&
       (rule.decision === "allow" || rule.decision === "deny") &&
       isPermissionMatch(rule.match)
     ) {
@@ -204,6 +118,7 @@ export function rulesFromObjects(
   return rules;
 }
 
+/** One discovery per actor/site. Vue supplies updates; writes queue per scope. */
 export type RuleScope = {
   key: string;
   source: Source;
@@ -212,14 +127,15 @@ export type RuleScope = {
   rules: AccessRule[];
   ready: Promise<void>;
   resolveReady: () => void;
-  loaded: boolean;
   write: Promise<void>;
 };
 
-export class GraffitiRuleStore {
+export class GraffitiRuleStore implements GuardDB {
   readonly scopes = shallowReactive<RuleScope[]>([]);
   readonly state = shallowReactive({ active: false });
   private graffiti?: Graffiti;
+
+  constructor(private readonly guardSource: Source) {}
 
   activate() {
     this.state.active = true;
@@ -235,14 +151,12 @@ export class GraffitiRuleStore {
   }
 
   update(scope: RuleScope, objects: readonly GraffitiObject<{}>[], loaded: boolean) {
+    if (!loaded) return;
     scope.rules = rulesFromObjects(objects, scope.actor, scope.source);
-    if (loaded && !scope.loaded) {
-      scope.loaded = true;
-      scope.resolveReady();
-    }
+    scope.resolveReady(); // Resolving again on later updates is harmless.
   }
 
-  async permissions(source: Source, actor: string, method: GraffitiMethod) {
+  async permissions(source: Source, actor: string, method: Permission["method"]) {
     const scope = this.loadedScope(source, actor);
     await scope.ready;
     return scope.rules
@@ -263,6 +177,13 @@ export class GraffitiRuleStore {
   ): Promise<Permission> {
     const scope = this.loadedScope(permission.source, permission.actor);
     return this.enqueue(scope, async () => {
+      const previous = scope.rules.flatMap((rule) =>
+        rule.kind === "permission" &&
+        rule.permission.method === permission.method &&
+        matches(rule.permission, permission.match)
+          ? [rule.permission.id]
+          : [],
+      );
       const object = await this.post(scope, {
         method: permission.method,
         decision: permission.decision,
@@ -273,24 +194,10 @@ export class GraffitiRuleStore {
         throw new Error("Graffiti returned an invalid permission object.");
       }
       this.add(scope, stored);
+      // Save the replacement before deleting known older decisions. Revoking
+      // an allow must remove that object, not depend on finding a newer deny.
+      for (const id of previous) await this.revoke(id, permission.actor);
       return stored.permission;
-    });
-  }
-
-  async ensurePermission(
-    permission: Omit<Permission, "id" | "createdAt" | "decision">,
-  ) {
-    const scope = this.loadedScope(permission.source, permission.actor);
-    return this.enqueue(scope, async () => {
-      const existing = scope.rules.find(
-        (rule): rule is Extract<AccessRule, { kind: "permission" }> =>
-          rule.kind === "permission" &&
-          rule.permission.method === permission.method &&
-          rule.permission.decision === "allow" &&
-          JSON.stringify(rule.permission.match) === JSON.stringify(permission.match),
-      );
-      if (existing) return existing.permission;
-      return this.rememberNow(scope, { ...permission, decision: "allow" });
     });
   }
 
@@ -321,46 +228,8 @@ export class GraffitiRuleStore {
     if (!scope) throw new Error("Permission is not loaded.");
     const graffiti = this.requireGraffiti();
     await graffiti.delete(id, scope.session);
-    for (const candidate of this.scopes) {
-      candidate.rules = candidate.rules.filter((rule) => ruleId(rule) !== id);
-    }
-  }
-
-  async unblockSource(key: string, actor?: string) {
-    const blocks = this.scopes.flatMap((scope) =>
-      scope.rules.filter(
-        (rule): rule is Extract<AccessRule, { kind: "site-block" }> =>
-          rule.kind === "site-block" &&
-          rule.block.source.key === key &&
-          (!actor || rule.block.actor === actor),
-      ),
-    );
-    await Promise.all(blocks.map(({ block }) => this.revoke(block.id, block.actor)));
-  }
-
-  async all() {
-    await Promise.all(this.scopes.map(({ ready }) => ready));
-    return uniqueRules(this.scopes.flatMap(({ rules }) => rules));
-  }
-
-  async snapshot() {
-    const rules = await this.all();
-    return {
-      permissions: rules
-        .filter((rule): rule is Extract<AccessRule, { kind: "permission" }> =>
-          rule.kind === "permission",
-        )
-        .map(({ permission }) => permission),
-      siteBlocks: rules
-        .filter((rule): rule is Extract<AccessRule, { kind: "site-block" }> =>
-          rule.kind === "site-block",
-        )
-        .map(({ block }) => block),
-    };
-  }
-
-  async destroy() {
-    this.scopes.splice(0);
+    // Parsing assigns each policy to exactly one actor and requesting site.
+    scope.rules = scope.rules.filter(rule => ruleId(rule) !== id);
   }
 
   private scope(source: Source, session: GraffitiSession) {
@@ -380,7 +249,6 @@ export class GraffitiRuleStore {
       rules: [],
       ready,
       resolveReady,
-      loaded: false,
       write: Promise.resolve(),
     });
     this.scopes.push(scope);
@@ -399,6 +267,11 @@ export class GraffitiRuleStore {
     return this.requireGraffiti().post(
       {
         value: {
+          action: "Remember permission",
+          // The person's Remember choice already confirmed this write. Stamp
+          // the guard as its creator, not the site this rule grants access to.
+          "confirm with guard": true,
+          "via site": siteStamp(this.guardSource),
           published: Date.now(),
           site: {
             origin: scope.source.origin,
@@ -406,28 +279,14 @@ export class GraffitiRuleStore {
           },
           rule,
         },
-        channels: [scope.source.key, scope.actor],
+        channels: [
+          ruleChannel("site", scope.source.key),
+          ruleChannel("actor", scope.actor),
+        ],
         allowed: [],
       },
       scope.session,
     );
-  }
-
-  private async rememberNow(
-    scope: RuleScope,
-    permission: Omit<Permission, "id" | "createdAt">,
-  ) {
-    const object = await this.post(scope, {
-      method: permission.method,
-      decision: permission.decision,
-      match: permission.match,
-    });
-    const stored = rulesFromObjects([object], scope.actor, scope.source)[0];
-    if (!stored || stored.kind !== "permission") {
-      throw new Error("Graffiti returned an invalid permission object.");
-    }
-    this.add(scope, stored);
-    return stored.permission;
   }
 
   private add(scope: RuleScope, rule: AccessRule) {
@@ -459,39 +318,15 @@ export function ruleActor(rule: AccessRule) {
   return rule.kind === "permission" ? rule.permission.actor : rule.block.actor;
 }
 
-function uniqueRules(rules: AccessRule[]) {
-  return [
-    ...new Map(rules.map((rule) => [ruleId(rule), rule])).values(),
-  ];
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isGraffitiMethod(value: unknown): value is GraffitiMethod {
-  return [
-    "post",
-    "get",
-    "delete",
-    "postMedia",
-    "getMedia",
-    "deleteMedia",
-    "logout",
-  ].includes(value as string);
+function isPermissionMethod(value: unknown): value is Permission["method"] {
+  return value === "get" || value === "delete";
 }
 
 function isPermissionMatch(value: unknown): value is Permission["match"] {
   if (!isRecord(value)) return false;
-  if (value.kind === "logout") return true;
-  if (value.kind !== "object" && value.kind !== "media") return false;
-  if (typeof value.url === "string") return true;
-  if (value.kind === "object") return "example" in value;
-  if (!("example" in value)) return false;
-  return (
-    isRecord(value.example) &&
-    typeof value.example.type === "string" &&
-    typeof value.example.size === "number" &&
-    (value.example.name === undefined || typeof value.example.name === "string")
-  );
+  return value.kind === "site" && typeof value.site === "string";
 }

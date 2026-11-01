@@ -1,16 +1,15 @@
+import type { GraffitiSession } from "@graffiti-garden/api";
+import type { GraffitiMethod } from "./graffiti.js";
+import { sessionArgumentIndex, type GuardSourceSegment } from "../../../client/src/source.js";
+
 export type Source = {
   key: string;
   origin: string;
-  path: { id: string; name: string }[];
+  path: GuardSourceSegment[];
 };
 
-export function sourceFromArgs(origin: string, args: readonly unknown[]) {
-  const session = sessionFromArgs(args);
-  return sourceFromPath(origin, session?.source);
-}
-
-export function actorFromArgs(args: readonly unknown[]) {
-  return sessionFromArgs(args)?.actor;
+export function actorFromArgs(args: readonly unknown[], method: GraffitiMethod) {
+  return sessionFromArgs(args, method)?.actor;
 }
 
 export function sourceFromContext(origin: string, context: unknown) {
@@ -52,23 +51,39 @@ function parsePath(value: unknown) {
     ) {
       throw new TypeError("Invalid guard source segment.");
     }
-    return { id: item.id, name: item.name };
+    if (item.url !== undefined && typeof item.url !== "string") {
+      throw new TypeError("Invalid guard source URL.");
+    }
+    return {
+      id: item.id,
+      name: item.name,
+      ...(item.url !== undefined ? { url: item.url } : {}),
+    };
   });
 }
 
 function hasActor(value: unknown): value is {
   actor: string;
-  source?: unknown;
 } {
   return isRecord(value) && typeof value.actor === "string";
 }
 
-export function sessionFromArgs(args: readonly unknown[]) {
-  // The caller supplies arguments with the session last (normalizing logout first).
-  const session = args.at(-1);
+export function sessionFromArgs(args: readonly unknown[], method: GraffitiMethod) {
+  // A sessionless schema may contain an `actor` property. Check the API slot,
+  // not the last supplied argument, before attributing a request to an actor.
+  const index = sessionArgumentIndex[method];
+  const session = index === undefined ? undefined : args[index];
   return hasActor(session) ? session : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function snapshotSession(session: GraffitiSession | undefined) {
+  if (!session) return undefined;
+  // These fields belong to the guard, not the underlying implementation.
+  const { source: _source, guardSites: _sites, ...forwarded } = session as
+    GraffitiSession & { source?: unknown; guardSites?: unknown };
+  return forwarded;
 }

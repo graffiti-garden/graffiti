@@ -1,8 +1,11 @@
-import {
-  Graffiti,
-  type GraffitiSession,
-} from "@graffiti-garden/api";
+import { Graffiti } from "@graffiti-garden/api";
 import { GraffitiRpcClient } from "@graffiti-garden/wrapper-iframe-rpc/client";
+import { withGuardSource, type GuardLoginOptions, type GuardSourceSegment } from "./source.js";
+export { withGuardSource } from "./source.js";
+export type {
+  GuardSourceSegment as GraffitiGuardSourceSegment,
+  GuardSession as GraffitiGuardSession,
+} from "./source.js";
 
 declare const DATA_GUARD_DEFAULT_HOST_URL: string;
 
@@ -16,15 +19,6 @@ export interface GraffitiGuardedOptions {
   timeout?: number;
 }
 
-export interface GraffitiGuardSourceSegment {
-  id: string;
-  name: string;
-}
-
-export type GraffitiGuardSession = GraffitiSession & {
-  source?: GraffitiGuardSourceSegment[];
-};
-
 /** A Graffiti implementation backed by a sandboxed guard iframe. */
 // @ts-ignore Graffiti methods are delegated through the constructor proxy.
 export class GraffitiGuarded extends Graffiti {
@@ -34,6 +28,7 @@ export class GraffitiGuarded extends Graffiti {
   private readonly rpc!: GraffitiRpcClient;
   private readonly onMessage!: (event: MessageEvent) => void;
   private readonly connectionTimeout!: number;
+  private readonly stopSessionEvents!: () => void;
   private destroyed = false;
   private returnFocus: HTMLElement | null = null;
   private readonly backgroundInert = new Map<HTMLElement, boolean>();
@@ -41,7 +36,12 @@ export class GraffitiGuarded extends Graffiti {
 
   constructor(options: GraffitiGuardedOptions = {}) {
     super();
-    if (instance) return instance;
+    if (instance) {
+      // Another consumer may attach after initialization. The public RPC client
+      // constructor replays its restored sessions to the newly attached listeners.
+      new GraffitiRpcClient({ remoteWindow: instance.iframe.contentWindow! });
+      return instance;
+    }
 
     const hostUrl = new URL(
       options.hostUrl?.toString() ?? DATA_GUARD_DEFAULT_HOST_URL,
@@ -82,7 +82,6 @@ export class GraffitiGuarded extends Graffiti {
       iframe.contentWindow?.postMessage(
         {
           type: "graffiti-guard:connect",
-          pageUrl: window.location.href,
           ...(loginNonce ? { loginNonce } : {}),
         },
         hostUrl.origin,
@@ -112,7 +111,9 @@ export class GraffitiGuarded extends Graffiti {
       channel: options.channel,
       timeout: options.timeout,
     });
-    this.sessionEvents = rpc.sessionEvents;
+    const scoped = withGuardSource(rpc, () => undefined);
+    this.sessionEvents = scoped.graffiti.sessionEvents;
+    this.stopSessionEvents = scoped.destroy;
     this.sessionEvents.addEventListener("initialized", () => {
       if (sessionStorage.getItem(loginKey) === loginNonce) sessionStorage.removeItem(loginKey);
     }, { once: true });
@@ -165,6 +166,8 @@ export class GraffitiGuarded extends Graffiti {
           }
           window.location.assign(setupUrl);
         } catch {}
+      } else if (event.data.type === "graffiti-guard:open-login") {
+        this.redirectLogin(event.data.options);
       } else if (
         event.data.type === "graffiti-guard:open-audit" &&
         typeof event.data.actor === "string" &&
@@ -193,28 +196,25 @@ export class GraffitiGuarded extends Graffiti {
     return instance;
   }
 
-  login: Graffiti["login"] = (options) => {
+  private redirectLogin(options: GuardLoginOptions) {
     const loginUrl = new URL(this.hostUrl);
-    // The guard reads this state in the browser; keep it out of the HTTP request.
-    // This allows for very long redirectUrls
-    const params = new URLSearchParams({
-      guardLogin: "1",
-      redirectUrl: window.location.href,
-    });
-    if (options?.actor) params.set("suggestedActor", options.actor);
     const nonce = crypto.randomUUID();
     sessionStorage.setItem(pendingLoginKey + this.hostUrl.origin, nonce);
-    params.set("loginNonce", nonce);
-    if (options?.state !== undefined) params.set("state", options.state);
+    // Keep return URLs and caller state out of the HTTP request, including long URLs.
+    const params = new URLSearchParams({
+      guardLogin: "1", redirectUrl: window.location.href,
+      loginNonce: nonce, source: JSON.stringify(options.source ?? []),
+    });
+    if (options.actor) params.set("suggestedActor", options.actor);
+    if (options.state !== undefined) params.set("state", options.state);
     loginUrl.hash = params.toString();
     window.location.assign(loginUrl.href);
-    return Promise.resolve();
-  };
+  }
 
   /** Link to the host-owned audit panel without exposing audit data to this app. */
   auditUrl(scope?: {
     actor?: string;
-    source?: GraffitiGuardSourceSegment[];
+    source?: GuardSourceSegment[];
   }) {
     const auditUrl = new URL(this.hostUrl);
     const params = new URLSearchParams({
@@ -283,6 +283,7 @@ export class GraffitiGuarded extends Graffiti {
     window.removeEventListener("message", this.onMessage);
     if (this.iframe.style.display === "block") this.setGuardVisible(false);
     this.rpc.destroy();
+    this.stopSessionEvents();
     this.iframe.remove();
     if (instance === this) instance = undefined;
   }

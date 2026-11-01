@@ -1,9 +1,10 @@
+import type { GraffitiSession } from "@graffiti-garden/api";
 import { sourceFromContext } from "../core/source.js";
 import { openAudit } from "../ui/audit.js";
 
-export function handleAudit(url: URL) {
+export function handleAudit(url: URL, sessions: ReadonlyMap<string, GraffitiSession>) {
   const options = auditOptions(url);
-  openAudit({
+  openAudit(sessions, {
     ...options,
     redirectUrl: options.redirectUrl?.href,
   });

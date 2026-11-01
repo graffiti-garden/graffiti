@@ -7,10 +7,8 @@ import {
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorTooLarge,
-  type GraffitiLoginEvent,
   type GraffitiMedia,
   type GraffitiObjectStream,
-  type GraffitiLogoutEvent,
   type GraffitiPostMedia,
   type GraffitiSession,
 } from "@graffiti-garden/api";
@@ -21,6 +19,7 @@ import {
   type RemoteProxy,
   WindowMessenger,
 } from "penpal";
+import { rememberSessionEvents } from "./session-relay.js";
 export type * from "@graffiti-garden/api";
 
 type MethodsOf<T> = {
@@ -90,8 +89,7 @@ export class GraffitiRpcClient extends Graffiti {
   private readonly connection!: Connection<RPCMethods>;
   private readonly remote_!: Promise<RemoteProxy<RPCMethods>>;
   private remoteClient?: RemoteProxy<RPCMethods>;
-  private readonly sessions = new Map<string, GraffitiSession>();
-  private initialized = false;
+  private readonly history = rememberSessionEvents(this.sessionEvents);
   private destroyed = false;
 
   constructor(options: GraffitiRpcClientOptions) {
@@ -112,16 +110,7 @@ export class GraffitiRpcClient extends Graffiti {
       timeout: options.timeout,
       methods: {
         sessionEvent: (type: string, detail: unknown) => {
-          if (type === "login") {
-            const login = detail as GraffitiLoginEvent["detail"];
-            if (!login.error) this.sessions.set(login.session.actor, login.session);
-          } else if (type === "logout") {
-            const logout = detail as GraffitiLogoutEvent["detail"];
-            if (!logout.error) this.sessions.delete(logout.actor);
-          } else if (type === "initialized") {
-            this.initialized = true;
-            detail = undefined;
-          }
+          if (type === "initialized") detail = undefined;
           this.sessionEvents.dispatchEvent(new CustomEvent(type, { detail }));
         },
       },
@@ -143,7 +132,7 @@ export class GraffitiRpcClient extends Graffiti {
       (this as any)[method] = async (...args: unknown[]) => {
         const remote = await this.remote();
         const call = remote[method] as (...args: unknown[]) => unknown;
-        return call(...clone(args));
+        return call(...cloneArgs(args));
       };
     }
 
@@ -160,12 +149,12 @@ export class GraffitiRpcClient extends Graffiti {
 
   private replayInitialization() {
     if (this.destroyed) return;
-    for (const session of this.sessions.values()) {
+    for (const session of this.history.sessions.values()) {
       this.sessionEvents.dispatchEvent(
         new CustomEvent("login", { detail: { session } }),
       );
     }
-    if (this.initialized) {
+    if (this.history.initialized) {
       this.sessionEvents.dispatchEvent(
         new CustomEvent("initialized", { detail: undefined }),
       );
@@ -173,7 +162,7 @@ export class GraffitiRpcClient extends Graffiti {
   }
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
-    const result = await (await this.remote()).getMedia(...clone(args));
+    const result = await (await this.remote()).getMedia(...cloneArgs(args));
     return {
       ...result,
       data: new Blob([result.data.buffer], { type: result.data.type }),
@@ -218,14 +207,14 @@ export class GraffitiRpcClient extends Graffiti {
   // @ts-ignore Graffiti schema inference is preserved at the public boundary.
   discover: Graffiti["discover"] = (...args) => {
     return this.remoteStream((remote, id) =>
-      remote.discover(id, ...clone(args)),
+      remote.discover(id, ...cloneArgs(args)),
     ) as any;
   };
 
   // @ts-ignore Graffiti schema inference is preserved at the public boundary.
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
     return this.remoteStream((remote, id) =>
-      remote.continueDiscover(id, ...clone(args)),
+      remote.continueDiscover(id, ...cloneArgs(args)),
     ) as any;
   };
 
@@ -233,6 +222,12 @@ export class GraffitiRpcClient extends Graffiti {
     if (this.destroyed) throw new Error("Graffiti RPC client has been destroyed.");
     return this.remote_;
   }
+}
+
+// Clone arguments separately: JSON turns undefined array entries into null,
+// but an omitted optional argument must stay undefined across nested RPC calls.
+function cloneArgs<Args extends unknown[]>(args: Args): Args {
+  return args.map(arg => arg === undefined ? undefined : clone(arg)) as Args;
 }
 
 function clone<T>(value: T): T {

@@ -1,10 +1,17 @@
 import { afterEach, expect, it, vi } from "vitest";
 
 const rpcEvents: EventTarget[] = [];
+const framesForLogin: Frame[] = [];
 vi.mock("@graffiti-garden/wrapper-iframe-rpc/client", () => ({
   GraffitiRpcClient: class {
     sessionEvents = new EventTarget();
     destroy = vi.fn();
+    login = vi.fn(async (options) => {
+      window.dispatchEvent(Object.assign(new Event("message"), {
+        source: framesForLogin.at(-1)!.contentWindow, origin: "https://guard.example",
+        data: { type: "graffiti-guard:open-login", options },
+      }));
+    });
     constructor() {
       rpcEvents.push(this.sessionEvents);
     }
@@ -35,6 +42,7 @@ class Frame extends EventTarget {
 
 afterEach(() => {
   rpcEvents.length = 0;
+  framesForLogin.length = 0;
   vi.unstubAllGlobals();
 });
 
@@ -56,6 +64,7 @@ it("carries the requested login ID through a reload, only for the chosen account
     createElement: () => {
       const frame = new Frame();
       frames.push(frame);
+      framesForLogin.push(frame);
       return frame;
     },
     body: { append: vi.fn() },
@@ -92,7 +101,6 @@ it("carries the requested login ID through a reload, only for the chosen account
   }));
   const completion = { session: { actor: "actor-B" }, state: "login-42" };
   rpcEvents[2].dispatchEvent(new CustomEvent("login", { detail: completion }));
-  expect(restored.sessionEvents).toBe(rpcEvents[2]); // No client-side event translation.
   expect(seen.map(({ session, state }) => [session.actor, state])).toEqual([
     ["actor-A", undefined],
     ["actor-B", "login-42"],

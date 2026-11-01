@@ -28,38 +28,7 @@ it("acknowledges the embedding origin before connecting", async () => {
     { type: "graffiti-guard:connected" },
     "https://app.example",
   );
-  expect(connect).toHaveBeenCalledWith("https://app.example", undefined, undefined);
-});
-
-it("passes through a page URL only for the embedding origin", async () => {
-  const parent = { postMessage: vi.fn() };
-  let onMessage: ((event: MessageEvent) => void) | undefined;
-  vi.stubGlobal("window", {
-    parent,
-    addEventListener: vi.fn((type, listener) => {
-      if (type === "message") onMessage = listener;
-    }),
-  });
-  const { listenToParent } = await import(
-    "../src/bootstrap/protocol.js"
-  );
-  const connect = vi.fn();
-  listenToParent(connect);
-
-  onMessage?.({
-    source: parent,
-    origin: "https://app.example",
-    data: {
-      type: "graffiti-guard:connect",
-      pageUrl: "https://app.example/page",
-    },
-  } as unknown as MessageEvent);
-
-  expect(connect).toHaveBeenCalledWith(
-    "https://app.example",
-    "https://app.example/page",
-    undefined,
-  );
+  expect(connect).toHaveBeenCalledWith("https://app.example", undefined);
 });
 
 it("passes a login nonce only from the verified embedding parent", async () => {
@@ -83,12 +52,11 @@ it("passes a login nonce only from the verified embedding parent", async () => {
 
   expect(connect).toHaveBeenCalledWith(
     "https://app.example",
-    undefined,
     "nonce",
   );
 });
 
-it("asks the connected parent to open storage setup", async () => {
+it("asks the connected parent to start a login redirect", async () => {
   const parent = { postMessage: vi.fn() };
   let onMessage: ((event: MessageEvent) => void) | undefined;
   vi.stubGlobal("window", {
@@ -97,11 +65,11 @@ it("asks the connected parent to open storage setup", async () => {
       if (type === "message") onMessage = listener;
     }),
   });
-  const { listenToParent, requestStorageSetup } = await import(
+  const { listenToParent, requestLoginRedirect } = await import(
     "../src/bootstrap/protocol.js"
   );
 
-  requestStorageSetup("https://guard.example/?guardStorageSetup=1");
+  requestLoginRedirect({ state: "request-state" });
   expect(parent.postMessage).not.toHaveBeenCalled();
 
   listenToParent(vi.fn());
@@ -111,12 +79,12 @@ it("asks the connected parent to open storage setup", async () => {
     data: { type: "graffiti-guard:connect" },
   } as unknown as MessageEvent);
   parent.postMessage.mockClear();
-  requestStorageSetup("https://guard.example/?guardStorageSetup=1");
+  requestLoginRedirect({ state: "request-state" });
 
   expect(parent.postMessage).toHaveBeenCalledWith(
     {
-      type: "graffiti-guard:open-storage-setup",
-      url: "https://guard.example/?guardStorageSetup=1",
+      type: "graffiti-guard:open-login",
+      options: { state: "request-state" },
     },
     "https://app.example",
   );

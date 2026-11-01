@@ -17,7 +17,12 @@ import {
   compileGraffitiObjectSchema,
   GraffitiErrorCursorExpired,
 } from "@graffiti-garden/api";
-import { randomBase64, decodeObjectUrl, encodeObjectUrl } from "./utilities.js";
+import {
+  randomBase64,
+  decodeObjectUrl,
+  encodeObjectUrl,
+  stripGraffitiUrlAddendums,
+} from "./utilities.js";
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -121,7 +126,7 @@ export class GraffitiLocalObjects {
 
   get: Graffiti["get"] = async (...args) => {
     const [urlObject, schema, session] = args;
-    const url = unpackObjectUrl(urlObject);
+    const url = stripGraffitiUrlAddendums(unpackObjectUrl(urlObject));
 
     let doc: GraffitiObjectData;
     try {
@@ -168,7 +173,7 @@ export class GraffitiLocalObjects {
   delete: Graffiti["delete"] = async (...args) => {
     const [urlObject, session] = args;
 
-    const url = unpackObjectUrl(urlObject);
+    const url = stripGraffitiUrlAddendums(unpackObjectUrl(urlObject));
     const { actor } = decodeObjectUrl(url);
     if (actor !== session.actor) {
       throw new GraffitiErrorForbidden(

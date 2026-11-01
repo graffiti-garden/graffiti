@@ -3,6 +3,7 @@ import * as esbuild from "esbuild";
 const entryPoints = {
   index: "index.ts",
   "client/index": "client/index.ts",
+  "client/session-relay": "client/session-relay.ts",
   "host/index": "host/index.ts",
 };
 

@@ -1,711 +1,650 @@
-import type { Graffiti } from "@graffiti-garden/api";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { GuardDB } from "../src/core/db.js";
 import {
-  Guard,
-  type GuardAnswer,
-  type GuardPromptContext,
-  type GuardQueueStatus,
-} from "../src/core/guard.js";
-import type { GraffitiMethod } from "../src/core/graffiti.js";
+  GraffitiErrorForbidden,
+  GraffitiErrorNotFound,
+  GraffitiErrorTooLarge,
+  type Graffiti,
+  type GraffitiObject,
+} from "@graffiti-garden/api";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Request } from "../src/core/db.js";
+import { MemoryRules } from "./memory-rules.js";
+import { Guard, type GuardAnswer } from "../src/core/guard.js";
+import { sourceFromContext, type Source } from "../src/core/source.js";
+import { appendMediaReceiptUrl, parseMediaReceiptUrl } from "../src/core/media-receipts.js";
 
-const databases: GuardDB[] = [];
+const origin = "https://example.com";
+const actor = "actor:one";
+const sessionA = { actor };
+const sourceA = sourceFromContext(origin, { source: [{ id: "a", name: "A" }] });
+const rootSource = sourceFromContext(origin, {});
+const siteA = [origin, "a"];
+const siteB = [origin, "b"];
+const siteAKey = JSON.stringify(siteA);
+const databases: MemoryRules[] = [];
+
 afterEach(async () => {
-  await Promise.all(databases.splice(0).map((database) => database.destroy()));
+  await Promise.all(databases.splice(0).map((db) => db.destroy()));
 });
 
-function setup(
-  answer: GuardAnswer = { allow: true, remember: true },
-  mediaAllowed?: string[] | null,
-  objectAllowed?: string[] | null,
-) {
-  const db = new GuardDB();
-  databases.push(db);
-  let prompts = 0;
-  const object = {
-    value: { type: "Note", content: "existing" },
-    channels: ["chat"],
-    url: "graffiti:existing",
-    actor: "actor:one",
-    ...(objectAllowed !== undefined ? { allowed: objectAllowed } : {}),
+function object(url: string, site?: string[], allowed: string[] | null = []) {
+  return {
+    url,
+    actor,
+    channels: ["channel"],
+    allowed,
+    value: {
+      type: "Note",
+      text: url,
+      ...(site ? { "via site": { name: site.at(-1), id: JSON.stringify(site) } } : {}),
+    },
   };
-  const graffiti = {
-    sessionEvents: new EventTarget(),
-    get: async (url: string) => ({ ...object, url }),
-    getMedia: async () => ({
-      data: new Blob(["media"], { type: "image/png" }),
-      actor: "actor:one",
-      ...(mediaAllowed !== undefined ? { allowed: mediaAllowed } : {}),
-    }),
-  } as unknown as Graffiti;
-  const guard = new Guard(graffiti, db, "https://example.com", async () => {
-    prompts += 1;
-    return answer;
-  });
-  return { db, guard, prompts: () => prompts };
 }
 
-const session = {
-  actor: "actor:one",
-  source: [{ id: "chat", name: "Chat" }],
-};
-
-describe("Guard", () => {
-  it("checks the session's logout permission when options follow it", async () => {
-    const { guard, prompts } = setup(false);
-    await expect(guard.authorize("logout", [session, { state: "logout-request" }])).rejects.toThrow();
-    expect(prompts()).toBe(1);
+function harness(
+  answer: (request: Request, canRemember: boolean) => GuardAnswer | Promise<GuardAnswer> = () => ({
+    allow: true,
+    remember: false,
+  }),
+) {
+  const db = new MemoryRules();
+  databases.push(db);
+  const objects = new Map<string, ReturnType<typeof object>>();
+  const media = new Map<string, {
+    actor: string;
+    data: Blob;
+    allowed?: string[] | null;
+  }>();
+  const prompts: { request: Request; canRemember: boolean }[] = [];
+  const graffiti = {
+    sessionEvents: new EventTarget(),
+    get: async (url: string) => {
+      const found = objects.get(parseMediaReceiptUrl(url).canonicalUrl);
+      if (!found) throw new Error(`Missing object ${url}`);
+      return found;
+    },
+    getMedia: async (url: string, accept: { maxBytes?: number }) => {
+      const found = media.get(parseMediaReceiptUrl(url).canonicalUrl);
+      if (!found) throw new GraffitiErrorNotFound(`Missing media ${url}`);
+      if (accept.maxBytes !== undefined && found.data.size > accept.maxBytes) {
+        throw new GraffitiErrorTooLarge("Media exceeds limit");
+      }
+      return found;
+    },
+  } as unknown as Graffiti;
+  const guard = new Guard(graffiti, db, origin, async (request, canRemember) => {
+    prompts.push({ request, canRemember });
+    return answer(request, canRemember);
   });
+  return { db, guard, objects, media, prompts };
+}
 
-  it("uses the session's source for logout with options", async () => {
-    const { guard, prompts } = setup();
-    const first = await guard.authorize("logout", [session, { state: "first" }]);
-    const second = await guard.authorize("logout", [session, { state: "second" }]);
-    expect(first?.request.actor).toBe(session.actor);
-    expect(first?.request.source.path).toEqual(session.source);
-    expect(second?.permission?.id).toBe(first?.permission?.id);
-    expect(prompts()).toBe(1);
-  });
+async function receives(
+  guard: Guard,
+  args: Parameters<Guard["filterDiscovery"]>[1],
+  object: GraffitiObject<{}>,
+  source: Source,
+  tombstone = false,
+) {
+  const stream = (async function* () {
+    yield { object, ...(tombstone ? { tombstone: true as const } : {}) };
+    return { cursor: "next" };
+  })();
+  for await (const _ of guard.filterDiscovery(stream, args, source)) return true;
+  return false;
+}
 
-  it("rechecks permissions before showing a queued prompt", async () => {
-    const db = new GuardDB();
-    databases.push(db);
-    let prompts = 0;
-    let queue: GuardQueueStatus | undefined;
-    let answerFirst: (answer: GuardAnswer) => void = () => {};
-    const firstAnswer = new Promise<GuardAnswer>(
-      (resolve) => (answerFirst = resolve),
-    );
-    const guard = new Guard(
-      { sessionEvents: new EventTarget() } as Graffiti,
-      db,
-      "https://example.com",
-      async (_request, _canRemember, _preview, context) => {
-        prompts += 1;
-        queue = context?.queue;
-        return prompts === 1
-          ? firstAnswer
-          : { allow: true, remember: true };
-      },
-    );
-    const post = (content: string) =>
-      guard.authorize("post", [
-        { value: { type: "Note", content }, channels: ["chat"] },
-        session,
-      ]);
+function receipt(mediaUrl: string, site: string[]) {
+  return {
+    url: `graffiti:receipt-${mediaUrl}`,
+    actor,
+    channels: [],
+    allowed: [],
+    value: {
+      mediaUrl,
+      "via site": { name: site.at(-1), id: JSON.stringify(site) },
+      _guard: { kind: "media-receipt" },
+    },
+  };
+}
 
-    const first = post("first");
-    await vi.waitFor(() => expect(prompts).toBe(1));
-    const second = post("second");
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(prompts).toBe(1);
-    expect(queue?.pending).toBe(2);
+describe("site-scoped Guard permissions", () => {
+  it("posts ordinary objects and media without a publishing prompt or grant", async () => {
+    const { db, guard, prompts } = harness();
 
-    answerFirst({ allow: true, remember: true });
-    const [firstHandle, secondHandle] = await Promise.all([first, second]);
-    expect(secondHandle?.permission?.id).toBe(firstHandle?.permission?.id);
-    expect(prompts).toBe(1);
-    expect(queue?.pending).toBe(0);
-  });
-
-  it("does not count queued requests that cannot prompt", async () => {
-    const db = new GuardDB();
-    databases.push(db);
-    await db.ensurePermission({
-      source: {
-        key: JSON.stringify(["https://example.com", "chat"]),
-        origin: "https://example.com",
-        path: session.source,
-      },
-      actor: session.actor,
-      method: "logout",
-      match: { kind: "logout" },
-    });
-    let queue: GuardQueueStatus | undefined;
-    let answerPrompt: (answer: GuardAnswer) => void = () => {};
-    const promptAnswer = new Promise<GuardAnswer>(
-      (resolve) => (answerPrompt = resolve),
-    );
-    const guard = new Guard(
-      {
-        sessionEvents: new EventTarget(),
-        get: async (url: string) => ({
-          value: { type: "Note", content: "public" },
-          channels: ["chat"],
-          url,
-          actor: "actor:one",
-        }),
-      } as unknown as Graffiti,
-      db,
-      "https://example.com",
-      async (_request, _canRemember, _preview, context) => {
-        queue = context?.queue;
-        return promptAnswer;
-      },
-    );
-
-    const post = guard.authorize("post", [
-      { value: { type: "Note", content: "private" }, channels: ["chat"] },
-      session,
-    ]);
-    await vi.waitFor(() => expect(queue?.pending).toBe(1));
-
-    const get = guard.authorize("get", ["graffiti:public", {}, session]);
-    const logout = guard.authorize("logout", [session]);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(queue?.pending).toBe(1);
-
-    answerPrompt({ allow: true, remember: false });
-    await Promise.all([post, get, logout]);
-    expect(queue?.pending).toBe(0);
-  });
-
-  it("reuses a permission only for the same method, actor, and source", async () => {
-    const { guard, prompts } = setup();
     const first = await guard.authorize("post", [
-      {
-        value: { type: "Note", content: "first" },
-        channels: ["chat"],
-      },
-      session,
-    ]);
-    await guard.succeed(first, { url: "graffiti:first" });
-
-    const second = await guard.authorize("post", [
-      {
-        value: { type: "Note", content: "second" },
-        channels: ["chat"],
-      },
-      session,
-    ]);
-    expect(second?.permission?.id).toBe(first?.permission?.id);
-    expect(prompts()).toBe(1);
-
-    await guard.authorize("delete", ["graffiti:existing", session]);
+      { value: { type: "Note", text: "one" }, channels: ["one"] },
+      sessionA,
+    ], sourceA);
     await guard.authorize("post", [
-      {
-        value: { type: "Note", content: "third" },
-        channels: ["chat"],
-      },
-      { ...session, actor: "actor:two" },
-    ]);
-    expect(prompts()).toBe(3);
+      { value: { activity: "Like", target: "graffiti:other" }, channels: ["graffiti:other"] },
+      sessionA,
+    ], sourceA);
+    await guard.authorize("postMedia", [
+      { data: new Blob(["picture"], { type: "image/png" }), allowed: [] },
+      sessionA,
+    ], sourceA);
+
+    expect(prompts).toEqual([]);
+    expect(first!.args[0]).toMatchObject({
+      value: { "via site": { name: "A", id: siteAKey } },
+    });
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
-  it("reuses a remembered denial for similar requests", async () => {
-    const { db, guard, prompts } = setup({ allow: false, remember: true });
-    const post = (content: string) =>
+  it("stamps parent and child posts with distinct IDs", async () => {
+    const child = { actor, source: [...sourceA.path, { id: "chat", name: "Chat" }] };
+    const childSource = sourceFromContext(origin, { source: child.source });
+    const { guard, prompts } = harness();
+    const parentPost = await guard.authorize("post", [{ value: {}, channels: [] }, sessionA], sourceA);
+    const childPost = await guard.authorize("post", [{ value: {}, channels: [] }, child], childSource);
+    expect(parentPost!.args[0]).toMatchObject({
+      value: { "via site": { name: "A", id: siteAKey } },
+    });
+    expect(childPost!.args[0]).toMatchObject({
+      value: { "via site": { name: "Chat", id: JSON.stringify([...siteA, "chat"]) } },
+    });
+    expect(prompts).toEqual([]);
+  });
+
+  it("uses the verified site when a session claims a different site", async () => {
+    const { guard, objects, prompts } = harness();
+    const sourceB = sourceFromContext(origin, { source: [{ id: "b", name: "B" }] });
+    const claimedSession = { actor, source: sourceA.path };
+    const post = await guard.authorize(
+      "post",
+      [{ value: {}, channels: [] }, claimedSession],
+      sourceB,
+    );
+    expect(post!.args[0]).toMatchObject({
+      value: { "via site": { name: "B", id: JSON.stringify(siteB) } },
+    });
+    expect(post!.args[1]).toEqual({ actor });
+
+    objects.set("private", object("private", siteA));
+    await guard.authorize("get", ["private", {}, claimedSession], sourceB);
+    expect(prompts[0].request.source.key).toBe(JSON.stringify(siteB));
+    expect(prompts[0].request.mode).toBe("read");
+  });
+
+  it("includes an optional document URL in the stamp without changing its ID", async () => {
+    const { guard } = harness();
+    const linkedSession = {
+      actor,
+      source: [{ id: "a", name: "A", url: "https://example.com/a" }],
+    };
+    const linkedSource = sourceFromContext(origin, { source: linkedSession.source });
+    const post = await guard.authorize("post", [{ value: {}, channels: [] }, linkedSession], linkedSource);
+    expect(post!.args[0]).toMatchObject({
+      value: { "via site": { name: "A", id: siteAKey, url: "https://example.com/a" } },
+    });
+  });
+
+  it("requires a separate exact confirmation for each consequential post", async () => {
+    const { db, guard, prompts } = harness(() => ({ allow: true, remember: true }));
+    await guard.authorize("post", [{ value: { type: "Note" }, channels: [] }, sessionA], sourceA);
+    const confirmed = await guard.authorize("post", [
+      {
+        value: { action: "Trust", target: "actor:two", "confirm with guard": true },
+        channels: ["profile"],
+        allowed: [],
+      },
+      sessionA,
+    ], sourceA);
+    await guard.authorize("post", [
+      { value: { action: "Trust", target: "actor:three", "confirm with guard": true }, channels: [] },
+      sessionA,
+    ], sourceA);
+
+    expect(prompts.map(({ request }) => request.mode)).toEqual(["confirm", "confirm"]);
+    expect(prompts.every(({ canRemember }) => !canRemember)).toBe(true);
+    expect(confirmed!.args[0]).toMatchObject({
+      value: {
+        action: "Trust",
+        "confirm with guard": true,
+        "via site": { name: "A", id: siteAKey },
+      },
+      channels: ["profile"],
+      allowed: [],
+    });
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
+    await expect(
       guard.authorize("post", [
-        {
-          value: { type: "Note", content },
-          channels: ["chat"],
-        },
-        session,
-      ]);
+        { value: { action: "Trust", "via site": { name: "A", id: siteAKey } }, channels: [] },
+        sessionA,
+      ], sourceA),
+    ).rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    await expect(guard.authorize("post", [
+      { value: { action: "Trust", _guard: { confirm: true } }, channels: [] },
+      sessionA,
+    ], sourceA)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
+  });
 
-    await expect(post("first")).rejects.toThrow("denied");
-    await expect(post("second")).rejects.toThrow("denied");
+  it("automatically reads same-site and unstamped private objects, but asks for another site", async () => {
+    const { guard, objects, prompts } = harness();
+    objects.set("same", object("same", siteA));
+    objects.set("other", object("other", siteB));
+    objects.set("unknown", object("unknown"));
 
-    expect(prompts()).toBe(1);
-    const permissions = (await db.rulesSnapshot()).permissions;
+    await guard.authorize("get", ["same", {}, sessionA], sourceA);
+    await guard.authorize("get", ["unknown", {}, sessionA], sourceA);
+    await guard.authorize("get", ["other", {}, sessionA], sourceA);
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].request).toMatchObject({
+      mode: "read",
+      originSite: { kind: "site", site: JSON.stringify(siteB), name: "b" },
+    });
+  });
+
+  it("lets ancestors read child-created private data without granting sibling or child access", async () => {
+    const { guard, objects, prompts } = harness();
+    const childSite = [...siteA, "chat-1"];
+    const child = { actor, source: [...sourceA.path, { id: "chat-1", name: "Chat 1" }] };
+    const sibling = { actor, source: [...sourceA.path, { id: "chat-2", name: "Chat 2" }] };
+    const childSource = sourceFromContext(origin, { source: child.source });
+    const siblingSource = sourceFromContext(origin, { source: sibling.source });
+    const root = { actor, source: [] };
+    const childMessage = object("child-message", childSite);
+    const parentMessage = object("parent-message", siteA);
+    const foreignSite = ["https://other.example", "a", "chat-1"];
+    objects.set(childMessage.url, childMessage);
+    objects.set(parentMessage.url, parentMessage);
+    objects.set("foreign-message", object("foreign-message", foreignSite));
+
+    await guard.authorize("get", [childMessage.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [childMessage.url, {}, root], rootSource);
+    await receives(guard, [["channel"], {}, sessionA], childMessage, sourceA);
+    expect(await receives(guard, [["channel"], {}, sessionA], childMessage, sourceA, true)).toBe(true);
+    expect(await receives(guard, [["channel"], {}, sibling], childMessage, siblingSource, true)).toBe(false);
+    expect(prompts).toEqual([]);
+
+    await guard.authorize("get", [childMessage.url, {}, sibling], siblingSource);
+    await guard.authorize("get", [parentMessage.url, {}, child], childSource);
+    await guard.authorize("get", ["foreign-message", {}, sessionA], sourceA);
+    expect(prompts.map(({ request }) => request.originSite?.site)).toEqual([
+      JSON.stringify(childSite),
+      JSON.stringify(siteA),
+      JSON.stringify(foreignSite),
+    ]);
+  });
+
+  it("keeps generic object methods from reading or deleting an unstamped media descriptor", async () => {
+    const { guard, objects, media, prompts } = harness();
+    objects.set("graffiti:private-file", object("graffiti:private-file"));
+    objects.set("graffiti:public-file", object("graffiti:public-file", undefined, null));
+    objects.set("graffiti:ordinary", object("graffiti:ordinary"));
+    media.set("graffiti:private-file", { actor, data: new Blob(["image"]), allowed: [] });
+    media.set("graffiti:public-file", { actor, data: new Blob([]), allowed: null });
+
+    await expect(guard.authorize("get", ["graffiti:private-file", {}, sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    await expect(guard.authorize("delete", ["graffiti:private-file", sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    await expect(guard.authorize("delete", ["graffiti:public-file", sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    await guard.authorize("get", ["graffiti:ordinary", {}, sessionA], sourceA);
+    await guard.authorize("delete", ["graffiti:ordinary", sessionA], sourceA);
+    expect(prompts).toEqual([]);
+  });
+
+  it("keeps an item-only private read for this Guard session, including its deletion notice", async () => {
+    const { db, guard, objects, prompts } = harness();
+    const first = object("first", siteB);
+    const second = object("second", siteB);
+    objects.set(first.url, first);
+    objects.set(second.url, second);
+    const stream = [["channel"], {}, sessionA] as const;
+
+    expect(await receives(guard, stream, first, sourceA, true)).toBe(false);
+    await guard.authorize("get", [first.url, {}, sessionA], sourceA);
+    expect(await receives(guard, ["cursor", sessionA], first, sourceA, true)).toBe(true);
+    await guard.authorize("get", [first.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [second.url, {}, sessionA], sourceA);
+    expect(prompts).toHaveLength(2);
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
+
+    const refreshed = new Guard(
+      { sessionEvents: new EventTarget(), get: async () => first } as unknown as Graffiti,
+      db,
+      origin,
+      async () => ({ allow: false, remember: false }),
+    );
+    expect(await receives(refreshed, stream, first, sourceA, true)).toBe(false);
+  });
+
+  it("lets a site retry a private read after a denial without remember", async () => {
+    let attempts = 0;
+    const { db, guard, objects, prompts } = harness(() => ++attempts === 1
+      ? { allow: false, remember: false }
+      : { allow: true, remember: false });
+    const item = object("first", siteB);
+    objects.set(item.url, item);
+
+    await expect(guard.authorize("get", [item.url, {}, sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    expect(await receives(guard, [["channel"], {}, sessionA], item, sourceA, true)).toBe(false);
+    await guard.authorize("get", [item.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [item.url, {}, sessionA], sourceA);
+
+    expect(prompts).toHaveLength(2);
+    expect((await db.rulesSnapshot()).permissions).toEqual([]);
+  });
+
+  it("lets a later remembered denial override an earlier item-only read", async () => {
+    let decisions = 0;
+    const { guard, objects, prompts } = harness(() => ++decisions === 1
+      ? { allow: true, remember: false }
+      : { allow: false, remember: true });
+    objects.set("first", object("first", siteB));
+    objects.set("second", object("second", siteB));
+
+    await guard.authorize("get", ["first", {}, sessionA], sourceA);
+    await expect(guard.authorize("get", ["second", {}, sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    await expect(guard.authorize("get", ["first", {}, sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    expect(prompts).toHaveLength(2);
+  });
+
+  it("does not retain a remembered read as an item grant after revocation", async () => {
+    const { db, guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
+    objects.set("first", object("first", siteB));
+
+    await guard.authorize("get", ["first", {}, sessionA], sourceA);
+    const { permissions } = await db.rulesSnapshot();
     expect(permissions).toHaveLength(1);
-    expect(permissions[0].decision).toBe("deny");
+    await db.revoke(permissions[0].id);
+    await guard.authorize("get", ["first", {}, sessionA], sourceA);
+    expect(prompts).toHaveLength(2);
   });
 
-  it("does not remember an unchecked post denial or a cancellation", async () => {
-    for (const answer of [
-      { allow: false, remember: false } as const,
-      false as const,
-    ]) {
-      const { db, guard, prompts } = setup(answer);
-      const args = [
-        { value: { type: "Note" }, channels: ["chat"] },
-        session,
-      ] as const;
+  it("shares a remembered source-site read grant across objects and files", async () => {
+    const { db, guard, objects, media, prompts } = harness(() => ({ allow: true, remember: true }));
+    objects.set("first", object("first", siteB));
+    objects.set("second", object("second", siteB));
+    media.set("graffiti:file", { actor, data: new Blob(["image"]), allowed: [] });
+    objects.set("graffiti:receipt-graffiti:file", receipt("graffiti:file", siteB) as never);
 
-      await expect(guard.authorize("post", args)).rejects.toThrow("denied");
-      await expect(guard.authorize("post", args)).rejects.toThrow("denied");
+    await guard.authorize("get", ["first", {}, sessionA], sourceA);
+    await guard.authorize("get", ["second", {}, sessionA], sourceA);
+    const mediaUrl = appendMediaReceiptUrl("graffiti:file", "graffiti:receipt-graffiti:file");
+    await guard.authorize("getMedia", [mediaUrl, {}, sessionA], sourceA);
 
-      expect(prompts()).toBe(2);
-      expect((await db.rulesSnapshot()).permissions).toEqual([]);
-    }
+    expect(prompts).toHaveLength(1);
+    expect((await db.rulesSnapshot()).permissions).toMatchObject([
+      { method: "get", match: { kind: "site", site: JSON.stringify(siteB) } },
+    ]);
   });
 
-  it("retains an unchecked denial only for the exact private read", async () => {
-    const { db, guard, prompts } = setup(
-      { allow: false, remember: false },
-      [],
-      [],
-    );
-    const denyObject = (url: string) =>
-      guard.authorize("get", [url, {}, session]);
-    const denyMedia = (url: string) =>
-      guard.authorize("getMedia", [url, {}, session]);
-
-    await expect(denyObject("graffiti:first")).rejects.toThrow("denied");
-    await expect(denyObject("graffiti:first")).rejects.toThrow("denied");
-    await expect(denyObject("graffiti:second")).rejects.toThrow("denied");
-    await expect(denyMedia("graffiti:media")).rejects.toThrow("denied");
-    await expect(denyMedia("graffiti:media")).rejects.toThrow("denied");
-
-    expect(prompts()).toBe(3);
-    const permissions = (await db.rulesSnapshot()).permissions;
-    expect(permissions).toHaveLength(3);
-    expect(permissions.every(({ decision }) => decision === "deny")).toBe(true);
-    expect(permissions.map(({ match }) => match)).toEqual(
-      expect.arrayContaining([
-        { kind: "object", url: "graffiti:first" },
-        { kind: "object", url: "graffiti:second" },
-        { kind: "media", url: "graffiti:media" },
-      ]),
-    );
+  it("keeps remembered grants specific to their requester and actor", async () => {
+    const { guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
+    const foreign = object("foreign", ["https://notes.example", "b"]);
+    objects.set(foreign.url, foreign);
+    await guard.authorize("get", [foreign.url, {}, sessionA], sourceA);
+    const child = sourceFromContext(origin, {
+      source: [{ id: "a", name: "A" }, { id: "nested", name: "A" }],
+    });
+    // Provenance inheritance applies to data produced by descendants, not to
+    // a grant that a different requester received for somebody else's data.
+    await guard.authorize("get", [foreign.url, {}, sessionA], child);
+    await guard.authorize("get", [foreign.url, {}, sessionA], rootSource);
+    await guard.authorize("get", [foreign.url, {}, { actor: "actor:two" }], sourceA);
+    await guard.authorize("get", [foreign.url, {}, sessionA], sourceA);
+    expect(prompts).toHaveLength(4);
+    expect(prompts.map(({ request }) => [request.source.key, request.actor])).toEqual([
+      [sourceA.key, actor], [child.key, actor], [rootSource.key, actor], [sourceA.key, "actor:two"],
+    ]);
   });
 
-  it("does not remember a cancelled private read", async () => {
-    const { db, guard, prompts } = setup(false, [], []);
+  it("applies the same private-read rule to data received from another actor", async () => {
+    const { guard, objects, prompts } = harness();
+    const received = { ...object("received", siteB), actor: "actor:sender", allowed: [actor] };
+    objects.set(received.url, received);
+    await guard.authorize("get", [received.url, {}, sessionA], sourceA);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].request).toMatchObject({ actor, mode: "read", originSite: { kind: "site", site: JSON.stringify(siteB), name: "b" } });
+    const producingSite = sourceFromContext(origin, { source: [{ id: "b", name: "B" }] });
+    await guard.authorize("get", [received.url, {}, sessionA], producingSite);
+    expect(prompts).toHaveLength(1);
+  });
 
-    await expect(
-      guard.authorize("get", ["graffiti:private", {}, session]),
-    ).rejects.toThrow("denied");
-    await expect(
-      guard.authorize("get", ["graffiti:private", {}, session]),
-    ).rejects.toThrow("denied");
+  it("asks for an exact private file if no valid receipt establishes its source", async () => {
+    const { db, guard, media, prompts } = harness(() => ({ allow: true, remember: true }));
+    media.set("graffiti:file", { actor, data: new Blob(["image"]), allowed: [] });
+    await guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA);
+    await guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA);
 
-    expect(prompts()).toBe(2);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatchObject({
+      canRemember: false,
+      request: { mode: "read" },
+    });
+    expect(prompts[0].request.originSite).toBeUndefined();
     expect((await db.rulesSnapshot()).permissions).toEqual([]);
   });
 
-  it("blocks every guarded request from a site for the same identity", async () => {
-    const { db, guard, prompts } = setup({ blockSite: true }, [], []);
+  it.each(["same site", "site grant", "remembered approval"])(
+    "remembers a media read allowed by %s when its receipt suffix is lost",
+    async (access) => {
+      const { db, guard, objects, media, prompts } = harness(() => ({ allow: true, remember: true }));
+      const file = "graffiti:file";
+      media.set(file, { actor, data: new Blob(["image"]), allowed: [] });
+      const from = access === "same site" ? siteA : siteB;
+      const proof = receipt(file, from);
+      objects.set(proof.url, proof as never);
+      if (access === "site grant") {
+        await db.remember({
+          source: sourceA, actor, method: "get", decision: "allow",
+          match: { kind: "site", site: JSON.stringify(siteB) },
+        });
+      }
 
-    await expect(
-      guard.authorize("post", [
-        { value: { type: "Note" }, channels: ["chat"] },
-        session,
-      ]),
-    ).rejects.toThrow("blocked all requests");
-    await expect(
-      guard.authorize("getMedia", [
-        "graffiti:media",
-        {},
-        { ...session, actor: "actor:two" },
-      ]),
-    ).rejects.toThrow("blocked all requests");
-
-    expect(prompts()).toBe(2);
-    const rules = await db.rulesSnapshot();
-    expect(rules.siteBlocks).toHaveLength(2);
-    expect(rules.permissions).toEqual([]);
-  });
-
-  it("does not accept an open prompt after another guard blocks the site", async () => {
-    const db = new GuardDB();
-    databases.push(db);
-    const graffiti = { sessionEvents: new EventTarget() } as Graffiti;
-    let answerOpenPrompt: (answer: GuardAnswer) => void = () => {};
-    let openPrompted = false;
-    const openAnswer = new Promise<GuardAnswer>(
-      (resolve) => (answerOpenPrompt = resolve),
-    );
-    const openGuard = new Guard(
-      graffiti,
-      db,
-      "https://example.com",
-      async () => {
-        openPrompted = true;
-        return openAnswer;
-      },
-    );
-    const blockingGuard = new Guard(
-      graffiti,
-      db,
-      "https://example.com",
-      async () => ({ blockSite: true }),
-    );
-    const post = (guard: Guard, content: string) =>
-      guard.authorize("post", [
-        { value: { type: "Note", content }, channels: ["chat"] },
-        session,
+      await guard.authorize("getMedia", [appendMediaReceiptUrl(file, proof.url), {}, sessionA], sourceA);
+      const initialPrompts = access === "remembered approval" ? 1 : 0;
+      expect(prompts).toHaveLength(initialPrompts);
+      const savedRules = await db.rulesSnapshot();
+      await Promise.all([
+        guard.authorize("getMedia", [file, {}, sessionA], sourceA),
+        guard.authorize("getMedia", [`${file}?other.layer=x`, {}, sessionA], sourceA),
       ]);
+      expect(prompts).toHaveLength(initialPrompts);
+      expect(await db.rulesSnapshot()).toEqual(savedRules);
 
-    const openRequest = post(openGuard, "open");
-    await vi.waitFor(() => expect(openPrompted).toBe(true));
-    await expect(post(blockingGuard, "block")).rejects.toThrow(
-      "blocked all requests",
-    );
-    answerOpenPrompt({ allow: true, remember: true });
+      // Seeing a file grants neither deletion nor access from another site/account.
+      await guard.authorize("deleteMedia", [file, sessionA], sourceA);
+      await guard.authorize("getMedia", [file, {}, sessionA], rootSource);
+      await guard.authorize("getMedia", [file, {}, { actor: "actor:two" }], sourceA);
+      expect(prompts.slice(initialPrompts).map(({ request }) => request.mode))
+        .toEqual(["delete", "read", "read"]);
+    },
+  );
 
-    await expect(openRequest).rejects.toThrow("blocked all requests");
-    expect((await db.rulesSnapshot()).permissions).toEqual([]);
-  });
-
-  it("does not authorize discovery queries or cursors", async () => {
-    const { guard, prompts } = setup();
-    const discovery = await guard.authorize("discover", [
-      ["chat"],
-      {},
-      session,
-    ]);
-    const continuation = await guard.authorize("continueDiscover", [
-      "cursor-one",
-      session,
-    ]);
-
-    expect(discovery).toBeUndefined();
-    expect(continuation).toBeUndefined();
-    expect(prompts()).toBe(0);
-  });
-
-  it("does not guard sessionless public reads", async () => {
-    const { guard, prompts } = setup();
-    expect(await guard.authorize("get", ["graffiti:public", {}])).toBeUndefined();
-    expect(await guard.authorize("discover", [["chat"], {}])).toBeUndefined();
-    expect(prompts()).toBe(0);
-  });
-
-  it("automatically allows authenticated reads of public data", async () => {
-    const { guard, prompts } = setup();
-
-    const object = await guard.authorize("get", [
-      "graffiti:public",
-      {},
-      session,
-    ]);
-    const media = await guard.authorize("getMedia", [
-      "graffiti:public-media",
-      {},
-      session,
-    ]);
-
-    expect(prompts()).toBe(0);
-    expect(object?.permission).toBeUndefined();
-    expect(media?.permission).toBeUndefined();
-  });
-
-  it("also treats a null allowed list as public", async () => {
-    const { db, guard, prompts } = setup(
-      { allow: true, remember: true },
-      null,
-      null,
-    );
-
-    await guard.authorize("get", ["graffiti:public", {}, session]);
-    await guard.authorize("getMedia", ["graffiti:public-media", {}, session]);
-
-    expect(prompts()).toBe(0);
-    expect((await db.rulesSnapshot()).permissions).toEqual([]);
-  });
-
-  it("treats activity as an object discriminator", async () => {
-    const { guard, prompts } = setup();
-    await guard.authorize("post", [
-      {
-        value: { activity: "Like", target: "graffiti:first" },
-        channels: ["chat"],
-      },
-      session,
-    ]);
-    await guard.authorize("post", [
-      {
-        value: { activity: "Like", target: "graffiti:second" },
-        channels: ["chat"],
-      },
-      session,
-    ]);
-    await guard.authorize("post", [
-      {
-        value: { activity: "Follow", target: "actor:two" },
-        channels: ["chat"],
-      },
-      session,
-    ]);
-
-    expect(prompts()).toBe(2);
-  });
-
-  it("lets a remembered public operation apply to a recipient subset", async () => {
-    const { guard, prompts } = setup();
-    await guard.authorize("post", [
-      { value: { type: "Note", content: "public" }, channels: ["chat"] },
-      session,
-    ]);
-    await guard.authorize("post", [
-      {
-        value: { type: "Note", content: "private" },
-        channels: ["chat"],
-        allowed: ["actor:two"],
-      },
-      session,
-    ]);
-
-    expect(prompts()).toBe(1);
-  });
-
-  it("stores examples for remembered broad permissions", async () => {
-    const { guard } = setup({ allow: true, remember: true }, [], []);
-
-    const object = await guard.authorize("get", [
-      "graffiti:private",
-      {},
-      session,
-    ]);
-    const media = await guard.authorize("getMedia", [
-      "graffiti:private-media",
-      {},
-      session,
-    ]);
-
-    expect(object?.permission?.match).toMatchObject({
-      kind: "object",
-      example: {
-        type: "Note",
-        content: "existing",
-      },
-    });
-    expect(media?.permission?.match).toMatchObject({
-      kind: "media",
-      example: {
-        type: "image/png",
-        size: 5,
-      },
-    });
-  });
-
-  it("retains an unremembered allow only for the exact approved read", async () => {
-    const { db, guard, prompts } = setup(
-      { allow: true, remember: false },
-      [],
-      [],
-    );
-
-    const get = await guard.authorize("get", ["graffiti:first", {}, session]);
-    const repeatedGet = await guard.authorize("get", [
-      "graffiti:first",
-      {},
-      session,
-    ]);
-    await guard.authorize("get", ["graffiti:second", {}, session]);
-
-    const media = await guard.authorize("getMedia", [
-      "graffiti:media",
-      {},
-      session,
-    ]);
-    const repeatedMedia = await guard.authorize("getMedia", [
-      "graffiti:media",
-      {},
-      session,
-    ]);
-
-    expect(repeatedGet?.permission?.id).toBe(get?.permission?.id);
-    expect(repeatedMedia?.permission?.id).toBe(media?.permission?.id);
-    expect(prompts()).toBe(3);
-    expect((await db.rulesSnapshot()).permissions).toHaveLength(3);
-
-    await guard.revoke(get!.permission!.id);
-    await guard.authorize("get", ["graffiti:first", {}, session]);
-    expect(prompts()).toBe(4);
-  });
-
-  it("implicitly permits reading data posted by the same app", async () => {
-    const { db, guard, prompts } = setup(
-      { allow: true, remember: false },
-      [],
-      [],
-    );
-
-    const post = await guard.authorize("post", [
-      { value: { type: "Note" }, channels: ["chat"], allowed: [] },
-      session,
-    ]);
-    await guard.succeed(post, { url: "graffiti:posted" });
-    const get = await guard.authorize("get", ["graffiti:posted", {}, session]);
-
-    const postMedia = await guard.authorize("postMedia", [
-      { data: new Blob(["private"]), allowed: [] },
-      session,
-    ]);
-    await guard.succeed(postMedia, "graffiti:posted-media");
-    const getMedia = await guard.authorize("getMedia", [
-      "graffiti:posted-media",
-      {},
-      session,
-    ]);
-
-    expect(prompts()).toBe(2);
-    expect(get?.permission?.id).toBeDefined();
-    expect(getMedia?.permission?.id).toBeDefined();
-    expect((await db.rulesSnapshot()).permissions).toHaveLength(2);
-  });
-
-  it("does not store implicit read permissions for public writes", async () => {
-    const { db, guard } = setup({ allow: true, remember: false });
-
-    const post = await guard.authorize("post", [
-      { value: { type: "Note" }, channels: ["chat"] },
-      session,
-    ]);
-    await guard.succeed(post, { url: "graffiti:public-post" });
-    const postMedia = await guard.authorize("postMedia", [
-      { data: new Blob(["public"]) },
-      session,
-    ]);
-    await guard.succeed(postMedia, "graffiti:public-media");
-
-    expect((await db.rulesSnapshot()).permissions).toEqual([]);
-  });
-
-  it("authorizes private discovery results as exact get requests", async () => {
-    const { db, guard, prompts } = setup(
-      { allow: true, remember: false },
-      [],
-      [],
-    );
-    const args = [["chat"], {}, session];
-    const object = {
-      url: "graffiti:discovered",
-      value: { type: "Note" },
-      channels: ["chat"],
-      allowed: [],
-      actor: "actor:one",
-    };
-
-    const first = await guard.authorizeDiscovered(args, object);
-    await guard.succeed(first, object);
-    const second = await guard.authorizeDiscovered(["cursor", session], object);
-    await guard.succeed(second, object);
-
-    expect(prompts()).toBe(1);
-    expect(second?.permission?.id).toBe(first?.permission?.id);
-    expect((await db.rulesSnapshot()).permissions).toHaveLength(1);
-  });
-
-  it("marks private discovery prompts as part of a result stream", async () => {
-    const db = new GuardDB();
+  it("keeps a media descriptor closed when its bytes are temporarily unavailable", async () => {
+    const db = new MemoryRules();
     databases.push(db);
-    let promptContext: GuardPromptContext | undefined;
-    const guard = new Guard(
-      { sessionEvents: new EventTarget() } as Graffiti,
-      db,
-      "https://example.com",
-      async (_request, _canRemember, _preview, context) => {
-        promptContext = context;
-        return { allow: true, remember: false };
+    const file = object("graffiti:file");
+    const fileReceipt = receipt(file.url, siteB);
+    const graffiti = {
+      sessionEvents: new EventTarget(),
+      get: async (url: string) => parseMediaReceiptUrl(url).canonicalUrl === file.url ? file : fileReceipt,
+      getMedia: async () => { throw new GraffitiErrorNotFound("Media bytes unavailable."); },
+    } as unknown as Graffiti;
+    const guard = new Guard(graffiti, db, origin, async () => {
+      throw new Error("The generic object path must not prompt for media metadata.");
+    });
+
+    const mediaUrl = appendMediaReceiptUrl(file.url, fileReceipt.url);
+    await expect(guard.authorize("get", [mediaUrl, {}, sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+  });
+
+  it("lets a site delete its own or unstamped objects, and scopes cross-site deletion separately", async () => {
+    const { db, guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
+    objects.set("own", object("own", siteA));
+    objects.set("unknown", object("unknown"));
+    objects.set("other-1", object("other-1", siteB));
+    objects.set("other-2", object("other-2", siteB));
+
+    await guard.authorize("delete", ["own", sessionA], sourceA);
+    await guard.authorize("delete", ["unknown", sessionA], sourceA);
+    await guard.authorize("delete", ["other-1", sessionA], sourceA);
+    await guard.authorize("delete", ["other-2", sessionA], sourceA);
+
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].request).toMatchObject({ mode: "delete", originSite: { kind: "site", site: JSON.stringify(siteB), name: "b" } });
+    expect((await db.rulesSnapshot()).permissions).toMatchObject([
+      { method: "delete", match: { kind: "site", site: JSON.stringify(siteB), name: "b" } },
+    ]);
+  });
+
+  it("uses the same delete rule for confirmed records", async () => {
+    const { guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
+    const confirmedOwn = object("confirmed-own", siteA);
+    const confirmedOther = object("confirmed-other", siteB);
+    confirmedOwn.value["confirm with guard"] = true;
+    confirmedOther.value["confirm with guard"] = true;
+    objects.set(confirmedOwn.url, confirmedOwn);
+    objects.set(confirmedOther.url, confirmedOther);
+
+    await guard.authorize("delete", [confirmedOwn.url, sessionA], sourceA);
+    expect(prompts).toEqual([]);
+    await guard.authorize("delete", [confirmedOther.url, sessionA], sourceA);
+    expect(prompts).toHaveLength(1);
+    await guard.authorize("delete", [confirmedOther.url, sessionA], sourceA);
+    expect(prompts).toHaveLength(1);
+  });
+
+  it("lets ancestors delete child-created data without granting sibling or child deletion", async () => {
+    const { guard, objects, prompts } = harness();
+    const childSite = [...siteA, "chat-1"];
+    const child = { actor, source: [...sourceA.path, { id: "chat-1", name: "Chat 1" }] };
+    const sibling = { actor, source: [...sourceA.path, { id: "chat-2", name: "Chat 2" }] };
+    const childSource = sourceFromContext(origin, { source: child.source });
+    const siblingSource = sourceFromContext(origin, { source: sibling.source });
+    objects.set("child-message", object("child-message", childSite));
+    objects.set("parent-message", object("parent-message", siteA));
+
+    await guard.authorize("delete", ["child-message", sessionA], sourceA);
+    await guard.authorize("delete", ["child-message", { actor, source: [] }], rootSource);
+    expect(prompts).toEqual([]);
+
+    await guard.authorize("delete", ["child-message", sibling], siblingSource);
+    await guard.authorize("delete", ["parent-message", child], childSource);
+    expect(prompts.map(({ request }) => request.originSite?.site)).toEqual([
+      JSON.stringify(childSite),
+      JSON.stringify(siteA),
+    ]);
+  });
+
+  it("does not let a remembered read grant delete cross-site data", async () => {
+    const { guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
+    objects.set("other", object("other", siteB));
+    await guard.authorize("get", ["other", {}, sessionA], sourceA);
+    await guard.authorize("delete", ["other", sessionA], sourceA);
+    expect(prompts.map(({ request }) => request.mode)).toEqual(["read", "delete"]);
+  });
+
+  it("rejects blocked sites before fetching a media preview", async () => {
+    const db = new MemoryRules();
+    databases.push(db);
+    const getMedia = vi.fn(async () => ({
+      actor,
+      allowed: [],
+      data: new Blob(["private file"]),
+    }));
+    const graffiti = { sessionEvents: new EventTarget(), getMedia } as unknown as Graffiti;
+    const guard = new Guard(graffiti, db, origin, async () => {
+      throw new Error("A blocked site must not prompt.");
+    });
+    await db.blockSource({ key: siteAKey, origin, path: sourceA.path }, actor);
+
+    await expect(guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    expect(getMedia).not.toHaveBeenCalled();
+  });
+
+  it("never discloses or deletes media receipts through app object requests", async () => {
+    const { guard, objects, prompts } = harness();
+    const mediaReceipt = receipt("graffiti:file", siteA);
+    objects.set(mediaReceipt.url, mediaReceipt as never);
+
+    await expect(guard.authorize("get", [mediaReceipt.url, {}, sessionA], sourceA)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    await expect(guard.authorize("delete", [mediaReceipt.url, sessionA], sourceA)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    expect(await receives(guard, [["channel"], {}, sessionA], mediaReceipt, sourceA)).toBe(false);
+    expect(await receives(guard, [["channel"], {}, sessionA], mediaReceipt, sourceA, true)).toBe(false);
+    expect(prompts).toEqual([]);
+  });
+
+  it("confirms an app's permission post and uses ordinary provenance for its reads and deletes", async () => {
+    const { guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
+    const proposed = {
+      channels: [`guard:permissions:site:${siteAKey}`, `guard:permissions:actor:${actor}`],
+      allowed: [],
+      value: {
+        action: "Remember permission",
+        "confirm with guard": true,
+        published: Date.now(),
+        site: { origin, path: sourceA.path },
+        rule: {
+          method: "get",
+          decision: "deny",
+          match: { kind: "site", site: JSON.stringify(siteB) },
+        },
       },
-    );
-
-    await guard.authorizeDiscovered([["chat"], {}, session], {
-      url: "graffiti:private",
-      value: {},
-      channels: ["chat"],
-      allowed: [],
-      actor: "actor:one",
-    });
-
-    expect(promptContext?.privateResult).toBe(1);
-  });
-
-  it("does not record or store public discovery results", async () => {
-    const { db, guard, prompts } = setup();
-    const base = {
-      value: {},
-      channels: ["chat"],
-      actor: "actor:one",
     };
+    const post = await guard.authorize("post", [proposed, sessionA], sourceA);
+    const stamped = post!.args[0] as typeof proposed;
+    const policy = { ...stamped, url: "graffiti:policy", actor };
+    objects.set(policy.url, policy as never);
+    expect(prompts.map(({ request }) => request.mode)).toEqual(["confirm"]);
+    expect(prompts[0].canRemember).toBe(false);
 
-    expect(await guard.authorizeDiscovered([["chat"], {}, session], {
-      ...base,
-      url: "graffiti:undefined",
-    })).toBeUndefined();
-    expect(await guard.authorizeDiscovered([["chat"], {}, session], {
-      ...base,
-      url: "graffiti:null",
-      allowed: null,
-    })).toBeUndefined();
+    await guard.authorize("get", [policy.url, {}, sessionA], sourceA);
+    await guard.authorize("delete", [policy.url, sessionA], sourceA);
+    expect(prompts).toHaveLength(1);
 
-    expect(prompts()).toBe(0);
-    expect(await db.rulesSnapshot()).toEqual({
-      permissions: [],
-      siteBlocks: [],
-    });
+    const otherSite = sourceFromContext("https://other.example", {});
+    expect(await receives(guard, [["channel"], {}, sessionA], policy, otherSite, true)).toBe(false);
+    await receives(guard, [["channel"], {}, sessionA], policy, otherSite);
+    expect(await receives(guard, [["channel"], {}, sessionA], policy, otherSite, true)).toBe(true);
+    await guard.authorize("delete", [policy.url, sessionA], otherSite);
+    await guard.authorize("get", [policy.url, {}, sessionA], otherSite);
+    await guard.authorize("delete", [policy.url, sessionA], otherSite);
+    expect(prompts.map(({ request }) => request.mode)).toEqual(["confirm", "read", "delete"]);
+    expect(prompts.slice(1).every(({ request }) => request.originSite?.site === siteAKey)).toBe(true);
   });
 
-  it("uses broad get permissions for later private discovery results", async () => {
-    const { db, guard, prompts } = setup(
-      { allow: true, remember: true },
-      [],
-      [],
-    );
-    const args = [["chat"], {}, session];
-    const object = (url: string, content: string) => ({
-      url,
-      value: { type: "Note", content },
-      channels: ["chat"],
-      allowed: [],
-      actor: "actor:one",
-    });
+  it("does not reveal a cross-site private schema mismatch before read approval", async () => {
+    const { guard, objects, prompts } = harness(() => false);
+    objects.set("private", object("private", siteB));
+    const mismatchingSchema = {
+      properties: {
+        value: {
+          properties: { text: { const: "guessed text" } },
+        },
+      },
+    } as const;
 
-    const first = await guard.authorizeDiscovered(
-      args,
-      object("graffiti:first", "first"),
-    );
-    await guard.succeed(first, object("graffiti:first", "first"));
-    const second = await guard.authorizeDiscovered(
-      args,
-      object("graffiti:second", "second"),
-    );
-    await guard.succeed(second, object("graffiti:second", "second"));
-
-    expect(prompts()).toBe(1);
-    expect(second?.permission?.id).toBe(first?.permission?.id);
-    // One broad grant plus an exact grant for each disclosed object.
-    expect((await db.rulesSnapshot()).permissions).toHaveLength(3);
+    await expect(guard.authorize("get", ["private", mismatchingSchema, sessionA], sourceA))
+      .rejects.toBeInstanceOf(GraffitiErrorForbidden);
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0].request.mode).toBe("read");
   });
 
-  it("rejects a private sessionless discovery result", async () => {
-    const { db, guard, prompts } = setup();
-
-    await expect(
-      guard.authorizeDiscovered([["chat"], {}], {
-        url: "graffiti:private",
-        value: {},
-        channels: ["chat"],
-        allowed: [],
-        actor: "actor:one",
-      }),
-    ).rejects.toThrow("authenticated session");
-
-    expect(prompts()).toBe(0);
-    expect(await db.rulesSnapshot()).toEqual({
-      permissions: [],
-      siteBlocks: [],
-    });
-  });
-
-  it("does not remember a cancelled private discovery result", async () => {
-    const { db, guard, prompts } = setup(false, [], []);
-
-    await expect(
-      guard.authorizeDiscovered([["chat"], {}, session], {
-        url: "graffiti:private",
-        value: {},
-        channels: ["chat"],
-        allowed: [],
-        actor: "actor:one",
-      }),
-    ).rejects.toBeInstanceOf(Error);
-
-    expect(prompts()).toBe(1);
-    expect((await db.rulesSnapshot()).permissions).toEqual([]);
-  });
-
-  it("rejects an unknown authenticated Graffiti method", async () => {
-    const { guard } = setup();
-    await expect(
-      guard.authorize(
-        "futureMutation" as GraffitiMethod,
-        [session] as never,
-      ),
-    ).rejects.toThrow("Unsupported authenticated Graffiti method");
+  it("rechecks a queued private read after a remembered site decision", async () => {
+    let release: (answer: GuardAnswer) => void = () => {};
+    const firstAnswer = new Promise<GuardAnswer>((resolve) => { release = resolve; });
+    let asked = 0;
+    const { guard, objects, prompts } = harness(() => ++asked === 1
+      ? firstAnswer
+      : { allow: true, remember: true });
+    objects.set("one", object("one", siteB));
+    objects.set("two", object("two", siteB));
+    const one = guard.authorize("get", ["one", {}, sessionA], sourceA);
+    await vi.waitFor(() => expect(prompts).toHaveLength(1));
+    const two = guard.authorize("get", ["two", {}, sessionA], sourceA);
+    release({ allow: true, remember: true });
+    await Promise.all([one, two]);
+    expect(prompts).toHaveLength(1);
   });
 });

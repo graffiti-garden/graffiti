@@ -60,7 +60,7 @@ export class GraffitiLocalMedia {
 
     const { dataBase64, type, size } = object.value;
 
-    if (accept?.maxBytes && size > accept.maxBytes) {
+    if (accept?.maxBytes !== undefined && size > accept.maxBytes) {
       throw new GraffitiErrorTooLarge("File size exceeds limit");
     }
 
