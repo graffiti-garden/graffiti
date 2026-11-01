@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.4.0",
-    "@graffiti-garden/implementation-decentralized": "^0.2.0",
-    "@graffiti-garden/wrapper-iframe-rpc": "^0.2.0",
+    "@graffiti-garden/implementation-decentralized": "^0.3.0",
+    "@graffiti-garden/wrapper-iframe-rpc": "^0.3.0",
     "@graffiti-garden/wrapper-vue": "^1.4.3",
     "content-type": "^3.1.1",
     "human-filetypes": "^1.2.0",
@@ -29,7 +29,7 @@
     "vue": "^3.5.29"
   },
   "devDependencies": {
-    "@graffiti-garden/implementation-local": "^1.4.0",
+    "@graffiti-garden/implementation-local": "^1.5.0",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "@vitejs/plugin-vue": "^6.0.4",
     "fake-indexeddb": "^6.2.5",

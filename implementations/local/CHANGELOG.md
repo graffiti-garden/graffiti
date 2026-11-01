@@ -1,5 +1,18 @@
 # @graffiti-garden/implementation-local
 
+## 1.5.0
+
+### Minor Changes
+
+- 8f7fc5e: Mark newly stored records with an internal `kind`: `object` or `media`. Object and media methods share storage but only access records of their own kind. This prevents an ordinary post from impersonating a media descriptor and keeps media backing records out of the object API. The public Graffiti API, object values, and media bytes are unchanged.
+  
+  The decentralized wire format uses `r: 0` for objects and `r: 1` for media in both stored records and inbox metadata.
+  
+  Existing records without a kind retain the legacy behavior; no migration or media rewriting is needed. Older decentralized clients reject the new internal field, so update clients and reload existing tabs before using newly written records. Updated readers revalidate kind-bearing records that older clients labeled invalid, so those saved labels do not leave data hidden after an upgrade. For Social.Wiki, deploy the updated hosted guard before the Social.Wiki update; the kernel and lenses access decentralized data through that guard.
+- 75b02f0: Accept wrapper addendums on Graffiti object and media URLs. Lookups and deletions use the canonical URL before the first literal `?` or `#`, allowing wrappers to attach metadata without changing the Graffiti API. Encoded characters within URL components remain part of the identifier, and existing undecorated URLs keep working.
+  
+  The local implementation also honors `getMedia`'s `maxBytes: 0` limit instead of treating zero as an omitted limit, and preserves the original MIME type and parameters when decoding stored media.
+
 ## 1.4.0
 
 ### Minor Changes

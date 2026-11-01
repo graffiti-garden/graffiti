@@ -20,11 +20,11 @@
   },
   "dependencies": {
     "@graffiti-garden/api": "^1.4.0",
-    "@graffiti-garden/wrapper-data-guard": "^0.2.8",
+    "@graffiti-garden/wrapper-data-guard": "^0.3.0",
     "@graffiti-garden/wrapper-vue": "^1.4.3",
     "@picocss/pico": "^2.1.1",
     "vue": "^3.5.29",
-    "@graffiti-garden/wrapper-iframe-rpc": "^0.2.0"
+    "@graffiti-garden/wrapper-iframe-rpc": "^0.3.0"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.3.0",
