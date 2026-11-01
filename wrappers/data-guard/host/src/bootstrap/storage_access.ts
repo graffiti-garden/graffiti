@@ -50,22 +50,22 @@ export async function restoreStorageAccess(): Promise<boolean> {
   }
 }
 
-/** Called only on return from login, before constructing Graffiti or its caches. */
-export function activateStorageAccess(): Promise<boolean> {
+/** Resume a previous login or finish a new one, before constructing any caches. */
+export function activateStorageAccess(restoring = false): Promise<boolean> {
   return withPrompt(() => new Promise((resolve) => {
     const onCancel = () => resolve(false);
     const onContinue = async () => {
-      show(StorageAccess, { busy: true, onContinue, onCancel });
+      show(StorageAccess, { restoring, busy: true, onContinue, onCancel });
       try {
         // This call must run inside the iframe's button-click handler.
         await requestAndInstall();
         if (!getLocalStorage()) throw new Error("Login storage is unavailable.");
         resolve(true);
       } catch {
-        show(StorageAccess, { error: true, onContinue, onCancel });
+        show(StorageAccess, { restoring, error: true, onContinue, onCancel });
       }
     };
-    show(StorageAccess, { onContinue, onCancel });
+    show(StorageAccess, { restoring, onContinue, onCancel });
   }));
 }
 

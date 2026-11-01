@@ -15,6 +15,7 @@ import {
 import { LoginAccess } from "./core/login-access.js";
 import { sourceFromContext } from "./core/source.js";
 import { activateStorageAccess, restoreStorageAccess, getLocalStorage } from "./bootstrap/storage_access.js";
+import { createLoginReminder } from "./bootstrap/login-reminder.js";
 import { GuardedGraffiti } from "./core/graffiti.js";
 import { Guard } from "./core/guard.js";
 import { GraffitiRuleStore } from "./core/rules.js";
@@ -56,8 +57,11 @@ if (standalone) {
   }
 } else {
   listenToParent(async (origin, loginNonce, loginCancelled) => {
+    const reminder = createLoginReminder(origin);
     let storageReady = await restoreStorageAccess();
-    if (!storageReady && loginNonce && !loginCancelled) storageReady = await activateStorageAccess();
+    if (!storageReady && !loginCancelled && (loginNonce || reminder.remembered)) {
+      storageReady = await activateStorageAccess(!loginNonce);
+    }
     // Public browsing starts anonymously; choose storage before creating any caches.
     const graffiti = new GraffitiDecentralized();
     app.use(GraffitiPlugin, { graffiti });
@@ -70,6 +74,7 @@ if (standalone) {
       ? { error: new Error("Login was not completed"), state: loginCancelled.state }
       : storageReady && loginNonce ? takeLoginResult(loginNonce, origin) : undefined;
     const guarded = new GuardedGraffiti(graffiti, guard, access, origin, result);
+    if (storageReady) reminder.track(guarded.sessionEvents);
     serveGraffiti(guarded).connect({
       remoteWindow: window.parent,
       allowedOrigins: [origin],
