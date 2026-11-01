@@ -2,7 +2,7 @@ export const visibilityEvents = new EventTarget();
 let parentOrigin: string | undefined;
 
 export function listenToParent(
-  connect: (origin: string, pageUrl?: string, loginNonce?: string) => void,
+  connect: (origin: string, loginNonce?: string) => void,
 ) {
   window.addEventListener("message", (event) => {
     if (
@@ -28,10 +28,8 @@ export function listenToParent(
           { type: "graffiti-guard:connected" },
           parentOrigin,
         );
-        const pageUrl = parseUrl(event.data.pageUrl);
         connect(
           parentOrigin,
-          pageUrl?.origin === parentOrigin ? pageUrl.href : undefined,
           typeof event.data.loginNonce === "string"
             ? event.data.loginNonce
             : undefined,
@@ -47,19 +45,12 @@ export function listenToParent(
   });
 }
 
-function parseUrl(value: unknown) {
-  if (typeof value !== "string") return;
-  try {
-    return new URL(value);
-  } catch {}
-}
-
 export function setVisible(visible: boolean) {
   postToParent({ type: "graffiti-guard:set-visible", visible });
 }
 
-export function requestStorageSetup(url: string) {
-  postToParent({ type: "graffiti-guard:open-storage-setup", url });
+export function requestLoginRedirect(options: import("../../../client/src/source.js").GuardLoginOptions) {
+  postToParent({ type: "graffiti-guard:open-login", options });
 }
 
 export function requestAudit(

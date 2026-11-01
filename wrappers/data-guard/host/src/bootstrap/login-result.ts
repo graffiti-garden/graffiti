@@ -1,6 +1,8 @@
 import type { GraffitiLoginEvent } from "@graffiti-garden/api";
 
-type LoginResult = GraffitiLoginEvent["detail"];
+import { sourceFromContext, type Source } from "../core/source.js";
+
+type LoginResult = GraffitiLoginEvent["detail"] & { source?: Source["path"] };
 const prefix = "graffiti-guard-login-result-";
 const maxAge = 10 * 60;
 
@@ -11,6 +13,7 @@ export function storeLoginResult(nonce: string, origin: string, detail: LoginRes
     origin,
     expiresAt: Date.now() + maxAge * 1000,
     state: detail.state,
+    ...(detail.source ? { source: detail.source } : {}),
     ...(detail.error ? { error: detail.error.message } : { actor: detail.session.actor }),
   }), maxAge);
 }
@@ -27,8 +30,11 @@ export function takeLoginResult(nonce: string, origin: string): LoginResult | un
     write(nonce, "", 0);
     if (typeof stored.expiresAt !== "number" || stored.expiresAt <= Date.now()) return;
     const state = typeof stored.state === "string" ? stored.state : undefined;
-    if (typeof stored.error === "string") return { error: new Error(stored.error), state };
-    if (typeof stored.actor === "string") return { session: { actor: stored.actor }, state };
+    const source = stored.source === undefined ? {} : {
+      source: sourceFromContext(origin, { source: stored.source }).path,
+    };
+    if (typeof stored.error === "string") return { error: new Error(stored.error), state, ...source };
+    if (typeof stored.actor === "string") return { session: { actor: stored.actor }, state, ...source };
   } catch {
     write(nonce, "", 0);
   }

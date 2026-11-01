@@ -1,6 +1,7 @@
 import type {
   Graffiti,
   GraffitiObjectBase,
+  GraffitiObject,
   JSONSchema,
   GraffitiSession,
   GraffitiObjectStreamEntry,
@@ -17,7 +18,12 @@ import {
   compileGraffitiObjectSchema,
   GraffitiErrorCursorExpired,
 } from "@graffiti-garden/api";
-import { randomBase64, decodeObjectUrl, encodeObjectUrl } from "./utilities.js";
+import {
+  randomBase64,
+  decodeObjectUrl,
+  encodeObjectUrl,
+  stripGraffitiUrlAddendums,
+} from "./utilities.js";
 
 /**
  * Constructor options for the GraffitiPoubchDB class.
@@ -39,6 +45,9 @@ export interface GraffitiLocalOptions {
 }
 
 type GraffitiObjectData = {
+  // Internal storage metadata, never taken from the caller's object value.
+  // Unmarked records retain the legacy behavior for both APIs.
+  kind?: "object" | "media";
   tombstone: boolean;
   value: {};
   channels: string[];
@@ -119,9 +128,15 @@ export class GraffitiLocalObjects {
     this.options = options ?? {};
   }
 
-  get: Graffiti["get"] = async (...args) => {
+  get = <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.get<Schema>>) =>
+    this.getRecord<Schema>("object", ...args);
+
+  async getRecord<Schema extends JSONSchema>(
+    kind: "object" | "media",
+    ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
+  ) {
     const [urlObject, schema, session] = args;
-    const url = unpackObjectUrl(urlObject);
+    const url = stripGraffitiUrlAddendums(unpackObjectUrl(urlObject));
 
     let doc: GraffitiObjectData;
     try {
@@ -132,7 +147,7 @@ export class GraffitiLocalObjects {
       );
     }
 
-    if (doc.tombstone) {
+    if (doc.tombstone || (doc.kind !== undefined && doc.kind !== kind)) {
       throw new GraffitiErrorNotFound(
         "The object you are trying to get either does not exist or you are not allowed to see it",
       );
@@ -163,12 +178,14 @@ export class GraffitiLocalObjects {
       throw new GraffitiErrorSchemaMismatch();
     }
     return masked;
-  };
+  }
 
-  delete: Graffiti["delete"] = async (...args) => {
+  delete: Graffiti["delete"] = (...args) => this.deleteRecord("object", ...args);
+
+  async deleteRecord(kind: "object" | "media", ...args: Parameters<Graffiti["delete"]>) {
     const [urlObject, session] = args;
 
-    const url = unpackObjectUrl(urlObject);
+    const url = stripGraffitiUrlAddendums(unpackObjectUrl(urlObject));
     const { actor } = decodeObjectUrl(url);
     if (actor !== session.actor) {
       throw new GraffitiErrorForbidden(
@@ -183,7 +200,7 @@ export class GraffitiLocalObjects {
       throw new GraffitiErrorNotFound("Object not found.");
     }
 
-    if (doc.tombstone) {
+    if (doc.tombstone || (doc.kind !== undefined && doc.kind !== kind)) {
       throw new GraffitiErrorNotFound("Object not found.");
     }
 
@@ -206,10 +223,15 @@ export class GraffitiLocalObjects {
       actor,
     };
     return object;
-  };
+  }
 
-  // @ts-ignore
-  post: Graffiti["post"] = async (...args) => {
+  post = <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.post<Schema>>) =>
+    this.postRecord<Schema>("object", ...args);
+
+  async postRecord<Schema extends JSONSchema>(
+    kind: "object" | "media",
+    ...args: Parameters<typeof Graffiti.prototype.post<Schema>>
+  ): Promise<GraffitiObject<Schema>> {
     const [objectPartial, session] = args;
 
     const actor = session.actor;
@@ -218,6 +240,7 @@ export class GraffitiLocalObjects {
 
     const { value, channels, allowed } = objectPartial;
     const object: GraffitiObjectData = {
+      kind,
       value,
       channels,
       allowed,
@@ -242,8 +265,8 @@ export class GraffitiLocalObjects {
         : {}),
       actor,
       url,
-    };
-  };
+    } as GraffitiObject<Schema>;
+  }
 
   protected async *discoverMeta<Schema extends JSONSchema>(
     args: Parameters<typeof Graffiti.prototype.discover<Schema>>,
@@ -296,7 +319,7 @@ export class GraffitiLocalObjects {
 
       for (const row of result.rows) {
         const doc = row.doc;
-        if (!doc) continue;
+        if (!doc || (doc.kind !== undefined && doc.kind !== "object")) continue;
 
         const url = doc._id;
 

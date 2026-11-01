@@ -5,6 +5,8 @@ vi.mock("../src/ui/show.js", () => ({ show: vi.fn() }));
 
 import { handleLoginRedirect, takeLoginResult } from "../src/bootstrap/login_redirect.js";
 import { show } from "../src/ui/show.js";
+import { LoginAccess } from "../src/core/login-access.js";
+import { sourceFromContext } from "../src/core/source.js";
 
 const nonce = "01234567-89ab-4def-8123-456789abcdef";
 const appUrl = "https://app.example/chat#room";
@@ -12,6 +14,7 @@ const statePrefix = "graffiti-guard-login:";
 let replace: ReturnType<typeof vi.fn>;
 const cookies = new Map<string, string>();
 const cookieDocument = {
+  referrer: "",
   get cookie() { return [...cookies].map(([key, value]) => `${key}=${value}`).join("; "); },
   set cookie(value: string) {
     const [entry] = value.split(";");
@@ -54,6 +57,7 @@ function load(url = new URL("https://guard.example/")) {
 beforeEach(() => {
   vi.clearAllMocks();
   cookies.clear();
+  cookieDocument.referrer = "";
   vi.stubGlobal("document", cookieDocument);
   replace = vi.fn();
   const unavailableStorage = new Proxy({}, {
@@ -170,7 +174,7 @@ it.each([
   resumed.initialize();
   expect(replace).not.toHaveBeenCalled();
   expect(resumed.onReady).not.toHaveBeenCalled();
-  expect(cookies.size).toBe(0);
+  expect([...cookies.keys()].some(key => key.startsWith("graffiti-guard-login-result-"))).toBe(false);
   expect(show).toHaveBeenLastCalledWith(expect.anything(), { message: expect.stringContaining("expired"), loading: false });
 });
 
@@ -192,7 +196,7 @@ it("shows public initialization failures instead of opening Permissions", () => 
 it("rejects an invalid return destination before constructing the implementation", () => {
   const page = load(startUrl(nonce, "javascript:alert(1)"));
   expect(page.create).not.toHaveBeenCalled();
-  expect(cookies.size).toBe(0);
+  expect([...cookies.keys()].some(key => key.startsWith("graffiti-guard-login-result-"))).toBe(false);
 });
 
 it("rejects receipts without a valid expiry", () => {
@@ -200,4 +204,45 @@ it("rejects receipts without a valid expiry", () => {
     actor: "did:example:chosen", origin: "https://app.example",
   })));
   expect(takeLoginResult(nonce, "https://app.example")).toBeUndefined();
+});
+
+
+it.each([
+  { existing: false, fromSite: true },
+  { existing: false, fromSite: false },
+  { existing: true, fromSite: true },
+  { existing: true, fromSite: false },
+])("carries site consent through upstream state ($existing, $fromSite)", ({ existing, fromSite }) => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); },
+    removeItem: (key: string) => { values.delete(key); },
+  };
+  vi.stubGlobal("localStorage", storage);
+  const access = new LoginAccess(storage);
+  const previous = sourceFromContext("https://previous.example", {});
+  access.grant("alice", previous);
+  const source = [{ id: "room", name: "Room" }];
+  const site = sourceFromContext("https://app.example", { source });
+  cookieDocument.referrer = fromSite ? appUrl : "https://unrelated.example/";
+  const url = startUrl();
+  const params = new URLSearchParams(url.hash.slice(1));
+  params.set("source", JSON.stringify(source));
+  url.hash = params.toString();
+  const first = load(url);
+  if (existing) first.emit({ session: { actor: "alice" } });
+  first.initialize();
+  // An OAuth callback is a new document without activation. It should return
+  // directly, including when the person chose an already signed-in account.
+  vi.stubGlobal("navigator", { userActivation: { hasBeenActive: false } });
+  const resumed = load();
+  resumed.emit({ session: { actor: "alice" }, state: first.state });
+  resumed.initialize();
+  expect(replace).toHaveBeenCalledExactlyOnceWith(appUrl);
+  expect(access.allows("alice", site)).toBe(fromSite);
+  expect(access.allows("alice", previous)).toBe(existing);
+  expect(takeLoginResult(nonce, "https://app.example")).toEqual({
+    session: { actor: "alice" }, state: "caller-id", source,
+  });
 });

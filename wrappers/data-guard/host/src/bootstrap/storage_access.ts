@@ -1,14 +1,11 @@
 import StorageAccess from "../ui/StorageAccess.vue";
-import { clear, show } from "../ui/show.js";
-import { requestStorageSetup, setVisible } from "./protocol.js";
+import { show, withPrompt } from "../ui/show.js";
 
 const storageTypes = {
   cookies: true,
   indexedDB: true,
   localStorage: true,
 } as const;
-
-const storageSetupKey = "graffiti-guard:storage-setup";
 
 type StorageAccessHandle = {
   indexedDB?: IDBFactory;
@@ -22,125 +19,69 @@ type StorageDocument = Document & {
   ) => Promise<StorageAccessHandle | void>;
 };
 
-let activation: Promise<void> | undefined;
-
-export function activateStorageAccess(pageUrl?: string) {
-  return (activation ??= activate(pageUrl));
-}
-
-async function activate(pageUrl?: string) {
-  // Keep this reference before Storage Access can replace window.localStorage
-  // with an unpartitioned handle. This transient state belongs to the guard,
-  // partitioned by the embedding site, rather than to the embedding client.
-  const partitionedStorage = getLocalStorage();
-  const storageSetupAttempted =
-    getStorageItem(partitionedStorage, storageSetupKey) === "1";
-  const storageDocument = document as StorageDocument;
-  const request = storageDocument.requestStorageAccess?.bind(document);
-  if (!request) return;
-  try {
-    await requestAndInstall(request);
-    removeStorageItem(partitionedStorage, storageSetupKey);
-    return;
-  } catch {}
-  try {
-    if (await storageDocument.hasStorageAccess?.()) {
-      removeStorageItem(partitionedStorage, storageSetupKey);
-      return;
-    }
-  } catch {}
-  const setupUrl = storageSetupUrl(pageUrl);
-  await new Promise<void>((resolve) => {
-    const onContinue = async () => {
-      show(StorageAccess, {
-        busy: true,
-        finishing: storageSetupAttempted,
-        onContinue,
-      });
-      try {
-        await requestAndInstall(request);
-        removeStorageItem(partitionedStorage, storageSetupKey);
-        clear();
-        setVisible(false);
-        resolve();
-      } catch (error) {
-        if (setupUrl && !storageSetupAttempted) {
-          setStorageItem(partitionedStorage, storageSetupKey, "1");
-          requestStorageSetup(setupUrl);
-          // Older clients ignore the navigation request, so retain the manual
-          // recovery screen as a backward-compatible fallback.
-          window.setTimeout(() => {
-            if (document.visibilityState === "visible") {
-              show(StorageAccess, { error: true, onContinue, setupUrl });
-            }
-          }, 1000);
-          return;
-        }
-        show(StorageAccess, {
-          error: true,
-          finishing: storageSetupAttempted,
-          onContinue,
-          setupUrl,
-        });
-      }
-    };
-    setVisible(true);
-    show(StorageAccess, { finishing: storageSetupAttempted, onContinue });
-  });
-}
-
-function getLocalStorage() {
+export function getLocalStorage() {
   try {
     return window.localStorage;
   } catch {}
 }
 
-function getStorageItem(storage: Storage | undefined, key: string) {
+/** Restore existing access silently. A new visitor must never see a prompt. */
+export async function restoreStorageAccess(): Promise<boolean> {
+  const storageDocument = document as StorageDocument;
+  if (!storageDocument.requestStorageAccess) return !!getLocalStorage();
+  let allowed = false;
   try {
-    return storage?.getItem(key);
+    allowed = await storageDocument.hasStorageAccess?.() ?? false;
   } catch {}
-}
-
-function setStorageItem(
-  storage: Storage | undefined,
-  key: string,
-  value: string,
-) {
+  if (!allowed) {
+    try {
+      const permission = await navigator.permissions.query({
+        name: "storage-access" as PermissionName,
+      });
+      allowed = permission.state === "granted";
+    } catch {}
+  }
+  if (!allowed) return false;
   try {
-    storage?.setItem(key, value);
-  } catch {}
+    await requestAndInstall();
+    return !!getLocalStorage();
+  } catch {
+    return false;
+  }
 }
 
-function removeStorageItem(storage: Storage | undefined, key: string) {
-  try {
-    storage?.removeItem(key);
-  } catch {}
+/** Called only on return from login, before constructing Graffiti or its caches. */
+export function activateStorageAccess(): Promise<boolean> {
+  return withPrompt(() => new Promise((resolve) => {
+    const onCancel = () => resolve(false);
+    const onContinue = async () => {
+      show(StorageAccess, { busy: true, onContinue, onCancel });
+      try {
+        // This call must run inside the iframe's button-click handler.
+        await requestAndInstall();
+        if (!getLocalStorage()) throw new Error("Login storage is unavailable.");
+        resolve(true);
+      } catch {
+        show(StorageAccess, { error: true, onContinue, onCancel });
+      }
+    };
+    show(StorageAccess, { onContinue, onCancel });
+  }));
 }
 
-function storageSetupUrl(pageUrl?: string) {
-  if (!pageUrl) return;
-  const setupUrl = new URL(window.location.href);
-  setupUrl.search = "";
-  setupUrl.hash = new URLSearchParams({
-    guardStorageSetup: "1",
-    redirectUrl: pageUrl,
-  }).toString();
-  return setupUrl.href;
-}
-
-async function requestAndInstall(
-  request: NonNullable<StorageDocument["requestStorageAccess"]>,
-) {
+async function requestAndInstall() {
+  const request = (document as StorageDocument).requestStorageAccess?.bind(document);
+  if (!request) return;
   let handle: StorageAccessHandle | void;
   try {
     handle = await request(storageTypes);
-  } catch {
-    // Some browsers implement only the original, untyped Storage Access API.
+  } catch (error) {
+    // Older browsers implement only cookie access. Do not retry a denial.
+    if (!(error instanceof TypeError)) throw error;
     handle = await request();
   }
   if (!handle) return;
-  // idb and the decentralized implementation read these window globals, so
-  // install any partitioned-storage handles before constructing either one.
+  // Install shared handles before opening storage, never underneath live caches.
   for (const type of ["localStorage", "indexedDB"] as const) {
     if (handle[type]) {
       Object.defineProperty(window, type, {

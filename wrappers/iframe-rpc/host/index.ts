@@ -8,13 +8,15 @@ import type {
   GraffitiSession,
 } from "@graffiti-garden/api";
 import { connect as connectRpc, Reply, WindowMessenger } from "penpal";
+import { statePrefix } from "../client/session-relay.js";
+export { createGraffitiRelay } from "../client/session-relay.js";
 
 type ClientMethods = {
   sessionEvent(type: string, detail?: unknown): Promise<void>;
 };
 
 type ConnectionState = {
-  client?: ClientMethods;
+  send(type: string, detail?: unknown): Promise<void>;
   initialized: boolean;
   statePrefix: string;
   destroy(): Promise<void>;
@@ -44,8 +46,8 @@ export interface GraffitiRpcConnectionOptions {
   allowedOrigins?: (string | RegExp)[];
   channel?: string;
   timeout?: number;
-  /** A completed redirect login to deliver before ordinary session restoration. */
-  initialLoginResult?: () => GraffitiLoginEvent["detail"] | undefined;
+  /** Stable, unique within the containing page, when requests may survive a reload. */
+  stateId?: string;
 }
 
 /** Expose one Graffiti implementation through any number of iframe connections. */
@@ -83,7 +85,7 @@ export function serveGraffiti(graffiti: Graffiti) {
         if (rest.error && state !== undefined && ownState === undefined) continue;
         detail = ownState === undefined ? rest : { ...rest, state: ownState };
       } else if (!connection.initialized) continue;
-      void connection.client?.sessionEvent(event.type, detail).catch(() => {});
+      void connection.send(event.type, detail).catch(() => {});
     }
   };
 
@@ -106,9 +108,17 @@ export function serveGraffiti(graffiti: Graffiti) {
 
     const state: ConnectionState = {
       initialized: false,
-      statePrefix: `${crypto.randomUUID()}:`,
+      statePrefix: statePrefix(options.stateId ?? crypto.randomUUID()),
+      async send(type, detail) {
+        // A redirect result may arrive before the iframe finishes connecting.
+        const client = await connection.promise;
+        if (!connectionDestroyed) await client.sessionEvent(type, detail);
+      },
       destroy: destroyConnection,
     };
+    if ([...connections].some(connection => connection.statePrefix === state.statePrefix)) {
+      throw new Error("RPC stateId must be unique among this host's connections.");
+    }
     const streams = new Map<string, GraffitiObjectStream<{}>>();
     let connectionDestroyed = false;
 
@@ -169,18 +179,10 @@ export function serveGraffiti(graffiti: Graffiti) {
           if (state.initialized || connectionDestroyed) return;
           // Forward live changes while replaying state and notifying initialized listeners.
           state.initialized = true;
-          let result = options.initialLoginResult?.();
-          if (result && !result.error && !sessions.has(result.session.actor)) {
-            result = { error: new Error("Login session is no longer active"), state: result.state };
-          }
-          if (result) {
-            await state.client?.sessionEvent("login", result);
-          }
           for (const session of sessions.values()) {
-            if (result && !result.error && result.session.actor === session.actor) continue;
-            await state.client?.sessionEvent("login", { session });
+            await state.send("login", { session });
           }
-          await state.client?.sessionEvent("initialized");
+          await state.send("initialized");
         },
         destroy() {
           window.setTimeout(() => void destroyConnection(), 0);
@@ -189,11 +191,7 @@ export function serveGraffiti(graffiti: Graffiti) {
     });
 
     connections.add(state);
-    void connection.promise
-      .then((remote) => {
-        state.client = remote;
-      })
-      .catch(() => void destroyConnection());
+    void connection.promise.catch(() => void destroyConnection());
 
     async function replaceStream(
       id: string,

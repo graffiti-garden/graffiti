@@ -60,7 +60,7 @@ export class GraffitiLocalMedia {
 
     const { dataBase64, type, size } = object.value;
 
-    if (accept?.maxBytes && size > accept.maxBytes) {
+    if (accept?.maxBytes !== undefined && size > accept.maxBytes) {
       throw new GraffitiErrorTooLarge("File size exceeds limit");
     }
 
@@ -73,13 +73,18 @@ export class GraffitiLocalMedia {
       }
     }
 
-    const data = await base64ToBlob(dataBase64);
-    if (data.size !== size || data.type !== type) {
+    // Use the separately stored type, not the data URL's MIME header: fetching
+    // that header normalizes parameters, and quoted commas look like delimiters.
+    // Base64 contains no commas, so the last comma always starts our payload.
+    const payload = dataBase64.slice(dataBase64.lastIndexOf(",") + 1);
+    const data = await base64ToBlob(`data:;base64,${payload}`);
+    if (data.size !== size) {
       throw new Error("Invalid data");
     }
 
     return {
-      data,
+      // Preserve the exact MIME type and parameters saved at upload.
+      data: data.slice(0, data.size, type),
       actor: object.actor,
       allowed: object.allowed,
     };

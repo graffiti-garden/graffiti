@@ -19,6 +19,7 @@ import {
   type infer as infer_,
   array,
   custom,
+  literal,
   looseObject,
   optional,
   strictObject,
@@ -52,6 +53,7 @@ export class ObjectEncoding {
   async encode<Schema extends JSONSchema>(
     partialObject: GraffitiPostObject<Schema>,
     actor: string,
+    kind?: RecordKind,
   ): Promise<{
     object: GraffitiObject<Schema>;
     tags: Uint8Array[];
@@ -85,6 +87,7 @@ export class ObjectEncoding {
     );
 
     const objectData: infer_<typeof ObjectDataSchema> = {
+      ...(kind === undefined ? {} : { [RECORD_KIND_KEY]: kind }),
       [VALUE_PROPERTY]: partialObject.value,
       [CHANNEL_ATTESTATIONS_PROPERTY]: channelAttestations,
       [NONCE_PROPERTY]: randomBytes(32),
@@ -171,6 +174,7 @@ export class ObjectEncoding {
       | {
           allowedTickets: Uint8Array[];
         },
+    kind?: RecordKind,
   ): Promise<void> {
     if (objectBytes.byteLength > MAX_OBJECT_SIZE_BYTES) {
       throw new Error("Object is too big");
@@ -210,6 +214,8 @@ export class ObjectEncoding {
     // back to a javascript object
     const objectDataUnknown = dagCborDecode(objectBytes);
     const objectData = ObjectDataSchema.parse(objectDataUnknown);
+    // The inbox copy must agree with the stored record, just like its value.
+    if (objectData[RECORD_KIND_KEY] !== kind) throw new Error("Record kind does not match storage value");
 
     // And extract the values
     const value = objectData[VALUE_PROPERTY];
@@ -334,11 +340,21 @@ const CHANNEL_ATTESTATIONS_PROPERTY = "c";
 const ALLOWED_ATTESTATIONS_PROPERTY = "a";
 const NONCE_PROPERTY = "n";
 
+// Internal metadata, separate from the app-controlled value. Missing kinds are
+// legacy records, which remain usable through either object or media methods.
+// Use the same compact key and codes in stored records and inbox metadata.
+export const RECORD_KIND_KEY = "r";
+export const RECORD_KIND_OBJECT = 0;
+export const RECORD_KIND_MEDIA = 1;
+export const RecordKindSchema = literal([RECORD_KIND_OBJECT, RECORD_KIND_MEDIA]);
+export type RecordKind = infer_<typeof RecordKindSchema>;
+
 const Uint8ArraySchema = custom<Uint8Array>(
   (v): v is Uint8Array => v instanceof Uint8Array,
 );
 
 const ObjectDataSchema = strictObject({
+  [RECORD_KIND_KEY]: optional(RecordKindSchema),
   [VALUE_PROPERTY]: looseObject({}),
   [CHANNEL_ATTESTATIONS_PROPERTY]: array(Uint8ArraySchema),
   [ALLOWED_ATTESTATIONS_PROPERTY]: optional(array(Uint8ArraySchema)),
@@ -346,6 +362,13 @@ const ObjectDataSchema = strictObject({
 });
 
 export const GRAFFITI_OBJECT_URL_PREFIX = "graffiti:";
+
+/** Canonical components encode ? and #; a literal one begins wrapper addendums. */
+export function stripGraffitiUrlAddendums(url: string) {
+  if (!url.startsWith(GRAFFITI_OBJECT_URL_PREFIX)) return url;
+  const boundary = url.search(/[?#]/);
+  return boundary === -1 ? url : url.slice(0, boundary);
+}
 
 // Methods to encode and decode object URLs
 export function encodeObjectUrlComponent(value: string) {

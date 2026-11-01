@@ -3,13 +3,14 @@ import { useGraffitiDiscover } from "@graffiti-garden/wrapper-vue";
 import { watch } from "vue";
 import {
   GraffitiRuleStore,
+  ruleChannel,
   ruleSchema,
   type RuleScope,
 } from "../core/rules.js";
 
 const props = defineProps<{ store: GraffitiRuleStore; scope: RuleScope }>();
 const { objects, isFirstPoll } = useGraffitiDiscover(
-  () => [props.scope.source.key],
+  () => [ruleChannel("site", props.scope.source.key)],
   () => ruleSchema(props.scope.actor),
   () => props.scope.session,
 );

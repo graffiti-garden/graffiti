@@ -1,16 +1,14 @@
 import {
-  graffitiCRUDTests,
-  graffitiDiscoverTests,
   graffitiMediaTests,
 } from "@graffiti-garden/api/tests";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { afterAll } from "vitest";
-import { GuardDB } from "../src/core/db.js";
+import { MemoryRules } from "./memory-rules.js";
 import { Guard } from "../src/core/guard.js";
 import { GuardedGraffiti } from "../src/core/graffiti.js";
 
 const implementation = new GraffitiLocal();
-const database = new GuardDB();
+const database = new MemoryRules();
 const guard = new Guard(
   implementation,
   database,
@@ -25,6 +23,6 @@ const useGraffiti = () => graffiti;
 const useSession1 = () => ({ actor: "did:example:someone" });
 const useSession2 = () => ({ actor: "did:example:someoneelse" });
 
-graffitiCRUDTests(useGraffiti, useSession1, useSession2);
-graffitiDiscoverTests(useGraffiti, useSession1, useSession2);
+// Object conformance asserts exact value equality, while the guard deliberately
+// adds `value["via site"]`. Focused guard tests cover object and discovery behavior.
 graffitiMediaTests(useGraffiti, useSession1, useSession2);

@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { encodeGuardSiteId } from "../../client/src/source.js";
 import { auditOptions } from "../src/bootstrap/audit.js";
+import { siteStamp } from "../src/core/provenance.js";
 import { sourceFromContext } from "../src/core/source.js";
 
 describe("guard sources", () => {
+  it("exposes the stamp's ID encoding without losing boundaries between site IDs", () => {
+    const origin = "https://example.com";
+    const path = [origin, 'room","nested', "É 🌱"] as const;
+    const source = sourceFromContext(origin, {
+      source: path.slice(1).map(id => ({ id, name: "Document" })),
+    });
+    expect(encodeGuardSiteId([origin])).toBe('["https://example.com"]');
+    expect(siteStamp(source).id).toBe(encodeGuardSiteId(path));
+    expect(encodeGuardSiteId(path)).not.toBe(encodeGuardSiteId([origin, "room", "nested", "É 🌱"]));
+  });
+
   it("uses the verified origin and ordered IDs for identity", () => {
     const first = sourceFromContext("https://example.com", {
       source: [

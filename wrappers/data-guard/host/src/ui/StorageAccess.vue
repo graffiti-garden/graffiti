@@ -6,10 +6,9 @@ const props = defineProps<{
   busy?: boolean;
   error?: boolean;
   onContinue?: () => void;
-  setupUrl?: string;
+  onCancel?: () => void;
   setup?: boolean;
   redirectUrl?: string;
-  finishing?: boolean;
 }>();
 
 const guardHost = window.location.host;
@@ -29,7 +28,7 @@ onBeforeUnmount(() => {
   visibilityEvents.removeEventListener("shown", focusTitle);
   if (dialog.value?.open) dialog.value.close();
 });
-watch(() => [props.error, props.setup, props.finishing], focusTitle);
+watch(() => [props.error, props.setup], focusTitle);
 
 function continueToApp(event: MouseEvent) {
   if (
@@ -57,54 +56,36 @@ function continueToApp(event: MouseEvent) {
   >
     <div class="storage-card">
       <template v-if="setup">
-        <h1 id="storage-access-title" ref="title" tabindex="-1">Continue cookie setup</h1>
+        <h1 id="storage-access-title" ref="title" tabindex="-1">Continue logging in</h1>
         <p id="storage-access-description">
-          For your privacy, your browser requires this extra step before
-          allowing <strong>{{ appHost }}</strong> to use cookies from
-          <strong>{{ guardHost }}</strong>.
+          Continue to <strong>{{ appHost }}</strong> to finish logging in.
+          Your browser may ask for permission to use your saved login there.
         </p>
         <a class="button" :href="redirectUrl" @click="continueToApp">Continue to {{ appHost }}</a>
       </template>
-      <template v-else-if="error">
-        <h1 id="storage-access-title" ref="title" tabindex="-1">Cookies weren’t allowed</h1>
-        <p id="storage-access-description">
-          This app needs cookies from <strong>{{ guardHost }}</strong> to work.
-          Your browser may need you to open it directly before cookies can be
-          allowed.
-        </p>
-        <template v-if="finishing">
-          <button type="button" @click="onContinue">Try again</button>
-          <a
-            v-if="setupUrl"
-            class="recovery-link"
-            :href="setupUrl"
-            target="_top"
-          >
-            Restart cookie setup
-          </a>
-        </template>
-        <a v-else-if="setupUrl" class="button" :href="setupUrl" target="_top">
-          Continue
-        </a>
-        <button v-else type="button" @click="onContinue">Try again</button>
-      </template>
       <template v-else>
-        <h1 id="storage-access-title" ref="title" tabindex="-1">
-          {{ finishing ? "One last confirmation" : "Allow cookies to continue" }}
-        </h1>
-        <p v-if="finishing" id="storage-access-description">
-          Your browser will ask for permission next. Choose Allow to finish.
+        <h1 id="storage-access-title" ref="title" tabindex="-1">Finish logging in</h1>
+        <p v-if="error" id="storage-access-description">
+          Your browser didn’t allow access to your saved login.
+          You can try again or keep browsing without logging in.
         </p>
         <p v-else id="storage-access-description">
-          This site is built on the <a href="https://graffiti.garden" target="_blank">Graffiti</a> infrastructure.
-          To use the app, you must allow cookies from <strong>{{ guardHost }}</strong>.
+          Your browser needs permission to use your saved login from
+          <strong>{{ guardHost }}</strong> here.
+          You can also keep browsing without logging in.
         </p>
         <button type="button" :disabled="busy" @click="onContinue">
           <span v-if="busy">
             Waiting for your browser<span class="loading-dots" aria-hidden="true" />
           </span>
-          <span v-else>{{ finishing ? "Continue" : "Allow cookies and continue" }}</span>
+          <span v-else>{{ error ? "Try again" : "Continue" }}</span>
         </button>
+        <button
+          type="button"
+          class="secondary"
+          :disabled="busy"
+          @click="onCancel"
+        >Keep browsing</button>
       </template>
     </div>
   </dialog>
@@ -192,14 +173,10 @@ button:disabled {
   opacity: 0.7;
 }
 
-.recovery-link {
-  display: block;
-  width: 100%;
-  margin: 1rem 0 0;
-  padding: 0.75rem 1rem;
-  font-size: 1.05rem;
-  line-height: 1.3;
-  text-align: center;
+.secondary {
+  margin-top: 1rem;
+  background: transparent;
+  color: var(--text-color);
 }
 
 @media (max-width: 34rem) {

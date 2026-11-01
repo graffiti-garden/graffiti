@@ -1,6 +1,33 @@
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { expect, it, vi } from "vitest";
 import { serveGraffiti } from "../host/index.js";
+import type { Graffiti } from "@graffiti-garden/api";
+
+it.each(["login", "logout"] as const)("preserves undefined %s options across a frame", async (method) => {
+  const called = vi.fn(async (..._args: unknown[]) => {});
+  const source = { sessionEvents: new EventTarget(), [method]: called } as unknown as Graffiti;
+  const host = serveGraffiti(source);
+  const frame = document.createElement("iframe");
+  frame.name = `undefined-${method}`;
+  // A relay supplies the optional argument explicitly, even when the app omitted it.
+  frame.srcdoc = `<script type="module">
+    import { GraffitiRpcClient } from "${new URL("../client/index.ts", import.meta.url)}";
+    const graffiti = new GraffitiRpcClient({ remoteWindow: parent, channel: window.name });
+    void ("${method}" === "login"
+      ? graffiti.login(undefined)
+      : graffiti.logout({ actor: "did:example:chosen" }, undefined));
+  </script>`;
+  try {
+    document.body.append(frame);
+    host.connect({ remoteWindow: frame.contentWindow!, channel: frame.name });
+    await vi.waitFor(() => expect(called).toHaveBeenCalledExactlyOnceWith(
+      ...(method === "login" ? [undefined] : [{ actor: "did:example:chosen" }, undefined]),
+    ));
+  } finally {
+    await host.destroy();
+    frame.remove();
+  }
+});
 
 it.each(["login", "logout"] as const)("keeps equal %s state values separate across frames", async (method) => {
   const source = new GraffitiLocal();
@@ -88,68 +115,6 @@ it.each(["login", "logout"] as const)("keeps equal %s state values separate acro
     window.removeEventListener("message", onMessage);
     await host.destroy();
     for (const frame of frames) frame.remove();
-  }
-});
-
-it.each([
-  { failure: false, loggedOut: false },
-  { failure: true, loggedOut: false },
-  { failure: false, loggedOut: true },
-])("delivers a current guard result once despite overlapping initialization ($failure, $loggedOut)", async ({ failure, loggedOut }) => {
-  const source = new GraffitiLocal();
-  source.sessionEvents = new EventTarget(); // Control when restoration finishes.
-  const host = serveGraffiti(source);
-  for (const actor of ["did:example:other", "did:example:chosen"]) {
-    source.sessionEvents.dispatchEvent(new CustomEvent("login", { detail: { session: { actor } } }));
-  }
-  if (loggedOut) source.sessionEvents.dispatchEvent(new CustomEvent("logout", {
-    detail: { actor: "did:example:chosen" },
-  }));
-  const frame = document.createElement("iframe");
-  frame.name = `guard-result-${crypto.randomUUID()}`;
-  frame.srcdoc = `<script type="module">
-    import { GraffitiRpcClient } from "${new URL("../client/index.ts", import.meta.url)}";
-    const graffiti = new GraffitiRpcClient({ remoteWindow: parent, channel: window.name });
-    for (const type of ["login", "initialized"]) graffiti.sessionEvents.addEventListener(type, event =>
-      parent.postMessage({ type, detail: event.detail }, "*"));
-    const remote = await graffiti.remote();
-    const pending = Promise.all([remote.initialize(), remote.initialize()]);
-    parent.postMessage({ type: "initializing" }, "*");
-    await pending;
-    parent.postMessage({ type: "complete" }, "*");
-  </script>`;
-  const received: { type: string; detail: any }[] = [];
-  let initializing = false, complete = false;
-  const onMessage = (event: MessageEvent) => {
-    if (event.source !== frame.contentWindow) return;
-    if (event.data?.type === "initializing") initializing = true;
-    else if (event.data?.type === "complete") complete = true;
-    else if (["login", "initialized"].includes(event.data?.type)) received.push(event.data);
-  };
-  window.addEventListener("message", onMessage);
-  try {
-    document.body.append(frame);
-    host.connect({
-      remoteWindow: frame.contentWindow!, channel: frame.name,
-      initialLoginResult: () => failure
-        ? { error: new Error("Login failed"), state: "caller-id" }
-        : { session: { actor: "did:example:chosen" }, state: "caller-id" },
-    });
-    await vi.waitFor(() => expect(initializing).toBe(true));
-    source.sessionEvents.dispatchEvent(new CustomEvent("initialized"));
-    await vi.waitFor(() => expect(complete).toBe(true));
-    expect(received.filter(event => event.type === "initialized")).toHaveLength(1);
-    expect(received[0].detail.state).toBe("caller-id");
-    expect(Boolean(received[0].detail.error)).toBe(failure || loggedOut);
-    expect(received.filter(event => event.detail?.state)).toHaveLength(1);
-    expect(received.filter(event => event.detail?.session?.actor === "did:example:chosen"))
-      .toHaveLength(loggedOut ? 0 : 1);
-    expect(received.find(event => event.detail?.session?.actor === "did:example:other")?.detail.state)
-      .toBeUndefined();
-  } finally {
-    window.removeEventListener("message", onMessage);
-    await host.destroy();
-    frame.remove();
   }
 });
 
