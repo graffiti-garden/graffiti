@@ -1,6 +1,7 @@
 import { Graffiti } from "@graffiti-garden/api";
 import { GraffitiRpcClient } from "@graffiti-garden/wrapper-iframe-rpc/client";
 import { withGuardSource, type GuardLoginOptions, type GuardSourceSegment } from "./source.js";
+import { createConnectionNotice } from "./connection-notice.js";
 export { encodeGuardSiteId, withGuardSource } from "./source.js";
 export type {
   GuardSourceSegment as GraffitiGuardSourceSegment,
@@ -10,8 +11,29 @@ export type {
 declare const DATA_GUARD_DEFAULT_HOST_URL: string;
 
 let instance: GraffitiGuarded | undefined;
-const defaultConnectionTimeout = 10_000;
+const defaultConnectionTimeout = 20_000;
 const pendingLoginKey = "graffiti-guard-login:";
+
+/** A URL can cancel a pending login, never approve one or supply an identity. */
+function readCancelledLogin(loginKey: string, nonce: string | null) {
+  if (!nonce) return;
+  try {
+    const context = JSON.parse(sessionStorage.getItem(loginKey + ":return") ?? "null");
+    const currentUrl = new URL(window.location.href);
+    if (context?.nonce !== nonce || typeof context.returnUrl !== "string" ||
+        new URL(context.returnUrl).origin !== currentUrl.origin) return;
+    if (currentUrl.searchParams.get("graffitiLoginCanceled") === nonce) {
+      // Keep the result until initialization, even if the app reloads again.
+      context.cancelled = true;
+      sessionStorage.setItem(loginKey + ":return", JSON.stringify(context));
+      // Restore the original route and query exactly, without the return marker.
+      window.history.replaceState(window.history.state, "", context.returnUrl);
+    }
+    if (context.cancelled === true) {
+      return { state: typeof context.state === "string" ? context.state : undefined };
+    }
+  } catch { /* An old or missing request context cannot cancel a login. */ }
+}
 
 export interface GraffitiGuardedOptions {
   hostUrl?: string | URL;
@@ -28,6 +50,7 @@ export class GraffitiGuarded extends Graffiti {
   private readonly rpc!: GraffitiRpcClient;
   private readonly onMessage!: (event: MessageEvent) => void;
   private readonly connectionTimeout!: number;
+  private connectionNotice?: HTMLElement;
   private readonly stopSessionEvents!: () => void;
   private destroyed = false;
   private returnFocus: HTMLElement | null = null;
@@ -48,7 +71,8 @@ export class GraffitiGuarded extends Graffiti {
       document.baseURI,
     );
     const loginKey = pendingLoginKey + hostUrl.origin;
-    const loginNonce = sessionStorage.getItem(loginKey);
+    let loginNonce = sessionStorage.getItem(loginKey);
+    let loginCancelled = readCancelledLogin(loginKey, loginNonce);
     const iframe = document.createElement("iframe");
     iframe.title = "Graffiti Guard";
     iframe.allow = "storage-access";
@@ -75,28 +99,22 @@ export class GraffitiGuarded extends Graffiti {
       zIndex: "2147483647",
     });
     let connected = false;
-    let connectionErrorShown = false;
     iframe.addEventListener("load", () => {
       // Bootstrap the guard with the browser-reported embedding origin, which
       // the RPC handshake verifies internally but does not expose to the host.
       iframe.contentWindow?.postMessage(
         {
           type: "graffiti-guard:connect",
-          ...(loginNonce ? { loginNonce } : {}),
+          ...(loginCancelled ? { loginCancelled } : loginNonce ? { loginNonce } : {}),
         },
         hostUrl.origin,
       );
     });
-    const showConnectionError = () => {
-      if (connected || connectionErrorShown) return;
-      connectionErrorShown = true;
-      window.alert(
-        `This app could not connect to its data service at ${hostUrl.origin}. ` +
-          "The service may be offline, or your browser may be blocking its security certificate. " +
-          "Open that address directly, then reload this page.",
-      );
+    const showConnectionNotice = () => {
+      if (connected || this.connectionNotice) return;
+      this.connectionNotice = createConnectionNotice(hostUrl);
+      document.body.append(this.connectionNotice);
     };
-    iframe.addEventListener("error", showConnectionError);
     document.body.append(iframe);
 
     const remoteWindow = iframe.contentWindow;
@@ -115,15 +133,23 @@ export class GraffitiGuarded extends Graffiti {
     this.sessionEvents = scoped.graffiti.sessionEvents;
     this.stopSessionEvents = scoped.destroy;
     this.sessionEvents.addEventListener("initialized", () => {
-      if (sessionStorage.getItem(loginKey) === loginNonce) sessionStorage.removeItem(loginKey);
+      if (sessionStorage.getItem(loginKey) === loginNonce) {
+        sessionStorage.removeItem(loginKey);
+        sessionStorage.removeItem(loginKey + ":return");
+      }
+      // A later iframe reload must not resend a completed login return.
+      loginNonce = null;
+      loginCancelled = undefined;
     }, { once: true });
     const connectionTimeout = window.setTimeout(
-      showConnectionError,
+      showConnectionNotice,
       options.timeout ?? defaultConnectionTimeout,
     );
     const markConnected = () => {
       connected = true;
       window.clearTimeout(connectionTimeout);
+      this.connectionNotice?.remove();
+      this.connectionNotice = undefined;
     };
     const onMessage = (event: MessageEvent) => {
       if (
@@ -196,16 +222,22 @@ export class GraffitiGuarded extends Graffiti {
     return instance;
   }
 
-  private redirectLogin(options: GuardLoginOptions) {
+  private redirectLogin(options: GuardLoginOptions & { chooseAccount?: boolean }) {
     const loginUrl = new URL(this.hostUrl);
     const nonce = crypto.randomUUID();
-    sessionStorage.setItem(pendingLoginKey + this.hostUrl.origin, nonce);
+    const loginKey = pendingLoginKey + this.hostUrl.origin;
+    sessionStorage.setItem(loginKey, nonce);
+    sessionStorage.setItem(loginKey + ":return", JSON.stringify({
+      nonce, state: options.state, returnUrl: window.location.href,
+    }));
     // Keep return URLs and caller state out of the HTTP request, including long URLs.
     const params = new URLSearchParams({
       guardLogin: "1", redirectUrl: window.location.href,
       loginNonce: nonce, source: JSON.stringify(options.source ?? []),
+      cancelReturn: "1",
     });
     if (options.actor) params.set("suggestedActor", options.actor);
+    if (options.chooseAccount) params.set("chooseAccount", "1");
     if (options.state !== undefined) params.set("state", options.state);
     loginUrl.hash = params.toString();
     window.location.assign(loginUrl.href);
@@ -280,6 +312,7 @@ export class GraffitiGuarded extends Graffiti {
     if (this.destroyed) return;
     this.destroyed = true;
     window.clearTimeout(this.connectionTimeout);
+    this.connectionNotice?.remove();
     window.removeEventListener("message", this.onMessage);
     if (this.iframe.style.display === "block") this.setGuardVisible(false);
     this.rpc.destroy();

@@ -1,5 +1,7 @@
 import type { Graffiti, GraffitiLoginEvent } from "@graffiti-garden/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createSSRApp, h } from "vue";
+import { renderToString } from "vue/server-renderer";
 import { GuardedGraffiti } from "../src/core/graffiti.js";
 import type { Guard } from "../src/core/guard.js";
 import { LoginAccess } from "../src/core/login-access.js";
@@ -59,9 +61,8 @@ beforeEach(() => {
 });
 
 describe("embedded site login", () => {
-  it("returns the chosen identity without another prompt after sign-in approved the site", async () => {
+  it("approves the returned identity in the embedded storage without another prompt", async () => {
     const access = new LoginAccess(memoryStorage());
-    access.grant("alice", sourceFromContext(origin, { source: child }));
     const { events, guarded } = fixture(undefined, access, {
       session: { actor: "alice" }, source: child, state: "returning",
     });
@@ -69,14 +70,31 @@ describe("embedded site login", () => {
     const initialized = vi.fn();
     guarded.sessionEvents.addEventListener("login", event => results.push((event as CustomEvent).detail));
     guarded.sessionEvents.addEventListener("initialized", initialized);
-    restored(events, "alice");
+    restored(events, "alice", "bob");
 
     await vi.waitFor(() => expect(initialized).toHaveBeenCalledOnce());
-    expect(results).toContainEqual({
+    expect(results).toEqual([{
       session: { actor: "alice", guardSites: [["chat"]] }, state: "returning",
-    });
+    }]);
+    expect(access.allows("alice", sourceFromContext(origin, { source: child }))).toBe(true);
+    expect(access.allows("alice", sourceFromContext(origin, {}))).toBe(true);
+    expect(access.allows("alice", sourceFromContext(origin, { source: other }))).toBe(false);
+    expect(access.allows("bob", sourceFromContext(origin, { source: child }))).toBe(false);
     expect(componentState.component).toBeNull();
     expect(setVisible).not.toHaveBeenCalled();
+  });
+
+  it("does not approve a returned account that is no longer signed in", async () => {
+    const { events, guarded, access } = fixture(undefined, undefined, {
+      session: { actor: "alice" }, source: child, state: "returning",
+    });
+    const login = vi.fn();
+    guarded.sessionEvents.addEventListener("login", login);
+    restored(events, "bob");
+    await vi.waitFor(() => expect(login).toHaveBeenCalledOnce());
+    expect(login.mock.calls[0][0].detail).toMatchObject({ error: expect.any(Error), state: "returning" });
+    expect(access.allows("alice", sourceFromContext(origin, { source: child }))).toBe(false);
+    expect(componentState.component).toBeNull();
   });
 
   it("can finish a returned login while another request waits for initialization", async () => {
@@ -90,13 +108,11 @@ describe("embedded site login", () => {
     restored(events, "alice");
 
     // Completing the return releases initialization and then the waiting call.
-    await vi.waitFor(() => expect(componentState.props.site).toBe("app.example › Chat"));
-    (componentState.props.cancel as () => void)();
     await vi.waitFor(() => expect(componentState.props.site).toBe("app.example › Other"));
     (componentState.props.choose as (actor: string) => void)("alice");
     await next;
     expect(results).toMatchObject([
-      { state: "returning", error: expect.any(Error) },
+      { state: "returning", session: { actor: "alice" } },
       { state: "next", session: { actor: "alice" } },
     ]);
   });
@@ -105,7 +121,7 @@ describe("embedded site login", () => {
     const { events, guarded } = fixture(undefined, new LoginAccess());
     await expect(guarded.login({actor: "alice", source: child }))
       .resolves.toBeUndefined();
-    expect(requestLoginRedirect).toHaveBeenCalledWith({ actor: "alice", source: child });
+    expect(requestLoginRedirect).toHaveBeenCalledWith({ actor: "alice", source: child, chooseAccount: true });
     expect(componentState.component).toBeNull();
 
     const login = vi.fn();
@@ -166,7 +182,7 @@ describe("embedded site login", () => {
     const { events, guarded, access } = fixture();
     restored(events);
     await expect(guarded.login({ source: child })).resolves.toBeUndefined();
-    expect(requestLoginRedirect).toHaveBeenCalledWith({ actor: undefined, source: child });
+    expect(requestLoginRedirect).toHaveBeenCalledWith({ actor: undefined, source: child, chooseAccount: true });
     expect(componentState.component).toBeNull();
     expect(setVisible).not.toHaveBeenCalled();
     expect(access.allows("alice", sourceFromContext(origin, { source: child }))).toBe(false);
@@ -177,18 +193,29 @@ describe("embedded site login", () => {
     restored(events, "alice");
     await expect(guarded.login({actor: "bob", source: child }))
       .resolves.toBeUndefined();
-    expect(requestLoginRedirect).toHaveBeenCalledWith({ actor: "bob", source: child });
+    expect(requestLoginRedirect).toHaveBeenCalledWith({ actor: "bob", source: child, chooseAccount: true });
     expect(componentState.component).toBeNull();
   });
 
-  it("shows actor choices before a handle lookup completes", async () => {
-    const lookup = vi.fn(() => new Promise<string>(() => {}));
+  it("disables unidentified accounts while other handles load independently", async () => {
+    let finish!: (handle: string) => void;
+    const lookup = vi.fn((actor: string) => actor === "alice"
+      ? new Promise<string>(resolve => { finish = resolve; })
+      : actor === "bob" ? Promise.resolve("@bob") : Promise.reject(new Error("unavailable")));
     const { events, guarded } = fixture(lookup);
-    restored(events, "alice");
+    restored(events, "alice", "bob", "carol");
     const login = guarded.login({ source: child });
 
     await vi.waitFor(() => expect(componentState.component).toBe(LoginPrompt));
-    expect(componentState.props.accounts).toEqual([{ actor: "alice" }]);
+    const render = () => renderToString(createSSRApp({ render: () => h(LoginPrompt, componentState.props) }));
+    let html = await render();
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Account loading…<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Account unavailable<\/button>/);
+    expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>@bob<\/button>/);
+    finish("@alice");
+    await vi.waitFor(() => expect(componentState.props.accounts).toContainEqual({ actor: "alice", handle: "@alice" }));
+    html = await render();
+    expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>@alice<\/button>/);
     (componentState.props.choose as (actor: string) => void)("alice");
     await login;
     expect(lookup).toHaveBeenCalledWith("alice");

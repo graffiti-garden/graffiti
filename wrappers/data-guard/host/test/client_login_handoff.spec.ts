@@ -20,6 +20,11 @@ vi.mock("@graffiti-garden/wrapper-iframe-rpc/client", () => ({
 
 import { GraffitiGuarded } from "../../client/src/index.js";
 
+let lastGuarded: GraffitiGuarded | undefined;
+function createGuarded() {
+  return lastGuarded = new GraffitiGuarded({ hostUrl: "https://guard.example" });
+}
+
 function memoryStorage() {
   const values = new Map<string, string>();
   return {
@@ -41,17 +46,23 @@ class Frame extends EventTarget {
 }
 
 afterEach(() => {
+  lastGuarded?.destroy();
+  lastGuarded = undefined;
   rpcEvents.length = 0;
   framesForLogin.length = 0;
   vi.unstubAllGlobals();
 });
 
-it("carries the requested login ID through a reload, only for the chosen account", async () => {
+function setup(url = "https://app.example/chat#room") {
   const frames: Frame[] = [];
   const storage = memoryStorage();
   const assign = vi.fn();
   const page = Object.assign(new EventTarget(), {
-    location: { href: "https://app.example/chat#room", assign },
+    location: { href: url, assign },
+    history: {
+      state: { app: "navigation state" },
+      replaceState: vi.fn((_state, _title, url: string) => { page.location.href = url; }),
+    },
     setTimeout: vi.fn(() => 1),
     clearTimeout: vi.fn(),
     alert: vi.fn(),
@@ -69,8 +80,12 @@ it("carries the requested login ID through a reload, only for the chosen account
     },
     body: { append: vi.fn() },
   });
+  return { frames, storage, assign, page };
+}
 
-  const first = new GraffitiGuarded({ hostUrl: "https://guard.example" });
+it("carries the requested login ID through a reload, only for the chosen account", async () => {
+  const { frames, storage, assign } = setup();
+  const first = createGuarded();
   await first.login({ state: "login-42" });
   const nonce = new URLSearchParams(new URL(assign.mock.calls[0][0]).hash.slice(1))
     .get("loginNonce");
@@ -81,11 +96,11 @@ it("carries the requested login ID through a reload, only for the chosen account
   first.destroy();
 
   // The app page and its iframe are recreated after the guard redirects back.
-  const interrupted = new GraffitiGuarded({ hostUrl: "https://guard.example" });
+  const interrupted = createGuarded();
   expect(storage.getItem("graffiti-guard-login:https://guard.example")).toBe(nonce);
   // Storage setup or a failed connection can reload the app before initialization.
   interrupted.destroy();
-  const restored = new GraffitiGuarded({ hostUrl: "https://guard.example" });
+  const restored = createGuarded();
   frames[2].dispatchEvent(new Event("load"));
   expect(frames[2].contentWindow.postMessage).toHaveBeenCalledWith(
     expect.objectContaining({ loginNonce: nonce }),
@@ -107,9 +122,10 @@ it("carries the requested login ID through a reload, only for the chosen account
   ]);
   rpcEvents[2].dispatchEvent(new CustomEvent("initialized"));
   expect(storage.getItem("graffiti-guard-login:https://guard.example")).toBeNull();
+  expect(storage.getItem("graffiti-guard-login:https://guard.example:return")).toBeNull();
   restored.destroy();
 
-  const later = new GraffitiGuarded({ hostUrl: "https://guard.example" });
+  const later = createGuarded();
   const laterEvents: CustomEvent[] = [];
   later.sessionEvents.addEventListener("login", (event) => {
     laterEvents.push(event as CustomEvent);
@@ -119,4 +135,81 @@ it("carries the requested login ID through a reload, only for the chosen account
   }));
   expect(laterEvents[0].detail.state).toBeUndefined();
   later.destroy();
+});
+
+it.each([undefined, "", "nested request: café / ? #"])("returns cancellation without cookies and preserves state through another reload (%s)", async state => {
+  const originalUrl = "https://app.example/chat?x=a%20b&x=~&graffitiLoginCanceled=app-value#/v?/nested";
+  const { frames, storage, assign, page } = setup(originalUrl);
+  const key = "graffiti-guard-login:https://guard.example";
+  const first = createGuarded();
+  await first.login({ state });
+  const params = new URLSearchParams(new URL(assign.mock.calls[0][0]).hash.slice(1));
+  expect(params.get("cancelReturn")).toBe("1");
+  const nonce = params.get("loginNonce")!;
+  first.destroy();
+
+  const callback = new URL(originalUrl);
+  callback.searchParams.set("graffitiLoginCanceled", nonce);
+  page.location.href = callback.href;
+  const cancelled = createGuarded();
+  frames[1].dispatchEvent(new Event("load"));
+  expect(frames[1].contentWindow.postMessage).toHaveBeenCalledWith({
+    type: "graffiti-guard:connect", loginCancelled: { state },
+  }, "https://guard.example");
+  expect(page.history.replaceState).toHaveBeenCalledWith(page.history.state, "", originalUrl);
+  expect(page.location.href).toBe(originalUrl);
+  cancelled.destroy();
+
+  // A reload before the guard connects must not lose the cancellation result.
+  const restored = createGuarded();
+  frames[2].dispatchEvent(new Event("load"));
+  expect(frames[2].contentWindow.postMessage).toHaveBeenCalledWith({
+    type: "graffiti-guard:connect", loginCancelled: { state },
+  }, "https://guard.example");
+  rpcEvents[2].dispatchEvent(new CustomEvent("initialized"));
+  expect(storage.getItem(key)).toBeNull();
+  expect(storage.getItem(key + ":return")).toBeNull();
+  // Reloading just the iframe must not replay a cancellation already delivered.
+  frames[2].contentWindow.postMessage.mockClear();
+  frames[2].dispatchEvent(new Event("load"));
+  expect(frames[2].contentWindow.postMessage).toHaveBeenCalledWith({ type: "graffiti-guard:connect" }, "https://guard.example");
+  restored.destroy();
+
+  const later = createGuarded();
+  frames[3].dispatchEvent(new Event("load"));
+  expect(frames[3].contentWindow.postMessage).toHaveBeenCalledWith({ type: "graffiti-guard:connect" }, "https://guard.example");
+  later.destroy();
+});
+
+it("does not cancel a newer request with an older return marker", async () => {
+  const { frames, storage, page } = setup();
+  const key = "graffiti-guard-login:https://guard.example";
+  const first = createGuarded();
+  await first.login({ state: "old" });
+  const oldNonce = storage.getItem(key)!;
+  await first.login({ state: "new" });
+  const newNonce = storage.getItem(key)!;
+  first.destroy();
+
+  const callback = new URL(page.location.href);
+  callback.searchParams.set("graffitiLoginCanceled", oldNonce);
+  page.location.href = callback.href;
+  const returned = createGuarded();
+  frames[1].dispatchEvent(new Event("load"));
+  expect(frames[1].contentWindow.postMessage).toHaveBeenCalledWith({
+    type: "graffiti-guard:connect", loginNonce: newNonce,
+  }, "https://guard.example");
+  expect(page.history.replaceState).not.toHaveBeenCalled();
+  returned.destroy();
+});
+
+it("keeps the old return flow for an in-flight login without saved cancellation context", () => {
+  const { frames, storage } = setup();
+  storage.setItem("graffiti-guard-login:https://guard.example", "old-nonce");
+  const returned = createGuarded();
+  frames[0].dispatchEvent(new Event("load"));
+  expect(frames[0].contentWindow.postMessage).toHaveBeenCalledWith({
+    type: "graffiti-guard:connect", loginNonce: "old-nonce",
+  }, "https://guard.example");
+  returned.destroy();
 });

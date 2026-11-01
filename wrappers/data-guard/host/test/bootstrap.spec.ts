@@ -57,9 +57,9 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-async function start(loginNonce?: string) {
+async function start(loginNonce?: string, loginCancelled?: { state?: string }) {
   await import("../src/index.js");
-  await fake.listen.mock.calls[0][0]("https://app.example", loginNonce);
+  await fake.listen.mock.calls[0][0]("https://app.example", loginNonce, loginCancelled);
   return fake.serve.mock.calls[0][0] as GuardedGraffiti;
 }
 
@@ -83,8 +83,27 @@ it("still connects anonymously after declining storage access on login return", 
   expect(login).not.toHaveBeenCalled();
 });
 
-it.each([true, false])("finishes returned-login consent before initialization (approve: %s)", async approve => {
-  fake.restore.mockResolvedValue(true);
+it("reports cancellation before initialization without requesting cookies or granting identity", async () => {
+  // Even if a parent supplies both fields, cancellation cannot redeem a success.
+  const guarded = await start("login-nonce", { state: "nested-caller-state" });
+  expect(fake.activate).not.toHaveBeenCalled();
+  expect(fake.completed).not.toHaveBeenCalled();
+  const events: { type: string; detail: unknown }[] = [];
+  for (const type of ["login", "initialized"]) guarded.sessionEvents.addEventListener(type, event => {
+    events.push({ type, detail: (event as CustomEvent).detail });
+  });
+  fake.events.dispatchEvent(new CustomEvent("login", { detail: { session: { actor: "alice" } } }));
+  fake.events.dispatchEvent(new CustomEvent("initialized"));
+  await vi.waitFor(() => expect(events).toEqual([
+    { type: "login", detail: { error: new Error("Login was not completed"), state: "nested-caller-state" } },
+    { type: "initialized", detail: null },
+  ]));
+  expect(fake.storage.size).toBe(0);
+});
+
+it.each([true, false])("finishes the chosen login without another prompt (storage already allowed: %s)", async alreadyAllowed => {
+  fake.restore.mockResolvedValue(alreadyAllowed);
+  fake.activate.mockResolvedValue(true);
   const source = [{ id: "chat-v3", name: "Chat" }];
   fake.completed.mockReturnValue({ session: { actor: "alice" }, state: "caller-state", source });
   const guarded = await start("login-nonce");
@@ -93,7 +112,7 @@ it.each([true, false])("finishes returned-login consent before initialization (a
     events.push({ type, detail: (event as CustomEvent).detail });
   });
   const { componentState } = await import("../src/ui/show.js");
-  expect(fake.activate).not.toHaveBeenCalled();
+  expect(fake.activate).toHaveBeenCalledTimes(alreadyAllowed ? 0 : 1);
   expect(fake.serve.mock.results[0].value.connect).toHaveBeenCalledWith({
     remoteWindow: window.parent,
     allowedOrigins: ["https://app.example"],
@@ -102,15 +121,21 @@ it.each([true, false])("finishes returned-login consent before initialization (a
   fake.events.dispatchEvent(new CustomEvent("login", { detail: { session: { actor: "alice" } } }));
   fake.events.dispatchEvent(new CustomEvent("initialized"));
   expect(fake.completed).toHaveBeenCalledWith("login-nonce", "https://app.example");
-  // The return nonce by itself grants nothing; this is the usual login prompt.
-  await vi.waitFor(() => expect(componentState.props.site).toBe("app.example › Chat"));
-  expect(events).toEqual([]);
-  if (approve) (componentState.props.choose as (actor: string) => void)("alice");
-  else (componentState.props.cancel as () => void)();
   await vi.waitFor(() => expect(events).toMatchObject([
-    { type: "login", detail: approve
-      ? { session: { actor: "alice", guardSites: [["chat-v3"]] }, state: "caller-state" }
-      : { error: expect.any(Error), state: "caller-state" } },
+    { type: "login", detail: { session: { actor: "alice", guardSites: [["chat-v3"]] }, state: "caller-state" } },
     { type: "initialized" },
   ]));
+  expect(componentState.component).toBeNull();
+});
+
+it("does not grant access from a nonce without a verified login result", async () => {
+  fake.restore.mockResolvedValue(true);
+  const guarded = await start("login-nonce");
+  const login = vi.fn();
+  guarded.sessionEvents.addEventListener("login", login);
+  fake.events.dispatchEvent(new CustomEvent("login", { detail: { session: { actor: "alice" } } }));
+  fake.events.dispatchEvent(new CustomEvent("initialized"));
+  expect(fake.completed).toHaveBeenCalledWith("login-nonce", "https://app.example");
+  expect(login).not.toHaveBeenCalled();
+  expect(fake.storage.size).toBe(0);
 });

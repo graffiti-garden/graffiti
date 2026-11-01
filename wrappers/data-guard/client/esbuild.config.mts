@@ -5,7 +5,7 @@ import * as esbuild from "esbuild";
 const defaultHostUrl =
   process.env.DATA_GUARD_HOST_URL ?? "https://guard.graffiti.garden/";
 const common = {
-  entryPoints: ["src/index.ts", "src/source.ts"],
+  entryPoints: ["src/index.ts", "src/source.ts", "src/connection-notice.ts"],
   sourcemap: true,
   define: {
     DATA_GUARD_DEFAULT_HOST_URL: JSON.stringify(defaultHostUrl),
