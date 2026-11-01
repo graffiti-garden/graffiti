@@ -5,6 +5,7 @@ import { visibilityEvents } from "../bootstrap/protocol.js";
 const props = defineProps<{
   busy?: boolean;
   error?: boolean;
+  restoring?: boolean;
   onContinue?: () => void;
   onCancel?: () => void;
   setup?: boolean;
@@ -64,7 +65,9 @@ function continueToApp(event: MouseEvent) {
         <a class="button" :href="redirectUrl" @click="continueToApp">Continue to {{ appHost }}</a>
       </template>
       <template v-else>
-        <h1 id="storage-access-title" ref="title" tabindex="-1">Finish logging in</h1>
+        <h1 id="storage-access-title" ref="title" tabindex="-1">
+          {{ restoring ? "Continue with your saved login" : "Finish logging in" }}
+        </h1>
         <p v-if="error" id="storage-access-description">
           Your browser didn’t allow access to your saved login.
           You can try again or keep browsing without logging in.
