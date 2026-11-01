@@ -6,6 +6,7 @@ import { storeLoginResult } from "./login-result.js";
 export { takeLoginResult } from "./login-result.js";
 import Status from "../ui/Status.vue";
 import { show } from "../ui/show.js";
+import { askLogin } from "../ui/ask-login.js";
 
 const redirectMaxAge = 10 * 60 * 1000;
 const statePrefix = "graffiti-guard-login:";
@@ -19,7 +20,7 @@ type Redirect = {
   expiresAt: number;
   source?: Source["path"];
   initialActors?: string[];
-  fromSite?: boolean;
+  cancelReturn?: boolean;
 };
 
 /** Install on every standalone visit: login results identify their own return destination. */
@@ -48,7 +49,7 @@ export function handleLoginRedirect(
       appState: params.get("state") ?? undefined,
       expiresAt: Date.now() + redirectMaxAge,
       source,
-      fromSite: URL.parse(document.referrer ?? "")?.origin === new URL(redirectUrl).origin,
+      cancelReturn: params.get("cancelReturn") === "1",
     };
     login = { actor: params.get("suggestedActor") || undefined };
     // Consume the start instruction before the implementation can save this page's URL.
@@ -68,16 +69,22 @@ export function handleLoginRedirect(
     const redirect = readRedirect(result.state!);
     finished = true;
     if (!redirect) return status("Login expired or missing return URL. Please start again.");
+    if (result.error && redirect.cancelReturn === true) {
+      // Cancellation and other failed logins need no identity or cookie access.
+      // Only clients advertising support receive this return; older ones use cookies.
+      const returnUrl = new URL(redirect.redirectUrl);
+      returnUrl.searchParams.set("graffitiLoginCanceled", redirect.nonce);
+      window.location.replace(returnUrl.href);
+      return;
+    }
     if (!result.error && redirect.source && redirect.initialActors) {
       const access = new LoginAccess(localStorage);
       if (!redirect.initialActors.includes(result.session.actor)) {
         access.clear(result.session.actor);
       }
-      // Completing the explicit sign-in flow approves this site even when the
-      // person chooses an account that was already signed in elsewhere.
-      if (redirect.fromSite) access.grant(result.session.actor,
-        sourceFromContext(new URL(redirect.redirectUrl).origin, { source: redirect.source }));
     }
+    // Site approval happens when the embedding app redeems this one-use result,
+    // after cookie access. A return URL or referrer alone cannot grant access.
     prepareStorage(url);
     storeLoginResult(redirect.nonce, new URL(redirect.redirectUrl).origin, {
       ...result, state: redirect.appState,
@@ -99,7 +106,7 @@ export function handleLoginRedirect(
     result = detail;
     finish();
   });
-  graffiti.sessionEvents.addEventListener("initialized", (event) => {
+  graffiti.sessionEvents.addEventListener("initialized", async (event) => {
     initialized = true;
     finish();
     if (finished) return;
@@ -107,7 +114,24 @@ export function handleLoginRedirect(
     if (error) return status(error.message);
     if (login && starting) {
       if (starting.source) starting.initialActors = [...restoredActors];
-      void graffiti.login({ ...login, state: statePrefix + JSON.stringify(starting) });
+      const state = statePrefix + JSON.stringify(starting);
+      // A new embedding site may not have cookie access yet. Here, at the
+      // guard's own origin, offer saved accounts before starting a new sign-in.
+      if (params.get("chooseAccount") === "1" && restoredActors.size &&
+          (!login.actor || restoredActors.has(login.actor))) {
+        const source = sourceFromContext(new URL(starting.redirectUrl).origin, { source: starting.source });
+        const choice = await askLogin(graffiti, source, [...restoredActors]);
+        if (choice !== null) {
+          result = choice
+            ? { session: { actor: choice }, state }
+            : { error: new Error("Login canceled"), state };
+          finish();
+          return;
+        }
+        login = {};
+      }
+      status("Opening login", true);
+      void graffiti.login({ ...login, state });
     }
     else onReady();
   }, { once: true });

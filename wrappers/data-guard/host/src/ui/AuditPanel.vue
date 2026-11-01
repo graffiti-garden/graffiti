@@ -324,8 +324,8 @@ function resizeWithKeyboard(event: KeyboardEvent, index: number) {
       <label v-if="actors.length" class="account">
         Permissions for
         <select v-model="actor" :disabled="busy">
-          <GraffitiActorToHandle v-for="(account, index) in actors" :key="account" :actor="account" v-slot="{ handle }">
-            <option :value="account">{{ handle ?? `Account ${index + 1}` }}{{ sessions.has(account) ? '' : ' (logged out)' }}</option>
+          <GraffitiActorToHandle v-for="account in actors" :key="account" :actor="account" v-slot="{ handle, error }">
+            <option :value="account" :disabled="!handle">{{ handle ?? (error ? 'Account unavailable' : 'Account loading…') }}{{ sessions.has(account) ? '' : ' (logged out)' }}</option>
           </GraffitiActorToHandle>
         </select>
       </label>

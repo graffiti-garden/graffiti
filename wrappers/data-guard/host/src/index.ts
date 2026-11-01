@@ -55,16 +55,20 @@ if (standalone) {
     );
   }
 } else {
-  listenToParent(async (origin, loginNonce) => {
+  listenToParent(async (origin, loginNonce, loginCancelled) => {
     let storageReady = await restoreStorageAccess();
-    if (!storageReady && loginNonce) storageReady = await activateStorageAccess();
+    if (!storageReady && loginNonce && !loginCancelled) storageReady = await activateStorageAccess();
     // Public browsing starts anonymously; choose storage before creating any caches.
     const graffiti = new GraffitiDecentralized();
     app.use(GraffitiPlugin, { graffiti });
     if (storageReady) ruleStore.activate();
     const access = new LoginAccess(storageReady ? getLocalStorage() : undefined);
     const guard = new Guard(graffiti, ruleStore, origin, ask, access);
-    const result = storageReady && loginNonce ? takeLoginResult(loginNonce, origin) : undefined;
+    // This untrusted return can only report failure. Success still requires the
+    // guard's origin-bound cookie, and neither identity nor consent comes from a URL.
+    const result = loginCancelled
+      ? { error: new Error("Login was not completed"), state: loginCancelled.state }
+      : storageReady && loginNonce ? takeLoginResult(loginNonce, origin) : undefined;
     const guarded = new GuardedGraffiti(graffiti, guard, access, origin, result);
     serveGraffiti(guarded).connect({
       remoteWindow: window.parent,

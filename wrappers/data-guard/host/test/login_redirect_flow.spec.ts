@@ -2,9 +2,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Graffiti, GraffitiLoginEvent } from "@graffiti-garden/api";
 
 vi.mock("../src/ui/show.js", () => ({ show: vi.fn() }));
+vi.mock("../src/ui/ask-login.js", () => ({ askLogin: vi.fn() }));
 
 import { handleLoginRedirect, takeLoginResult } from "../src/bootstrap/login_redirect.js";
 import { show } from "../src/ui/show.js";
+import { askLogin } from "../src/ui/ask-login.js";
 import { LoginAccess } from "../src/core/login-access.js";
 import { sourceFromContext } from "../src/core/source.js";
 
@@ -56,6 +58,7 @@ function load(url = new URL("https://guard.example/")) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(askLogin).mockReset();
   cookies.clear();
   cookieDocument.referrer = "";
   vi.stubGlobal("document", cookieDocument);
@@ -75,6 +78,88 @@ beforeEach(() => {
 });
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it.each(["alice", undefined])("offers saved accounts after the first-party visit (choice: %s)", async choice => {
+  const url = startUrl();
+  const source = [{ id: "chat", name: "Chat" }];
+  const params = new URLSearchParams(url.hash.slice(1));
+  params.set("chooseAccount", "1");
+  params.set("source", JSON.stringify(source));
+  url.hash = params.toString();
+  vi.mocked(askLogin).mockResolvedValue(choice);
+  const page = load(url);
+  page.emit({ session: { actor: "alice" } });
+  page.emit({ session: { actor: "bob" } });
+  page.initialize();
+
+  await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith(appUrl));
+  expect(askLogin).toHaveBeenCalledWith(expect.anything(), sourceFromContext("https://app.example", { source }), ["alice", "bob"]);
+  expect(page.login).not.toHaveBeenCalled();
+  expect(takeLoginResult(nonce, "https://app.example")).toEqual(choice
+    ? { session: { actor: choice }, state: "caller-id", source }
+    : { error: new Error("Login canceled"), state: "caller-id", source });
+});
+
+it("starts a new sign-in when Another account is chosen on the guard page", async () => {
+  const url = startUrl();
+  url.hash += "&chooseAccount=1&suggestedActor=alice";
+  vi.mocked(askLogin).mockResolvedValue(null);
+  const page = load(url);
+  page.emit({ session: { actor: "alice" } });
+  page.initialize();
+  await vi.waitFor(() => expect(page.login).toHaveBeenCalledWith({ state: expect.any(String) }));
+  expect(replace).not.toHaveBeenCalled();
+});
+
+it.each([undefined, "bob"])("starts sign-in directly if no matching saved account exists (%s)", actor => {
+  const url = startUrl();
+  url.hash += "&chooseAccount=1" + (actor ? `&suggestedActor=${actor}` : "");
+  const page = load(url);
+  if (actor) page.emit({ session: { actor: "alice" } });
+  page.initialize();
+  expect(askLogin).not.toHaveBeenCalled();
+  expect(page.login).toHaveBeenCalledWith({ state: expect.any(String), actor });
+});
+
+it("does not repeat the chooser after Another account was chosen in the app", () => {
+  const page = load(startUrl());
+  page.emit({ session: { actor: "alice" } });
+  page.initialize();
+  expect(askLogin).not.toHaveBeenCalled();
+  expect(page.login).toHaveBeenCalledWith({ state: expect.any(String), actor: undefined });
+});
+
+it("returns the chooser's cancellation in the URL for clients that support it", async () => {
+  const url = startUrl();
+  url.hash += "&chooseAccount=1&cancelReturn=1";
+  vi.mocked(askLogin).mockResolvedValue(undefined);
+  const page = load(url);
+  page.emit({ session: { actor: "alice" } });
+  page.initialize();
+  const expected = new URL(appUrl);
+  expected.searchParams.set("graffitiLoginCanceled", nonce);
+  await vi.waitFor(() => expect(replace).toHaveBeenCalledExactlyOnceWith(expected.href));
+  expect(takeLoginResult(nonce, "https://app.example")).toBeUndefined();
+  expect(page.login).not.toHaveBeenCalled();
+});
+
+it.each([true, false])("preserves the return capability through authentication reloads (failed: %s)", failed => {
+  const destination = "https://app.example/view?keep=1#/v?/nested";
+  const url = startUrl(nonce, destination);
+  url.hash += "&cancelReturn=1";
+  const first = load(url);
+  first.initialize();
+  const resumed = load();
+  resumed.emit(failed
+    ? { error: new Error("Provider declined login"), state: first.state }
+    : { session: { actor: "alice" }, state: first.state });
+  resumed.initialize();
+  const expected = new URL(destination);
+  if (failed) expected.searchParams.set("graffitiLoginCanceled", nonce);
+  expect(replace).toHaveBeenCalledExactlyOnceWith(expected.href);
+  expect(takeLoginResult(nonce, "https://app.example")).toEqual(failed
+    ? undefined : { session: { actor: "alice" }, state: "caller-id" });
+});
 
 it.each([
   "caller-id",
@@ -208,11 +293,11 @@ it("rejects receipts without a valid expiry", () => {
 
 
 it.each([
-  { existing: false, fromSite: true },
-  { existing: false, fromSite: false },
-  { existing: true, fromSite: true },
-  { existing: true, fromSite: false },
-])("carries site consent through upstream state ($existing, $fromSite)", ({ existing, fromSite }) => {
+  { existing: false, referrer: appUrl },
+  { existing: false, referrer: "" },
+  { existing: true, referrer: appUrl },
+  { existing: true, referrer: "" },
+])("carries the chosen account without approving an unverified destination ($existing, $referrer)", ({ existing, referrer }) => {
   const values = new Map<string, string>();
   const storage = {
     getItem: (key: string) => values.get(key) ?? null,
@@ -225,7 +310,7 @@ it.each([
   access.grant("alice", previous);
   const source = [{ id: "room", name: "Room" }];
   const site = sourceFromContext("https://app.example", { source });
-  cookieDocument.referrer = fromSite ? appUrl : "https://unrelated.example/";
+  cookieDocument.referrer = referrer;
   const url = startUrl();
   const params = new URLSearchParams(url.hash.slice(1));
   params.set("source", JSON.stringify(source));
@@ -240,7 +325,7 @@ it.each([
   resumed.emit({ session: { actor: "alice" }, state: first.state });
   resumed.initialize();
   expect(replace).toHaveBeenCalledExactlyOnceWith(appUrl);
-  expect(access.allows("alice", site)).toBe(fromSite);
+  expect(access.allows("alice", site)).toBe(false);
   expect(access.allows("alice", previous)).toBe(existing);
   expect(takeLoginResult(nonce, "https://app.example")).toEqual({
     session: { actor: "alice" }, state: "caller-id", source,

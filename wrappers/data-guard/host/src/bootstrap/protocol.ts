@@ -2,7 +2,7 @@ export const visibilityEvents = new EventTarget();
 let parentOrigin: string | undefined;
 
 export function listenToParent(
-  connect: (origin: string, loginNonce?: string) => void,
+  connect: (origin: string, loginNonce?: string, loginCancelled?: { state?: string }) => void,
 ) {
   window.addEventListener("message", (event) => {
     if (
@@ -33,6 +33,9 @@ export function listenToParent(
           typeof event.data.loginNonce === "string"
             ? event.data.loginNonce
             : undefined,
+          event.data.loginCancelled && typeof event.data.loginCancelled === "object"
+            ? { state: typeof event.data.loginCancelled.state === "string" ? event.data.loginCancelled.state : undefined }
+            : undefined,
         );
       }
     } else if (
@@ -49,7 +52,9 @@ export function setVisible(visible: boolean) {
   postToParent({ type: "graffiti-guard:set-visible", visible });
 }
 
-export function requestLoginRedirect(options: import("../../../client/src/source.js").GuardLoginOptions) {
+// chooseAccount distinguishes needing cookie access from choosing Another account.
+// It stays within the guard's redirect protocol, outside the Graffiti login API.
+export function requestLoginRedirect(options: import("../../../client/src/source.js").GuardLoginOptions & { chooseAccount?: boolean }) {
   postToParent({ type: "graffiti-guard:open-login", options });
 }
 

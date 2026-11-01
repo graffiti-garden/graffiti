@@ -69,7 +69,7 @@ export class GuardedGraffiti extends Graffiti {
           const { source = [], ...detail } = initialLogin;
           const result = await this.approveReturnedLogin(detail, source)
             .catch(error => ({ error, state: detail.state }));
-          if (result) this.sessionEvents.dispatchEvent(new CustomEvent("login", { detail: result }));
+          this.sessionEvents.dispatchEvent(new CustomEvent("login", { detail: result }));
         }
         this.sessionEvents.dispatchEvent(new CustomEvent("initialized", {
           detail: event instanceof CustomEvent ? event.detail : undefined,
@@ -115,33 +115,30 @@ export class GuardedGraffiti extends Graffiti {
     const scope = this.origin ? sourceFromContext(this.origin, options).path : [];
     const result = await this.requestLogin(options, scope);
     if (result && "redirect" in result) {
-      requestLoginRedirect({ ...options, source: scope, actor: result.redirect.actor });
+      requestLoginRedirect({ ...options, source: scope, ...result.redirect });
     } else if (result) {
       this.sessionEvents.dispatchEvent(new CustomEvent("login", { detail: result }));
     }
   };
 
-  /** A redirect result is already correlated upstream; only site consent remains. */
+  /** The origin-bound, one-use login result already records an explicit account choice. */
   private async approveReturnedLogin(detail: GraffitiLoginEvent["detail"], scope: Source["path"]) {
     if (detail.error || !this.loginAccess || !this.origin) return detail;
     const actor = detail.session.actor;
     if (!this.activeActors.has(actor)) {
       return { error: new Error("Login session is no longer active"), state: detail.state };
     }
-    if (this.loginAccess.allows(actor, sourceFromContext(this.origin, { source: scope }))) {
-      return { ...detail, session: this.visibleSession(actor)! };
-    }
-    // The account was chosen during sign-in. Ask only for access to this site.
-    const result = await this.requestLogin({ actor, state: detail.state }, scope, true);
-    return result && !("redirect" in result) ? result : undefined;
+    // Save approval here, using the embedded guard's storage after cookie access.
+    // It need not share localStorage with the top-level login page.
+    this.loginAccess.grant(actor, sourceFromContext(this.origin, { source: scope }));
+    return { ...detail, session: this.visibleSession(actor)! };
   }
 
   // A fresh sign-in uses the guard's existing top-level navigation protocol.
   private async requestLogin(
     options: LoginOptions,
     scope: Source["path"],
-    returning = false,
-  ): Promise<GraffitiLoginEvent["detail"] | { redirect: { actor?: string } } | undefined> {
+  ): Promise<GraffitiLoginEvent["detail"] | { redirect: { actor?: string; chooseAccount?: boolean } } | undefined> {
     if (!this.loginAccess || !this.origin) {
       await this.graffiti.login(options);
       return;
@@ -149,7 +146,7 @@ export class GuardedGraffiti extends Graffiti {
     // Public browsing does not wait for shared storage or account restoration.
     // Establish storage during the top-level login visit instead.
     if (!this.loginAccess.available) {
-      return { redirect: { actor: options?.actor } };
+      return { redirect: { actor: options?.actor, chooseAccount: true } };
     }
     if (!this.sessionsInitialized) {
       await new Promise<void>((resolve) =>
@@ -162,11 +159,10 @@ export class GuardedGraffiti extends Graffiti {
     // A fresh account sign-in already asks the user to choose an identity.
     // Keep the decentralized implementation's familiar same-tab redirect.
     if (!actors.length || (actor && !this.activeActors.has(actor))) {
-      return { redirect: { actor } };
+      return { redirect: { actor, chooseAccount: true } };
     }
-    const choice = await askLogin(this.graffiti, source,
-      actors.filter(candidate => !returning || candidate === actor), returning);
-    if (choice === null) return { redirect: {} };
+    const choice = await askLogin(this.graffiti, source, actors);
+    if (choice === null) return { redirect: { actor: undefined } };
     if (choice) {
       // The account may have signed out while the chooser was open.
       if (!this.activeActors.has(choice)) return { error: new Error("Login session is no longer active"), state: options?.state };

@@ -28,7 +28,7 @@ it("acknowledges the embedding origin before connecting", async () => {
     { type: "graffiti-guard:connected" },
     "https://app.example",
   );
-  expect(connect).toHaveBeenCalledWith("https://app.example", undefined);
+  expect(connect).toHaveBeenCalledWith("https://app.example", undefined, undefined);
 });
 
 it("passes a login nonce only from the verified embedding parent", async () => {
@@ -53,6 +53,7 @@ it("passes a login nonce only from the verified embedding parent", async () => {
   expect(connect).toHaveBeenCalledWith(
     "https://app.example",
     "nonce",
+    undefined,
   );
 });
 
@@ -88,6 +89,23 @@ it("asks the connected parent to start a login redirect", async () => {
     },
     "https://app.example",
   );
+});
+
+it("passes cancellation state without trusting identity fields from the parent", async () => {
+  const parent = { postMessage: vi.fn() };
+  const page = Object.assign(new EventTarget(), { parent });
+  vi.stubGlobal("window", page);
+  const { listenToParent } = await import("../src/bootstrap/protocol.js");
+  const connect = vi.fn();
+  listenToParent(connect);
+  const data = {
+    type: "graffiti-guard:connect",
+    loginCancelled: { state: "caller-state", session: { actor: "forged" } },
+  };
+  page.dispatchEvent(Object.assign(new Event("message"), { source: {}, origin: "https://unrelated.example", data }));
+  expect(connect).not.toHaveBeenCalled();
+  page.dispatchEvent(Object.assign(new Event("message"), { source: parent, origin: "https://app.example", data }));
+  expect(connect).toHaveBeenCalledWith("https://app.example", undefined, { state: "caller-state" });
 });
 
 it("announces when the parent has made the guard visible", async () => {
