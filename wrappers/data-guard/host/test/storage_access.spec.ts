@@ -21,7 +21,10 @@ beforeEach(() => {
   vi.mocked(setVisible).mockClear();
   clear();
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("storage access", () => {
   it("starts anonymously without requesting permission or showing UI", async () => {
@@ -31,14 +34,23 @@ describe("storage access", () => {
     expect(setVisible).not.toHaveBeenCalled();
   });
 
-  it("silently restores an existing grant and installs shared handles", async () => {
+  it("silently restores cookie access while keeping native storage partitioned", async () => {
     permission.mockResolvedValue({ state: "granted" });
-    const storage = {} as Storage;
-    const database = {} as IDBFactory;
-    request.mockResolvedValue({ localStorage: storage, indexedDB: database });
+    const original = window.localStorage;
+    request.mockResolvedValue({ localStorage: {}, indexedDB: {} });
     expect(await restoreStorageAccess()).toBe(true);
-    expect(window.localStorage).toBe(storage);
-    expect(window.indexedDB).toBe(database);
+    expect(request).toHaveBeenCalledWith();
+    expect(window.localStorage).toBe(original);
+    expect(componentState.component).toBeNull();
+  });
+
+  it("keeps browsing when Safari never answers the optional permission query", async () => {
+    vi.useFakeTimers();
+    permission.mockReturnValue(new Promise(() => {}));
+    const result = restoreStorageAccess();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await result).toBe(false);
+    expect(request).not.toHaveBeenCalled();
     expect(componentState.component).toBeNull();
   });
 
@@ -50,13 +62,9 @@ describe("storage access", () => {
     expect(request).toHaveBeenCalledOnce();
   });
 
-  it("supports cookie-only browsers without retrying permission denials", async () => {
+  it("does not retry permission denials", async () => {
     document.hasStorageAccess = async () => true;
-    request.mockRejectedValueOnce(new TypeError("No storage types"));
-    expect(await restoreStorageAccess()).toBe(true);
-    expect(request.mock.calls[1]).toEqual([]);
-
-    request.mockReset().mockRejectedValue(new DOMException("Denied", "NotAllowedError"));
+    request.mockRejectedValue(new DOMException("Denied", "NotAllowedError"));
     expect(await restoreStorageAccess()).toBe(false);
     expect(request).toHaveBeenCalledOnce();
     expect(componentState.component).toBeNull();

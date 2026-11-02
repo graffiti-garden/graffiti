@@ -1,24 +1,6 @@
 import StorageAccess from "../ui/StorageAccess.vue";
 import { show, withPrompt } from "../ui/show.js";
 
-const storageTypes = {
-  cookies: true,
-  indexedDB: true,
-  localStorage: true,
-} as const;
-
-type StorageAccessHandle = {
-  indexedDB?: IDBFactory;
-  localStorage?: Storage;
-};
-
-type StorageDocument = Document & {
-  hasStorageAccess?: () => Promise<boolean>;
-  requestStorageAccess?: (
-    types?: typeof storageTypes,
-  ) => Promise<StorageAccessHandle | void>;
-};
-
 export function getLocalStorage() {
   try {
     return window.localStorage;
@@ -27,67 +9,47 @@ export function getLocalStorage() {
 
 /** Restore existing access silently. A new visitor must never see a prompt. */
 export async function restoreStorageAccess(): Promise<boolean> {
-  const storageDocument = document as StorageDocument;
-  if (!storageDocument.requestStorageAccess) return !!getLocalStorage();
+  if (!document.requestStorageAccess) return !!getLocalStorage();
   let allowed = false;
   try {
-    allowed = await storageDocument.hasStorageAccess?.() ?? false;
+    allowed = await document.hasStorageAccess?.() ?? false;
   } catch {}
   if (!allowed) {
     try {
-      const permission = await navigator.permissions.query({
-        name: "storage-access" as PermissionName,
-      });
-      allowed = permission.state === "granted";
+      // Safari Private Browsing can leave this query pending indefinitely.
+      // A silent convenience check must not block anonymous browsing.
+      const permission = await Promise.race([
+        navigator.permissions.query({ name: "storage-access" as PermissionName }),
+        new Promise<undefined>(resolve => setTimeout(resolve, 1_000)),
+      ]);
+      allowed = permission?.state === "granted";
     } catch {}
   }
   if (!allowed) return false;
   try {
-    await requestAndInstall();
+    await document.requestStorageAccess();
     return !!getLocalStorage();
   } catch {
     return false;
   }
 }
 
-/** Resume a previous login or finish a new one, before constructing any caches. */
-export function activateStorageAccess(restoring = false): Promise<boolean> {
+/** Cookies are needed once to import the chosen login from the top-level visit. */
+export function activateStorageAccess(): Promise<boolean> {
   return withPrompt(() => new Promise((resolve) => {
     const onCancel = () => resolve(false);
     const onContinue = async () => {
-      show(StorageAccess, { restoring, busy: true, onContinue, onCancel });
+      show(StorageAccess, { busy: true, onContinue, onCancel });
       try {
         // This call must run inside the iframe's button-click handler.
-        await requestAndInstall();
+        // Keep native localStorage/IndexedDB; only shared cookies are needed here.
+        await document.requestStorageAccess?.();
         if (!getLocalStorage()) throw new Error("Login storage is unavailable.");
         resolve(true);
       } catch {
-        show(StorageAccess, { restoring, error: true, onContinue, onCancel });
+        show(StorageAccess, { error: true, onContinue, onCancel });
       }
     };
-    show(StorageAccess, { restoring, onContinue, onCancel });
+    show(StorageAccess, { onContinue, onCancel });
   }));
-}
-
-async function requestAndInstall() {
-  const request = (document as StorageDocument).requestStorageAccess?.bind(document);
-  if (!request) return;
-  let handle: StorageAccessHandle | void;
-  try {
-    handle = await request(storageTypes);
-  } catch (error) {
-    // Older browsers implement only cookie access. Do not retry a denial.
-    if (!(error instanceof TypeError)) throw error;
-    handle = await request();
-  }
-  if (!handle) return;
-  // Install shared handles before opening storage, never underneath live caches.
-  for (const type of ["localStorage", "indexedDB"] as const) {
-    if (handle[type]) {
-      Object.defineProperty(window, type, {
-        configurable: true,
-        value: handle[type],
-      });
-    }
-  }
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GraffitiLoginEvent, GraffitiLogoutEvent, GraffitiSessionInitializedEvent } from "@graffiti-garden/api";
 import { Authorization } from "../1-services/1-authorization";
+import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 import { Sessions } from "./1-sessions";
 import { LOGIN_ATTEMPT_PARAM, type LoginAttempt } from "./login-attempt";
 import { GraffitiDecentralized } from "./4-graffiti";
@@ -30,9 +31,8 @@ export function sessionTests() {
       mocks.cookies.clear();
       mocks.close.mockClear();
       mocks.cancel = undefined;
-      vi.spyOn(browserStorage, "getBrowserStorageItem").mockImplementation(key => mocks.cookies.get(key));
-      vi.spyOn(browserStorage, "setBrowserStorageItem").mockImplementation((key, value) => { mocks.cookies.set(key, value); });
-      vi.spyOn(browserStorage, "removeBrowserStorageItem").mockImplementation(key => { mocks.cookies.delete(key); });
+      vi.spyOn(browserStorage, "readCookie").mockImplementation(key => mocks.cookies.get(key));
+      vi.spyOn(browserStorage, "writeCookie").mockImplementation((key, value) => { mocks.cookies.set(key, value); });
       vi.spyOn(modal, "GraffitiModal").mockImplementation(class {
         close = mocks.close;
         constructor(options: { onManualClose: () => void }) { mocks.cancel = options.onManualClose; }
@@ -49,6 +49,7 @@ export function sessionTests() {
       shown: { attempt: LoginAttempt; handle?: string }[] = [];
       get manager() { return this.sessions; }
       get didService() { return this.dids; }
+      get bucketService() { return this.storageBuckets; }
       protected override async login_(attempt: LoginAttempt, handle?: string) {
         this.shown.push({ attempt, handle });
       }
@@ -148,6 +149,142 @@ export function sessionTests() {
       expect(events).toEqual([{ session: { actor: "did:example:alice" } }]);
       expect(graffiti.manager.loginAttempts.current).toBeUndefined();
       expect(window.history.replaceState).not.toHaveBeenCalled();
+    });
+
+    async function savedLogin() {
+      const first = sessionFixture();
+      await first.ready;
+      const attempt = first.sessions.loginAttempts.begin();
+      await first.sessions.login("did:example:alice", attempt);
+      first.authorization.eventTarget.dispatchEvent(new CustomEvent("login", {
+        detail: { loginId: attempt.id, token: "saved-token" },
+      }));
+      return first;
+    }
+
+    it("restores a saved login without cookies or network access", async () => {
+      await savedLogin();
+      mocks.cookies.clear(); // Safari after a refresh, before storage access.
+      const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Offline"));
+      const restored = sessionFixture();
+      const logout = vi.fn();
+      restored.sessions.sessionEvents.addEventListener("logout", logout);
+      await restored.ready;
+      expect(network).not.toHaveBeenCalled();
+      expect(restored.sessions.resolveSession({ actor: "did:example:alice" }).tokens).toEqual(["saved-token"]);
+      expect(restored.events).toEqual([{ session: { actor: "did:example:alice" } }]);
+      expect(logout).not.toHaveBeenCalled();
+    });
+
+    it("ends the old login before importing different credentials for the same actor", async () => {
+      await savedLogin();
+      const cookie = mocks.cookies.get("graffiti-sessions-logged-in")!;
+      mocks.cookies.set("graffiti-sessions-logged-in", cookie.replaceAll("saved-token", "new-token"));
+      const restored = sessionFixture();
+      const order: string[] = [];
+      for (const type of ["login", "logout"]) {
+        restored.sessions.sessionEvents.addEventListener(type, () => order.push(type));
+      }
+      await restored.ready;
+      expect(order).toEqual(["logout", "login"]);
+      expect(restored.sessions.resolveSession({ actor: "did:example:alice" }).tokens).toEqual(["new-token"]);
+    });
+
+    it("honors shared-cookie logout before making a request and clears the local fallback", async () => {
+      await savedLogin();
+      const graffiti = new Probe();
+      vi.spyOn(graffiti, "actorToHandle").mockResolvedValue("alice");
+      await new Promise<void>(resolve => graffiti.sessionEvents.addEventListener("initialized", () => resolve(), { once: true }));
+      const put = vi.spyOn(graffiti.bucketService, "put").mockRejectedValue(new Error("Should not reach the server"));
+      const logout = vi.fn();
+      graffiti.sessionEvents.addEventListener("logout", logout);
+      // Another embedding site changes the shared cookie, not this site's storage.
+      const key = "graffiti-sessions-logged-in";
+      mocks.cookies.set(key, "[]");
+
+      await expect(graffiti.post({ value: {}, channels: [] }, { actor: "did:example:alice" })).rejects.toThrow("Not logged in");
+      expect(put).not.toHaveBeenCalled();
+      expect(logout).toHaveBeenCalledOnce();
+      expect(logout.mock.calls[0][0].detail).toEqual({ actor: "did:example:alice" });
+      expect(window.localStorage.getItem(key)).toBe("[]");
+      mocks.cookies.clear(); // Losing cookie access must not resurrect the copy.
+      const nextLoad = sessionFixture();
+      await nextLoad.ready;
+      expect(nextLoad.events).toEqual([]);
+    });
+
+    it("preserves other accounts when a shared cookie logs out one account", async () => {
+      await savedLogin();
+      const key = "graffiti-sessions-logged-in";
+      const [alice] = JSON.parse(mocks.cookies.get(key)!);
+      const bob = { ...alice, actor: "did:example:bob" };
+      mocks.cookies.set(key, JSON.stringify([alice, bob]));
+      const current = sessionFixture();
+      await current.ready;
+      mocks.cookies.set(key, JSON.stringify([bob]));
+
+      expect(() => current.sessions.resolveSession({ actor: alice.actor })).toThrow("Not logged in");
+      expect(current.sessions.resolveSession({ actor: bob.actor }).actor).toBe(bob.actor);
+      mocks.cookies.clear();
+      const nextLoad = sessionFixture();
+      await nextLoad.ready;
+      expect(nextLoad.events).toEqual([{ session: { actor: bob.actor } }]);
+    });
+
+    it("does not adopt a replacement login under an open page's existing approval", async () => {
+      const current = await savedLogin();
+      const key = "graffiti-sessions-logged-in";
+      const replacement = mocks.cookies.get(key)!.replaceAll("saved-token", "replacement-token");
+      const logout = vi.fn();
+      current.sessions.sessionEvents.addEventListener("logout", logout);
+      mocks.cookies.set(key, replacement);
+
+      expect(() => current.sessions.resolveSession({ actor: "did:example:alice" })).toThrow("Not logged in");
+      expect(logout).toHaveBeenCalledOnce();
+      expect(logout.mock.calls[0][0].detail).toEqual({ actor: "did:example:alice" });
+      expect(mocks.cookies.get(key)).toBe(replacement);
+      const nextLoad = sessionFixture();
+      await nextLoad.ready;
+      expect(nextLoad.sessions.resolveSession({ actor: "did:example:alice" }).tokens).toEqual(["replacement-token"]);
+    });
+
+    it.each([true, false])("clears a restored login only when an operation reports unauthorized (unauthorized: %s)", async unauthorized => {
+      await savedLogin();
+      mocks.cookies.clear();
+      const graffiti = new Probe();
+      vi.spyOn(graffiti, "actorToHandle").mockResolvedValue("alice");
+      await new Promise<void>(resolve => graffiti.sessionEvents.addEventListener("initialized", () => resolve(), { once: true }));
+      const failure = unauthorized ? new GraffitiErrorUnauthorized("Revoked") : new Error("Offline");
+      vi.spyOn(graffiti.bucketService, "put").mockRejectedValue(failure);
+      const revoke = vi.spyOn(Authorization.prototype, "logout");
+      const logout = vi.fn();
+      graffiti.sessionEvents.addEventListener("logout", logout);
+
+      await expect(graffiti.post({ value: {}, channels: [] }, { actor: "did:example:alice" })).rejects.toBe(failure);
+      expect(revoke).not.toHaveBeenCalled(); // No extra request to revoke an invalid token.
+      expect(logout).toHaveBeenCalledTimes(unauthorized ? 1 : 0);
+      if (unauthorized) expect(logout.mock.calls[0][0].detail).toEqual({ actor: "did:example:alice" });
+      const nextLoad = sessionFixture();
+      await nextLoad.ready;
+      expect(nextLoad.events).toEqual(unauthorized ? [] : [{ session: { actor: "did:example:alice" } }]);
+    });
+
+    it("does not erase a newer login when an old tab discovers its token was revoked", async () => {
+      const old = await savedLogin();
+      const key = "graffiti-sessions-logged-in";
+      const replacement = mocks.cookies.get(key)!.replaceAll("saved-token", "replacement-token");
+      // A different tab has logged in again before this tab notices revocation.
+      mocks.cookies.set(key, replacement);
+      window.localStorage.setItem(key, replacement);
+      const logout = vi.fn();
+      old.sessions.sessionEvents.addEventListener("logout", logout);
+      old.sessions.forget("did:example:alice");
+      expect(logout).toHaveBeenCalledOnce();
+      expect(old.authorization.logout).not.toHaveBeenCalled();
+      const restored = sessionFixture();
+      await restored.ready;
+      expect(restored.sessions.resolveSession({ actor: "did:example:alice" }).tokens).toEqual(["replacement-token"]);
+      expect(restored.events).toEqual([{ session: { actor: "did:example:alice" } }]);
     });
 
     it("resumes authorization with its request after reload, then restores without it", async () => {
@@ -277,10 +414,10 @@ export function sessionTests() {
       authorization.eventTarget.dispatchEvent(new CustomEvent("login", {
         detail: { loginId: attempt.id, token: "first-token" },
       }));
-      const stored = JSON.parse(mocks.cookies.get("graffiti-sessions-logged-in")!);
-      stored[0].tokens.push("second-token");
-      stored[0].servicesByAuthorization.push(["oauth2:https://second.example", []]);
-      mocks.cookies.set("graffiti-sessions-logged-in", JSON.stringify(stored));
+      const stored = sessions.resolveSession({ actor });
+      stored.tokens.push("second-token");
+      stored.servicesByAuthorization.push(["oauth2:https://second.example", []]);
+      mocks.cookies.set("graffiti-sessions-logged-in", JSON.stringify([stored]));
       const events: GraffitiLogoutEvent["detail"][] = [];
       sessions.sessionEvents.addEventListener("logout", event => events.push((event as GraffitiLogoutEvent).detail));
 
@@ -291,7 +428,7 @@ export function sessionTests() {
       expect(authorization.logout.mock.calls).toEqual([
         ["oauth2:https://second.example", "second-token"],
         ["oauth2:https://provider.example", "first-token"],
-      ].slice(0, failedStep === 0 ? 1 : 2));
+      ]);
       expect(events).toEqual([{
         actor, state: "logout-request", ...(failedStep === undefined ? {} : { error: expect.any(Error) }),
       }]);
