@@ -15,9 +15,10 @@ import { StorageBuckets } from "../1-services/3-storage-buckets";
 import type { Inboxes } from "../1-services/4-inboxes";
 import type { Service } from "did-resolver";
 import {
-  getBrowserStorageItem,
-  removeBrowserStorageItem,
-  setBrowserStorageItem,
+  readCookie,
+  readLocalStorage,
+  writeLocalStorage,
+  writeCookie,
 } from "./browser-storage";
 import {
   type infer as infer_,
@@ -44,6 +45,8 @@ export class Sessions {
   /** Keep a failed attempt open for the UI to retry; otherwise finish with an error. */
   onLoginError?: (attempt: LoginAttempt, error: Error, actor?: string) => void;
   initialAuthorizationNavigation: "assign" | "replace" = "assign";
+  // Cookies may end these logins, but cannot silently replace this instance's credentials.
+  private browserSessions?: StoredSession[];
 
   constructor(
     protected readonly services: {
@@ -127,7 +130,22 @@ export class Sessions {
       // Wait for login to complete, if there
       await loginPromise;
 
-      for (const session of this.loggedInSessions) {
+      // Announce changed logins before restoring identity. Wrappers can then
+      // discard state belonging to the previous login, even for the same actor.
+      const previous = parseSessions(readLocalStorage(SESSION_STORAGE_KEY));
+      const current = this.loggedInSessions;
+      if (typeof window !== "undefined") {
+        for (const actor of new Set([...previous, ...current].map(s => s.actor))) {
+          if (!sameLogin(previous.find(s => s.actor === actor), current.find(s => s.actor === actor))) {
+            this.sessionEvents.dispatchEvent(new CustomEvent("logout", { detail: { actor } }));
+          }
+        }
+        // Save a copy for the next load, when shared cookies may be unavailable.
+        writeLocalStorage(SESSION_STORAGE_KEY, JSON.stringify(current));
+      }
+      // Restore immediately, including offline. A revoked token is discarded
+      // when an authenticated operation receives an unauthorized response.
+      for (const session of current) {
         const loginEvent: GraffitiLoginEvent = new CustomEvent("login", {
           detail: { session: { actor: session.actor } },
         });
@@ -143,6 +161,16 @@ export class Sessions {
       );
       this.sessionEvents.dispatchEvent(initializedEvent);
     })();
+  }
+
+  /** Forget a rejected credential locally; the server already considers it invalid. */
+  forget(actor: string) {
+    // The rejected request used this instance's credentials, not a newer copy
+    // that another tab may have written in the meantime.
+    const session = (this.browserSessions ?? this.loggedInSessions).find(s => s.actor === actor);
+    if (session) this.updateSession(session, true);
+    const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", { detail: { actor } });
+    this.sessionEvents.dispatchEvent(logoutEvent);
   }
 
   async login(
@@ -335,10 +363,9 @@ export class Sessions {
         sharedInboxes: services.filter((s) => s.type === "shared-inbox")!,
       };
 
-      // Store the completed session
-      const sessions = this.loggedInSessions;
-      sessions.push(session);
-      this.loggedInSessions = sessions;
+      // A fresh authorization is a new login even when the actor is unchanged.
+      this.sessionEvents.dispatchEvent(new CustomEvent("logout", { detail: { actor } }));
+      this.updateSession(session);
 
       this.loginAttempts.finish(attempt, { session: { actor } });
     } else {
@@ -363,67 +390,75 @@ export class Sessions {
       const session = sessions.find(session => session.actor === actor);
       if (!session) throw new Error(`No session found for actor ${actor}`);
 
-      this.loggedInSessions = sessions.filter(session => session.actor !== actor);
+      this.updateSession(session, true);
       if (!session.tokens.length) throw new Error("No tokens found in session");
 
-      // Revocation does not redirect, so each logout keeps its progress in this call.
+      // Revoke every provider even if one is offline; other sites hold copies of
+      // these same tokens. Report failures, rather than claiming a global logout.
+      let failure: unknown;
       for (let index = session.tokens.length - 1; index >= 0; index--) {
         const [authorizationEndpoint] = session.servicesByAuthorization[index];
-        await this.services.authorization.logout(authorizationEndpoint, session.tokens[index]);
+        try {
+          await this.services.authorization.logout(authorizationEndpoint, session.tokens[index]);
+        } catch (error) {
+          if (!(error instanceof GraffitiErrorUnauthorized)) failure ??= error;
+        }
       }
+      if (failure) throw failure;
     } catch (error) {
-      // Unauthorized errors can be treated as successful logouts.
-      if (!(error instanceof GraffitiErrorUnauthorized)) {
-        detail = { ...detail, error: error instanceof Error ? error : new Error(String(error)) };
-      }
+      detail = { ...detail, error: error instanceof Error ? error : new Error(String(error)) };
     }
     this.sessionEvents.dispatchEvent(new CustomEvent("logout", { detail }));
   }
 
   protected get loggedInSessions(): StoredSession[] {
     if (typeof window === "undefined") return loggedInSessions_;
-
-    const data = getBrowserStorageItem(COOKIE_LOGGED_IN_SESSIONS_KEY);
-    if (!data) return [];
-
-    let json: unknown;
-    try {
-      json = JSON.parse(data);
-    } catch {
-      console.error("Error parsing stored session data");
-      removeBrowserStorageItem(COOKIE_LOGGED_IN_SESSIONS_KEY);
-      return [];
+    const shared = readCookie(SESSION_STORAGE_KEY);
+    if (!this.browserSessions) {
+      this.browserSessions = parseSessions(shared ?? readLocalStorage(SESSION_STORAGE_KEY));
+    } else if (shared !== undefined) {
+      // Re-read accessible cookies on each operation, so another site's logout
+      // takes effect locally. An empty list is authoritative, not a fallback.
+      const current = parseSessions(shared);
+      const removed = this.browserSessions.filter(s => !current.some(c => sameLogin(s, c)));
+      if (removed.length) {
+        // End replaced logins; do not switch an open instance to new credentials.
+        this.browserSessions = this.browserSessions.filter(s => !removed.includes(s));
+        writeLocalStorage(SESSION_STORAGE_KEY, JSON.stringify(current));
+        for (const { actor } of removed) {
+          this.sessionEvents.dispatchEvent(new CustomEvent("logout", { detail: { actor } }));
+        }
+      }
     }
-
-    const parsed = array(StoredSessionSchema).safeParse(json);
-    if (!parsed.success) {
-      console.error("Stored session data is invalid");
-      removeBrowserStorageItem(COOKIE_LOGGED_IN_SESSIONS_KEY);
-      return [];
-    }
-    return parsed.data;
+    return this.browserSessions;
   }
-  protected set loggedInSessions(sessions: StoredSession[]) {
+  private updateSession(session: StoredSession, remove = false) {
+    const update = (sessions: StoredSession[]) => remove
+      ? sessions.filter(s => !sameLogin(s, session))
+      : [...sessions.filter(s => s.actor !== session.actor), session];
     if (typeof window === "undefined") {
-      loggedInSessions_ = sessions;
+      loggedInSessions_ = update(loggedInSessions_);
       return;
     }
-
-    setBrowserStorageItem(
-      COOKIE_LOGGED_IN_SESSIONS_KEY,
-      JSON.stringify(sessions),
-    );
+    this.browserSessions = update(this.browserSessions ?? this.loggedInSessions);
+    // Read each store afresh. An old tab may remove its own revoked token, but
+    // must not erase a newer login or another account saved by a different tab.
+    const shared = readCookie(SESSION_STORAGE_KEY);
+    if (shared !== undefined || !remove) {
+      writeCookie(SESSION_STORAGE_KEY, JSON.stringify(update(parseSessions(shared))));
+    }
+    const local = readLocalStorage(SESSION_STORAGE_KEY);
+    writeLocalStorage(SESSION_STORAGE_KEY, JSON.stringify(update(parseSessions(local))));
   }
 
   resolveSession(session: GraffitiSession): StoredSession {
+    const wasKnown = this.browserSessions?.some(s => s.actor === session.actor);
     const resolvedSession = this.loggedInSessions.find(
       (s) => s.actor === session.actor,
     );
     if (!resolvedSession) {
-      const logoutEvent: GraffitiLogoutEvent = new CustomEvent("logout", {
-        detail: { actor: session.actor },
-      });
-      this.sessionEvents.dispatchEvent(logoutEvent);
+      // Reading the shared cookie already announced a lost, known login.
+      if (!wasKnown) this.forget(session.actor);
       throw new Error("Not logged in");
     }
     return resolvedSession;
@@ -431,7 +466,7 @@ export class Sessions {
 }
 let loggedInSessions_: StoredSession[] = [];
 
-const COOKIE_LOGGED_IN_SESSIONS_KEY = "graffiti-sessions-logged-in";
+const SESSION_STORAGE_KEY = "graffiti-sessions-logged-in";
 const ServiceSessionSchema = object({
   token: string(),
   serviceEndpoint: url(),
@@ -445,6 +480,16 @@ const StoredSessionSchema = extend(AuthorizationProgressSchema, {
 });
 
 type StoredSession = infer_<typeof StoredSessionSchema>;
+
+function parseSessions(data?: string): StoredSession[] {
+  try { return array(StoredSessionSchema).parse(JSON.parse(data ?? "[]")); }
+  catch { return []; }
+}
+
+function sameLogin(a?: StoredSession, b?: StoredSession) {
+  return !!a && !!b && a.actor === b.actor &&
+    JSON.stringify([a.servicesByAuthorization, a.tokens]) === JSON.stringify([b.servicesByAuthorization, b.tokens]);
+}
 
 function serviceToEndpoint(service: Service): string {
   if (typeof service.serviceEndpoint === "string")

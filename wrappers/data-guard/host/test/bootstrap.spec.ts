@@ -84,13 +84,11 @@ it("still connects anonymously after declining storage access on login return", 
 });
 
 it.each([true, false])("restores a remembered login without choosing the account again (silent access: %s)", async silent => {
-  fake.storage.set("graffiti-guard:remember-login:https://app.example", "1");
   fake.storage.set("graffiti-guard:login-access-v3:alice", JSON.stringify([["https://app.example"]]));
   fake.restore.mockResolvedValue(silent);
   fake.activate.mockResolvedValue(true);
   const guarded = await start();
-  expect(fake.activate).toHaveBeenCalledTimes(silent ? 0 : 1);
-  if (!silent) expect(fake.activate).toHaveBeenCalledWith(true);
+  expect(fake.activate).not.toHaveBeenCalled();
   expect(fake.completed).not.toHaveBeenCalled();
   const login = vi.fn();
   guarded.sessionEvents.addEventListener("login", login);
@@ -100,26 +98,13 @@ it.each([true, false])("restores a remembered login without choosing the account
   expect((await import("../src/ui/show.js")).componentState.component).toBeNull();
 });
 
-it("keeps the reminder if Continue is skipped, without exposing the account", async () => {
-  const key = "graffiti-guard:remember-login:https://app.example";
-  fake.storage.set(key, "1");
-  const guarded = await start();
-  expect(fake.activate).toHaveBeenCalledOnce();
-  const login = vi.fn();
-  guarded.sessionEvents.addEventListener("login", login);
-  fake.events.dispatchEvent(new CustomEvent("login", { detail: { session: { actor: "alice" } } }));
-  fake.events.dispatchEvent(new CustomEvent("initialized"));
-  expect(login).not.toHaveBeenCalled();
-  expect(fake.storage.get(key)).toBe("1");
-});
-
-it("never treats a reminder as site approval", async () => {
-  const key = "graffiti-guard:remember-login:https://app.example";
-  fake.storage.set(key, "1");
-  fake.activate.mockResolvedValue(true);
+it("clears old site approval before restoring a replacement login for the same actor", async () => {
+  const key = "graffiti-guard:login-access-v3:alice";
+  fake.storage.set(key, JSON.stringify([["https://app.example"]]));
   const guarded = await start();
   const login = vi.fn();
   guarded.sessionEvents.addEventListener("login", login);
+  fake.events.dispatchEvent(new CustomEvent("logout", { detail: { actor: "alice" } }));
   fake.events.dispatchEvent(new CustomEvent("login", { detail: { session: { actor: "alice" } } }));
   fake.events.dispatchEvent(new CustomEvent("initialized"));
   expect(login).not.toHaveBeenCalled();
@@ -144,8 +129,7 @@ it("reports cancellation before initialization without requesting cookies or gra
   expect(fake.storage.size).toBe(0);
 });
 
-it("does not reopen cookie setup after a canceled login, even with a reminder", async () => {
-  fake.storage.set("graffiti-guard:remember-login:https://app.example", "1");
+it("does not reopen cookie setup after a canceled login", async () => {
   await start(undefined, { state: "canceled-login" });
   expect(fake.activate).not.toHaveBeenCalled();
 });
@@ -162,7 +146,7 @@ it.each([true, false])("finishes the chosen login without another prompt (storag
   });
   const { componentState } = await import("../src/ui/show.js");
   expect(fake.activate).toHaveBeenCalledTimes(alreadyAllowed ? 0 : 1);
-  if (!alreadyAllowed) expect(fake.activate).toHaveBeenCalledWith(false);
+  if (!alreadyAllowed) expect(fake.activate).toHaveBeenCalledWith();
   expect(fake.serve.mock.results[0].value.connect).toHaveBeenCalledWith({
     remoteWindow: window.parent,
     allowedOrigins: ["https://app.example"],
@@ -175,7 +159,6 @@ it.each([true, false])("finishes the chosen login without another prompt (storag
     { type: "login", detail: { session: { actor: "alice", guardSites: [["chat-v3"]] }, state: "caller-state" } },
     { type: "initialized" },
   ]));
-  expect(fake.storage.get("graffiti-guard:remember-login:https://app.example")).toBe("1");
   expect(componentState.component).toBeNull();
 });
 

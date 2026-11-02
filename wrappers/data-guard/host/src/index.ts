@@ -15,7 +15,6 @@ import {
 import { LoginAccess } from "./core/login-access.js";
 import { sourceFromContext } from "./core/source.js";
 import { activateStorageAccess, restoreStorageAccess, getLocalStorage } from "./bootstrap/storage_access.js";
-import { createLoginReminder } from "./bootstrap/login-reminder.js";
 import { GuardedGraffiti } from "./core/graffiti.js";
 import { Guard } from "./core/guard.js";
 import { GraffitiRuleStore } from "./core/rules.js";
@@ -29,9 +28,7 @@ if (standalone) document.documentElement.classList.add("standalone");
 
 const ruleStore = new GraffitiRuleStore(sourceFromContext(window.location.origin, {}));
 const app = createApp(App, { ruleStore });
-// The storage-access prompt uses this root before Graffiti can safely touch
-// browser storage. Graffiti-dependent prompt components are rendered only after
-// the plugin is installed below.
+// The login-return prompt uses this root before the Graffiti plugin is installed.
 app.mount("#app");
 const pageUrl = new URL(window.location.href);
 
@@ -57,24 +54,23 @@ if (standalone) {
   }
 } else {
   listenToParent(async (origin, loginNonce, loginCancelled) => {
-    const reminder = createLoginReminder(origin);
-    let storageReady = await restoreStorageAccess();
-    if (!storageReady && !loginCancelled && (loginNonce || reminder.remembered)) {
-      storageReady = await activateStorageAccess(!loginNonce);
+    let cookieAccess = await restoreStorageAccess();
+    if (!cookieAccess && !loginCancelled && loginNonce) {
+      cookieAccess = await activateStorageAccess();
     }
-    // Public browsing starts anonymously; choose storage before creating any caches.
+    // The implementation restores its own saved credentials. Site approval stays
+    // in this embedding site's storage and does not require shared cookies.
     const graffiti = new GraffitiDecentralized();
     app.use(GraffitiPlugin, { graffiti });
-    if (storageReady) ruleStore.activate();
-    const access = new LoginAccess(storageReady ? getLocalStorage() : undefined);
+    ruleStore.activate();
+    const access = new LoginAccess(getLocalStorage());
     const guard = new Guard(graffiti, ruleStore, origin, ask, access);
     // This untrusted return can only report failure. Success still requires the
     // guard's origin-bound cookie, and neither identity nor consent comes from a URL.
     const result = loginCancelled
       ? { error: new Error("Login was not completed"), state: loginCancelled.state }
-      : storageReady && loginNonce ? takeLoginResult(loginNonce, origin) : undefined;
+      : cookieAccess && loginNonce ? takeLoginResult(loginNonce, origin) : undefined;
     const guarded = new GuardedGraffiti(graffiti, guard, access, origin, result);
-    if (storageReady) reminder.track(guarded.sessionEvents);
     serveGraffiti(guarded).connect({
       remoteWindow: window.parent,
       allowedOrigins: [origin],

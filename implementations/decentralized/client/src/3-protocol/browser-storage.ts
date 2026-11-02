@@ -1,27 +1,30 @@
 import Cookies from "js-cookie";
 
-// The Storage Access API only exposes cookies, but not
-// localstorage or indexedDB. Therefore, we must use cookies
-// for storage that persists across iframes. This just involves
-// session tokens, the rest of the storage is for in-process
-// authorization, which cannot be done in an iframe anyways,
-// and caching, which just adds efficiency.
+// Cookies share a login with a newly visited embedding site after storage access.
+// A local copy lets that site resume the same login without cookie access later.
+// Both stores stay on the implementation's origin. In browsers with partitioned
+// storage, each embedding site keeps its own local copy.
 
 const BROWSER_STORAGE_EXPIRATION_DAYS = 365;
 
-export function setBrowserStorageItem(key: string, value: string): void {
-  Cookies.set(key, value, getBrowserStorageOptions());
+export function writeCookie(key: string, value: string): void {
+  try { Cookies.set(key, value, cookieOptions()); } catch {}
 }
 
-export function getBrowserStorageItem(key: string): string | undefined {
-  return Cookies.get(key);
+export function readCookie(key: string): string | undefined {
+  try { return Cookies.get(key); } catch {}
 }
 
-export function removeBrowserStorageItem(key: string): void {
-  Cookies.remove(key, getBrowserStorageOptions());
+export function readLocalStorage(key: string): string | undefined {
+  try { return window.localStorage.getItem(key) ?? undefined; } catch {}
 }
 
-function getBrowserStorageOptions(): Cookies.CookieAttributes {
+export function writeLocalStorage(key: string, value: string): void {
+  // Cookie-based login still works if the browser cannot retain a local copy.
+  try { window.localStorage.setItem(key, value); } catch {}
+}
+
+function cookieOptions(): Cookies.CookieAttributes {
   const attributes: Cookies.CookieAttributes = {
     expires: BROWSER_STORAGE_EXPIRATION_DAYS,
     path: "/",

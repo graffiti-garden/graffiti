@@ -1002,12 +1002,12 @@ export class GraffitiDecentralized implements Graffiti {
     return this.discoverMeta<{}>(channels, {}, cursors, session);
   };
 
-  protected async tryLogoutIfUnauthorized(
+  protected tryLogoutIfUnauthorized(
     e: unknown,
     session?: GraffitiSession | null,
   ) {
     if (e instanceof GraffitiErrorUnauthorized && session) {
-      await this.sessions.logout(session.actor);
+      this.sessions.forget(session.actor);
     }
   }
 
