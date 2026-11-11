@@ -182,62 +182,17 @@ export class StorageBuckets {
 
     const response = await fetchWithErrorHandling(url);
 
+    // Stream the body so that we can enforce maxBytes and halt the stream
+    // if a malicious server gives us more than we are asking for.
+    // The stream is only internal: callers just get one byte array
+    // once the full read completes.
     const reader = response.body?.getReader();
     if (!reader) {
       throw new Error("Failed to read value from storage bucket");
     }
 
-    const contentLengthHeader = response.headers.get("Content-Length");
-    const parsedContentLength = contentLengthHeader
-      ? Number(contentLengthHeader)
-      : undefined;
-
-    const hasValidContentLength =
-      !!parsedContentLength &&
-      !!Number.isFinite(parsedContentLength) &&
-      parsedContentLength >= 0;
-
-    // Fast path: Content-Length exists and is valid
-    if (hasValidContentLength) {
-      const contentLength = parsedContentLength!;
-      if (maxBytes !== undefined && contentLength > maxBytes) {
-        throw new Error("Value exceeds maximum byte limit");
-      }
-
-      const out = new Uint8Array(contentLength);
-      let offset = 0;
-      let completed = false;
-
-      try {
-        while (offset <= out.length) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            completed = true;
-            break;
-          }
-          if (!value || value.length === 0) continue;
-
-          const nextOffset = offset + value.length;
-          if (nextOffset > out.length) {
-            throw new Error("Received more data than expected");
-          }
-
-          out.set(value, offset);
-          offset = nextOffset;
-        }
-      } finally {
-        reader.releaseLock();
-      }
-
-      if (!completed) {
-        throw new Error("Failed to read complete value from storage bucket");
-      }
-
-      return offset === contentLength ? out : out.slice(0, offset);
-    }
-
-    // Fallback path: no (usable) Content-Length
+    // Allocate an array to store the chunks and count the
+    // total number of bytes
     const chunks: Uint8Array[] = [];
     let total = 0;
 
@@ -250,7 +205,10 @@ export class StorageBuckets {
 
         total += value.length;
         if (maxBytes !== undefined && total > maxBytes) {
-          throw new Error("Value exceeds maximum byte limit");
+          const error = new Error("Value exceeds maximum byte limit");
+          // Start cancellation without delaying or replacing the size error.
+          void reader.cancel(error).catch(() => {});
+          throw error;
         }
 
         // Copy because some implementations reuse the underlying buffer
