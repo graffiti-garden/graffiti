@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { StorageBuckets } from "./3-storage-buckets";
 import { GraffitiErrorUnauthorized } from "./utilities";
 import { GraffitiErrorNotFound, GraffitiErrorTooLarge } from "@graffiti-garden/api";
@@ -61,6 +61,83 @@ export function storageBucketTests(
       await expect(
         storageBuckets.get(storageBucketEndpoint, key, bytes.length - 1),
       ).rejects.toThrow();
+    });
+
+    describe("response bodies", () => {
+      afterEach(() => vi.unstubAllGlobals());
+
+      test.each([
+        { wireLength: 44, encoding: "gzip" },
+        { wireLength: 84, encoding: "gzip" },
+        { wireLength: 44, encoding: undefined },
+        { wireLength: 84, encoding: undefined },
+      ])("reads decoded bytes with wire length $wireLength and encoding $encoding", async ({ wireLength, encoding }) => {
+        const bytes = new Uint8Array(64).fill(42);
+        // Fetch yields decoded bytes; CORS may hide the encoding header while
+        // exposing Content-Length. Either wire length can be valid.
+        const headers = new Headers({ "Content-Length": String(wireLength) });
+        if (encoding) headers.set("Content-Encoding", encoding);
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes.slice(), { headers })));
+        expect(await storageBuckets.get(storageBucketEndpoint, "key", bytes.length))
+          .toEqual(bytes);
+      });
+
+      test.each([0, 4])("accepts exactly %i bytes without length headers", async (size) => {
+        const bytes = new Uint8Array(size).fill(42);
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes.slice(0, 2));
+            controller.enqueue(bytes.slice(2));
+            controller.close();
+          },
+        });
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(body)));
+        expect(await storageBuckets.get(storageBucketEndpoint, "key", size))
+          .toEqual(bytes);
+        expect(body.locked).toBe(false);
+      });
+
+      test.each(["pending", "rejecting"] as const)("cancels oversized bodies despite %s cleanup", async (cleanup) => {
+        let pulls = 0;
+        const cancel = vi.fn(() => cleanup === "pending"
+          ? new Promise<void>(() => {})
+          : Promise.reject(new Error("Cancellation failed")));
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            pulls++;
+            controller.enqueue(new Uint8Array([1, 2]));
+          },
+          cancel,
+        }, { highWaterMark: 0 });
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+          headers: { "Content-Length": "2" },
+        })));
+        await expect(storageBuckets.get(storageBucketEndpoint, "key", 3))
+          .rejects.toThrow("Value exceeds maximum byte limit");
+        expect(cancel).toHaveBeenCalledOnce();
+        expect(pulls).toBe(2);
+        expect(body.locked).toBe(false);
+      });
+
+      test("propagates a failed body read instead of returning partial bytes", async () => {
+        const failure = new Error("Connection lost");
+        let sent = false;
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (sent) controller.error(failure);
+            else {
+              controller.enqueue(new Uint8Array([1, 2]));
+              sent = true;
+            }
+          },
+        }, { highWaterMark: 0 });
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+          headers: { "Content-Length": "4" },
+        })));
+        await expect(storageBuckets.get(storageBucketEndpoint, "key"))
+          .rejects.toBe(failure);
+        expect(body.locked).toBe(false);
+      });
     });
 
     test("overwrites across the small and large storage cutoff", async () => {
