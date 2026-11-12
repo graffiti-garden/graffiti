@@ -24,6 +24,7 @@ import { authorizationTests } from "./1-services/1-authorization-tests";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
 import { inboxTests, inboxUnitTests } from "./1-services/4-inboxes-tests";
+import { inboxCacheTests } from "./1-services/4-inboxes/cache-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
@@ -431,3 +432,5 @@ describe("GraffitiDecentralized Tests", () => {
 authorizationTests();
 inboxUnitTests();
 sessionTests();
+
+inboxCacheTests();

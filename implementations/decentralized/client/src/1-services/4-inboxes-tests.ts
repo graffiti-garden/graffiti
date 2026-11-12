@@ -546,14 +546,16 @@ export function inboxUnitTests() {
         const tags = [new Uint8Array([1])];
         const first = inboxes.query(inboxUrl, tags, {});
         const second = inboxes.query(inboxUrl, tags, {});
-        const [firstResult, secondResult] = await Promise.all([
-          first.next(), second.next(),
-        ]);
+        const firstPending = first.next();
+        const secondPending = second.next();
+        const firstResult = await firstPending;
+        const secondResult = await secondPending;
         expect(firstResult.value).toEqual(message);
         expect(secondResult.value).toEqual(message);
-        const [firstNext, secondNext] = await Promise.all([
-          first.next(), second.next(),
-        ]);
+        const firstNextPending = first.next();
+        const secondNextPending = second.next();
+        const firstNext = await firstNextPending;
+        const secondNext = await secondNextPending;
         expect(firstNext.value).toEqual(nextMessage);
         expect(secondNext.value).toEqual(nextMessage);
         expect(fetch).toHaveBeenCalledTimes(2);
