@@ -27,7 +27,8 @@ type MethodsOf<T> = {
 };
 
 type SerializedMedia = Omit<GraffitiMedia, "data"> & {
-  data: { buffer: ArrayBuffer; type: string };
+  // Older hosts send an ArrayBuffer; both forms are valid Blob parts.
+  data: { buffer: Blob | ArrayBuffer; type: string };
 };
 
 type SerializedPostMedia = Omit<GraffitiPostMedia, "data"> & {

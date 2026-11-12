@@ -7,7 +7,7 @@ import type {
   GraffitiPostMedia,
   GraffitiSession,
 } from "@graffiti-garden/api";
-import { connect as connectRpc, Reply, WindowMessenger } from "penpal";
+import { connect as connectRpc, WindowMessenger } from "penpal";
 import { statePrefix } from "../client/session-relay.js";
 export { createGraffitiRelay } from "../client/session-relay.js";
 
@@ -23,7 +23,8 @@ type ConnectionState = {
 };
 
 type SerializedMedia = Omit<GraffitiMedia, "data"> & {
-  data: { buffer: ArrayBuffer; type: string };
+  // Older hosts send an ArrayBuffer; both forms are valid Blob parts.
+  data: { buffer: Blob | ArrayBuffer; type: string };
 };
 
 type SerializedPostMedia = Omit<GraffitiPostMedia, "data"> & {
@@ -149,14 +150,17 @@ export function serveGraffiti(graffiti: Graffiti) {
         },
         async getMedia(...args: Parameters<Graffiti["getMedia"]>) {
           const result = await graffiti.getMedia(...args);
-          const buffer = await result.data.arrayBuffer();
-          return new Reply(
-            {
-              ...result,
-              data: { buffer, type: result.data.type },
-            } satisfies SerializedMedia,
-            { transferables: [buffer] },
-          );
+          // Structured cloning preserves Blob bytes without materializing a new
+          // ArrayBuffer at every hop. Keep the envelope accepted by old clients.
+          return {
+            ...result,
+            data: {
+              // Normalize File subclasses so filenames and timestamps stay local,
+              // as they did with the former ArrayBuffer payload.
+              buffer: new Blob([result.data], { type: result.data.type }),
+              type: result.data.type,
+            },
+          } satisfies SerializedMedia;
         },
         async discover(id: string, ...args: Parameters<Graffiti["discover"]>) {
           await replaceStream(id, graffiti.discover<{}>(...args));
