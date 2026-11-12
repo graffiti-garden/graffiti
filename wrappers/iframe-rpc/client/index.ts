@@ -27,8 +27,9 @@ type MethodsOf<T> = {
 };
 
 type SerializedMedia = Omit<GraffitiMedia, "data"> & {
-  // Older hosts send an ArrayBuffer; both forms are valid Blob parts.
-  data: { buffer: Blob | ArrayBuffer; type: string };
+  // Transitional reader: after hosts and consuming bundles have migrated to
+  // direct Blobs, remove the envelope type and the reconstruction below.
+  data: Blob | { buffer: Blob | ArrayBuffer; type: string };
 };
 
 type SerializedPostMedia = Omit<GraffitiPostMedia, "data"> & {
@@ -166,7 +167,9 @@ export class GraffitiRpcClient extends Graffiti {
     const result = await (await this.remote()).getMedia(...cloneArgs(args));
     return {
       ...result,
-      data: new Blob([result.data.buffer], { type: result.data.type }),
+      data: result.data instanceof Blob
+        ? result.data
+        : new Blob([result.data.buffer], { type: result.data.type }),
     };
   };
 

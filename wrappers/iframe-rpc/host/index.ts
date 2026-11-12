@@ -23,7 +23,8 @@ type ConnectionState = {
 };
 
 type SerializedMedia = Omit<GraffitiMedia, "data"> & {
-  // Older hosts send an ArrayBuffer; both forms are valid Blob parts.
+  // TODO: remove this envelope once all consuming bundles include the
+  // direct-Blob reader. The client can then return GraffitiMedia unchanged.
   data: { buffer: Blob | ArrayBuffer; type: string };
 };
 
@@ -151,7 +152,8 @@ export function serveGraffiti(graffiti: Graffiti) {
         async getMedia(...args: Parameters<Graffiti["getMedia"]>) {
           const result = await graffiti.getMedia(...args);
           // Structured cloning preserves Blob bytes without materializing a new
-          // ArrayBuffer at every hop. Keep the envelope accepted by old clients.
+          // ArrayBuffer at every hop. Keep the envelope until consuming bundles
+          // (including Social.Wiki) have deployed the direct-Blob reader.
           return {
             ...result,
             data: {

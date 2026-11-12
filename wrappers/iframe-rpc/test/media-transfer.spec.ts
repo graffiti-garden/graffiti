@@ -28,10 +28,12 @@ const fixtures = [
     type: "text/plain",
   },
 ];
-for (const legacyHost of [false, true])
+for (const hostFormat of ["current", "legacy", "direct-blob"])
   for (const legacyClient of [false, true]) {
+    if (hostFormat === "direct-blob" && legacyClient) continue;
+    const legacyHost = hostFormat === "legacy";
     it.each(fixtures)(
-      `$name media remains readable with ${legacyHost ? "legacy" : "current"} host and ${legacyClient ? "legacy" : "current"} client`,
+      `$name media remains readable with ${hostFormat} host and ${legacyClient ? "legacy" : "current"} client`,
       async ({ bytes, type, file }) => {
         const blob = file
           ? new File([bytes], "private-fixture.txt", {
@@ -64,7 +66,7 @@ for (const legacyHost of [false, true])
         let destroy: () => void | Promise<void>;
         const transferred: ArrayBuffer[] = [];
         const materialize = vi.spyOn(blob, "arrayBuffer");
-        if (legacyHost) {
+        if (legacyHost || hostFormat === "direct-blob") {
           const connection = connect<{
             sessionEvent(type: string, detail?: unknown): void;
           }>({
@@ -79,6 +81,9 @@ for (const legacyHost of [false, true])
               },
               async getMedia(...args: unknown[]) {
                 getMedia(...args);
+                if (hostFormat === "direct-blob") {
+                  return { data: new Blob([blob], { type: blob.type }), actor, allowed };
+                }
                 const buffer = await blob.arrayBuffer();
                 transferred.push(buffer);
                 return new Reply(
