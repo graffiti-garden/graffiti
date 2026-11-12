@@ -10,17 +10,10 @@ hashes.sha512Async = sha512;
 export const CHANNEL_ATTESTATION_METHOD_SHA256_ED25519 = "pk:sha2-256+ed25519";
 const CHANNEL_ATTESTATION_METHOD_PREFIX_SHA256_ED25519 = 0;
 const VALIDATION_CACHE_LIMIT = 1024;
-const VALIDATION_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_CACHED_ACTOR_LENGTH = 2048;
 
 export class ChannelAttestations {
-  private readonly validations = new Map<
-    string,
-    {
-      until: number;
-      promise: Promise<boolean>;
-    }
-  >();
+  private readonly validations = new Map<string, Promise<boolean>>();
 
   async register(
     channelAttestationMethod: string,
@@ -122,27 +115,24 @@ export class ChannelAttestations {
       Array.from(signature),
       Array.from(publicId),
     ]);
-    const now = performance.now();
     const cached = this.validations.get(key);
-    if (cached && cached.until > now) {
+    if (cached) {
       this.validations.delete(key);
       this.validations.set(key, cached);
-      return await cached.promise;
+      return await cached;
     }
-    if (cached) this.validations.delete(key);
 
     const promise = verifyAsync(
       signature,
       new TextEncoder().encode(actor),
       publicId.subarray(1),
     );
-    const entry = { until: now + VALIDATION_CACHE_TTL_MS, promise };
-    this.validations.set(key, entry);
+    this.validations.set(key, promise);
     while (this.validations.size > VALIDATION_CACHE_LIMIT) {
       this.validations.delete(this.validations.keys().next().value!);
     }
     const remove = () => {
-      if (this.validations.get(key) === entry) this.validations.delete(key);
+      if (this.validations.get(key) === promise) this.validations.delete(key);
     };
     // Singleflight pending calls, but do not retain failed verification results.
     void promise.then((valid) => {

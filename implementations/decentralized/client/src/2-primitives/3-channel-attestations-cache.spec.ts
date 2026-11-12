@@ -63,18 +63,13 @@ describe("exact channel attestation memo", () => {
     expect(verifyAsync).toHaveBeenCalledTimes(1);
   });
 
-  it("expires entries and does not cache malformed or oversized tuples", async () => {
-    const clock = vi.spyOn(performance, "now").mockReturnValue(0);
+  it("does not cache malformed or oversized tuples", async () => {
     const attestations = new ChannelAttestations();
     const x = await attestations.attest(method, actor, "fixture");
     expect(
       await attestations.validate(x.attestation, actor, x.channelPublicId),
     ).toBe(true);
-    clock.mockReturnValue(600_001);
-    expect(
-      await attestations.validate(x.attestation, actor, x.channelPublicId),
-    ).toBe(true);
-    expect(verifyAsync).toHaveBeenCalledTimes(2);
+    expect(verifyAsync).toHaveBeenCalledTimes(1);
     const longActor = "did:example:" + "x".repeat(2048);
     const long = await attestations.attest(method, longActor, "fixture");
     for (let i = 0; i < 2; i++)
@@ -90,7 +85,7 @@ describe("exact channel attestation memo", () => {
         attestations.validate(x.attestation.slice(1), actor, x.channelPublicId),
       ).rejects.toThrow();
     expect(size(attestations)).toBe(1);
-    expect(verifyAsync).toHaveBeenCalledTimes(6);
+    expect(verifyAsync).toHaveBeenCalledTimes(5);
   });
 
   it("bounds retained entries with LRU eviction", async () => {
@@ -133,8 +128,7 @@ describe("exact channel attestation memo", () => {
     expect(verifyAsync).toHaveBeenCalledTimes(2);
   });
 
-  it("does not let an old rejection remove a replacement after expiry", async () => {
-    const clock = vi.spyOn(performance, "now").mockReturnValue(0);
+  it("does not let an old rejection remove a replacement after LRU eviction", async () => {
     const attestations = new ChannelAttestations();
     const x = await attestations.attest(method, actor, "fixture");
     let reject!: (error: Error) => void;
@@ -150,17 +144,26 @@ describe("exact channel attestation memo", () => {
       x.channelPublicId,
     );
     const rejected = expect(first).rejects.toThrow("Old verification failed");
-    clock.mockReturnValue(600_001);
+    // Pending work can be evicted too. Its eventual rejection must not remove
+    // a new successful verification of the same tuple.
+    for (let i = 0; i < 1024; i++) {
+      vi.mocked(verifyAsync).mockResolvedValueOnce(true);
+      await attestations.validate(
+        x.attestation,
+        `did:example:other-${i}`,
+        x.channelPublicId,
+      );
+    }
     expect(
       await attestations.validate(x.attestation, actor, x.channelPublicId),
     ).toBe(true);
     reject(new Error("Old verification failed"));
     await rejected;
-    expect(size(attestations)).toBe(1);
+    expect(size(attestations)).toBe(1024);
     expect(
       await attestations.validate(x.attestation, actor, x.channelPublicId),
     ).toBe(true);
-    expect(verifyAsync).toHaveBeenCalledTimes(2);
+    expect(verifyAsync).toHaveBeenCalledTimes(1026);
   });
 
   it("still validates current object bytes, value, channels and private recipients", async () => {
