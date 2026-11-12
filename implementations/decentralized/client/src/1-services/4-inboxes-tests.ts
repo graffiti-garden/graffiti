@@ -392,23 +392,20 @@ export function inboxUnitTests() {
         },
       );
 
-      test("discards an unacknowledged body response before a legacy retry", async () => {
-        const ignored = response();
-        const cancel = vi.spyOn(ignored.body!, "cancel");
+      test("missing advertisement preserves results and uses URLs on later calls", async () => {
+        const successful = response();
         const fetch = vi.fn().mockResolvedValueOnce(response(true))
-          .mockResolvedValueOnce(ignored).mockResolvedValueOnce(response());
+          .mockResolvedValueOnce(successful).mockResolvedValueOnce(response());
         vi.stubGlobal("fetch", fetch);
-        const deadline = vi.spyOn(AbortSignal, "timeout");
         const inboxes = new TestInboxes();
         await inboxes.requestBatch(inboxUrl, "query");
-        deadline.mockClear();
         const result = await inboxes.requestBatch(inboxUrl, "query", "cursor-1");
-        expect(result.response).not.toBe(ignored);
-        expect(cancel).toHaveBeenCalledOnce();
+        expect(result.response).toBe(successful);
+        expect(fetch).toHaveBeenCalledTimes(2);
+        await inboxes.requestBatch(inboxUrl, "query", "cursor-2");
         expect(fetch.mock.calls.slice(1).map((call) => call[0])).toEqual([
-          `${inboxUrl}/query`, `${inboxUrl}/query?cursor=cursor-1`,
+          `${inboxUrl}/query`, `${inboxUrl}/query?cursor=cursor-2`,
         ]);
-        expect(deadline).toHaveBeenCalledOnce();
       });
     });
 

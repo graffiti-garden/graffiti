@@ -206,9 +206,10 @@ export class Inboxes {
     const bodyCursor =
       type === "query" && !!cursor &&
       this.bodyCursorEndpoints.has(endpoint);
-    const fetchBatch = (useBodyCursor: boolean) =>
-      fetchWithErrorHandling(
-        cursor && !useBodyCursor
+    let response: Response;
+    try {
+      response = await fetchWithErrorHandling(
+        cursor && !bodyCursor
           ? `${endpoint}?cursor=${encodeURIComponent(cursor)}`
           : endpoint,
         {
@@ -221,30 +222,20 @@ export class Inboxes {
                 }
               : {}),
           },
-          body: useBodyCursor ? new Uint8Array(dagCborEncode({ cursor })) : body,
+          body: bodyCursor ? new Uint8Array(dagCborEncode({ cursor })) : body,
           signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         },
       );
-    let response: Response;
-    try {
-      response = await fetchBatch(bodyCursor);
     } catch (error) {
       // Keep the error unchanged, but do not retain a possibly stale capability.
       // A later caller starts with the compatible URL form again.
       if (bodyCursor) this.bodyCursorEndpoints.delete(endpoint);
       throw error;
     }
-    const supportsBody = () =>
-      response.headers.get("Graffiti-Cursor-Transport") === "body";
-    if (bodyCursor && !supportsBody()) {
-      // Do not consume an unacknowledged body-cursor response: an independent
-      // server may have ignored the body. Retry only this successful response.
-      // Failed requests remain errors; in particular 410 is never negotiation.
-      this.bodyCursorEndpoints.delete(endpoint);
-      await response.body?.cancel();
-      response = await fetchBatch(false);
-    }
-    if (type === "query" && supportsBody()) {
+    if (
+      type === "query" &&
+      response.headers.get("Graffiti-Cursor-Transport") === "body"
+    ) {
       this.bodyCursorEndpoints.add(endpoint);
     } else {
       this.bodyCursorEndpoints.delete(endpoint);

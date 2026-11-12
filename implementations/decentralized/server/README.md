@@ -88,12 +88,11 @@ unchanged. URL cursors remain supported for older clients; export continues
 to use URL cursors.
 
 The client learns support from ordinary successful responses, separately for
-each endpoint and without a probe. An older server receives URL cursors. A
-successful body-cursor response must acknowledge support before the client
-consumes it; otherwise the client discards it and retries that cursor by URL.
-Errors are returned unchanged, without a transport retry, and clear the
-in-memory capability so the next caller uses the URL form. Consequently,
-rolling back to a server that rejects body cursors can fail one in-flight
+each endpoint and without a probe. An older server receives URL cursors. If a
+response stops advertising support, its results are still consumed and later
+calls use URL cursors. Errors are returned unchanged, without a transport retry,
+and clear the in-memory capability so the next caller uses the URL form.
+Rolling back to a server that rejects body cursors can fail one in-flight
 query. Keep body support available throughout rolling deployments to avoid
 that interruption.
 
