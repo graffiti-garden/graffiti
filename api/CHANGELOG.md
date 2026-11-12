@@ -1,5 +1,11 @@
 # @graffiti-garden/api
 
+## 1.4.1
+
+### Patch Changes
+
+- 53364b5: Reuse validators for cloned JSON schemas with a bounded LRU and share concurrent AJV initialization. Keep query schemas isolated: identifiers and references within a schema work, but separate queries cannot register schemas for one another.
+
 ## 1.4.0
 
 ### Minor Changes

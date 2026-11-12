@@ -19,7 +19,7 @@
     "predev:flow-lab": "npm --prefix ../../.. run build -w @graffiti-garden/wrapper-iframe-rpc && npm --prefix ../../.. run build -w @graffiti-garden/implementation-decentralized && npm --prefix ../../.. run build -w @graffiti-garden/wrapper-data-guard"
   },
   "dependencies": {
-    "@graffiti-garden/api": "^1.4.0",
+    "@graffiti-garden/api": "^1.4.1",
     "@graffiti-garden/wrapper-data-guard": "^0.3.1",
     "@graffiti-garden/wrapper-vue": "^1.4.3",
     "@picocss/pico": "^2.1.1",
