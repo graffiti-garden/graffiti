@@ -20,20 +20,14 @@ async function etagFor(value: Uint8Array) {
   return [...hash].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-// Parse standard entity-tags for weak GET comparison. Ignore malformed
-// validators: a full response is safe, and R2 rejects malformed conditions.
+// Parse Etags for GET
 function parseIfNoneMatch(header: string | undefined) {
   if (!header) return undefined;
   let remaining = header.trim();
   if (remaining === "*") return "*";
   const tags: string[] = [];
   while (remaining) {
-    // Consume one complete quoted tag: commas inside quotes belong to the tag,
-    // so splitting the header on commas would misparse e.g. W/"a,b", "c".
-    // RFC 9110 section 8.8.3 defines the captured characters as ! (0x21),
-    // # through ~ (0x23-0x7e), or bytes 0x80-0xff: no quotes/control characters.
-    // The optional W/ prefix is discarded because If-None-Match uses weak
-    // comparison. After the closing quote, allow only spaces/tabs and comma/end.
+    // Consume one complete quoted tag per RFC 9110
     // https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3
     const item = /^(?:W\/)?"([\x21\x23-\x7e\x80-\xff]*)"[\t ]*(?:,|$)/.exec(remaining);
     if (!item) return undefined;
@@ -98,6 +92,8 @@ export class StorageBucketDO extends DurableObject<Bindings> {
   async getValue(key: string, ifNoneMatch?: string) {
     if (this.deleted) return new Response("Bucket not found", { status: 404 });
     const condition = parseIfNoneMatch(ifNoneMatch);
+
+    // Look in SQLite first
     const entry = this.entry(key);
     if (entry && entry.value !== null) {
       const etag = entry.etag!;
@@ -107,6 +103,7 @@ export class StorageBucketDO extends DurableObject<Bindings> {
         : new Response(entry.value, { headers });
     }
 
+    // Otherwise look in R2 storage
     if (!entry) return notFound();
     const result = await this.env.STORAGE.get(`${this.bucketId}/${key}`, {
       onlyIf: condition
