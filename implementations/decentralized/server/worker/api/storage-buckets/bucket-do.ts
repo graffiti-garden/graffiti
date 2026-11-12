@@ -28,6 +28,13 @@ function parseIfNoneMatch(header: string | undefined) {
   if (remaining === "*") return "*";
   const tags: string[] = [];
   while (remaining) {
+    // Consume one complete quoted tag: commas inside quotes belong to the tag,
+    // so splitting the header on commas would misparse e.g. W/"a,b", "c".
+    // RFC 9110 section 8.8.3 defines the captured characters as ! (0x21),
+    // # through ~ (0x23-0x7e), or bytes 0x80-0xff: no quotes/control characters.
+    // The optional W/ prefix is discarded because If-None-Match uses weak
+    // comparison. After the closing quote, allow only spaces/tabs and comma/end.
+    // https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3
     const item = /^(?:W\/)?"([\x21\x23-\x7e\x80-\xff]*)"[\t ]*(?:,|$)/.exec(remaining);
     if (!item) return undefined;
     tags.push(item[1]);
