@@ -88,6 +88,10 @@ type StreamSource<Schema extends JSONSchema> =
 
 export class Inboxes {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
+  // Negotiate on ordinary successful responses, never by retrying an error.
+  // Keep this endpoint-specific and in memory: independent inbox providers may
+  // still only support URL cursors, without probing or sending extra queries.
+  protected readonly bodyCursorEndpoints = new Set<string>();
   protected cache_: Promise<Cache> | null = null;
   protected get cache() {
     if (!this.cache_) {
@@ -198,22 +202,53 @@ export class Inboxes {
   ) {
     // Keep the deadline active while the response body is being read, too.
     const timeout = AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS);
-    const response = await fetchWithErrorHandling(
-      `${inboxUrl}/${type}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/cbor",
-          ...(inboxToken
-            ? {
-                Authorization: `Bearer ${inboxToken}`,
-              }
-            : {}),
+    const endpoint = `${inboxUrl}/${type}`;
+    const bodyCursor =
+      type === "query" && !!cursor &&
+      this.bodyCursorEndpoints.has(endpoint);
+    const fetchBatch = (useBodyCursor: boolean) =>
+      fetchWithErrorHandling(
+        cursor && !useBodyCursor
+          ? `${endpoint}?cursor=${encodeURIComponent(cursor)}`
+          : endpoint,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/cbor",
+            ...(inboxToken
+              ? {
+                  Authorization: `Bearer ${inboxToken}`,
+                }
+              : {}),
+          },
+          body: useBodyCursor ? new Uint8Array(dagCborEncode({ cursor })) : body,
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         },
-        body,
-        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      },
-    );
+      );
+    let response: Response;
+    try {
+      response = await fetchBatch(bodyCursor);
+    } catch (error) {
+      // Keep the error unchanged, but do not retain a possibly stale capability.
+      // A later caller starts with the compatible URL form again.
+      if (bodyCursor) this.bodyCursorEndpoints.delete(endpoint);
+      throw error;
+    }
+    const supportsBody = () =>
+      response.headers.get("Graffiti-Cursor-Transport") === "body";
+    if (bodyCursor && !supportsBody()) {
+      // Do not consume an unacknowledged body-cursor response: an independent
+      // server may have ignored the body. Retry only this successful response.
+      // Failed requests remain errors; in particular 410 is never negotiation.
+      this.bodyCursorEndpoints.delete(endpoint);
+      await response.body?.cancel();
+      response = await fetchBatch(false);
+    }
+    if (type === "query" && supportsBody()) {
+      this.bodyCursorEndpoints.add(endpoint);
+    } else {
+      this.bodyCursorEndpoints.delete(endpoint);
+    }
     const retryAfterHeader = response.headers.get("Retry-After");
     const retryAfter = retryAfterHeader
       ? parseInt(retryAfterHeader)
@@ -330,7 +365,7 @@ export class Inboxes {
               batch = await this.fetchMessageBatch(
                 inboxUrl,
                 type,
-                firstPage ? body : undefined, // Later pages send no body.
+                firstPage ? body : undefined,
                 inboxToken,
                 query?.cursor,
                 signal,

@@ -15,7 +15,7 @@ const noCors = cors({
   origin: "*",
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "If-None-Match"],
-  exposeHeaders: ["ETag", "Retry-After"],
+  exposeHeaders: ["ETag", "Retry-After", "Graffiti-Cursor-Transport"],
   maxAge: 86400, // one day
 });
 

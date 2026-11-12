@@ -77,6 +77,26 @@ For first time deployments:
 
 In the future, simply run `npm run deploy` to update the application.
 
+## Query cursor transport
+
+Inbox query responses advertise `Graffiti-Cursor-Transport: body`, exposed
+through CORS. After receiving this header from a query endpoint, clients may
+continue with a CBOR `{ cursor }` body at the same URL. This lets browsers reuse
+the CORS preflight cache instead of preflighting every distinct cursor URL.
+The initial query body, authorization, cursor expiry, and rate limits are
+unchanged. URL cursors remain supported for older clients; export continues
+to use URL cursors.
+
+The client learns support from ordinary successful responses, separately for
+each endpoint and without a probe. An older server receives URL cursors. A
+successful body-cursor response must acknowledge support before the client
+consumes it; otherwise the client discards it and retries that cursor by URL.
+Errors are returned unchanged, without a transport retry, and clear the
+in-memory capability so the next caller uses the URL form. Consequently,
+rolling back to a server that rejects body cursors can fail one in-flight
+query. Keep body support available throughout rolling deployments to avoid
+that interruption.
+
 ## OAuth TODOs
 
 - **Service scopes:** An OAuth token can access all services belonging to its

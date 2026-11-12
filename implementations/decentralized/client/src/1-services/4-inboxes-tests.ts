@@ -117,6 +117,56 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       ).rejects.toThrowError(GraffitiErrorUnauthorized);
     }, 30000);
 
+    test("body cursors preserve authorization, expiry and rate limits", async () => {
+      const headers = {
+        "Content-Type": "application/cbor",
+        Authorization: `Bearer ${inboxToken}`,
+      };
+      const initial = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST", headers,
+        body: dagCborEncode({ tags: [randomBytes()], schema: {} }).slice(),
+      });
+      expect(initial.status).toBe(200);
+      expect(initial.headers.get("Graffiti-Cursor-Transport")).toBe("body");
+      expect(initial.headers.get("Access-Control-Expose-Headers"))
+        .toContain("Graffiti-Cursor-Transport");
+      const { cursor } = dagCborDecode(await initial.arrayBuffer()) as { cursor: string };
+      for (const bodyCursor of [false, true]) {
+        const response = await fetch(
+          `${inboxEndpoint}/query${bodyCursor ? "" : `?cursor=${encodeURIComponent(cursor)}`}`,
+          { method: "POST", headers,
+            body: bodyCursor ? dagCborEncode({ cursor }).slice() : undefined },
+        );
+        expect(response.status).toBe(429);
+      }
+      const decoded = dagCborDecode(Buffer.from(cursor, "base64url")) as
+        Record<string, unknown>;
+      const expired = Buffer.from(dagCborEncode({ ...decoded, createdAt: 0, waitTil: 0 }))
+        .toString("base64url");
+      for (const [body, status] of [
+        [{ cursor: "invalid-cursor" }, 410],
+        [{ cursor: expired }, 410],
+        [{ cursor: "" }, 400],
+        [{ unexpected: true }, 400],
+      ] as const) {
+        const response = await fetch(`${inboxEndpoint}/query`, {
+          method: "POST", headers,
+          body: dagCborEncode(body).slice(),
+        });
+        expect(response.status).toBe(status);
+      }
+      const unauthorized = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST", headers: { ...headers, Authorization: "Bearer invalid-token" },
+        body: dagCborEncode({ cursor }).slice(),
+      });
+      expect(unauthorized.status).toBe(401);
+      const forbidden = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST", headers: { "Content-Type": "application/cbor" },
+        body: dagCborEncode({ tags: [randomBytes()], schema: {} }).slice(),
+      });
+      expect(forbidden.status).toBe(403);
+    });
+
     test("query paged", async () => {
       const tags = [randomBytes(), randomBytes()];
 
@@ -170,12 +220,28 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         inboxToken,
       );
 
+      const fetchOriginal = globalThis.fetch;
+      const requests: { url: string; body: unknown }[] = [];
+      globalThis.fetch = async (input, init) => {
+        if (String(input).includes("/query")) requests.push({
+          url: String(input),
+          body: init?.body ? dagCborDecode(init.body as Uint8Array) : undefined,
+        });
+        return fetchOriginal(input, init);
+      };
       let count = 0;
-      for await (const _ of iterator) {
-        count++;
+      try {
+        for await (const _ of iterator) count++;
+      } finally {
+        globalThis.fetch = fetchOriginal;
       }
-
       expect(count).toBe(numSends);
+      expect(new Set(requests.map((request) => request.url))).toEqual(
+        new Set([`${inboxEndpoint}/query`]),
+      );
+      expect(requests.slice(1).every((request) =>
+        !!request.body && typeof request.body === "object" && "cursor" in request.body,
+      )).toBe(true);
     }, 100000);
   });
 }
@@ -208,6 +274,15 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
 }
 
 class TestInboxes extends Inboxes {
+  requestBatch(
+    endpoint: string,
+    type: "query" | "export",
+    cursor?: string,
+    token?: string,
+    signal?: AbortSignal,
+  ) {
+    return this.fetchMessageBatch(endpoint, type, undefined, token, cursor, signal);
+  }
   async prepareCache() {
     await this.cache;
   }
@@ -246,6 +321,95 @@ export function inboxUnitTests() {
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
+    });
+
+    describe("cursor transport negotiation", () => {
+      function response(advertise = false) {
+        const result = queryPage([], "next-cursor");
+        if (advertise) result.headers.set("Graffiti-Cursor-Transport", "body");
+        return result;
+      }
+
+      test("old servers use URL cursors without a probe or retry", async () => {
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => response());
+        vi.stubGlobal("fetch", fetch);
+        const inboxes = new TestInboxes();
+        await inboxes.requestBatch(inboxUrl, "query");
+        await inboxes.requestBatch(inboxUrl, "query", "cursor-1");
+        await inboxes.requestBatch(inboxUrl, "query", "cursor-2");
+        expect(fetch.mock.calls.map((call) => call[0])).toEqual([
+          `${inboxUrl}/query`, `${inboxUrl}/query?cursor=cursor-1`,
+          `${inboxUrl}/query?cursor=cursor-2`,
+        ]);
+      });
+
+      test("advertised endpoints reuse their URL and preserve authorization", async () => {
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => response(true));
+        vi.stubGlobal("fetch", fetch);
+        const inboxes = new TestInboxes();
+        await inboxes.requestBatch(inboxUrl, "query", undefined, "synthetic-token");
+        await inboxes.requestBatch(inboxUrl, "query", "cursor-1", "synthetic-token");
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(fetch.mock.calls.map((call) => call[0])).toEqual([
+          `${inboxUrl}/query`, `${inboxUrl}/query`,
+        ]);
+        const init = fetch.mock.calls[1][1] as RequestInit;
+        expect(dagCborDecode(init.body as Uint8Array)).toEqual({ cursor: "cursor-1" });
+        expect(new Headers(init.headers).get("Authorization")).toBe("Bearer synthetic-token");
+      });
+
+      test("support is scoped to the query endpoint and is not persisted", async () => {
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => response(true));
+        vi.stubGlobal("fetch", fetch);
+        const inboxes = new TestInboxes();
+        await inboxes.requestBatch(inboxUrl, "query");
+        await inboxes.requestBatch(`${inboxUrl}-other`, "query", "cursor-1");
+        await inboxes.requestBatch(inboxUrl, "export", "cursor-1");
+        await new TestInboxes().requestBatch(inboxUrl, "query", "cursor-1");
+        expect(fetch.mock.calls.slice(1).map((call) => call[0])).toEqual([
+          `${inboxUrl}-other/query?cursor=cursor-1`,
+          `${inboxUrl}/export?cursor=cursor-1`,
+          `${inboxUrl}/query?cursor=cursor-1`,
+        ]);
+      });
+
+      test.each([400, 401, 403, 410, 429, 500])(
+        "status %i remains an error without transport retries",
+        async (status) => {
+          const fetch = vi.fn().mockResolvedValueOnce(response(true))
+            .mockResolvedValueOnce(new Response("protocol failure", { status }))
+            .mockResolvedValueOnce(response());
+          vi.stubGlobal("fetch", fetch);
+          const inboxes = new TestInboxes();
+          await inboxes.requestBatch(inboxUrl, "query");
+          await expect(inboxes.requestBatch(inboxUrl, "query", "cursor-1"))
+            .rejects.toThrow("protocol failure");
+          expect(fetch).toHaveBeenCalledTimes(2);
+          // A later caller can recover from a server downgrade, without
+          // changing the failed call's error or treating 410 as negotiation.
+          await inboxes.requestBatch(inboxUrl, "query", "cursor-1");
+          expect(fetch.mock.calls[2][0]).toBe(`${inboxUrl}/query?cursor=cursor-1`);
+        },
+      );
+
+      test("discards an unacknowledged body response before a legacy retry", async () => {
+        const ignored = response();
+        const cancel = vi.spyOn(ignored.body!, "cancel");
+        const fetch = vi.fn().mockResolvedValueOnce(response(true))
+          .mockResolvedValueOnce(ignored).mockResolvedValueOnce(response());
+        vi.stubGlobal("fetch", fetch);
+        const deadline = vi.spyOn(AbortSignal, "timeout");
+        const inboxes = new TestInboxes();
+        await inboxes.requestBatch(inboxUrl, "query");
+        deadline.mockClear();
+        const result = await inboxes.requestBatch(inboxUrl, "query", "cursor-1");
+        expect(result.response).not.toBe(ignored);
+        expect(cancel).toHaveBeenCalledOnce();
+        expect(fetch.mock.calls.slice(1).map((call) => call[0])).toEqual([
+          `${inboxUrl}/query`, `${inboxUrl}/query?cursor=cursor-1`,
+        ]);
+        expect(deadline).toHaveBeenCalledOnce();
+      });
     });
 
     describe("inbox stream lock and network failures", () => {
@@ -546,14 +710,16 @@ export function inboxUnitTests() {
         const tags = [new Uint8Array([1])];
         const first = inboxes.query(inboxUrl, tags, {});
         const second = inboxes.query(inboxUrl, tags, {});
-        const [firstResult, secondResult] = await Promise.all([
-          first.next(), second.next(),
-        ]);
+        const firstPending = first.next();
+        const secondPending = second.next();
+        const firstResult = await firstPending;
+        const secondResult = await secondPending;
         expect(firstResult.value).toEqual(message);
         expect(secondResult.value).toEqual(message);
-        const [firstNext, secondNext] = await Promise.all([
-          first.next(), second.next(),
-        ]);
+        const firstNextPending = first.next();
+        const secondNextPending = second.next();
+        const firstNext = await firstNextPending;
+        const secondNext = await secondNextPending;
         expect(firstNext.value).toEqual(nextMessage);
         expect(secondNext.value).toEqual(nextMessage);
         expect(fetch).toHaveBeenCalledTimes(2);

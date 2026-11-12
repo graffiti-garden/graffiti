@@ -56,6 +56,9 @@ const QueryBodySchema = z.object({
   schema: ObjectSchemaSchema,
 });
 
+const CursorBodySchema = z.object({ cursor: z.string().min(1) });
+const QueryRequestBodySchema = z.union([QueryBodySchema, CursorBodySchema]);
+
 const QueryCursorSchema = z.object({
   sinceSeq: SinceSeqSchema,
   tags: TagsSchema,
@@ -257,7 +260,7 @@ const queryRoute = createRoute({
     body: {
       content: {
         "application/cbor": {
-          schema: QueryBodySchema,
+          schema: QueryRequestBodySchema,
         },
       },
     },
@@ -266,6 +269,13 @@ const queryRoute = createRoute({
   responses: {
     200: {
       description: "Messages queried successfully",
+      headers: {
+        "Graffiti-Cursor-Transport": {
+          description:
+            "Advertises CBOR query continuation bodies. URL cursors remain supported.",
+          schema: { type: "string", enum: ["body"] },
+        },
+      },
       content: {
         "application/cbor": {
           schema: QueryResultsSchema,
@@ -289,7 +299,19 @@ inbox.openapi(queryRoute, async (c) => {
 
   const inboxId = getInboxId(c);
 
-  const { cursor: cursorParam } = c.req.valid("query");
+  let { cursor: cursorParam } = c.req.valid("query");
+  let initialQuery: z.infer<typeof QueryBodySchema> | undefined;
+  if (!cursorParam) {
+    try {
+      const parsed = QueryRequestBodySchema.parse(
+        dagCborDecode(await c.req.arrayBuffer()),
+      );
+      if ("cursor" in parsed) cursorParam = parsed.cursor;
+      else initialQuery = parsed;
+    } catch {
+      throw new HTTPException(400, { message: "Invalid query body" });
+    }
+  }
 
   let objectSchema: {};
   let tags: Uint8Array[] | undefined = undefined;
@@ -319,17 +341,8 @@ inbox.openapi(queryRoute, async (c) => {
       throw new HTTPException(429, { message: "Rate limit exceeded" });
     }
   } else {
-    const queryParamsBlob = await c.req.blob();
-    const queryParamsBytes = await queryParamsBlob.arrayBuffer();
-    let queryParams: z.infer<typeof QueryBodySchema>;
-    try {
-      const queryParamsDecoded = dagCborDecode(queryParamsBytes);
-      queryParams = QueryBodySchema.parse(queryParamsDecoded);
-    } catch (e) {
-      throw new HTTPException(400, { message: "Invalid query body" });
-    }
-    tags = queryParams.tags;
-    objectSchema = queryParams.schema;
+    tags = initialQuery!.tags;
+    objectSchema = initialQuery!.schema;
   }
 
   const createdAt = Date.now();
@@ -368,6 +381,7 @@ inbox.openapi(queryRoute, async (c) => {
 
   return c.body(dagCborEncode(queryResults).slice(), 200, {
     "Content-Type": "application/cbor",
+    "Graffiti-Cursor-Transport": "body",
     ...(!hasMore
       ? {
           "Retry-After": String(RATE_LIMIT_SECONDS),
