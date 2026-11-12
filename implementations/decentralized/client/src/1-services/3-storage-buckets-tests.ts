@@ -46,6 +46,99 @@ export function storageBucketTests(
       ).rejects.toThrow(GraffitiErrorNotFound);
     });
 
+    test.each([16, 32769])(
+      "conditional GET validates current bytes at size %i",
+      async (size) => {
+        const key = crypto.randomUUID();
+        const url = `${storageBucketEndpoint}/value/${key}`;
+        const bytes = new Uint8Array(size).fill(7);
+        await storageBuckets.put(
+          storageBucketEndpoint,
+          key,
+          bytes,
+          storageBucketToken,
+        );
+        const initial = await fetch(url);
+        const etag = initial.headers.get("ETag")!;
+        expect(etag).toMatch(/^"[^"]+"$/);
+        expect(initial.headers.get("Cache-Control")).toBe("no-cache");
+        expect(new Uint8Array(await initial.arrayBuffer())).toEqual(bytes);
+
+        for (const condition of [
+          etag,
+          `W/${etag}`,
+          `"unrelated", W/${etag}`,
+          `W/"unrelated,tag", ${etag}`,
+          "*",
+        ]) {
+          const response = await fetch(url, {
+            headers: { "If-None-Match": condition },
+          });
+          expect(response.status, condition).toBe(304);
+          expect(response.headers.get("ETag")).toBe(etag);
+          expect(response.headers.get("Cache-Control")).toBe("no-cache");
+          expect((await response.arrayBuffer()).byteLength).toBe(0);
+        }
+
+        const mismatch = await fetch(url, {
+          headers: { "If-None-Match": '"different"' },
+        });
+        expect(mismatch.status).toBe(200);
+        expect(new Uint8Array(await mismatch.arrayBuffer())).toEqual(bytes);
+
+        // Malformed validators (including previously emitted bare hashes)
+        // cause a full read without reaching R2's strict condition parser.
+        // An empty but valid entity-tag is also a miss for these objects.
+        for (const condition of [
+          etag.slice(1, -1),
+          '"unterminated',
+          `${etag} junk`,
+          '""',
+        ]) {
+          const response = await fetch(url, {
+            headers: { "If-None-Match": condition },
+          });
+          expect(response.status, condition).toBe(200);
+          expect(response.headers.get("ETag")).toBe(etag);
+          expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+        }
+
+        const updated = new Uint8Array(size).fill(8);
+        await storageBuckets.put(
+          storageBucketEndpoint,
+          key,
+          updated,
+          storageBucketToken,
+        );
+        const changed = await fetch(url, {
+          headers: { "If-None-Match": etag },
+        });
+        expect(changed.status).toBe(200);
+        expect(changed.headers.get("ETag")).not.toBe(etag);
+        expect(new Uint8Array(await changed.arrayBuffer())).toEqual(updated);
+
+        await storageBuckets.delete(storageBucketEndpoint, key, storageBucketToken);
+        for (const condition of [etag, "*"]) {
+          const deleted = await fetch(url, {
+            headers: { "If-None-Match": condition },
+          });
+          expect(deleted.status).toBe(404);
+        }
+
+        await storageBuckets.put(
+          storageBucketEndpoint,
+          key,
+          updated,
+          storageBucketToken,
+        );
+        const recreated = await fetch(url, {
+          headers: { "If-None-Match": etag },
+        });
+        expect(recreated.status).toBe(200);
+        expect(new Uint8Array(await recreated.arrayBuffer())).toEqual(updated);
+      },
+    );
+
     test("get with limit less than object", async () => {
       const key = Math.random().toString(36).substring(2, 15);
       const input = "Hello world";

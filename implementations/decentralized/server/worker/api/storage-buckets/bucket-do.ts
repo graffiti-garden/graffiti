@@ -20,6 +20,31 @@ async function etagFor(value: Uint8Array) {
   return [...hash].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+// Parse Etags for GET
+function parseIfNoneMatch(header: string | undefined) {
+  if (!header) return undefined;
+  let remaining = header.trim();
+  if (remaining === "*") return "*";
+  const tags: string[] = [];
+  while (remaining) {
+    // Consume one complete quoted tag per RFC 9110
+    // https://www.rfc-editor.org/rfc/rfc9110.html#section-8.8.3
+    const item = /^(?:W\/)?"([\x21\x23-\x7e\x80-\xff]*)"[\t ]*(?:,|$)/.exec(remaining);
+    if (!item) return undefined;
+    tags.push(item[1]);
+    remaining = remaining.slice(item[0].length).trim();
+  }
+  return tags.length ? tags : undefined;
+}
+
+function valueHeaders(etag: string) {
+  return {
+    ETag: etag,
+    // Retain bytes in the browser, but ask current storage on every reuse.
+    "Cache-Control": "no-cache",
+  };
+}
+
 export class StorageBucketDO extends DurableObject<Bindings> {
   protected sql: SqlStorage;
   protected writes: Promise<void> = Promise.resolve();
@@ -66,21 +91,27 @@ export class StorageBucketDO extends DurableObject<Bindings> {
 
   async getValue(key: string, ifNoneMatch?: string) {
     if (this.deleted) return new Response("Bucket not found", { status: 404 });
+    const condition = parseIfNoneMatch(ifNoneMatch);
+
+    // Look in SQLite first
     const entry = this.entry(key);
     if (entry && entry.value !== null) {
       const etag = entry.etag!;
-      const headers = { ETag: etag };
-      return ifNoneMatch === etag
+      const headers = valueHeaders(`"${etag}"`);
+      return condition === "*" || condition?.includes(etag)
         ? new Response(null, { status: 304, headers })
         : new Response(entry.value, { headers });
     }
 
+    // Otherwise look in R2 storage
     if (!entry) return notFound();
     const result = await this.env.STORAGE.get(`${this.bucketId}/${key}`, {
-      onlyIf: { etagDoesNotMatch: ifNoneMatch },
+      onlyIf: condition
+        ? new Headers({ "If-None-Match": ifNoneMatch! })
+        : undefined,
     });
     if (!result) return notFound();
-    const headers = { ETag: result.etag };
+    const headers = valueHeaders(result.httpEtag);
     if (!("body" in result)) return new Response(null, { status: 304, headers });
     return new Response(result.body, { headers });
   }
