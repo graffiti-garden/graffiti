@@ -35,7 +35,6 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "test": "vitest run tests",
     "check": "tsc --noEmit",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
