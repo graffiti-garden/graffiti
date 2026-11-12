@@ -83,8 +83,9 @@ type CompiledSchema = {
 const compiledSchemas = new Map<string, CompiledSchema>();
 // AJV registers explicit identifiers for later, separately compiled $refs.
 // Preserve that existing registry lifetime, including identifiers nested in
-// otherwise anonymous roots. Only anonymous schemas are safe to evict.
-const namedSchemas = new Map<string, CompiledSchema>();
+// otherwise anonymous roots. The two boolean schemas are also retained: AJV's
+// removeSchema does not accept booleans, and their retention has constant size.
+const retainedSchemas = new Map<string, CompiledSchema>();
 
 const schemaArrayKeywords = new Set(["items", "allOf", "anyOf", "oneOf"]);
 const schemaMapKeywords = new Set([
@@ -162,7 +163,7 @@ export async function compileGraffitiObjectSchema<Schema extends JSONSchema>(
   const ajv = await useAjv();
   try {
     const key = JSON.stringify(schema);
-    let cached = namedSchemas.get(key) ?? compiledSchemas.get(key);
+    let cached = retainedSchemas.get(key) ?? compiledSchemas.get(key);
     if (cached) {
       // Refresh insertion order for bounded least-recently-used eviction.
       if (compiledSchemas.delete(key)) compiledSchemas.set(key, cached);
@@ -170,16 +171,17 @@ export async function compileGraffitiObjectSchema<Schema extends JSONSchema>(
       // Compile a snapshot: callers may mutate and reuse a schema object, and
       // AJV otherwise returns its old validator by object identity.
       const snapshot = JSON.parse(key) as JSONSchema;
-      const named = hasSchemaIdentifier(snapshot);
+      const retained =
+        typeof snapshot === "boolean" || hasSchemaIdentifier(snapshot);
       try {
         cached = { schema: snapshot, validator: ajv.compile(snapshot) };
       } catch (error) {
         // AJV inserts its identity entry before checking the schema itself.
         // Invalid anonymous inputs must not bypass our retention bound.
-        if (!named) ajv.removeSchema(snapshot);
+        if (!retained) ajv.removeSchema(snapshot);
         throw error;
       }
-      if (named) namedSchemas.set(key, cached);
+      if (retained) retainedSchemas.set(key, cached);
       else compiledSchemas.set(key, cached);
     }
     if (compiledSchemas.size > COMPILED_SCHEMA_CACHE_LIMIT) {

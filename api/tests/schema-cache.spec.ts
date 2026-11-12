@@ -213,4 +213,31 @@ describe("compiled schema cache", () => {
     expect((await compile(true))({})).toBe(true);
     expect((await compile(false))({})).toBe(false);
   });
+  it("retains both boolean validators while evicting anonymous object schemas", async () => {
+    const { compileGraffitiObjectSchema } = await import(
+      "../src/4-utilities.js"
+    );
+    const compile = compileGraffitiObjectSchema as (
+      schema: any,
+    ) => Promise<(value: any) => boolean>;
+    const always = await compile(true);
+    const never = await compile(false);
+    for (let i = 0; i < 150; i++) {
+      const validate = await compile({ properties: { value: { const: i } } });
+      expect(validate({ ...metadata, value: i })).toBe(true);
+    }
+    // 128 anonymous object schemas, two boolean schemas and the meta-schema.
+    expect(observed.instances[0]._cache.size).toBe(131);
+    expect(await compile(true)).toBe(always);
+    expect(await compile(false)).toBe(never);
+    expect(always({ ...metadata, value: null })).toBe(true);
+    expect(never({ ...metadata, value: null })).toBe(false);
+    expect(
+      (await compile({ properties: { value: { const: 151 } } }))({
+        ...metadata,
+        value: 151,
+      }),
+    ).toBe(true);
+    expect(observed.instances[0]._cache.size).toBe(131);
+  });
 });
