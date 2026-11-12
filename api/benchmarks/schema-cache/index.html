@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Graffiti schema browser experiment</title>
+    <style>
+      body {
+        font: 16px system-ui;
+        max-width: 1100px;
+        margin: 32px auto;
+        background: #fafbff;
+        color: #172435;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      td,
+      th {
+        padding: 7px;
+        text-align: left;
+        border-bottom: 1px solid #d9dfe8;
+      }
+      iframe {
+        width: 20px;
+        height: 20px;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+      }
+      #status {
+        padding: 14px;
+        background: #e8f0ff;
+      }
+      pre {
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Graffiti schema browser experiment</h1>
+    <p>
+      API schema validator baseline versus cache fix; current site-scoped guard
+      checks are identical in both modes. Public People schema; synthetic
+      values. Fresh opaque sandbox for every trial. Real Graffiti iframe RPC
+      chains. No production accounts or data requests.
+    </p>
+    <p id="status">Starting…</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Trial</th>
+          <th>Scenario</th>
+          <th>Mode</th>
+          <th>Work ms</th>
+          <th>AJV instances</th>
+          <th>Cached schemas</th>
+          <th>Correct</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <pre id="summary"></pre>
+    <script type="module" src="/runner.js"></script>
+  </body>
+</html>

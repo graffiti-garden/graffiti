@@ -72,21 +72,125 @@ export function isMediaAcceptable(
   });
 }
 
-let ajv: Ajv | undefined = undefined;
+const COMPILED_SCHEMA_CACHE_LIMIT = 128;
+let ajvInitialization: Promise<Ajv> | undefined;
+
+type CompiledSchema = {
+  schema: JSONSchema;
+  validator: ReturnType<Ajv["compile"]>;
+};
+
+const compiledSchemas = new Map<string, CompiledSchema>();
+// AJV registers explicit identifiers for later, separately compiled $refs.
+// Preserve that existing registry lifetime, including identifiers nested in
+// otherwise anonymous roots. Only anonymous schemas are safe to evict.
+const namedSchemas = new Map<string, CompiledSchema>();
+
+const schemaArrayKeywords = new Set(["items", "allOf", "anyOf", "oneOf"]);
+const schemaMapKeywords = new Set([
+  "$defs",
+  "definitions",
+  "properties",
+  "patternProperties",
+  "dependencies",
+]);
+const schemaDataKeywords = new Set([
+  "default",
+  "enum",
+  "const",
+  "required",
+  "maximum",
+  "minimum",
+  "exclusiveMaximum",
+  "exclusiveMinimum",
+  "multipleOf",
+  "maxLength",
+  "minLength",
+  "pattern",
+  "format",
+  "maxItems",
+  "minItems",
+  "uniqueItems",
+  "maxProperties",
+  "minProperties",
+]);
+
+function hasSchemaIdentifier(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const schema = value as Record<string, unknown>;
+  if (
+    [schema.$id, schema.$anchor, schema.$dynamicAnchor].some(
+      (id) => typeof id === "string",
+    )
+  ) {
+    return true;
+  }
+  // Match AJV's schema traversal, excluding data in const/enum/default and
+  // non-schema arrays. A literal object containing "$id" is not a registry.
+  return Object.entries(schema).some(([keyword, child]) => {
+    if (Array.isArray(child)) {
+      return (
+        schemaArrayKeywords.has(keyword) && child.some(hasSchemaIdentifier)
+      );
+    }
+    if (schemaMapKeywords.has(keyword)) {
+      return (
+        !!child &&
+        typeof child === "object" &&
+        Object.values(child).some(hasSchemaIdentifier)
+      );
+    }
+    return !schemaDataKeywords.has(keyword) && hasSchemaIdentifier(child);
+  });
+}
+
+function useAjv(): Promise<Ajv> {
+  if (!ajvInitialization) {
+    ajvInitialization = import("ajv")
+      .then(({ default: Ajv }) => new Ajv({ strict: false }))
+      .catch((error) => {
+        ajvInitialization = undefined;
+        throw error;
+      });
+  }
+  return ajvInitialization;
+}
+
 export async function compileGraffitiObjectSchema<Schema extends JSONSchema>(
   schema: Schema,
 ) {
-  if (!ajv) {
-    const { default: Ajv } = await import("ajv");
-    ajv = new Ajv({ strict: false });
-  }
-
+  const ajv = await useAjv();
   try {
-    // Force the validation guard because
-    // it is too big for the type checker.
-    // Fortunately json-schema-to-ts is
-    // well tested against ajv.
-    return ajv.compile(schema) as (
+    const key = JSON.stringify(schema);
+    let cached = namedSchemas.get(key) ?? compiledSchemas.get(key);
+    if (cached) {
+      // Refresh insertion order for bounded least-recently-used eviction.
+      if (compiledSchemas.delete(key)) compiledSchemas.set(key, cached);
+    } else {
+      // Compile a snapshot: callers may mutate and reuse a schema object, and
+      // AJV otherwise returns its old validator by object identity.
+      const snapshot = JSON.parse(key) as JSONSchema;
+      const named = hasSchemaIdentifier(snapshot);
+      try {
+        cached = { schema: snapshot, validator: ajv.compile(snapshot) };
+      } catch (error) {
+        // AJV inserts its identity entry before checking the schema itself.
+        // Invalid anonymous inputs must not bypass our retention bound.
+        if (!named) ajv.removeSchema(snapshot);
+        throw error;
+      }
+      if (named) namedSchemas.set(key, cached);
+      else compiledSchemas.set(key, cached);
+    }
+    if (compiledSchemas.size > COMPILED_SCHEMA_CACHE_LIMIT) {
+      const oldestKey = compiledSchemas.keys().next().value!;
+      const oldest = compiledSchemas.get(oldestKey)!;
+      compiledSchemas.delete(oldestKey);
+      // Bound AJV's own identity cache as well as our structural cache.
+      ajv.removeSchema(oldest.schema);
+    }
+    // Force the validation guard because json-schema-to-ts supplies the type.
+    return cached.validator as (
       data: GraffitiObjectBase,
     ) => data is GraffitiObject<Schema>;
   } catch (error) {
