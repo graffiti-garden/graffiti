@@ -70,7 +70,6 @@ export function storageBucketTests(
           `"unrelated", W/${etag}`,
           `W/"unrelated,tag", ${etag}`,
           "*",
-          etag.slice(1, -1), // Validators saved before ETags were quoted.
         ]) {
           const response = await fetch(url, {
             headers: { "If-None-Match": condition },
@@ -86,6 +85,23 @@ export function storageBucketTests(
         });
         expect(mismatch.status).toBe(200);
         expect(new Uint8Array(await mismatch.arrayBuffer())).toEqual(bytes);
+
+        // Malformed validators (including previously emitted bare hashes)
+        // cause a full read without reaching R2's strict condition parser.
+        // An empty but valid entity-tag is also a miss for these objects.
+        for (const condition of [
+          etag.slice(1, -1),
+          '"unterminated',
+          `${etag} junk`,
+          '""',
+        ]) {
+          const response = await fetch(url, {
+            headers: { "If-None-Match": condition },
+          });
+          expect(response.status, condition).toBe(200);
+          expect(response.headers.get("ETag")).toBe(etag);
+          expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
+        }
 
         const updated = new Uint8Array(size).fill(8);
         await storageBuckets.put(

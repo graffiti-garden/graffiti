@@ -20,31 +20,20 @@ async function etagFor(value: Uint8Array) {
   return [...hash].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-// If-None-Match uses weak comparison for GET. Old versions emitted bare
-// hashes, so retain those during the transition to properly quoted ETags.
-function matchesIfNoneMatch(header: string | undefined, etag: string) {
-  if (!header) return false;
+// Parse standard entity-tags for weak GET comparison. Ignore malformed
+// validators: a full response is safe, and R2 rejects malformed conditions.
+function parseIfNoneMatch(header: string | undefined) {
+  if (!header) return undefined;
   let remaining = header.trim();
-  if (remaining === "*" || remaining === etag) return true;
-  let matched = false;
+  if (remaining === "*") return "*";
+  const tags: string[] = [];
   while (remaining) {
-    const item = /^(?:W\/)?"([^"\r\n]*)"\s*(?:,|$)/.exec(remaining);
-    if (!item) return false;
-    matched ||= item[1] === etag;
+    const item = /^(?:W\/)?"([\x21\x23-\x7e\x80-\xff]*)"[\t ]*(?:,|$)/.exec(remaining);
+    if (!item) return undefined;
+    tags.push(item[1]);
     remaining = remaining.slice(item[0].length).trim();
   }
-  return matched;
-}
-
-function conditionalHeaders(header?: string) {
-  const headers = new Headers();
-  if (header) {
-    headers.set(
-      "If-None-Match",
-      /^[a-f0-9]+(?:-\d+)?$/i.test(header) ? `"${header}"` : header,
-    );
-  }
-  return headers;
+  return tags.length ? tags : undefined;
 }
 
 function valueHeaders(etag: string) {
@@ -101,18 +90,21 @@ export class StorageBucketDO extends DurableObject<Bindings> {
 
   async getValue(key: string, ifNoneMatch?: string) {
     if (this.deleted) return new Response("Bucket not found", { status: 404 });
+    const condition = parseIfNoneMatch(ifNoneMatch);
     const entry = this.entry(key);
     if (entry && entry.value !== null) {
       const etag = entry.etag!;
       const headers = valueHeaders(`"${etag}"`);
-      return matchesIfNoneMatch(ifNoneMatch, etag)
+      return condition === "*" || condition?.includes(etag)
         ? new Response(null, { status: 304, headers })
         : new Response(entry.value, { headers });
     }
 
     if (!entry) return notFound();
     const result = await this.env.STORAGE.get(`${this.bucketId}/${key}`, {
-      onlyIf: conditionalHeaders(ifNoneMatch),
+      onlyIf: condition
+        ? new Headers({ "If-None-Match": ifNoneMatch! })
+        : undefined,
     });
     if (!result) return notFound();
     const headers = valueHeaders(result.httpEtag);
