@@ -38,14 +38,16 @@ const metadata = {
   actor: "did:example:fixture",
   url: "graffiti:fixture",
 };
+async function loadCompile() {
+  const { compileGraffitiObjectSchema } = await import("../src/4-utilities.js");
+  // Exercise runtime schema handling independently of json-schema-to-ts inference.
+  return compileGraffitiObjectSchema as (
+    schema: any,
+  ) => Promise<(value: any) => boolean>;
+}
 describe("compiled schema cache", () => {
-  it("retries a failed shared initialization without changing its error type", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
+  it("retries failed shared initialization without changing its error type", async () => {
+    const compile = await loadCompile();
     observed.failNext = true;
     const failures = await Promise.allSettled(
       Array.from({ length: 20 }, () => compile(schema)),
@@ -61,22 +63,16 @@ describe("compiled schema cache", () => {
     expect(
       (await compile(schema))({ ...metadata, value: { name: "fixture" } }),
     ).toBe(true);
-    expect(observed.instances).toHaveLength(2);
+    expect(observed.instances).toHaveLength(3);
   });
-  it("coalesces cold initialization and cloned schemas", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    // These are runtime/cache tests, not json-schema-to-ts inference tests.
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
+
+  it("shares initialization and a validator across concurrent cloned schemas", async () => {
+    const compile = await loadCompile();
     const validators = await Promise.all(
       Array.from({ length: 50 }, () => compile(structuredClone(schema))),
     );
-    expect(observed.instances).toHaveLength(1);
+    expect(observed.instances).toHaveLength(2);
     expect(new Set(validators).size).toBe(1);
-    expect(observed.instances[0]._cache.size).toBe(2);
     expect(validators[0]({ ...metadata, value: { name: "fixture" } })).toBe(
       true,
     );
@@ -86,14 +82,9 @@ describe("compiled schema cache", () => {
       validators[0]({ ...metadata, value: { name: "fixture", extra: true } }),
     ).toBe(false);
   });
+
   it("does not reuse a validator after caller schema mutation", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    // These are runtime/cache tests, not json-schema-to-ts inference tests.
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
+    const compile = await loadCompile();
     const mutable: any = structuredClone(schema);
     const first = await compile(mutable);
     mutable.properties.value.properties.name.type = "number";
@@ -103,141 +94,141 @@ describe("compiled schema cache", () => {
     expect(second({ ...metadata, value: { name: "fixture" } })).toBe(false);
     expect(second({ ...metadata, value: { name: 3 } })).toBe(true);
   });
-  it("bounds both caches and recompiles evicted schemas correctly", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    // These are runtime/cache tests, not json-schema-to-ts inference tests.
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
-    const first = await compile({ properties: { value: { const: 0 } } });
-    for (let i = 1; i <= 150; i++)
-      await compile({ properties: { value: { const: i } } });
-    expect(observed.instances[0]._cache.size).toBeLessThanOrEqual(129);
-    expect(first({ ...metadata, value: 0 })).toBe(true);
-    expect(first({ ...metadata, value: 1 })).toBe(false);
-    const again = await compile({ properties: { value: { const: 0 } } });
-    expect(again).not.toBe(first);
-    expect(again({ ...metadata, value: 0 })).toBe(true);
-    expect(again({ ...metadata, value: 1 })).toBe(false);
+
+  it("evicts the least recently used schema, including named schemas", async () => {
+    const compile = await loadCompile();
+    const named = (i: number) => ({ $id: `urn:fixture:${i}`, const: i });
+    const first = await compile(named(0));
+    const second = await compile(named(1));
+    for (let i = 2; i < 128; i++) await compile(named(i));
+    expect(await compile(named(0))).toBe(first); // Refresh the oldest entry.
+    await compile(named(128));
+    expect(await compile(named(0))).toBe(first);
+    expect(await compile(named(1))).not.toBe(second);
+    // Eviction does not invalidate a function already held by a query.
+    expect(second(1)).toBe(true);
+    expect(second(2)).toBe(false);
+    // The long-lived validator contains only its built-in meta-schema.
+    expect(observed.instances[0]._cache.size).toBe(1);
   });
-  it("retains local references and errors for invalid schemas", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    // These are runtime/cache tests, not json-schema-to-ts inference tests.
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
-    const validator = await compile({
-      $defs: { name: { type: "string" } },
-      properties: { value: { $ref: "#/$defs/name" } },
+
+  it("preserves local definitions, nested identifiers, anchors and recursive references", async () => {
+    const compile = await loadCompile();
+    const node = await compile({
+      $id: "https://fixture.invalid/node",
+      $defs: {
+        name: { $anchor: "name", type: "string" },
+        count: { $id: "count", type: "number" },
+        flag: { type: "boolean" },
+      },
+      type: "object",
+      properties: {
+        name: { $ref: "#name" },
+        count: { $ref: "count" },
+        flag: { $ref: "#/$defs/flag" },
+        next: { $ref: "https://fixture.invalid/node" },
+      },
     });
-    expect(validator({ ...metadata, value: "fixture" })).toBe(true);
-    expect(validator({ ...metadata, value: 3 })).toBe(false);
-    await expect(compile({ type: "invalid" } as any)).rejects.toThrow();
-  });
-  it("preserves separately compiled root and nested identifiers after anonymous eviction", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
-    const root = { $id: "https://fixture.invalid/root", type: "string" };
-    const withNested = {
-      $id: "https://fixture.invalid/base/",
-      $defs: { number: { $id: "number", type: "number" } },
-      properties: { value: { $ref: "number" } },
-    };
-    const anonymousRoot = {
-      $defs: { flag: { $id: "https://fixture.invalid/flag", type: "boolean" } },
-    };
-    const original = await compile(root);
-    await compile(withNested);
-    await compile(anonymousRoot);
-    expect((await compile({ $ref: root.$id }))("fixture")).toBe(true);
-    for (let i = 0; i < 150; i++) await compile({ type: "number", minimum: i });
+    await compile({ $id: "https://fixture.invalid/node", type: "number" });
     expect(
-      (await compile({ $ref: root.$id, title: "later root consumer" }))(
-        "fixture",
-      ),
+      node({ name: "fixture", count: 2, flag: true, next: { name: "child" } }),
     ).toBe(true);
-    const number = await compile({
-      $ref: "https://fixture.invalid/base/number",
-    });
-    expect(number(2)).toBe(true);
-    expect(number("wrong")).toBe(false);
-    // AJV cannot resolve a separate root's reference into an anonymous root,
-    // even without eviction. Retain that root conservatively without inventing
-    // new cross-root reference behavior here.
-    expect(await compile(structuredClone(anonymousRoot))).toBeDefined();
-    expect(await compile(structuredClone(root))).toBe(original);
-    // Three explicitly named roots retain their baseline registry lifetime;
-    // the anonymous cache remains bounded in addition to those registrations.
-    expect(observed.instances[0]._cache.size).toBeLessThanOrEqual(132);
+    expect(node({ name: 3 })).toBe(false);
+    expect(node({ count: "wrong" })).toBe(false);
+    expect(node({ flag: "wrong" })).toBe(false);
+    expect(node({ next: { name: 3 } })).toBe(false);
   });
-  it("does not mistake literal data containing identifiers for named schemas", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
-    for (let i = 0; i < 150; i++) {
-      const data = { $id: `literal-${i}` };
-      const validator = await compile({
-        const: data,
-        default: data,
-        enum: [data],
-        examples: [data],
+
+  it("rejects cross-query references even while the provider is cached", async () => {
+    const compile = await loadCompile();
+    const provider = {
+      $id: "https://fixture.invalid/root",
+      $defs: { child: { $id: "child", type: "number" } },
+      properties: { value: { $ref: "child" } },
+    };
+    const original = await compile(provider);
+    for (const ref of [provider.$id, "https://fixture.invalid/child"]) {
+      await expect(compile({ $ref: ref })).rejects.toMatchObject({
+        name: "GraffitiErrorInvalidSchema",
       });
-      expect(validator(data)).toBe(true);
     }
-    expect(observed.instances[0]._cache.size).toBeLessThanOrEqual(129);
+    expect(await compile(structuredClone(provider))).toBe(original);
+    // A cache hit must not re-register the schema either.
+    await expect(compile({ $ref: provider.$id })).rejects.toMatchObject({
+      name: "GraffitiErrorInvalidSchema",
+    });
+    await expect(compile({ $schema: provider.$id })).rejects.toMatchObject({
+      name: "GraffitiErrorInvalidSchema",
+    });
   });
-  it("does not retain invalid anonymous schemas in AJV's identity cache", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
+
+  it("lets concurrent callers reuse the same root and nested identifiers independently", async () => {
+    const compile = await loadCompile();
+    const [string, number] = await Promise.all(
+      ["string", "number"].map((type) =>
+        compile({
+          $id: "https://fixture.invalid/shared",
+          $defs: { value: { $id: "value", type } },
+          properties: { value: { $ref: "value" } },
+        }),
+      ),
     );
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
+    expect(string({ value: "fixture" })).toBe(true);
+    expect(string({ value: 1 })).toBe(false);
+    expect(number({ value: 1 })).toBe(true);
+    expect(number({ value: "fixture" })).toBe(false);
+  });
+
+  it("keeps invalid schemas out of other queries", async () => {
+    const compile = await loadCompile();
     for (let i = 0; i < 150; i++) {
       await expect(
-        compile({ type: "invalid", title: String(i) }),
+        compile({
+          $id: `https://fixture.invalid/broken-${i}`,
+          $defs: { value: { $id: "value", type: "string" } },
+          type: "invalid",
+        }),
       ).rejects.toMatchObject({ name: "GraffitiErrorInvalidSchema" });
     }
+    const valid = await compile({
+      $id: "https://fixture.invalid/broken-149",
+      $defs: { value: { $id: "value", type: "number" } },
+      properties: { value: { $ref: "value" } },
+    });
+    expect(valid({ value: 1 })).toBe(true);
+    expect(valid({ value: "wrong" })).toBe(false);
+    expect(
+      observed.instances[0].getSchema("https://fixture.invalid/value"),
+    ).toBeUndefined();
+    // The long-lived validator contains only its built-in meta-schema.
     expect(observed.instances[0]._cache.size).toBe(1);
-    expect((await compile(true))({})).toBe(true);
-    expect((await compile(false))({})).toBe(false);
   });
-  it("retains both boolean validators while evicting anonymous object schemas", async () => {
-    const { compileGraffitiObjectSchema } = await import(
-      "../src/4-utilities.js"
-    );
-    const compile = compileGraffitiObjectSchema as (
-      schema: any,
-    ) => Promise<(value: any) => boolean>;
+
+  it("handles Boolean schemas through the same bounded cache", async () => {
+    const compile = await loadCompile();
     const always = await compile(true);
     const never = await compile(false);
-    for (let i = 0; i < 150; i++) {
-      const validate = await compile({ properties: { value: { const: i } } });
-      expect(validate({ ...metadata, value: i })).toBe(true);
-    }
-    // 128 anonymous object schemas, two boolean schemas and the meta-schema.
-    expect(observed.instances[0]._cache.size).toBe(131);
     expect(await compile(true)).toBe(always);
     expect(await compile(false)).toBe(never);
-    expect(always({ ...metadata, value: null })).toBe(true);
-    expect(never({ ...metadata, value: null })).toBe(false);
-    expect(
-      (await compile({ properties: { value: { const: 151 } } }))({
-        ...metadata,
-        value: 151,
-      }),
-    ).toBe(true);
-    expect(observed.instances[0]._cache.size).toBe(131);
+    for (let i = 0; i < 128; i++) await compile({ const: i });
+    expect(await compile(true)).not.toBe(always);
+    expect(await compile(false)).not.toBe(never);
+    expect(always({})).toBe(true);
+    expect(never({})).toBe(false);
+  });
+
+  it("supports built-in meta-schemas across queries", async () => {
+    const compile = await loadCompile();
+    for (let i = 0; i < 3; i++) {
+      for (const $schema of [
+        "http://json-schema.org/schema#",
+        "http://json-schema.org/draft-07/schema#",
+      ]) {
+        expect((await compile({ $schema, const: i }))(i)).toBe(true);
+        await expect(
+          compile({ $schema, type: "invalid", title: String(i) }),
+        ).rejects.toMatchObject({ name: "GraffitiErrorInvalidSchema" });
+      }
+    }
   });
 });
