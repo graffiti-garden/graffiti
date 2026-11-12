@@ -238,11 +238,14 @@ export class StorageBuckets {
     let cursor: string | undefined = undefined;
     while (true) {
       const response = await fetchWithErrorHandling(
-        cursor ? `${url}?cursor=${encodeURIComponent(cursor)}` : url,
+        url,
         {
+          method: "POST",
           headers: {
             Authorization: `Bearer ${authorizationToken}`,
+            "Content-Type": "application/cbor",
           },
+          body: new Uint8Array(dagCborEncode(cursor ? { cursor } : {})),
         },
       );
 

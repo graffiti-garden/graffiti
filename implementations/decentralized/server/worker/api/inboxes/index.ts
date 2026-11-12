@@ -12,7 +12,7 @@ import {
   getMessage,
 } from "./db";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { augmentService, getId } from "../shared";
+import { augmentService, ExportBodySchema, getId } from "../shared";
 import {
   encode as dagCborEncode,
   decode as dagCborDecode,
@@ -255,6 +255,7 @@ const queryRoute = createRoute({
   description: "Query messages that have been sent to the inbox",
   request: {
     body: {
+      required: true,
       content: {
         "application/cbor": {
           schema: QueryRequestBodySchema,
@@ -272,6 +273,7 @@ const queryRoute = createRoute({
         },
       },
     },
+    400: { description: "Invalid query body" },
     401: { description: "Invalid authorization" },
     403: {
       description: "Cannot query messages in someone else's inbox",
@@ -380,9 +382,12 @@ const exportRoute = createRoute({
   tags: ["Inbox"],
   description: "Export all messages sent to the inbox",
   request: {
-    query: z.object({
-      cursor: z.string().optional(),
-    }),
+    body: {
+      required: true,
+      content: {
+        "application/cbor": { schema: ExportBodySchema },
+      },
+    },
   },
   security: [{ oauth2: [] }],
   responses: {
@@ -394,10 +399,12 @@ const exportRoute = createRoute({
         },
       },
     },
+    400: { description: "Invalid export body" },
     401: { description: "Invalid authorization" },
     403: {
       description: "Cannot export from someone else's inbox",
     },
+    410: { description: "Cursor expired or otherwise invalid" },
   },
 });
 
@@ -405,14 +412,19 @@ const exportRoute = createRoute({
 inbox.openapi(exportRoute, async (c) => {
   const { accountId } = await verifySessionHeader(c);
   const inboxId = getInboxId(c);
-  const { cursor: cursorParam } = c.req.valid("query");
+  let body: z.infer<typeof ExportBodySchema>;
+  try {
+    body = ExportBodySchema.parse(dagCborDecode(await c.req.arrayBuffer()));
+  } catch {
+    throw new HTTPException(400, { message: "Invalid export body" });
+  }
 
   let sinceSeq: number | undefined = undefined;
-  if (cursorParam) {
+  if (body.cursor) {
     let createdAt: number;
     let waitTil: number | undefined;
     try {
-      const cursorBytes = decodeBase64(cursorParam);
+      const cursorBytes = decodeBase64(body.cursor);
       const cursorDecoded = dagCborDecode(cursorBytes);
       const cursorParsed = ExportCursorSchema.parse(cursorDecoded);
       sinceSeq = cursorParsed.sinceSeq;

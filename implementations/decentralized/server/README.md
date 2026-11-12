@@ -77,18 +77,6 @@ For first time deployments:
 
 In the future, simply run `npm run deploy` to update the application.
 
-## Query cursor transport
-
-Query continuations use a CBOR `{ cursor }` body at the stable `/query` URL.
-Initial requests still use `{ tags, schema }`. This lets browsers reuse the
-CORS preflight cache instead of preflighting every distinct cursor URL.
-Authentication, cursor expiry, rate limits, and response bodies are unchanged.
-Export continues to use URL cursors.
-
-Deploy the inbox server and active clients together: query continuations no
-longer accept URL cursors. Existing cached cursor values remain valid; only
-their request transport changes.
-
 ## OAuth TODOs
 
 - **Service scopes:** An OAuth token can access all services belonging to its

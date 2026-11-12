@@ -199,9 +199,7 @@ export class Inboxes {
     // Keep the deadline active while the response body is being read, too.
     const timeout = AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS);
     const response = await fetchWithErrorHandling(
-      `${inboxUrl}/${type}${type === "export" && cursor
-        ? `?cursor=${encodeURIComponent(cursor)}`
-        : ""}`,
+      `${inboxUrl}/${type}`,
       {
         method: "POST",
         headers: {
@@ -210,9 +208,9 @@ export class Inboxes {
             ? { Authorization: `Bearer ${inboxToken}` }
             : {}),
         },
-        body: type === "query" && cursor
+        body: cursor
           ? new Uint8Array(dagCborEncode({ cursor }))
-          : body,
+          : body ?? new Uint8Array(dagCborEncode({})),
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       },
     );

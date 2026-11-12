@@ -7,6 +7,10 @@ import { serviceIdToUrl } from "../../shared/service-urls";
 
 const Base64IdSchema = z.base64url().length(43);
 
+export const ExportBodySchema = z.object({
+  cursor: z.string().min(1).optional(),
+});
+
 export function getId(context: Context<{ Bindings: Bindings }>, type: string) {
   const inboxId = context.req.param(`${type}Id`);
   const schema =

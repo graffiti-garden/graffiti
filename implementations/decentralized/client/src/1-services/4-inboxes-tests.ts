@@ -161,12 +161,35 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       expect(forbidden.status).toBe(403);
     });
 
+    test("export body cursors preserve expiry and rate limits", async () => {
+      const headers = {
+        "Content-Type": "application/cbor",
+        Authorization: `Bearer ${inboxToken}`,
+      };
+      const encodeCursor = (createdAt: number, waitTil: number) =>
+        Buffer.from(dagCborEncode({ sinceSeq: 0, createdAt, waitTil })).toString("base64url");
+      for (const [body, status] of [
+        [{ cursor: "invalid-cursor" }, 410],
+        [{ cursor: encodeCursor(0, 0) }, 410],
+        [{ cursor: encodeCursor(Date.now(), Date.now() + 60_000) }, 429],
+        [{ cursor: "" }, 400],
+        [{ cursor: 3 }, 400],
+        [null, 400],
+      ] as const) {
+        const response = await fetch(`${inboxEndpoint}/export`, {
+          method: "POST", headers, body: dagCborEncode(body).slice(),
+        });
+        expect(response.status).toBe(status);
+      }
+    });
+
     test("query paged", async () => {
       const tags = [randomBytes(), randomBytes()];
 
       const numSends = 211;
+      const sentIds = new Set<string>();
       for (let i = 0; i < numSends; i++) {
-        await inboxes.send(inboxEndpoint, {
+        sentIds.add(await inboxes.send(inboxEndpoint, {
           t: tags,
           m: randomBytes(),
           o: {
@@ -180,7 +203,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
             },
             allowed: ["did:example2"],
           },
-        });
+        }));
       }
 
       let cursor: string | undefined;
@@ -236,6 +259,30 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         new Set([`${inboxEndpoint}/query`]),
       );
       expect(requests.slice(1).every((request) =>
+        !!request.body && typeof request.body === "object" && "cursor" in request.body,
+      )).toBe(true);
+
+      const exportRequests: { url: string; method?: string; body: unknown }[] = [];
+      const exportedIds = new Set<string>();
+      globalThis.fetch = async (input, init) => {
+        if (String(input).includes("/export")) exportRequests.push({
+          url: String(input), method: init?.method,
+          body: dagCborDecode(init!.body as Uint8Array),
+        });
+        return fetchOriginal(input, init);
+      };
+      try {
+        for await (const result of inboxes.export(inboxEndpoint, inboxToken)) {
+          if (sentIds.has(result.id)) exportedIds.add(result.id);
+        }
+      } finally {
+        globalThis.fetch = fetchOriginal;
+      }
+      expect(exportedIds).toEqual(sentIds);
+      expect(exportRequests.length).toBeGreaterThan(1);
+      expect(exportRequests.every((request) => request.url === `${inboxEndpoint}/export` && request.method === "POST")).toBe(true);
+      expect(exportRequests[0].body).toEqual({});
+      expect(exportRequests.slice(1).every((request) =>
         !!request.body && typeof request.body === "object" && "cursor" in request.body,
       )).toBe(true);
     }, 100000);
@@ -320,16 +367,17 @@ export function inboxUnitTests() {
     });
 
     describe("cursor transport", () => {
-      test("query cursors use CBOR bodies without negotiation or extra requests", async () => {
+      test.each(["query", "export"] as const)("%s cursors use stable URLs and CBOR bodies", async (type) => {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
         vi.stubGlobal("fetch", fetch);
         const inboxes = new TestInboxes();
-        await inboxes.requestBatch(inboxUrl, "query", "cursor-1", "synthetic-token");
-        await inboxes.requestBatch(inboxUrl, "query", "cursor-2", "synthetic-token");
+        await inboxes.requestBatch(inboxUrl, type, "cursor-1", "synthetic-token");
+        await inboxes.requestBatch(inboxUrl, type, "cursor-2", "synthetic-token");
         expect(fetch.mock.calls.map((call) => call[0])).toEqual([
-          `${inboxUrl}/query`, `${inboxUrl}/query`,
+          `${inboxUrl}/${type}`, `${inboxUrl}/${type}`,
         ]);
         for (const [i, [, init]] of fetch.mock.calls.entries()) {
+          expect(init!.method).toBe("POST");
           expect(dagCborDecode(init!.body as Uint8Array))
             .toEqual({ cursor: `cursor-${i + 1}` });
           expect(new Headers(init!.headers).get("Authorization"))
@@ -337,13 +385,13 @@ export function inboxUnitTests() {
         }
       });
 
-      test("export continuations keep URL cursors", async () => {
+      test("initial exports use an empty CBOR object", async () => {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
         vi.stubGlobal("fetch", fetch);
-        await new TestInboxes().requestBatch(inboxUrl, "export", "cursor-1", "token");
+        await new TestInboxes().requestBatch(inboxUrl, "export", undefined, "token");
         expect(fetch).toHaveBeenCalledOnce();
-        expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/export?cursor=cursor-1`);
-        expect(fetch.mock.calls[0][1]?.body).toBeUndefined();
+        expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/export`);
+        expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array)).toEqual({});
       });
     });
 
