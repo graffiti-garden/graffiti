@@ -88,10 +88,6 @@ type StreamSource<Schema extends JSONSchema> =
 
 export class Inboxes {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
-  // Negotiate on ordinary successful responses, never by retrying an error.
-  // Keep this endpoint-specific and in memory: independent inbox providers may
-  // still only support URL cursors, without probing or sending extra queries.
-  protected readonly bodyCursorEndpoints = new Set<string>();
   protected cache_: Promise<Cache> | null = null;
   protected get cache() {
     if (!this.cache_) {
@@ -202,44 +198,24 @@ export class Inboxes {
   ) {
     // Keep the deadline active while the response body is being read, too.
     const timeout = AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS);
-    const endpoint = `${inboxUrl}/${type}`;
-    const bodyCursor =
-      type === "query" && !!cursor &&
-      this.bodyCursorEndpoints.has(endpoint);
-    let response: Response;
-    try {
-      response = await fetchWithErrorHandling(
-        cursor && !bodyCursor
-          ? `${endpoint}?cursor=${encodeURIComponent(cursor)}`
-          : endpoint,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/cbor",
-            ...(inboxToken
-              ? {
-                  Authorization: `Bearer ${inboxToken}`,
-                }
-              : {}),
-          },
-          body: bodyCursor ? new Uint8Array(dagCborEncode({ cursor })) : body,
-          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    const response = await fetchWithErrorHandling(
+      `${inboxUrl}/${type}${type === "export" && cursor
+        ? `?cursor=${encodeURIComponent(cursor)}`
+        : ""}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/cbor",
+          ...(inboxToken
+            ? { Authorization: `Bearer ${inboxToken}` }
+            : {}),
         },
-      );
-    } catch (error) {
-      // Keep the error unchanged, but do not retain a possibly stale capability.
-      // A later caller starts with the compatible URL form again.
-      if (bodyCursor) this.bodyCursorEndpoints.delete(endpoint);
-      throw error;
-    }
-    if (
-      type === "query" &&
-      response.headers.get("Graffiti-Cursor-Transport") === "body"
-    ) {
-      this.bodyCursorEndpoints.add(endpoint);
-    } else {
-      this.bodyCursorEndpoints.delete(endpoint);
-    }
+        body: type === "query" && cursor
+          ? new Uint8Array(dagCborEncode({ cursor }))
+          : body,
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      },
+    );
     const retryAfterHeader = response.headers.get("Retry-After");
     const retryAfter = retryAfterHeader
       ? parseInt(retryAfterHeader)

@@ -2,7 +2,6 @@
 "@graffiti-garden/implementation-decentralized": patch
 ---
 
-Negotiate CBOR query continuation bodies with compatible inbox servers so
-browsers can reuse CORS preflights for a stable endpoint URL. Preserve URL
-cursors for older servers and keep authentication, cursor errors, and rate
-limits unchanged.
+Send query continuation cursors in CBOR bodies at a stable endpoint URL so
+browsers can reuse CORS preflights. Coordinate rollout with the inbox server;
+authentication, cursor errors, and rate limits remain unchanged.
