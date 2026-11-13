@@ -7,7 +7,6 @@ import {
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorTooLarge,
-  type GraffitiMedia,
   type GraffitiObjectStream,
   type GraffitiPostMedia,
   type GraffitiSession,
@@ -26,18 +25,11 @@ type MethodsOf<T> = {
   [K in keyof T as T[K] extends (...args: any[]) => any ? K : never]: T[K];
 };
 
-type SerializedMedia = Omit<GraffitiMedia, "data"> & {
-  // Transitional reader: after hosts and consuming bundles have migrated to
-  // direct Blobs, remove the envelope type and the reconstruction below.
-  data: Blob | { buffer: Blob | ArrayBuffer; type: string };
-};
-
 type SerializedPostMedia = Omit<GraffitiPostMedia, "data"> & {
   data: { buffer: ArrayBuffer; type: string };
 };
 
 type RPCMethods = MethodsOf<Graffiti> & {
-  getMedia: (...args: Parameters<Graffiti["getMedia"]>) => Promise<SerializedMedia>;
   postMedia: (
     media: SerializedPostMedia,
     session: GraffitiSession,
@@ -164,13 +156,7 @@ export class GraffitiRpcClient extends Graffiti {
   }
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
-    const result = await (await this.remote()).getMedia(...cloneArgs(args));
-    return {
-      ...result,
-      data: result.data instanceof Blob
-        ? result.data
-        : new Blob([result.data.buffer], { type: result.data.type }),
-    };
+    return (await this.remote()).getMedia(...cloneArgs(args));
   };
 
   postMedia: Graffiti["postMedia"] = async (media, session) => {
