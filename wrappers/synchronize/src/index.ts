@@ -139,7 +139,18 @@ export class GraffitiSynchronize implements Graffiti {
   ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
     const repeater = new Repeater<GraffitiObjectStreamSuccess<Schema>>(
       async (push, stop) => {
-        const validate = await compileGraffitiObjectSchema(schema);
+        let validate: Awaited<ReturnType<typeof compileGraffitiObjectSchema<Schema>>> | undefined;
+        const pending: GraffitiObjectStreamSuccess<{}>[] = [];
+        const emit = (update: GraffitiObjectStreamSuccess<{}>) => {
+          if (!validate) {
+            pending.push(update);
+            return;
+          }
+          if (!validate(update.object)) return;
+          push(update.tombstone
+            ? { tombstone: true, object: update.object }
+            : { object: update.object });
+        };
         const callback: GraffitiSynchronizeCallback = (objectUpdate) => {
           if (
             !matchObject(objectUpdate.object) ||
@@ -155,18 +166,29 @@ export class GraffitiSynchronize implements Graffiti {
           if (!this.options.omniscient) {
             object = maskGraffitiObject(object, channels, session?.actor);
           }
-          if (!validate(object)) return;
-
-          push(
+          emit(
             objectUpdate.tombstone
               ? { tombstone: true, object }
               : { object },
           );
         };
 
+        // Subscribe before awaiting compilation (which can load AJV). Fast
+        // getters/discovery must not lose updates during that startup window.
         this.callbacks.add(callback);
-        await stop;
-        this.callbacks.delete(callback);
+        try {
+          validate = await Promise.race([
+            compileGraffitiObjectSchema(schema),
+            stop.then(() => undefined),
+          ]);
+          if (!validate) return;
+          for (const update of pending) emit(update);
+          pending.length = 0;
+          await stop;
+        } finally {
+          this.callbacks.delete(callback);
+          pending.length = 0;
+        }
       },
     );
 

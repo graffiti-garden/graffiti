@@ -1,5 +1,13 @@
 # @graffiti-garden/wrapper-synchronize
 
+## 1.4.1
+
+### Patch Changes
+
+- f6b4ad4: Preserve updates received while a synchronization listener's schema is compiling, and clean up pending listeners on cancellation or compilation failure.
+  
+  Republish the Vue browser bundle so its embedded synchronization wrapper includes the fix.
+
 ## 1.4.0
 
 ### Minor Changes

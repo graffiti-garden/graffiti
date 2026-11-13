@@ -72,21 +72,61 @@ export function isMediaAcceptable(
   });
 }
 
-let ajv: Ajv | undefined = undefined;
+const COMPILED_SCHEMA_CACHE_LIMIT = 128;
+type SchemaCompiler = (schema: JSONSchema) => ReturnType<Ajv["compile"]>;
+let compilerInitialization: Promise<SchemaCompiler> | undefined;
+const compiledSchemas = new Map<string, ReturnType<Ajv["compile"]>>();
+
+function useSchemaCompiler(): Promise<SchemaCompiler> {
+  if (!compilerInitialization) {
+    compilerInitialization = import("ajv")
+      .then(({ default: Ajv }) => {
+        // Share the expensive meta-schema validator, but never register query
+        // schemas in it. Each cache miss gets an isolated compiler so neither
+        // identifiers nor AJV's generated-code references leak across queries.
+        const metaValidator = new Ajv({ strict: false });
+        return (schema: JSONSchema) => {
+          metaValidator.validateSchema(schema, true);
+          // The shared validator just checked the schema; do not repeat that
+          // compilation in the short-lived query compiler.
+          return new Ajv({ strict: false, validateSchema: false }).compile(
+            schema,
+          );
+        };
+      })
+      .catch((error) => {
+        compilerInitialization = undefined;
+        throw error;
+      });
+  }
+  return compilerInitialization;
+}
+
+/** Compile a self-contained schema; identifiers are local to this query. */
 export async function compileGraffitiObjectSchema<Schema extends JSONSchema>(
   schema: Schema,
 ) {
-  if (!ajv) {
-    const { default: Ajv } = await import("ajv");
-    ajv = new Ajv({ strict: false });
-  }
-
+  const compile = await useSchemaCompiler();
   try {
-    // Force the validation guard because
-    // it is too big for the type checker.
-    // Fortunately json-schema-to-ts is
-    // well tested against ajv.
-    return ajv.compile(schema) as (
+    const key = JSON.stringify(schema);
+    let cached = compiledSchemas.get(key);
+    if (cached) {
+      // Refresh insertion order for bounded least-recently-used eviction.
+      compiledSchemas.delete(key);
+      compiledSchemas.set(key, cached);
+    } else {
+      // Compile a snapshot: callers may mutate and reuse a schema object, and
+      // validators must keep the schema they were originally compiled from.
+      const snapshot = JSON.parse(key) as JSONSchema;
+      cached = compile(snapshot);
+      compiledSchemas.set(key, cached);
+    }
+    if (compiledSchemas.size > COMPILED_SCHEMA_CACHE_LIMIT) {
+      const oldestKey = compiledSchemas.keys().next().value!;
+      compiledSchemas.delete(oldestKey);
+    }
+    // Force the validation guard because json-schema-to-ts supplies the type.
+    return cached as (
       data: GraffitiObjectBase,
     ) => data is GraffitiObject<Schema>;
   } catch (error) {
