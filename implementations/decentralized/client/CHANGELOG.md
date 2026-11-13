@@ -1,5 +1,15 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.4.1
+
+### Patch Changes
+
+- 504a32a: Reuse exact channel-attestation verification results across objects, including false results, with bounded retention and concurrent request sharing. Existing storage, object-content, channel and private-recipient validation is preserved.
+- 99a39f0: Send inbox query and export cursors, and storage bucket export cursors, in CBOR
+  bodies at stable POST endpoints so browsers can reuse CORS preflights. Clients
+  require a server that accepts body cursors. Authentication, cursor errors and
+  rate limits are unchanged. Storage bucket export now uses POST instead of GET.
+
 ## 0.4.0
 
 ### Minor Changes
