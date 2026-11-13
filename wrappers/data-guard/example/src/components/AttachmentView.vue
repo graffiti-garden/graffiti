@@ -12,7 +12,7 @@ const accept = computed(() => ({ types: [props.attachment.mediaType] }));
 const { media } = useGraffitiGetMedia(
   () => props.attachment.url,
   accept,
-  () => props.session,
+  { session: () => props.session },
 );
 const kind = computed(() => props.attachment.mediaType.split("/")[0]);
 </script>

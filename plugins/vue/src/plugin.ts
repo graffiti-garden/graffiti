@@ -239,7 +239,7 @@ export {
  * for use in Vue templates.
  *
  * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
- * are identical to the arguments and return values of
+ * correspond to the arguments, options, and return values of
  * the composable {@link useGraffitiDiscover}. If no template is provided to
  * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
  * will display the objects using {@link GraffitiObjectInfo} for debugging.
@@ -251,7 +251,7 @@ export const GraffitiDiscover = Discover;
  * for use in Vue templates.
  *
  * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
- * are identical to the arguments and return values of
+ * correspond to the arguments, options, and return values of
  * the composable {@link useGraffitiGet}. If no template is provided to
  * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
  * will display the object using {@link GraffitiObjectInfo} for debugging.
@@ -263,7 +263,7 @@ export const GraffitiGet = Get;
  * for use in Vue templates.
  *
  * Its props and [slots props](https://vuejs.org/guide/components/slots.html#scoped-slots)
- * are identical to the arguments and return values of
+ * correspond to the arguments, options, and return values of
  * the composable {@link useGraffitiGetMedia}. If no template is provided to
  * the default slot, [fallback content](https://vuejs.org/guide/components/slots.html#fallback-content)
  * will display the media in an appropriate container based on its media type.
@@ -298,3 +298,5 @@ export const GraffitiHandleToActor = HandleToActor;
  * debugging purposes.
  */
 export const GraffitiObjectInfo = ObjectInfo;
+
+export type { GraffitiVueReadOptions, GraffitiVueDiscoverOptions } from "./composables/read-options";

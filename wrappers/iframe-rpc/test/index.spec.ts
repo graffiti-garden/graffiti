@@ -1,5 +1,6 @@
 import {
   graffitiCRUDTests,
+  graffitiLegacyReadSessionTests,
   graffitiDiscoverTests,
   graffitiMediaTests,
 } from "@graffiti-garden/api/tests";
@@ -29,6 +30,7 @@ const useSession1 = () => ({ actor: "did:example:someone" });
 const useSession2 = () => ({ actor: "did:example:someoneelse" });
 
 graffitiCRUDTests(useGraffiti, useSession1, useSession2);
+graffitiLegacyReadSessionTests(useGraffiti, useSession1);
 graffitiDiscoverTests(useGraffiti, useSession1, useSession2);
 graffitiMediaTests(useGraffiti, useSession1, useSession2);
 

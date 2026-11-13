@@ -57,3 +57,21 @@ createApp({})
 ```
 
 [See live examples of both methods](https://vue.graffiti.garden/examples/)
+
+
+## Composable options
+
+The read composables accept options, including reactive sessions:
+
+```ts
+const session = useGraffitiSession();
+const posts = useGraffitiDiscover(channels, schema, { session, autopoll: true });
+const publicPosts = useGraffitiDiscover(channels, schema, { autopoll: true });
+const object = useGraffitiGet(url, schema, { session });
+const media = useGraffitiGetMedia(mediaUrl, accept, { session });
+```
+
+The options object, `session`, and `autopoll` may be refs or getters. Autopoll
+is off by default. Existing positional session arguments and discovery's fourth
+`autopoll` argument still work. Renderless components retain their `session`
+and `autopoll` props.

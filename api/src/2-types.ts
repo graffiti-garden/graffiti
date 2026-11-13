@@ -192,6 +192,12 @@ export interface GraffitiSession {
   actor: string;
 }
 
+/** Options shared by object reads, media reads, and discovery. */
+export interface GraffitiReadOptions {
+  /** Authenticate this read. Omit or use null to read only public data. */
+  session?: GraffitiSession | null;
+}
+
 /**
  * A stream of data that returned by {@link Graffiti.discover | `discover`}
  * and {@link Graffiti.continueDiscover | `continueDiscover`}.

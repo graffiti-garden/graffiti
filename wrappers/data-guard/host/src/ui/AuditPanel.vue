@@ -57,7 +57,7 @@ const schema = computed(() => ruleSchema(actor.value ?? ""));
 const { objects, isFirstPoll, poll } = useGraffitiDiscover(
   channels,
   schema,
-  activeSession,
+  { session: activeSession },
 );
 
 const urlSites = new URL(window.location.href).searchParams

@@ -24,7 +24,7 @@ defineSlots<{
 const { media, error, poll } = useGraffitiGetMedia(
     toRef(props, "url"),
     toRef(props, "accept"),
-    toRef(props, "session"),
+    { session: toRef(props, "session") },
 );
 </script>
 

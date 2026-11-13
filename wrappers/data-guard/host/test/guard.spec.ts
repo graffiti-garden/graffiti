@@ -153,7 +153,7 @@ describe("site-scoped Guard permissions", () => {
     expect(post!.args[1]).toEqual({ actor });
 
     objects.set("private", object("private", siteA));
-    await guard.authorize("get", ["private", {}, claimedSession], sourceB);
+    await guard.authorize("get", ["private", {}, { session: claimedSession }], sourceB);
     expect(prompts[0].request.source.key).toBe(JSON.stringify(siteB));
     expect(prompts[0].request.mode).toBe("read");
   });
@@ -213,9 +213,9 @@ describe("site-scoped Guard permissions", () => {
     objects.set("other", object("other", siteB));
     objects.set("unknown", object("unknown"));
 
-    await guard.authorize("get", ["same", {}, sessionA], sourceA);
-    await guard.authorize("get", ["unknown", {}, sessionA], sourceA);
-    await guard.authorize("get", ["other", {}, sessionA], sourceA);
+    await guard.authorize("get", ["same", {}, { session: sessionA }], sourceA);
+    await guard.authorize("get", ["unknown", {}, { session: sessionA }], sourceA);
+    await guard.authorize("get", ["other", {}, { session: sessionA }], sourceA);
 
     expect(prompts).toHaveLength(1);
     expect(prompts[0].request).toMatchObject({
@@ -239,16 +239,16 @@ describe("site-scoped Guard permissions", () => {
     objects.set(parentMessage.url, parentMessage);
     objects.set("foreign-message", object("foreign-message", foreignSite));
 
-    await guard.authorize("get", [childMessage.url, {}, sessionA], sourceA);
-    await guard.authorize("get", [childMessage.url, {}, root], rootSource);
-    await receives(guard, [["channel"], {}, sessionA], childMessage, sourceA);
-    expect(await receives(guard, [["channel"], {}, sessionA], childMessage, sourceA, true)).toBe(true);
-    expect(await receives(guard, [["channel"], {}, sibling], childMessage, siblingSource, true)).toBe(false);
+    await guard.authorize("get", [childMessage.url, {}, { session: sessionA }], sourceA);
+    await guard.authorize("get", [childMessage.url, {}, { session: root }], rootSource);
+    await receives(guard, [["channel"], {}, { session: sessionA }], childMessage, sourceA);
+    expect(await receives(guard, [["channel"], {}, { session: sessionA }], childMessage, sourceA, true)).toBe(true);
+    expect(await receives(guard, [["channel"], {}, { session: sibling }], childMessage, siblingSource, true)).toBe(false);
     expect(prompts).toEqual([]);
 
-    await guard.authorize("get", [childMessage.url, {}, sibling], siblingSource);
-    await guard.authorize("get", [parentMessage.url, {}, child], childSource);
-    await guard.authorize("get", ["foreign-message", {}, sessionA], sourceA);
+    await guard.authorize("get", [childMessage.url, {}, { session: sibling }], siblingSource);
+    await guard.authorize("get", [parentMessage.url, {}, { session: child }], childSource);
+    await guard.authorize("get", ["foreign-message", {}, { session: sessionA }], sourceA);
     expect(prompts.map(({ request }) => request.originSite?.site)).toEqual([
       JSON.stringify(childSite),
       JSON.stringify(siteA),
@@ -262,13 +262,13 @@ describe("site-scoped Guard permissions", () => {
     const second = object("second", siteB);
     objects.set(first.url, first);
     objects.set(second.url, second);
-    const stream = [["channel"], {}, sessionA] as const;
+    const stream = [["channel"], {}, { session: sessionA }] as const;
 
     expect(await receives(guard, stream, first, sourceA, true)).toBe(false);
-    await guard.authorize("get", [first.url, {}, sessionA], sourceA);
-    expect(await receives(guard, ["cursor", sessionA], first, sourceA, true)).toBe(true);
-    await guard.authorize("get", [first.url, {}, sessionA], sourceA);
-    await guard.authorize("get", [second.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [first.url, {}, { session: sessionA }], sourceA);
+    expect(await receives(guard, ["cursor", { session: sessionA }], first, sourceA, true)).toBe(true);
+    await guard.authorize("get", [first.url, {}, { session: sessionA }], sourceA);
+    await guard.authorize("get", [second.url, {}, { session: sessionA }], sourceA);
     expect(prompts).toHaveLength(2);
     expect((await db.rulesSnapshot()).permissions).toEqual([]);
 
@@ -289,11 +289,11 @@ describe("site-scoped Guard permissions", () => {
     const item = object("first", siteB);
     objects.set(item.url, item);
 
-    await expect(guard.authorize("get", [item.url, {}, sessionA], sourceA))
+    await expect(guard.authorize("get", [item.url, {}, { session: sessionA }], sourceA))
       .rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    expect(await receives(guard, [["channel"], {}, sessionA], item, sourceA, true)).toBe(false);
-    await guard.authorize("get", [item.url, {}, sessionA], sourceA);
-    await guard.authorize("get", [item.url, {}, sessionA], sourceA);
+    expect(await receives(guard, [["channel"], {}, { session: sessionA }], item, sourceA, true)).toBe(false);
+    await guard.authorize("get", [item.url, {}, { session: sessionA }], sourceA);
+    await guard.authorize("get", [item.url, {}, { session: sessionA }], sourceA);
 
     expect(prompts).toHaveLength(2);
     expect((await db.rulesSnapshot()).permissions).toEqual([]);
@@ -307,10 +307,10 @@ describe("site-scoped Guard permissions", () => {
     objects.set("first", object("first", siteB));
     objects.set("second", object("second", siteB));
 
-    await guard.authorize("get", ["first", {}, sessionA], sourceA);
-    await expect(guard.authorize("get", ["second", {}, sessionA], sourceA))
+    await guard.authorize("get", ["first", {}, { session: sessionA }], sourceA);
+    await expect(guard.authorize("get", ["second", {}, { session: sessionA }], sourceA))
       .rejects.toBeInstanceOf(GraffitiErrorForbidden);
-    await expect(guard.authorize("get", ["first", {}, sessionA], sourceA))
+    await expect(guard.authorize("get", ["first", {}, { session: sessionA }], sourceA))
       .rejects.toBeInstanceOf(GraffitiErrorForbidden);
     expect(prompts).toHaveLength(2);
   });
@@ -319,11 +319,11 @@ describe("site-scoped Guard permissions", () => {
     const { db, guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
     objects.set("first", object("first", siteB));
 
-    await guard.authorize("get", ["first", {}, sessionA], sourceA);
+    await guard.authorize("get", ["first", {}, { session: sessionA }], sourceA);
     const { permissions } = await db.rulesSnapshot();
     expect(permissions).toHaveLength(1);
     await db.revoke(permissions[0].id);
-    await guard.authorize("get", ["first", {}, sessionA], sourceA);
+    await guard.authorize("get", ["first", {}, { session: sessionA }], sourceA);
     expect(prompts).toHaveLength(2);
   });
 
@@ -333,9 +333,9 @@ describe("site-scoped Guard permissions", () => {
     objects.set("second", object("second", siteB));
     media.set("graffiti:file", { actor, data: mediaBlob(siteB), allowed: [] });
 
-    await guard.authorize("get", ["first", {}, sessionA], sourceA);
-    await guard.authorize("get", ["second", {}, sessionA], sourceA);
-    await guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA);
+    await guard.authorize("get", ["first", {}, { session: sessionA }], sourceA);
+    await guard.authorize("get", ["second", {}, { session: sessionA }], sourceA);
+    await guard.authorize("getMedia", ["graffiti:file", {}, { session: sessionA }], sourceA);
 
     expect(prompts).toHaveLength(1);
     expect((await db.rulesSnapshot()).permissions).toMatchObject([
@@ -347,16 +347,16 @@ describe("site-scoped Guard permissions", () => {
     const { guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
     const foreign = object("foreign", ["https://notes.example", "b"]);
     objects.set(foreign.url, foreign);
-    await guard.authorize("get", [foreign.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [foreign.url, {}, { session: sessionA }], sourceA);
     const child = sourceFromContext(origin, {
       source: [{ id: "a", name: "A" }, { id: "nested", name: "A" }],
     });
     // Provenance inheritance applies to data produced by descendants, not to
     // a grant that a different requester received for somebody else's data.
-    await guard.authorize("get", [foreign.url, {}, sessionA], child);
-    await guard.authorize("get", [foreign.url, {}, sessionA], rootSource);
-    await guard.authorize("get", [foreign.url, {}, { actor: "actor:two" }], sourceA);
-    await guard.authorize("get", [foreign.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [foreign.url, {}, { session: sessionA }], child);
+    await guard.authorize("get", [foreign.url, {}, { session: sessionA }], rootSource);
+    await guard.authorize("get", [foreign.url, {}, { session: { actor: "actor:two" } }], sourceA);
+    await guard.authorize("get", [foreign.url, {}, { session: sessionA }], sourceA);
     expect(prompts).toHaveLength(4);
     expect(prompts.map(({ request }) => [request.source.key, request.actor])).toEqual([
       [sourceA.key, actor], [child.key, actor], [rootSource.key, actor], [sourceA.key, "actor:two"],
@@ -367,18 +367,18 @@ describe("site-scoped Guard permissions", () => {
     const { guard, objects, prompts } = harness();
     const received = { ...object("received", siteB), actor: "actor:sender", allowed: [actor] };
     objects.set(received.url, received);
-    await guard.authorize("get", [received.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [received.url, {}, { session: sessionA }], sourceA);
     expect(prompts).toHaveLength(1);
     expect(prompts[0].request).toMatchObject({ actor, mode: "read", originSite: { kind: "site", site: JSON.stringify(siteB), name: "b" } });
     const producingSite = sourceFromContext(origin, { source: [{ id: "b", name: "B" }] });
-    await guard.authorize("get", [received.url, {}, sessionA], producingSite);
+    await guard.authorize("get", [received.url, {}, { session: sessionA }], producingSite);
     expect(prompts).toHaveLength(1);
   });
 
   it("allows unstamped private files without a prompt or stored grant", async () => {
     const { db, guard, media, prompts } = harness();
     media.set("graffiti:file", { actor, data: new Blob(["image"]), allowed: [] });
-    await guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA);
+    await guard.authorize("getMedia", ["graffiti:file", {}, { session: sessionA }], sourceA);
     await guard.authorize("deleteMedia", ["graffiti:file", sessionA], sourceA);
     expect(prompts).toEqual([]);
     expect((await db.rulesSnapshot()).permissions).toEqual([]);
@@ -388,12 +388,12 @@ describe("site-scoped Guard permissions", () => {
     const { db, guard, media, prompts } = harness();
     const file = "graffiti:file";
     media.set(file, { actor, data: mediaBlob(siteB), allowed: [] });
-    await guard.authorize("getMedia", [file, {}, sessionA], sourceA);
-    await guard.authorize("getMedia", [file, {}, sessionA], sourceA);
+    await guard.authorize("getMedia", [file, {}, { session: sessionA }], sourceA);
+    await guard.authorize("getMedia", [file, {}, { session: sessionA }], sourceA);
     expect(prompts).toHaveLength(1);
     expect((await db.rulesSnapshot()).permissions).toEqual([]);
     await guard.authorize("deleteMedia", [file, sessionA], sourceA);
-    await guard.authorize("getMedia", [file, {}, { actor: "actor:two" }], sourceA);
+    await guard.authorize("getMedia", [file, {}, { session: { actor: "actor:two" } }], sourceA);
     expect(prompts.map(({ request }) => request.mode)).toEqual(["read", "delete", "read"]);
   });
 
@@ -411,7 +411,7 @@ describe("site-scoped Guard permissions", () => {
       throw new Error("Unstamped objects must not prompt.");
     });
 
-    await guard.authorize("get", [file.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [file.url, {}, { session: sessionA }], sourceA);
     await guard.authorize("delete", [file.url, sessionA], sourceA);
     expect(getMedia).not.toHaveBeenCalled();
   });
@@ -477,7 +477,7 @@ describe("site-scoped Guard permissions", () => {
   it("does not let a remembered read grant delete cross-site data", async () => {
     const { guard, objects, prompts } = harness(() => ({ allow: true, remember: true }));
     objects.set("other", object("other", siteB));
-    await guard.authorize("get", ["other", {}, sessionA], sourceA);
+    await guard.authorize("get", ["other", {}, { session: sessionA }], sourceA);
     await guard.authorize("delete", ["other", sessionA], sourceA);
     expect(prompts.map(({ request }) => request.mode)).toEqual(["read", "delete"]);
   });
@@ -496,7 +496,7 @@ describe("site-scoped Guard permissions", () => {
     });
     await db.blockSource({ key: siteAKey, origin, path: sourceA.path }, actor);
 
-    await expect(guard.authorize("getMedia", ["graffiti:file", {}, sessionA], sourceA))
+    await expect(guard.authorize("getMedia", ["graffiti:file", {}, { session: sessionA }], sourceA))
       .rejects.toBeInstanceOf(GraffitiErrorForbidden);
     expect(getMedia).not.toHaveBeenCalled();
   });
@@ -524,16 +524,16 @@ describe("site-scoped Guard permissions", () => {
     expect(prompts.map(({ request }) => request.mode)).toEqual(["confirm"]);
     expect(prompts[0].canRemember).toBe(false);
 
-    await guard.authorize("get", [policy.url, {}, sessionA], sourceA);
+    await guard.authorize("get", [policy.url, {}, { session: sessionA }], sourceA);
     await guard.authorize("delete", [policy.url, sessionA], sourceA);
     expect(prompts).toHaveLength(1);
 
     const otherSite = sourceFromContext("https://other.example", {});
-    expect(await receives(guard, [["channel"], {}, sessionA], policy, otherSite, true)).toBe(false);
-    await receives(guard, [["channel"], {}, sessionA], policy, otherSite);
-    expect(await receives(guard, [["channel"], {}, sessionA], policy, otherSite, true)).toBe(true);
+    expect(await receives(guard, [["channel"], {}, { session: sessionA }], policy, otherSite, true)).toBe(false);
+    await receives(guard, [["channel"], {}, { session: sessionA }], policy, otherSite);
+    expect(await receives(guard, [["channel"], {}, { session: sessionA }], policy, otherSite, true)).toBe(true);
     await guard.authorize("delete", [policy.url, sessionA], otherSite);
-    await guard.authorize("get", [policy.url, {}, sessionA], otherSite);
+    await guard.authorize("get", [policy.url, {}, { session: sessionA }], otherSite);
     await guard.authorize("delete", [policy.url, sessionA], otherSite);
     expect(prompts.map(({ request }) => request.mode)).toEqual(["confirm", "read", "delete"]);
     expect(prompts.slice(1).every(({ request }) => request.originSite?.site === siteAKey)).toBe(true);
@@ -550,7 +550,7 @@ describe("site-scoped Guard permissions", () => {
       },
     } as const;
 
-    await expect(guard.authorize("get", ["private", mismatchingSchema, sessionA], sourceA))
+    await expect(guard.authorize("get", ["private", mismatchingSchema, { session: sessionA }], sourceA))
       .rejects.toBeInstanceOf(GraffitiErrorForbidden);
     expect(prompts).toHaveLength(1);
     expect(prompts[0].request.mode).toBe("read");
@@ -565,9 +565,9 @@ describe("site-scoped Guard permissions", () => {
       : { allow: true, remember: true });
     objects.set("one", object("one", siteB));
     objects.set("two", object("two", siteB));
-    const one = guard.authorize("get", ["one", {}, sessionA], sourceA);
+    const one = guard.authorize("get", ["one", {}, { session: sessionA }], sourceA);
     await vi.waitFor(() => expect(prompts).toHaveLength(1));
-    const two = guard.authorize("get", ["two", {}, sessionA], sourceA);
+    const two = guard.authorize("get", ["two", {}, { session: sessionA }], sourceA);
     release({ allow: true, remember: true });
     await Promise.all([one, two]);
     expect(prompts).toHaveLength(1);

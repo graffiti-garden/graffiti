@@ -1,5 +1,7 @@
 import {
   Graffiti,
+  normalizeGraffitiReadOptions,
+  type GraffitiReadOptions,
   type GraffitiLoginEvent,
   type GraffitiLogoutEvent,
   type GraffitiObjectStream,
@@ -7,7 +9,7 @@ import {
 } from "@graffiti-garden/api";
 import { requestLoginRedirect } from "../bootstrap/protocol.js";
 import { askLogin } from "../ui/ask-login.js";
-import { sessionArgumentIndex, type GuardLoginOptions, type GuardSession } from "../../../client/src/source.js";
+import { readOptionsArgumentIndex, type GuardLoginOptions, type GuardSession } from "../../../client/src/source.js";
 import type { Guard } from "./guard.js";
 import { LoginAccess } from "./login-access.js";
 import { sessionFromArgs, snapshotSession, sourceFromContext, type Source } from "./source.js";
@@ -219,8 +221,11 @@ export class GuardedGraffiti extends Graffiti {
     source?: Source,
   ): GraffitiObjectStream<{}> {
     const forwarded = [...args] as typeof args;
-    const index = sessionArgumentIndex[method];
-    if (forwarded[index] != null) forwarded[index] = snapshotSession(sessionFromArgs(args, method));
+    const index = readOptionsArgumentIndex[method];
+    forwarded[index] = {
+      ...normalizeGraffitiReadOptions(args[index] as GraffitiReadOptions | GraffitiSession | undefined),
+      session: snapshotSession(sessionFromArgs(args, method)),
+    };
     // Check site login and blocking before the implementation starts any work.
     await this.guard.authorize(method, forwarded, source);
     const stream = implementation.apply(this.graffiti, forwarded) as GraffitiObjectStream<{}>;

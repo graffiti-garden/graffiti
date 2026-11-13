@@ -22,8 +22,7 @@ const accountError = ref("");
 const { objects, isFirstPoll, poll } = useGraffitiDiscover(
   [messageChannel],
   messageSchema,
-  undefined,
-  true,
+  { session: undefined, autopoll: true },
 );
 const messages = computed(() =>
   [...objects.value]

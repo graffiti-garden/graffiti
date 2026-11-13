@@ -1,6 +1,7 @@
 import type {
   Graffiti,
   GraffitiSession,
+  GraffitiReadOptions,
   JSONSchema,
   GraffitiObjectBase,
   GraffitiObjectStream,
@@ -9,6 +10,7 @@ import type {
   GraffitiObjectStreamTombstone,
 } from "@graffiti-garden/api";
 import {
+  normalizeGraffitiReadOptions,
   compileGraffitiObjectSchema,
   isActorAllowedGraffitiObject,
   maskGraffitiObject,
@@ -216,8 +218,9 @@ export class GraffitiSynchronize implements Graffiti {
   synchronizeDiscover<Schema extends JSONSchema>(
     channels: string[],
     schema: Schema,
-    session?: GraffitiSession | null,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
+    const { session } = normalizeGraffitiReadOptions(options);
     function matchObject(object: GraffitiObjectBase) {
       return object.channels.some((channel) => channels.includes(channel));
     }
@@ -239,8 +242,9 @@ export class GraffitiSynchronize implements Graffiti {
   synchronizeGet<Schema extends JSONSchema>(
     objectUrl: string | GraffitiObjectUrl,
     schema: Schema,
-    session?: GraffitiSession | null | undefined,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
+    const { session } = normalizeGraffitiReadOptions(options);
     const url = unpackObjectUrl(objectUrl);
     function matchObject(object: GraffitiObjectBase) {
       return object.url === url;
@@ -262,8 +266,9 @@ export class GraffitiSynchronize implements Graffiti {
    */
   synchronizeAll<Schema extends JSONSchema>(
     schema: Schema,
-    session?: GraffitiSession | null,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): AsyncGenerator<GraffitiObjectStreamSuccess<Schema>> {
+    const { session } = normalizeGraffitiReadOptions(options);
     return this.synchronize<Schema>(() => true, [], schema, session);
   }
 

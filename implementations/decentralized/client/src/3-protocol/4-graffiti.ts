@@ -1,5 +1,6 @@
 import type { JSONSchema } from "json-schema-to-ts";
 import {
+  normalizeGraffitiReadOptions,
   GraffitiErrorNotFound,
   maskGraffitiObject,
   type Graffiti,
@@ -578,7 +579,8 @@ export class GraffitiDecentralized implements Graffiti {
     kind: RecordKind,
     ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
   ) {
-    const [url, schema, session] = args;
+    const [url, schema, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     let services: { token?: string; serviceEndpoint: string }[];
     const validator = await compileGraffitiObjectSchema(schema);
 
@@ -750,7 +752,8 @@ export class GraffitiDecentralized implements Graffiti {
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
-    const [mediaUrl, accept, session] = args;
+    const [mediaUrl, accept, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
 
     if (
       accept?.maxBytes !== undefined &&
@@ -763,7 +766,7 @@ export class GraffitiDecentralized implements Graffiti {
       RECORD_KIND_MEDIA,
       mediaUrl,
       MEDIA_OBJECT_SCHEMA,
-      session,
+      { session },
     );
 
     const { key, type, size } = object.value;
@@ -979,13 +982,15 @@ export class GraffitiDecentralized implements Graffiti {
   }
 
   discover: Graffiti["discover"] = (...args) => {
-    const [channels, schema, session] = args;
+    const [channels, schema, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     return this.discoverMeta<(typeof args)[1]>(channels, schema, {}, session);
   };
 
   // @ts-ignore
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
-    const [cursor, session] = args;
+    const [cursor, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     // Extract the channels from the cursor
     let channels: string[];
     let cursors: { [endpoint: string]: string };

@@ -9,6 +9,7 @@ import type {
   GraffitiObjectStreamTombstone,
 } from "@graffiti-garden/api";
 import {
+  normalizeGraffitiReadOptions,
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
   GraffitiErrorForbidden,
@@ -135,7 +136,8 @@ export class GraffitiLocalObjects {
     kind: "object" | "media",
     ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
   ) {
-    const [urlObject, schema, session] = args;
+    const [urlObject, schema, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     const url = stripGraffitiUrlAddendums(unpackObjectUrl(urlObject));
 
     let doc: GraffitiObjectData;
@@ -293,7 +295,8 @@ export class GraffitiLocalObjects {
       }
     }
 
-    const [discoverChannels, schema, session] = args;
+    const [discoverChannels, schema, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     const validate = await compileGraffitiObjectSchema(schema);
     const startKeySuffix = continueParams
       ? continueParams.ifModifiedSince.toString().padStart(15, "0")
@@ -372,7 +375,8 @@ export class GraffitiLocalObjects {
       ifModifiedSince: number;
     },
   ): string {
-    const [channels, schema, session] = args;
+    const [channels, schema, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     return (
       "discover:" +
       JSON.stringify({
@@ -392,7 +396,7 @@ export class GraffitiLocalObjects {
     },
     session?: GraffitiSession | null,
   ): GraffitiObjectStream<Schema> {
-    if (session?.actor !== args[2]?.actor) {
+    if (session?.actor !== normalizeGraffitiReadOptions(args[2]).session?.actor) {
       throw new GraffitiErrorForbidden(
         "Cannot continue a cursor started by another actor",
       );
@@ -411,11 +415,12 @@ export class GraffitiLocalObjects {
   }
 
   discover: Graffiti["discover"] = (...args) => {
-    const [channels, schema, session] = args;
+    const [channels, schema, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     const iterator = this.discoverMeta<(typeof args)[1]>([
       channels,
       schema,
-      session,
+      { session },
     ]);
 
     const this_ = this;
@@ -436,7 +441,8 @@ export class GraffitiLocalObjects {
 
   // @ts-ignore
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
-    const [cursor, session] = args;
+    const [cursor, options] = args;
+    const { session } = normalizeGraffitiReadOptions(options);
     if (cursor.startsWith("discover:")) {
       // TODO: use AJV here
       const { channels, schema, actor, continueParams } = JSON.parse(
@@ -450,7 +456,7 @@ export class GraffitiLocalObjects {
         })();
       }
       return this.discoverContinue<{}>(
-        [channels, schema, session],
+        [channels, schema, { session }],
         continueParams,
         session,
       );

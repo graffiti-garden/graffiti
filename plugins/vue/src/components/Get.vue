@@ -26,7 +26,7 @@ defineSlots<{
 const { object, error, poll } = useGraffitiGet<Schema>(
     toRef(() => props.url),
     toRef(() => props.schema),
-    toRef(() => props.session),
+    { session: toRef(() => props.session) },
 );
 </script>
 

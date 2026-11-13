@@ -131,7 +131,7 @@ async function post() {
 async function getObject() {
   await run("Get object", async () => {
     if (!objectUrl.value) throw new Error("Enter an object URL.");
-    const object = await graffiti.get(objectUrl.value, {}, readSession.value);
+    const object = await graffiti.get(objectUrl.value, {}, { session: readSession.value });
     objects.value = [object, ...objects.value.filter((item) => item.url !== object.url)];
     note(`Read object made via ${siteOf(object)}.`);
   });
@@ -175,14 +175,14 @@ async function consume(stream: GraffitiObjectStream<{}>, replace: boolean) {
 async function discover() {
   await run("Discover", async () => {
     cursor.value = undefined;
-    await consume(graffiti.discover<{}>([channel], schema, readSession.value), true);
+    await consume(graffiti.discover<{}>([channel], schema, { session: readSession.value }), true);
   });
 }
 
 async function poll() {
   await run("Poll changes", async () => {
     if (!cursor.value) throw new Error("Run Discover first.");
-    await consume(graffiti.continueDiscover<{}>(cursor.value, readSession.value), false);
+    await consume(graffiti.continueDiscover<{}>(cursor.value, { session: readSession.value }), false);
   });
 }
 
@@ -200,7 +200,7 @@ async function postMedia() {
 async function getMedia() {
   await run("Get media", async () => {
     if (!mediaUrl.value) throw new Error("Enter a media URL.");
-    const media = await graffiti.getMedia(mediaUrl.value, { maxBytes: 20_000_000 }, readSession.value);
+    const media = await graffiti.getMedia(mediaUrl.value, { maxBytes: 20_000_000 }, { session: readSession.value });
     if (mediaDownloadUrl.value) URL.revokeObjectURL(mediaDownloadUrl.value);
     mediaDownloadUrl.value = URL.createObjectURL(media.data);
     mediaDescription.value = `${media.data.type || "Unknown type"}, ${media.data.size} bytes`;

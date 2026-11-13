@@ -3,6 +3,7 @@ import type {
   GraffitiObject,
   GraffitiObjectBase,
   GraffitiSession,
+  GraffitiReadOptions,
   GraffitiPostObject,
   GraffitiObjectStream,
   GraffitiMedia,
@@ -166,12 +167,13 @@ export abstract class Graffiti {
      */
     schema: Schema,
     /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * Read options, including an optional authentication `session`.
+     * Passing a session directly is supported for backward compatibility.
+     * If no `options.session` is provided,
      * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
      * property must be `undefined`.
      */
-    session?: GraffitiSession | null,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): Promise<GraffitiObject<Schema>>;
 
   /**
@@ -242,12 +244,13 @@ export abstract class Graffiti {
      */
     schema: Schema,
     /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * Read options, including an optional authentication `session`.
+     * Passing a session directly is supported for backward compatibility.
+     * If no `options.session` is provided,
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
      */
-    session?: GraffitiSession | null,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): GraffitiObjectStream<Schema>;
 
   /**
@@ -264,14 +267,15 @@ export abstract class Graffiti {
    *
    * @throws {@link GraffitiErrorForbidden} upon iteration
    * if the {@link GraffitiObjectBase.actor | `actor`}
-   * provided in the `session` is not the same as the `actor`
+   * provided in `options.session` is not the same as the `actor`
    * that initiated the original stream.
    *
    * @group 2 - Multi-Object Methods
    */
   abstract continueDiscover<Schema extends JSONSchema>(
     cursor: string,
-    session?: GraffitiSession | null,
+    /** Read options; a legacy session argument is also accepted. */
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): GraffitiObjectStream<Schema>;
 
   /**
@@ -347,10 +351,10 @@ export abstract class Graffiti {
      */
     accept: GraffitiMediaAccept,
     /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
+     * Read options, including an optional authentication `session`.
+     * Passing a session directly is supported for backward compatibility.
      */
-    session?: GraffitiSession | null,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): Promise<GraffitiMedia>;
 
   /**
