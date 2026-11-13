@@ -11,7 +11,6 @@ import { GraffitiErrorNotFound } from "@graffiti-garden/api";
 import type { RecordKind } from "./3-protocol/3-object-encoding";
 import {
   graffitiCRUDTests,
-  graffitiLegacyReadSessionTests,
   graffitiDiscoverTests,
   graffitiMediaTests,
 } from "@graffiti-garden/api/tests";
@@ -215,7 +214,6 @@ describe("GraffitiDecentralized Tests", () => {
     () => sessions[0],
     () => sessions[1],
   );
-  graffitiLegacyReadSessionTests(useGraffiti, () => sessions[0]);
   graffitiMediaTests(
     useGraffiti,
     () => sessions[0],

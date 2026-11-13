@@ -9,7 +9,6 @@ import {
 import { GraffitiSynchronize } from "./index";
 import {
   graffitiCRUDTests,
-  graffitiLegacyReadSessionTests,
   graffitiDiscoverTests,
   graffitiMediaTests,
 } from "@graffiti-garden/api/tests";
@@ -368,6 +367,5 @@ describe("synchronizeAll", () => {
 });
 
 graffitiCRUDTests(useGraffiti, useSession1, useSession2);
-graffitiLegacyReadSessionTests(useGraffiti, useSession1);
 graffitiDiscoverTests(useGraffiti, useSession1, useSession2);
 graffitiMediaTests(useGraffiti, useSession1, useSession2);

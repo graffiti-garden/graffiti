@@ -30,6 +30,14 @@ export const graffitiMediaTests = (
         session2 = await useSession2();
       });
 
+      it("getMedia accepts a legacy session argument", async () => {
+        const data = new Blob([randomString()], { type: "text/plain" });
+        const url = await graffiti.postMedia({ data, allowed: [] }, session);
+        const media = await graffiti.getMedia(url, {}, session);
+        expect(await media.data.text()).toBe(await data.text());
+        await graffiti.deleteMedia(url, session);
+      });
+
       it("post, get, delete media", async () => {
         // Post media
         const text = randomString();

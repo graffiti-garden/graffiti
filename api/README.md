@@ -52,8 +52,6 @@ graffitiCRUDTests(useGraffiti, useSession1, useSession2);
 ```
 
 Add equivalent discover and media suites as appropriate.
-`graffitiLegacyReadSessionTests(useGraffiti, useSession1)` checks the legacy
-positional session arguments; the other suites use options.
 
 ## Building the Documentation
 

@@ -354,6 +354,15 @@ export const graffitiCRUDTests = (
         prepost.channels.forEach((c) => expect(output.channels).toContain(c));
         expect(output.channels).toContain(channel);
       });
+
+      it("get accepts a legacy session argument", async () => {
+        const object = await graffiti.post<{}>(
+          { ...randomPostObject(), allowed: [] },
+          session,
+        );
+        expect(await graffiti.get(object.url, {}, session)).toEqual(object);
+        await graffiti.delete(object.url, session);
+      });
     },
   );
 };

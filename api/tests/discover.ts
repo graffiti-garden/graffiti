@@ -37,6 +37,25 @@ export const graffitiDiscoverTests = (
       session2 = await useSession2();
     });
 
+    it("discover and continueDiscover accept legacy session arguments", async () => {
+      const object = await graffiti.post<{}>(
+        { ...randomPostObject(), allowed: [] },
+        session,
+      );
+      const stream = graffiti.discover<{}>(object.channels, {}, session);
+      expect((await nextStreamValue<{}>(stream)).url).toBe(object.url);
+      const end = await stream.next();
+      assert(end.done);
+
+      await graffiti.delete(object.url, session);
+      const continuation = graffiti.continueDiscover<{}>(end.value.cursor, session);
+      expect(await continuation.next()).toMatchObject({
+        done: false,
+        value: { tombstone: true, object: { url: object.url } },
+      });
+      await continuation.return({ cursor: "" });
+    });
+
     it("discover nothing", async () => {
       const iterator = graffiti.discover([], {});
       expect(await iterator.next()).toHaveProperty("done", true);
