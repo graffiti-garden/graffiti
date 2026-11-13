@@ -1,3 +1,5 @@
+// Register the cache tests' verification spy before importing its consumers.
+import { channelAttestationCacheTests } from "./2-primitives/3-channel-attestations-cache-tests";
 import type {
   Graffiti,
   JSONSchema,
@@ -92,6 +94,7 @@ describe("GraffitiDecentralized Tests", () => {
   stringEncodingTests();
   contentAddressesTests();
   channelAttestationTests();
+  channelAttestationCacheTests();
   allowedAttestationTests();
 
   // Protocol tests

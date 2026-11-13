@@ -9,8 +9,12 @@ hashes.sha512Async = sha512;
 
 export const CHANNEL_ATTESTATION_METHOD_SHA256_ED25519 = "pk:sha2-256+ed25519";
 const CHANNEL_ATTESTATION_METHOD_PREFIX_SHA256_ED25519 = 0;
+const VALIDATION_CACHE_LIMIT = 1024;
+const MAX_CACHED_ACTOR_LENGTH = 2048;
 
 export class ChannelAttestations {
+  private readonly validations = new Map<string, Promise<boolean>>();
+
   async register(
     channelAttestationMethod: string,
     channel: string,
@@ -86,10 +90,50 @@ export class ChannelAttestations {
       );
     }
 
-    return await verifyAsync(
-      attestation,
+    // Cache only signature verification; object and permission checks still run.
+    // Keep malformed/oversized inputs on the normal verifier path without
+    // allocating cache keys for them.
+    const cacheable =
+      attestation.byteLength === 64 &&
+      channelPublicId.byteLength === 33 &&
+      actor.length <= MAX_CACHED_ACTOR_LENGTH;
+    if (!cacheable) {
+      return await verifyAsync(
+        attestation,
+        new TextEncoder().encode(actor),
+        channelPublicId.slice(1),
+      );
+    }
+
+    // Snapshot before verification: callers can mutate their typed arrays while
+    // the verifier awaits hashing. Uint8Array also copies Node Buffer views.
+    const signature = new Uint8Array(attestation);
+    const publicId = new Uint8Array(channelPublicId);
+    const key = JSON.stringify([
+      actor,
+      Array.from(signature),
+      Array.from(publicId),
+    ]);
+    const cached = this.validations.get(key);
+    if (cached) {
+      this.validations.delete(key);
+      this.validations.set(key, cached);
+      return await cached;
+    }
+
+    const promise = verifyAsync(
+      signature,
       new TextEncoder().encode(actor),
-      channelPublicId.slice(1),
+      publicId.subarray(1),
     );
+    this.validations.set(key, promise);
+    while (this.validations.size > VALIDATION_CACHE_LIMIT) {
+      this.validations.delete(this.validations.keys().next().value!);
+    }
+    // Both true and false are stable results. Retry only verification errors.
+    void promise.catch(() => {
+      if (this.validations.get(key) === promise) this.validations.delete(key);
+    });
+    return await promise;
   }
 }
