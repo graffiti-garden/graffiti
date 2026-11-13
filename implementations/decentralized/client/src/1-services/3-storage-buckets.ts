@@ -11,10 +11,15 @@ import { GraffitiErrorNotFound, GraffitiErrorTooLarge } from "@graffiti-garden/a
 const BATCH_KEYS = 32; // total number of keys in a batch request
 const BATCH_TOTAL_VALUE_BYTES = 1024 * 1024; // total response limit
 
-// This is a heuristic for how long to wait to fill a batch request
-// before sending it. Just enough waiting to capture a few more requests,
-// but not so long that it adds noticeable latency.
-const BATCH_WAIT_MS = 2;
+// Keep this at 0: Chromium can delay positive timers (even 2 ms) by ~1 s in
+// hidden cross-origin guard iframes. Zero uses its immediate timer queue,
+// while still batching reads queued before the callback.
+// https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.cc#L466-L479
+//
+// In the future, A worker-based timer might be able to add a short collection
+// window to batch gets together (2-5ms or something) but it could be complicated
+// and its effectiveness and overhead would need to be measured first.
+const BATCH_WAIT_MS = 0;
 
 function batchWidth(maxBytes: number) {
   return Math.min(BATCH_KEYS, Math.floor(BATCH_TOTAL_VALUE_BYTES / maxBytes));
