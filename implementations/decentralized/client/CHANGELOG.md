@@ -1,5 +1,11 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.4.2
+
+### Patch Changes
+
+- fabfede: Read cached inbox messages in bounded IndexedDB transactions to reduce replay overhead for large query histories.
+
 ## 0.4.1
 
 ### Patch Changes
