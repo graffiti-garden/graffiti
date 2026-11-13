@@ -46,6 +46,7 @@ export async function canUseIDB(): Promise<boolean> {
 export type Cache = {
   messages: {
     get(k: string): Promise<LabeledMessageBase | null | undefined>;
+    getMany(keys: string[]): Promise<(LabeledMessageBase | null | undefined)[]>;
     set(k: string, value: LabeledMessageBase | null): Promise<void>;
     setMany(entries: [string, LabeledMessageBase][]): Promise<void>;
     del(k: string): Promise<void>;
@@ -73,20 +74,17 @@ export async function replayQuery(
   const messageIds = query.messageIds.slice(numSeen);
 
   // Get all the messages pointed to in the cache
-  return Promise.all(
-    messageIds.map(async (id) => {
-      const message = await cache.messages.get(getMessageCacheKey(inboxUrl, id));
-      if (!message) {
-        // Something is very wrong with the cache,
-        // it refers to message IDs that are not cached
-        try {
-          await cache.messageIds.del(messageIdsCacheKey);
-        } catch {}
-        throw new Error("Cache out of sync - perhaps clear browser storage");
-      }
-      return message;
-    }),
+  const messages = await cache.messages.getMany(
+    messageIds.map((id) => getMessageCacheKey(inboxUrl, id)),
   );
+  if (messages.some((message) => !message)) {
+    // The query refers to messages that are no longer cached.
+    try {
+      await cache.messageIds.del(messageIdsCacheKey);
+    } catch {}
+    throw new Error("Cache out of sync - perhaps clear browser storage");
+  }
+  return messages as LabeledMessageBase[];
 }
 
 export async function storeQueryPage(
@@ -164,6 +162,26 @@ export async function createCache(): Promise<Cache> {
 
     return {
       messages: {
+        getMany: async (keys) => {
+          if (keys.length <= 1) {
+            return Promise.all(keys.map((key) => db.get("m", key)));
+          }
+
+          const batches: Promise<(LabeledMessageBase | null | undefined)[]>[] = [];
+          // Queue every read before awaiting, so later writes cannot overtake
+          // part of this replay. Bounded transactions avoid both a transaction
+          // per message and one very large transaction for the whole history.
+          for (let start = 0; start < keys.length; start += 128) {
+            const tx = db.transaction("m", "readonly");
+            const reads = keys
+              .slice(start, start + 128)
+              .map((key) => tx.store.get(key));
+            batches.push(
+              Promise.all([Promise.all(reads), tx.done]).then(([values]) => values),
+            );
+          }
+          return (await Promise.all(batches)).flat();
+        },
         get: async (k) => {
           try {
             return db.get("m", k);
@@ -211,6 +229,7 @@ export async function createCache(): Promise<Cache> {
 
   return {
     messages: {
+      getMany: async (keys) => keys.map((key) => m.get(key)),
       get: async (k) => m.get(k),
       set: async (k, v) => void m.set(k, v),
       setMany: async (entries) => {
