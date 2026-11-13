@@ -507,23 +507,10 @@ export function storageBucketTests(
       )).toBe(true);
       expect(retrievedKeys.size).toEqual(keys.size);
 
-      // Old clients use GET and URL cursors throughout the export.
-      const legacyKeys = new Set<string>();
-      let legacyCursor: string | null = null;
-      for (let page = 0; page < 10; page++) {
-        const response = await fetch(`${storageBucketEndpoint}/export${legacyCursor ? `?cursor=${encodeURIComponent(legacyCursor)}` : ""}`, {
-          headers: { Authorization: `Bearer ${storageBucketToken}` },
-        });
-        expect(response.status).toBe(200);
-        const batch = dagCborDecode(await response.arrayBuffer()) as { keys: string[]; cursor: string | null };
-        for (const key of batch.keys) if (keys.has(key)) legacyKeys.add(key);
-        if (!batch.cursor) { expect(page).toBeGreaterThan(0); break; }
-        legacyCursor = batch.cursor;
-        expect(page).toBeLessThan(9);
-      }
-      expect(legacyKeys).toEqual(keys);
       const unauthorized = await fetch(`${storageBucketEndpoint}/export`, {
-        headers: { Authorization: "Bearer invalid-token" },
+        method: "POST",
+        headers: { "Content-Type": "application/cbor", Authorization: "Bearer invalid-token" },
+        body: dagCborEncode({}).slice(),
       });
       expect(unauthorized.status).toBe(401);
 

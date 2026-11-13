@@ -12,7 +12,7 @@ import {
   getMessage,
 } from "./db";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { augmentService, ExportBodySchema, getId, readCursorRequest } from "../shared";
+import { augmentService, ExportBodySchema, getId } from "../shared";
 import {
   encode as dagCborEncode,
   decode as dagCborDecode,
@@ -294,7 +294,7 @@ inbox.openapi(queryRoute, async (c) => {
   let queryBody: z.infer<typeof QueryRequestBodySchema>;
   try {
     queryBody = QueryRequestBodySchema.parse(
-      await readCursorRequest(c),
+      dagCborDecode(await c.req.arrayBuffer()),
     );
   } catch {
     throw new HTTPException(400, { message: "Invalid query body" });
@@ -414,7 +414,7 @@ inbox.openapi(exportRoute, async (c) => {
   const inboxId = getInboxId(c);
   let body: z.infer<typeof ExportBodySchema>;
   try {
-    body = ExportBodySchema.parse(await readCursorRequest(c));
+    body = ExportBodySchema.parse(dagCborDecode(await c.req.arrayBuffer()));
   } catch {
     throw new HTTPException(400, { message: "Invalid export body" });
   }

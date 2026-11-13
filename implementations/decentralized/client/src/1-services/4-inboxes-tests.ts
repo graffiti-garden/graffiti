@@ -133,12 +133,6 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         body: dagCborEncode({ cursor }).slice(),
       });
       expect(limited.status).toBe(429);
-      for (const [authorization, status] of [[headers.Authorization, 429], ["Bearer invalid-token", 401]] as const) {
-        const legacy = await fetch(`${inboxEndpoint}/query?cursor=${encodeURIComponent(cursor)}`, {
-          method: "POST", headers: { ...headers, Authorization: authorization },
-        });
-        expect(legacy.status).toBe(status);
-      }
       const decoded = dagCborDecode(Buffer.from(cursor, "base64url")) as
         Record<string, unknown>;
       const expired = Buffer.from(dagCborEncode({ ...decoded, createdAt: 0, waitTil: 0 }))
@@ -186,12 +180,6 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
           method: "POST", headers, body: dagCborEncode(body).slice(),
         });
         expect(response.status).toBe(status);
-        if (body && typeof body.cursor === "string" && body.cursor) {
-          const legacy = await fetch(`${inboxEndpoint}/export?cursor=${encodeURIComponent(body.cursor)}`, {
-            method: "POST", headers,
-          });
-          expect(legacy.status).toBe(status);
-        }
       }
     });
 
@@ -239,16 +227,6 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
           hasMore: boolean;
           cursor: string;
         };
-        if (cursor) {
-          // Old clients send the same cursor in the URL with no request body.
-          const legacy = await fetch(`${inboxEndpoint}/query?cursor=${encodeURIComponent(cursor)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/cbor", Authorization: `Bearer ${inboxToken}` },
-          });
-          expect(legacy.status).toBe(200);
-          expect((dagCborDecode(await legacy.arrayBuffer()) as { results: unknown[] }).results)
-            .toEqual(pageResult.results);
-        }
         expect(pageResult.results).toHaveLength(expectedCount);
         expect(pageResult.hasMore).toBe(page < 2);
         cursor = pageResult.cursor;
@@ -300,25 +278,6 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       } finally {
         globalThis.fetch = fetchOriginal;
       }
-      // Exercise the pre-deployment export protocol against the same server.
-      const legacyExportedIds = new Set<string>();
-      let legacyCursor: string | undefined;
-      for (let page = 0; page < 10; page++) {
-        const response = await fetch(`${inboxEndpoint}/export${legacyCursor ? `?cursor=${encodeURIComponent(legacyCursor)}` : ""}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/cbor", Authorization: `Bearer ${inboxToken}` },
-        });
-        expect(response.status).toBe(200);
-        const batch = dagCborDecode(await response.arrayBuffer()) as {
-          results: { id: string }[]; cursor: string; hasMore: boolean;
-        };
-        for (const result of batch.results) if (sentIds.has(result.id)) legacyExportedIds.add(result.id);
-        if (!batch.hasMore) break;
-        legacyCursor = batch.cursor;
-        expect(page).toBeLessThan(9);
-      }
-      expect(legacyCursor).toBeDefined();
-      expect(legacyExportedIds).toEqual(sentIds);
       expect(exportedIds).toEqual(sentIds);
       expect(exportRequests.length).toBeGreaterThan(1);
       expect(exportRequests.every((request) => request.url === `${inboxEndpoint}/export` && request.method === "POST")).toBe(true);

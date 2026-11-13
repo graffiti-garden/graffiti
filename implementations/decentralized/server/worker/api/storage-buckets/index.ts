@@ -3,7 +3,7 @@ import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../../app/auth/session";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { augmentService, ExportBodySchema, getId, readCursorRequest } from "../shared";
+import { augmentService, ExportBodySchema, getId } from "../shared";
 import { getValue, getValues, putValue, deleteValue, exportKeys } from "./db";
 import { bodyLimit } from "hono/body-limit";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
@@ -256,7 +256,7 @@ storageBucket.openapi(
     const { accountId } = await verifySessionHeader(c);
     let body: z.infer<typeof ExportBodySchema>;
     try {
-      body = ExportBodySchema.parse(await readCursorRequest(c));
+      body = ExportBodySchema.parse(dagCborDecode(await c.req.arrayBuffer()));
     } catch {
       throw new HTTPException(400, { message: "Invalid export body" });
     }
@@ -266,15 +266,6 @@ storageBucket.openapi(
     });
   },
 );
-
-// Temporary rollout bridge; remove with readCursorRequest after old clients retire.
-storageBucket.get("/export", async (c) => {
-  const { accountId } = await verifySessionHeader(c);
-  const output = await exportKeys(c, getBucketId(c), c.req.query("cursor"), accountId);
-  return c.body(dagCborEncode(output).slice(), 200, {
-    "Content-Type": "application/cbor",
-  });
-});
 
 storageBuckets.route("/:bucketId", storageBucket);
 

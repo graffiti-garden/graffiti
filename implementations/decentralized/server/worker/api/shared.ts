@@ -1,5 +1,4 @@
 import type { Context } from "hono";
-import { decode as dagCborDecode } from "@ipld/dag-cbor";
 import { getOrigin, type Bindings } from "../env";
 import { type OpenAPIHono, z, createRoute } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
@@ -11,17 +10,6 @@ const Base64IdSchema = z.base64url().length(43);
 export const ExportBodySchema = z.object({
   cursor: z.string().min(1).optional(),
 });
-
-// Temporary rollout bridge: deploy the Worker before publishing body-cursor clients.
-// Once those clients are deployed and old tabs have reloaded, remove this helper
-// (decode CBOR directly at its callers) and the legacy storage-export GET route.
-export async function readCursorRequest(context: Context): Promise<unknown> {
-  const cursor = context.req.query("cursor");
-  if (cursor) return { cursor };
-  const bytes = await context.req.arrayBuffer();
-  // Old inbox exports send no body, including their initial request.
-  return bytes.byteLength ? dagCborDecode(bytes) : {};
-}
 
 export function getId(context: Context<{ Bindings: Bindings }>, type: string) {
   const inboxId = context.req.param(`${type}Id`);
