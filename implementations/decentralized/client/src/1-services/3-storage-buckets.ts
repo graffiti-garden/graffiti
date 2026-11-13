@@ -13,11 +13,12 @@ const BATCH_TOTAL_VALUE_BYTES = 1024 * 1024; // total response limit
 
 // Keep this at 0: Chromium can delay positive timers (even 2 ms) by ~1 s in
 // hidden cross-origin guard iframes. Zero uses its immediate timer queue,
-// while still batching reads queued before the callback. A worker-based
-// timer could restore a short collection window, but its scheduling and
-// messaging overhead would need to be measured first.
-// Chromium's timer queue policy:
+// while still batching reads queued before the callback.
 // https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.cc#L466-L479
+//
+// In the future, A worker-based timer might be able to add a short collection
+// window to batch gets together (2-5ms or something) but it could be complicated
+// and its effectiveness and overhead would need to be measured first.
 const BATCH_WAIT_MS = 0;
 
 function batchWidth(maxBytes: number) {
