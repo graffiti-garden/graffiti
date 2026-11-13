@@ -204,8 +204,9 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           } finally {
             // Let synchronized results reach Vue before the poll settles.
             await new Promise((resolve) => setTimeout(resolve, 0));
-            // Keep batching streamed updates, but do not delay a completed poll
-            // (or a query waiting on it) for the remainder of the batch window.
+            // The poll is done, so we can flush early without waiting
+            // for the render batch window. This prevents an unnecessary
+            // wait if all the listener wants is for the poll to finish.
             flushBatch?.();
             if (active) {
               if (completed && !syncFailure) {
