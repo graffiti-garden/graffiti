@@ -20,6 +20,7 @@ export type CacheQueryValue = {
   // Whether the server has another page; needed when reusing another tab's
   // cached page. Older cache entries lack this and are refreshed on next query.
   hasMore?: boolean;
+  checkedAt?: number;
 };
 
 export async function canUseIDB(): Promise<boolean> {
@@ -43,6 +44,10 @@ export async function canUseIDB(): Promise<boolean> {
   }
 }
 
+export class ReadInvalidated extends Error {}
+type ReadVersion = { url: string; version: string | undefined };
+const readVersionKey = (url: string) => `read-version:${encodeURIComponent(url)}`;
+
 export type Cache = {
   messages: {
     get(k: string): Promise<LabeledMessageBase | null | undefined>;
@@ -53,10 +58,14 @@ export type Cache = {
   };
   messageIds: {
     get(k: string): Promise<CacheQueryValue | undefined>;
-    set(k: string, value: CacheQueryValue): Promise<void>;
+    set(k: string, value: CacheQueryValue, read?: ReadVersion): Promise<boolean | void>;
+    readVersion(url: string): Promise<string | undefined>;
     del(k: string): Promise<void>;
+    invalidateReads(url: string): Promise<void>;
   };
 };
+
+export const readCachePrefix = (url: string) => `read:${encodeURIComponent(url)}:`;
 
 export function getMessageCacheKey(inboxUrl: string, messageId: string) {
   return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
@@ -97,6 +106,8 @@ export async function storeQueryPage(
     cursor: string;
     hasMore: boolean;
     waitTil?: number;
+    checkedAt?: number;
+    read?: ReadVersion;
   },
 ): Promise<CacheQueryValue> {
   // First cache the messages with their labels
@@ -117,8 +128,12 @@ export async function storeQueryPage(
     generation: crypto.randomUUID(),
     hasMore: page.hasMore,
     waitTil: page.waitTil,
+    checkedAt: page.checkedAt,
   };
-  await cache.messageIds.set(messageIdsCacheKey, query);
+  // An earlier request must not refill the getter cache after a known deletion.
+  if (await cache.messageIds.set(messageIdsCacheKey, query, page.read) === false) {
+    throw new ReadInvalidated();
+  }
   return query;
 }
 
@@ -126,11 +141,13 @@ export async function getMessageIdsCacheKey(
   inboxUrl: string,
   type: "query" | "export",
   body?: Uint8Array,
+  inboxToken?: string | null,
 ): Promise<string> {
   const cacheIdData = dagCborEncode({
     inboxUrl,
     type,
     body: body ?? null,
+    inboxToken: inboxToken ?? null,
   });
   return crypto.subtle
     .digest("SHA-256", new Uint8Array(cacheIdData))
@@ -216,16 +233,31 @@ export async function createCache(): Promise<Cache> {
             return undefined;
           }
         },
-        set: async (k, v) => {
-          await db.put("q", v, k);
+        set: async (k, v, read) => {
+          const tx = db.transaction("q", "readwrite");
+          if (read && await tx.store.get(readVersionKey(read.url)) !== read.version) {
+            await tx.done;
+            return false;
+          }
+          await tx.store.put(v, k);
+          await tx.done;
         },
+        readVersion: (url) => db.get("q", readVersionKey(url)),
         del: (k) => db.delete("q", k),
+        invalidateReads: async (url) => {
+          const prefix = readCachePrefix(url);
+          const tx = db.transaction("q", "readwrite");
+          await tx.store.delete(IDBKeyRange.bound(prefix, prefix + "\uffff"));
+          await tx.store.put(crypto.randomUUID(), readVersionKey(url));
+          await tx.done;
+        },
       },
     };
   }
 
   const m = new Map<string, LabeledMessageBase | null>();
   const q = new Map<string, CacheQueryValue>();
+  const readVersions = new Map<string, string>();
 
   return {
     messages: {
@@ -239,8 +271,17 @@ export async function createCache(): Promise<Cache> {
     },
     messageIds: {
       get: async (k) => q.get(k),
-      set: async (k, v) => void q.set(k, v),
+      set: async (k, v, read) => {
+        if (read && readVersions.get(read.url) !== read.version) return false;
+        q.set(k, v);
+      },
+      readVersion: async (url) => readVersions.get(url),
       del: async (k) => void q.delete(k),
+      invalidateReads: async (url) => {
+        const prefix = readCachePrefix(url);
+        for (const key of q.keys()) if (key.startsWith(prefix)) q.delete(key);
+        readVersions.set(url, crypto.randomUUID());
+      },
     },
   };
 }

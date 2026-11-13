@@ -5,6 +5,8 @@ import {
   getMessageCacheKey,
   replayQuery,
   storeQueryPage,
+  readCachePrefix,
+  ReadInvalidated,
   type Cache,
   type CacheQueryValue,
 } from "./cache";
@@ -50,6 +52,24 @@ export function inboxCacheTests() {
     afterEach(() => {
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
+    });
+
+    test("invalidates getter histories across instances without expiring discovery cursors", async () => {
+      const first = await createCache();
+      const second = await createCache();
+      const url = message(1).m.o.url;
+      const key = readCachePrefix(url) + "anonymous";
+      const record = await seed(first, 1);
+      await first.messageIds.set(key, record);
+      const version = await first.messageIds.readVersion(url);
+      await second.messageIds.invalidateReads(url);
+      expect(await first.messageIds.get(key)).toBeUndefined();
+      expect(await first.messageIds.get(queryKey)).toEqual(record);
+      expect(await first.messageIds.set(key, record, { url, version })).toBe(false);
+      await expect(storeQueryPage(first, inboxUrl, key, undefined, {
+        messages: [], cursor: "old-inflight-response", hasMore: false, read: { url, version },
+      })).rejects.toBeInstanceOf(ReadInvalidated);
+      expect(await first.messageIds.get(key)).toBeUndefined();
     });
 
     test("preserves order, duplicate IDs and continuation offsets", async () => {

@@ -341,7 +341,7 @@ export const graffitiCRUDTests = (
         // Wait for "labels" to propogate
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        await expect(graffiti2.get(posted, {}, session1)).rejects.toThrow(
+        await expect(graffiti2.get(posted, {}, session1, { cache: "no-cache" })).rejects.toThrow(
           GraffitiErrorNotFound,
         );
       });

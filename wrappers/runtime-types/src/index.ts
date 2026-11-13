@@ -13,6 +13,7 @@ import {
   optional,
   nonnegative,
   extend,
+  literal,
 } from "zod/mini";
 
 export const GraffitiPostObjectSchema = looseObject({
@@ -52,6 +53,10 @@ export const GraffitiMediaAcceptSchema = looseObject({
   types: optional(array(string())),
   maxBytes: optional(int().check(nonnegative())),
 });
+
+const readOptionsSchema = optional(looseObject({
+  cache: optional(union([literal("default"), literal("no-cache")])),
+}));
 
 const requestOptionsSchema = looseObject({ state: optional(string()) });
 
@@ -99,12 +104,14 @@ export class GraffitiRuntimeTypes implements Graffiti {
       GraffitiObjectUrlSchema,
       GraffitiJSONSchemaSchema,
       GraffitiOptionalSessionSchema,
+      readOptionsSchema,
     ]).parse(args);
 
     return this.graffiti.get<(typeof args)[1]>(
       typedArgs[0],
       typedArgs[1] as (typeof args)[1],
       typedArgs[2],
+      typedArgs[3],
     );
   };
 
@@ -129,6 +136,7 @@ export class GraffitiRuntimeTypes implements Graffiti {
       url(),
       GraffitiMediaAcceptSchema,
       GraffitiOptionalSessionSchema,
+      readOptionsSchema,
     ]).parse(args);
 
     return this.graffiti.getMedia(...typedArgs);

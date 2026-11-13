@@ -139,6 +139,40 @@ export function storageBucketTests(
       },
     );
 
+    test("cacheable reads use native GETs while verification remains fresh", async () => {
+      const key = crypto.randomUUID();
+      const bytes = new Uint8Array([1, 2, 3]);
+      await storageBuckets.put(storageBucketEndpoint, key, bytes, storageBucketToken);
+      const url = `${storageBucketEndpoint}/value/${key}?cache=600`;
+      const first = await fetch(url);
+      expect(first.headers.get("Cache-Control")).toBe("private, max-age=600, must-revalidate");
+      const etag = first.headers.get("ETag")!;
+      const revalidated = await fetch(url, { headers: { "If-None-Match": etag } });
+      expect(revalidated.status).toBe(304);
+      expect(revalidated.headers.get("Cache-Control")).toBe(first.headers.get("Cache-Control"));
+
+      const original = globalThis.fetch;
+      const calls: { url: string; cache?: RequestCache; method?: string }[] = [];
+      globalThis.fetch = (input, init) => {
+        calls.push({ url: String(input), cache: init?.cache, method: init?.method });
+        return original(input, init);
+      };
+      try {
+        await Promise.all([0, 1].map(() => storageBuckets.get(storageBucketEndpoint, key, 3, "default")));
+        expect(calls).toEqual([0, 1].map(() => ({ url, cache: "default", method: undefined })));
+        calls.length = 0;
+        await storageBuckets.get(storageBucketEndpoint, key, 3);
+        expect(calls).toEqual([{ url: url.split("?")[0], cache: "no-cache", method: undefined }]);
+        await storageBuckets.delete(storageBucketEndpoint, key, storageBucketToken);
+        expect(calls.at(-1)).toMatchObject({ url, method: "DELETE" });
+      } finally {
+        globalThis.fetch = original;
+      }
+      const deleted = await fetch(url);
+      expect(deleted.status).toBe(404);
+      expect(deleted.headers.get("Cache-Control") ?? "").not.toContain("max-age=600");
+    });
+
     test("get with limit less than object", async () => {
       const key = Math.random().toString(36).substring(2, 15);
       const input = "Hello world";

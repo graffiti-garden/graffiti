@@ -2,6 +2,7 @@ import {
   GraffitiErrorForbidden,
   type Graffiti,
   type GraffitiMediaAccept,
+  type GraffitiReadOptions,
   type GraffitiObject,
   type GraffitiObjectStream,
   type GraffitiPostMedia,
@@ -261,9 +262,13 @@ export class Guard {
       const url = objectUrl(args[0]);
       // Do not evaluate an app-supplied schema until private-read approval.
       // Otherwise schema mismatch becomes an oracle for a known private URL.
-      const object = await this.graffiti.get(url, {}, session);
+      const options = method === "get"
+        ? structuredClone(args[3]) as GraffitiReadOptions | undefined
+        : { cache: "no-cache" as const };
+      const object = await this.graffiti.get(url, {}, session, options);
       if (method === "get") {
-        return this.prepareObjectRead(object, source, [url, args[1], session]);
+        return this.prepareObjectRead(object, source,
+          options === undefined ? [url, args[1], session] : [url, args[1], session, options]);
       }
       return this.prepareDelete(
         { kind: "object", object },
@@ -286,11 +291,14 @@ export class Guard {
         : {};
       // Preserve the caller's limits: the stamp changes neither bytes nor the
       // base MIME type. This one read supplies both provenance and file bytes.
-      const { media, from } = readMedia(await this.graffiti.getMedia(url, accept, session));
+      const options = method === "getMedia"
+        ? structuredClone(args[3]) as GraffitiReadOptions | undefined
+        : { cache: "no-cache" as const };
+      const { media, from } = readMedia(await this.graffiti.getMedia(url, accept, session, options));
       const subject = mediaSubject(media, url);
       if (method === "getMedia") {
         const prepared: Prepared = {
-          args: [url, accept, session],
+          args: options === undefined ? [url, accept, session] : [url, accept, session, options],
           subject,
           preview: { media },
           result: media,

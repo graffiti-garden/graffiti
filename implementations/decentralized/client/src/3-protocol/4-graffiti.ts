@@ -567,6 +567,7 @@ export class GraffitiDecentralized implements Graffiti {
       session,
       kind,
     );
+    await this.inboxes.invalidateReads(object.url);
 
     return object;
   }
@@ -578,7 +579,7 @@ export class GraffitiDecentralized implements Graffiti {
     kind: RecordKind,
     ...args: Parameters<typeof Graffiti.prototype.get<Schema>>
   ) {
-    const [url, schema, session] = args;
+    const [url, schema, session, options] = args;
     let services: { token?: string; serviceEndpoint: string }[];
     const validator = await compileGraffitiObjectSchema(schema);
 
@@ -603,6 +604,7 @@ export class GraffitiDecentralized implements Graffiti {
     const tags = [new TextEncoder().encode(objectUrl)];
     for (const service of services) {
       let object: GraffitiObjectBase | undefined = undefined;
+      let sawTombstone = false;
 
       const iterator = this.querySingleEndpoint<{}>(
         service.serviceEndpoint,
@@ -612,6 +614,7 @@ export class GraffitiDecentralized implements Graffiti {
         },
         service.token,
         session?.actor,
+        { url: objectUrl, maxAge: options?.cache === "no-cache" ? 0 : 10 * 60 * 1000 },
       );
 
       for await (const result of iterator) {
@@ -619,6 +622,7 @@ export class GraffitiDecentralized implements Graffiti {
         if (result.kind !== undefined && result.kind !== kind) continue;
         if (result.tombstone) {
           object = undefined;
+          sawTombstone = true;
         } else {
           object = result.object;
         }
@@ -631,10 +635,16 @@ export class GraffitiDecentralized implements Graffiti {
           );
         }
 
-        return object;
+        return structuredClone(object);
       }
+      // Finish replaying this history before invalidating it. Historical
+      // tombstones followed by a repost must not expire the live result.
+      if (sawTombstone) await this.inboxes.invalidateReads(objectUrl);
     }
 
+    // Do not retain a negative lookup: the object may be published or reposted
+    // from another device immediately after this request.
+    await this.inboxes.invalidateReads(objectUrl);
     throw new GraffitiErrorNotFound("Object not found");
   }
 
@@ -688,6 +698,8 @@ export class GraffitiDecentralized implements Graffiti {
       resolvedSession.storageBucket.token,
     );
 
+    await this.inboxes.invalidateReads(object.url);
+
     // Announce the deletion to all inboxes
     await this.announceObject(
       object,
@@ -705,6 +717,9 @@ export class GraffitiDecentralized implements Graffiti {
         },
       ],
     );
+
+    // A reader may have repopulated its cache while announcements were in flight.
+    await this.inboxes.invalidateReads(object.url);
 
     return object;
   }
@@ -750,7 +765,7 @@ export class GraffitiDecentralized implements Graffiti {
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
-    const [mediaUrl, accept, session] = args;
+    const [mediaUrl, accept, session, options] = args;
 
     if (
       accept?.maxBytes !== undefined &&
@@ -764,6 +779,7 @@ export class GraffitiDecentralized implements Graffiti {
       mediaUrl,
       MEDIA_OBJECT_SCHEMA,
       session,
+      options,
     );
 
     const { key, type, size } = object.value;
@@ -804,6 +820,7 @@ export class GraffitiDecentralized implements Graffiti {
       storageBucketEndpoint,
       key,
       size,
+      options?.cache ?? "default",
     );
 
     const blob = new Blob([data.slice()], { type });
@@ -1196,6 +1213,7 @@ export class GraffitiDecentralized implements Graffiti {
         },
     inboxToken?: string | null,
     recipient?: string | null,
+    read?: { url: string; maxAge: number },
   ): SingleEndpointQueryIterator<Schema> {
     const iterator: MessageStream<Schema> =
       "tags" in queryArguments
@@ -1204,6 +1222,7 @@ export class GraffitiDecentralized implements Graffiti {
             queryArguments.tags,
             queryArguments.objectSchema,
             inboxToken,
+            read,
           )
         : (this.inboxes.continueQuery(
             inboxEndpoint,
@@ -1244,7 +1263,14 @@ export class GraffitiDecentralized implements Graffiti {
         }
 
         const processed = await nextProcessedPromise;
-        if (processed) yield processed;
+        if (processed) {
+          // Discovery/deletion streams report known removals immediately.
+          // Getters invalidate after replay so old tombstones can precede a repost.
+          if (processed.tombstone && !read) {
+            await this.inboxes.invalidateReads(processed.object.url);
+          }
+          yield processed;
+        }
       }
     } finally {
       await iterator.return("");
@@ -1460,6 +1486,7 @@ export class GraffitiDecentralized implements Graffiti {
       }
     } else {
       if (validationError === undefined) {
+        await this.inboxes.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_VALID);
         this.labelInboxMessage(
           inboxEndpoint,
           messageId,
@@ -1468,6 +1495,7 @@ export class GraffitiDecentralized implements Graffiti {
         );
         return resultBase;
       } else if (validationError instanceof GraffitiErrorNotFound) {
+        await this.inboxes.invalidateReads(object.url);
         // Item was deleted before we got a chance to
         // validate it. Just label the message as trash.
         this.labelInboxMessage(

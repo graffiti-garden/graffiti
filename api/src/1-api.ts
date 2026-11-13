@@ -8,6 +8,7 @@ import type {
   GraffitiMedia,
   GraffitiPostMedia,
   GraffitiMediaAccept,
+  GraffitiReadOptions,
 } from "./2-types.js";
 import type { JSONSchema } from "json-schema-to-ts";
 
@@ -172,6 +173,8 @@ export abstract class Graffiti {
      * property must be `undefined`.
      */
     session?: GraffitiSession | null,
+    /** Read cached data, or explicitly revalidate it. */
+    options?: GraffitiReadOptions,
   ): Promise<GraffitiObject<Schema>>;
 
   /**
@@ -351,6 +354,8 @@ export abstract class Graffiti {
      * {@link GraffitiObjectBase.actor | `actor`}.
      */
     session?: GraffitiSession | null,
+    /** Read cached data, or explicitly revalidate it. */
+    options?: GraffitiReadOptions,
   ): Promise<GraffitiMedia>;
 
   /**

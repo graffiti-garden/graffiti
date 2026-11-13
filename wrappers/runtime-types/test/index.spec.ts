@@ -82,6 +82,8 @@ describe("GraffitiRuntimeTypes", () => {
         [{ value: {}, channels: [42] }, session],
       ],
       ["get", methods.get, ["not a URL", schema, session]],
+      ["get", methods.get, [objectUrl, schema, session, { cache: "force-cache" }]],
+      ["getMedia", methods.getMedia, [mediaUrl, {}, session, { cache: true }]],
       ["delete", methods.delete, [objectUrl, {}]],
       [
         "postMedia",
@@ -114,6 +116,7 @@ describe("GraffitiRuntimeTypes", () => {
     const blob = new Blob(["hello"], { type: "text/plain" });
     const postMedia = { data: blob, allowed: [actor] };
     const accept = { types: ["text/plain"], maxBytes: 100 };
+    const options = { cache: "no-cache" } as const;
 
     await expect(wrapper.login({ actor })).resolves.toBeUndefined();
     await expect(wrapper.login({ actor, state: "request-1" })).resolves.toBeUndefined();
@@ -125,7 +128,7 @@ describe("GraffitiRuntimeTypes", () => {
     await expect(wrapper.post<{}>(postObject, session)).resolves.toBe(
       results.object,
     );
-    await expect(wrapper.get(objectUrl, schema, session)).resolves.toBe(
+    await expect(wrapper.get(objectUrl, schema, session, options)).resolves.toBe(
       results.object,
     );
     await expect(wrapper.get(objectUrl, true, session)).resolves.toBe(
@@ -135,7 +138,7 @@ describe("GraffitiRuntimeTypes", () => {
       results.object,
     );
     await expect(wrapper.postMedia(postMedia, session)).resolves.toBe(mediaUrl);
-    await expect(wrapper.getMedia(mediaUrl, accept, session)).resolves.toBe(
+    await expect(wrapper.getMedia(mediaUrl, accept, session, options)).resolves.toBe(
       results.media,
     );
     await expect(wrapper.deleteMedia(mediaUrl, session)).resolves.toBeUndefined();
@@ -157,11 +160,11 @@ describe("GraffitiRuntimeTypes", () => {
     expect(methods.handleToActor).toHaveBeenCalledWith("alice.example");
     expect(methods.actorToHandle).toHaveBeenCalledWith(actor);
     expect(methods.post).toHaveBeenCalledWith(postObject, session);
-    expect(methods.get).toHaveBeenCalledWith(objectUrl, schema, session);
-    expect(methods.get).toHaveBeenCalledWith(objectUrl, true, session);
+    expect(methods.get).toHaveBeenCalledWith(objectUrl, schema, session, options);
+    expect(methods.get).toHaveBeenCalledWith(objectUrl, true, session, undefined);
     expect(methods.delete).toHaveBeenCalledWith({ url: objectUrl }, session);
     expect(methods.postMedia).toHaveBeenCalledWith(postMedia, session);
-    expect(methods.getMedia).toHaveBeenCalledWith(mediaUrl, accept, session);
+    expect(methods.getMedia).toHaveBeenCalledWith(mediaUrl, accept, session, options);
     expect(methods.deleteMedia).toHaveBeenCalledWith(mediaUrl, session);
     expect(methods.discover).toHaveBeenCalledWith(["posts"], schema, session);
     expect(methods.discover).toHaveBeenCalledWith(["posts"], false, session);

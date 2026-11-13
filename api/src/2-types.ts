@@ -192,6 +192,18 @@ export interface GraffitiSession {
   actor: string;
 }
 
+/** Options for reading an object or media. */
+export interface GraffitiReadOptions {
+  /**
+   * `default` permits implementation-defined caching (ten minutes in the
+   * decentralized implementation). A remote deletion may remain visible until
+   * expiration or until a discovery poll observes it. Use `no-cache` to check
+   * the server before returning data; cached bytes may still be revalidated.
+   */
+  cache?: "default" | "no-cache";
+}
+
+
 /**
  * A stream of data that returned by {@link Graffiti.discover | `discover`}
  * and {@link Graffiti.continueDiscover | `continueDiscover`}.

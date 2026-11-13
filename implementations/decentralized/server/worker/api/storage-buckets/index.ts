@@ -48,6 +48,11 @@ const getValueRoute = createRoute({
     headers: z.object({
       "If-None-Match": z.string().optional(),
     }),
+    query: z.object({
+      cache: z.literal("600").optional().openapi({
+        description: "Allow private HTTP caching for ten minutes. Omit for verification reads.",
+      }),
+    }),
   },
   responses: {
     200: {
@@ -75,7 +80,15 @@ storageBucket.openapi(getValueRoute, async (c) => {
   const { key } = c.req.valid("param");
   const bucketId = getBucketId(c);
   const ifNoneMatch = c.req.header("If-None-Match");
-  return await getValue(c, bucketId, key, ifNoneMatch);
+  const response = await getValue(c, bucketId, key, ifNoneMatch);
+  // Old clients rely on no-cache for object and tombstone verification. Only
+  // explicitly cacheable reads receive freshness; either deployment order works.
+  if (c.req.valid("query").cache === "600" && (response.status === 200 || response.status === 304)) {
+    const headers = new Headers(response.headers);
+    headers.set("Cache-Control", "private, max-age=600, must-revalidate");
+    return new Response(response.body, { status: response.status, headers });
+  }
+  return response;
 });
 
 const batchResultSchema = z.discriminatedUnion("status", [

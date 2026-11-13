@@ -31,6 +31,7 @@ import { useGraffitiSynchronize } from "../globals";
  * - `error`: A ref containing the fetch error for failures other than not found,
  * or `null` otherwise.
  * - `poll`: A function that can be called to manually check if the object has changed.
+ * Polling asks the implementation to revalidate cached data.
  * If a poll is already running, it waits for that poll.
  */
 export function useGraffitiGet<Schema extends JSONSchema>(
@@ -97,6 +98,7 @@ export function useGraffitiGet<Schema extends JSONSchema>(
       })();
 
       // Then set up a polling function
+      let initial = true;
       let pollPromise: Promise<void> | undefined;
       poll_ = () => {
         if (!active) return Promise.resolve();
@@ -105,7 +107,9 @@ export function useGraffitiGet<Schema extends JSONSchema>(
           if (error.value) object.value = undefined;
           error.value = null;
           try {
-            await graffiti.get<Schema>(...args);
+            const options = initial ? undefined : { cache: "no-cache" as const };
+            initial = false;
+            await graffiti.get<Schema>(...args, options);
           } catch (e) {
             if (!active) return;
             if (

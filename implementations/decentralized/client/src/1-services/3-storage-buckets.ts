@@ -62,7 +62,9 @@ export class StorageBuckets {
     authorizationToken: string,
   ): Promise<void> {
     verifyHTTPSEndpoint(storageBucketEndpoint);
-    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}`;
+    // DELETE the same representation used by cached reads, so the browser also
+    // invalidates its HTTP entry. Verification uses the always-fresh base URL.
+    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}?cache=600`;
 
     await fetchWithErrorHandling(url, {
       method: "DELETE",
@@ -76,8 +78,12 @@ export class StorageBuckets {
     storageBucketEndpoint: string,
     key: string,
     maxBytes?: number,
+    cache?: "default" | "no-cache",
   ): Promise<Uint8Array> {
     verifyHTTPSEndpoint(storageBucketEndpoint);
+    // Direct reads use individual GETs so the native HTTP cache owns the bytes.
+    // Verification remains fresh and can still share a batched storage request.
+    if (cache !== undefined) return this.getOne(storageBucketEndpoint, key, maxBytes, cache);
     if (
       maxBytes !== undefined &&
       Number.isSafeInteger(maxBytes) &&
@@ -182,10 +188,11 @@ export class StorageBuckets {
     storageBucketEndpoint: string,
     key: string,
     maxBytes?: number,
+    cache?: "default" | "no-cache",
   ): Promise<Uint8Array> {
-    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}`;
-
-    const response = await fetchWithErrorHandling(url);
+    // The opt-in URL keeps older clients' verification fresh during rollout.
+    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}${cache === undefined ? "" : "?cache=600"}`;
+    const response = await fetchWithErrorHandling(url, { cache: cache ?? "no-cache" });
 
     // Stream the body so that we can enforce maxBytes and halt the stream
     // if a malicious server gives us more than we are asking for.
