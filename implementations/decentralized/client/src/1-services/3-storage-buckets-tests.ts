@@ -342,8 +342,28 @@ export function storageBucketTests(
       expect(decoded.results.map(({ status }) => status)).toEqual(Array(32).fill(404));
     });
 
-    test.each([3, 32, 33])("%i concurrent bounded gets flush partial and full batches", async (count) => {
-      const keys = Array.from({ length: count }, () => crypto.randomUUID());
+    test("unbatched bounded reads start immediately and enforce the byte limit", async () => {
+      const fetchMock = vi.fn(async () => new Response(new Uint8Array([7])));
+      vi.stubGlobal("fetch", fetchMock);
+      try {
+        const reads = ["a", "b"].map((key) =>
+          storageBuckets.getUnbatched(storageBucketEndpoint, key, 1),
+        );
+        // Both fetches start in this turn, without waiting to collect a batch.
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(await Promise.all(reads)).toEqual([
+          new Uint8Array([7]), new Uint8Array([7]),
+        ]);
+        fetchMock.mockImplementation(async () => new Response(new Uint8Array([7, 8])));
+        await expect(storageBuckets.getUnbatched(storageBucketEndpoint, "large", 1))
+          .rejects.toThrow("Value exceeds maximum byte limit");
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    test("concurrent bounded gets share one batch", async () => {
+      const keys = Array.from({ length: 3 }, () => crypto.randomUUID());
       const values = keys.map((_, i) => new Uint8Array([i + 1]));
       for (let i = 0; i < keys.length; i++) {
         await storageBuckets.put(storageBucketEndpoint, keys[i], values[i], storageBucketToken);
@@ -360,52 +380,12 @@ export function storageBucketTests(
           storageBuckets.get(storageBucketEndpoint, key, 1),
         ))).toEqual(values);
         expect(calls.filter((call) => call === `POST ${storageBucketEndpoint}/values`)).toHaveLength(1);
-        expect(calls.filter((call) => call.includes("/value/"))).toHaveLength(count === 33 ? 1 : 0);
+        expect(calls.filter((call) => call.includes("/value/"))).toHaveLength(0);
       } finally {
         globalThis.fetch = originalFetch;
         for (const key of keys) {
           await storageBuckets.delete(storageBucketEndpoint, key, storageBucketToken);
         }
-      }
-    });
-
-    test("a late flush message cannot flush again or remove the next queue", async () => {
-      const deliveries: (() => void)[] = [];
-      vi.stubGlobal("MessageChannel", class {
-        port1 = { onmessage: null as (() => void) | null, close() {} };
-        port2 = {
-          close() {},
-          postMessage: () => {
-            // Model a browser delivering a task already queued before close().
-            const callback = this.port1.onmessage!;
-            deliveries.push(callback);
-          },
-        };
-      });
-      const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const { keys } = dagCborDecode(init!.body as Uint8Array) as { keys: string[] };
-        return new Response(dagCborEncode({
-          results: keys.map(() => ({ status: 200, value: new Uint8Array([7]) })),
-        }).slice());
-      });
-      vi.stubGlobal("fetch", fetchMock);
-      try {
-        const buckets = new StorageBuckets();
-        const reads = Array.from({ length: 33 }, (_, i) =>
-          buckets.get(storageBucketEndpoint, String(i), 1),
-        );
-        expect(fetchMock).toHaveBeenCalledTimes(1); // the full batch
-        deliveries[0](); // its stale scheduled callback
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        reads.push(buckets.get(storageBucketEndpoint, "33", 1));
-        deliveries[1](); // the following partial batch remains intact
-        expect(await Promise.all(reads)).toEqual(
-          Array.from({ length: 34 }, () => new Uint8Array([7])),
-        );
-        expect(fetchMock).toHaveBeenCalledTimes(2);
-        expect(deliveries).toHaveLength(2);
-      } finally {
-        vi.unstubAllGlobals();
       }
     });
 

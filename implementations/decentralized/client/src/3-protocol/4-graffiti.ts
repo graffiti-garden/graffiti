@@ -800,7 +800,9 @@ export class GraffitiDecentralized implements Graffiti {
     }
     const storageBucketEndpoint = storageBucketService.serviceEndpoint;
 
-    const data = await this.storageBuckets.get(
+    // Payloads with different exact byte limits cannot share a batch. Read
+    // immediately instead of waiting on a timer the hidden guard can throttle.
+    const data = await this.storageBuckets.getUnbatched(
       storageBucketEndpoint,
       key,
       size,

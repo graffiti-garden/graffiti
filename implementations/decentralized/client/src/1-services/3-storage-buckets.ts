@@ -11,6 +11,11 @@ import { GraffitiErrorNotFound, GraffitiErrorTooLarge } from "@graffiti-garden/a
 const BATCH_KEYS = 32; // total number of keys in a batch request
 const BATCH_TOTAL_VALUE_BYTES = 1024 * 1024; // total response limit
 
+// This is a heuristic for how long to wait to fill a batch request
+// before sending it. Just enough waiting to capture a few more requests,
+// but not so long that it adds noticeable latency.
+const BATCH_WAIT_MS = 2;
+
 function batchWidth(maxBytes: number) {
   return Math.min(BATCH_KEYS, Math.floor(BATCH_TOTAL_VALUE_BYTES / maxBytes));
 }
@@ -20,7 +25,7 @@ type PendingGet = {
   resolve: (value: Uint8Array) => void;
   reject: (reason: unknown) => void;
 };
-type BatchQueue = { requests: PendingGet[]; channel?: MessageChannel };
+type BatchQueue = { requests: PendingGet[]; timer?: ReturnType<typeof setTimeout> };
 
 export class StorageBuckets {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
@@ -89,13 +94,11 @@ export class StorageBuckets {
         queue.requests.push({ key, resolve, reject });
         if (queue.requests.length === batchWidth(maxBytes)) {
           this.flush(storageBucketEndpoint, maxBytes, queue);
-        } else if (!queue.channel) {
-          // Timers can wait ~1 second in a hidden cross-origin iframe.
-          // A message task still coalesces pending reads without that delay.
-          queue.channel = new MessageChannel();
-          queue.channel.port1.onmessage = () =>
-            this.flush(storageBucketEndpoint, maxBytes, queue);
-          queue.channel.port2.postMessage(null);
+        } else if (queue.timer === undefined) {
+          queue.timer = setTimeout(
+            () => this.flush(storageBucketEndpoint, maxBytes, queue),
+            BATCH_WAIT_MS,
+          );
         }
       });
     }
@@ -103,12 +106,8 @@ export class StorageBuckets {
   }
 
   private flush(endpoint: string, maxBytes: number, queue: BatchQueue) {
-    // A message already queued by the browser can arrive after a full batch
-    // flushes. Drain once so that callback cannot touch a newer queue.
-    const requests = queue.requests.splice(0);
-    if (!requests.length) return;
-    queue.channel?.port1.close();
-    queue.channel?.port2.close();
+    if (queue.timer !== undefined) clearTimeout(queue.timer);
+    const requests = queue.requests;
     const queuesByMaxBytes = this.queues.get(endpoint)!;
     queuesByMaxBytes.delete(maxBytes);
     if (queuesByMaxBytes.size === 0) this.queues.delete(endpoint);
@@ -172,6 +171,11 @@ export class StorageBuckets {
     } catch (error) {
       requests.forEach(({ reject }) => reject(error));
     }
+  }
+
+  async getUnbatched(endpoint: string, key: string, maxBytes?: number) {
+    verifyHTTPSEndpoint(endpoint);
+    return this.getOne(endpoint, key, maxBytes);
   }
 
   private async getOne(
