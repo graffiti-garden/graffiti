@@ -342,26 +342,6 @@ export function storageBucketTests(
       expect(decoded.results.map(({ status }) => status)).toEqual(Array(32).fill(404));
     });
 
-    test("unbatched bounded reads start immediately and enforce the byte limit", async () => {
-      const fetchMock = vi.fn(async () => new Response(new Uint8Array([7])));
-      vi.stubGlobal("fetch", fetchMock);
-      try {
-        const reads = ["a", "b"].map((key) =>
-          storageBuckets.getUnbatched(storageBucketEndpoint, key, 1),
-        );
-        // Both fetches start in this turn, without waiting to collect a batch.
-        expect(fetchMock).toHaveBeenCalledTimes(2);
-        expect(await Promise.all(reads)).toEqual([
-          new Uint8Array([7]), new Uint8Array([7]),
-        ]);
-        fetchMock.mockImplementation(async () => new Response(new Uint8Array([7, 8])));
-        await expect(storageBuckets.getUnbatched(storageBucketEndpoint, "large", 1))
-          .rejects.toThrow("Value exceeds maximum byte limit");
-      } finally {
-        vi.unstubAllGlobals();
-      }
-    });
-
     test("concurrent bounded gets share one batch", async () => {
       const keys = Array.from({ length: 3 }, () => crypto.randomUUID());
       const values = keys.map((_, i) => new Uint8Array([i + 1]));
