@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/wrapper-iframe-rpc",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Pass a Graffiti implementation across an iframe boundary",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
