@@ -91,9 +91,11 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
       // Set up automatic iterator cleanup
       let active = true;
+      let flushBatch: (() => void) | undefined;
       let restartTimer: ReturnType<typeof setTimeout> | undefined;
       onInvalidate(() => {
         active = false;
+        flushBatch?.();
         if (restartTimer !== undefined) clearTimeout(restartTimer);
         void myDiscoverIterator?.return({ cursor: "" }).catch(console.error);
         void mySyncIterator.return(null).catch(console.error);
@@ -110,7 +112,6 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
       // Start to synchronize in the background
       // (all polling results will go through here)
       let syncFailure: Error | null = null;
-      let batchFlattenPromise: Promise<void> | undefined = undefined;
       let then = 0;
       (async () => {
         try {
@@ -123,21 +124,18 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
             }
 
             const now = Date.now();
-            if (!batchFlattenPromise) {
+            if (!flushBatch) {
               // If many objects are being received back to back,
               // flatten them in batches to prevent
               // excessive re-rendering
               const timeoutLength =
                 now - then < BATCH_PERIOD_MS ? BATCH_PERIOD_MS : 0;
-              batchFlattenPromise = new Promise<void>((resolve) => {
-                setTimeout(() => {
-                  if (active) {
-                    objects.value = Array.from(objectsRaw.values());
-                  }
-                  batchFlattenPromise = undefined;
-                  resolve();
-                }, timeoutLength);
-              });
+              flushBatch = () => {
+                clearTimeout(timer);
+                flushBatch = undefined;
+                if (active) objects.value = Array.from(objectsRaw.values());
+              };
+              const timer = setTimeout(flushBatch, timeoutLength);
             }
             then = now;
           }
@@ -206,7 +204,10 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           } finally {
             // Let synchronized results reach Vue before the poll settles.
             await new Promise((resolve) => setTimeout(resolve, 0));
-            if (batchFlattenPromise) await batchFlattenPromise;
+            // The poll is done, so we can flush early without waiting
+            // for the render batch window. This prevents an unnecessary
+            // wait if all the listener wants is for the poll to finish.
+            flushBatch?.();
             if (active) {
               if (completed && !syncFailure) {
                 if (restartTimer !== undefined) clearTimeout(restartTimer);

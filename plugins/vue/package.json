@@ -34,7 +34,8 @@
     "build:js": "npm run build:js:node && npm run build:js:browser",
     "build:docs": "npm run build:js && typedoc --options typedoc.json",
     "build": "rm -rf dist && npm run build:docs && npm run build:example && cp -r examples docs",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "vitest run"
   },
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "@graffiti-garden/implementation-decentralized": "^0.4.0",
+    "@graffiti-garden/implementation-local": "^1.4.0",
     "@types/node": "^26.4.0",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/typescript-plugin": "3.3.11",
@@ -60,6 +62,7 @@
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vite-plugin-dts": "^5.0.3",
+    "vitest": "^4.0.17",
     "vue": "^3.5.42",
     "vue-tsc": "3.3.11"
   },
