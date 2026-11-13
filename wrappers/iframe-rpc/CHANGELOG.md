@@ -1,5 +1,11 @@
 # @graffiti-garden/wrapper-iframe-rpc
 
+## 0.3.1
+
+### Patch Changes
+
+- 1f6eac9: Pass immutable media Blobs through iframe RPC without reading a new ArrayBuffer at every hop. Keep the existing media envelope while consuming bundles update; the client also accepts a direct Blob so the envelope can be removed in a later coordinated cleanup.
+
 ## 0.3.0
 
 ### Minor Changes
