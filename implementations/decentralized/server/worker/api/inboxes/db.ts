@@ -411,7 +411,7 @@ export async function exportMessages(
   const res = await context.env.DB.prepare(
     `
     SELECT
-      message_seq,
+      inbox_messages.message_seq,
       message_id,
       tags,
       object,
@@ -419,9 +419,9 @@ export async function exportMessages(
       l.label AS label
     FROM inbox_messages
     LEFT JOIN inbox_message_labels l
-      ON message_seq = l.message_seq AND l.account_id = ?
-    WHERE inbox_seq = ? AND message_seq > ?
-    ORDER BY message_seq ASC
+      ON inbox_messages.message_seq = l.message_seq AND l.account_id = ?
+    WHERE inbox_seq = ? AND inbox_messages.message_seq > ?
+    ORDER BY inbox_messages.message_seq ASC
     LIMIT ?
   `,
   )

@@ -199,18 +199,18 @@ export class Inboxes {
     // Keep the deadline active while the response body is being read, too.
     const timeout = AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS);
     const response = await fetchWithErrorHandling(
-      `${inboxUrl}/${type}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      `${inboxUrl}/${type}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/cbor",
           ...(inboxToken
-            ? {
-                Authorization: `Bearer ${inboxToken}`,
-              }
+            ? { Authorization: `Bearer ${inboxToken}` }
             : {}),
         },
-        body,
+        body: cursor
+          ? new Uint8Array(dagCborEncode({ cursor }))
+          : body ?? new Uint8Array(dagCborEncode({})),
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       },
     );
@@ -330,7 +330,7 @@ export class Inboxes {
               batch = await this.fetchMessageBatch(
                 inboxUrl,
                 type,
-                firstPage ? body : undefined, // Later pages send no body.
+                firstPage ? body : undefined,
                 inboxToken,
                 query?.cursor,
                 signal,

@@ -446,6 +446,20 @@ export function storageBucketTests(
       ).rejects.toThrow(GraffitiErrorUnauthorized);
     });
 
+    test("export rejects malformed CBOR bodies", async () => {
+      for (const body of [null, { cursor: "" }, { cursor: 3 }]) {
+        const response = await fetch(`${storageBucketEndpoint}/export`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${storageBucketToken}`,
+            "Content-Type": "application/cbor",
+          },
+          body: dagCborEncode(body).slice(),
+        });
+        expect(response.status).toBe(400);
+      }
+    });
+
     test("export", async () => {
       // Put a whole bunch of stuff so the export needs to page
       const keys = new Set<string>();
@@ -469,12 +483,36 @@ export function storageBucketTests(
         storageBucketEndpoint,
         storageBucketToken,
       );
-      for await (const result of iterator) {
-        if (keys.has(result.key)) {
-          retrievedKeys.add(result.key);
+      const originalFetch = globalThis.fetch;
+      const requests: { url: string; method?: string; body: unknown }[] = [];
+      globalThis.fetch = async (input, init) => {
+        if (String(input).includes("/export")) requests.push({
+          url: String(input), method: init?.method,
+          body: dagCborDecode(init!.body as Uint8Array),
+        });
+        return originalFetch(input, init);
+      };
+      try {
+        for await (const result of iterator) {
+          if (keys.has(result.key)) retrievedKeys.add(result.key);
         }
+      } finally {
+        globalThis.fetch = originalFetch;
       }
+      expect(requests.length).toBeGreaterThan(1);
+      expect(requests.every((request) => request.url === `${storageBucketEndpoint}/export` && request.method === "POST")).toBe(true);
+      expect(requests[0].body).toEqual({});
+      expect(requests.slice(1).every((request) =>
+        !!request.body && typeof request.body === "object" && "cursor" in request.body,
+      )).toBe(true);
       expect(retrievedKeys.size).toEqual(keys.size);
+
+      const unauthorized = await fetch(`${storageBucketEndpoint}/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/cbor", Authorization: "Bearer invalid-token" },
+        body: dagCborEncode({}).slice(),
+      });
+      expect(unauthorized.status).toBe(401);
 
       // Delete all the keys
       for (const key of keys) {

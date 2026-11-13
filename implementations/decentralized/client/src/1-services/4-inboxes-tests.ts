@@ -117,12 +117,79 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       ).rejects.toThrowError(GraffitiErrorUnauthorized);
     }, 30000);
 
+    test("body cursors preserve authorization, expiry and rate limits", async () => {
+      const headers = {
+        "Content-Type": "application/cbor",
+        Authorization: `Bearer ${inboxToken}`,
+      };
+      const initial = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST", headers,
+        body: dagCborEncode({ tags: [randomBytes()], schema: {} }).slice(),
+      });
+      expect(initial.status).toBe(200);
+      const { cursor } = dagCborDecode(await initial.arrayBuffer()) as { cursor: string };
+      const limited = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST", headers,
+        body: dagCborEncode({ cursor }).slice(),
+      });
+      expect(limited.status).toBe(429);
+      const decoded = dagCborDecode(Buffer.from(cursor, "base64url")) as
+        Record<string, unknown>;
+      const expired = Buffer.from(dagCborEncode({ ...decoded, createdAt: 0, waitTil: 0 }))
+        .toString("base64url");
+      for (const [body, status] of [
+        [{ cursor: "invalid-cursor" }, 410],
+        [{ cursor: expired }, 410],
+        [{ cursor: "" }, 400],
+        [{ unexpected: true }, 400],
+      ] as const) {
+        const response = await fetch(`${inboxEndpoint}/query`, {
+          method: "POST", headers,
+          body: dagCborEncode(body).slice(),
+        });
+        expect(response.status).toBe(status);
+      }
+      const unauthorized = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST", headers: { ...headers, Authorization: "Bearer invalid-token" },
+        body: dagCborEncode({ cursor }).slice(),
+      });
+      expect(unauthorized.status).toBe(401);
+      const forbidden = await fetch(`${inboxEndpoint}/query`, {
+        method: "POST", headers: { "Content-Type": "application/cbor" },
+        body: dagCborEncode({ tags: [randomBytes()], schema: {} }).slice(),
+      });
+      expect(forbidden.status).toBe(403);
+    });
+
+    test("export body cursors preserve expiry and rate limits", async () => {
+      const headers = {
+        "Content-Type": "application/cbor",
+        Authorization: `Bearer ${inboxToken}`,
+      };
+      const encodeCursor = (createdAt: number, waitTil: number) =>
+        Buffer.from(dagCborEncode({ sinceSeq: 0, createdAt, waitTil })).toString("base64url");
+      for (const [body, status] of [
+        [{ cursor: "invalid-cursor" }, 410],
+        [{ cursor: encodeCursor(0, 0) }, 410],
+        [{ cursor: encodeCursor(Date.now(), Date.now() + 60_000) }, 429],
+        [{ cursor: "" }, 400],
+        [{ cursor: 3 }, 400],
+        [null, 400],
+      ] as const) {
+        const response = await fetch(`${inboxEndpoint}/export`, {
+          method: "POST", headers, body: dagCborEncode(body).slice(),
+        });
+        expect(response.status).toBe(status);
+      }
+    });
+
     test("query paged", async () => {
       const tags = [randomBytes(), randomBytes()];
 
       const numSends = 211;
+      const sentIds = new Set<string>();
       for (let i = 0; i < numSends; i++) {
-        await inboxes.send(inboxEndpoint, {
+        sentIds.add(await inboxes.send(inboxEndpoint, {
           t: tags,
           m: randomBytes(),
           o: {
@@ -136,20 +203,22 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
             },
             allowed: ["did:example2"],
           },
-        });
+        }));
       }
 
       let cursor: string | undefined;
       for (const [page, expectedCount] of [10, 100, 101].entries()) {
         const response = await fetch(
-          `${inboxEndpoint}/query${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+          `${inboxEndpoint}/query`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/cbor",
               Authorization: `Bearer ${inboxToken}`,
             },
-            body: cursor ? undefined : dagCborEncode({ tags: [tags[1]], schema: {} }).slice(),
+            body: dagCborEncode(cursor
+              ? { cursor }
+              : { tags: [tags[1]], schema: {} }).slice(),
           },
         );
         expect(response.status).toBe(200);
@@ -170,12 +239,52 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         inboxToken,
       );
 
+      const fetchOriginal = globalThis.fetch;
+      const requests: { url: string; body: unknown }[] = [];
+      globalThis.fetch = async (input, init) => {
+        if (String(input).includes("/query")) requests.push({
+          url: String(input),
+          body: init?.body ? dagCborDecode(init.body as Uint8Array) : undefined,
+        });
+        return fetchOriginal(input, init);
+      };
       let count = 0;
-      for await (const _ of iterator) {
-        count++;
+      try {
+        for await (const _ of iterator) count++;
+      } finally {
+        globalThis.fetch = fetchOriginal;
       }
-
       expect(count).toBe(numSends);
+      expect(new Set(requests.map((request) => request.url))).toEqual(
+        new Set([`${inboxEndpoint}/query`]),
+      );
+      expect(requests.slice(1).every((request) =>
+        !!request.body && typeof request.body === "object" && "cursor" in request.body,
+      )).toBe(true);
+
+      const exportRequests: { url: string; method?: string; body: unknown }[] = [];
+      const exportedIds = new Set<string>();
+      globalThis.fetch = async (input, init) => {
+        if (String(input).includes("/export")) exportRequests.push({
+          url: String(input), method: init?.method,
+          body: dagCborDecode(init!.body as Uint8Array),
+        });
+        return fetchOriginal(input, init);
+      };
+      try {
+        for await (const result of inboxes.export(inboxEndpoint, inboxToken)) {
+          if (sentIds.has(result.id)) exportedIds.add(result.id);
+        }
+      } finally {
+        globalThis.fetch = fetchOriginal;
+      }
+      expect(exportedIds).toEqual(sentIds);
+      expect(exportRequests.length).toBeGreaterThan(1);
+      expect(exportRequests.every((request) => request.url === `${inboxEndpoint}/export` && request.method === "POST")).toBe(true);
+      expect(exportRequests[0].body).toEqual({});
+      expect(exportRequests.slice(1).every((request) =>
+        !!request.body && typeof request.body === "object" && "cursor" in request.body,
+      )).toBe(true);
     }, 100000);
   });
 }
@@ -208,6 +317,15 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
 }
 
 class TestInboxes extends Inboxes {
+  requestBatch(
+    endpoint: string,
+    type: "query" | "export",
+    cursor?: string,
+    token?: string,
+    signal?: AbortSignal,
+  ) {
+    return this.fetchMessageBatch(endpoint, type, undefined, token, cursor, signal);
+  }
   async prepareCache() {
     await this.cache;
   }
@@ -246,6 +364,35 @@ export function inboxUnitTests() {
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
+    });
+
+    describe("cursor transport", () => {
+      test.each(["query", "export"] as const)("%s cursors use stable URLs and CBOR bodies", async (type) => {
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
+        vi.stubGlobal("fetch", fetch);
+        const inboxes = new TestInboxes();
+        await inboxes.requestBatch(inboxUrl, type, "cursor-1", "synthetic-token");
+        await inboxes.requestBatch(inboxUrl, type, "cursor-2", "synthetic-token");
+        expect(fetch.mock.calls.map((call) => call[0])).toEqual([
+          `${inboxUrl}/${type}`, `${inboxUrl}/${type}`,
+        ]);
+        for (const [i, [, init]] of fetch.mock.calls.entries()) {
+          expect(init!.method).toBe("POST");
+          expect(dagCborDecode(init!.body as Uint8Array))
+            .toEqual({ cursor: `cursor-${i + 1}` });
+          expect(new Headers(init!.headers).get("Authorization"))
+            .toBe("Bearer synthetic-token");
+        }
+      });
+
+      test("initial exports use an empty CBOR object", async () => {
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
+        vi.stubGlobal("fetch", fetch);
+        await new TestInboxes().requestBatch(inboxUrl, "export", undefined, "token");
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/export`);
+        expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array)).toEqual({});
+      });
     });
 
     describe("inbox stream lock and network failures", () => {
@@ -382,7 +529,9 @@ export function inboxUnitTests() {
         const iterator = inboxes.query(inboxUrl, [new Uint8Array([1])], {});
         expect((await iterator.next()).value).toEqual(message);
         await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-        expect(fetch.mock.calls[1][0]).toBe(`${inboxUrl}/query?cursor=cursor-1`);
+        expect(fetch.mock.calls[1][0]).toBe(`${inboxUrl}/query`);
+        expect(dagCborDecode(fetch.mock.calls[1][1]!.body as Uint8Array))
+          .toEqual({ cursor: "cursor-1" });
         await iterator.return("");
         expect(prefetchAborted).toBe(true);
         await vi.waitFor(() => expect(held).toBe(0));
@@ -455,7 +604,9 @@ export function inboxUnitTests() {
         expect((await second.next()).value).toEqual(message);
         expect((await second.next()).done).toBe(true);
         expect(fetch).toHaveBeenCalledTimes(2);
-        expect(fetch.mock.calls[1][0]).toBe(`${inboxUrl}/query?cursor=cursor-1`);
+        expect(fetch.mock.calls[1][0]).toBe(`${inboxUrl}/query`);
+        expect(dagCborDecode(fetch.mock.calls[1][1]!.body as Uint8Array))
+          .toEqual({ cursor: "cursor-1" });
       });
 
       test("does not hold the query lock while a message is yielded", async () => {
@@ -546,14 +697,16 @@ export function inboxUnitTests() {
         const tags = [new Uint8Array([1])];
         const first = inboxes.query(inboxUrl, tags, {});
         const second = inboxes.query(inboxUrl, tags, {});
-        const [firstResult, secondResult] = await Promise.all([
-          first.next(), second.next(),
-        ]);
+        const firstPending = first.next();
+        const secondPending = second.next();
+        const firstResult = await firstPending;
+        const secondResult = await secondPending;
         expect(firstResult.value).toEqual(message);
         expect(secondResult.value).toEqual(message);
-        const [firstNext, secondNext] = await Promise.all([
-          first.next(), second.next(),
-        ]);
+        const firstNextPending = first.next();
+        const secondNextPending = second.next();
+        const firstNext = await firstNextPending;
+        const secondNext = await secondNextPending;
         expect(firstNext.value).toEqual(nextMessage);
         expect(secondNext.value).toEqual(nextMessage);
         expect(fetch).toHaveBeenCalledTimes(2);

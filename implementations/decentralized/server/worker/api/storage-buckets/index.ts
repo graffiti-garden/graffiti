@@ -3,7 +3,7 @@ import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
 import { verifySessionHeader } from "../../app/auth/session";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { augmentService, getId } from "../shared";
+import { augmentService, ExportBodySchema, getId } from "../shared";
 import { getValue, getValues, putValue, deleteValue, exportKeys } from "./db";
 import { bodyLimit } from "hono/body-limit";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
@@ -221,17 +221,17 @@ storageBucket.openapi(deleteValueRoute, async (c) => {
 
 storageBucket.openapi(
   createRoute({
-    method: "get",
+    method: "post",
     description: "Export all keys that have values within a bucket",
     tags: ["Storage Bucket"],
     path: "/export",
     request: {
-      query: z.object({
-        cursor: z.string().optional().openapi({
-          description:
-            "An optional cursor to continue receiving keys. A cursor is returned from a previous request if there are more keys to export.",
-        }),
-      }),
+      body: {
+        required: true,
+        content: {
+          "application/cbor": { schema: ExportBodySchema },
+        },
+      },
     },
     security: [{ oauth2: [] }],
     responses: {
@@ -246,15 +246,21 @@ storageBucket.openapi(
           },
         },
       },
+      400: { description: "Invalid export body" },
       401: { description: "Invalid authorization" },
       403: { description: "Cannot export from someone else's bucket" },
     },
   }),
   async (c) => {
-    const { cursor } = c.req.valid("query");
     const bucketId = getBucketId(c);
     const { accountId } = await verifySessionHeader(c);
-    const output = await exportKeys(c, bucketId, cursor, accountId);
+    let body: z.infer<typeof ExportBodySchema>;
+    try {
+      body = ExportBodySchema.parse(dagCborDecode(await c.req.arrayBuffer()));
+    } catch {
+      throw new HTTPException(400, { message: "Invalid export body" });
+    }
+    const output = await exportKeys(c, bucketId, body.cursor, accountId);
     return c.body(dagCborEncode(output).slice(), 200, {
       "Content-Type": "application/cbor",
     });
