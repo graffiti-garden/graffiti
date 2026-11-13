@@ -342,8 +342,8 @@ export function storageBucketTests(
       expect(decoded.results.map(({ status }) => status)).toEqual(Array(32).fill(404));
     });
 
-    test("concurrent bounded gets share one batch", async () => {
-      const keys = Array.from({ length: 3 }, () => crypto.randomUUID());
+    test.each([3, 32, 33])("%i concurrent bounded gets flush partial and full batches", async (count) => {
+      const keys = Array.from({ length: count }, () => crypto.randomUUID());
       const values = keys.map((_, i) => new Uint8Array([i + 1]));
       for (let i = 0; i < keys.length; i++) {
         await storageBuckets.put(storageBucketEndpoint, keys[i], values[i], storageBucketToken);
@@ -360,7 +360,7 @@ export function storageBucketTests(
           storageBuckets.get(storageBucketEndpoint, key, 1),
         ))).toEqual(values);
         expect(calls.filter((call) => call === `POST ${storageBucketEndpoint}/values`)).toHaveLength(1);
-        expect(calls.filter((call) => call.includes("/value/"))).toHaveLength(0);
+        expect(calls.filter((call) => call.includes("/value/"))).toHaveLength(count === 33 ? 1 : 0);
       } finally {
         globalThis.fetch = originalFetch;
         for (const key of keys) {

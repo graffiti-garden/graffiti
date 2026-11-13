@@ -11,11 +11,6 @@ import { GraffitiErrorNotFound, GraffitiErrorTooLarge } from "@graffiti-garden/a
 const BATCH_KEYS = 32; // total number of keys in a batch request
 const BATCH_TOTAL_VALUE_BYTES = 1024 * 1024; // total response limit
 
-// This is a heuristic for how long to wait to fill a batch request
-// before sending it. Just enough waiting to capture a few more requests,
-// but not so long that it adds noticeable latency.
-const BATCH_WAIT_MS = 2;
-
 function batchWidth(maxBytes: number) {
   return Math.min(BATCH_KEYS, Math.floor(BATCH_TOTAL_VALUE_BYTES / maxBytes));
 }
@@ -25,7 +20,7 @@ type PendingGet = {
   resolve: (value: Uint8Array) => void;
   reject: (reason: unknown) => void;
 };
-type BatchQueue = { requests: PendingGet[]; timer?: ReturnType<typeof setTimeout> };
+type BatchQueue = { requests: PendingGet[]; channel?: MessageChannel };
 
 export class StorageBuckets {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
@@ -94,11 +89,13 @@ export class StorageBuckets {
         queue.requests.push({ key, resolve, reject });
         if (queue.requests.length === batchWidth(maxBytes)) {
           this.flush(storageBucketEndpoint, maxBytes, queue);
-        } else if (queue.timer === undefined) {
-          queue.timer = setTimeout(
-            () => this.flush(storageBucketEndpoint, maxBytes, queue),
-            BATCH_WAIT_MS,
-          );
+        } else if (!queue.channel) {
+          // Timers can wait ~1 second in a hidden cross-origin iframe.
+          // A message task still coalesces pending reads without that delay.
+          queue.channel = new MessageChannel();
+          queue.channel.port1.onmessage = () =>
+            this.flush(storageBucketEndpoint, maxBytes, queue);
+          queue.channel.port2.postMessage(null);
         }
       });
     }
@@ -106,7 +103,10 @@ export class StorageBuckets {
   }
 
   private flush(endpoint: string, maxBytes: number, queue: BatchQueue) {
-    if (queue.timer !== undefined) clearTimeout(queue.timer);
+    // Closing both ports also cancels the queued task when a full batch
+    // flushes synchronously, before its message is delivered.
+    queue.channel?.port1.close();
+    queue.channel?.port2.close();
     const requests = queue.requests;
     const queuesByMaxBytes = this.queues.get(endpoint)!;
     queuesByMaxBytes.delete(maxBytes);
