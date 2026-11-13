@@ -103,11 +103,12 @@ export class StorageBuckets {
   }
 
   private flush(endpoint: string, maxBytes: number, queue: BatchQueue) {
-    // Closing both ports also cancels the queued task when a full batch
-    // flushes synchronously, before its message is delivered.
+    // A message already queued by the browser can arrive after a full batch
+    // flushes. Drain once so that callback cannot touch a newer queue.
+    const requests = queue.requests.splice(0);
+    if (!requests.length) return;
     queue.channel?.port1.close();
     queue.channel?.port2.close();
-    const requests = queue.requests;
     const queuesByMaxBytes = this.queues.get(endpoint)!;
     queuesByMaxBytes.delete(maxBytes);
     if (queuesByMaxBytes.size === 0) this.queues.delete(endpoint);

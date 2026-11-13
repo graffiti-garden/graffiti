@@ -369,6 +369,46 @@ export function storageBucketTests(
       }
     });
 
+    test("a late flush message cannot flush again or remove the next queue", async () => {
+      const deliveries: (() => void)[] = [];
+      vi.stubGlobal("MessageChannel", class {
+        port1 = { onmessage: null as (() => void) | null, close() {} };
+        port2 = {
+          close() {},
+          postMessage: () => {
+            // Model a browser delivering a task already queued before close().
+            const callback = this.port1.onmessage!;
+            deliveries.push(callback);
+          },
+        };
+      });
+      const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const { keys } = dagCborDecode(init!.body as Uint8Array) as { keys: string[] };
+        return new Response(dagCborEncode({
+          results: keys.map(() => ({ status: 200, value: new Uint8Array([7]) })),
+        }).slice());
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      try {
+        const buckets = new StorageBuckets();
+        const reads = Array.from({ length: 33 }, (_, i) =>
+          buckets.get(storageBucketEndpoint, String(i), 1),
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(1); // the full batch
+        deliveries[0](); // its stale scheduled callback
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        reads.push(buckets.get(storageBucketEndpoint, "33", 1));
+        deliveries[1](); // the following partial batch remains intact
+        expect(await Promise.all(reads)).toEqual(
+          Array.from({ length: 34 }, () => new Uint8Array([7])),
+        );
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(deliveries).toHaveLength(2);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     test("falls back to GET when a bucket server does not support batches", async () => {
       const keys = Array.from({ length: 2 }, () => crypto.randomUUID());
       const value = new Uint8Array([42]);
