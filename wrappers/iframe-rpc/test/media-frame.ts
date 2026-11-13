@@ -1,20 +1,16 @@
 import type { GraffitiMedia } from "@graffiti-garden/api";
 import { connect, WindowMessenger } from "penpal";
 import { GraffitiRpcClient } from "../client/index.js";
-const { channel, legacyClient } = JSON.parse(window.name) as {
+const { channel, releasedClient } = JSON.parse(window.name) as {
   channel: string;
-  legacyClient: boolean;
+  releasedClient: boolean;
 };
 async function run() {
   let getMedia: (
     url: string,
     accept: { maxBytes: number },
   ) => Promise<GraffitiMedia>;
-  let wireIsBlob: boolean | undefined;
-  let wireFileMetadata:
-    | { isFile: boolean; name: unknown; lastModified: unknown }
-    | undefined;
-  if (legacyClient) {
+  if (releasedClient) {
     const connection = connect<{
       initialize(): void;
       getMedia(
@@ -23,7 +19,7 @@ async function run() {
       ): Promise<{
         actor: string;
         allowed?: string[];
-        data: { buffer: ArrayBuffer; type: string };
+        data: Blob | { buffer: Blob | ArrayBuffer; type: string };
       }>;
     }>({
       messenger: new WindowMessenger({
@@ -37,16 +33,12 @@ async function run() {
     await remote.initialize();
     getMedia = async (...args) => {
       const result = await remote.getMedia(...args);
-      wireIsBlob = result.data.buffer instanceof Blob;
-      wireFileMetadata = {
-        isFile: result.data.buffer instanceof File,
-        name: Reflect.get(result.data.buffer, "name"),
-        lastModified: Reflect.get(result.data.buffer, "lastModified"),
-      };
-      // Preserve the decoder used by older, separately deployed clients.
+      // Preserve the decoder shipped in wrapper-iframe-rpc 0.3.1.
       return {
         ...result,
-        data: new Blob([result.data.buffer], { type: result.data.type }),
+        data: result.data instanceof Blob
+          ? result.data
+          : new Blob([result.data.buffer], { type: result.data.type }),
       };
     };
   } else {
@@ -84,8 +76,12 @@ async function run() {
         {
           channel,
           type: "result",
-          wireIsBlob,
-          wireFileMetadata,
+          wireIsBlob: media[0].data instanceof Blob,
+          wireFileMetadata: {
+            isFile: media[0].data instanceof File,
+            name: Reflect.get(media[0].data, "name"),
+            lastModified: Reflect.get(media[0].data, "lastModified"),
+          },
           original,
           repeated,
           fetched,

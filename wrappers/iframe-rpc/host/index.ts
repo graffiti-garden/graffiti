@@ -22,12 +22,6 @@ type ConnectionState = {
   destroy(): Promise<void>;
 };
 
-type SerializedMedia = Omit<GraffitiMedia, "data"> & {
-  // TODO: remove this envelope once all consuming bundles include the
-  // direct-Blob reader. The client can then return GraffitiMedia unchanged.
-  data: { buffer: Blob | ArrayBuffer; type: string };
-};
-
 type SerializedPostMedia = Omit<GraffitiPostMedia, "data"> & {
   data: { buffer: ArrayBuffer; type: string };
 };
@@ -151,18 +145,11 @@ export function serveGraffiti(graffiti: Graffiti) {
         },
         async getMedia(...args: Parameters<Graffiti["getMedia"]>) {
           const result = await graffiti.getMedia(...args);
-          // Structured cloning preserves Blob bytes without materializing a new
-          // ArrayBuffer at every hop. Keep the envelope until consuming bundles
-          // (including Social.Wiki) have deployed the direct-Blob reader.
           return {
             ...result,
-            data: {
-              // Normalize File subclasses so filenames and timestamps stay local,
-              // as they did with the former ArrayBuffer payload.
-              buffer: new Blob([result.data], { type: result.data.type }),
-              type: result.data.type,
-            },
-          } satisfies SerializedMedia;
+            // Preserve media bytes and type while keeping File names and timestamps local.
+            data: new Blob([result.data], { type: result.data.type }),
+          } satisfies GraffitiMedia;
         },
         async discover(id: string, ...args: Parameters<Graffiti["discover"]>) {
           await replaceStream(id, graffiti.discover<{}>(...args));
