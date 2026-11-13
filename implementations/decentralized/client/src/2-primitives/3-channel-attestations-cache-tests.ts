@@ -9,6 +9,11 @@ import { StringEncoder } from "./1-string-encoding";
 import { ContentAddresses } from "./2-content-addresses";
 import { AllowedAttestations } from "./4-allowed-attestations";
 
+// Copy the real ESM exports so these tests can spy on verification.
+vi.mock("@noble/ed25519", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@noble/ed25519")>(),
+}));
+
 const actor = "did:example:synthetic-fixture";
 const size = (attestations: ChannelAttestations) =>
   (attestations as any).validations.size;
@@ -22,7 +27,7 @@ export function channelAttestationCacheTests() {
       vi.mocked(ed25519.verifyAsync).mockRestore();
     });
 
-    test("shares concurrent exact clones but rechecks actor, signature and channel changes", async () => {
+    test("shares concurrent clones and caches true and false for exact tuples", async () => {
       const attestations = new ChannelAttestations();
       const { attestation: sig, channelPublicId: key } =
         await attestations.attest(method, actor, "fixture-channel");
@@ -42,12 +47,12 @@ export function channelAttestationCacheTests() {
         expect(await attestations.validate(s, a, k)).toBe(false);
         expect(await attestations.validate(s, a, k)).toBe(false);
       }
-      expect(ed25519.verifyAsync).toHaveBeenCalledTimes(7);
+      expect(ed25519.verifyAsync).toHaveBeenCalledTimes(4);
       const bad = key.slice();
       bad[0] = 255;
       await expect(attestations.validate(sig, actor, bad)).rejects.toThrow();
       await expect(attestations.validate(sig, actor, bad)).rejects.toThrow();
-      expect(size(attestations)).toBe(1);
+      expect(size(attestations)).toBe(4);
     });
 
     test("snapshots typed array and Buffer input before asynchronous verification", async () => {

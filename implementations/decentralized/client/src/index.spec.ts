@@ -1,3 +1,5 @@
+// Register the cache tests' verification spy before importing its consumers.
+import { channelAttestationCacheTests } from "./2-primitives/3-channel-attestations-cache-tests";
 import type {
   Graffiti,
   JSONSchema,
@@ -27,7 +29,6 @@ import { inboxTests, inboxUnitTests } from "./1-services/4-inboxes-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
-import { channelAttestationCacheTests } from "./2-primitives/3-channel-attestations-cache-tests";
 import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
 import { sessionTests } from "./3-protocol/1-sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
@@ -42,10 +43,6 @@ import {
 // Copy native ESM exports so each test can replace and restore them with spies.
 vi.mock("openid-client", async (importOriginal) => ({
   ...await importOriginal<typeof import("openid-client")>(),
-}));
-
-vi.mock("@noble/ed25519", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@noble/ed25519")>(),
 }));
 
 describe("GraffitiDecentralized Tests", () => {

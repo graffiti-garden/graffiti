@@ -90,8 +90,7 @@ export class ChannelAttestations {
       );
     }
 
-    // These immutable bytes identify a mathematical verification result, not
-    // an object's current storage state, channel membership or permission.
+    // Cache only signature verification; object and permission checks still run.
     // Keep malformed/oversized inputs on the normal verifier path without
     // allocating cache keys for them.
     const cacheable =
@@ -131,13 +130,10 @@ export class ChannelAttestations {
     while (this.validations.size > VALIDATION_CACHE_LIMIT) {
       this.validations.delete(this.validations.keys().next().value!);
     }
-    const remove = () => {
+    // Both true and false are stable results. Retry only verification errors.
+    void promise.catch(() => {
       if (this.validations.get(key) === promise) this.validations.delete(key);
-    };
-    // Singleflight pending calls, but do not retain failed verification results.
-    void promise.then((valid) => {
-      if (!valid) remove();
-    }, remove);
+    });
     return await promise;
   }
 }
