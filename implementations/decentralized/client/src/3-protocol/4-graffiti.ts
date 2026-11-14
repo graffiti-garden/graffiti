@@ -913,9 +913,9 @@ export class GraffitiDecentralized implements Graffiti {
       },
     );
 
-    let indexedIteratorNexts = iterators.map<
+    const indexedIteratorNexts = iterators.map<
       Promise<IndexedSingleEndpointQueryResult<Schema>>
-    >(async (it, index) => indexedSingleEndpointQueryNext<Schema>(it, index));
+    >((it, index) => indexedSingleEndpointQueryNext<Schema>(it, index));
     let active = indexedIteratorNexts.length;
 
     try {
@@ -923,6 +923,10 @@ export class GraffitiDecentralized implements Graffiti {
         const next: IndexedSingleEndpointQueryResult<Schema> =
           await Promise.race<any>(indexedIteratorNexts);
         if (next.error !== undefined) {
+          if (
+            next.error instanceof GraffitiErrorCursorExpired ||
+            next.error instanceof GraffitiErrorInvalidSchema
+          ) throw next.error;
           // Remove it from the race
           indexedIteratorNexts[next.index] = new Promise(() => {});
           active--;
@@ -1255,11 +1259,15 @@ export class GraffitiDecentralized implements Graffiti {
             options,
           ) as unknown as MessageStream<Schema>);
 
-    const inFlight: Promise<SingleEndpointQueryResult<Schema> | void>[] = [];
+    const inFlight: Promise<
+      | { result: SingleEndpointQueryResult<Schema> | void }
+      | { error: unknown }
+    >[] = [];
     let doneValue: string | null = null;
 
     try {
       while (true) {
+        // Fill up the in-flight queue of queries up to the concurrency limit
         while (doneValue === null && inFlight.length < CONCURRENCY) {
           const itResult = await iterator.next();
           if (itResult.done) {
@@ -1267,18 +1275,22 @@ export class GraffitiDecentralized implements Graffiti {
             break;
           }
 
+          // Capture rejections immediately, even if another read is pending
+          // or the caller closes before reaching this result.
           const processPromise = this.processOneLabeledMessage<Schema>(
             inboxEndpoint,
             itResult.value,
             inboxToken,
             recipient,
-          ).catch((e) => {
-            throw e;
-          });
+          ).then(
+            (result) => ({ result }),
+            (error: unknown) => ({ error }),
+          );
 
           inFlight.push(processPromise);
         }
 
+        // Process something from the queue
         const nextProcessedPromise = inFlight.shift();
 
         if (!nextProcessedPromise) {
@@ -1288,13 +1300,14 @@ export class GraffitiDecentralized implements Graffiti {
         }
 
         const processed = await nextProcessedPromise;
-        if (processed) {
+        if ("error" in processed) throw processed.error;
+        if (processed.result) {
           // Discovery/deletion streams report known removals immediately.
           // Getters invalidate after replay so old tombstones can precede a repost.
-          if (processed.tombstone && !options?.url) {
-            await this.inboxes.invalidateReads(processed.object.url);
+          if (processed.result.tombstone && !options?.url) {
+            await this.inboxes.invalidateReads(processed.result.object.url);
           }
-          yield processed;
+          yield processed.result;
         }
       }
     } finally {
@@ -1609,14 +1622,9 @@ async function indexedSingleEndpointQueryNext<Schema extends JSONSchema>(
       result: await it.next(),
     };
   } catch (e) {
-    if (
-      e instanceof GraffitiErrorCursorExpired ||
-      e instanceof GraffitiErrorInvalidSchema
-    ) {
-      // Propogate these errors to the root
-      throw e;
-    }
-    // Otherwise, silently pass them in the stream
+    // Capture even fatal errors here: a prefetched next() can finish while the
+    // caller is paused at a yield. The consumer propagates fatal errors when
+    // resumed, without leaving a rejected promise unhandled in the meantime.
     return {
       index,
       error: e instanceof Error ? e : new Error(String(e)),
