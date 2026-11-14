@@ -46,6 +46,11 @@ export function inboxRetentionTests(environment: DecentralizedTestEnvironment) {
       expect((await query(owner.inboxEndpoint, { tags: personal.t, schema: {} }, owner.token)).results.map((m) => m.id)).toEqual([ids[2]]);
       // An expired entry cannot be rescued by a late pin, even before physical GC.
       await expect(inboxes.pin(decentralizedSharedInbox, [ids[0]], owner.token)).rejects.toThrow();
+      // Including a live entry must not turn that failure into partial pinning.
+      await expect(inboxes.pin(decentralizedSharedInbox, [ids[0], ids[3]], owner.token)).rejects.toThrow();
+      expect(await db.prepare(`SELECT p.message_seq FROM inbox_message_pins p
+        JOIN inbox_messages m ON m.message_seq = p.message_seq WHERE m.message_id = ?`)
+        .bind(ids[3]).first()).toBeNull();
       await inboxes.unpin(decentralizedSharedInbox, [ids[1]], owner.token);
       expect((await query(decentralizedSharedInbox, { tags, schema: {} })).results.map((m) => m.id)).toContain(ids[1]);
       await inboxes.unpin(decentralizedSharedInbox, [ids[1]], other.token);
