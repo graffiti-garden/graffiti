@@ -5,10 +5,12 @@ import {
   getMessageCacheKey,
   replayQuery,
   storeQueryPage,
+  readCachePrefix,
+  ReadInvalidated,
   type Cache,
   type CacheQueryValue,
 } from "./cache";
-import type { LabeledMessageBase } from "./messages";
+import { MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";
@@ -50,6 +52,40 @@ export function inboxCacheTests() {
     afterEach(() => {
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
+    });
+
+    test("invalidates getter histories across instances without expiring discovery cursors", async () => {
+      const first = await createCache();
+      const second = await createCache();
+      const url = message(1).m.o.url;
+      const key = readCachePrefix(url) + "anonymous";
+      const record = await seed(first, 1);
+      await first.messageIds.set(key, record);
+      const version = await first.messageIds.readVersion(url);
+      await second.messageIds.invalidateReads(url);
+      expect(await first.messageIds.get(key)).toBeUndefined();
+      expect(await first.messageIds.get(queryKey)).toEqual(record);
+      expect(await first.messageIds.set(key, record, { url, version })).toBe(false);
+      await expect(storeQueryPage(first, inboxUrl, key, undefined, {
+        messages: [], cursor: "old-inflight-response", hasMore: false, read: { url, version },
+      })).rejects.toBeInstanceOf(ReadInvalidated);
+      expect(await first.messageIds.get(key)).toBeUndefined();
+    });
+
+    test.each(["indexeddb", "memory"])("keeps a known deletion when an older reply or validation finishes (%s)", async (storage) => {
+      if (storage === "memory") vi.stubGlobal("indexedDB", undefined);
+      const cache = await createCache();
+      const entry = message(1);
+      const key = getMessageCacheKey(inboxUrl, entry.id);
+      await cache.messages.set(key, { ...entry, l: MESSAGE_LABEL_TRASH });
+      // A different query's response was already in flight at deletion time.
+      await storeQueryPage(cache, inboxUrl, "other-query", undefined, {
+        messages: [entry], cursor: "late-response", hasMore: false,
+      });
+      expect((await cache.messages.get(key))?.l).toBe(MESSAGE_LABEL_TRASH);
+      // The same applies to a validation which finishes after the deletion.
+      await cache.messages.set(key, entry);
+      expect((await cache.messages.get(key))?.l).toBe(MESSAGE_LABEL_TRASH);
     });
 
     test("preserves order, duplicate IDs and continuation offsets", async () => {

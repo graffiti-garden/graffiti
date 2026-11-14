@@ -146,9 +146,12 @@ export abstract class Graffiti {
    * {@link GraffitiObjectBase.channels | `channels`} properties are
    * not revealed, similar to a BCC email.
    *
+   * Previously obtained immutable objects may be reused until a deletion is
+   * observed. Pass `{ refresh: true }` to check for changes in availability.
+   *
    * @returns Returns the retrieved object.
    *
-   * @throws {@link GraffitiErrorNotFound} if the object does not exist, has been deleted, or the actor is not
+   * @throws {@link GraffitiErrorNotFound} if the object is not found, is known to have been deleted, or the actor is not
    * {@link GraffitiObjectBase.allowed | `allowed`} to access it.
    *
    * @throws {@link GraffitiErrorSchemaMismatch} if the retrieved object does not match the provided schema.
@@ -206,6 +209,11 @@ export abstract class Graffiti {
    * in at least one of the given {@link GraffitiObjectBase.channels | `channels`}
    * and match the given [JSON Schema](https://json-schema.org).
    *
+   * Discovery refreshes by default. With `{ refresh: false }`, implementations
+   * may reuse a completed saved query, including an empty result. Missing or
+   * incomplete queries are still fetched. The returned cursor can be continued
+   * normally to check for changes since the saved result.
+   *
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
    * The {@link GraffitiObjectStream} ends by returning a
@@ -258,7 +266,8 @@ export abstract class Graffiti {
    * that match the original stream, and also returns the
    * objects that have been {@link delete | `delete`d}, as marked by a
    * `tombstone`. The tombstone contains the original object, masked for the
-   * querying actor.
+   * querying actor. Refreshes by default; `{ refresh: false }` may return only
+   * changes already obtained locally since the cursor.
    *
    * @throws {@link GraffitiErrorCursorExpired} upon iteration
    * if the cursor is invalid or expired.
@@ -326,6 +335,8 @@ export abstract class Graffiti {
 
   /**
    * Retrieves media from the given media URL, adhering to the given requirements.
+   * Previously obtained media may be reused until a deletion is observed.
+   * Pass `{ refresh: true }` to check for changes in availability.
    *
    * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
    *

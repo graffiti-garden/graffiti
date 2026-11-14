@@ -7,11 +7,12 @@ import type {
 } from "@graffiti-garden/api";
 import { useGraffitiGetMedia } from "../composables/get-media";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     url: string;
     accept: GraffitiMediaAccept;
     session?: GraffitiSession | null;
-}>();
+    refresh?: boolean;
+}>(), { refresh: undefined });
 
 defineSlots<{
     default?(props: {
@@ -24,7 +25,7 @@ defineSlots<{
 const { media, error, poll } = useGraffitiGetMedia(
     toRef(props, "url"),
     toRef(props, "accept"),
-    { session: toRef(props, "session") },
+    { session: toRef(props, "session"), refresh: toRef(props, "refresh") },
 );
 </script>
 

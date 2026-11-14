@@ -42,6 +42,8 @@ import {
   getMessageIdsCacheKey,
   replayQuery,
   storeQueryPage,
+  readCachePrefix,
+  ReadInvalidated,
 } from "./4-inboxes/cache";
 import type { Cache, CacheQueryValue } from "./4-inboxes/cache";
 
@@ -66,7 +68,17 @@ const INBOX_REQUEST_TIMEOUT_MS = 30_000;
 // lock acquisition; the request above bounds work after acquisition.
 const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
 
-type StreamSource<Schema extends JSONSchema> =
+// Immutable read results can be reused for a year; deletions invalidate them.
+const READ_CACHE_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+
+export interface InboxReadOptions {
+  refresh?: boolean;
+  // Getter histories are keyed separately so deleting one does not expire
+  // discovery cursors. This also guards against stale in-flight getter writes.
+  url?: string;
+}
+
+type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & (
   | {
       kind: "query";
       inboxUrl: string;
@@ -84,7 +96,7 @@ type StreamSource<Schema extends JSONSchema> =
       kind: "export";
       inboxUrl: string;
       inboxToken: string;
-    };
+    });
 
 export class Inboxes {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
@@ -94,6 +106,10 @@ export class Inboxes {
       this.cache_ = createCache();
     }
     return this.cache_;
+  }
+
+  async invalidateReads(url: string): Promise<void> {
+    await (await this.cache).messageIds.invalidateReads(url);
   }
 
   async send(inboxUrl: string, message: Message<{}>): Promise<string> {
@@ -174,9 +190,11 @@ export class Inboxes {
       });
     }
 
-    // Update the cache, even if no token.
-    // Therefore people not logged in do not need to
-    // repeatedly re-validate objects.
+    await this.cacheLabel(inboxUrl, messageId, label);
+  }
+
+  // A verified local result need not wait for advisory server labeling.
+  async cacheLabel(inboxUrl: string, messageId: string, label: number): Promise<void> {
     const cache = await this.cache;
     const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
     const result = await cache.messages.get(messageCacheKey);
@@ -275,9 +293,12 @@ export class Inboxes {
     ) as Schema;
     const validator = await compileGraffitiObjectSchema(objectSchema);
     const body = source.kind === "query" ? source.body : undefined;
+    const read = source.options?.url ? { url: source.options.url } : undefined;
+    const refresh = source.options?.refresh !== false;
     const messageIdsCacheKey = source.kind === "continue"
       ? source.cursor.messageIdsCacheKey
-      : await getMessageIdsCacheKey(inboxUrl, type, body);
+      : (read ? readCachePrefix(read.url) : "") +
+        await getMessageIdsCacheKey(inboxUrl, type, body, inboxToken);
     const cacheVersion = source.kind === "continue"
       ? source.cursor.version
       : undefined;
@@ -319,6 +340,14 @@ export class Inboxes {
               return { query };
             }
 
+            // Reuse only a completed query. An empty completed discovery is
+            // useful saved state too; a missing/partial query must still fetch.
+            const now = Date.now();
+            if (
+              !refresh && query?.hasMore === false && query.checkedAt !== undefined &&
+              query.checkedAt <= now && now - query.checkedAt < READ_CACHE_MAX_AGE_MS
+            ) return { query };
+
             // A cached Retry-After should not keep other tabs waiting on this lock.
             if (query?.waitTil !== undefined && query.waitTil > Date.now()) {
               return { waitTil: query.waitTil };
@@ -326,6 +355,10 @@ export class Inboxes {
 
             // See if the cursor is still active by requesting the next batch.
             let batch: { response: Response; waitTil?: number };
+            const readVersion = read
+              ? { url: read.url, version: await cache.messageIds.readVersion(read.url) }
+              : undefined;
+            const checkedAt = Date.now();
             try {
               batch = await this.fetchMessageBatch(
                 inboxUrl,
@@ -387,23 +420,31 @@ export class Inboxes {
               },
             );
 
-            query = await storeQueryPage(
-              cache,
-              inboxUrl,
-              messageIdsCacheKey,
-              query,
-              {
-                messages: labeledMessages,
-                cursor,
-                hasMore,
-                waitTil: batch.waitTil,
-              },
-            );
+            try {
+              query = await storeQueryPage(
+                cache,
+                inboxUrl,
+                messageIdsCacheKey,
+                query,
+                {
+                  messages: labeledMessages,
+                  cursor,
+                  hasMore,
+                  waitTil: batch.waitTil,
+                  checkedAt,
+                  read: readVersion,
+                },
+              );
+            } catch (error) {
+              if (error instanceof ReadInvalidated) return { retry: true };
+              throw error;
+            }
             return { query };
           },
           signal,
         );
 
+        if ("retry" in step) continue;
         if ("initialFetchError" in step) {
           console.error(
             "Unexpected error in stream, waiting 5 seconds before continuing...",
@@ -482,6 +523,7 @@ export class Inboxes {
     tags: Uint8Array[],
     objectSchema: Schema,
     inboxToken?: string | null,
+    options?: InboxReadOptions,
   ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
     const body = new Uint8Array(dagCborEncode({
@@ -494,6 +536,7 @@ export class Inboxes {
       body,
       schema: objectSchema,
       inboxToken,
+      options,
     });
   }
 
@@ -501,6 +544,7 @@ export class Inboxes {
     inboxUrl: string,
     cursor: string,
     inboxToken?: string | null,
+    options?: InboxReadOptions,
   ): MessageStream<{}> {
     verifyHTTPSEndpoint(inboxUrl);
 
@@ -511,6 +555,7 @@ export class Inboxes {
       inboxUrl,
       cursor: parsedCursor,
       inboxToken,
+      options,
     });
   }
 

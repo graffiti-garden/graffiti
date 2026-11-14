@@ -82,7 +82,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
     [
       toValue(channels),
       toValue(schema),
-      { session: toValue(options_().session) },
+      { session: toValue(options_().session), refresh: toValue(options_().refresh) },
     ] as const;
   watch(
     () => `${refresh.value}:${JSON.stringify(args_())}`,
@@ -204,7 +204,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
               if (!active) return;
               if (result.done) {
                 continueFn = () =>
-                  graffiti.continueDiscover<Schema>(result.value.cursor, args[2]);
+                  graffiti.continueDiscover<Schema>(result.value.cursor, { ...args[2], refresh: true });
                 completed = true;
                 break;
               } else if (result.value.error) {

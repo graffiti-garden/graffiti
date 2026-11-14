@@ -42,6 +42,7 @@ export const GraffitiOptionalSessionSchema = optional(
 
 export const GraffitiReadOptionsSchema = looseObject({
   session: GraffitiOptionalSessionSchema,
+  refresh: optional(boolean()),
 });
 
 export const GraffitiJSONSchemaSchema = union([boolean(), looseObject({})]);
