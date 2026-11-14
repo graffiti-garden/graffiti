@@ -18,6 +18,7 @@ import { DecentralizedIdentifiers } from "./1-services/2-dids";
 import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
+import { discoveryErrorTests } from "./3-protocol/4-discovery-errors-tests";
 import { discoveryCursorTests } from "./3-protocol/4-discovery-cursor-tests";
 import { Sessions } from "./3-protocol/1-sessions";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
@@ -439,6 +440,7 @@ describe("GraffitiDecentralized Tests", () => {
 authorizationTests();
 inboxUnitTests();
 discoveryCursorTests();
+discoveryErrorTests();
 sessionTests();
 
 inboxCacheTests();
