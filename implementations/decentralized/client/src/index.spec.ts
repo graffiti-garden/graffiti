@@ -36,6 +36,7 @@ import { handleTests } from "./3-protocol/2-handles-tests";
 import { readCacheTests } from "./3-protocol/4-read-cache-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
+import { discoveryAsyncTests } from "./3-protocol/4-discovery-async-tests";
 import {
   DecentralizedTestEnvironment,
   decentralizedSharedInbox,
@@ -439,3 +440,5 @@ inboxUnitTests();
 sessionTests();
 
 inboxCacheTests();
+
+discoveryAsyncTests();
