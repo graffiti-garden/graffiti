@@ -16,9 +16,10 @@ import { useGraffitiSynchronize } from "../globals";
  *
  * Its corresponding renderless component is {@link GraffitiGetMedia}.
  *
- * The first two arguments and individual option fields can be refs or getters.
- * The initial read can reuse saved data; `options.refresh: true` refreshes it.
- * Explicit polls always refresh.
+ * The arguments of this composable are the same as Graffiti.getMedia,
+ * with the first two arguments and each option, including the optional session,
+ * also accepting [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
  * As they change the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.

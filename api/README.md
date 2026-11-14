@@ -6,21 +6,6 @@ This folder contains the abstract API, its documentation, and conformonce tests.
 
 To build with the API: [**see the API Documentation**](https://api.graffiti.garden/classes/Graffiti.html)
 
-## Read options
-
-Object reads, media reads, and discovery accept an optional options object:
-
-```ts
-await graffiti.get(url, schema, { session });
-await graffiti.getMedia(mediaUrl, accept, { session });
-const stream = graffiti.discover(channels, schema, { session });
-const updates = graffiti.continueDiscover(cursor, { session });
-```
-
-Omit `session` for public reads. Passing a session directly in the options slot
-remains supported for existing callers. Implementations can use
-`normalizeGraffitiReadOptions` from this package to handle both forms.
-
 ## Implementing the API
 
 To implement the API, create a class that extends the abstract `Graffiti` class and implement its

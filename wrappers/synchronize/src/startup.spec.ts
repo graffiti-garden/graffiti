@@ -22,7 +22,6 @@ function object(number: number): GraffitiObjectBase {
     actor: "did:example:author",
     channels: ["visible", "hidden"],
     value: { number, keep: true },
-    lastModified: number,
   };
 }
 

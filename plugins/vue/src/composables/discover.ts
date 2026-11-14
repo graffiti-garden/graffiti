@@ -22,9 +22,11 @@ const BATCH_PERIOD_MS = 50;
  *
  * Its corresponding renderless component is {@link GraffitiDiscover}.
  *
- * The first two arguments and individual option fields can be refs or getters.
- * Discovery refreshes by default; `options.refresh: false` allows saved results.
- * Explicit polls always refresh. Set `options.autopoll` to keep polling.
+ * The arguments of this composable are largely the same as Graffiti.discover,
+ * with the first two arguments and each option, including the optional session,
+ * also accepting [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
+ * Set `options.autopoll` to `true` to automatically poll for new objects.
  * As the arguments change, the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
