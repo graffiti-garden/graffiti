@@ -2,8 +2,6 @@ import { describe, expect, test, vi } from "vitest";
 import { GraffitiErrorNotFound, GraffitiErrorSchemaMismatch, type GraffitiSession, type GraffitiObjectStream } from "@graffiti-garden/api";
 import * as fakeIndexedDB from "fake-indexeddb";
 import { GraffitiDecentralized } from "./4-graffiti";
-import { StorageBuckets } from "../1-services/3-storage-buckets";
-import { Inboxes } from "../1-services/4-inboxes";
 
 export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSessions: () => GraffitiSession[]) {
   describe("Read caching", () => {
@@ -136,31 +134,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
         expect(requests.length).toBeGreaterThan(0);
       } finally { globalThis.fetch = original; }
     });
-    test("keeps a storage-observed deletion when remote labeling fails", async () => {
-      const writer = useGraffiti();
-      const reader = useGraffiti();
-      const session = useSessions()[0];
-      const channels = [crypto.randomUUID()];
-      const posted = await writer.post<{}>({ value: {}, channels }, session);
-      const storage = vi.spyOn(StorageBuckets.prototype, "get")
-        .mockRejectedValue(new GraffitiErrorNotFound("Object was deleted"));
-      const labeling = vi.spyOn(Inboxes.prototype, "label")
-        .mockRejectedValue(new Error("Label request failed"));
-      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-      try {
-        expect((await collect(reader.discover<{}>(channels, {}, { session }))).objects).toEqual([]);
-        expect(labeling).toHaveBeenCalled();
-        storage.mockRestore();
-        // A known deletion must remain deleted locally even if the server
-        // label was never updated and old storage bytes become available again.
-        expect((await collect(reader.discover<{}>(channels, {}, { session, refresh: false }))).objects).toEqual([]);
-      } finally {
-        storage.mockRestore();
-        labeling.mockRestore();
-        errors.mockRestore();
-        await writer.delete(posted, session);
-      }
-    });
+
   });
 }
 

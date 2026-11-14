@@ -7,7 +7,6 @@ import {
 import {
   compileGraffitiObjectSchema,
   GraffitiErrorCursorExpired,
-  GraffitiErrorNotFound,
 } from "@graffiti-garden/api";
 import {
   encode as dagCborEncode,
@@ -24,21 +23,19 @@ import {
   union,
 } from "zod/mini";
 import {
-  LabeledMessageBaseSchema,
   SendResponseSchema,
   MessageResultSchema,
-  LABELED_MESSAGE_MESSAGE_KEY,
+  INBOX_MESSAGE_MESSAGE_KEY,
   MESSAGE_OBJECT_KEY,
 } from "./4-inboxes/messages";
 import type {
-  LabeledMessageBase,
-  LabeledMessage,
+  InboxMessageBase,
+  InboxMessage,
   Message,
 } from "./4-inboxes/messages";
 import {
   canUseIDB,
   createCache,
-  getMessageCacheKey,
   getMessageIdsCacheKey,
   replayQuery,
   storeQueryPage,
@@ -54,12 +51,10 @@ export {
   MESSAGE_OBJECT_KEY,
   MESSAGE_METADATA_KEY,
   MessageBaseSchema,
-  LABELED_MESSAGE_ID_KEY,
-  LABELED_MESSAGE_MESSAGE_KEY,
-  LABELED_MESSAGE_LABEL_KEY,
-  LabeledMessageBaseSchema,
+  INBOX_MESSAGE_ID_KEY,
+  INBOX_MESSAGE_MESSAGE_KEY,
 } from "./4-inboxes/messages";
-export type { Message, LabeledMessage } from "./4-inboxes/messages";
+export type { Message, InboxMessage } from "./4-inboxes/messages";
 
 // One batch may be slow on a mobile connection. This bounds the network request
 // and response-body read, not IndexedDB or time spent yielding messages.
@@ -127,78 +122,23 @@ export class Inboxes {
     return parsed.id;
   }
 
-  async get(
-    inboxUrl: string,
-    messageId: string,
-    inboxToken?: string | null,
-  ): Promise<LabeledMessageBase | null> {
-    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
-    const cache = await this.cache;
-    const cached = await cache.messages.get(messageCacheKey);
-    if (cached !== undefined) return cached;
-
-    const url = `${inboxUrl}/message/${messageId}`;
-    let response: Response | null = null;
-    try {
-      response = await fetchWithErrorHandling(url, {
-        method: "GET",
-        headers: {
-          ...(inboxToken
-            ? {
-                Authorization: `Bearer ${inboxToken}`,
-              }
-            : {}),
-        },
-      });
-    } catch (e) {
-      if (e instanceof GraffitiErrorNotFound) {
-        await cache.messages.set(messageCacheKey, null);
-        return null;
-      }
-      throw e;
-    }
-
-    const blob = await response.blob();
-    const cbor = dagCborDecode(await blob.arrayBuffer());
-    const parsed = LabeledMessageBaseSchema.parse(cbor);
-
-    await cache.messages.set(messageCacheKey, parsed);
-    return parsed;
+  async pin(inboxUrl: string, ids: string[], inboxToken: string): Promise<void> {
+    await this.updatePins(inboxUrl, "pin", ids, inboxToken);
   }
 
-  async label(
-    inboxUrl: string,
-    messageId: string,
-    label: number,
-    inboxToken?: string | null,
-  ): Promise<void> {
+  async unpin(inboxUrl: string, ids: string[], inboxToken: string): Promise<void> {
+    await this.updatePins(inboxUrl, "unpin", ids, inboxToken);
+  }
+
+  private async updatePins(inboxUrl: string, operation: "pin" | "unpin", ids: string[], inboxToken: string) {
     verifyHTTPSEndpoint(inboxUrl);
-
-    if (inboxToken) {
-      const url = `${inboxUrl}/label/${messageId}`;
-
-      await fetchWithErrorHandling(url, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/cbor",
-          Authorization: `Bearer ${inboxToken}`,
-        },
-        body: new Uint8Array(dagCborEncode({ l: label })),
-      });
-    }
-
-    await this.cacheLabel(inboxUrl, messageId, label);
-  }
-
-  // A verified local result need not wait for advisory server labeling.
-  async cacheLabel(inboxUrl: string, messageId: string, label: number): Promise<void> {
-    const cache = await this.cache;
-    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
-    const result = await cache.messages.get(messageCacheKey);
-    if (result) {
-      await cache.messages.set(messageCacheKey, {
-        ...result,
-        l: label,
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += 100) {
+      await fetchWithErrorHandling(`${inboxUrl}/${operation}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/cbor", Authorization: `Bearer ${inboxToken}` },
+        body: dagCborEncode({ ids: unique.slice(i, i + 100) }).slice(),
+        signal: AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS),
       });
     }
   }
@@ -395,17 +335,17 @@ export class Inboxes {
             );
             const { results, hasMore, cursor } =
               MessageResultSchema.parse(decoded);
-            const labeledMessages: LabeledMessage<Schema>[] = results.map(
+            const messages: InboxMessage<Schema>[] = results.map(
               (result) => {
                 const object =
-                  result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
+                  result[INBOX_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
                 if (!validator(object)) {
                   throw new Error("Server returned data that does not match schema");
                 }
                 return {
                   ...result,
-                  [LABELED_MESSAGE_MESSAGE_KEY]: {
-                    ...result[LABELED_MESSAGE_MESSAGE_KEY],
+                  [INBOX_MESSAGE_MESSAGE_KEY]: {
+                    ...result[INBOX_MESSAGE_MESSAGE_KEY],
                     [MESSAGE_OBJECT_KEY]: object,
                   },
                 };
@@ -419,7 +359,7 @@ export class Inboxes {
                 messageIdsCacheKey,
                 query,
                 {
-                  messages: labeledMessages,
+                  messages: messages,
                   cursor,
                   hasMore,
                   waitTil: batch.waitTil,
@@ -490,7 +430,7 @@ export class Inboxes {
       let consumedPage = false;
       try {
         for (const message of messages) {
-          yield message as LabeledMessage<Schema>;
+          yield message as InboxMessage<Schema>;
         }
         consumedPage = true;
       } finally {
@@ -569,7 +509,7 @@ const CursorSchema = strictObject({
 
 export interface MessageStream<
   Schema extends JSONSchema,
-> extends AsyncGenerator<LabeledMessage<Schema>, string> {}
+> extends AsyncGenerator<InboxMessage<Schema>, string> {}
 
 async function waitFor(waitTil?: number) {
   if (waitTil !== undefined) {

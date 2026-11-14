@@ -41,7 +41,7 @@ class CursorGraffiti extends GraffitiDecentralized {
 
 class QueueGraffiti extends CursorGraffiti {
   override querySingleEndpoint = super.querySingleEndpoint;
-  override processOneLabeledMessage = super.processOneLabeledMessage;
+  override processOneInboxMessage = super.processOneInboxMessage;
 }
 
 export function discoveryAsyncTests() {
@@ -50,7 +50,7 @@ export function discoveryAsyncTests() {
 
     const message = {
       id: "announcement",
-      l: 0,
+
       m: { o: object, t: [], m: new Uint8Array() },
     };
     const processed = {
@@ -76,7 +76,7 @@ export function discoveryAsyncTests() {
         // the second must be handled before the queue reaches it.
         let release!: () => void;
         const pending = new Promise<void>((resolve) => { release = resolve; });
-        const process = vi.spyOn(graffiti, "processOneLabeledMessage")
+        const process = vi.spyOn(graffiti, "processOneInboxMessage")
           .mockImplementationOnce(async () => {
             await pending;
             if (failed === "first") throw failure;
@@ -120,7 +120,7 @@ export function discoveryAsyncTests() {
         throw failure;
       });
       // The abandoned validation must not produce an unhandled rejection.
-      vi.spyOn(graffiti, "processOneLabeledMessage")
+      vi.spyOn(graffiti, "processOneInboxMessage")
         .mockRejectedValueOnce(new Error("Validation read failed"))
         .mockResolvedValueOnce(processed);
 

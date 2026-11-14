@@ -19,6 +19,8 @@ import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
 import { discoveryErrorTests } from "./3-protocol/4-discovery-errors-tests";
+import { verifiedMessageTests } from "./3-protocol/verified-messages-tests";
+import { pinProtocolTests, pinPolicyIntegrationTests } from "./3-protocol/4-pin-protocol-tests";
 import { discoveryCursorTests } from "./3-protocol/4-discovery-cursor-tests";
 import { Sessions } from "./3-protocol/1-sessions";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
@@ -142,32 +144,7 @@ describe("GraffitiDecentralized Tests", () => {
 
   objectEncodingTests();
   readCacheTests(() => useGraffiti(), () => sessions);
-
-  test.each([3, 4])("revalidates legacy invalid label 3, but skips current invalid label 4 (label %i)", async (label) => {
-    const writer = useGraffiti();
-    const session = sessions[0];
-    const object = await writer.post({ value: { text: "rollout check" }, channels: [], allowed: [] }, session);
-    const { personalInbox } = sessionMethods.resolveSession(session);
-    const inboxes = new Inboxes();
-    const messages = [];
-    for await (const message of inboxes.query(personalInbox.serviceEndpoint,
-      [new TextEncoder().encode(object.url)], {}, personalInbox.token)) {
-      messages.push(message);
-    }
-    expect(messages).toHaveLength(1);
-    const metadata = dagCborDecode(messages[0].m.m);
-    expect(metadata).toHaveProperty("r", 0);
-    expect(metadata).not.toHaveProperty("kind");
-    const messageId = messages[0].id;
-    // Old clients reject the unknown kind field and persist label 3 on the server.
-    await inboxes.label(personalInbox.serviceEndpoint, messageId, label, personalInbox.token);
-    const read = useGraffiti().get(object.url, {}, { session });
-    if (label === 3) await expect(read).resolves.toEqual(object);
-    else await expect(read).rejects.toBeInstanceOf(GraffitiErrorNotFound);
-    // Restore this known-valid fixture so it can be deleted normally.
-    await inboxes.label(personalInbox.serviceEndpoint, messageId, 1, personalInbox.token);
-    await writer.delete(object.url, session);
-  });
+  pinPolicyIntegrationTests(environment, () => useGraffiti(), () => sessions);
 
   test("keeps new media records separate from ordinary objects", async () => {
     const graffiti = useGraffiti();
@@ -444,6 +421,8 @@ authorizationTests();
 inboxUnitTests();
 discoveryCursorTests();
 discoveryErrorTests();
+verifiedMessageTests();
+pinProtocolTests();
 sessionTests();
 
 inboxCacheTests();

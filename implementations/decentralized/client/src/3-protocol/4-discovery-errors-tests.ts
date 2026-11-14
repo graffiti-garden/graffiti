@@ -6,26 +6,26 @@ import {
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
 import { GraffitiDecentralized } from "./4-graffiti";
 import { RECORD_KIND_KEY, RECORD_KIND_MEDIA, type RecordKind } from "./3-object-encoding";
-import type { LabeledMessage } from "../1-services/4-inboxes";
+import type { InboxMessage } from "../1-services/4-inboxes";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
-const inboxEndpoint = "https://example.test/inbox";
-const channel = "discovery-errors";
-const bucketEndpoint = "https://example.test/bucket";
-const actor = "did:web:example.test";
+export const inboxEndpoint = "https://example.test/inbox";
+export const channel = "discovery-errors";
+export const bucketEndpoint = "https://example.test/bucket";
+export const actor = "did:web:example.test";
 class CursorGraffiti extends GraffitiDecentralized {
   get inboxService() { return this.inboxes; }
 }
 
-class ValidationGraffiti extends CursorGraffiti {
-  constructor() { super({ defaultInboxEndpoints: [inboxEndpoint] }); }
+export class ValidationGraffiti extends CursorGraffiti {
+  constructor(defaultInboxEndpoints = [inboxEndpoint]) { super({ defaultInboxEndpoints }); }
   get services() {
     return { buckets: this.storageBuckets, dids: this.dids, sessions: this.sessions };
   }
   async announcement(id: string, kind?: RecordKind) {
     const encoded = await this.objectEncoding.encode<{}>({ value: { text: id }, channels: [channel] }, actor, kind);
-    const message: LabeledMessage<{}> = {
-      id, l: 0,
+    const message: InboxMessage<{}> = {
+      id,
       m: { o: encoded.object, t: encoded.tags, m: dagCborEncode({
         k: id, ...(kind === undefined ? {} : { [RECORD_KIND_KEY]: kind }),
       }) },
@@ -34,13 +34,13 @@ class ValidationGraffiti extends CursorGraffiti {
   }
 }
 
-function inboxPage(messages: LabeledMessage<{}>[]) {
+export function inboxPage(messages: InboxMessage<{}>[]) {
   return new Response(new Uint8Array(dagCborEncode({
     results: messages, cursor: "after-messages", hasMore: false,
   })));
 }
 
-function serveMessages(graffiti: ValidationGraffiti, messages: LabeledMessage<{}>[]) {
+export function serveMessages(graffiti: ValidationGraffiti, messages: InboxMessage<{}>[]) {
   vi.spyOn(graffiti.services.dids, "resolve").mockResolvedValue({
     id: actor,
     service: [{ id: "#graffitiStorageBucket", type: "GraffitiStorageBucket", serviceEndpoint: bucketEndpoint }],
@@ -54,7 +54,9 @@ function serveMessages(graffiti: ValidationGraffiti, messages: LabeledMessage<{}
   }));
 }
 
-function mockSession(graffiti: ValidationGraffiti) {
+export function mockSession(graffiti: ValidationGraffiti) {
+  vi.spyOn(graffiti.inboxService, "pin").mockResolvedValue();
+  vi.spyOn(graffiti.inboxService, "unpin").mockResolvedValue();
   const service = { token: "session-token", authorizationEndpoint: "https://example.test/auth" };
   vi.spyOn(graffiti.services.sessions, "resolveSession").mockReturnValue({
     actor, tokens: [], servicesByAuthorization: [],
@@ -65,7 +67,7 @@ function mockSession(graffiti: ValidationGraffiti) {
   return vi.spyOn(graffiti.services.sessions, "forget").mockImplementation(() => {});
 }
 
-async function collectDiscovery(stream: GraffitiObjectStream<{}>) {
+export async function collectDiscovery(stream: GraffitiObjectStream<{}>) {
   const entries = [];
   while (true) {
     const next = await stream.next();
@@ -116,11 +118,6 @@ export function discoveryErrorTests() {
       ]);
       expect(read).toHaveBeenCalledTimes(2); // No retry during this discovery.
       expect(JSON.parse(result.cursor).cursors).toEqual(cursor ? JSON.parse(cursor).cursors : {});
-      expect((await graffiti.inboxService.get(inboxEndpoint, first.message.id))?.l).toBe(0);
-      await vi.waitFor(async () => {
-        expect((await graffiti.inboxService.get(inboxEndpoint, second.message.id))?.l).toBe(1);
-      });
-
       // Retaining the earlier checkpoint lets the next poll retry the failed
       // object. Replaying the already delivered object is also permitted.
       const recovered = await collectDiscovery(graffiti.continueDiscover<{}>(result.cursor));
@@ -158,12 +155,10 @@ export function discoveryErrorTests() {
       const resolve = vi.mocked(graffiti.services.dids.resolve);
       if (failure === "DID lookup") resolve.mockRejectedValueOnce(new GraffitiErrorNotFound("Resolver offline"));
       else resolve.mockResolvedValueOnce({ id: actor });
-      const label = vi.spyOn(graffiti.inboxService, "label");
       vi.spyOn(graffiti.services.buckets, "get").mockResolvedValue(bytes);
 
       const initial = await collectDiscovery(graffiti.discover<{}>([channel], {}));
       expect(initial.entries).toEqual([{ error: expect.any(Error), origin: inboxEndpoint }]);
-      expect(label).not.toHaveBeenCalled();
       expect((await collectDiscovery(graffiti.continueDiscover<{}>(initial.cursor))).entries)
         .toEqual([{ object: message.m.o }]);
     });
@@ -197,12 +192,12 @@ export function discoveryErrorTests() {
       expect(reads).toBe(2);
     });
 
-    test.each(["contents", "metadata", "false deletion"])("reports invalid %s without stopping discovery or holding its checkpoint", async (invalid) => {
+    test.each(["contents", "metadata"])("reports invalid %s without stopping discovery or holding its checkpoint", async (invalid) => {
       const graffiti = new ValidationGraffiti();
       const bad = await graffiti.announcement("bad");
       const good = await graffiti.announcement("good");
       if (invalid === "contents") bad.message.m.o.value = { forged: true };
-      else bad.message.m.m = dagCborEncode(invalid === "metadata" ? {} : { k: "bad", t: "original" });
+      else bad.message.m.m = dagCborEncode({});
       serveMessages(graffiti, [bad.message, good.message]);
       vi.spyOn(graffiti.services.buckets, "get").mockImplementation(async (_endpoint, key) =>
         key === "bad" ? bad.bytes : good.bytes);
@@ -212,9 +207,6 @@ export function discoveryErrorTests() {
         { error: expect.any(Error), origin: inboxEndpoint },
         { object: good.message.m.o },
       ]);
-      await vi.waitFor(async () => {
-        expect((await graffiti.inboxService.get(inboxEndpoint, bad.message.id))?.l).toBe(4);
-      });
       // A proven-invalid message is complete, so it must not keep replaying
       // on every poll and prevent the inbox checkpoint from advancing.
       expect(JSON.parse(result.cursor).cursors[inboxEndpoint]).toEqual(expect.any(String));
@@ -242,7 +234,6 @@ export function discoveryErrorTests() {
       const { message, bytes } = await graffiti.announcement("object");
       serveMessages(graffiti, [message]);
       const forget = mockSession(graffiti);
-      vi.spyOn(graffiti.inboxService, "label").mockResolvedValue();
       const queryFetch = globalThis.fetch;
       let reads = 0;
       vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

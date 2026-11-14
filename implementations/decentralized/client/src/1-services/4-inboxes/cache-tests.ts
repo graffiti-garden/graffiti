@@ -10,15 +10,14 @@ import {
   type Cache,
   type CacheQueryValue,
 } from "./cache";
-import { MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
+import { type InboxMessageBase } from "./messages";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";
 
-function message(index: number): LabeledMessageBase {
+function message(index: number): InboxMessageBase {
   return {
     id: `message-${index}`,
-    l: 1,
     m: {
       t: [new Uint8Array([index % 256])],
       m: new Uint8Array([1, 2, 3]),
@@ -75,22 +74,6 @@ export function inboxCacheTests() {
       expect(await second.messageIds.get(key)).toEqual(record);
     });
 
-    test.each(["indexeddb", "memory"])("keeps a known deletion when an older reply or validation finishes (%s)", async (storage) => {
-      if (storage === "memory") vi.stubGlobal("indexedDB", undefined);
-      const cache = await createCache();
-      const entry = message(1);
-      const key = getMessageCacheKey(inboxUrl, entry.id);
-      await cache.messages.set(key, { ...entry, l: MESSAGE_LABEL_TRASH });
-      // A different query's response was already in flight at deletion time.
-      await storeQueryPage(cache, inboxUrl, "other-query", undefined, {
-        messages: [entry], cursor: "late-response", hasMore: false,
-      });
-      expect((await cache.messages.get(key))?.l).toBe(MESSAGE_LABEL_TRASH);
-      // The same applies to a validation which finishes after the deletion.
-      await cache.messages.set(key, entry);
-      expect((await cache.messages.get(key))?.l).toBe(MESSAGE_LABEL_TRASH);
-    });
-
     test("preserves order, duplicate IDs and continuation offsets", async () => {
       const cache = await createCache();
       const query = await seed(cache, 300);
@@ -110,12 +93,12 @@ export function inboxCacheTests() {
       const query = await seed(cache, 300);
       const firstReplay = replayQuery(cache, inboxUrl, queryKey, query);
       const updated = message(299);
-      updated.l = 2;
+      updated.m.o.value.index = -1;
       const write = cache.messages.set(getMessageCacheKey(inboxUrl, updated.id), updated);
 
-      expect((await firstReplay)[299].l).toBe(1);
+      expect((await firstReplay)[299].m.o.value.index).toBe(299);
       await write;
-      expect((await replayQuery(cache, inboxUrl, queryKey, query))[299].l).toBe(2);
+      expect((await replayQuery(cache, inboxUrl, queryKey, query))[299].m.o.value.index).toBe(-1);
     });
 
     test("mutating returned messages cannot change later IndexedDB replays", async () => {

@@ -5,7 +5,7 @@ import { getResolver as webResolver } from "web-did-resolver";
 
 // Endpoint rotations keep the old endpoint alive for a day. A normal TTL lets
 // clients learn the replacement without bypassing the cache on storage errors.
-const DID_CACHE_TTL_MS = 60 * 60 * 1000;
+export const DID_CACHE_TTL_MS = 60 * 60 * 1000;
 
 export class DecentralizedIdentifiers {
   protected readonly methods: Record<string, unknown> = {

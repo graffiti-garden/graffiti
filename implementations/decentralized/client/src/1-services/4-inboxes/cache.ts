@@ -1,5 +1,5 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
-import { LABELED_MESSAGE_ID_KEY, MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
+import { INBOX_MESSAGE_ID_KEY, type InboxMessageBase } from "./messages";
 
 // One record per inbox query. Messages live in the separate message cache;
 // this record tracks their IDs and where to continue fetching from the server.
@@ -50,10 +50,10 @@ const readInvalidationKey = (url: string) => `read-invalidation:${encodeURICompo
 
 export type Cache = {
   messages: {
-    get(k: string): Promise<LabeledMessageBase | null | undefined>;
-    getMany(keys: string[]): Promise<(LabeledMessageBase | null | undefined)[]>;
-    set(k: string, value: LabeledMessageBase | null): Promise<void>;
-    setMany(entries: [string, LabeledMessageBase][]): Promise<void>;
+    get(k: string): Promise<InboxMessageBase | null | undefined>;
+    getMany(keys: string[]): Promise<(InboxMessageBase | null | undefined)[]>;
+    set(k: string, value: InboxMessageBase | null): Promise<void>;
+    setMany(entries: [string, InboxMessageBase][]): Promise<void>;
     del(k: string): Promise<void>;
   };
   messageIds: {
@@ -77,7 +77,7 @@ export async function replayQuery(
   messageIdsCacheKey: string,
   query: CacheQueryValue,
   numSeen = 0,
-): Promise<LabeledMessageBase[]> {
+): Promise<InboxMessageBase[]> {
   // Filter out all messageIds before
   // the number already seen
   const messageIds = query.messageIds.slice(numSeen);
@@ -93,7 +93,7 @@ export async function replayQuery(
     } catch {}
     throw new Error("Cache out of sync - perhaps clear browser storage");
   }
-  return messages as LabeledMessageBase[];
+  return messages as InboxMessageBase[];
 }
 
 export async function storeQueryPage(
@@ -102,17 +102,17 @@ export async function storeQueryPage(
   messageIdsCacheKey: string,
   previous: CacheQueryValue | undefined,
   page: {
-    messages: LabeledMessageBase[];
+    messages: InboxMessageBase[];
     cursor: string;
     hasMore: boolean;
     waitTil?: number;
     invalidation?: ReadInvalidationCheck;
   },
 ): Promise<CacheQueryValue> {
-  // First cache the messages with their labels
+  // First cache the raw messages
   await cache.messages.setMany(
     page.messages.map((message) => [
-      getMessageCacheKey(inboxUrl, message[LABELED_MESSAGE_ID_KEY]),
+      getMessageCacheKey(inboxUrl, message[INBOX_MESSAGE_ID_KEY]),
       message,
     ]),
   );
@@ -122,7 +122,7 @@ export async function storeQueryPage(
     version: previous?.version ?? crypto.randomUUID(),
     messageIds: [
       ...(previous?.messageIds ?? []),
-      ...page.messages.map((message) => message[LABELED_MESSAGE_ID_KEY]),
+      ...page.messages.map((message) => message[INBOX_MESSAGE_ID_KEY]),
     ],
     generation: crypto.randomUUID(),
     hasMore: page.hasMore,
@@ -153,15 +153,9 @@ export async function getMessageIdsCacheKey(
     );
 }
 
-// A response/validation started before deletion must not resurrect a message
-// in another saved query. Message IDs are immutable, so keep its deletion label.
-function preserveDeletion(previous: LabeledMessageBase | null | undefined, next: LabeledMessageBase | null) {
-  return previous?.l === MESSAGE_LABEL_TRASH ? previous : next;
-}
-
 async function resetCacheDB() {
   await new Promise<void>((resolve) => {
-    const req = indexedDB.deleteDatabase("graffiti-inbox-cache");
+    const req = indexedDB.deleteDatabase("graffiti-inbox-cache-v2");
     req.onsuccess = () => resolve();
     req.onerror = () => resolve(); // best effort
     req.onblocked = () => resolve(); // best effort
@@ -171,7 +165,7 @@ async function resetCacheDB() {
 export async function createCache(): Promise<Cache> {
   if (await canUseIDB()) {
     const { openDB } = await import("idb");
-    const db = await openDB("graffiti-inbox-cache", 1, {
+    const db = await openDB("graffiti-inbox-cache-v2", 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("m")) db.createObjectStore("m");
         if (!db.objectStoreNames.contains("q")) db.createObjectStore("q");
@@ -185,7 +179,7 @@ export async function createCache(): Promise<Cache> {
             return Promise.all(keys.map((key) => db.get("m", key)));
           }
 
-          const batches: Promise<(LabeledMessageBase | null | undefined)[]>[] = [];
+          const batches: Promise<(InboxMessageBase | null | undefined)[]>[] = [];
           // Queue every read before awaiting, so later writes cannot overtake
           // part of this replay. Bounded transactions avoid both a transaction
           // per message and one very large transaction for the whole history.
@@ -212,7 +206,7 @@ export async function createCache(): Promise<Cache> {
         },
         set: async (k, v) => {
           const tx = db.transaction("m", "readwrite");
-          await tx.store.put(preserveDeletion(await tx.store.get(k), v), k);
+          await tx.store.put(v, k);
           await tx.done;
         },
         setMany: async (entries) => {
@@ -220,7 +214,7 @@ export async function createCache(): Promise<Cache> {
           const tx = db.transaction("m", "readwrite");
           await Promise.all([
             ...entries.map(async ([k, v]) =>
-              tx.store.put(preserveDeletion(await tx.store.get(k), v), k)),
+              tx.store.put(v, k)),
             tx.done,
           ]);
         },
@@ -259,7 +253,7 @@ export async function createCache(): Promise<Cache> {
     };
   }
 
-  const m = new Map<string, LabeledMessageBase | null>();
+  const m = new Map<string, InboxMessageBase | null>();
   const q = new Map<string, CacheQueryValue>();
   const readInvalidationTokens = new Map<string, string>();
 
@@ -267,9 +261,9 @@ export async function createCache(): Promise<Cache> {
     messages: {
       getMany: async (keys) => keys.map((key) => m.get(key)),
       get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, preserveDeletion(m.get(k), v)),
+      set: async (k, v) => void m.set(k, v),
       setMany: async (entries) => {
-        for (const [k, v] of entries) m.set(k, preserveDeletion(m.get(k), v));
+        for (const [k, v] of entries) m.set(k, v);
       },
       del: async (k) => void m.delete(k),
     },

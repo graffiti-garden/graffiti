@@ -85,6 +85,7 @@ export class DecentralizedTestEnvironment {
       "0007_rename_user_to_account.sql",
       "0008_session_kinds.sql",
       "0009_inbox_pins.sql",
+      "0010_remove_inbox_labels.sql",
     ]) {
       const sql = await readFile(
         join(SERVER_ROOT, "migrations", migration),
