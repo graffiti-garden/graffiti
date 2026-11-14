@@ -68,9 +68,6 @@ const INBOX_REQUEST_TIMEOUT_MS = 30_000;
 // lock acquisition; the request above bounds work after acquisition.
 const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
 
-// Immutable read results can be reused for a year; deletions invalidate them.
-const READ_CACHE_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
-
 export interface InboxReadOptions {
   refresh?: boolean;
   // Getter histories are keyed separately so deleting one does not expire
@@ -293,11 +290,11 @@ export class Inboxes {
     ) as Schema;
     const validator = await compileGraffitiObjectSchema(objectSchema);
     const body = source.kind === "query" ? source.body : undefined;
-    const read = source.options?.url ? { url: source.options.url } : undefined;
+    const readUrl = source.options?.url;
     const refresh = source.options?.refresh !== false;
     const messageIdsCacheKey = source.kind === "continue"
       ? source.cursor.messageIdsCacheKey
-      : (read ? readCachePrefix(read.url) : "") +
+      : (readUrl ? readCachePrefix(readUrl) : "") +
         await getMessageIdsCacheKey(inboxUrl, type, body, inboxToken);
     const cacheVersion = source.kind === "continue"
       ? source.cursor.version
@@ -342,11 +339,7 @@ export class Inboxes {
 
             // Reuse only a completed query. An empty completed discovery is
             // useful saved state too; a missing/partial query must still fetch.
-            const now = Date.now();
-            if (
-              !refresh && query?.hasMore === false && query.checkedAt !== undefined &&
-              query.checkedAt <= now && now - query.checkedAt < READ_CACHE_MAX_AGE_MS
-            ) return { query };
+            if (!refresh && query?.hasMore === false) return { query };
 
             // A cached Retry-After should not keep other tabs waiting on this lock.
             if (query?.waitTil !== undefined && query.waitTil > Date.now()) {
@@ -355,10 +348,9 @@ export class Inboxes {
 
             // See if the cursor is still active by requesting the next batch.
             let batch: { response: Response; waitTil?: number };
-            const readVersion = read
-              ? { url: read.url, version: await cache.messageIds.readVersion(read.url) }
+            const invalidation = readUrl
+              ? { url: readUrl, token: await cache.messageIds.readInvalidationToken(readUrl) }
               : undefined;
-            const checkedAt = Date.now();
             try {
               batch = await this.fetchMessageBatch(
                 inboxUrl,
@@ -431,8 +423,7 @@ export class Inboxes {
                   cursor,
                   hasMore,
                   waitTil: batch.waitTil,
-                  checkedAt,
-                  read: readVersion,
+                  invalidation,
                 },
               );
             } catch (error) {

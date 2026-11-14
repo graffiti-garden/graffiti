@@ -495,9 +495,7 @@ export function inboxUnitTests() {
     });
 
     describe("inbox query cache", () => {
-      test("bounds saved query reuse without sliding expiration and includes empty queries", async () => {
-        let now = 1_000_000;
-        vi.spyOn(Date, "now").mockImplementation(() => now);
+      test("reuses completed queries, including empty results, unless refreshed", async () => {
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);
         const inboxes = new Inboxes();
@@ -508,22 +506,18 @@ export function inboxUnitTests() {
           return results;
         }
         expect(await collect()).toEqual([message]);
-        now += 365 * 24 * 60 * 60 * 1000 - 1;
         expect(await collect()).toEqual([message]);
         expect(fetch).toHaveBeenCalledTimes(1);
-        now++;
-        await collect();
-        expect(fetch).toHaveBeenCalledTimes(2);
         await collect({ ...read, refresh: true });
-        expect(fetch).toHaveBeenCalledTimes(3);
+        expect(fetch).toHaveBeenCalledTimes(2);
         await collect(read, "different-token");
-        expect(fetch).toHaveBeenCalledTimes(4);
+        expect(fetch).toHaveBeenCalledTimes(3);
 
         fetch.mockImplementation(async () => queryPage([], "empty"));
         const missing = { ...read, url: "graffiti:example:missing" };
         expect(await collect(missing)).toEqual([]);
         expect(await collect(missing)).toEqual([]);
-        expect(fetch).toHaveBeenCalledTimes(5);
+        expect(fetch).toHaveBeenCalledTimes(4);
       });
 
       test("fetches the next page while the current message is yielded", async () => {

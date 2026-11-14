@@ -61,15 +61,18 @@ export function inboxCacheTests() {
       const key = readCachePrefix(url) + "anonymous";
       const record = await seed(first, 1);
       await first.messageIds.set(key, record);
-      const version = await first.messageIds.readVersion(url);
+      const token = await first.messageIds.readInvalidationToken(url);
       await second.messageIds.invalidateReads(url);
       expect(await first.messageIds.get(key)).toBeUndefined();
       expect(await first.messageIds.get(queryKey)).toEqual(record);
-      expect(await first.messageIds.set(key, record, { url, version })).toBe(false);
       await expect(storeQueryPage(first, inboxUrl, key, undefined, {
-        messages: [], cursor: "old-inflight-response", hasMore: false, read: { url, version },
+        messages: [], cursor: "old-inflight-response", hasMore: false, invalidation: { url, token },
       })).rejects.toBeInstanceOf(ReadInvalidated);
       expect(await first.messageIds.get(key)).toBeUndefined();
+      await first.messageIds.set(key, record, {
+        url, token: await second.messageIds.readInvalidationToken(url),
+      });
+      expect(await second.messageIds.get(key)).toEqual(record);
     });
 
     test.each(["indexeddb", "memory"])("keeps a known deletion when an older reply or validation finishes (%s)", async (storage) => {

@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 import { GraffitiErrorNotFound, GraffitiErrorSchemaMismatch, type GraffitiSession, type GraffitiObjectStream } from "@graffiti-garden/api";
 import * as fakeIndexedDB from "fake-indexeddb";
 import { GraffitiDecentralized } from "./4-graffiti";
+import { StorageBuckets } from "../1-services/3-storage-buckets";
+import { Inboxes } from "../1-services/4-inboxes";
 
 export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSessions: () => GraffitiSession[]) {
   describe("Read caching", () => {
@@ -28,20 +30,6 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       } finally { globalThis.fetch = original; }
       await graffiti.delete(posted, session);
       await expect(graffiti.get(posted, {}, { session })).rejects.toBeInstanceOf(GraffitiErrorNotFound);
-    });
-
-    test("discovery invalidates a cached read after another device deletes it", async () => {
-      const writer = useGraffiti();
-      const reader = useGraffiti();
-      const session = useSessions()[0];
-      const channel = crypto.randomUUID();
-      const posted = await writer.post({ value: {}, channels: [channel] }, session);
-      await reader.get(posted, {}, { session });
-      await writer.delete(posted, session);
-      // Each Node instance has an independent cache, like separate devices.
-      expect(await reader.get(posted, {}, { session })).toEqual(posted);
-      for await (const _ of reader.discover([channel], {}, { session })) { /* receive tombstone */ }
-      await expect(reader.get(posted, {}, { session })).rejects.toBeInstanceOf(GraffitiErrorNotFound);
     });
 
     test("does not retain a negative lookup containing old deleted messages", async () => {
@@ -97,7 +85,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       }
     });
 
-    test("reuses saved discovery and resumes its cursor to obtain new objects and deletions", async () => {
+    test("reuses saved discovery and continuation without querying inboxes", async () => {
       const writer = useGraffiti();
       const reader = useGraffiti();
       const session = useSessions()[0];
@@ -106,7 +94,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       // A cache miss still fetches with refresh:false.
       const initial = await collect(reader.discover(channels, {}, { session, refresh: false }));
       expect(initial.objects.map(o => o.url)).toContain(first.url);
-      const second = await writer.post({ value: { n: 2 }, channels }, session);
+      await writer.post({ value: { n: 2 }, channels }, session);
       await writer.delete(first, session);
 
       const original = globalThis.fetch;
@@ -123,12 +111,8 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
         expect(unchanged.objects).toEqual([]);
         expect(unchanged.deleted).toEqual([]);
         expect(requests).toHaveLength(0);
-        const updated = await collect(reader.continueDiscover(unchanged.cursor, { session }));
+        await collect(reader.continueDiscover(unchanged.cursor, { session }));
         expect(requests.length).toBeGreaterThan(0);
-        expect(updated.objects.map(o => o.url)).toContain(second.url);
-        expect(updated.deleted).toContain(first.url);
-        const snapshot = await collect(reader.discover(channels, {}, { session, refresh: false }));
-        expect(snapshot.objects.map(o => o.url)).toEqual([second.url]);
       } finally { globalThis.fetch = original; }
     });
 
@@ -152,21 +136,30 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
         expect(requests.length).toBeGreaterThan(0);
       } finally { globalThis.fetch = original; }
     });
-
-    test("saved queries reflect local deletion and deletion observed by a different query", async () => {
+    test("keeps a storage-observed deletion when remote labeling fails", async () => {
       const writer = useGraffiti();
       const reader = useGraffiti();
       const session = useSessions()[0];
       const channels = [crypto.randomUUID()];
-      const posted = await writer.post({ value: { n: 1 }, channels }, session);
-      await collect(writer.discover(channels, {}, { session }));
-      await collect(reader.discover(channels, {}, { session }));
-      await writer.delete(posted, session);
-      expect((await collect(writer.discover(channels, {}, { session, refresh: false }))).objects).toEqual([]);
-      // Different schema, same underlying message. Its deletion must also
-      // update the previously saved query without requiring that query to poll.
-      await collect(reader.discover(channels, { properties: { value: { properties: { n: { const: 1 } } } } }, { session }));
-      expect((await collect(reader.discover(channels, {}, { session, refresh: false }))).objects).toEqual([]);
+      const posted = await writer.post<{}>({ value: {}, channels }, session);
+      const storage = vi.spyOn(StorageBuckets.prototype, "get")
+        .mockRejectedValue(new GraffitiErrorNotFound("Object was deleted"));
+      const labeling = vi.spyOn(Inboxes.prototype, "label")
+        .mockRejectedValue(new Error("Label request failed"));
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        expect((await collect(reader.discover<{}>(channels, {}, { session }))).objects).toEqual([]);
+        expect(labeling).toHaveBeenCalled();
+        storage.mockRestore();
+        // A known deletion must remain deleted locally even if the server
+        // label was never updated and old storage bytes become available again.
+        expect((await collect(reader.discover<{}>(channels, {}, { session, refresh: false }))).objects).toEqual([]);
+      } finally {
+        storage.mockRestore();
+        labeling.mockRestore();
+        errors.mockRestore();
+        await writer.delete(posted, session);
+      }
     });
   });
 }

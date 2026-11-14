@@ -37,8 +37,8 @@ import {
   MESSAGE_TAGS_KEY,
   type LabeledMessage,
   type MessageStream,
+  type InboxReadOptions,
 } from "../1-services/4-inboxes";
-import type { InboxReadOptions } from "../1-services/4-inboxes";
 import { MESSAGE_LABEL_TRASH } from "../1-services/4-inboxes/messages";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
@@ -1532,9 +1532,10 @@ export class GraffitiDecentralized implements Graffiti {
         );
         return resultBase;
       } else if (validationError instanceof GraffitiErrorNotFound) {
-        await this.inboxes.invalidateReads(object.url);
         // Item was deleted before we got a chance to
         // validate it. Just label the message as trash.
+        await this.inboxes.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_TRASH);
+        await this.inboxes.invalidateReads(object.url);
         this.labelInboxMessage(
           inboxEndpoint,
           messageId,

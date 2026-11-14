@@ -20,7 +20,6 @@ export type CacheQueryValue = {
   // Whether the server has another page; needed when reusing another tab's
   // cached page. Older cache entries lack this and are refreshed on next query.
   hasMore?: boolean;
-  checkedAt?: number;
 };
 
 export async function canUseIDB(): Promise<boolean> {
@@ -45,8 +44,9 @@ export async function canUseIDB(): Promise<boolean> {
 }
 
 export class ReadInvalidated extends Error {}
-type ReadVersion = { url: string; version: string | undefined };
-const readVersionKey = (url: string) => `read-version:${encodeURIComponent(url)}`;
+// Capture the token before fetching; it must still match when saving the result.
+type ReadInvalidationCheck = { url: string; token: string | undefined };
+const readInvalidationKey = (url: string) => `read-invalidation:${encodeURIComponent(url)}`;
 
 export type Cache = {
   messages: {
@@ -58,8 +58,8 @@ export type Cache = {
   };
   messageIds: {
     get(k: string): Promise<CacheQueryValue | undefined>;
-    set(k: string, value: CacheQueryValue, read?: ReadVersion): Promise<boolean | void>;
-    readVersion(url: string): Promise<string | undefined>;
+    set(k: string, value: CacheQueryValue, invalidation?: ReadInvalidationCheck): Promise<void>;
+    readInvalidationToken(url: string): Promise<string | undefined>;
     del(k: string): Promise<void>;
     invalidateReads(url: string): Promise<void>;
   };
@@ -106,8 +106,7 @@ export async function storeQueryPage(
     cursor: string;
     hasMore: boolean;
     waitTil?: number;
-    checkedAt?: number;
-    read?: ReadVersion;
+    invalidation?: ReadInvalidationCheck;
   },
 ): Promise<CacheQueryValue> {
   // First cache the messages with their labels
@@ -128,12 +127,8 @@ export async function storeQueryPage(
     generation: crypto.randomUUID(),
     hasMore: page.hasMore,
     waitTil: page.waitTil,
-    checkedAt: page.checkedAt,
   };
-  // An earlier request must not refill the getter cache after a known deletion.
-  if (await cache.messageIds.set(messageIdsCacheKey, query, page.read) === false) {
-    throw new ReadInvalidated();
-  }
+  await cache.messageIds.set(messageIdsCacheKey, query, page.invalidation);
   return query;
 }
 
@@ -242,22 +237,22 @@ export async function createCache(): Promise<Cache> {
             return undefined;
           }
         },
-        set: async (k, v, read) => {
+        set: async (k, v, invalidation) => {
           const tx = db.transaction("q", "readwrite");
-          if (read && await tx.store.get(readVersionKey(read.url)) !== read.version) {
+          if (invalidation && await tx.store.get(readInvalidationKey(invalidation.url)) !== invalidation.token) {
             await tx.done;
-            return false;
+            throw new ReadInvalidated();
           }
           await tx.store.put(v, k);
           await tx.done;
         },
-        readVersion: (url) => db.get("q", readVersionKey(url)),
+        readInvalidationToken: (url) => db.get("q", readInvalidationKey(url)),
         del: (k) => db.delete("q", k),
         invalidateReads: async (url) => {
           const prefix = readCachePrefix(url);
           const tx = db.transaction("q", "readwrite");
           await tx.store.delete(IDBKeyRange.bound(prefix, prefix + "\uffff"));
-          await tx.store.put(crypto.randomUUID(), readVersionKey(url));
+          await tx.store.put(crypto.randomUUID(), readInvalidationKey(url));
           await tx.done;
         },
       },
@@ -266,7 +261,7 @@ export async function createCache(): Promise<Cache> {
 
   const m = new Map<string, LabeledMessageBase | null>();
   const q = new Map<string, CacheQueryValue>();
-  const readVersions = new Map<string, string>();
+  const readInvalidationTokens = new Map<string, string>();
 
   return {
     messages: {
@@ -280,16 +275,18 @@ export async function createCache(): Promise<Cache> {
     },
     messageIds: {
       get: async (k) => q.get(k),
-      set: async (k, v, read) => {
-        if (read && readVersions.get(read.url) !== read.version) return false;
+      set: async (k, v, invalidation) => {
+        if (invalidation && readInvalidationTokens.get(invalidation.url) !== invalidation.token) {
+          throw new ReadInvalidated();
+        }
         q.set(k, v);
       },
-      readVersion: async (url) => readVersions.get(url),
+      readInvalidationToken: async (url) => readInvalidationTokens.get(url),
       del: async (k) => void q.delete(k),
       invalidateReads: async (url) => {
         const prefix = readCachePrefix(url);
         for (const key of q.keys()) if (key.startsWith(prefix)) q.delete(key);
-        readVersions.set(url, crypto.randomUUID());
+        readInvalidationTokens.set(url, crypto.randomUUID());
       },
     },
   };

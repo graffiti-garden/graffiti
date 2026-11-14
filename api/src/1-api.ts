@@ -146,8 +146,9 @@ export abstract class Graffiti {
    * {@link GraffitiObjectBase.channels | `channels`} properties are
    * not revealed, similar to a BCC email.
    *
-   * Previously obtained immutable objects may be reused until a deletion is
-   * observed. Pass `{ refresh: true }` to check for changes in availability.
+   * Previously retrieved objects may be returned from a cache. An object's contents
+   * are immutable, but it is possible that the object may have been deleted. If it is necessary to
+   * ensure that the object has not been deleted, pass `{ refresh: true }` in the `options` parameter.
    *
    * @returns Returns the retrieved object.
    *
@@ -209,11 +210,6 @@ export abstract class Graffiti {
    * in at least one of the given {@link GraffitiObjectBase.channels | `channels`}
    * and match the given [JSON Schema](https://json-schema.org).
    *
-   * Discovery refreshes by default. With `{ refresh: false }`, implementations
-   * may reuse a completed saved query, including an empty result. Missing or
-   * incomplete queries are still fetched. The returned cursor can be continued
-   * normally to check for changes since the saved result.
-   *
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
    * The {@link GraffitiObjectStream} ends by returning a
@@ -232,6 +228,12 @@ export abstract class Graffiti {
    *
    * Since different implementations may fetch data from multiple sources there is
    * no guarentee on the order that objects are returned in.
+   *
+   * Discovery refreshes by default. With `{ refresh: false }`, implementations
+   * may reuse a previously cached query. If a previous query has not been made
+   * or was incomplete, a full query will be made even if `{ refresh: false }`.
+   * The returned cursor can be continued normally to check for changes since
+   * the saved result.
    *
    * @throws {@link GraffitiErrorInvalidSchema} if an invalid schema is provided.
    * Discovery is lazy and will not throw until the iterator is consumed.
