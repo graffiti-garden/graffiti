@@ -389,6 +389,51 @@ export async function labelMessage(
     .run();
 }
 
+export async function setMessagePins(
+  context: Context<{ Bindings: Bindings }>,
+  inboxId: string,
+  messageIds: string[],
+  accountId: number,
+  pinned: boolean,
+) {
+  const info = await getInboxInfo(context, inboxId);
+  if (!info || !(info.accountId === accountId || info.accountId === 0)) {
+    throw new HTTPException(403, { message: "Cannot pin messages in someone else's inbox" });
+  }
+  const ids = [...new Set(messageIds)];
+  // JSON keeps a batch within D1's bound-parameter limit.
+  const encodedIds = JSON.stringify(ids);
+  if (!pinned) {
+    // Removing one's own pin is idempotent, even after an entry disappears.
+    await context.env.DB.prepare(`
+      DELETE FROM inbox_message_pins
+      WHERE account_id = ? AND message_seq IN (
+        SELECT message_seq FROM inbox_messages
+        WHERE inbox_seq = ? AND message_id IN (SELECT value FROM json_each(?))
+      )
+    `).bind(accountId, info.inboxSeq, encodedIds).run();
+    return;
+  }
+
+  const matching = `SELECT message_seq FROM inbox_messages
+    WHERE inbox_seq = ? AND message_id IN (SELECT value FROM json_each(?))`;
+  // Validate and insert in one transaction. A batch with any missing ID pins
+  // nothing; retrying a successful batch leaves the existing pins unchanged.
+  const [count] = await context.env.DB.batch<{ count: number }>([
+    context.env.DB.prepare(`SELECT COUNT(*) AS count FROM (${matching})`)
+      .bind(info.inboxSeq, encodedIds),
+    context.env.DB.prepare(`
+      INSERT INTO inbox_message_pins (message_seq, account_id)
+      SELECT message_seq, ? FROM (${matching})
+      WHERE (SELECT COUNT(*) FROM (${matching})) = ?
+      ON CONFLICT (message_seq, account_id) DO NOTHING
+    `).bind(accountId, info.inboxSeq, encodedIds, info.inboxSeq, encodedIds, ids.length),
+  ]);
+  if (count.results[0]?.count !== ids.length) {
+    throw new HTTPException(404, { message: "Message not found" });
+  }
+}
+
 export async function exportMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
