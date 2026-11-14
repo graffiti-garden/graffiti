@@ -80,6 +80,7 @@ import {
   custom,
   string,
   boolean,
+  looseObject,
   strictObject,
   array,
   int,
@@ -996,6 +997,7 @@ export class GraffitiDecentralized implements Graffiti {
       cursor: JSON.stringify({
         channels,
         cursors,
+        schema,
       } satisfies infer_<typeof CursorSchema>),
     };
   }
@@ -1013,17 +1015,19 @@ export class GraffitiDecentralized implements Graffiti {
     // Extract the channels from the cursor
     let channels: string[];
     let cursors: { [endpoint: string]: string };
+    let schema: JSONSchema;
     try {
       const json = JSON.parse(cursor);
       const parsed = CursorSchema.parse(json);
       channels = parsed.channels;
       cursors = parsed.cursors;
+      schema = parsed.schema;
     } catch (error) {
       return (async function* () {
         throw new GraffitiErrorCursorExpired("Invalid cursor");
       })();
     }
-    return this.discoverMeta<{}>(channels, {}, cursors, session, refresh);
+    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh);
   };
 
   protected tryLogoutIfUnauthorized(
@@ -1585,6 +1589,7 @@ const MEDIA_OBJECT_SCHEMA = {
 const CursorSchema = strictObject({
   cursors: record(url(), string()),
   channels: array(string()),
+  schema: union([looseObject({}), boolean()]),
 });
 
 interface SingleEndpointQueryResult<Schema extends JSONSchema> {
