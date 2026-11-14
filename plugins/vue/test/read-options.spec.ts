@@ -30,8 +30,9 @@ it.each(["options", "legacy"])("reacts to session changes in all read composable
   const results = scope.run(() => ({
     get: useGraffitiGet(object.url, {}, argument),
     media: useGraffitiGetMedia(mediaUrl, {}, argument),
-    // Exercise a getter around the options too.
-    discover: useGraffitiDiscover(channels, {}, () => shape === "options" ? { session } : session.value),
+    discover: useGraffitiDiscover(channels, {}, shape === "options"
+      ? { session: () => session.value }
+      : () => session.value),
   }))!;
   try {
     await Promise.all([results.get.poll(), results.discover.poll()]);

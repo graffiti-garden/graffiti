@@ -168,7 +168,6 @@ export abstract class Graffiti {
     schema: Schema,
     /**
      * Read options, including an optional authentication `session`.
-     * Passing a session directly is supported for backward compatibility.
      * If no `options.session` is provided,
      * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
      * property must be `undefined`.
@@ -245,7 +244,6 @@ export abstract class Graffiti {
     schema: Schema,
     /**
      * Read options, including an optional authentication `session`.
-     * Passing a session directly is supported for backward compatibility.
      * If no `options.session` is provided,
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
@@ -274,7 +272,7 @@ export abstract class Graffiti {
    */
   abstract continueDiscover<Schema extends JSONSchema>(
     cursor: string,
-    /** Read options; a legacy session argument is also accepted. */
+    /** Read options, including an optional authentication `session`. */
     options?: GraffitiReadOptions | GraffitiSession | null,
   ): GraffitiObjectStream<Schema>;
 
@@ -352,7 +350,6 @@ export abstract class Graffiti {
     accept: GraffitiMediaAccept,
     /**
      * Read options, including an optional authentication `session`.
-     * Passing a session directly is supported for backward compatibility.
      */
     options?: GraffitiReadOptions | GraffitiSession | null,
   ): Promise<GraffitiMedia>;

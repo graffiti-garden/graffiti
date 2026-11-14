@@ -10,9 +10,8 @@ import type { JSONSchema } from "json-schema-to-ts";
 import type Ajv from "ajv";
 
 /**
- * Accept legacy positional sessions at read API boundaries. A top-level `actor`
- * identifies a session; new options put it inside `session` instead.
- * The generic also supports wrappers with reactive or additional options.
+ * Convert legacy positional sessions into read options.
+ * I.e. session -> { session }
  */
 export function normalizeGraffitiReadOptions<
   Options extends { session?: unknown } = GraffitiReadOptions,

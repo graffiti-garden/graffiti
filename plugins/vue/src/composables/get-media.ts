@@ -62,10 +62,9 @@ function trimCache(cache: Map<string, CacheEntry>) {
  * Its corresponding renderless component is {@link GraffitiGetMedia}.
  *
  * The arguments of this composable are the same as Graffiti.getMedia,
- * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * with the first two arguments and each option, including the optional session,
+ * also accepting [Refs](https://vuejs.org/api/reactivity-core.html#ref)
  * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
- * `options.session` may also be a ref or getter.
- * Passing a session directly remains supported for backward compatibility.
  * As they change the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
@@ -84,9 +83,9 @@ function trimCache(cache: Map<string, CacheEntry>) {
 export function useGraffitiGetMedia(
   url: MaybeRefOrGetter<string>,
   accept: MaybeRefOrGetter<GraffitiMediaAccept>,
-  options?: MaybeRefOrGetter<
-    GraffitiVueReadOptions | GraffitiSession | undefined | null
-  >,
+  options?:
+    | GraffitiVueReadOptions
+    | MaybeRefOrGetter<GraffitiSession | null | undefined>,
 ): {
   media: Ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>;
   error: Ref<Error | null>;

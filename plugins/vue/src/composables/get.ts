@@ -19,10 +19,9 @@ import { useGraffitiSynchronize } from "../globals";
  * Its corresponding renderless component is {@link GraffitiGet}.
  *
  * The arguments of this composable are the same as Graffiti.get,
- * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * with the first two arguments and each option, including the optional session,
+ * also accepting [Refs](https://vuejs.org/api/reactivity-core.html#ref)
  * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
- * `options.session` may also be a ref or getter.
- * Passing a session directly remains supported for backward compatibility.
  * As they change the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
@@ -39,9 +38,9 @@ import { useGraffitiSynchronize } from "../globals";
 export function useGraffitiGet<Schema extends JSONSchema>(
   url: MaybeRefOrGetter<GraffitiObjectUrl | string>,
   schema: MaybeRefOrGetter<Schema>,
-  options?: MaybeRefOrGetter<
-    GraffitiVueReadOptions | GraffitiSession | undefined | null
-  >,
+  options?:
+    | GraffitiVueReadOptions
+    | MaybeRefOrGetter<GraffitiSession | null | undefined>,
 ): {
   object: Ref<GraffitiObject<Schema> | null | undefined>;
   error: Ref<Error | null>;

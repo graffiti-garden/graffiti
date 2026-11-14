@@ -23,11 +23,10 @@ const BATCH_PERIOD_MS = 50;
  * Its corresponding renderless component is {@link GraffitiDiscover}.
  *
  * The arguments of this composable are largely the same as Graffiti.discover,
- * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * with the first two arguments and each option, including the optional session,
+ * also accepting [Refs](https://vuejs.org/api/reactivity-core.html#ref)
  * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
  * Set `options.autopoll` to `true` to automatically poll for new objects.
- * Both `options.session` and `options.autopoll` may be refs or getters.
- * Legacy session and fourth-argument autopoll values are still accepted.
  * As the arguments change, the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
@@ -46,9 +45,9 @@ const BATCH_PERIOD_MS = 50;
 export function useGraffitiDiscover<Schema extends JSONSchema>(
   channels: MaybeRefOrGetter<string[]>,
   schema: MaybeRefOrGetter<Schema>,
-  options?: MaybeRefOrGetter<
-    GraffitiVueDiscoverOptions | GraffitiSession | undefined | null
-  >,
+  options?:
+    | GraffitiVueDiscoverOptions
+    | MaybeRefOrGetter<GraffitiSession | null | undefined>,
   /**
    * @deprecated Pass `{ session, autopoll }` as the third argument instead.
    */

@@ -10,8 +10,8 @@
 ---
 
 Accept `{ session }` options in `get`, `getMedia`, `discover`, `continueDiscover`,
-and synchronization helpers. Vue read composables accept reactive options, with
-`autopoll` moved into the discovery options. Legacy positional sessions (identified
+and synchronization helpers. Vue read composables accept options with reactive fields,
+with `autopoll` moved into the discovery options. Legacy positional sessions (identified
 by a top-level `actor`) and the fourth Vue autopoll argument remain supported.
 
 Update implementations and deployed RPC/data-guard hosts before switching callers
