@@ -188,6 +188,61 @@ export function storageBucketTests(
       afterEach(() => vi.unstubAllGlobals());
 
       test.each([
+        { count: 1, phase: "headers" }, { count: 1, phase: "body" },
+        { count: 2, phase: "headers" }, { count: 2, phase: "body" },
+      ])("bounds $count validation reads stalled at $phase", async ({ count, phase }) => {
+        const controller = new AbortController();
+        const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+        const failure = new DOMException("Read timed out", "TimeoutError");
+        let body: ReadableStream<Uint8Array> | undefined;
+        const fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
+          const signal = init?.signal;
+          expect(signal).toBe(controller.signal);
+          if (phase === "headers") return new Promise((_resolve, reject) => {
+            signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+          });
+          body = new ReadableStream({ start(stream) {
+            signal?.addEventListener("abort", () => stream.error(signal.reason), { once: true });
+          } });
+          return new Response(body);
+        });
+        vi.stubGlobal("fetch", fetch);
+        try {
+          const buckets = new StorageBuckets();
+          const reads = Promise.allSettled(Array.from({ length: count }, (_, i) => buckets.get(storageBucketEndpoint, String(i), 32 * 1024)));
+          await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+          controller.abort(failure);
+          expect(await reads).toEqual(Array.from({ length: count }, () => ({ status: "rejected", reason: failure })));
+          expect(timeout).toHaveBeenCalledExactlyOnceWith(30_000);
+          if (body) expect(body.locked).toBe(false);
+        } finally { timeout.mockRestore(); }
+      });
+
+      test("bounds a decoded batch body before parsing it", async () => {
+        const cancel = vi.fn();
+        const body = new ReadableStream<Uint8Array>({
+          pull(stream) { stream.enqueue(new Uint8Array(64 * 1024)); }, cancel,
+        }, { highWaterMark: 0 });
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(body, { headers: { "Content-Length": "1", "Content-Encoding": "gzip" } })));
+        const buckets = new StorageBuckets();
+        const results = await Promise.allSettled(["a", "b"].map((key) => buckets.get(storageBucketEndpoint, key, 16)));
+        for (const result of results) expect(result).toMatchObject({ status: "rejected", reason: { message: "Value exceeds maximum byte limit" } });
+        expect(cancel).toHaveBeenCalledOnce();
+        expect(body.locked).toBe(false);
+      });
+
+      test("preserves the timeout policy for large and explicitly cached media reads", async () => {
+        const timeout = vi.spyOn(AbortSignal, "timeout");
+        vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array([1]))));
+        try {
+          const buckets = new StorageBuckets();
+          await buckets.get(storageBucketEndpoint, "large", 1024 * 1024);
+          await buckets.get(storageBucketEndpoint, "media", 32 * 1024, "default");
+          expect(timeout).not.toHaveBeenCalled();
+        } finally { timeout.mockRestore(); }
+      });
+
+      test.each([
         { wireLength: 44, encoding: "gzip" },
         { wireLength: 84, encoding: "gzip" },
         { wireLength: 44, encoding: undefined },

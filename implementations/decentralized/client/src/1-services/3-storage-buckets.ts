@@ -10,6 +10,7 @@ import { GraffitiErrorNotFound, GraffitiErrorTooLarge } from "@graffiti-garden/a
 // All batch-capable bucket servers accept these transport limits.
 const BATCH_KEYS = 32; // total number of keys in a batch request
 const BATCH_TOTAL_VALUE_BYTES = 1024 * 1024; // total response limit
+const VALIDATION_READ_TIMEOUT_MS = 30_000;
 
 // Keep this at 0: Chromium can delay positive timers (even 2 ms) by ~1 s in
 // hidden cross-origin guard iframes. Zero uses its immediate timer queue,
@@ -137,9 +138,11 @@ export class StorageBuckets {
           keys: requests.map(({ key }) => key),
           maxValueBytes: maxBytes,
         }).slice(),
+        signal: AbortSignal.timeout(VALIDATION_READ_TIMEOUT_MS),
       });
       if (response.status === 404) {
         // An older bucket server has no /values route but still serves GETs.
+        void response.body?.cancel().catch(() => {});
         this.unsupportedBatchEndpoints.add(endpoint);
         await Promise.all(requests.map(async ({ key, resolve, reject }) => {
           try {
@@ -150,8 +153,10 @@ export class StorageBuckets {
         }));
         return;
       }
-      if (!response.ok) throw new Error(await response.text());
-      const decoded = dagCborDecode(await response.arrayBuffer());
+      if (!response.ok) throw new Error(new TextDecoder().decode(await this.readBytes(response, 32 * 1024)));
+      // Allow 32 KiB for CBOR framing and ETags in addition to the requested
+      // values. Bound decoded bytes even if a server ignores maxValueBytes.
+      const decoded = dagCborDecode(await this.readBytes(response, requests.length * maxBytes + 32 * 1024));
       if (
         !decoded || typeof decoded !== "object" ||
         !("results" in decoded) || !Array.isArray(decoded.results) ||
@@ -187,8 +192,18 @@ export class StorageBuckets {
     { maxBytes, cache }: StorageReadOptions = {},
   ): Promise<Uint8Array> {
     const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}`;
-    const response = await fetchWithErrorHandling(url, { cache: cache ?? "no-cache" });
+    const response = await fetchWithErrorHandling(url, {
+      cache: cache ?? "no-cache",
+      // Small protocol validation reads have a deadline covering headers and
+      // body. Explicit media/cache reads and large downloads retain their policy.
+      signal: cache === undefined && maxBytes !== undefined &&
+        Number.isSafeInteger(maxBytes) && maxBytes > 0 && batchWidth(maxBytes) >= 2
+        ? AbortSignal.timeout(VALIDATION_READ_TIMEOUT_MS) : undefined,
+    });
+    return this.readBytes(response, maxBytes);
+  }
 
+  private async readBytes(response: Response, maxBytes?: number): Promise<Uint8Array> {
     // Stream the body so that we can enforce maxBytes and halt the stream
     // if a malicious server gives us more than we are asking for.
     // The stream is only internal: callers just get one byte array
