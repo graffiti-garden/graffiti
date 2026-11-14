@@ -75,8 +75,28 @@ export const graffitiDiscoverTests = (
       const value = await nextStreamValue<{}>(matchingIterator);
       expect(value.url).toEqual(posted.url);
 
+      // Finish both queries to obtain cursors for the original boolean filters.
+      const matchingEnd = await matchingIterator.next();
+      assert(matchingEnd.done);
       const nonmatchingIterator = graffiti.discover(object.channels, false);
-      await expect(nonmatchingIterator.next()).resolves.toHaveProperty(
+      const nonmatchingEnd = await nonmatchingIterator.next();
+      assert(nonmatchingEnd.done);
+
+      // Continuations must apply the original filters to new objects.
+      const posted2 = await graffiti.post<{}>(object, session);
+      const matchingContinuation = graffiti.continueDiscover<{}>(
+        matchingEnd.value.cursor,
+      );
+      const value2 = await nextStreamValue<{}>(matchingContinuation);
+      expect(value2.url).toEqual(posted2.url);
+      await expect(matchingContinuation.next()).resolves.toHaveProperty(
+        "done",
+        true,
+      );
+      const nonmatchingContinuation = graffiti.continueDiscover<{}>(
+        nonmatchingEnd.value.cursor,
+      );
+      await expect(nonmatchingContinuation.next()).resolves.toHaveProperty(
         "done",
         true,
       );
@@ -155,7 +175,19 @@ export const graffitiDiscoverTests = (
       expect(value.url).toEqual(posted1.url);
       expect(value.url).not.toEqual(posted2.url);
       expect(value.value).toEqual(object1.value);
-      await expect(iterator.next()).resolves.toHaveProperty("done", true);
+      const end = await iterator.next();
+      assert(end.done);
+
+      // Add both a match and a nonmatch after obtaining the filtered cursor.
+      const posted3 = await graffiti.post<{}>(object1, session1);
+      await graffiti.post<{}>(object2, session2);
+
+      // The cursor must retain the filter:
+      // only the matching new post should be returned
+      const continuation = graffiti.continueDiscover<{}>(end.value.cursor);
+      const continuedValue = await nextStreamValue<{}>(continuation);
+      expect(continuedValue.url).toEqual(posted3.url);
+      await expect(continuation.next()).resolves.toHaveProperty("done", true);
     });
 
     it("discover schema allowed, as and not as owner", async () => {
