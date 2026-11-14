@@ -91,8 +91,10 @@ Apply migration `0009_inbox_pins.sql` before deploying these routes.
 
 Query/export entries are `{ id, m }`; labels and individual message lookup are
 removed. See the [inbox protocol](../INBOX-PROTOCOL.md) for client policy, verified
-deletion, and the coordinated client/server migration. Expiration is a separate
-step; adding a pin does not itself enable garbage collection.
+deletion, and the coordinated client/server migration. Apply migration
+`0011_inbox_retention.sql` before deploying retention: new unpinned shared entries
+expire after 30 days, and an hourly scheduled handler removes up to 1,000 expired
+rows. Personal entries and unaudited legacy rows remain exempt.
 
 ## OAuth TODOs
 

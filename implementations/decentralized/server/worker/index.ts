@@ -1,3 +1,4 @@
+import { collectExpiredMessages } from "./api/inboxes/retention";
 import { Hono, type Context } from "hono";
 import { compress } from "hono/compress";
 import { getOrigin, type Bindings } from "./env";
@@ -100,6 +101,9 @@ function getHostRouter(baseHost: string): Hono<{ Bindings: Bindings }> {
 }
 
 export default {
+  async scheduled(_event: ScheduledController, env: Bindings) {
+    await collectExpiredMessages(env.DB);
+  },
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
     return getHostRouter(env.BASE_HOST).fetch(request, env, ctx);
   },

@@ -78,6 +78,27 @@ does not maintain the old label API. New clients use fresh cache databases and
 expire old discovery cursors. Existing original announcement bytes remain readable;
 server labels are not used as migration evidence.
 
-Shared-entry expiration, cursor retention, and legacy-data auditing are separate
-follow-up changes. Personal inbox expiration stays disabled. Inbox expiration
-means “no longer indexed”; it never proves the stored object was deleted.
+Apply `0011_inbox_retention.sql` before deploying retention. New unpinned shared
+entries expire 30 days after arrival. Personal expiration stays disabled, and
+legacy rows with NULL arrival times remain exempt until audited. Expiration means
+“no longer indexed”; it never proves the stored object was deleted.
+
+Cursor validity uses the same 30-day interval. A continuation retains the previous
+deadline through intermediate pages and renews only after catching up. Otherwise,
+a very slow reader could keep extending a cursor while unread entries expired.
+The anchor is captured before the query, so messages arriving during the query
+are not older than the renewed cursor. A fresh paged scan has ordinary concurrent
+change semantics, not a frozen snapshot. Old server cursor formats expire.
+
+Queries hide expired entries immediately; hourly cleanup removes at most 1,000
+rows per run. Any pin prevents expiry. Removing the last pin after the original
+arrival deadline makes the entry eligible immediately. Resending an expired entry
+creates a new ID/sequence; resending a live duplicate does not renew its deadline.
+A persistent sequence counter prevents garbage collection from reusing positions.
+Message insertion and tag indexing commit together so queries cannot pass an
+announcement before it becomes searchable.
+
+Do not assign legacy arrival times based on old labels. Audit the original
+announcements and seed sponsorship for verified live entries first. Leave unresolved
+rows exempt until reviewed; never interpret missing storage as proof that an
+unverified object was deleted.

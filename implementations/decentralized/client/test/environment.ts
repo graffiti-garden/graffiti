@@ -86,6 +86,7 @@ export class DecentralizedTestEnvironment {
       "0008_session_kinds.sql",
       "0009_inbox_pins.sql",
       "0010_remove_inbox_labels.sql",
+      "0011_inbox_retention.sql",
     ]) {
       const sql = await readFile(
         join(SERVER_ROOT, "migrations", migration),
@@ -149,6 +150,11 @@ export class DecentralizedTestEnvironment {
   async database() {
     if (!this.miniflare) throw new Error("Miniflare did not start");
     return this.miniflare.getD1Database("DB");
+  }
+
+  async collectExpiredMessages() {
+    if (!this.miniflare) throw new Error("Miniflare did not start");
+    return (await this.miniflare.getWorker()).scheduled({ cron: "17 * * * *" });
   }
 
   async storedR2ObjectExists(key: string): Promise<boolean> {

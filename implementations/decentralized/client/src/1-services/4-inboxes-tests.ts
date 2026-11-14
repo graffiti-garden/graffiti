@@ -143,7 +143,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         Authorization: `Bearer ${inboxToken}`,
       };
       const encodeCursor = (createdAt: number, waitTil: number) =>
-        Buffer.from(dagCborEncode({ sinceSeq: 0, createdAt, waitTil })).toString("base64url");
+        Buffer.from(dagCborEncode({ version: 1, sinceSeq: 0, createdAt, waitTil })).toString("base64url");
       for (const [body, status] of [
         [{ cursor: "invalid-cursor" }, 410],
         [{ cursor: encodeCursor(0, 0) }, 410],
