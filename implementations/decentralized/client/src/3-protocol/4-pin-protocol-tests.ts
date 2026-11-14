@@ -86,6 +86,34 @@ export function pinProtocolTests() {
       expect((await collectDiscovery(graffiti.continueDiscover(first.cursor))).entries).toEqual([{ object: original.message.m.o }]);
     });
 
+    test("keeps a new key verified by another discovery while a deletion check waits", async () => {
+      const graffiti = new ValidationGraffiti();
+      const original = await graffiti.announcement("original");
+      serveMessages(graffiti, [original.message]);
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockResolvedValue(original.bytes);
+      const initial = await collectDiscovery(graffiti.discover([channel], {}));
+      const rotated: InboxMessage<{}> = { ...original.message, id: "rotated", m: { ...original.message.m, m: dagCborEncode({ k: "rotated" }) } };
+
+      // One discovery starts checking the old key. A different query learns
+      // and verifies the replacement while that storage response is pending.
+      let finishOldRead!: () => void;
+      read.mockImplementation(async (_endpoint, key) => key === "rotated"
+        ? original.bytes
+        : new Promise<Uint8Array>((_resolve, reject) => {
+            finishOldRead = () => reject(new GraffitiErrorNotFound("Old key gone"));
+          }));
+      vi.mocked(fetch).mockResolvedValueOnce(inboxPage([hint(original.message)]));
+      const checking = collectDiscovery(graffiti.continueDiscover(initial.cursor));
+      await vi.waitFor(() => expect(finishOldRead).toBeDefined());
+      vi.mocked(fetch).mockResolvedValueOnce(inboxPage([rotated]));
+      expect((await collectDiscovery(graffiti.discover<{}>([channel], { required: ["value"] }))).entries)
+        .toEqual([{ object: original.message.m.o }]);
+
+      // The old 404 is authoritative for its key, but cannot remove the live URL.
+      finishOldRead();
+      expect((await checking).entries).toEqual([]);
+    });
+
     test("stops replaying an unknown missing announcement after normal DID cache expiry", async () => {
       const graffiti = new ValidationGraffiti();
       const original = await graffiti.announcement("original");
