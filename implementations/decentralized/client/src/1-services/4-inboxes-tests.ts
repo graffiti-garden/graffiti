@@ -495,6 +495,31 @@ export function inboxUnitTests() {
     });
 
     describe("inbox query cache", () => {
+      test("reuses completed queries, including empty results, unless refreshed", async () => {
+        const fetch = vi.fn(async () => queryPage([message], "cursor"));
+        vi.stubGlobal("fetch", fetch);
+        const inboxes = new Inboxes();
+        const read = { url: "graffiti:example:object", refresh: false };
+        async function collect(options = read, token = "owner") {
+          const results = [];
+          for await (const result of inboxes.query(inboxUrl, [], {}, token, options)) results.push(result);
+          return results;
+        }
+        expect(await collect()).toEqual([message]);
+        expect(await collect()).toEqual([message]);
+        expect(fetch).toHaveBeenCalledTimes(1);
+        await collect({ ...read, refresh: true });
+        expect(fetch).toHaveBeenCalledTimes(2);
+        await collect(read, "different-token");
+        expect(fetch).toHaveBeenCalledTimes(3);
+
+        fetch.mockImplementation(async () => queryPage([], "empty"));
+        const missing = { ...read, url: "graffiti:example:missing" };
+        expect(await collect(missing)).toEqual([]);
+        expect(await collect(missing)).toEqual([]);
+        expect(fetch).toHaveBeenCalledTimes(4);
+      });
+
       test("fetches the next page while the current message is yielded", async () => {
         const inboxes = new TestInboxes();
         await inboxes.prepareCache();

@@ -341,7 +341,9 @@ export const graffitiCRUDTests = (
         // Wait for "labels" to propogate
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        await expect(graffiti2.get(posted, {}, { session: session1 })).rejects.toThrow(
+        // Since these are different graffiti instances, a refresh may
+        // be needed to see the deletion.
+        await expect(graffiti2.get(posted, {}, { session: session1, refresh: true })).rejects.toThrow(
           GraffitiErrorNotFound,
         );
       });

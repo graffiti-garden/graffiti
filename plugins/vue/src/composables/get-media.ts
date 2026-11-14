@@ -9,51 +9,6 @@ import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
 import { useGraffitiSynchronize } from "../globals";
 
-// Cache media in-memory for up to 5 minutes
-// Polling clears this. This may show deleted media but saves
-// a lot on performance (e.g. same profile picture shown in many places)
-const CACHE_LIFETIME_MS = 5 * 60 * 1000; // 5 minutes
-const CACHE_MAX_BYTES = 128 * 1024 * 1024; // 128mb per session
-
-type CacheEntry = {
-  promise: Promise<GraffitiMedia>;
-  expiresAt?: number;
-  bytes: number;
-};
-
-// Keep sessions separate so cached private media cannot be reused by another
-// session. Weak keys also let the browser discard a logged-out session's cache.
-const sessionCaches = new WeakMap<GraffitiSession, Map<string, CacheEntry>>();
-const anonymousCache = new Map<string, CacheEntry>();
-
-function cacheFor(session: GraffitiSession | undefined | null) {
-  if (!session) return anonymousCache;
-  let cache = sessionCaches.get(session);
-  if (!cache) {
-    cache = new Map();
-    sessionCaches.set(session, cache);
-  }
-  return cache;
-}
-
-function trimCache(cache: Map<string, CacheEntry>) {
-  let bytes = 0;
-  const now = Date.now();
-  for (const [key, entry] of cache) {
-    if (entry.expiresAt !== undefined && entry.expiresAt <= now) {
-      cache.delete(key);
-    } else {
-      bytes += entry.bytes;
-    }
-  }
-  for (const [key, entry] of cache) {
-    if (bytes <= CACHE_MAX_BYTES) break;
-    if (entry.expiresAt === undefined) continue;
-    cache.delete(key);
-    bytes -= entry.bytes;
-  }
-}
-
 /**
  * The [Graffiti.getMedia](https://api.graffiti.garden/classes/Graffiti.html#getMedia)
  * method as a reactive [composable](https://vuejs.org/guide/reusability/composables.html)
@@ -77,8 +32,7 @@ function trimCache(cache: Map<string, CacheEntry>) {
  * - `error`: A ref containing the fetch error for failures other than not found,
  * or `null` otherwise.
  * - `poll`: A function that can be called to manually check if the media has changed.
- *   Images are cached and shared across instances for up to five minutes; polling bypasses
- *   that cache and checks Graffiti again.
+ *   Polling asks the implementation to revalidate cached media.
  */
 export function useGraffitiGetMedia(
   url: MaybeRefOrGetter<string>,
@@ -122,7 +76,7 @@ export function useGraffitiGetMedia(
     [
       toValue(url),
       toValue(accept),
-      { session: toValue(options_().session) },
+      { session: toValue(options_().session), refresh: toValue(options_().refresh) },
     ] as const;
   let handledPollCounter = pollCounter.value;
 
@@ -147,44 +101,11 @@ export function useGraffitiGetMedia(
       });
 
       try {
-        const cache = cacheFor(args[2].session);
-        const key = JSON.stringify([args[0], args[1]]);
-        let entry = cache.get(key);
-        if (
-          force ||
-          (entry?.expiresAt !== undefined && entry.expiresAt <= Date.now())
-        ) {
-          cache.delete(key);
-          entry = undefined;
-        }
-        if (entry) {
-          // Move a cache hit to the end so older images are evicted first.
-          cache.delete(key);
-          cache.set(key, entry);
-        } else {
-          entry = { promise: graffiti.getMedia(...args), bytes: 0 };
-          cache.set(key, entry);
-          const fetched = entry;
-          void fetched.promise.then(
-            (result) => {
-              if (cache.get(key) !== fetched) return;
-              if (
-                !result.data.type.startsWith("image/") ||
-                result.data.size > CACHE_MAX_BYTES
-              ) {
-                cache.delete(key);
-                return;
-              }
-              fetched.bytes = result.data.size;
-              fetched.expiresAt = Date.now() + CACHE_LIFETIME_MS;
-              trimCache(cache);
-            },
-            () => {
-              if (cache.get(key) === fetched) cache.delete(key);
-            },
-          );
-        }
-        const { data, actor, allowed } = await entry.promise;
+        const { data, actor, allowed } = await graffiti.getMedia(
+          args[0],
+          args[1],
+          { ...args[2], refresh: force ? true : args[2].refresh },
+        );
         if (!active) return;
         const dataUrl = URL.createObjectURL(data);
         media.value = {

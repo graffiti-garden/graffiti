@@ -61,12 +61,14 @@ it.each(["options", "legacy"])("reacts to autopoll without restarting discovery 
     return { cursor: "next" };
   });
   const result = scope.run(() => shape === "options"
-    ? useGraffitiDiscover([], {}, { autopoll })
+    ? useGraffitiDiscover([], {}, { autopoll, refresh: false })
     : useGraffitiDiscover([], {}, undefined, autopoll))!;
   await result.poll();
   expect(continuation).not.toHaveBeenCalled();
   autopoll.value = true;
   await vi.waitFor(() => expect(continuation).toHaveBeenCalledOnce());
-  expect(discover).toHaveBeenCalledOnce();
-  expect(continuation).toHaveBeenCalledWith(expect.any(String), { session: undefined });
+  expect(discover).toHaveBeenCalledExactlyOnceWith([], {}, {
+    session: undefined, refresh: shape === "options" ? false : undefined,
+  });
+  expect(continuation).toHaveBeenCalledWith(expect.any(String), { session: undefined, refresh: true });
 });

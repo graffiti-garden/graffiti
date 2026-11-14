@@ -33,6 +33,7 @@ import { channelAttestationTests } from "./2-primitives/3-channel-attestations-t
 import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
 import { sessionTests } from "./3-protocol/1-sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
+import { readCacheTests } from "./3-protocol/4-read-cache-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
 import {
@@ -134,6 +135,7 @@ describe("GraffitiDecentralized Tests", () => {
   });
 
   objectEncodingTests();
+  readCacheTests(() => useGraffiti(), () => sessions);
 
   test.each([3, 4])("revalidates legacy invalid label 3, but skips current invalid label 4 (label %i)", async (label) => {
     const writer = useGraffiti();

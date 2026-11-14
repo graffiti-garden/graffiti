@@ -40,8 +40,9 @@ function parseIfNoneMatch(header: string | undefined) {
 function valueHeaders(etag: string) {
   return {
     ETag: etag,
-    // Retain bytes in the browser, but ask current storage on every reuse.
-    "Cache-Control": "no-cache",
+    // Values are immutable. Clients explicitly revalidate availability when
+    // verifying objects/tombstones or performing a refresh.
+    "Cache-Control": "private, max-age=31536000, must-revalidate",
   };
 }
 

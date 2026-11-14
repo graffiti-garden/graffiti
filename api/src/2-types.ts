@@ -196,6 +196,13 @@ export interface GraffitiSession {
 export interface GraffitiReadOptions {
   /** Authenticate this read. Omit or use null to read only public data. */
   session?: GraffitiSession | null;
+  /**
+   * Refresh this read instead of reusing previously obtained results.
+   * Defaults to false for get/getMedia and true for discover/continueDiscover.
+   * With false, missing or incomplete results are still fetched. Known deletions
+   * invalidate saved results. A failed refresh is reported, not hidden by reuse.
+   */
+  refresh?: boolean;
 }
 
 /**

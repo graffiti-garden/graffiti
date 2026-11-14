@@ -253,7 +253,7 @@ export class Guard {
     const session = snapshotSession(sessionFromArgs(args, method));
     const options = method === "get" || method === "getMedia"
       ? { ...normalizeGraffitiReadOptions(args[2] as GraffitiReadOptions | GraffitiSession | undefined), session }
-      : { session };
+      : { session, refresh: true };
     if (method === "post") {
       const { object, confirm } = preparePost(args[0], source);
       return {

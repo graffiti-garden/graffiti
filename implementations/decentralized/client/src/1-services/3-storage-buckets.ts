@@ -76,8 +76,12 @@ export class StorageBuckets {
     storageBucketEndpoint: string,
     key: string,
     maxBytes?: number,
+    cache?: "default" | "no-cache",
   ): Promise<Uint8Array> {
     verifyHTTPSEndpoint(storageBucketEndpoint);
+    // Direct reads use individual GETs so the native HTTP cache owns the bytes.
+    // Verification remains fresh and can still share a batched storage request.
+    if (cache !== undefined) return this.getOne(storageBucketEndpoint, key, maxBytes, cache);
     if (
       maxBytes !== undefined &&
       Number.isSafeInteger(maxBytes) &&
@@ -182,10 +186,10 @@ export class StorageBuckets {
     storageBucketEndpoint: string,
     key: string,
     maxBytes?: number,
+    cache?: "default" | "no-cache",
   ): Promise<Uint8Array> {
     const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}`;
-
-    const response = await fetchWithErrorHandling(url);
+    const response = await fetchWithErrorHandling(url, { cache: cache ?? "no-cache" });
 
     // Stream the body so that we can enforce maxBytes and halt the stream
     // if a malicious server gives us more than we are asking for.

@@ -1,5 +1,5 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
-import { LABELED_MESSAGE_ID_KEY, type LabeledMessageBase } from "./messages";
+import { LABELED_MESSAGE_ID_KEY, MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
 
 // One record per inbox query. Messages live in the separate message cache;
 // this record tracks their IDs and where to continue fetching from the server.
@@ -43,6 +43,11 @@ export async function canUseIDB(): Promise<boolean> {
   }
 }
 
+export class ReadInvalidated extends Error {}
+// Capture the token before fetching; it must still match when saving the result.
+type ReadInvalidationCheck = { url: string; token: string | undefined };
+const readInvalidationKey = (url: string) => `read-invalidation:${encodeURIComponent(url)}`;
+
 export type Cache = {
   messages: {
     get(k: string): Promise<LabeledMessageBase | null | undefined>;
@@ -53,10 +58,14 @@ export type Cache = {
   };
   messageIds: {
     get(k: string): Promise<CacheQueryValue | undefined>;
-    set(k: string, value: CacheQueryValue): Promise<void>;
+    set(k: string, value: CacheQueryValue, invalidation?: ReadInvalidationCheck): Promise<void>;
+    readInvalidationToken(url: string): Promise<string | undefined>;
     del(k: string): Promise<void>;
+    invalidateReads(url: string): Promise<void>;
   };
 };
+
+export const readCachePrefix = (url: string) => `read:${encodeURIComponent(url)}:`;
 
 export function getMessageCacheKey(inboxUrl: string, messageId: string) {
   return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
@@ -97,6 +106,7 @@ export async function storeQueryPage(
     cursor: string;
     hasMore: boolean;
     waitTil?: number;
+    invalidation?: ReadInvalidationCheck;
   },
 ): Promise<CacheQueryValue> {
   // First cache the messages with their labels
@@ -118,7 +128,7 @@ export async function storeQueryPage(
     hasMore: page.hasMore,
     waitTil: page.waitTil,
   };
-  await cache.messageIds.set(messageIdsCacheKey, query);
+  await cache.messageIds.set(messageIdsCacheKey, query, page.invalidation);
   return query;
 }
 
@@ -126,11 +136,13 @@ export async function getMessageIdsCacheKey(
   inboxUrl: string,
   type: "query" | "export",
   body?: Uint8Array,
+  inboxToken?: string | null,
 ): Promise<string> {
   const cacheIdData = dagCborEncode({
     inboxUrl,
     type,
     body: body ?? null,
+    inboxToken: inboxToken ?? null,
   });
   return crypto.subtle
     .digest("SHA-256", new Uint8Array(cacheIdData))
@@ -139,6 +151,12 @@ export async function getMessageIdsCacheKey(
         .map((byte) => byte.toString(16).padStart(2, "0"))
         .join(""),
     );
+}
+
+// A response/validation started before deletion must not resurrect a message
+// in another saved query. Message IDs are immutable, so keep its deletion label.
+function preserveDeletion(previous: LabeledMessageBase | null | undefined, next: LabeledMessageBase | null) {
+  return previous?.l === MESSAGE_LABEL_TRASH ? previous : next;
 }
 
 async function resetCacheDB() {
@@ -193,13 +211,16 @@ export async function createCache(): Promise<Cache> {
           }
         },
         set: async (k, v) => {
-          await db.put("m", v, k);
+          const tx = db.transaction("m", "readwrite");
+          await tx.store.put(preserveDeletion(await tx.store.get(k), v), k);
+          await tx.done;
         },
         setMany: async (entries) => {
           if (entries.length === 0) return;
           const tx = db.transaction("m", "readwrite");
           await Promise.all([
-            ...entries.map(([k, v]) => tx.store.put(v, k)),
+            ...entries.map(async ([k, v]) =>
+              tx.store.put(preserveDeletion(await tx.store.get(k), v), k)),
             tx.done,
           ]);
         },
@@ -216,31 +237,57 @@ export async function createCache(): Promise<Cache> {
             return undefined;
           }
         },
-        set: async (k, v) => {
-          await db.put("q", v, k);
+        set: async (k, v, invalidation) => {
+          const tx = db.transaction("q", "readwrite");
+          if (invalidation && await tx.store.get(readInvalidationKey(invalidation.url)) !== invalidation.token) {
+            await tx.done;
+            throw new ReadInvalidated();
+          }
+          await tx.store.put(v, k);
+          await tx.done;
         },
+        readInvalidationToken: (url) => db.get("q", readInvalidationKey(url)),
         del: (k) => db.delete("q", k),
+        invalidateReads: async (url) => {
+          const prefix = readCachePrefix(url);
+          const tx = db.transaction("q", "readwrite");
+          await tx.store.delete(IDBKeyRange.bound(prefix, prefix + "\uffff"));
+          await tx.store.put(crypto.randomUUID(), readInvalidationKey(url));
+          await tx.done;
+        },
       },
     };
   }
 
   const m = new Map<string, LabeledMessageBase | null>();
   const q = new Map<string, CacheQueryValue>();
+  const readInvalidationTokens = new Map<string, string>();
 
   return {
     messages: {
       getMany: async (keys) => keys.map((key) => m.get(key)),
       get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, v),
+      set: async (k, v) => void m.set(k, preserveDeletion(m.get(k), v)),
       setMany: async (entries) => {
-        for (const [k, v] of entries) m.set(k, v);
+        for (const [k, v] of entries) m.set(k, preserveDeletion(m.get(k), v));
       },
       del: async (k) => void m.delete(k),
     },
     messageIds: {
       get: async (k) => q.get(k),
-      set: async (k, v) => void q.set(k, v),
+      set: async (k, v, invalidation) => {
+        if (invalidation && readInvalidationTokens.get(invalidation.url) !== invalidation.token) {
+          throw new ReadInvalidated();
+        }
+        q.set(k, v);
+      },
+      readInvalidationToken: async (url) => readInvalidationTokens.get(url),
       del: async (k) => void q.delete(k),
+      invalidateReads: async (url) => {
+        const prefix = readCachePrefix(url);
+        for (const key of q.keys()) if (key.startsWith(prefix)) q.delete(key);
+        readInvalidationTokens.set(url, crypto.randomUUID());
+      },
     },
   };
 }

@@ -8,6 +8,7 @@ import {
   GraffitiErrorCursorExpired,
   GraffitiErrorForbidden,
   GraffitiErrorInvalidSchema,
+  GraffitiErrorNotFound,
 } from "@graffiti-garden/api";
 import {
   randomString,
@@ -20,7 +21,7 @@ import {
 export const graffitiDiscoverTests = (
   useGraffiti: () => Pick<
     Graffiti,
-    "discover" | "post" | "delete" | "continueDiscover"
+    "discover" | "post" | "get" | "delete" | "continueDiscover"
   >,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
@@ -409,6 +410,7 @@ export const graffitiDiscoverTests = (
 
       const prepost = randomPostObject();
       const posted = await graffiti1.post<{}>(prepost, session1);
+      expect(await graffiti2.get<{}>(posted, {}, { session: session1 })).toEqual(posted);
 
       const iterator1 = graffiti1.discover(prepost.channels, {}, { session: session1 });
       const iterator2 = graffiti2.discover(prepost.channels, {}, { session: session1 });
@@ -448,6 +450,11 @@ export const graffitiDiscoverTests = (
       expect(next6.value.tombstone).toBe(true);
       expect(next6.value.object).toEqual(posted);
       await expect(iterator4.next()).resolves.toHaveProperty("done", true);
+      // A deletion was observed by the discovery stream,
+      // so a subsequent get should fail, even without a refresh
+      await expect(graffiti2.get<{}>(posted, {}, { session: session1 })).rejects.toThrow(
+        GraffitiErrorNotFound,
+      );
     });
 
     it("concurrent discovery streams progress independently", async () => {
@@ -596,6 +603,97 @@ export const graffitiDiscoverTests = (
         value: { tombstone: true, object: { url: object.url } },
       });
       await continuation.return({ cursor: "" });
+    });
+
+    it("discovery invalidates a read after another device deletes it", async () => {
+      const writer = useGraffiti();
+      const reader = useGraffiti();
+      const posted = await writer.post<{}>(randomPostObject(), session);
+      expect(await reader.get<{}>(posted, {}, { session })).toEqual(posted);
+
+      await writer.delete(posted, session);
+      for await (const result of reader.discover<{}>(posted.channels, {}, { session })) {
+        assert(!result.error);
+      }
+      // Get should fail even without a refresh, since the discovery stream observed the deletion
+      await expect(reader.get<{}>(posted, {}, { session })).rejects.toThrow(
+        GraffitiErrorNotFound,
+      );
+    });
+
+    it("discovers without refresh and returns cursors that can be refreshed", async () => {
+      const writer = useGraffiti();
+      const reader = useGraffiti();
+      const first = await writer.post<{}>(randomPostObject(), session);
+
+      // A cache miss should still fetch results even without a refresh.
+      const initial = reader.discover<{}>(first.channels, {}, { session, refresh: false });
+      expect(await nextStreamValue<{}>(initial)).toEqual(first);
+      await expect(initial.next()).resolves.toHaveProperty("done", true);
+
+      const repeated = reader.discover<{}>(first.channels, {}, { session, refresh: false });
+      expect(await nextStreamValue<{}>(repeated)).toEqual(first);
+      const end = await repeated.next();
+      assert(end.done);
+
+      const unchanged = reader.continueDiscover<{}>(end.value.cursor, { session, refresh: false });
+      const unchangedEnd = await unchanged.next();
+      assert(unchangedEnd.done);
+
+      const second = await writer.post<{}>(
+        { ...randomPostObject(), channels: first.channels },
+        session,
+      );
+      await writer.delete(first, session);
+
+      const added: string[] = [];
+      const deleted: string[] = [];
+      // A cursor obtained without refreshing should still find subsequent
+      // additions and deletions when continued with the default refresh.
+      for await (const result of reader.continueDiscover<{}>(unchangedEnd.value.cursor, { session })) {
+        assert(!result.error);
+        (result.tombstone ? deleted : added).push(result.object.url);
+      }
+      expect(added).toEqual([second.url]);
+      expect(deleted).toEqual([first.url]);
+    });
+
+    it("discovery without refresh respects local deletions and deletions learned by another query", async () => {
+      const writer = useGraffiti();
+      const reader = useGraffiti();
+      const posted = await writer.post<{}>(randomPostObject(), session);
+      for (const instance of [writer, reader]) {
+        const initial = instance.discover<{}>(posted.channels, {}, { session });
+        expect(await nextStreamValue<{}>(initial)).toEqual(posted);
+        await expect(initial.next()).resolves.toHaveProperty("done", true);
+      }
+
+      const otherQuery = reader.discover<{}>(
+        posted.channels,
+        { properties: { actor: { const: session.actor } } },
+        { session },
+      );
+      expect(await nextStreamValue<{}>(otherQuery)).toEqual(posted);
+      const end = await otherQuery.next();
+      assert(end.done);
+
+      await writer.delete(posted, session);
+      const continuation = reader.continueDiscover<{}>(end.value.cursor, { session });
+      expect(await continuation.next()).toMatchObject({
+        done: false,
+        value: { tombstone: true, object: { url: posted.url } },
+      });
+      await expect(continuation.next()).resolves.toHaveProperty("done", true);
+
+      // Both the local deletion and the deletion observed by another query
+      // should be reflected without refreshing the original query.
+      for (const instance of [writer, reader]) {
+        const saved = instance.discover<{}>(posted.channels, {}, { session, refresh: false });
+        for await (const result of saved) {
+          assert(!result.error);
+          expect(result.tombstone).toBe(true);
+        }
+      }
     });
   });
 };

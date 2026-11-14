@@ -4,6 +4,8 @@ import type { MaybeRefOrGetter } from "vue";
 /** Reactive options for reading objects and media. */
 export interface GraffitiVueReadOptions {
   session?: MaybeRefOrGetter<GraffitiSession | null | undefined>;
+  /** Refresh the initial read; explicit polls always refresh. */
+  refresh?: MaybeRefOrGetter<boolean | undefined>;
 }
 
 /** Reactive options for discovering objects. */

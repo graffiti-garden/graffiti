@@ -38,6 +38,8 @@ type MessageBase = infer_<typeof MessageBaseSchema>;
 export const LABELED_MESSAGE_ID_KEY = "id";
 export const LABELED_MESSAGE_MESSAGE_KEY = "m";
 export const LABELED_MESSAGE_LABEL_KEY = "l";
+// A verified deletion is terminal for this immutable message ID.
+export const MESSAGE_LABEL_TRASH = 2;
 export const LabeledMessageBaseSchema = strictObject({
   [LABELED_MESSAGE_ID_KEY]: string(),
   [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
