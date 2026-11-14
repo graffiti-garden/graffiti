@@ -1397,7 +1397,7 @@ export class GraffitiDecentralized implements Graffiti {
         for (const endpoint of origins) scan.retry.add(endpoint);
         continue;
       }
-      const verified = await this.verifiedMessages.list(url, scan.recipient);
+      let verified = await this.verifiedMessages.list(url, scan.recipient);
       if (!verified.length) continue;
       try {
         let endpoint: Promise<string> | undefined;
@@ -1418,6 +1418,10 @@ export class GraffitiDecentralized implements Graffiti {
           }
         }));
         if (!checks.every(Boolean)) continue;
+        // Another discovery/tab may have verified a replacement while these
+        // reads waited. A missing old key cannot erase that new location.
+        verified = await this.verifiedMessages.list(url, scan.recipient);
+        if (verified.some((entry) => !entry.missing)) continue;
         await this.inboxes.invalidateReads(url);
         const original = verified[0];
         const metadata = MessageMetadataSchema.parse(dagCborDecode(original.message.m.m));
