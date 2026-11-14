@@ -35,8 +35,7 @@ const admin = chatAdmin(
 const { objects: chatObjects, isFirstPoll } = useGraffitiDiscover(
     () => [props.channel],
     () => chatObjectSchema(props.channel),
-    () => props.session,
-    true,
+    { session: () => props.session, autopoll: true },
 );
 
 const chatNamesRaw = computed(() =>

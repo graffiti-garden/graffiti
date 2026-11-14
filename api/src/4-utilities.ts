@@ -3,10 +3,23 @@ import type {
   GraffitiObjectBase,
   GraffitiObjectUrl,
   GraffitiSession,
+  GraffitiReadOptions,
 } from "./2-types.js";
 import { GraffitiErrorInvalidSchema } from "./3-errors.js";
 import type { JSONSchema } from "json-schema-to-ts";
 import type Ajv from "ajv";
+
+/**
+ * Convert legacy positional sessions into read options.
+ * I.e. session -> { session }
+ */
+export function normalizeGraffitiReadOptions<
+  Options extends { session?: unknown } = GraffitiReadOptions,
+>(options?: Options | GraffitiSession | null): Options | GraffitiReadOptions {
+  return options && typeof options === "object" && "actor" in options
+    ? { session: options as GraffitiSession }
+    : options ?? {};
+}
 
 export function unpackObjectUrl(url: string | GraffitiObjectUrl) {
   return typeof url === "string" ? url : url.url;

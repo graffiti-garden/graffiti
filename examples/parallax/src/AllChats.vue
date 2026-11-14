@@ -32,7 +32,7 @@ const { objects: chatsAll, isFirstPoll } = useGraffitiDiscover(
                 },
             },
         }) as const satisfies JSONSchema,
-    () => props.session,
+    { session: () => props.session },
 );
 
 type MembershipUpdate = {

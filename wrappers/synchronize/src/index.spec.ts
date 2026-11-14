@@ -60,7 +60,7 @@ describe.concurrent("synchronizeDiscover", () => {
 
     const graffiti2 = useGraffiti();
     const next = graffiti2.synchronizeDiscover(channels, {}).next();
-    const gotten = await graffiti2.get(posted, {}, session);
+    const gotten = await graffiti2.get(posted, {}, { session });
 
     const result = await next;
     if (result.done || result.value.error) {
@@ -154,10 +154,10 @@ describe.concurrent("synchronizeDiscover", () => {
     const channels = allChannels.slice(1);
 
     const creatorNext = graffiti
-      .synchronizeDiscover(channels, {}, session1)
+      .synchronizeDiscover(channels, {}, { session: session1 })
       .next();
     const allowedNext = graffiti
-      .synchronizeDiscover(channels, {}, session2)
+      .synchronizeDiscover(channels, {}, { session: session2 })
       .next();
     const noSession = graffiti.synchronizeDiscover(channels, {}).next();
 

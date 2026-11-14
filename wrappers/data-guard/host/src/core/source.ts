@@ -1,6 +1,6 @@
-import type { GraffitiSession } from "@graffiti-garden/api";
+import { normalizeGraffitiReadOptions, type GraffitiReadOptions, type GraffitiSession } from "@graffiti-garden/api";
 import type { GraffitiMethod } from "./graffiti.js";
-import { encodeGuardSiteId, sessionArgumentIndex, type GuardSourceSegment } from "../../../client/src/source.js";
+import { encodeGuardSiteId, readOptionsArgumentIndex, sessionArgumentIndex, type GuardSourceSegment } from "../../../client/src/source.js";
 
 export type Source = {
   key: string;
@@ -72,7 +72,10 @@ export function sessionFromArgs(args: readonly unknown[], method: GraffitiMethod
   // A sessionless schema may contain an `actor` property. Check the API slot,
   // not the last supplied argument, before attributing a request to an actor.
   const index = sessionArgumentIndex[method];
-  const session = index === undefined ? undefined : args[index];
+  const readIndex = readOptionsArgumentIndex[method];
+  const session = readIndex !== undefined
+    ? normalizeGraffitiReadOptions(args[readIndex] as GraffitiReadOptions | GraffitiSession | undefined).session
+    : index === undefined ? undefined : args[index];
   return hasActor(session) ? session : undefined;
 }
 

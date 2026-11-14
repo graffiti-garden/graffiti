@@ -29,6 +29,10 @@ it("prefixes login and authenticated calls at each parent, without changing the 
     await inner.graffiti.post(object, session);
     expect(graffiti.post).toHaveBeenCalledExactlyOnceWith(object, { actor: "alice", source: [app, room] });
     expect(session).toEqual({ actor: "alice", source: [] });
+    await inner.graffiti.get("private", {}, { session });
+    expect(graffiti.get).toHaveBeenCalledWith("private", {}, { session: { actor: "alice", source: [app, room] } });
+    expect(session).toEqual({ actor: "alice", source: [] });
+    vi.mocked(graffiti.get).mockClear();
     await inner.graffiti.get("public", {});
     expect(graffiti.get).toHaveBeenCalledExactlyOnceWith("public", {});
   } finally { inner.destroy(); outer.destroy(); }

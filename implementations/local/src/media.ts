@@ -1,4 +1,5 @@
 import {
+  normalizeGraffitiReadOptions,
   GraffitiErrorNotAcceptable,
   GraffitiErrorTooLarge,
   isMediaAcceptable,
@@ -50,12 +51,12 @@ export class GraffitiLocalMedia {
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
-    const [mediaUrl, accept, session] = args;
+    const [mediaUrl, accept, options] = args;
 
     const object = await this.db.get<typeof MEDIA_OBJECT_SCHEMA>(
       mediaUrl,
       MEDIA_OBJECT_SCHEMA,
-      session,
+      normalizeGraffitiReadOptions(options),
     );
 
     const { dataBase64, type, size } = object.value;

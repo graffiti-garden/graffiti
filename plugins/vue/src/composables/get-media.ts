@@ -1,9 +1,10 @@
+import type { GraffitiVueReadOptions } from "./read-options";
 import type {
   GraffitiMedia,
   GraffitiMediaAccept,
   GraffitiSession,
 } from "@graffiti-garden/api";
-import { GraffitiErrorNotFound } from "@graffiti-garden/api";
+import { normalizeGraffitiReadOptions, GraffitiErrorNotFound } from "@graffiti-garden/api";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
 import { useGraffitiSynchronize } from "../globals";
@@ -61,7 +62,8 @@ function trimCache(cache: Map<string, CacheEntry>) {
  * Its corresponding renderless component is {@link GraffitiGetMedia}.
  *
  * The arguments of this composable are the same as Graffiti.getMedia,
- * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
+ * with the first two arguments and each option, including the optional session,
+ * also accepting [Refs](https://vuejs.org/api/reactivity-core.html#ref)
  * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
  * As they change the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
@@ -81,13 +83,17 @@ function trimCache(cache: Map<string, CacheEntry>) {
 export function useGraffitiGetMedia(
   url: MaybeRefOrGetter<string>,
   accept: MaybeRefOrGetter<GraffitiMediaAccept>,
-  session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+  options?:
+    | GraffitiVueReadOptions
+    | MaybeRefOrGetter<GraffitiSession | null | undefined>,
 ): {
   media: Ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>;
   error: Ref<Error | null>;
   poll: () => Promise<void>;
 } {
   const graffiti = useGraffitiSynchronize();
+  const options_ = (): GraffitiVueReadOptions =>
+    normalizeGraffitiReadOptions(toValue(options));
   const media = ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>(
     undefined,
   );
@@ -113,7 +119,11 @@ export function useGraffitiGetMedia(
   }
 
   const args_ = () =>
-    [toValue(url), toValue(accept), toValue(session)] as const;
+    [
+      toValue(url),
+      toValue(accept),
+      { session: toValue(options_().session) },
+    ] as const;
   let handledPollCounter = pollCounter.value;
 
   watch(
@@ -137,7 +147,7 @@ export function useGraffitiGetMedia(
       });
 
       try {
-        const cache = cacheFor(args[2]);
+        const cache = cacheFor(args[2].session);
         const key = JSON.stringify([args[0], args[1]]);
         let entry = cache.get(key);
         if (

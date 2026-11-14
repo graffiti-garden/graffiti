@@ -89,7 +89,7 @@ export const graffitiDiscoverTests = (
       const iteratorSession1 = graffiti.discover<{}>(
         object.channels,
         {},
-        session1,
+        { session: session1 },
       );
       const value = await nextStreamValue<{}>(iteratorSession1);
       expect(value.url).toEqual(posted.url);
@@ -98,7 +98,7 @@ export const graffitiDiscoverTests = (
       expect(value.allowed).toEqual(object.allowed);
       expect(value.actor).toEqual(session1.actor);
 
-      const iteratorSession2 = graffiti.discover(object.channels, {}, session2);
+      const iteratorSession2 = graffiti.discover(object.channels, {}, { session: session2 });
       expect(await iteratorSession2.next()).toHaveProperty("done", true);
 
       const iteratorNoSession = graffiti.discover(object.channels, {});
@@ -113,7 +113,7 @@ export const graffitiDiscoverTests = (
       const iteratorSession2 = graffiti.discover<{}>(
         object.channels,
         {},
-        session2,
+        { session: session2 },
       );
       const value = await nextStreamValue<{}>(iteratorSession2);
       expect(value.url).toEqual(posted.url);
@@ -177,7 +177,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session1,
+        { session: session1 },
       );
       const value = await nextStreamValue<{}>(iteratorSession1);
       expect(value.value).toEqual(object.value);
@@ -195,7 +195,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session2,
+        { session: session2 },
       );
       await expect(iteratorSession2BigAllow.next()).resolves.toHaveProperty(
         "done",
@@ -214,7 +214,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session2,
+        { session: session2 },
       );
       await expect(iteratorSession2PeekOther.next()).resolves.toHaveProperty(
         "done",
@@ -234,7 +234,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session2,
+        { session: session2 },
       );
       const value2 = await nextStreamValue<{}>(
         iteratorSession2SmallAllowPeekSelf,
@@ -265,7 +265,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session1,
+        { session: session1 },
       );
       const value = await nextStreamValue<{}>(iteratorSession1);
       expect(value.value).toEqual(object.value);
@@ -283,7 +283,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session2,
+        { session: session2 },
       );
       await expect(iteratorSession2BigAllow.next()).resolves.toHaveProperty(
         "done",
@@ -302,7 +302,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session2,
+        { session: session2 },
       );
       await expect(iteratorSession2PeekOther.next()).resolves.toHaveProperty(
         "done",
@@ -322,7 +322,7 @@ export const graffitiDiscoverTests = (
             },
           },
         },
-        session2,
+        { session: session2 },
       );
       const value2 = await nextStreamValue<{}>(
         iteratorSession2SmallAllowPeekSelf,
@@ -346,7 +346,7 @@ export const graffitiDiscoverTests = (
       const iterator = graffiti.discover<{}>(
         publicO.channels,
         publicSchema,
-        session1,
+        { session: session1 },
       );
       const value = await nextStreamValue<{}>(iterator);
       expect(value.value).toEqual(publicO.value);
@@ -359,7 +359,7 @@ export const graffitiDiscoverTests = (
       const iterator2 = graffiti.discover(
         restricted.channels,
         publicSchema,
-        session1,
+        { session: session1 },
       );
       await expect(iterator2.next()).resolves.toHaveProperty("done", true);
     });
@@ -410,8 +410,8 @@ export const graffitiDiscoverTests = (
       const prepost = randomPostObject();
       const posted = await graffiti1.post<{}>(prepost, session1);
 
-      const iterator1 = graffiti1.discover(prepost.channels, {}, session1);
-      const iterator2 = graffiti2.discover(prepost.channels, {}, session1);
+      const iterator1 = graffiti1.discover(prepost.channels, {}, { session: session1 });
+      const iterator2 = graffiti2.discover(prepost.channels, {}, { session: session1 });
       const next1 = await iterator1.next();
       const next2 = await iterator2.next();
       assert(!next1.done && !next1.value.error);
@@ -427,7 +427,7 @@ export const graffitiDiscoverTests = (
 
       const iterator3 = graffiti1.continueDiscover(
         next3.value.cursor,
-        session1,
+        { session: session1 },
       );
       const next5 = await iterator3.next();
       assert(!next5.done && !next5.value.error);
@@ -441,7 +441,7 @@ export const graffitiDiscoverTests = (
 
       const iterator4 = graffiti2.continueDiscover(
         next4.value.cursor,
-        session1,
+        { session: session1 },
       );
       const next6 = await iterator4.next();
       assert(!next6.done && !next6.value.error);
@@ -533,7 +533,7 @@ export const graffitiDiscoverTests = (
           const discovery = graffiti.discover<{}>(
             [object.channels[0]],
             {},
-            session2,
+            { session: session2 },
           );
           const live = await discovery.next();
           assert(!live.done && !live.value.error && !live.value.tombstone);
@@ -543,7 +543,7 @@ export const graffitiDiscoverTests = (
           await graffiti.delete(posted, session1);
           const continuation = graffiti.continueDiscover<{}>(
             discoveryEnd.value.cursor,
-            session2,
+            { session: session2 },
           );
           const deletion = await continuation.next();
           assert(!deletion.done && !deletion.value.error);
@@ -557,7 +557,7 @@ export const graffitiDiscoverTests = (
         });
 
         it("continue with wrong actor", async () => {
-          const iterator = graffiti.discover<{}>([], {}, session1);
+          const iterator = graffiti.discover<{}>([], {}, { session: session1 });
           const result = await iterator.next();
           assert(result.done, "iterator is not done");
 
@@ -577,6 +577,25 @@ export const graffitiDiscoverTests = (
     it("lookup non-existant cursor", async () => {
       const iterator = graffiti.continueDiscover(randomString());
       await expect(iterator.next()).rejects.toThrow(GraffitiErrorCursorExpired);
+    });
+
+    it("discover and continueDiscover accept legacy session arguments", async () => {
+      const object = await graffiti.post<{}>(
+        { ...randomPostObject(), allowed: [] },
+        session,
+      );
+      const stream = graffiti.discover<{}>(object.channels, {}, session);
+      expect((await nextStreamValue<{}>(stream)).url).toBe(object.url);
+      const end = await stream.next();
+      assert(end.done);
+
+      await graffiti.delete(object.url, session);
+      const continuation = graffiti.continueDiscover<{}>(end.value.cursor, session);
+      expect(await continuation.next()).toMatchObject({
+        done: false,
+        value: { tombstone: true, object: { url: object.url } },
+      });
+      await continuation.return({ cursor: "" });
     });
   });
 };

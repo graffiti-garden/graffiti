@@ -240,7 +240,7 @@ export const graffitiCRUDTests = (
         );
 
         // Get it with authenticated session
-        const gotten = await graffiti.get(posted, {}, session1);
+        const gotten = await graffiti.get(posted, {}, { session: session1 });
         expect(gotten.url).toEqual(posted.url);
         expect(gotten.actor).toEqual(session1.actor);
         expect(gotten.value).toEqual(value);
@@ -253,7 +253,7 @@ export const graffitiCRUDTests = (
         );
 
         // Or the wrong session
-        await expect(graffiti.get(posted, {}, session2)).rejects.toBeInstanceOf(
+        await expect(graffiti.get(posted, {}, { session: session2 })).rejects.toBeInstanceOf(
           GraffitiErrorNotFound,
         );
       });
@@ -274,7 +274,7 @@ export const graffitiCRUDTests = (
         );
 
         // Get it with authenticated session
-        const gotten = await graffiti.get(posted, {}, session1);
+        const gotten = await graffiti.get(posted, {}, { session: session1 });
         expect(gotten.url).toEqual(posted.url);
         expect(gotten.actor).toEqual(session1.actor);
         expect(gotten.value).toEqual(value);
@@ -286,7 +286,7 @@ export const graffitiCRUDTests = (
           GraffitiErrorNotFound,
         );
 
-        const gotten2 = await graffiti.get(posted, {}, session2);
+        const gotten2 = await graffiti.get(posted, {}, { session: session2 });
         expect(gotten.url).toEqual(posted.url);
         expect(gotten.actor).toEqual(session1.actor);
         expect(gotten2.value).toEqual(value);
@@ -316,7 +316,7 @@ export const graffitiCRUDTests = (
         expect(output.channels).toEqual(channels);
         expect(output).not.toHaveProperty("extra");
 
-        const gotten = await graffiti.get<{}>(output, {}, session1);
+        const gotten = await graffiti.get<{}>(output, {}, { session: session1 });
         expect(gotten).toEqual(output);
       });
 
@@ -327,21 +327,21 @@ export const graffitiCRUDTests = (
         const prepost = randomPostObject();
         const posted = await graffiti1.post<{}>(prepost, session1);
 
-        const gotten1 = await graffiti1.get(posted, {}, session1);
-        const gotten2 = await graffiti2.get(posted, {}, session1);
+        const gotten1 = await graffiti1.get(posted, {}, { session: session1 });
+        const gotten2 = await graffiti2.get(posted, {}, { session: session1 });
         expect(gotten1).toEqual(posted);
         expect(gotten2).toEqual(posted);
 
         await graffiti1.delete(posted, session1);
 
-        await expect(graffiti1.get(posted, {}, session1)).rejects.toThrow(
+        await expect(graffiti1.get(posted, {}, { session: session1 })).rejects.toThrow(
           GraffitiErrorNotFound,
         );
 
         // Wait for "labels" to propogate
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        await expect(graffiti2.get(posted, {}, session1)).rejects.toThrow(
+        await expect(graffiti2.get(posted, {}, { session: session1 })).rejects.toThrow(
           GraffitiErrorNotFound,
         );
       });
@@ -353,6 +353,15 @@ export const graffitiCRUDTests = (
         const output = await graffiti.post<{}>(prepost, session);
         prepost.channels.forEach((c) => expect(output.channels).toContain(c));
         expect(output.channels).toContain(channel);
+      });
+
+      it("get accepts a legacy session argument", async () => {
+        const object = await graffiti.post<{}>(
+          { ...randomPostObject(), allowed: [] },
+          session,
+        );
+        expect(await graffiti.get(object.url, {}, session)).toEqual(object);
+        await graffiti.delete(object.url, session);
       });
     },
   );

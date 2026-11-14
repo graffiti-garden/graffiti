@@ -1,4 +1,4 @@
-import type { Graffiti, GraffitiSession } from "@graffiti-garden/api";
+import { normalizeGraffitiReadOptions, type Graffiti, type GraffitiSession, type GraffitiReadOptions } from "@graffiti-garden/api";
 
 export type GuardSourceSegment = { id: string; name: string; url?: string };
 
@@ -22,9 +22,13 @@ export type GuardSession = GraffitiSession & {
   guardSites?: string[][];
 };
 
+export const readOptionsArgumentIndex: Readonly<Record<string, number>> = {
+  get: 2, discover: 2, continueDiscover: 1, getMedia: 2,
+};
+
 export const sessionArgumentIndex: Readonly<Record<string, number>> = {
-  post: 1, get: 2, delete: 1, discover: 2, continueDiscover: 1,
-  postMedia: 1, getMedia: 2, deleteMedia: 1, logout: 0,
+  post: 1, delete: 1,
+  postMedia: 1, deleteMedia: 1, logout: 0,
 };
 
 /**
@@ -94,7 +98,15 @@ export function withGuardSource(
       const value = Reflect.get(target, property, target);
       if (typeof value !== "function") return value;
       const index = sessionArgumentIndex[String(property)];
+      const readIndex = readOptionsArgumentIndex[String(property)];
       return (...args: unknown[]) => {
+        if (readIndex !== undefined && args[readIndex] != null) {
+          const options = normalizeGraffitiReadOptions(args[readIndex] as GraffitiReadOptions | GraffitiSession | undefined);
+          args[readIndex] = {
+            ...options,
+            session: options.session ? addSource(options.session as GuardSession) : options.session,
+          };
+        }
         if (index !== undefined && args[index] != null) {
           args[index] = addSource(args[index] as GuardSession);
         }

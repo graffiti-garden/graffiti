@@ -18,7 +18,7 @@ const admin = chatAdmin(
 const { objects, isFirstPoll } = useGraffitiDiscover(
     () => [props.channel],
     () => chatNameSchema(props.channel, admin.value),
-    () => props.session,
+    { session: () => props.session },
 );
 const chatNames = sortByPublished<ChatNameObject>(objects);
 

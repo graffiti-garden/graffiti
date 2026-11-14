@@ -57,7 +57,7 @@ describe("GuardedGraffiti streams and posts", () => {
 
       const session = { actor: "alice" };
       vi.mocked(implementation.get).mockClear();
-      await expect(guarded.get("graffiti:private", {}, session)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
+      await expect(guarded.get("graffiti:private", {}, { session })).rejects.toBeInstanceOf(GraffitiErrorForbidden);
       await expect(guarded.post({ value: {}, channels: [] }, session)).rejects.toBeInstanceOf(GraffitiErrorForbidden);
       expect(implementation.get).not.toHaveBeenCalled();
       expect(implementation.post).not.toHaveBeenCalled();
@@ -129,9 +129,9 @@ describe("GuardedGraffiti streams and posts", () => {
       origin,
     );
     try {
-      const discoverStream = guarded.discover([], {}, Object.assign({}, session, { source: source.path })) as
+      const discoverStream = guarded.discover([], {}, { session: Object.assign({}, session, { source: source.path }) }) as
         ReturnType<Graffiti["discover"]>;
-      const continuation = guarded.continueDiscover("cursor", Object.assign({}, session, { source: source.path })) as
+      const continuation = guarded.continueDiscover("cursor", { session: Object.assign({}, session, { source: source.path }) }) as
         ReturnType<Graffiti["continueDiscover"]>;
       await expect(discoverStream.next()).rejects.toBeInstanceOf(GraffitiErrorForbidden);
       await expect(continuation.next()).rejects.toBeInstanceOf(GraffitiErrorForbidden);
@@ -162,7 +162,7 @@ describe("GuardedGraffiti streams and posts", () => {
       match: { kind: "site", site: foreignSite },
     });
 
-    for (const results of [graffiti.discover([], {}, session), graffiti.continueDiscover("next", session)]) {
+    for (const results of [graffiti.discover([], {}, { session }), graffiti.continueDiscover("next", { session })]) {
       expect(await results.next()).toEqual({ done: false, value: entry });
       expect(await results.next()).toEqual({ done: false, value: entry });
       expect(await results.next()).toEqual({ done: true, value: { cursor: "next" } });
@@ -221,7 +221,7 @@ describe("GuardedGraffiti streams and posts", () => {
       discover: discovery,
     } as unknown as Graffiti;
     const { graffiti, ask } = wrap(implementation, false);
-    const iterator = graffiti.discover([], {}, { actor: "actor:one" });
+    const iterator = graffiti.discover([], {}, { session: { actor: "actor:one" } });
 
     expect(await iterator.next()).toMatchObject({ value: upstreamError });
     expect(await iterator.next()).toMatchObject({ value: tombstone });
@@ -259,7 +259,7 @@ describe("GuardedGraffiti streams and posts", () => {
     } as unknown as Graffiti;
     const { graffiti, db, ask } = wrap(implementation);
     const session = { actor: "actor:one" };
-    const iterator = graffiti.continueDiscover("previous", session);
+    const iterator = graffiti.continueDiscover("previous", { session });
 
     expect(await iterator.next()).toEqual({ done: false, value: privateTombstone });
     const end = await iterator.next();
@@ -295,7 +295,7 @@ describe("GuardedGraffiti streams and posts", () => {
     vi.spyOn(db, "permissions").mockRejectedValue(failure);
 
     await expect(
-      graffiti.discover([], {}, { actor: "actor:one" }).next(),
+      graffiti.discover([], {}, { session: { actor: "actor:one" } }).next(),
     ).rejects.toBe(failure);
     expect(closed).toBe(true);
   });
@@ -332,7 +332,7 @@ describe("GuardedGraffiti streams and posts", () => {
       },
     } as unknown as Graffiti;
     const { graffiti: guarded, ask } = wrap(implementation);
-    const stream = guarded.discover(["channel"], {}, { actor: "actor:one" });
+    const stream = guarded.discover(["channel"], {}, { session: { actor: "actor:one" } });
 
     expect(await stream.next()).toMatchObject({ value: policy });
     expect(await stream.next()).toMatchObject({ value: ordinary });
@@ -433,7 +433,7 @@ describe("GuardedGraffiti streams and posts", () => {
       "https://example.com",
     );
     try {
-      const stream = guarded.discover(["notes"], schema, Object.assign({}, { actor: "actor:one" }, { source: [{ id: "current-page", name: "Current page" }] })) as ReturnType<Graffiti["discover"]>;
+      const stream = guarded.discover(["notes"], schema, { session: Object.assign({}, { actor: "actor:one" }, { source: [{ id: "current-page", name: "Current page" }] }) }) as ReturnType<Graffiti["discover"]>;
       expect(await stream.next()).toMatchObject({ done: true });
       expect(querySchemas).toEqual([schema]);
       expect(ask).not.toHaveBeenCalled();

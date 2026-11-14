@@ -1,5 +1,7 @@
 import {
   GraffitiErrorForbidden,
+  normalizeGraffitiReadOptions,
+  type GraffitiReadOptions,
   type Graffiti,
   type GraffitiMediaAccept,
   type GraffitiObject,
@@ -249,6 +251,9 @@ export class Guard {
     source: Source,
   ): Promise<Prepared | undefined> {
     const session = snapshotSession(sessionFromArgs(args, method));
+    const options = method === "get" || method === "getMedia"
+      ? { ...normalizeGraffitiReadOptions(args[2] as GraffitiReadOptions | GraffitiSession | undefined), session }
+      : { session };
     if (method === "post") {
       const { object, confirm } = preparePost(args[0], source);
       return {
@@ -261,9 +266,9 @@ export class Guard {
       const url = objectUrl(args[0]);
       // Do not evaluate an app-supplied schema until private-read approval.
       // Otherwise schema mismatch becomes an oracle for a known private URL.
-      const object = await this.graffiti.get(url, {}, session);
+      const object = await this.graffiti.get(url, {}, options);
       if (method === "get") {
-        return this.prepareObjectRead(object, source, [url, args[1], session]);
+        return this.prepareObjectRead(object, source, [url, args[1], options]);
       }
       return this.prepareDelete(
         { kind: "object", object },
@@ -286,11 +291,11 @@ export class Guard {
         : {};
       // Preserve the caller's limits: the stamp changes neither bytes nor the
       // base MIME type. This one read supplies both provenance and file bytes.
-      const { media, from } = readMedia(await this.graffiti.getMedia(url, accept, session));
+      const { media, from } = readMedia(await this.graffiti.getMedia(url, accept, options));
       const subject = mediaSubject(media, url);
       if (method === "getMedia") {
         const prepared: Prepared = {
-          args: [url, accept, session],
+          args: [url, accept, options],
           subject,
           preview: { media },
           result: media,

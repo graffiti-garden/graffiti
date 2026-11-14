@@ -1,3 +1,4 @@
+import { normalizeGraffitiReadOptions } from "@graffiti-garden/api";
 import type { Graffiti } from "@graffiti-garden/api";
 import {
   looseObject,
@@ -38,6 +39,10 @@ export const GraffitiSessionSchema = looseObject({
 export const GraffitiOptionalSessionSchema = optional(
   nullable(GraffitiSessionSchema),
 );
+
+export const GraffitiReadOptionsSchema = looseObject({
+  session: GraffitiOptionalSessionSchema,
+});
 
 export const GraffitiJSONSchemaSchema = union([boolean(), looseObject({})]);
 
@@ -95,10 +100,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
   };
 
   get: Graffiti["get"] = (...args) => {
+    args[2] = normalizeGraffitiReadOptions(args[2]);
     const typedArgs = tuple([
       GraffitiObjectUrlSchema,
       GraffitiJSONSchemaSchema,
-      GraffitiOptionalSessionSchema,
+      GraffitiReadOptionsSchema,
     ]).parse(args);
 
     return this.graffiti.get<(typeof args)[1]>(
@@ -125,10 +131,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
   };
 
   getMedia: Graffiti["getMedia"] = (...args) => {
+    args[2] = normalizeGraffitiReadOptions(args[2]);
     const typedArgs = tuple([
       url(),
       GraffitiMediaAcceptSchema,
-      GraffitiOptionalSessionSchema,
+      GraffitiReadOptionsSchema,
     ]).parse(args);
 
     return this.graffiti.getMedia(...typedArgs);
@@ -141,10 +148,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
   };
 
   discover: Graffiti["discover"] = (...args) => {
+    args[2] = normalizeGraffitiReadOptions(args[2]);
     const typedArgs = tuple([
       array(string()),
       GraffitiJSONSchemaSchema,
-      GraffitiOptionalSessionSchema,
+      GraffitiReadOptionsSchema,
     ]).parse(args);
     return this.graffiti.discover<(typeof args)[1]>(
       typedArgs[0],
@@ -155,7 +163,8 @@ export class GraffitiRuntimeTypes implements Graffiti {
 
   // @ts-ignore - inferred types on continueDiscover do not affect output
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
-    const typedArgs = tuple([string(), GraffitiOptionalSessionSchema]).parse(
+    args[1] = normalizeGraffitiReadOptions(args[1]);
+    const typedArgs = tuple([string(), GraffitiReadOptionsSchema]).parse(
       args,
     );
 
