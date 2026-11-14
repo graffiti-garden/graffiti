@@ -48,7 +48,41 @@ export function didTests() {
 
       lookup.mockResolvedValue(found);
       await expect(dids.resolve(did)).resolves.toEqual(found.didDocument);
-      expect(lookup).toHaveBeenCalledTimes(2);
+      expect(lookup).toHaveBeenCalledTimes(1);
+    });
+
+    test("learns rotated endpoints after expiry and retries a failed refresh", async () => {
+      const dids = new DecentralizedIdentifiers();
+      const did = "did:web:example.com";
+      const before: DIDResolutionResult = {
+        didDocument: { id: did, service: [{ id: "#bucket", type: "bucket", serviceEndpoint: "https://old.test" }] },
+        didDocumentMetadata: {}, didResolutionMetadata: {},
+      };
+      const after: DIDResolutionResult = {
+        ...before,
+        didDocument: { id: did, service: [{ id: "#bucket", type: "bucket", serviceEndpoint: "https://new.test" }] },
+      };
+      const lookup = vi.fn<Resolver["resolve"]>()
+        .mockResolvedValueOnce(before)
+        .mockRejectedValueOnce(new Error("Offline"))
+        .mockResolvedValue(after);
+      Object.defineProperty(dids, "resolver", { value: { resolve: lookup } });
+      const clock = vi.spyOn(Date, "now").mockReturnValue(0);
+      try {
+        await expect(dids.resolve(did)).resolves.toEqual(before.didDocument);
+        // Ordinary reads reuse the cached endpoint throughout its lifetime.
+        clock.mockReturnValue(60 * 60 * 1000 - 1);
+        await expect(dids.resolve(did)).resolves.toEqual(before.didDocument);
+        expect(lookup).toHaveBeenCalledTimes(1);
+
+        clock.mockReturnValue(60 * 60 * 1000);
+        await expect(dids.resolve(did)).rejects.toThrow("Offline");
+        // Expiry does not cache the failure or keep the old endpoint forever.
+        await expect(dids.resolve(did)).resolves.toEqual(after.didDocument);
+        expect(lookup).toHaveBeenCalledTimes(3);
+      } finally {
+        clock.mockRestore();
+      }
     });
 
     test("retries a failed resolution", async () => {
