@@ -77,6 +77,22 @@ For first time deployments:
 
 In the future, simply run `npm run deploy` to update the application.
 
+## Inbox pins
+
+`PUT /i/:inboxId/send` remains unauthenticated. Authenticated callers can use
+`POST /i/:inboxId/pin` or `/unpin` with a CBOR body `{ ids: string[] }` containing
+1–100 message IDs. Personal inboxes accept only their owner's pins; shared
+inboxes accept pins from any authenticated account. Both operations return 204.
+
+Pins are sticky and idempotent. Unpin removes only the caller's pins, including
+when other accounts also pin the message. Pinning a batch containing a missing
+message returns 404 and adds no pins. Unpinning missing messages succeeds.
+Apply migration `0009_inbox_pins.sql` before deploying these routes.
+
+This additive step retains the existing query/export format and label/message
+routes. The client protocol migration removes those routes; expiration is a
+separate step. Adding a pin does not yet enable garbage collection.
+
 ## OAuth TODOs
 
 - **Service scopes:** An OAuth token can access all services belonging to its

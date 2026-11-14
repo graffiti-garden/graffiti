@@ -84,6 +84,7 @@ export class DecentralizedTestEnvironment {
       "0006_actors.sql",
       "0007_rename_user_to_account.sql",
       "0008_session_kinds.sql",
+      "0009_inbox_pins.sql",
     ]) {
       const sql = await readFile(
         join(SERVER_ROOT, "migrations", migration),
@@ -142,6 +143,11 @@ export class DecentralizedTestEnvironment {
       await rm(this.temporaryDirectory, { recursive: true, force: true });
       this.temporaryDirectory = undefined;
     }
+  }
+
+  async database() {
+    if (!this.miniflare) throw new Error("Miniflare did not start");
+    return this.miniflare.getD1Database("DB");
   }
 
   async storedR2ObjectExists(key: string): Promise<boolean> {
