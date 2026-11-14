@@ -1,6 +1,5 @@
 import { collectExpiredMessages } from "./api/inboxes/retention";
 import { Hono, type Context } from "hono";
-import { compress } from "hono/compress";
 import { getOrigin, type Bindings } from "./env";
 import app from "./app/app";
 import storageBuckets from "./api/storage-buckets/index";
@@ -95,7 +94,6 @@ function getHostRouter(baseHost: string): Hono<{ Bindings: Bindings }> {
     hostRouter.use("/subdomain/*", noCors);
     hostRouter.route("/subdomain", handleDids);
     hostRouter.route("/domain", router);
-    hostRouter.use(compress());
   }
   return hostRouter;
 }
