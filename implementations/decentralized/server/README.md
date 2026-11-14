@@ -77,6 +77,15 @@ For first time deployments:
 
 In the future, simply run `npm run deploy` to update the application.
 
+### Response compression
+
+In Cloudflare, create a
+[Compression Rule](https://developers.cloudflare.com/rules/compression-rules/create-dashboard/) with the following settings:
+
+- Name: Compress Everything
+- If incoming requests match…: All incoming requests
+- Compression options: Custom > Auto
+
 ## Inbox pins
 
 `PUT /i/:inboxId/send` remains unauthenticated. Authenticated callers can use
