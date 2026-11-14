@@ -268,15 +268,17 @@ export async function setMessagePins(
       AND NOT (${EXPIRED_MESSAGE_SQL})`;
   // Validate and insert in one transaction. A batch with any missing ID pins
   // nothing; retrying a successful batch leaves the existing pins unchanged.
-  const [count] = await context.env.DB.batch<{ count: number }>([
-    context.env.DB.prepare(`SELECT COUNT(*) AS count FROM (${matching})`)
-      .bind(info.inboxSeq, encodedIds),
+  const [, count] = await context.env.DB.batch<{ count: number }>([
     context.env.DB.prepare(`
       INSERT INTO inbox_message_pins (message_seq, account_id)
       SELECT message_seq, ? FROM (${matching})
       WHERE (SELECT COUNT(*) FROM (${matching})) = ?
       ON CONFLICT (message_seq, account_id) DO NOTHING
     `).bind(accountId, info.inboxSeq, encodedIds, info.inboxSeq, encodedIds, ids.length),
+    // Check after insertion: the deadline can pass between SQL statements.
+    // Successfully pinned entries remain live; expired unpinned ones must fail.
+    context.env.DB.prepare(`SELECT COUNT(*) AS count FROM (${matching})`)
+      .bind(info.inboxSeq, encodedIds),
   ]);
   if (count.results[0]?.count !== ids.length) {
     throw new HTTPException(404, { message: "Message not found" });
