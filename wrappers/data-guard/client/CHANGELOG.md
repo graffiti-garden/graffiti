@@ -1,5 +1,13 @@
 # @graffiti-garden/wrapper-data-guard
 
+## 0.3.4
+
+### Patch Changes
+
+- d0d0814: Reuse immutable object and media reads using the existing persistent inbox cache and native HTTP caching. Completed inbox queries remain reusable until invalidated or refreshed; storage responses allow browser caching for up to a year. Add `options.refresh`: getters reuse saved results by default; discovery and continuation refresh by default, with `refresh: false` allowing completed saved queries. Missing or incomplete results still fetch. Known deletions invalidate getters, verification stays fresh, and explicit Vue polls refresh. Remove Vue's separate image cache. Deploy clients that send explicit no-cache verification requests before the storage Worker enables long-lived responses.
+- Updated dependencies [d0d0814]
+  - @graffiti-garden/api@1.6.0
+
 ## 0.3.3
 
 ### Patch Changes
