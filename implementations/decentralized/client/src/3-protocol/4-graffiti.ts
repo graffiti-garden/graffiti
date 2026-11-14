@@ -622,6 +622,7 @@ export class GraffitiDecentralized implements Graffiti {
       );
 
       for await (const result of iterator) {
+        if ("error" in result) throw result.error;
         if (result.object.url !== objectUrl) continue;
         if (result.kind !== undefined && result.kind !== kind) continue;
         if (result.tombstone) {
@@ -671,6 +672,7 @@ export class GraffitiDecentralized implements Graffiti {
     );
     let existing: SingleEndpointQueryResult<{}> | undefined;
     for await (const result of iterator) {
+      if ("error" in result) throw result.error;
       if (result.object.url !== objectUrl) continue;
       if (result.kind !== undefined && result.kind !== kind) continue;
       if (result.tombstone) {
@@ -937,9 +939,12 @@ export class GraffitiDecentralized implements Graffiti {
           };
           this.tryLogoutIfUnauthorized(next.error, session);
         } else if (next.result.done) {
-          // Store the cursor for future use
+          // A retryable object error leaves this inbox's previous checkpoint
+          // intact, even though its other results were delivered successfully.
           const inbox = allInboxes[next.index];
-          cursors[inbox.serviceEndpoint] = next.result.value;
+          if (next.result.value !== undefined) {
+            cursors[inbox.serviceEndpoint] = next.result.value;
+          }
           // Remove it from the race
           indexedIteratorNexts[next.index] = new Promise(() => {});
           active--;
@@ -950,8 +955,14 @@ export class GraffitiDecentralized implements Graffiti {
               iterators[next.index],
               next.index,
             );
-          const { object, tombstone, tags: receivedTags } = next.result.value;
-          if (next.result.value.kind === RECORD_KIND_MEDIA) continue;
+          const item = next.result.value;
+          if ("error" in item) {
+            // An object failure does not remove this inbox from the stream.
+            yield { error: item.error, origin: allInboxes[next.index].serviceEndpoint };
+            continue;
+          }
+          if (item.kind === RECORD_KIND_MEDIA) continue;
+          const { object, tombstone, tags: receivedTags } = item;
           // Inbox announcements can omit channel names, so recover the queried
           // channels from their tags before applying the usual object mask.
           const matchedChannels = channels.filter((_, index) =>
@@ -1264,10 +1275,11 @@ export class GraffitiDecentralized implements Graffiti {
           ) as unknown as MessageStream<Schema>);
 
     const inFlight: Promise<
-      | { result: SingleEndpointQueryResult<Schema> | void }
+      | { result: SingleEndpointQueryItem<Schema> | void }
       | { error: unknown }
     >[] = [];
     let doneValue: string | null = null;
+    let retryNeeded = false;
 
     try {
       while (true) {
@@ -1298,7 +1310,7 @@ export class GraffitiDecentralized implements Graffiti {
         const nextProcessedPromise = inFlight.shift();
 
         if (!nextProcessedPromise) {
-          if (doneValue !== null) return doneValue;
+          if (doneValue !== null) return retryNeeded ? undefined : doneValue;
 
           throw new Error("Process queue empty but no return value");
         }
@@ -1306,9 +1318,14 @@ export class GraffitiDecentralized implements Graffiti {
         const processed = await nextProcessedPromise;
         if ("error" in processed) throw processed.error;
         if (processed.result) {
+          // Expected object errors are results, not exceptions. Only temporary
+          // failures hold back the checkpoint; invalid content can be passed over.
+          if ("error" in processed.result) {
+            retryNeeded ||= processed.result.retryable;
+          }
           // Discovery/deletion streams report known removals immediately.
           // Getters invalidate after replay so old tombstones can precede a repost.
-          if (processed.result.tombstone && !options?.url) {
+          else if (processed.result.tombstone && !options?.url) {
             await this.inboxes.invalidateReads(processed.result.object.url);
           }
           yield processed.result;
@@ -1337,7 +1354,7 @@ export class GraffitiDecentralized implements Graffiti {
     result: LabeledMessage<Schema>,
     inboxToken?: string | null,
     recipient?: string | null,
-  ): Promise<SingleEndpointQueryResult<Schema> | void> {
+  ): Promise<SingleEndpointQueryItem<Schema> | void> {
     const label = result.l;
     // Anything invalid or unexpected, we can skip
     if (
@@ -1362,7 +1379,7 @@ export class GraffitiDecentralized implements Graffiti {
         MESSAGE_LABEL_INVALID,
         inboxToken,
       );
-      return;
+      return { error: new Error("Invalid inbox message metadata", { cause: e }), retryable: false };
     }
 
     if (label === MESSAGE_LABEL_INVALID_LEGACY && metadata[RECORD_KIND_KEY] === undefined) return;
@@ -1431,8 +1448,9 @@ export class GraffitiDecentralized implements Graffiti {
       return { ...resultBase, tombstone: true };
     }
 
-    // Validate new messages and retry kind-bearing records rejected by old readers.
-    let validationError: unknown | undefined = undefined;
+    // Resolving the actor is a read, not proof of an object's validity or
+    // deletion. In particular, DID resolvers also report outages as NotFound.
+    let storageBucketEndpoint: string;
     try {
       const actor = object.actor;
       const actorDocument = await this.dids.resolve(actor);
@@ -1442,47 +1460,67 @@ export class GraffitiDecentralized implements Graffiti {
           service.type === DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
       );
       if (!storageBucketService) {
-        throw new GraffitiErrorNotFound(
+        throw new Error(
           `Actor ${actor} has no storage bucket service`,
         );
       }
       if (typeof storageBucketService.serviceEndpoint !== "string") {
-        throw new GraffitiErrorNotFound(
+        throw new Error(
           `Actor ${actor} does not have a valid storage bucket endpoint`,
         );
       }
-      const storageBucketEndpoint = storageBucketService.serviceEndpoint;
+      storageBucketEndpoint = storageBucketService.serviceEndpoint;
+    } catch (error) {
+      return { error: new Error("Could not resolve object storage bucket", { cause: error }), retryable: true };
+    }
 
-      const objectBytes = await this.storageBuckets.get(
+    let objectBytes: Uint8Array | undefined;
+    let validationError: Error | undefined;
+    try {
+      objectBytes = await this.storageBuckets.get(
         storageBucketEndpoint,
         storageBucketKey,
         MAX_OBJECT_SIZE_BYTES,
       );
-
-      if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {
-        throw new GraffitiErrorForbidden(
-          `Recipient is required when allowed ticket is present`,
-        );
+    } catch (error) {
+      if (!(error instanceof GraffitiErrorNotFound)) {
+        // This public read has no login token or discovery cursor. Even HTTP
+        // 401/410 here is an object-read failure, not logout or cursor expiry.
+        return { error: new Error("Could not read object from storage bucket", { cause: error }), retryable: true };
       }
-      const privateObjectInfo = allowedTickets
-        ? { allowedTickets }
-        : MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata
-          ? {
-              recipient: recipient ?? "null",
-              allowedTicket: metadata[MESSAGE_DATA_ALLOWED_TICKET_KEY],
-              allowedIndex: metadata[MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY],
-            }
-          : undefined;
 
-      await this.objectEncoding.validate(
-        object,
-        receivedTags,
-        objectBytes,
-        privateObjectInfo,
-        metadata[RECORD_KIND_KEY],
-      );
-    } catch (e) {
-      validationError = e;
+      // Only a bucket 404 reaches the existing deletion-label handling below.
+      validationError = error;
+    }
+
+    // Only validation of a complete response may label the message invalid.
+    if (objectBytes !== undefined) {
+      try {
+        if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {
+          throw new GraffitiErrorForbidden(
+            `Recipient is required when allowed ticket is present`,
+          );
+        }
+        const privateObjectInfo = allowedTickets
+          ? { allowedTickets }
+          : MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata
+            ? {
+                recipient: recipient ?? "null",
+                allowedTicket: metadata[MESSAGE_DATA_ALLOWED_TICKET_KEY],
+                allowedIndex: metadata[MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY],
+              }
+            : undefined;
+
+        await this.objectEncoding.validate(
+          object,
+          receivedTags,
+          objectBytes,
+          privateObjectInfo,
+          metadata[RECORD_KIND_KEY],
+        );
+      } catch (error) {
+        validationError = new Error("Invalid inbox object", { cause: error });
+      }
     }
 
     if (tombstonedMessageId) {
@@ -1529,14 +1567,16 @@ export class GraffitiDecentralized implements Graffiti {
 
         return { ...resultBase, tombstone: true };
       } else {
-        console.error("Recieved an incorrect tombstone object");
-        console.error(validationError);
         this.labelInboxMessage(
           inboxEndpoint,
           messageId,
           MESSAGE_LABEL_INVALID,
           inboxToken,
         );
+        return {
+          error: validationError ?? new Error("Tombstone refers to an existing object"),
+          retryable: false,
+        };
       }
     } else {
       if (validationError === undefined) {
@@ -1560,14 +1600,13 @@ export class GraffitiDecentralized implements Graffiti {
           inboxToken,
         );
       } else {
-        console.error("Recieved an incorrect object");
-        console.error(validationError);
         this.labelInboxMessage(
           inboxEndpoint,
           messageId,
           MESSAGE_LABEL_INVALID,
           inboxToken,
         );
+        return { error: validationError, retryable: false };
       }
     }
   }
@@ -1602,14 +1641,22 @@ interface SingleEndpointQueryResult<Schema extends JSONSchema> {
   tombstone?: boolean;
   announcements?: MessageMetadataAnnouncements | undefined;
 }
+interface SingleEndpointQueryError {
+  error: Error;
+  // A temporary read failure needs another poll; proven invalid content does not.
+  retryable: boolean;
+}
+type SingleEndpointQueryItem<Schema extends JSONSchema> =
+  | SingleEndpointQueryResult<Schema>
+  | SingleEndpointQueryError;
 interface SingleEndpointQueryIterator<
   Schema extends JSONSchema,
-> extends AsyncGenerator<SingleEndpointQueryResult<Schema>, string> {}
+> extends AsyncGenerator<SingleEndpointQueryItem<Schema>, string | undefined> {}
 type IndexedSingleEndpointQueryResult<Schema extends JSONSchema> =
   | {
       index: number;
       error?: undefined;
-      result: IteratorResult<SingleEndpointQueryResult<Schema>, string>;
+      result: IteratorResult<SingleEndpointQueryItem<Schema>, string | undefined>;
     }
   | {
       index: number;
