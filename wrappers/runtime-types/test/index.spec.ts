@@ -1,4 +1,4 @@
-import type { Graffiti } from "@graffiti-garden/api";
+import { normalizeGraffitiReadOptions, type Graffiti } from "@graffiti-garden/api";
 import { describe, expect, it, vi } from "vitest";
 import {
   GraffitiMediaAcceptSchema,
@@ -81,19 +81,23 @@ describe("GraffitiRuntimeTypes", () => {
         methods.post,
         [{ value: {}, channels: [42] }, session],
       ],
-      ["get", methods.get, ["not a URL", schema, session]],
-      ["get", methods.get, [objectUrl, schema, session, { cache: "force-cache" }]],
-      ["getMedia", methods.getMedia, [mediaUrl, {}, session, { cache: true }]],
+      ["get", methods.get, ["not a URL", schema, { session }]],
+      ["get", methods.get, [objectUrl, schema, { session: { actor: 42 } }]],
+      ["get", methods.get, [objectUrl, schema, "not options"]],
+      ["get", methods.get, [objectUrl, schema, { refresh: "true" }]],
+      ["getMedia", methods.getMedia, [mediaUrl, {}, { refresh: 1 }]],
+      ["discover", methods.discover, [["posts"], schema, { refresh: "false" }]],
+      ["continueDiscover", methods.continueDiscover, ["cursor", { refresh: null }]],
       ["delete", methods.delete, [objectUrl, {}]],
       [
         "postMedia",
         methods.postMedia,
         [{ data: "not a Blob" }, session],
       ],
-      ["getMedia", methods.getMedia, [mediaUrl, { maxBytes: -1 }, session]],
+      ["getMedia", methods.getMedia, [mediaUrl, { maxBytes: -1 }, { session }]],
       ["deleteMedia", methods.deleteMedia, ["not a URL", session]],
-      ["discover", methods.discover, [[42], schema, session]],
-      ["continueDiscover", methods.continueDiscover, [42, session]],
+      ["discover", methods.discover, [[42], schema, { session }]],
+      ["continueDiscover", methods.continueDiscover, [42, { session }]],
     ];
     const callableWrapper = wrapper as unknown as Record<
       string,
@@ -116,7 +120,6 @@ describe("GraffitiRuntimeTypes", () => {
     const blob = new Blob(["hello"], { type: "text/plain" });
     const postMedia = { data: blob, allowed: [actor] };
     const accept = { types: ["text/plain"], maxBytes: 100 };
-    const options = { cache: "no-cache" } as const;
 
     await expect(wrapper.login({ actor })).resolves.toBeUndefined();
     await expect(wrapper.login({ actor, state: "request-1" })).resolves.toBeUndefined();
@@ -128,27 +131,27 @@ describe("GraffitiRuntimeTypes", () => {
     await expect(wrapper.post<{}>(postObject, session)).resolves.toBe(
       results.object,
     );
-    await expect(wrapper.get(objectUrl, schema, session, options)).resolves.toBe(
+    await expect(wrapper.get(objectUrl, schema, { session, refresh: true })).resolves.toBe(
       results.object,
     );
-    await expect(wrapper.get(objectUrl, true, session)).resolves.toBe(
+    await expect(wrapper.get(objectUrl, true, { session, refresh: true })).resolves.toBe(
       results.object,
     );
     await expect(wrapper.delete({ url: objectUrl }, session)).resolves.toBe(
       results.object,
     );
     await expect(wrapper.postMedia(postMedia, session)).resolves.toBe(mediaUrl);
-    await expect(wrapper.getMedia(mediaUrl, accept, session, options)).resolves.toBe(
+    await expect(wrapper.getMedia(mediaUrl, accept, { session, refresh: true })).resolves.toBe(
       results.media,
     );
     await expect(wrapper.deleteMedia(mediaUrl, session)).resolves.toBeUndefined();
-    expect(wrapper.discover(["posts"], schema, session)).toBe(
+    expect(wrapper.discover(["posts"], schema, { session, refresh: true })).toBe(
       results.discoverStream,
     );
-    expect(wrapper.discover(["posts"], false, session)).toBe(
+    expect(wrapper.discover(["posts"], false, { session, refresh: true })).toBe(
       results.discoverStream,
     );
-    expect(wrapper.continueDiscover("cursor", session)).toBe(
+    expect(wrapper.continueDiscover("cursor", { session, refresh: true })).toBe(
       results.continueStream,
     );
 
@@ -160,15 +163,15 @@ describe("GraffitiRuntimeTypes", () => {
     expect(methods.handleToActor).toHaveBeenCalledWith("alice.example");
     expect(methods.actorToHandle).toHaveBeenCalledWith(actor);
     expect(methods.post).toHaveBeenCalledWith(postObject, session);
-    expect(methods.get).toHaveBeenCalledWith(objectUrl, schema, session, options);
-    expect(methods.get).toHaveBeenCalledWith(objectUrl, true, session, undefined);
+    expect(methods.get).toHaveBeenCalledWith(objectUrl, schema, { session, refresh: true });
+    expect(methods.get).toHaveBeenCalledWith(objectUrl, true, { session, refresh: true });
     expect(methods.delete).toHaveBeenCalledWith({ url: objectUrl }, session);
     expect(methods.postMedia).toHaveBeenCalledWith(postMedia, session);
-    expect(methods.getMedia).toHaveBeenCalledWith(mediaUrl, accept, session, options);
+    expect(methods.getMedia).toHaveBeenCalledWith(mediaUrl, accept, { session, refresh: true });
     expect(methods.deleteMedia).toHaveBeenCalledWith(mediaUrl, session);
-    expect(methods.discover).toHaveBeenCalledWith(["posts"], schema, session);
-    expect(methods.discover).toHaveBeenCalledWith(["posts"], false, session);
-    expect(methods.continueDiscover).toHaveBeenCalledWith("cursor", session);
+    expect(methods.discover).toHaveBeenCalledWith(["posts"], schema, { session, refresh: true });
+    expect(methods.discover).toHaveBeenCalledWith(["posts"], false, { session, refresh: true });
+    expect(methods.continueDiscover).toHaveBeenCalledWith("cursor", { session, refresh: true });
   });
 
   it("exposes the implementation's session event target", () => {
@@ -191,10 +194,10 @@ describe("GraffitiRuntimeTypes", () => {
       throw syncError;
     });
 
-    await expect(wrapper.get(objectUrl, schema, session)).rejects.toBe(
+    await expect(wrapper.get(objectUrl, schema, { session })).rejects.toBe(
       asyncError,
     );
-    expect(() => wrapper.discover<{}>(["posts"], schema, session)).toThrow(
+    expect(() => wrapper.discover<{}>(["posts"], schema, { session })).toThrow(
       syncError,
     );
   });
@@ -227,5 +230,22 @@ describe("exported schemas", () => {
         maxBytes: 100,
       }),
     ).toEqual({ types: ["text/plain"], maxBytes: 100 });
+  });
+});
+
+describe("legacy read options normalization", () => {
+  it("preserves options and implementation-specific session credentials", () => {
+    const options = { session, futureOption: true };
+    expect(normalizeGraffitiReadOptions(options)).toBe(options);
+    expect(normalizeGraffitiReadOptions(session).session).toBe(session);
+    expect(normalizeGraffitiReadOptions(null)).toEqual({});
+    expect(normalizeGraffitiReadOptions()).toEqual({});
+  });
+
+  it("rejects malformed legacy actors instead of treating them as anonymous options", () => {
+    const { methods, wrapper } = createSubject();
+    // @ts-expect-error Deliberately invalid legacy session.
+    expect(() => wrapper.get(objectUrl, schema, { actor: 42 })).toThrow();
+    expect(methods.get).not.toHaveBeenCalled();
   });
 });

@@ -3,10 +3,24 @@ import type {
   GraffitiObjectBase,
   GraffitiObjectUrl,
   GraffitiSession,
+  GraffitiReadOptions,
 } from "./2-types.js";
 import { GraffitiErrorInvalidSchema } from "./3-errors.js";
 import type { JSONSchema } from "json-schema-to-ts";
 import type Ajv from "ajv";
+
+/**
+ * Accept legacy positional sessions at read API boundaries. A top-level `actor`
+ * identifies a session; new options put it inside `session` instead.
+ * The generic also supports wrappers with reactive or additional options.
+ */
+export function normalizeGraffitiReadOptions<
+  Options extends { session?: unknown } = GraffitiReadOptions,
+>(options?: Options | GraffitiSession | null): Options | GraffitiReadOptions {
+  return options && typeof options === "object" && "actor" in options
+    ? { session: options as GraffitiSession }
+    : options ?? {};
+}
 
 export function unpackObjectUrl(url: string | GraffitiObjectUrl) {
   return typeof url === "string" ? url : url.url;

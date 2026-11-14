@@ -12,7 +12,7 @@ const props = defineProps<{ store: GraffitiRuleStore; scope: RuleScope }>();
 const { objects, isFirstPoll } = useGraffitiDiscover(
   () => [ruleChannel("site", props.scope.source.key)],
   () => ruleSchema(props.scope.actor),
-  () => props.scope.session,
+  { session: () => props.scope.session },
 );
 
 watch(

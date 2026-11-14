@@ -3,12 +3,12 @@ import type {
   GraffitiObject,
   GraffitiObjectBase,
   GraffitiSession,
+  GraffitiReadOptions,
   GraffitiPostObject,
   GraffitiObjectStream,
   GraffitiMedia,
   GraffitiPostMedia,
   GraffitiMediaAccept,
-  GraffitiReadOptions,
 } from "./2-types.js";
 import type { JSONSchema } from "json-schema-to-ts";
 
@@ -146,9 +146,12 @@ export abstract class Graffiti {
    * {@link GraffitiObjectBase.channels | `channels`} properties are
    * not revealed, similar to a BCC email.
    *
+   * Previously obtained immutable objects may be reused until a deletion is
+   * observed. Pass `{ refresh: true }` to check for changes in availability.
+   *
    * @returns Returns the retrieved object.
    *
-   * @throws {@link GraffitiErrorNotFound} if the object does not exist, has been deleted, or the actor is not
+   * @throws {@link GraffitiErrorNotFound} if the object is not found, is known to have been deleted, or the actor is not
    * {@link GraffitiObjectBase.allowed | `allowed`} to access it.
    *
    * @throws {@link GraffitiErrorSchemaMismatch} if the retrieved object does not match the provided schema.
@@ -167,14 +170,13 @@ export abstract class Graffiti {
      */
     schema: Schema,
     /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * Read options, including an optional authentication `session`.
+     * Passing a session directly is supported for backward compatibility.
+     * If no `options.session` is provided,
      * the retrieved object's {@link GraffitiObjectBase.allowed | `allowed`}
      * property must be `undefined`.
      */
-    session?: GraffitiSession | null,
-    /** Read cached data, or explicitly revalidate it. */
-    options?: GraffitiReadOptions,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): Promise<GraffitiObject<Schema>>;
 
   /**
@@ -207,6 +209,11 @@ export abstract class Graffiti {
    * Discovers objects created by any actor that are contained
    * in at least one of the given {@link GraffitiObjectBase.channels | `channels`}
    * and match the given [JSON Schema](https://json-schema.org).
+   *
+   * Discovery refreshes by default. With `{ refresh: false }`, implementations
+   * may reuse a completed saved query, including an empty result. Missing or
+   * incomplete queries are still fetched. The returned cursor can be continued
+   * normally to check for changes since the saved result.
    *
    * Objects are returned asynchronously as they are discovered but the stream
    * will end once all leads have been exhausted.
@@ -245,12 +252,13 @@ export abstract class Graffiti {
      */
     schema: Schema,
     /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}. If no `session` is provided,
+     * Read options, including an optional authentication `session`.
+     * Passing a session directly is supported for backward compatibility.
+     * If no `options.session` is provided,
      * only objects that have no {@link GraffitiObjectBase.allowed | `allowed`}
      * property will be returned.
      */
-    session?: GraffitiSession | null,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): GraffitiObjectStream<Schema>;
 
   /**
@@ -260,21 +268,23 @@ export abstract class Graffiti {
    * that match the original stream, and also returns the
    * objects that have been {@link delete | `delete`d}, as marked by a
    * `tombstone`. The tombstone contains the original object, masked for the
-   * querying actor.
+   * querying actor. Refreshes by default; `{ refresh: false }` may return only
+   * changes already obtained locally since the cursor.
    *
    * @throws {@link GraffitiErrorCursorExpired} upon iteration
    * if the cursor is invalid or expired.
    *
    * @throws {@link GraffitiErrorForbidden} upon iteration
    * if the {@link GraffitiObjectBase.actor | `actor`}
-   * provided in the `session` is not the same as the `actor`
+   * provided in `options.session` is not the same as the `actor`
    * that initiated the original stream.
    *
    * @group 2 - Multi-Object Methods
    */
   abstract continueDiscover<Schema extends JSONSchema>(
     cursor: string,
-    session?: GraffitiSession | null,
+    /** Read options; a legacy session argument is also accepted. */
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): GraffitiObjectStream<Schema>;
 
   /**
@@ -327,6 +337,8 @@ export abstract class Graffiti {
 
   /**
    * Retrieves media from the given media URL, adhering to the given requirements.
+   * Previously obtained media may be reused until a deletion is observed.
+   * Pass `{ refresh: true }` to check for changes in availability.
    *
    * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
    *
@@ -350,12 +362,10 @@ export abstract class Graffiti {
      */
     accept: GraffitiMediaAccept,
     /**
-     * An implementation-specific object with information to authenticate the
-     * {@link GraffitiObjectBase.actor | `actor`}.
+     * Read options, including an optional authentication `session`.
+     * Passing a session directly is supported for backward compatibility.
      */
-    session?: GraffitiSession | null,
-    /** Read cached data, or explicitly revalidate it. */
-    options?: GraffitiReadOptions,
+    options?: GraffitiReadOptions | GraffitiSession | null,
   ): Promise<GraffitiMedia>;
 
   /**

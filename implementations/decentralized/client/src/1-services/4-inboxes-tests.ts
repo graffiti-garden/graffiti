@@ -495,26 +495,26 @@ export function inboxUnitTests() {
     });
 
     describe("inbox query cache", () => {
-      test("bounds getter freshness without sliding expiration or caching empty lookups", async () => {
+      test("bounds saved query reuse without sliding expiration and includes empty queries", async () => {
         let now = 1_000_000;
         vi.spyOn(Date, "now").mockImplementation(() => now);
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);
         const inboxes = new Inboxes();
-        const read = { url: "graffiti:example:object", maxAge: 600_000 };
+        const read = { url: "graffiti:example:object", refresh: false };
         async function collect(options = read, token = "owner") {
           const results = [];
           for await (const result of inboxes.query(inboxUrl, [], {}, token, options)) results.push(result);
           return results;
         }
         expect(await collect()).toEqual([message]);
-        now += 599_999;
+        now += 365 * 24 * 60 * 60 * 1000 - 1;
         expect(await collect()).toEqual([message]);
         expect(fetch).toHaveBeenCalledTimes(1);
         now++;
         await collect();
         expect(fetch).toHaveBeenCalledTimes(2);
-        await collect({ ...read, maxAge: 0 });
+        await collect({ ...read, refresh: true });
         expect(fetch).toHaveBeenCalledTimes(3);
         await collect(read, "different-token");
         expect(fetch).toHaveBeenCalledTimes(4);
@@ -523,7 +523,7 @@ export function inboxUnitTests() {
         const missing = { ...read, url: "graffiti:example:missing" };
         expect(await collect(missing)).toEqual([]);
         expect(await collect(missing)).toEqual([]);
-        expect(fetch).toHaveBeenCalledTimes(6);
+        expect(fetch).toHaveBeenCalledTimes(5);
       });
 
       test("fetches the next page while the current message is yielded", async () => {

@@ -47,7 +47,7 @@ watch(
     // Graffiti URLs do not encode their resource kind. Probe media first, then
     // fall back to structured data on any media error.
     try {
-      const value = await graffiti.getMedia(url, accept, props.session);
+      const value = await graffiti.getMedia(url, accept, { session: props.session });
       if (!current) return;
       media.value = value;
       resolved.value = true;
@@ -57,7 +57,7 @@ watch(
     }
 
     try {
-      const value = await graffiti.get(url, schema, props.session);
+      const value = await graffiti.get(url, schema, { session: props.session });
       if (current) object.value = value;
     } catch {
       // The neutral unavailable state covers links that resolve as neither.

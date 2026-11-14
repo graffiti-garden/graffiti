@@ -8,12 +8,13 @@ import type {
 import { useGraffitiDiscover } from "../composables/discover";
 import ObjectInfo from "./ObjectInfo.vue";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     channels: string[];
     schema: Schema;
     session?: GraffitiSession | null;
+    refresh?: boolean;
     autopoll?: boolean;
-}>();
+}>(), { refresh: undefined });
 
 defineSlots<{
     default?(props: {
@@ -27,8 +28,7 @@ defineSlots<{
 const { objects, error, poll, isFirstPoll } = useGraffitiDiscover<Schema>(
     toRef(() => props.channels),
     toRef(() => props.schema),
-    toRef(() => props.session),
-    toRef(() => props.autopoll),
+    { session: toRef(() => props.session), refresh: toRef(() => props.refresh), autopoll: toRef(() => props.autopoll) },
 );
 </script>
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { effectScope, type EffectScope } from "vue";
+import { effectScope, ref, type EffectScope } from "vue";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { GraffitiSynchronize } from "@graffiti-garden/wrapper-synchronize";
 import * as globals from "../src/globals";
@@ -24,7 +24,7 @@ it("leaves repeated media reads to core and explicitly refreshes on poll", async
   expect(getMedia).toHaveBeenCalledTimes(2);
   const oldUrl = first.media.value!.dataUrl;
   await first.poll();
-  expect(getMedia).toHaveBeenLastCalledWith("url", {}, undefined, { cache: "no-cache" });
+  expect(getMedia).toHaveBeenLastCalledWith("url", {}, { session: undefined, refresh: true });
   expect(revoke).toHaveBeenCalledWith(oldUrl);
   const finalUrl = first.media.value!.dataUrl;
   scope.stop();
@@ -39,7 +39,33 @@ it("allows the initial object cache hit but explicitly refreshes on poll", async
   vi.spyOn(globals, "useGraffitiSynchronize").mockReturnValue(graffiti);
   const result = scope.run(() => useGraffitiGet("url", {}))!;
   await result.poll();
-  expect(get).toHaveBeenLastCalledWith("url", {}, undefined, undefined);
+  expect(get).toHaveBeenLastCalledWith("url", {}, { session: undefined, refresh: undefined });
   await result.poll();
-  expect(get).toHaveBeenLastCalledWith("url", {}, undefined, { cache: "no-cache" });
+  expect(get).toHaveBeenLastCalledWith("url", {}, { session: undefined, refresh: true });
+});
+
+
+it("reacts to the refresh option on object and media reads", async () => {
+  const graffiti = new GraffitiSynchronize(new GraffitiLocal());
+  const get = vi.spyOn(graffiti, "get").mockResolvedValue({
+    url: "url", actor: "did:example:owner", channels: [], value: {},
+  });
+  const getMedia = vi.spyOn(graffiti, "getMedia").mockResolvedValue({
+    data: new Blob(["image"]), actor: "did:example:owner",
+  });
+  vi.spyOn(globals, "useGraffitiSynchronize").mockReturnValue(graffiti);
+  const refresh = ref(false);
+  scope.run(() => {
+    useGraffitiGet("url", {}, { refresh });
+    useGraffitiGetMedia("url", {}, { refresh: () => refresh.value });
+  });
+  await vi.waitFor(() => {
+    expect(get).toHaveBeenLastCalledWith("url", {}, { session: undefined, refresh: false });
+    expect(getMedia).toHaveBeenLastCalledWith("url", {}, { session: undefined, refresh: false });
+  });
+  refresh.value = true;
+  await vi.waitFor(() => {
+    expect(get).toHaveBeenLastCalledWith("url", {}, { session: undefined, refresh: true });
+    expect(getMedia).toHaveBeenLastCalledWith("url", {}, { session: undefined, refresh: true });
+  });
 });

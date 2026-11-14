@@ -6,4 +6,4 @@
 "@graffiti-garden/wrapper-vue": patch
 ---
 
-Cache object and media lookups for ten minutes using the existing persistent inbox cache, and let browsers cache media bytes through HTTP. Known deletions invalidate cached lookups; discovery and storage verification still check the server. Pass `{ cache: "no-cache" }` as the fourth getter argument to explicitly revalidate. Remove Vue's image cache and forward explicit polls to the implementation's freshness option.
+Reuse immutable object and media reads for up to a year using the existing persistent inbox cache and native HTTP caching. Add `options.refresh`: getters reuse saved results by default; discovery and continuation refresh by default, with `refresh: false` allowing completed saved queries. Missing or incomplete results still fetch. Known deletions invalidate getters, verification stays fresh, and explicit Vue polls refresh. Remove Vue's separate image cache. Deploy clients that send explicit no-cache verification requests before the storage Worker enables long-lived responses.

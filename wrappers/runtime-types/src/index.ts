@@ -1,3 +1,4 @@
+import { normalizeGraffitiReadOptions } from "@graffiti-garden/api";
 import type { Graffiti } from "@graffiti-garden/api";
 import {
   looseObject,
@@ -13,7 +14,6 @@ import {
   optional,
   nonnegative,
   extend,
-  literal,
 } from "zod/mini";
 
 export const GraffitiPostObjectSchema = looseObject({
@@ -40,6 +40,11 @@ export const GraffitiOptionalSessionSchema = optional(
   nullable(GraffitiSessionSchema),
 );
 
+export const GraffitiReadOptionsSchema = looseObject({
+  session: GraffitiOptionalSessionSchema,
+  refresh: optional(boolean()),
+});
+
 export const GraffitiJSONSchemaSchema = union([boolean(), looseObject({})]);
 
 export const GraffitiPostMediaSchema = looseObject({
@@ -53,10 +58,6 @@ export const GraffitiMediaAcceptSchema = looseObject({
   types: optional(array(string())),
   maxBytes: optional(int().check(nonnegative())),
 });
-
-const readOptionsSchema = optional(looseObject({
-  cache: optional(union([literal("default"), literal("no-cache")])),
-}));
 
 const requestOptionsSchema = looseObject({ state: optional(string()) });
 
@@ -100,18 +101,17 @@ export class GraffitiRuntimeTypes implements Graffiti {
   };
 
   get: Graffiti["get"] = (...args) => {
+    args[2] = normalizeGraffitiReadOptions(args[2]);
     const typedArgs = tuple([
       GraffitiObjectUrlSchema,
       GraffitiJSONSchemaSchema,
-      GraffitiOptionalSessionSchema,
-      readOptionsSchema,
+      GraffitiReadOptionsSchema,
     ]).parse(args);
 
     return this.graffiti.get<(typeof args)[1]>(
       typedArgs[0],
       typedArgs[1] as (typeof args)[1],
       typedArgs[2],
-      typedArgs[3],
     );
   };
 
@@ -132,11 +132,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
   };
 
   getMedia: Graffiti["getMedia"] = (...args) => {
+    args[2] = normalizeGraffitiReadOptions(args[2]);
     const typedArgs = tuple([
       url(),
       GraffitiMediaAcceptSchema,
-      GraffitiOptionalSessionSchema,
-      readOptionsSchema,
+      GraffitiReadOptionsSchema,
     ]).parse(args);
 
     return this.graffiti.getMedia(...typedArgs);
@@ -149,10 +149,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
   };
 
   discover: Graffiti["discover"] = (...args) => {
+    args[2] = normalizeGraffitiReadOptions(args[2]);
     const typedArgs = tuple([
       array(string()),
       GraffitiJSONSchemaSchema,
-      GraffitiOptionalSessionSchema,
+      GraffitiReadOptionsSchema,
     ]).parse(args);
     return this.graffiti.discover<(typeof args)[1]>(
       typedArgs[0],
@@ -163,7 +164,8 @@ export class GraffitiRuntimeTypes implements Graffiti {
 
   // @ts-ignore - inferred types on continueDiscover do not affect output
   continueDiscover: Graffiti["continueDiscover"] = (...args) => {
-    const typedArgs = tuple([string(), GraffitiOptionalSessionSchema]).parse(
+    args[1] = normalizeGraffitiReadOptions(args[1]);
+    const typedArgs = tuple([string(), GraffitiReadOptionsSchema]).parse(
       args,
     );
 

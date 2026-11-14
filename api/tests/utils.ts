@@ -51,5 +51,5 @@ export function continueStream<Schema extends JSONSchema>(
   type: "cursor",
   session?: GraffitiSession | null,
 ): GraffitiObjectStream<Schema> {
-  return graffiti.continueDiscover<Schema>(streamReturn.cursor, session);
+  return graffiti.continueDiscover<Schema>(streamReturn.cursor, { session });
 }

@@ -62,9 +62,7 @@ export class StorageBuckets {
     authorizationToken: string,
   ): Promise<void> {
     verifyHTTPSEndpoint(storageBucketEndpoint);
-    // DELETE the same representation used by cached reads, so the browser also
-    // invalidates its HTTP entry. Verification uses the always-fresh base URL.
-    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}?cache=600`;
+    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}`;
 
     await fetchWithErrorHandling(url, {
       method: "DELETE",
@@ -190,8 +188,7 @@ export class StorageBuckets {
     maxBytes?: number,
     cache?: "default" | "no-cache",
   ): Promise<Uint8Array> {
-    // The opt-in URL keeps older clients' verification fresh during rollout.
-    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}${cache === undefined ? "" : "?cache=600"}`;
+    const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}`;
     const response = await fetchWithErrorHandling(url, { cache: cache ?? "no-cache" });
 
     // Stream the body so that we can enforce maxBytes and halt the stream

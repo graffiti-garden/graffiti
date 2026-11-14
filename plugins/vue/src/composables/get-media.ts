@@ -1,9 +1,10 @@
+import type { GraffitiVueReadOptions } from "./read-options";
 import type {
   GraffitiMedia,
   GraffitiMediaAccept,
   GraffitiSession,
 } from "@graffiti-garden/api";
-import { GraffitiErrorNotFound } from "@graffiti-garden/api";
+import { normalizeGraffitiReadOptions, GraffitiErrorNotFound } from "@graffiti-garden/api";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
 import { useGraffitiSynchronize } from "../globals";
@@ -15,9 +16,9 @@ import { useGraffitiSynchronize } from "../globals";
  *
  * Its corresponding renderless component is {@link GraffitiGetMedia}.
  *
- * The arguments of this composable are the same as Graffiti.getMedia,
- * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
- * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
+ * The first two arguments and individual option fields can be refs or getters.
+ * The initial read can reuse saved data; `options.refresh: true` refreshes it.
+ * Explicit polls always refresh.
  * As they change the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
@@ -35,13 +36,17 @@ import { useGraffitiSynchronize } from "../globals";
 export function useGraffitiGetMedia(
   url: MaybeRefOrGetter<string>,
   accept: MaybeRefOrGetter<GraffitiMediaAccept>,
-  session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+  options?:
+    | GraffitiVueReadOptions
+    | MaybeRefOrGetter<GraffitiSession | null | undefined>,
 ): {
   media: Ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>;
   error: Ref<Error | null>;
   poll: () => Promise<void>;
 } {
   const graffiti = useGraffitiSynchronize();
+  const options_ = (): GraffitiVueReadOptions =>
+    normalizeGraffitiReadOptions(toValue(options));
   const media = ref<(GraffitiMedia & { dataUrl: string }) | null | undefined>(
     undefined,
   );
@@ -67,7 +72,11 @@ export function useGraffitiGetMedia(
   }
 
   const args_ = () =>
-    [toValue(url), toValue(accept), toValue(session)] as const;
+    [
+      toValue(url),
+      toValue(accept),
+      { session: toValue(options_().session), refresh: toValue(options_().refresh) },
+    ] as const;
   let handledPollCounter = pollCounter.value;
 
   watch(
@@ -92,8 +101,9 @@ export function useGraffitiGetMedia(
 
       try {
         const { data, actor, allowed } = await graffiti.getMedia(
-          ...args,
-          force ? { cache: "no-cache" } : undefined,
+          args[0],
+          args[1],
+          { ...args[2], refresh: force ? true : args[2].refresh },
         );
         if (!active) return;
         const dataUrl = URL.createObjectURL(data);

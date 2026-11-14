@@ -1,5 +1,5 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
-import { LABELED_MESSAGE_ID_KEY, type LabeledMessageBase } from "./messages";
+import { LABELED_MESSAGE_ID_KEY, MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
 
 // One record per inbox query. Messages live in the separate message cache;
 // this record tracks their IDs and where to continue fetching from the server.
@@ -158,6 +158,12 @@ export async function getMessageIdsCacheKey(
     );
 }
 
+// A response/validation started before deletion must not resurrect a message
+// in another saved query. Message IDs are immutable, so keep its deletion label.
+function preserveDeletion(previous: LabeledMessageBase | null | undefined, next: LabeledMessageBase | null) {
+  return previous?.l === MESSAGE_LABEL_TRASH ? previous : next;
+}
+
 async function resetCacheDB() {
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase("graffiti-inbox-cache");
@@ -210,13 +216,16 @@ export async function createCache(): Promise<Cache> {
           }
         },
         set: async (k, v) => {
-          await db.put("m", v, k);
+          const tx = db.transaction("m", "readwrite");
+          await tx.store.put(preserveDeletion(await tx.store.get(k), v), k);
+          await tx.done;
         },
         setMany: async (entries) => {
           if (entries.length === 0) return;
           const tx = db.transaction("m", "readwrite");
           await Promise.all([
-            ...entries.map(([k, v]) => tx.store.put(v, k)),
+            ...entries.map(async ([k, v]) =>
+              tx.store.put(preserveDeletion(await tx.store.get(k), v), k)),
             tx.done,
           ]);
         },
@@ -263,9 +272,9 @@ export async function createCache(): Promise<Cache> {
     messages: {
       getMany: async (keys) => keys.map((key) => m.get(key)),
       get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, v),
+      set: async (k, v) => void m.set(k, preserveDeletion(m.get(k), v)),
       setMany: async (entries) => {
-        for (const [k, v] of entries) m.set(k, v);
+        for (const [k, v] of entries) m.set(k, preserveDeletion(m.get(k), v));
       },
       del: async (k) => void m.delete(k),
     },

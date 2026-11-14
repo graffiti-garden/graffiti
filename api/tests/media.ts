@@ -144,14 +144,14 @@ export const graffitiMediaTests = (
         const mediaUrl = await graffiti.postMedia({ data, allowed }, session1);
 
         // Get it with the authorized user
-        const media = await graffiti.getMedia(mediaUrl, {}, session1);
+        const media = await graffiti.getMedia(mediaUrl, {}, { session: session1 });
         expect(await media.data.text()).toEqual(text);
         expect(media.data.type).toEqual("text/plain");
         expect(media.allowed).toEqual([]);
         expect(media.actor).toBe(session1.actor);
 
         // Get it with the unauthorized user
-        await expect(graffiti.getMedia(mediaUrl, {}, session2)).rejects.toThrow(
+        await expect(graffiti.getMedia(mediaUrl, {}, { session: session2 })).rejects.toThrow(
           GraffitiErrorNotFound,
         );
 
@@ -168,14 +168,14 @@ export const graffitiMediaTests = (
         const mediaUrl = await graffiti.postMedia({ data, allowed }, session1);
 
         // Get it with the authorized user
-        const media = await graffiti.getMedia(mediaUrl, {}, session1);
+        const media = await graffiti.getMedia(mediaUrl, {}, { session: session1 });
         expect(await media.data.text()).toEqual(text);
         expect(media.data.type).toEqual("text/plain");
         expect(media.allowed).toEqual(allowed);
         expect(media.actor).toBe(session1.actor);
 
         // Get it with the allowed user
-        const media2 = await graffiti.getMedia(mediaUrl, {}, session2);
+        const media2 = await graffiti.getMedia(mediaUrl, {}, { session: session2 });
         expect(await media2.data.text()).toEqual(text);
         expect(media2.data.type).toEqual("text/plain");
         expect(media2.allowed).toEqual([session2.actor]);
@@ -185,6 +185,14 @@ export const graffitiMediaTests = (
         await expect(graffiti.getMedia(mediaUrl, {})).rejects.toThrow(
           GraffitiErrorNotFound,
         );
+      });
+
+      it("getMedia accepts a legacy session argument", async () => {
+        const data = new Blob([randomString()], { type: "text/plain" });
+        const url = await graffiti.postMedia({ data, allowed: [] }, session);
+        const media = await graffiti.getMedia(url, {}, session);
+        expect(await media.data.text()).toBe(await data.text());
+        await graffiti.deleteMedia(url, session);
       });
     },
   );

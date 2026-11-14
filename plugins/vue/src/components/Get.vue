@@ -9,11 +9,12 @@ import type {
 import { useGraffitiGet } from "../composables/get";
 import ObjectInfo from "./ObjectInfo.vue";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     url: string | GraffitiObjectUrl;
     schema: Schema;
     session?: GraffitiSession | null;
-}>();
+    refresh?: boolean;
+}>(), { refresh: undefined });
 
 defineSlots<{
     default?(props: {
@@ -26,7 +27,7 @@ defineSlots<{
 const { object, error, poll } = useGraffitiGet<Schema>(
     toRef(() => props.url),
     toRef(() => props.schema),
-    toRef(() => props.session),
+    { session: toRef(() => props.session), refresh: toRef(() => props.refresh) },
 );
 </script>
 

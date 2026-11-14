@@ -192,17 +192,18 @@ export interface GraffitiSession {
   actor: string;
 }
 
-/** Options for reading an object or media. */
+/** Options shared by object reads, media reads, and discovery. */
 export interface GraffitiReadOptions {
+  /** Authenticate this read. Omit or use null to read only public data. */
+  session?: GraffitiSession | null;
   /**
-   * `default` permits implementation-defined caching (ten minutes in the
-   * decentralized implementation). A remote deletion may remain visible until
-   * expiration or until a discovery poll observes it. Use `no-cache` to check
-   * the server before returning data; cached bytes may still be revalidated.
+   * Refresh this read instead of reusing previously obtained results.
+   * Defaults to false for get/getMedia and true for discover/continueDiscover.
+   * With false, missing or incomplete results are still fetched. Known deletions
+   * invalidate saved results. A failed refresh is reported, not hidden by reuse.
    */
-  cache?: "default" | "no-cache";
+  refresh?: boolean;
 }
-
 
 /**
  * A stream of data that returned by {@link Graffiti.discover | `discover`}

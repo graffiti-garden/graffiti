@@ -1,3 +1,4 @@
+import type { GraffitiVueReadOptions } from "./read-options";
 import type {
   GraffitiObject,
   GraffitiObjectUrl,
@@ -5,7 +6,7 @@ import type {
   JSONSchema,
 } from "@graffiti-garden/api";
 import type { GraffitiObjectStreamSuccess } from "@graffiti-garden/wrapper-synchronize";
-import { GraffitiErrorNotFound } from "@graffiti-garden/api";
+import { normalizeGraffitiReadOptions, GraffitiErrorNotFound } from "@graffiti-garden/api";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
 import { useGraffitiSynchronize } from "../globals";
@@ -17,9 +18,9 @@ import { useGraffitiSynchronize } from "../globals";
  *
  * Its corresponding renderless component is {@link GraffitiGet}.
  *
- * The arguments of this composable are the same as Graffiti.get,
- * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
- * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
+ * The first two arguments and individual option fields can be refs or getters.
+ * The initial read can reuse saved data; `options.refresh: true` refreshes it.
+ * Explicit polls always refresh.
  * As they change the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
@@ -37,13 +38,17 @@ import { useGraffitiSynchronize } from "../globals";
 export function useGraffitiGet<Schema extends JSONSchema>(
   url: MaybeRefOrGetter<GraffitiObjectUrl | string>,
   schema: MaybeRefOrGetter<Schema>,
-  session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+  options?:
+    | GraffitiVueReadOptions
+    | MaybeRefOrGetter<GraffitiSession | null | undefined>,
 ): {
   object: Ref<GraffitiObject<Schema> | null | undefined>;
   error: Ref<Error | null>;
   poll: () => Promise<void>;
 } {
   const graffiti = useGraffitiSynchronize();
+  const options_ = (): GraffitiVueReadOptions =>
+    normalizeGraffitiReadOptions(toValue(options));
 
   const object: Ref<GraffitiObject<Schema> | null | undefined> = ref(undefined);
   const error = ref<Error | null>(null);
@@ -56,7 +61,11 @@ export function useGraffitiGet<Schema extends JSONSchema>(
   });
 
   const args_ = () =>
-    [toValue(url), toValue(schema), toValue(session)] as const;
+    [
+      toValue(url),
+      toValue(schema),
+      { session: toValue(options_().session), refresh: toValue(options_().refresh) },
+    ] as const;
   watch(
     () => JSON.stringify(args_()),
     (_, __, onInvalidate) => {
@@ -107,9 +116,9 @@ export function useGraffitiGet<Schema extends JSONSchema>(
           if (error.value) object.value = undefined;
           error.value = null;
           try {
-            const options = initial ? undefined : { cache: "no-cache" as const };
+            const options = { ...args[2], refresh: initial ? args[2].refresh : true };
             initial = false;
-            await graffiti.get<Schema>(...args, options);
+            await graffiti.get<Schema>(args[0], args[1], options);
           } catch (e) {
             if (!active) return;
             if (

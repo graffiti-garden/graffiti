@@ -73,9 +73,9 @@ it("uses one policy discovery per site and actor, and writes no policy for ordin
       value: { "via site": { name: "Notes", id: '["https://notes.example"]' } },
       channels: ["notes"], allowed: [],
     }, { actor: "alice" });
-    const firstRead = guarded.get(foreign.url, {}, Object.assign({}, { actor: "alice" }, { source: site }));
+    const firstRead = guarded.get(foreign.url, {}, { session: Object.assign({}, { actor: "alice" }, { source: site }) });
     await firstRead;
-    await guarded.get(foreign.url, {}, Object.assign({}, { actor: "alice" }, { source: site }));
+    await guarded.get(foreign.url, {}, { session: Object.assign({}, { actor: "alice" }, { source: site }) });
     expect(ask).toHaveBeenCalledTimes(1);
     expect(post.mock.calls.filter(([input]) =>
       (input as GraffitiObjectBase).value.action === "Remember permission")).toHaveLength(1);

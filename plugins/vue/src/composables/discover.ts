@@ -1,3 +1,4 @@
+import type { GraffitiVueDiscoverOptions } from "./read-options";
 import type {
   GraffitiObject,
   GraffitiObjectStream,
@@ -7,7 +8,7 @@ import type {
   JSONSchema,
 } from "@graffiti-garden/api";
 import type { GraffitiObjectStreamSuccess } from "@graffiti-garden/wrapper-synchronize";
-import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
+import { normalizeGraffitiReadOptions, GraffitiErrorCursorExpired } from "@graffiti-garden/api";
 import type { MaybeRefOrGetter, Ref } from "vue";
 import { ref, toValue, watch, onScopeDispose } from "vue";
 import { useGraffitiSynchronize } from "../globals";
@@ -21,12 +22,10 @@ const BATCH_PERIOD_MS = 50;
  *
  * Its corresponding renderless component is {@link GraffitiDiscover}.
  *
- * The arguments of this composable are largely the same as Graffiti.discover,
- * only they can also be [Refs](https://vuejs.org/api/reactivity-core.html#ref)
- * or [getters](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/get#description).
- * There is one additional optional argument `autopoll`, which when `true`,
- * will automatically poll for new objects.
- * As they change the arguments change, the output will automatically update.
+ * The first two arguments and individual option fields can be refs or getters.
+ * Discovery refreshes by default; `options.refresh: false` allows saved results.
+ * Explicit polls always refresh. Set `options.autopoll` to keep polling.
+ * As the arguments change, the output will automatically update.
  * Reactivity only triggers when the root array or object changes,
  * not when the elements or properties change.
  * If you need deep reactivity, wrap your argument in a getter.
@@ -44,13 +43,19 @@ const BATCH_PERIOD_MS = 50;
 export function useGraffitiDiscover<Schema extends JSONSchema>(
   channels: MaybeRefOrGetter<string[]>,
   schema: MaybeRefOrGetter<Schema>,
-  session?: MaybeRefOrGetter<GraffitiSession | undefined | null>,
+  options?:
+    | GraffitiVueDiscoverOptions
+    | MaybeRefOrGetter<GraffitiSession | null | undefined>,
   /**
-   * Whether to automatically poll for new objects.
+   * @deprecated Pass `{ session, autopoll }` as the third argument instead.
    */
-  autopoll: MaybeRefOrGetter<boolean> = false,
+  legacyAutopoll: MaybeRefOrGetter<boolean> = false,
 ) {
   const graffiti = useGraffitiSynchronize();
+  const options_ = (): GraffitiVueDiscoverOptions =>
+    normalizeGraffitiReadOptions(toValue(options));
+
+  const autopoll_ = () => toValue(options_().autopoll) ?? toValue(legacyAutopoll);
 
   // Output
   const objectsRaw: Map<string, GraffitiObject<Schema>> = new Map();
@@ -72,7 +77,11 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
   const refresh = ref(0);
   const args_ = () =>
-    [toValue(channels), toValue(schema), toValue(session)] as const;
+    [
+      toValue(channels),
+      toValue(schema),
+      { session: toValue(options_().session), refresh: toValue(options_().refresh) },
+    ] as const;
   watch(
     () => `${refresh.value}:${JSON.stringify(args_())}`,
     (_, __, onInvalidate) => {
@@ -193,7 +202,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
               if (!active) return;
               if (result.done) {
                 continueFn = () =>
-                  graffiti.continueDiscover<Schema>(result.value.cursor, args[2]);
+                  graffiti.continueDiscover<Schema>(result.value.cursor, { ...args[2], refresh: true });
                 completed = true;
                 break;
               } else if (result.value.error) {
@@ -219,7 +228,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
           }
         })().finally(() => {
           pollPromise = undefined;
-          if (active && completed && !syncFailure && toValue(autopoll)) void poll_();
+          if (active && completed && !syncFailure && autopoll_()) void poll_();
         });
         return pollPromise;
       };
@@ -230,7 +239,7 @@ export function useGraffitiDiscover<Schema extends JSONSchema>(
 
   // Start polling if autopoll turns true
   watch(
-    () => toValue(autopoll),
+    autopoll_,
     (value) => value && poll(),
   );
 

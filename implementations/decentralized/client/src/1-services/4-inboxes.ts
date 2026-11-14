@@ -68,13 +68,22 @@ const INBOX_REQUEST_TIMEOUT_MS = 30_000;
 // lock acquisition; the request above bounds work after acquisition.
 const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
 
-type StreamSource<Schema extends JSONSchema> =
+// Immutable read results can be reused for a year; deletions invalidate them.
+const READ_CACHE_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000;
+
+export interface InboxReadOptions {
+  refresh?: boolean;
+  // Getter histories are keyed separately so deleting one does not expire
+  // discovery cursors. This also guards against stale in-flight getter writes.
+  url?: string;
+}
+
+type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & (
   | {
       kind: "query";
       inboxUrl: string;
       body: Uint8Array<ArrayBuffer>;
       schema: Schema;
-      read?: { url: string; maxAge: number };
       inboxToken?: string | null;
     }
   | {
@@ -87,7 +96,7 @@ type StreamSource<Schema extends JSONSchema> =
       kind: "export";
       inboxUrl: string;
       inboxToken: string;
-    };
+    });
 
 export class Inboxes {
   getAuthorizationEndpoint = getAuthorizationEndpoint;
@@ -284,7 +293,8 @@ export class Inboxes {
     ) as Schema;
     const validator = await compileGraffitiObjectSchema(objectSchema);
     const body = source.kind === "query" ? source.body : undefined;
-    const read = source.kind === "query" ? source.read : undefined;
+    const read = source.options?.url ? { url: source.options.url } : undefined;
+    const refresh = source.options?.refresh !== false;
     const messageIdsCacheKey = source.kind === "continue"
       ? source.cursor.messageIdsCacheKey
       : (read ? readCachePrefix(read.url) : "") +
@@ -330,13 +340,12 @@ export class Inboxes {
               return { query };
             }
 
-            // Only getters opt into bounded reuse. Discovery/continuation still
-            // polls the server, and incomplete or empty queries are never reused.
+            // Reuse only a completed query. An empty completed discovery is
+            // useful saved state too; a missing/partial query must still fetch.
             const now = Date.now();
             if (
-              read && read.maxAge > 0 && query?.hasMore === false &&
-              query.messageIds.length && query.checkedAt !== undefined &&
-              query.checkedAt <= now && now - query.checkedAt < read.maxAge
+              !refresh && query?.hasMore === false && query.checkedAt !== undefined &&
+              query.checkedAt <= now && now - query.checkedAt < READ_CACHE_MAX_AGE_MS
             ) return { query };
 
             // A cached Retry-After should not keep other tabs waiting on this lock.
@@ -514,7 +523,7 @@ export class Inboxes {
     tags: Uint8Array[],
     objectSchema: Schema,
     inboxToken?: string | null,
-    read?: { url: string; maxAge: number },
+    options?: InboxReadOptions,
   ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
     const body = new Uint8Array(dagCborEncode({
@@ -527,7 +536,7 @@ export class Inboxes {
       body,
       schema: objectSchema,
       inboxToken,
-      read,
+      options,
     });
   }
 
@@ -535,6 +544,7 @@ export class Inboxes {
     inboxUrl: string,
     cursor: string,
     inboxToken?: string | null,
+    options?: InboxReadOptions,
   ): MessageStream<{}> {
     verifyHTTPSEndpoint(inboxUrl);
 
@@ -545,6 +555,7 @@ export class Inboxes {
       inboxUrl,
       cursor: parsedCursor,
       inboxToken,
+      options,
     });
   }
 

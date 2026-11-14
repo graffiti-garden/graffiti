@@ -41,7 +41,7 @@ it("preserves early getter updates and tombstones in order, with snapshots and n
   const compilation = await delayCompilation(schema);
   const local = new GraffitiLocal();
   const sync = new ObservableSynchronize(local);
-  const stream = sync.synchronizeDiscover(["visible"], schema, { actor: "did:example:reader" });
+  const stream = sync.synchronizeDiscover(["visible"], schema, { session: { actor: "did:example:reader" } });
   const next = stream.next();
   let delivered = false;
   void next.then(() => { delivered = true; });

@@ -32,7 +32,7 @@ async function findChatAdmin(channel: string, session: GraffitiSession) {
           },
         },
       } as const,
-      session,
+      { session },
     )) {
       if (result.error || result.tombstone) continue;
 

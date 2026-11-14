@@ -1,8 +1,9 @@
 import {
   GraffitiErrorForbidden,
+  normalizeGraffitiReadOptions,
+  type GraffitiReadOptions,
   type Graffiti,
   type GraffitiMediaAccept,
-  type GraffitiReadOptions,
   type GraffitiObject,
   type GraffitiObjectStream,
   type GraffitiPostMedia,
@@ -250,6 +251,9 @@ export class Guard {
     source: Source,
   ): Promise<Prepared | undefined> {
     const session = snapshotSession(sessionFromArgs(args, method));
+    const options = method === "get" || method === "getMedia"
+      ? { ...normalizeGraffitiReadOptions(args[2] as GraffitiReadOptions | GraffitiSession | undefined), session }
+      : { session, refresh: true };
     if (method === "post") {
       const { object, confirm } = preparePost(args[0], source);
       return {
@@ -262,13 +266,9 @@ export class Guard {
       const url = objectUrl(args[0]);
       // Do not evaluate an app-supplied schema until private-read approval.
       // Otherwise schema mismatch becomes an oracle for a known private URL.
-      const options = method === "get"
-        ? structuredClone(args[3]) as GraffitiReadOptions | undefined
-        : { cache: "no-cache" as const };
-      const object = await this.graffiti.get(url, {}, session, options);
+      const object = await this.graffiti.get(url, {}, options);
       if (method === "get") {
-        return this.prepareObjectRead(object, source,
-          options === undefined ? [url, args[1], session] : [url, args[1], session, options]);
+        return this.prepareObjectRead(object, source, [url, args[1], options]);
       }
       return this.prepareDelete(
         { kind: "object", object },
@@ -291,14 +291,11 @@ export class Guard {
         : {};
       // Preserve the caller's limits: the stamp changes neither bytes nor the
       // base MIME type. This one read supplies both provenance and file bytes.
-      const options = method === "getMedia"
-        ? structuredClone(args[3]) as GraffitiReadOptions | undefined
-        : { cache: "no-cache" as const };
-      const { media, from } = readMedia(await this.graffiti.getMedia(url, accept, session, options));
+      const { media, from } = readMedia(await this.graffiti.getMedia(url, accept, options));
       const subject = mediaSubject(media, url);
       if (method === "getMedia") {
         const prepared: Prepared = {
-          args: options === undefined ? [url, accept, session] : [url, accept, session, options],
+          args: [url, accept, options],
           subject,
           preview: { media },
           result: media,

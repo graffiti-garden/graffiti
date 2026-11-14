@@ -30,7 +30,7 @@ describe("login access", () => {
     const guarded = new GuardedGraffiti(
       graffiti, new Guard(graffiti, db, origin, async () => false, access), access, origin,
     );
-    const next = guarded.discover(["chat"], {}, { actor: "alice" }).next();
+    const next = guarded.discover(["chat"], {}, { session: { actor: "alice" } }).next();
     try {
       await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
       access.clear("alice");
@@ -62,7 +62,7 @@ describe("login access", () => {
     const guarded = new GuardedGraffiti(
       graffiti, new Guard(graffiti, db, origin, ask, access), access, origin,
     );
-    const read = guarded.getMedia("graffiti:file", {}, { actor: "alice" });
+    const read = guarded.getMedia("graffiti:file", {}, { session: { actor: "alice" } });
     try {
       await vi.waitFor(() => expect(ask).toHaveBeenCalledOnce());
       access.clear("alice");
@@ -197,11 +197,11 @@ describe("login access", () => {
       await expect(guard.authorize("post", [
         { value: { action: "Message" }, channels: [] }, session,
       ])).resolves.toBeDefined();
-      await expect(guard.authorize("discover", [[], {}, {
+      await expect(guard.authorize("discover", [[], {}, { session: {
         actor: "alice", source: [{ id: "chat", name: "Chat" }],
-      }])).resolves.toBeUndefined();
+      } }])).resolves.toBeUndefined();
       access.clear("alice");
-      await expect(guard.authorize("discover", [[], {}, session]))
+      await expect(guard.authorize("discover", [[], {}, { session }]))
         .rejects.toBeInstanceOf(GraffitiErrorForbidden);
     } finally {
       await db.destroy();
