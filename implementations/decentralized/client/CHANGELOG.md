@@ -1,5 +1,12 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.6.1
+
+### Patch Changes
+
+- 8032f26: Handle prefetched discovery and queued validation rejections immediately, while propagating errors only when consumed. Fatal schema/cursor errors and inbox failures still terminate discovery; ordinary endpoint failures remain stream errors.
+- 0a51182: Preserve the original query schema when continuing discovery after an inbox fails. Older cursors without a schema now expire and require fresh discovery.
+
 ## 0.6.0
 
 ### Minor Changes
