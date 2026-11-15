@@ -26,7 +26,7 @@ export class InboxAuditor extends GraffitiDecentralized {
   readonly verify: Verify = async (inbox, message, recipient) => {
     // Reuse the client's validation, including private tickets, record kinds,
     // DID resolution, and bounded storage reads. This path never sends or pins.
-    const result = await this.processOneInboxMessage(inbox, message, undefined, recipient);
+    const result = await this.processOneInboxMessage(inbox, message, recipient);
     if (!result) return "missing";
     return "error" in result ? result.retryable ? "unavailable" : "invalid" : "verified";
   };
