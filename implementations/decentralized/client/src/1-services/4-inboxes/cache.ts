@@ -50,11 +50,8 @@ const readInvalidationKey = (url: string) => `read-invalidation:${encodeURICompo
 
 export type Cache = {
   messages: {
-    get(k: string): Promise<InboxMessageBase | null | undefined>;
-    getMany(keys: string[]): Promise<(InboxMessageBase | null | undefined)[]>;
-    set(k: string, value: InboxMessageBase | null): Promise<void>;
+    getMany(keys: string[]): Promise<(InboxMessageBase | undefined)[]>;
     setMany(entries: [string, InboxMessageBase][]): Promise<void>;
-    del(k: string): Promise<void>;
   };
   messageIds: {
     get(k: string): Promise<CacheQueryValue | undefined>;
@@ -179,7 +176,7 @@ export async function createCache(): Promise<Cache> {
             return Promise.all(keys.map((key) => db.get("m", key)));
           }
 
-          const batches: Promise<(InboxMessageBase | null | undefined)[]>[] = [];
+          const batches: Promise<(InboxMessageBase | undefined)[]>[] = [];
           // Queue every read before awaiting, so later writes cannot overtake
           // part of this replay. Bounded transactions avoid both a transaction
           // per message and one very large transaction for the whole history.
@@ -194,31 +191,14 @@ export async function createCache(): Promise<Cache> {
           }
           return (await Promise.all(batches)).flat();
         },
-        get: async (k) => {
-          try {
-            return db.get("m", k);
-          } catch (error) {
-            console.error("Error getting message from cache:", error);
-            console.error("resetting cache...");
-            await resetCacheDB();
-            return undefined;
-          }
-        },
-        set: async (k, v) => {
-          const tx = db.transaction("m", "readwrite");
-          await tx.store.put(v, k);
-          await tx.done;
-        },
         setMany: async (entries) => {
           if (entries.length === 0) return;
           const tx = db.transaction("m", "readwrite");
           await Promise.all([
-            ...entries.map(async ([k, v]) =>
-              tx.store.put(v, k)),
+            ...entries.map(([k, v]) => tx.store.put(v, k)),
             tx.done,
           ]);
         },
-        del: (k) => db.delete("m", k),
       },
       messageIds: {
         get: async (k) => {
@@ -253,19 +233,16 @@ export async function createCache(): Promise<Cache> {
     };
   }
 
-  const m = new Map<string, InboxMessageBase | null>();
+  const m = new Map<string, InboxMessageBase>();
   const q = new Map<string, CacheQueryValue>();
   const readInvalidationTokens = new Map<string, string>();
 
   return {
     messages: {
       getMany: async (keys) => keys.map((key) => m.get(key)),
-      get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, v),
       setMany: async (entries) => {
         for (const [k, v] of entries) m.set(k, v);
       },
-      del: async (k) => void m.delete(k),
     },
     messageIds: {
       get: async (k) => q.get(k),
