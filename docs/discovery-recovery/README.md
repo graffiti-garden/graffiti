@@ -41,7 +41,8 @@ safety under garbage collection. These protect against reproduced data-loss race
 or enforce the agreed policy. The separate verification cache keeps that state out
 of the raw inbox service; replacing it with `cacheLabel` would restore the leakage.
 
-Removed redundant pin-attempt state, an unused validation argument/generic, an
+Removed unused single-message cache operations and negative-cache types, redundant
+pin-attempt state, an unused validation argument/generic and field imports, an
 iterator cast, an unnecessary cursor-map copy, personal-export retention changes,
 and a redundant maximum-sequence query on every send. The large reduction should
 come from separating concerns and deferring optional operational work, not removing
