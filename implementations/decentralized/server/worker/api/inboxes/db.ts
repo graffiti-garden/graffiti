@@ -122,7 +122,7 @@ export async function sendMessage(
   const statements = [
     database.prepare(`DELETE FROM inbox_messages AS m WHERE hash = ? AND ${EXPIRED_MESSAGE_SQL}`).bind(messageHash),
     database.prepare(`UPDATE inbox_sequence
-      SET value = MAX(value, (SELECT COALESCE(MAX(message_seq), 0) FROM inbox_messages)) + 1 WHERE id = 1`),
+      SET value = value + 1 WHERE id = 1`),
     database.prepare(`INSERT INTO inbox_messages
       (message_seq, message_id, hash, inbox_seq, tags, object, metadata, created_at)
       VALUES ((SELECT value FROM inbox_sequence WHERE id = 1), ?, ?, ?, ?, ?, ?, ${DATABASE_NOW_MS})

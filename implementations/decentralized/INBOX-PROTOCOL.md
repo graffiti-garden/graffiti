@@ -83,12 +83,13 @@ entries expire 30 days after arrival. Personal expiration stays disabled, and
 legacy rows with NULL arrival times remain exempt until audited. Expiration means
 “no longer indexed”; it never proves the stored object was deleted.
 
-Cursor validity uses the same 30-day interval. A continuation retains the previous
+Query cursor validity uses the same 30-day interval. A continuation retains the previous
 deadline through intermediate pages and renews only after catching up. Otherwise,
 a very slow reader could keep extending a cursor while unread entries expired.
 The anchor is captured before the query, so messages arriving during the query
 are not older than the renewed cursor. A fresh paged scan has ordinary concurrent
-change semantics, not a frozen snapshot. Old server cursor formats expire.
+change semantics, not a frozen snapshot. Old query cursor formats expire. Personal
+exports keep their existing cursor behavior because personal entries do not expire.
 
 Queries hide expired entries immediately; hourly cleanup removes at most 1,000
 rows per run. Any pin prevents expiry. Removing the last pin after the original

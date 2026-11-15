@@ -66,7 +66,6 @@ const QueryResultsSchema = z.object({
 });
 
 const ExportCursorSchema = z.object({
-  version: z.literal(1),
   sinceSeq: SinceSeqSchema,
   createdAt: z.number(),
   waitTil: z.number().optional(),
@@ -360,9 +359,8 @@ inbox.openapi(exportRoute, async (c) => {
   }
 
   let sinceSeq: number | undefined = undefined;
-  const scanStartedAt = Date.now();
-  let createdAt = scanStartedAt;
   if (body.cursor) {
+    let createdAt: number;
     let waitTil: number | undefined;
     try {
       const cursorBytes = decodeBase64(body.cursor);
@@ -374,7 +372,7 @@ inbox.openapi(exportRoute, async (c) => {
     } catch (error) {
       throw new HTTPException(410, { message: "Invalid cursor." });
     }
-    if (createdAt + INBOX_RETENTION_MS <= Date.now()) {
+    if (createdAt + INBOX_RETENTION_MS < Date.now()) {
       throw new HTTPException(410, { message: "Cursor expired" });
     }
     if (waitTil && waitTil > Date.now()) {
@@ -382,20 +380,17 @@ inbox.openapi(exportRoute, async (c) => {
     }
   }
 
+  const createdAt = Date.now();
   const { results, lastSeq, hasMore } = await exportMessages(
     c,
     inboxId,
     accountId,
     sinceSeq,
   );
-  if (body.cursor && createdAt + INBOX_RETENTION_MS <= Date.now()) {
-    throw new HTTPException(410, { message: "Cursor expired" });
-  }
 
   const cursorCBOR: z.infer<typeof ExportCursorSchema> = {
-    version: 1,
     sinceSeq: lastSeq,
-    createdAt: hasMore ? createdAt : scanStartedAt,
+    createdAt,
     ...(!hasMore
       ? {
           waitTil: Date.now() + RATE_LIMIT_SECONDS * 1000,
