@@ -94,7 +94,7 @@ export function inboxCacheTests() {
       const firstReplay = replayQuery(cache, inboxUrl, queryKey, query);
       const updated = message(299);
       updated.m.o.value.index = -1;
-      const write = cache.messages.set(getMessageCacheKey(inboxUrl, updated.id), updated);
+      const write = cache.messages.setMany([[getMessageCacheKey(inboxUrl, updated.id), updated]]);
 
       expect((await firstReplay)[299].m.o.value.index).toBe(299);
       await write;
@@ -112,12 +112,13 @@ export function inboxCacheTests() {
       );
     });
 
-    test.each(["deleted", "null"])("invalidates a %s cached message", async (kind) => {
+    test("invalidates a query whose message is no longer cached", async () => {
       const cache = await createCache();
       const query = await seed(cache, 129);
-      const key = getMessageCacheKey(inboxUrl, "message-128");
-      if (kind === "deleted") await cache.messages.del(key);
-      else await cache.messages.set(key, null);
+      // A saved query can outlive the records it refers to. The raw cache no
+      // longer has a negative-cache entry or a single-message mutation API.
+      query.messageIds[128] = "uncached-message";
+      await cache.messageIds.set(queryKey, query);
 
       await expect(replayQuery(cache, inboxUrl, queryKey, query)).rejects.toThrow(
         "Cache out of sync",
@@ -154,7 +155,8 @@ export function inboxCacheTests() {
       const query = await seed(cache, 300);
       const result = await replayQuery(cache, inboxUrl, queryKey, query, 128);
       expect(result.map((entry) => entry.id)).toEqual(query.messageIds.slice(128));
-      await cache.messages.del(getMessageCacheKey(inboxUrl, "message-299"));
+      query.messageIds[299] = "uncached-message";
+      await cache.messageIds.set(queryKey, query);
       await expect(replayQuery(cache, inboxUrl, queryKey, query)).rejects.toThrow(
         "Cache out of sync",
       );
