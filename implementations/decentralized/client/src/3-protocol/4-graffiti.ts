@@ -875,7 +875,7 @@ export class GraffitiDecentralized implements Graffiti {
   ): GraffitiObjectStream<Schema> {
     const lastTombstoneState = new Map<string, boolean>();
     const scan = newScan(session?.actor);
-    const nextCursors = { ...cursors };
+    const nextCursors: Record<string, string> = {};
     const validator = await compileGraffitiObjectSchema<Schema>(schema);
 
     let allInboxes: { serviceEndpoint: string; token?: string; pin?: boolean }[];
@@ -1188,32 +1188,32 @@ export class GraffitiDecentralized implements Graffiti {
     const scan = options?.scan ?? newScan(recipient);
     const { pin, scan: _scan, ...readOptions } = options ?? {};
     const toPin = new Set<string>();
-    let pinAttempted = false;
     const flushPins = async () => {
-      if (pinAttempted || !toPin.size || !inboxToken || !recipient) return;
-      pinAttempted = true;
-      await this.inboxes.pin(inboxEndpoint, [...toPin], inboxToken);
-      for (const id of toPin) this.confirmedPins.add(this.pinKey(inboxEndpoint, recipient, id));
+      if (!toPin.size || !inboxToken || !recipient) return;
+      const ids = [...toPin];
+      toPin.clear(); // A failed batch retries on the next poll, not in finally.
+      await this.inboxes.pin(inboxEndpoint, ids, inboxToken);
+      for (const id of ids) this.confirmedPins.add(this.pinKey(inboxEndpoint, recipient, id));
     };
     if (pin && inboxToken && recipient) scan.personal = { endpoint: inboxEndpoint, token: inboxToken, actor: recipient };
-    const iterator: MessageStream<Schema> =
+    const iterator: MessageStream<{}> =
       "tags" in queryArguments
-        ? this.inboxes.query<Schema>(
+        ? this.inboxes.query<{}>(
             inboxEndpoint,
             queryArguments.tags,
             queryArguments.objectSchema,
             inboxToken,
             readOptions,
           )
-        : (this.inboxes.continueQuery(
+        : this.inboxes.continueQuery(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
             readOptions,
-          ) as unknown as MessageStream<Schema>);
+          );
 
     const inFlight: Promise<
-      | { result: SingleEndpointQueryItem<Schema> | void }
+      | { result: SingleEndpointQueryItem<{}> | void }
       | { error: unknown }
     >[] = [];
     let doneValue: string | null = null;
@@ -1231,10 +1231,9 @@ export class GraffitiDecentralized implements Graffiti {
 
           // Capture rejections immediately, even if another read is pending
           // or the caller closes before reaching this result.
-          const processPromise = this.processOneInboxMessage<Schema>(
+          const processPromise = this.processOneInboxMessage(
             inboxEndpoint,
             itResult.value,
-            inboxToken,
             recipient,
             scan,
           ).then(
@@ -1250,13 +1249,11 @@ export class GraffitiDecentralized implements Graffiti {
 
         if (!nextProcessedPromise) {
           if (doneValue !== null) {
-            if (toPin.size && inboxToken && recipient) {
-              try {
-                await flushPins();
-              } catch (cause) {
-                retryNeeded = true;
-                yield { error: new Error("Could not pin validated inbox messages", { cause }), retryable: true };
-              }
+            try {
+              await flushPins();
+            } catch (cause) {
+              retryNeeded = true;
+              yield { error: new Error("Could not pin validated inbox messages", { cause }), retryable: true };
             }
             if (!options?.scan) {
               for await (const { item } of this.checkDeletionHints(scan)) yield item;
@@ -1289,13 +1286,12 @@ export class GraffitiDecentralized implements Graffiti {
     }
   }
 
-  protected async processOneInboxMessage<Schema extends JSONSchema>(
+  protected async processOneInboxMessage(
     inboxEndpoint: string,
-    result: InboxMessage<Schema>,
-    _inboxToken?: string | null,
+    result: InboxMessage<{}>,
     recipient?: string | null,
     scan: DiscoveryScan = newScan(recipient),
-  ): Promise<SingleEndpointQueryItem<Schema> | void> {
+  ): Promise<SingleEndpointQueryItem<{}> | void> {
     const object = result.m.o;
     let decoded: unknown;
     try { decoded = dagCborDecode(result.m.m); }
@@ -1314,7 +1310,7 @@ export class GraffitiDecentralized implements Graffiti {
     const metadata = parsed.data;
     const storageBucketKey = metadata.k;
     const allowedTickets = "s" in metadata ? metadata.s : undefined;
-    const resultBase: SingleEndpointQueryResult<Schema> = {
+    const resultBase: SingleEndpointQueryResult<{}> = {
       kind: metadata[RECORD_KIND_KEY], messageId: result.id, object,
       storageBucketKey, allowedTickets, tags: result.m.t,
       announcements: "n" in metadata ? metadata.n : undefined,
