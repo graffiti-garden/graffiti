@@ -87,6 +87,7 @@ type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & 
       kind: "continue";
       inboxUrl: string;
       cursor: infer_<typeof CursorSchema>;
+      replayIds: string[];
       inboxToken?: string | null;
     }
   | {
@@ -282,7 +283,7 @@ export class Inboxes {
     const { inboxUrl, inboxToken } = source;
     const type = source.kind === "export" ? "export" : "query";
     // Continuations carry their validated schema in the cursor; export uses
-    // the empty schema. Both callers instantiate this stream with Schema = {}.
+    // the empty schema.
     const objectSchema = (
       source.kind === "query"
         ? source.schema
@@ -471,6 +472,7 @@ export class Inboxes {
         messageIdsCacheKey,
         query,
         numSeen,
+        firstPage && source.kind === "continue" ? source.replayIds : [],
       );
       numSeen = query.messageIds.length;
       seenGeneration = query.generation;
@@ -531,20 +533,22 @@ export class Inboxes {
     });
   }
 
-  continueQuery(
+  continueQuery<Schema extends JSONSchema = {}>(
     inboxUrl: string,
     cursor: string,
     inboxToken?: string | null,
     options?: InboxReadOptions,
-  ): MessageStream<{}> {
+    replayIds: string[] = [],
+  ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
 
     const decodedCursor = JSON.parse(cursor);
     const parsedCursor = CursorSchema.parse(decodedCursor);
-    return this.messageStreamer<{}>({
+    return this.messageStreamer<Schema>({
       kind: "continue",
       inboxUrl,
       cursor: parsedCursor,
+      replayIds,
       inboxToken,
       options,
     });

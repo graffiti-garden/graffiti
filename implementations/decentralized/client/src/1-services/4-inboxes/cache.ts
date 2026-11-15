@@ -1,4 +1,5 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
+import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
 import { LABELED_MESSAGE_ID_KEY, MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
 
 // One record per inbox query. Messages live in the separate message cache;
@@ -77,10 +78,19 @@ export async function replayQuery(
   messageIdsCacheKey: string,
   query: CacheQueryValue,
   numSeen = 0,
+  replayIds: string[] = [],
 ): Promise<LabeledMessageBase[]> {
-  // Filter out all messageIds before
-  // the number already seen
-  const messageIds = query.messageIds.slice(numSeen);
+  // Replay requested earlier messages without rewinding the continuation.
+  // Keep their inbox order (including deletion hints), and require them to
+  // belong to this query's history, including its schema and reader scope.
+  const requested = new Set(replayIds);
+  const earlierIds = requested.size
+    ? query.messageIds.slice(0, numSeen).filter((id) => requested.delete(id))
+    : [];
+  if (requested.size) {
+    throw new GraffitiErrorCursorExpired("Replay message is outside the cursor's history");
+  }
+  const messageIds = [...earlierIds, ...query.messageIds.slice(numSeen)];
 
   // Get all the messages pointed to in the cache
   const messages = await cache.messages.getMany(
@@ -91,7 +101,7 @@ export async function replayQuery(
     try {
       await cache.messageIds.del(messageIdsCacheKey);
     } catch {}
-    throw new Error("Cache out of sync - perhaps clear browser storage");
+    throw new GraffitiErrorCursorExpired("Cache out of sync - restart discovery");
   }
   return messages as LabeledMessageBase[];
 }

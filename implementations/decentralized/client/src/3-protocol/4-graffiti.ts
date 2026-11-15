@@ -151,6 +151,9 @@ export interface GraffitiDecentralizedOptions {
 }
 
 const CONCURRENCY = 128;
+const INITIAL_READ_RETRY_MS = 1_000;
+const MAX_READ_RETRY_MS = 60_000;
+const MAX_READ_RETRIES_PER_POLL = 32;
 const LOCAL_STORAGE_REMEMBERED_HANDLE_KEY = "graffiti-login-remembered-handle";
 
 // @ts-ignore
@@ -939,12 +942,8 @@ export class GraffitiDecentralized implements Graffiti {
           };
           this.tryLogoutIfUnauthorized(next.error, session);
         } else if (next.result.done) {
-          // A retryable object error leaves this inbox's previous checkpoint
-          // intact, even though its other results were delivered successfully.
           const inbox = allInboxes[next.index];
-          if (next.result.value !== undefined) {
-            cursors[inbox.serviceEndpoint] = next.result.value;
-          }
+          cursors[inbox.serviceEndpoint] = next.result.value;
           // Remove it from the race
           indexedIteratorNexts[next.index] = new Promise(() => {});
           active--;
@@ -1258,6 +1257,29 @@ export class GraffitiDecentralized implements Graffiti {
     recipient?: string | null,
     options?: InboxReadOptions,
   ): SingleEndpointQueryIterator<Schema> {
+    let pending = new Map<string, infer_<typeof PendingReadSchema>>();
+    let replayIds: string[] = [];
+    let deferred = false;
+    if ("cursor" in queryArguments) {
+      let checkpoint: infer_<typeof SingleEndpointCursorSchema>;
+      try {
+        checkpoint = SingleEndpointCursorSchema.parse(JSON.parse(queryArguments.cursor));
+      } catch {
+        throw new GraffitiErrorCursorExpired("Invalid discovery checkpoint");
+      }
+      queryArguments = { cursor: checkpoint.cursor };
+      pending = new Map(checkpoint.pending.map((retry) => [retry.id, retry]));
+      // Eligibility is checked once per poll. Never sleep or retry twice in
+      // this stream. Oldest due reads go first so a failing read cannot starve others.
+      const now = Date.now();
+      replayIds = [...pending.values()]
+        .filter((retry) => retry.retryAt <= now)
+        .sort((a, b) => a.retryAt - b.retryAt)
+        .slice(0, MAX_READ_RETRIES_PER_POLL)
+        .map((retry) => retry.id);
+      deferred = replayIds.length < pending.size;
+    }
+
     const iterator: MessageStream<Schema> =
       "tags" in queryArguments
         ? this.inboxes.query<Schema>(
@@ -1267,19 +1289,19 @@ export class GraffitiDecentralized implements Graffiti {
             inboxToken,
             options,
           )
-        : (this.inboxes.continueQuery(
+        : this.inboxes.continueQuery<Schema>(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
             options,
-          ) as unknown as MessageStream<Schema>);
+            replayIds,
+          );
 
     const inFlight: Promise<
-      | { result: SingleEndpointQueryItem<Schema> | void }
+      | { id: string; result: SingleEndpointQueryItem<Schema> | void }
       | { error: unknown }
     >[] = [];
     let doneValue: string | null = null;
-    let retryNeeded = false;
 
     try {
       while (true) {
@@ -1299,7 +1321,7 @@ export class GraffitiDecentralized implements Graffiti {
             inboxToken,
             recipient,
           ).then(
-            (result) => ({ result }),
+            (result) => ({ id: itResult.value.id, result }),
             (error: unknown) => ({ error }),
           );
 
@@ -1310,22 +1332,34 @@ export class GraffitiDecentralized implements Graffiti {
         const nextProcessedPromise = inFlight.shift();
 
         if (!nextProcessedPromise) {
-          if (doneValue !== null) return retryNeeded ? undefined : doneValue;
+          if (doneValue !== null) {
+            if (deferred && pending.size) {
+              yield { error: new Error("Some object reads are awaiting retry"), retryable: true };
+            }
+            // Each continuation keeps its own pending IDs. Another consumer's
+            // successful retry must not consume this consumer's delivery.
+            return JSON.stringify({
+              cursor: doneValue,
+              pending: [...pending.values()],
+            } satisfies infer_<typeof SingleEndpointCursorSchema>);
+          }
 
           throw new Error("Process queue empty but no return value");
         }
 
         const processed = await nextProcessedPromise;
         if ("error" in processed) throw processed.error;
+        if (processed.result && "error" in processed.result && processed.result.retryable) {
+          const previous = pending.get(processed.id);
+          const delay = Math.min(previous ? previous.delay * 2 : INITIAL_READ_RETRY_MS, MAX_READ_RETRY_MS);
+          pending.set(processed.id, { id: processed.id, delay, retryAt: Date.now() + delay });
+        } else {
+          pending.delete(processed.id);
+        }
         if (processed.result) {
-          // Expected object errors are results, not exceptions. Only temporary
-          // failures hold back the checkpoint; invalid content can be passed over.
-          if ("error" in processed.result) {
-            retryNeeded ||= processed.result.retryable;
-          }
           // Discovery/deletion streams report known removals immediately.
           // Getters invalidate after replay so old tombstones can precede a repost.
-          else if (processed.result.tombstone && !options?.url) {
+          if (!("error" in processed.result) && processed.result.tombstone && !options?.url) {
             await this.inboxes.invalidateReads(processed.result.object.url);
           }
           yield processed.result;
@@ -1631,6 +1665,16 @@ const CursorSchema = strictObject({
   schema: union([looseObject({}), boolean()]),
 });
 
+const PendingReadSchema = strictObject({
+  id: string(),
+  delay: int().check(nonnegative()),
+  retryAt: int().check(nonnegative()),
+});
+const SingleEndpointCursorSchema = strictObject({
+  cursor: string(),
+  pending: array(PendingReadSchema),
+});
+
 interface SingleEndpointQueryResult<Schema extends JSONSchema> {
   kind?: RecordKind;
   messageId: string;
@@ -1651,12 +1695,12 @@ type SingleEndpointQueryItem<Schema extends JSONSchema> =
   | SingleEndpointQueryError;
 interface SingleEndpointQueryIterator<
   Schema extends JSONSchema,
-> extends AsyncGenerator<SingleEndpointQueryItem<Schema>, string | undefined> {}
+> extends AsyncGenerator<SingleEndpointQueryItem<Schema>, string> {}
 type IndexedSingleEndpointQueryResult<Schema extends JSONSchema> =
   | {
       index: number;
       error?: undefined;
-      result: IteratorResult<SingleEndpointQueryItem<Schema>, string | undefined>;
+      result: IteratorResult<SingleEndpointQueryItem<Schema>, string>;
     }
   | {
       index: number;

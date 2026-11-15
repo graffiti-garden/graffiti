@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import * as fakeIndexedDB from "fake-indexeddb";
 import {
+  GraffitiErrorCursorExpired,
   GraffitiErrorNotFound,
   type GraffitiObjectStream,
 } from "@graffiti-garden/api";
@@ -38,6 +40,10 @@ function inboxPage(messages: LabeledMessage<{}>[]) {
   return new Response(new Uint8Array(dagCborEncode({
     results: messages, cursor: "after-messages", hasMore: false,
   })));
+}
+
+function checkpoint(cursor: string) {
+  return JSON.parse(JSON.parse(cursor).cursors[inboxEndpoint]);
 }
 
 function serveMessages(graffiti: ValidationGraffiti, messages: LabeledMessage<{}>[]) {
@@ -83,6 +89,12 @@ async function finishDiscovery(stream: GraffitiObjectStream<{}>) {
 
 export function discoveryErrorTests() {
   describe("Discovery object errors", () => {
+    let now: number;
+    beforeEach(() => {
+      now = Date.now();
+      // Keep real async work running; only control retry eligibility.
+      vi.spyOn(Date, "now").mockImplementation(() => now);
+    });
     afterEach(() => {
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
@@ -92,6 +104,7 @@ export function discoveryErrorTests() {
       const graffiti = new ValidationGraffiti();
       const first = await graffiti.announcement("first");
       const second = await graffiti.announcement("second");
+      const third = await graffiti.announcement("third");
       serveMessages(graffiti, [first.message, second.message]);
       let cursor: string | undefined;
       if (start === "continued") {
@@ -115,18 +128,115 @@ export function discoveryErrorTests() {
         { object: second.message.m.o },
       ]);
       expect(read).toHaveBeenCalledTimes(2); // No retry during this discovery.
-      expect(JSON.parse(result.cursor).cursors).toEqual(cursor ? JSON.parse(cursor).cursors : {});
+      expect(JSON.parse(checkpoint(result.cursor).cursor).numSeen).toBe(2);
+      expect(checkpoint(result.cursor).pending).toEqual([
+        { id: first.message.id, delay: 1000, retryAt: now + 1000 },
+      ]);
       expect((await graffiti.inboxService.get(inboxEndpoint, first.message.id))?.l).toBe(0);
       await vi.waitFor(async () => {
         expect((await graffiti.inboxService.get(inboxEndpoint, second.message.id))?.l).toBe(1);
       });
 
-      // Retaining the earlier checkpoint lets the next poll retry the failed
-      // object. Replaying the already delivered object is also permitted.
-      const recovered = await collectDiscovery(graffiti.continueDiscover<{}>(result.cursor));
-      expect(recovered.entries).toEqual([{ object: first.message.m.o }, { object: second.message.m.o }]);
-      expect(JSON.parse(recovered.cursor).cursors[inboxEndpoint]).toEqual(expect.any(String));
+      // A poll before the retry is due still returns new objects and completes
+      // without waiting or replaying the already delivered second object.
+      vi.mocked(fetch).mockResolvedValueOnce(inboxPage([third.message]));
+      read.mockResolvedValueOnce(third.bytes);
+      const deferred = await collectDiscovery(graffiti.continueDiscover<{}>(result.cursor));
+      expect(deferred.entries).toEqual([
+        { object: third.message.m.o },
+        { error: expect.any(Error), origin: inboxEndpoint },
+      ]);
+      expect(checkpoint(deferred.cursor).pending).toEqual(checkpoint(result.cursor).pending);
       expect(read).toHaveBeenCalledTimes(3);
+
+      // Only the failed message is replayed when a later poll finds it due.
+      now += 1000;
+      const recovered = await collectDiscovery(graffiti.continueDiscover<{}>(deferred.cursor));
+      expect(recovered.entries).toEqual([{ object: first.message.m.o }]);
+      expect(checkpoint(recovered.cursor).pending).toEqual([]);
+      expect(read).toHaveBeenCalledTimes(4);
+    });
+
+    test("backs off actual failures, caps the delay, and still recovers", async () => {
+      const graffiti = new ValidationGraffiti();
+      const { message, bytes } = await graffiti.announcement("offline");
+      serveMessages(graffiti, [message]);
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockRejectedValue(new TypeError("Offline"));
+      let cursor = await finishDiscovery(graffiti.discover<{}>([channel], {}));
+
+      for (const delay of [1000, 2000, 4000, 8000, 16000, 32000, 60000, 60000]) {
+        const pending = checkpoint(cursor).pending;
+        expect(pending).toEqual([{ id: message.id, delay, retryAt: now + delay }]);
+        const attempts = read.mock.calls.length;
+        // Skipped polls neither wait for the deadline nor increase the backoff.
+        now += delay - 1;
+        cursor = await finishDiscovery(graffiti.continueDiscover<{}>(cursor));
+        expect(checkpoint(cursor).pending).toEqual(pending);
+        expect(read).toHaveBeenCalledTimes(attempts);
+        now++;
+        cursor = await finishDiscovery(graffiti.continueDiscover<{}>(cursor));
+        expect(read).toHaveBeenCalledTimes(attempts + 1);
+      }
+
+      // Repeated failures never become a permanent invalid/deleted label.
+      read.mockResolvedValue(bytes);
+      now += 60000;
+      const recovered = await collectDiscovery(graffiti.continueDiscover<{}>(cursor));
+      expect(recovered.entries).toEqual([{ object: message.m.o }]);
+      expect(checkpoint(recovered.cursor).pending).toEqual([]);
+    });
+
+    test("bounds retries per poll without starving the remaining messages", async () => {
+      const graffiti = new ValidationGraffiti();
+      const announcements = await Promise.all(Array.from({ length: 34 }, (_, i) => graffiti.announcement(String(i))));
+      serveMessages(graffiti, announcements.map(({ message }) => message));
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockRejectedValue(new TypeError("Offline"));
+      let cursor = await finishDiscovery(graffiti.discover<{}>([channel], {}));
+      expect(read).toHaveBeenCalledTimes(34);
+
+      now += 1000;
+      cursor = await finishDiscovery(graffiti.continueDiscover<{}>(cursor));
+      expect(read).toHaveBeenCalledTimes(34 + 32);
+      // The failed retries are cooling down, so the next poll can attempt the
+      // two previously deferred reads. No messages are lost to the retry budget.
+      cursor = await finishDiscovery(graffiti.continueDiscover<{}>(cursor));
+      expect(read.mock.calls.slice(-2).map(([, key]) => key)).toEqual(["32", "33"]);
+      expect(read).toHaveBeenCalledTimes(34 + 34);
+      expect(checkpoint(cursor).pending).toHaveLength(34);
+    });
+
+    test("preserves pending reads across instances and independent continuations", async () => {
+      for (const [name, value] of Object.entries(fakeIndexedDB)) {
+        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
+      }
+      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      const first = new ValidationGraffiti();
+      const { message, bytes } = await first.announcement("shared");
+      serveMessages(first, [message]);
+      const firstRead = vi.spyOn(first.services.buckets, "get").mockRejectedValue(new TypeError("Offline"));
+      const cursor = await finishDiscovery(first.discover<{}>([channel], {}));
+
+      // Only the cursor and ordinary IndexedDB cache survive a reload.
+      const reloaded = new ValidationGraffiti();
+      serveMessages(reloaded, [message]);
+      const secondRead = vi.spyOn(reloaded.services.buckets, "get").mockResolvedValue(bytes);
+      const deferred = await finishDiscovery(reloaded.continueDiscover<{}>(cursor));
+      expect(secondRead).not.toHaveBeenCalled();
+      now += 1000;
+      expect((await collectDiscovery(reloaded.continueDiscover<{}>(deferred))).entries)
+        .toEqual([{ object: message.m.o }]);
+
+      // The first consumer still receives the recovered object through its
+      // own cursor, reusing verification performed by the other consumer.
+      expect((await collectDiscovery(first.continueDiscover<{}>(cursor))).entries)
+        .toEqual([{ object: message.m.o }]);
+      expect(firstRead).toHaveBeenCalledTimes(1);
+      expect(secondRead).toHaveBeenCalledTimes(1);
+
+      // Losing the cache expires the cursor instead of forgetting its reads.
+      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      await expect(finishDiscovery(new ValidationGraffiti().continueDiscover<{}>(cursor)))
+        .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
     });
 
     test("keeps media hidden after retrying its failed read", async () => {
@@ -146,8 +256,9 @@ export function discoveryErrorTests() {
         { object: good.message.m.o },
       ]);
       // Once validated, the media record stays outside ordinary discovery.
+      now += 1000;
       const recovered = await collectDiscovery(graffiti.continueDiscover<{}>(initial.cursor));
-      expect(recovered.entries).toEqual([{ object: good.message.m.o }]);
+      expect(recovered.entries).toEqual([]);
       expect(read).toHaveBeenCalledTimes(3);
     });
 
@@ -164,6 +275,7 @@ export function discoveryErrorTests() {
       const initial = await collectDiscovery(graffiti.discover<{}>([channel], {}));
       expect(initial.entries).toEqual([{ error: expect.any(Error), origin: inboxEndpoint }]);
       expect(label).not.toHaveBeenCalled();
+      now += 1000;
       expect((await collectDiscovery(graffiti.continueDiscover<{}>(initial.cursor))).entries)
         .toEqual([{ object: message.m.o }]);
     });
@@ -192,6 +304,7 @@ export function discoveryErrorTests() {
         error: expect.objectContaining({ cause: failure }), origin: inboxEndpoint,
       })));
       expect(reads).toBe(1);
+      now += 1000;
       expect((await collectDiscovery(graffiti.continueDiscover<{}>(initial.cursor))).entries)
         .toEqual([{ object: first.message.m.o }, { object: second.message.m.o }]);
       expect(reads).toBe(2);
@@ -253,6 +366,7 @@ export function discoveryErrorTests() {
 
       const initial = await collectDiscovery(graffiti.discover<{}>([channel], {}, { actor }));
       expect(initial.entries).toEqual([{ error: expect.any(Error), origin: inboxEndpoint }]);
+      now += 1000;
       expect((await collectDiscovery(graffiti.continueDiscover<{}>(initial.cursor, { actor }))).entries)
         .toEqual([{ object: message.m.o }]);
       expect(forget).not.toHaveBeenCalled();

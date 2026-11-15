@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import * as fakeIndexedDB from "fake-indexeddb";
+import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
 import {
   createCache,
   getMessageCacheKey,
@@ -103,6 +104,14 @@ export function inboxCacheTests() {
       expect(await replayQuery(cache, inboxUrl, queryKey, query, 301)).toEqual([
         message(128),
       ]);
+      // A continuation can request an earlier message without replaying the
+      // healthy messages between it and the current position.
+      // Selection order must not reorder announcements and deletion hints.
+      expect(await replayQuery(cache, inboxUrl, queryKey, query, 301, ["message-0", "message-299"])).toEqual([
+        message(299), message(0), message(128),
+      ]);
+      await expect(replayQuery(cache, inboxUrl, queryKey, query, 1, ["message-0"]))
+        .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
     });
 
     test("keeps queued reads ahead of later writes", async () => {
@@ -136,9 +145,10 @@ export function inboxCacheTests() {
       if (kind === "deleted") await cache.messages.del(key);
       else await cache.messages.set(key, null);
 
-      await expect(replayQuery(cache, inboxUrl, queryKey, query)).rejects.toThrow(
-        "Cache out of sync",
-      );
+      // A pending retry whose announcement was evicted must expire its cursor
+      // even when there are no new messages after the saved position.
+      await expect(replayQuery(cache, inboxUrl, queryKey, query, 129, ["message-128"]))
+        .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
       expect(await cache.messageIds.get(queryKey)).toBeUndefined();
     });
 
