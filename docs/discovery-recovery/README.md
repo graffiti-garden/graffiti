@@ -1,74 +1,51 @@
-# Discovery recovery and inbox pins: review guide
+# Discovery recovery: review the small fixes first
 
-The public Graffiti API stays unchanged. The independent fixes preserve upstream
-read options, media handling, batched storage reads, IndexedDB batching, and getter
-invalidation. Pinning removes validation/label state from the raw inbox cache.
+Main includes #99, #100, #101, and #105. The remaining branches include those
+merges. The public Graffiti API is unchanged.
 
-## Already reviewed and merged
+## Ready for review
 
-- [#99](https://github.com/graffiti-garden/graffiti/pull/99): capture asynchronous
-  prefetch/validation failures. Contains the earlier user-reviewed commits.
-- [#101](https://github.com/graffiti-garden/graffiti/pull/101): require the original
-  schema in continuation cursors, including the approved API-wide test extension.
-- [#105](https://github.com/graffiti-garden/graffiti/pull/105): the previously
-  reviewed edge-compression change. The streaming bucket reader is already upstream.
+| PR | Purpose | Dependency |
+| --- | --- | --- |
+| [#102](https://github.com/graffiti-garden/graffiti/pull/102) | The pending recovery fix: report object-read errors and retry on the next poll, without caching failure as deletion. | Main |
+| [#103](https://github.com/graffiti-garden/graffiti/pull/103) | Expire successful DID documents after one hour. The dependency's built-in cache never expires. | Main |
+| [#104](https://github.com/graffiti-garden/graffiti/pull/104) | Add authenticated batch pin/unpin routes; keep send unauthenticated. | Main |
+| [#109](https://github.com/graffiti-garden/graffiti/pull/109) | Bound small validation reads and decoded batch bodies. | #102 |
 
-All remaining branches include these merges. No production deployment or database
-migration is part of this review work.
+#102 and #109 are a native GitHub stack: each has its own diff and review, and
+GitHub retargets the second layer when the first merges. #103 and #104 are
+independent. Readiness means ready for human review, not an instruction to merge.
 
-## Remaining PRs, from smaller fixes to the protocol migration
+## Hold the larger drafts
 
-Sizes are approximate production-code additions/deletions, excluding tests and docs.
-Independent PRs can merge in either order; dependent PRs must follow their bases.
+- [#106](https://github.com/graffiti-garden/graffiti/pull/106) combines three concerns.
+  After the small prerequisites land, divide it into: **verified deletion**,
+  **automatic pinning and rollback**, then **removal of obsolete label/message
+  APIs and cache plumbing**. This avoids another combined review-base branch.
+- [#107](https://github.com/graffiti-garden/graffiti/pull/107) is the separate expiry
+  feature. Its server code can be reviewed independently, but expiry must not
+  deploy until publishers pin their announcements. Personal expiry stays disabled.
+- [#108](https://github.com/graffiti-garden/graffiti/pull/108) is later operational
+  tooling. It is not required to ship the recovery fix or pins: unaudited legacy
+  entries remain exempt from expiry. Review it when preparing the data migration.
 
-| PR | Purpose and review focus | Dependency | Size |
-| --- | --- | --- | --- |
-| [#103](https://github.com/graffiti-garden/graffiti/pull/103) | Expire successful DID documents after one hour; preserve concurrent request sharing and avoid caching failures. | Main | +16 / −1 |
-| [#104](https://github.com/graffiti-garden/graffiti/pull/104) | Add authenticated batch `/pin` and `/unpin`; test ownership, independent sponsors, and atomic missing-ID failure. Legacy routes remain for this stage. | Main | About +90 |
-| [#102](https://github.com/graffiti-garden/graffiti/pull/102) | The recovery patch previously under review: report transient object errors, continue the inbox, and retain the checkpoint for the next poll. Review `querySingleEndpoint` and object validation. | Main | +90 / −43 |
-| [#109](https://github.com/graffiti-garden/graffiti/pull/109) | Bound small storage validation reads by 30 seconds and decoded batch size; reuse the existing streaming reader. | #102 | +18 / −3 |
-| [#106](https://github.com/graffiti-garden/graffiti/pull/106) | Replace labels with automatic pins, verified originals, and deferred deletion checks. Read `INBOX-PROTOCOL.md`, then `verified-messages.ts`, then publication/validation/deletion in `4-graffiti.ts`. | #102, #103, #104, #109 | About 1,400 lines touched; net ~350 removed |
-| [#107](https://github.com/graffiti-garden/graffiti/pull/107) | Shared-entry retention, safe cursor deadlines, monotonic sequences, and atomic message/tag insertion. Review migration 0011 and server query/send logic. | #106 | About 180 lines touched |
-| [#108](https://github.com/graffiti-garden/graffiti/pull/108) | Read-only legacy-data audit and guarded SQL plan; reuses actual object/ticket verification. | #107 | About +160 |
+The existing #106 → #107 → #108 branch chain is packaging, not a requirement to
+review all three together. Keep these drafts until their scope is settled. #106's
+current `inbox-protocol-base` is only a temporary diff base, never a merge target.
 
-These are new implementations unless marked as previously reviewed above. #102
-continues the pending recovery patch; it does not repair old cached invalid labels.
-The pinning migration discards those labels and starts fresh client caches.
+## What to keep and what to simplify
 
-#106 uses `inbox-protocol-base`, a temporary branch combining its independent
-prerequisites so its diff shows only the migration. **Once those prerequisites merge,
-retarget #106 to `main` before merging it.** Do not merge into the review base.
-Then retarget #107 after #106 merges, and #108 after #107 merges. #109 can target
-`main` once #102 merges. Do not merge the temporary combined base as its own PR.
+Keep transient/permanent error separation, verified originals, deferred deletion
+hints, stale-write protection, awaited publication pins/rollback, and cursor/sequence
+safety under garbage collection. These protect against reproduced data-loss races
+or enforce the agreed policy. The separate verification cache keeps that state out
+of the raw inbox service; replacing it with `cacheLabel` would restore the leakage.
 
-## Decisions to verify in the larger PRs
+Removed redundant pin-attempt state, an unused validation argument/generic, an
+iterator cast, an unnecessary cursor-map copy, personal-export retention changes,
+and a redundant maximum-sequence query on every send. The large reduction should
+come from separating concerns and deferring optional operational work, not removing
+consistency checks to make the line count smaller.
 
-- Send stays unauthenticated. Pins are sticky, authenticated, and owned by the
-  caller. Authors await required pins; personal readers batch-pin valid messages.
-  Other shared readers do not sponsor posts. No `pinnedByMe` field, author
-  signatures, or inter-server sender authentication is added.
-- A failed required post/pin triggers best-effort storage/pin cleanup. Losing the
-  network can still leave partial work; there is no durable offline write queue.
-- Only a verified original plus a storage 404 can produce deletion. Unknown hints,
-  expired index entries, and network failures cannot. Another live storage key
-  preserves the object. Normal DID caching stays enabled; no cache-busting loop.
-- New unpinned shared entries expire after 30 days; personal expiry is disabled.
-  A cursor renews only after catching up, not on every intermediate page. Legacy
-  entries remain exempt until audited, since their arrival times are unknown.
-- The additive server pins can deploy separately. Removing `/label` and `/message`
-  requires a coordinated client/server upgrade and migration 0010. Old clients and
-  old cursors deliberately expire; the public Graffiti API does not change.
-- Audit output is a report and SQL to review, not automatic cleanup. Missing old
-  storage cannot prove an unverified logical object was deleted. Unresolved rows
-  stay exempt; applying the plan is a separate operational step.
-
-Each implementation PR has focused regressions and has passed repository validation.
-The combined stack is also validated together. New API-wide coverage is limited to
-those small existing-test extensions approved earlier; protocol details stay in the
-implementation tests.
-
-## Deferred cache-first reads
-
-[Replay cache before network finishes, retaining errors](./cache-first-reads.md)
-is a design proposal, not implemented behavior. Read recovery and the pinning
-migration can settle independently of that change.
+[Cache-first replay with retained errors](./cache-first-reads.md) remains a proposal.
+No production deployment, database audit, or migration has been run for this stack.
