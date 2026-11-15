@@ -32,9 +32,6 @@ import { Authorization } from "../1-services/1-authorization";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import {
   Inboxes,
-  MESSAGE_METADATA_KEY,
-  MESSAGE_OBJECT_KEY,
-  MESSAGE_TAGS_KEY,
   type InboxMessage,
   type MessageStream,
   type InboxReadOptions,
