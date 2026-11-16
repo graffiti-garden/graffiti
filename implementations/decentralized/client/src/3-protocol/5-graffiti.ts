@@ -38,7 +38,7 @@ import {
   type LabeledMessage,
 } from "../1-services/4-inboxes";
 import { InboxHistory, type MessageStream, type InboxReadOptions } from "./4-discovery/inbox-history";
-import { MESSAGE_LABEL_TRASH } from "../1-services/4-inboxes";
+import { MESSAGE_LABEL_TRASH } from "./4-discovery/message-store";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 import {
@@ -819,8 +819,7 @@ export class GraffitiDecentralized implements Graffiti {
     const data = await this.storageBuckets.get(
       storageBucketEndpoint,
       key,
-      size,
-      refresh ? "no-cache" : "default",
+      { maxBytes: size, cache: refresh ? "no-cache" : "default" },
     );
 
     const blob = new Blob([data.slice()], { type });
@@ -1456,7 +1455,7 @@ export class GraffitiDecentralized implements Graffiti {
       const objectBytes = await this.storageBuckets.get(
         storageBucketEndpoint,
         storageBucketKey,
-        MAX_OBJECT_SIZE_BYTES,
+        { maxBytes: MAX_OBJECT_SIZE_BYTES },
       );
 
       if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {

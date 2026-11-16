@@ -1,5 +1,8 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
-import { LABELED_MESSAGE_ID_KEY, MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "../../1-services/4-inboxes";
+import { LABELED_MESSAGE_ID_KEY, type LabeledMessageBase } from "../../1-services/4-inboxes";
+
+// A verified deletion is terminal for this immutable message ID.
+export const MESSAGE_LABEL_TRASH = 2;
 
 // One record per inbox query. Messages live in the separate message cache;
 // this record tracks their IDs and where to continue fetching from the server.

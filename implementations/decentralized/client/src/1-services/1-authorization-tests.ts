@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Authorization } from "./1-authorization";
+import { Authorization, PendingLoginStorage } from "./1-authorization";
 import * as oauth from "openid-client";
-import { PendingLoginStorage } from "./pending-login-storage";
 import { Sessions } from "../3-protocol/1-sessions/sessions";
 import type { GraffitiSessionInitializedEvent } from "@graffiti-garden/api";
 
