@@ -50,6 +50,12 @@ const LabelBodySchema = z.object({
   l: LabelSchema.min(1),
 });
 
+const PinBodySchema = z
+  .object({
+    ids: z.array(z.string().min(1)).min(1).max(100),
+  })
+  .strict();
+
 const SinceSeqSchema = z.int().min(0);
 
 const QueryBodySchema = z.object({
@@ -248,8 +254,6 @@ inbox.openapi(labelRoute, async (c) => {
   await labelMessage(c, inboxId, messageId, labelBody.l, accountId);
   return c.body(null, 200);
 });
-
-const PinBodySchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(100) }).strict();
 
 for (const operation of ["pin", "unpin"] as const) {
   inbox.use(`/${operation}`, bodyLimit({ maxSize: MAX_MESSAGE_SIZE_BYTES }));

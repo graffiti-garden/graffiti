@@ -35,15 +35,41 @@ export function inboxPinTests(environment: DecentralizedTestEnvironment) {
 
     test("pins are idempotent and accounts can only remove their own", async () => {
       const id = await send(decentralizedSharedInbox);
-      for (const token of [owner.token, owner.token, other.token]) {
+      const db = await environment.database();
+      const createdAt = () => db.prepare(`
+        SELECT p.created_at FROM inbox_message_pins p
+        JOIN inbox_messages m ON m.message_seq = p.message_seq
+        WHERE m.message_id = ? AND p.account_id = ?
+      `).bind(id, owner.accountId).first<number>("created_at");
+      const beforePin = Date.now();
+      expect((await update(decentralizedSharedInbox, "pin", [id], owner.token)).status).toBe(204);
+      const initialTimestamp = await createdAt();
+      expect(initialTimestamp).toBeGreaterThanOrEqual(beforePin);
+      expect(initialTimestamp).toBeLessThanOrEqual(Date.now());
+
+      // Age this pin so timestamp preservation cannot pass accidentally when
+      // two requests happen during the same millisecond.
+      await db.prepare(`UPDATE inbox_message_pins SET created_at = 0
+        WHERE account_id = ? AND message_seq IN (
+          SELECT message_seq FROM inbox_messages WHERE message_id = ?
+        )`).bind(owner.accountId, id).run();
+      for (const token of [owner.token, other.token]) {
         expect((await update(decentralizedSharedInbox, "pin", [id, id], token)).status).toBe(204);
       }
       expect((await pins(id)).results).toEqual([{ account_id: owner.accountId }, { account_id: other.accountId }]);
+      expect(await createdAt()).toBe(0);
       for (let i = 0; i < 2; i++) {
         expect((await update(decentralizedSharedInbox, "unpin", [id, "missing"], owner.token)).status).toBe(204);
       }
       // Removing one sponsor cannot remove another sponsor's pin or the message.
       expect((await pins(id)).results).toEqual([{ account_id: other.accountId }]);
+
+      // Repinning starts a new sponsorship with a fresh creation time.
+      const beforeRepin = Date.now();
+      expect((await update(decentralizedSharedInbox, "pin", [id], owner.token)).status).toBe(204);
+      const repinnedTimestamp = await createdAt();
+      expect(repinnedTimestamp).toBeGreaterThanOrEqual(beforeRepin);
+      expect(repinnedTimestamp).toBeLessThanOrEqual(Date.now());
     });
 
     test("rejects a batch containing a missing or foreign-inbox message atomically", async () => {
