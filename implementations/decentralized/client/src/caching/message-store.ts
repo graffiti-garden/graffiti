@@ -1,6 +1,6 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
-import { LABELED_MESSAGE_ID_KEY, type LabeledMessageBase } from "./messages";
+import { LABELED_MESSAGE_ID_KEY, type LabeledMessageBase } from "../1-services/4-inboxes/messages";
 
 // One record per inbox query. Messages live in the separate message cache;
 // this record tracks their IDs and where to continue fetching from the server.
@@ -139,6 +139,17 @@ export async function getMessageIdsCacheKey(
     );
 }
 
+// Labels may change; the body of an announcement must not. Keep a retained
+// payload available even if another query supplies a conflicting copy.
+function checkPayload(previous: LabeledMessageBase | null | undefined, next: LabeledMessageBase | null): void {
+  if (!previous || !next) return;
+  const original = dagCborEncode(previous.m);
+  const received = dagCborEncode(next.m);
+  if (previous.id !== next.id || original.length !== received.length || !original.every((byte, i) => byte === received[i])) {
+    throw new Error("Inbox changed an existing announcement");
+  }
+}
+
 async function resetCacheDB() {
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase("graffiti-inbox-cache");
@@ -151,6 +162,8 @@ async function resetCacheDB() {
 export async function createCache(): Promise<Cache> {
   if (await canUseIDB()) {
     const { openDB } = await import("idb");
+    // The raw payload/query layout is unchanged; existing inbox history can
+    // be reused independently of Graffiti's verification metadata.
     const db = await openDB("graffiti-inbox-cache", 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("m")) db.createObjectStore("m");
@@ -190,12 +203,22 @@ export async function createCache(): Promise<Cache> {
             return undefined;
           }
         },
-        set: (k, v) => db.put("m", v, k).then(() => {}),
+        set: async (k, v) => {
+          const tx = db.transaction("m", "readwrite");
+          const write = async () => {
+            checkPayload(await tx.store.get(k), v);
+            await tx.store.put(v, k);
+          };
+          await Promise.all([write(), tx.done]);
+        },
         setMany: async (entries) => {
           if (entries.length === 0) return;
           const tx = db.transaction("m", "readwrite");
           await Promise.all([
-            ...entries.map(([k, v]) => tx.store.put(v, k)),
+            ...entries.map(async ([k, v]) => {
+              checkPayload(await tx.store.get(k), v);
+              await tx.store.put(v, k);
+            }),
             tx.done,
           ]);
         },
@@ -223,17 +246,21 @@ export async function createCache(): Promise<Cache> {
 
   return {
     messages: {
-      getMany: async (keys) => keys.map((key) => m.get(key)),
-      get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, v),
+      getMany: async (keys) => keys.map((key) => structuredClone(m.get(key))),
+      get: async (k) => structuredClone(m.get(k)),
+      set: async (k, v) => {
+        checkPayload(m.get(k), v);
+        m.set(k, structuredClone(v));
+      },
       setMany: async (entries) => {
-        for (const [k, v] of entries) m.set(k, v);
+        for (const [k, v] of entries) checkPayload(m.get(k), v);
+        for (const [k, v] of entries) m.set(k, structuredClone(v));
       },
       del: async (k) => void m.delete(k),
     },
     messageIds: {
-      get: async (k) => q.get(k),
-      set: async (k, v) => void q.set(k, v),
+      get: async (k) => structuredClone(q.get(k)),
+      set: async (k, v) => void q.set(k, structuredClone(v)),
       del: async (k) => void q.delete(k),
     },
   };

@@ -36,7 +36,7 @@ class PrefetchGraffiti extends GraffitiDecentralized {
 }
 
 class CursorGraffiti extends GraffitiDecentralized {
-  get inboxService() { return this.inboxes; }
+  get inboxService() { return this.inboxHistory; }
 }
 
 class QueueGraffiti extends CursorGraffiti {

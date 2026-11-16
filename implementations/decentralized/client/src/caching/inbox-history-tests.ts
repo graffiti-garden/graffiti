@@ -1,13 +1,14 @@
 import { afterEach, assert, describe, expect, test, vi } from "vitest";
-import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "./4-inboxes";
-import { GraffitiErrorUnauthorized } from "./utilities";
+import { InboxHistory } from "./inbox-history";
+import { LABELED_MESSAGE_LABEL_KEY } from "../1-services/4-inboxes";
+import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { GraffitiErrorCursorExpired, type GraffitiObjectBase } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
 
 export function inboxTests(inboxEndpoint: string, inboxToken: string) {
-  describe("Inboxes", async () => {
-    const inboxes = new Inboxes();
+  describe("InboxHistory", async () => {
+    const inboxes = new InboxHistory();
 
     test("send, get", async () => {
       const tags = [randomBytes(), randomBytes()];
@@ -316,7 +317,7 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
   return cborResponse({ results, hasMore, cursor });
 }
 
-class TestInboxes extends Inboxes {
+class TestInboxHistory extends InboxHistory {
   requestBatch(
     endpoint: string,
     type: "query" | "export",
@@ -360,7 +361,7 @@ function enableLockPath(request: unknown) {
 }
 
 export function inboxUnitTests() {
-  describe("Inboxes unit", () => {
+  describe("InboxHistory unit", () => {
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
@@ -370,7 +371,7 @@ export function inboxUnitTests() {
       test.each(["query", "export"] as const)("%s cursors use stable URLs and CBOR bodies", async (type) => {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.requestBatch(inboxUrl, type, "cursor-1", "synthetic-token");
         await inboxes.requestBatch(inboxUrl, type, "cursor-2", "synthetic-token");
         expect(fetch.mock.calls.map((call) => call[0])).toEqual([
@@ -388,7 +389,7 @@ export function inboxUnitTests() {
       test("initial exports use an empty CBOR object", async () => {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
         vi.stubGlobal("fetch", fetch);
-        await new TestInboxes().requestBatch(inboxUrl, "export", undefined, "token");
+        await new TestInboxHistory().requestBatch(inboxUrl, "export", undefined, "token");
         expect(fetch).toHaveBeenCalledOnce();
         expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/export`);
         expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array)).toEqual({});
@@ -411,7 +412,7 @@ export function inboxUnitTests() {
             )) as typeof setTimeout,
         );
 
-        await expect(new Inboxes().query(inboxUrl, [], {}).next()).rejects.toBe(
+        await expect(new InboxHistory().query(inboxUrl, [], {}).next()).rejects.toBe(
           failure,
         );
         expect(fetch).toHaveBeenCalledOnce();
@@ -419,7 +420,7 @@ export function inboxUnitTests() {
       });
 
       test("a rejected lock request rejects the stream", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         const error = new Error("lock request failed");
         enableLockPath(vi.fn(() => Promise.reject(error)));
@@ -430,7 +431,7 @@ export function inboxUnitTests() {
       });
 
       test("waiting for another tab's lock has a deadline", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         const timeoutError = new DOMException("timed out", "TimeoutError");
         vi.spyOn(AbortSignal, "timeout").mockReturnValue(
@@ -465,7 +466,7 @@ export function inboxUnitTests() {
           ),
         );
 
-        await expect(new TestInboxes().fetchQueryBatch()).rejects.toMatchObject({
+        await expect(new TestInboxHistory().fetchQueryBatch()).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });
@@ -488,7 +489,7 @@ export function inboxUnitTests() {
           }),
         );
 
-        await expect(new TestInboxes().fetchQueryBatch()).rejects.toMatchObject({
+        await expect(new TestInboxHistory().fetchQueryBatch()).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });
@@ -498,7 +499,7 @@ export function inboxUnitTests() {
       test("reuses completed queries, including empty results, unless refreshed", async () => {
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new Inboxes();
+        const inboxes = new InboxHistory();
         const read = { refresh: false };
         async function collect(options = read, token = "owner", tags: Uint8Array[] = []) {
           const results = [];
@@ -521,7 +522,7 @@ export function inboxUnitTests() {
       });
 
       test("fetches the next page while the current message is yielded", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let held = 0;
         enableLockPath(vi.fn(async (
@@ -568,7 +569,7 @@ export function inboxUnitTests() {
           .mockResolvedValueOnce(new Response("stale", { status: 410 }));
         vi.stubGlobal("fetch", fetch);
 
-        const iterator = new Inboxes().query(inboxUrl, [new Uint8Array([1])], {});
+        const iterator = new InboxHistory().query(inboxUrl, [new Uint8Array([1])], {});
         expect((await iterator.next()).value).toEqual(message);
         await expect(iterator.next()).rejects.toBeInstanceOf(
           GraffitiErrorCursorExpired,
@@ -577,7 +578,7 @@ export function inboxUnitTests() {
       });
 
       test("does not replay messages after another tab resets the cache", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let markPrefetchStarted!: () => void;
         const prefetchStarted = new Promise<void>((resolve) => {
@@ -618,7 +619,7 @@ export function inboxUnitTests() {
           .mockResolvedValueOnce(queryPage([message], "cursor-1"))
           .mockResolvedValueOnce(queryPage([], "cursor-2"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new Inboxes();
+        const inboxes = new InboxHistory();
         const tags = [new Uint8Array([1])];
 
         const first = inboxes.query(inboxUrl, tags, {});
@@ -635,7 +636,7 @@ export function inboxUnitTests() {
       });
 
       test("does not hold the query lock while a message is yielded", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let held = false;
         enableLockPath(vi.fn(async (
@@ -662,7 +663,7 @@ export function inboxUnitTests() {
       });
 
       test("closing a yielded query leaves no lock held", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let held = false;
         enableLockPath(vi.fn(async (
@@ -687,7 +688,7 @@ export function inboxUnitTests() {
       });
 
       test("concurrent queries reuse a page fetched under the lock", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let releasePrevious = Promise.resolve();
         let requests = 0;

@@ -8,8 +8,8 @@ import {
   storeQueryPage,
   type Cache,
   type CacheQueryValue,
-} from "./cache";
-import { type LabeledMessageBase } from "./messages";
+} from "./message-store";
+import { type LabeledMessageBase } from "../1-services/4-inboxes/messages";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";
@@ -80,7 +80,8 @@ export function inboxCacheTests() {
       expect((await replayQuery(cache, inboxUrl, queryKey, query))[299].l).toBe(2);
     });
 
-    test("mutating returned messages cannot change later IndexedDB replays", async () => {
+    test.each(["indexeddb", "memory"])("mutating returned messages cannot change later replays (%s)", async storage => {
+      if (storage === "memory") vi.stubGlobal("indexedDB", undefined);
       const cache = await createCache();
       const query = await seed(cache, 129);
       const result = await replayQuery(cache, inboxUrl, queryKey, query);
@@ -89,6 +90,27 @@ export function inboxCacheTests() {
       expect((await replayQuery(cache, inboxUrl, queryKey, query))[128]).toEqual(
         message(128),
       );
+    });
+
+    test.each(["indexeddb", "memory"])("retains payloads independently of query histories and rejects changed bodies (%s)", async storage => {
+      if (storage === "memory") vi.stubGlobal("indexedDB", undefined);
+      const cache = await createCache();
+      await seed(cache, 1);
+      const key = getMessageCacheKey(inboxUrl, "message-0");
+      // Expiring a query must not erase a message still referenced by Graffiti.
+      await cache.messageIds.del(queryKey);
+      expect(await cache.messages.get(key)).toEqual(message(0));
+      // Labels are mutable server metadata; the announcement body is immutable.
+      const relabeled = { ...message(0), l: 42 };
+      await cache.messages.setMany([[key, relabeled]]);
+      expect(await cache.messages.get(key)).toEqual(relabeled);
+      const changed = message(0);
+      changed.m.o.value.index = -1;
+      await expect(storeQueryPage(cache, inboxUrl, queryKey, undefined, {
+        messages: [changed], cursor: "changed-body", hasMore: false,
+      })).rejects.toThrow("Inbox changed an existing announcement");
+      expect(await cache.messageIds.get(queryKey)).toBeUndefined();
+      expect(await cache.messages.get(key)).toEqual(relabeled);
     });
 
     test.each(["deleted", "null"])("invalidates a %s cached message", async (kind) => {

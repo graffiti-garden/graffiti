@@ -1,42 +1,29 @@
-import type { JSONSchema } from "@graffiti-garden/api";
 import type { DBSchema, IDBPDatabase } from "idb";
-import type { Message } from "../1-services/4-inboxes";
-import { encode as dagCborEncode } from "@ipld/dag-cbor";
-
-export type Announcement<Schema extends JSONSchema = {}> = {
-  id: string;
-  m: Message<Schema>;
-};
 
 export type MessageState = {
   scope: string | null;
   inbox: string;
-  message: Announcement;
+  id: string;
+  digest: string;
   storageKey: string;
   status: "pending" | "verified" | "invalid" | "deleted";
 };
 
-export function sameAnnouncement(a: Announcement, b: Announcement): boolean {
-  const original = dagCborEncode(a.m);
-  const received = dagCborEncode(b.m);
-  return original.length === received.length && original.every((byte, i) => byte === received[i]);
-}
-
-interface MessagesDB extends DBSchema {
+interface VerificationDB extends DBSchema {
   objects: { key: string; value: MessageState[] };
 }
 
-// Graffiti owns announcements it still needs and the results of verification.
-// Inbox history is only a transport cache; it is never a source of this state.
-export class ProtocolMessages {
+// Only Graffiti assigns verification/deletion state. Payloads live in the
+// shared message store; these reader-scoped records contain references only.
+export class VerificationState {
   private memory = new Map<string, MessageState[]>();
-  private database?: Promise<IDBPDatabase<MessagesDB> | undefined>;
+  private database?: Promise<IDBPDatabase<VerificationDB> | undefined>;
 
   private db() {
     return this.database ??= (async () => {
       if (!globalThis.indexedDB) return undefined;
       const { openDB } = await import("idb");
-      return openDB<MessagesDB>("graffiti-protocol-messages-v1", 1, {
+      return openDB<VerificationDB>("graffiti-verification-state-v1", 1, {
         upgrade(db) { db.createObjectStore("objects"); },
       });
     })().catch(() => undefined);
@@ -70,11 +57,11 @@ export class ProtocolMessages {
     return result;
   }
 
-  async remember(entry: MessageState): Promise<MessageState["status"]> {
-    return this.update(entry.message.m.o.url, (messages) => {
+  async remember(url: string, entry: MessageState): Promise<MessageState["status"]> {
+    return this.update(url, (messages) => {
       const previous = messages.find(m =>
-        m.scope === entry.scope && m.inbox === entry.inbox && m.message.id === entry.message.id);
-      if (previous && !sameAnnouncement(previous.message, entry.message)) {
+        m.scope === entry.scope && m.inbox === entry.inbox && m.id === entry.id);
+      if (previous && previous.digest !== entry.digest) {
         throw new Error("Inbox changed an existing announcement");
       }
       // A late read must not revive a key already observed missing. Other

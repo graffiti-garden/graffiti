@@ -33,17 +33,19 @@ import {
   MESSAGE_METADATA_KEY,
   MESSAGE_OBJECT_KEY,
   MESSAGE_TAGS_KEY,
-  type MessageStream,
-  type InboxReadOptions,
+  type LabeledMessage,
+  type Message,
 } from "../1-services/4-inboxes";
-import { ProtocolMessages, sameAnnouncement, type Announcement, type MessageState } from "./messages";
+import { InboxHistory, type MessageStream, type InboxReadOptions } from "../caching/inbox-history";
+import { createCache, getMessageCacheKey, type Cache } from "../caching/message-store";
+import { VerificationState, type MessageState } from "./verification-state";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 import {
   StringEncoder,
   STRING_ENCODER_METHOD_BASE64URL,
 } from "../2-primitives/1-string-encoding";
-import { ContentAddresses } from "../2-primitives/2-content-addresses";
+import { ContentAddresses, CONTENT_ADDRESS_METHOD_SHA256 } from "../2-primitives/2-content-addresses";
 import {
   CHANNEL_ATTESTATION_METHOD_SHA256_ED25519,
   ChannelAttestations,
@@ -159,7 +161,10 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly authorization = new Authorization();
   protected readonly storageBuckets = new StorageBuckets();
   protected readonly inboxes = new Inboxes();
-  protected readonly messages = new ProtocolMessages();
+  private cache_: Promise<Cache> | undefined;
+  protected readonly openCache = () => this.cache_ ??= createCache();
+  protected readonly inboxHistory = new InboxHistory(this.inboxes, this.openCache);
+  protected readonly verification = new VerificationState();
 
   protected readonly stringEncoder = new StringEncoder();
   protected readonly contentAddresses = new ContentAddresses();
@@ -610,14 +615,16 @@ export class GraffitiDecentralized implements Graffiti {
       // Verified objects belong to Graffiti, not to the inbox query cache.
       // A cache miss (including a known deletion) still queries the inbox.
       if (!refresh) {
-        const cached = (await this.messages.read(objectUrl)).find(entry => {
-          if (entry.scope !== (session?.actor ?? null) || entry.inbox !== service.serviceEndpoint || entry.status !== "verified") return false;
-          const metadata = MessageMetadataSchema.parse(dagCborDecode(entry.message.m.m));
-          return !metadata[MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY] &&
-            (metadata[RECORD_KIND_KEY] === undefined || metadata[RECORD_KIND_KEY] === kind);
-        });
-        if (cached) {
-          const object = cached.message.m.o;
+        const entries = await this.verification.read(objectUrl);
+        for (const entry of entries) {
+          if (entry.scope !== (session?.actor ?? null) || entry.inbox !== service.serviceEndpoint || entry.status !== "verified") continue;
+          const message = await (await this.openCache()).messages.get(getMessageCacheKey(entry.inbox, entry.id));
+          // Cache eviction is a miss, not evidence that the object was deleted.
+          if (!message || await this.digestMessage(message.m) !== entry.digest) continue;
+          const metadata = MessageMetadataSchema.parse(dagCborDecode(message.m.m));
+          if (metadata[MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY] ||
+            (metadata[RECORD_KIND_KEY] !== undefined && metadata[RECORD_KIND_KEY] !== kind)) continue;
+          const object = message.m.o;
           if (!validator(object)) throw new GraffitiErrorSchemaMismatch("Object exists but does not match the supplied schema");
           return structuredClone(object);
         }
@@ -712,7 +719,7 @@ export class GraffitiDecentralized implements Graffiti {
       resolvedSession.storageBucket.token,
     );
 
-    await this.messages.deleted(object.url, storageBucketKey);
+    await this.verification.deleted(object.url, storageBucketKey);
 
     // Announce the deletion to all inboxes
     await this.announceObject(
@@ -1245,7 +1252,7 @@ export class GraffitiDecentralized implements Graffiti {
     options?: InboxReadOptions,
   ): SingleEndpointQueryIterator<Schema> {
     let pending = new Map<string, infer_<typeof PendingReadSchema>>();
-    let retryMessages: Announcement<Schema>[] = [];
+    let retryMessages: LabeledMessage<Schema>[] = [];
     let deferred = false;
     if ("cursor" in queryArguments) {
       let checkpoint: infer_<typeof SingleEndpointCursorSchema>;
@@ -1267,10 +1274,14 @@ export class GraffitiDecentralized implements Graffiti {
       deferred = due.length < pending.size;
       if (due.length) {
         const messages = await Promise.all(due.map(async retry => {
-          const entry = (await this.messages.read(retry.url)).find(entry =>
-            entry.scope === (recipient ?? null) && entry.inbox === inboxEndpoint && entry.message.id === retry.id);
+          const entry = (await this.verification.read(retry.url)).find(entry =>
+            entry.scope === (recipient ?? null) && entry.inbox === inboxEndpoint && entry.id === retry.id);
           if (!entry) throw new GraffitiErrorCursorExpired("Pending announcement is no longer cached");
-          return entry.message;
+          const message = await (await this.openCache()).messages.get(getMessageCacheKey(entry.inbox, entry.id));
+          if (!message || message.m.o.url !== retry.url || await this.digestMessage(message.m) !== entry.digest) {
+            throw new GraffitiErrorCursorExpired("Pending announcement is no longer cached");
+          }
+          return message;
         }));
         const matches = await compileGraffitiObjectSchema<Schema>(queryArguments.objectSchema);
         retryMessages = messages.map((message) => {
@@ -1283,14 +1294,14 @@ export class GraffitiDecentralized implements Graffiti {
 
     const iterator: MessageStream<Schema> =
       "tags" in queryArguments
-        ? this.inboxes.query<Schema>(
+        ? this.inboxHistory.query<Schema>(
             inboxEndpoint,
             queryArguments.tags,
             queryArguments.objectSchema,
             inboxToken,
             options,
           )
-        : this.inboxes.continueQuery<Schema>(
+        : this.inboxHistory.continueQuery<Schema>(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
@@ -1308,7 +1319,7 @@ export class GraffitiDecentralized implements Graffiti {
         while (doneValue === null && inFlight.length < CONCURRENCY) {
           // Graffiti supplies due cached reads before the ordinary continuation.
           const retryMessage = retryMessages.shift();
-          const itResult: IteratorResult<Announcement<Schema>, string> = retryMessage
+          const itResult: IteratorResult<LabeledMessage<Schema>, string> = retryMessage
             ? { done: false, value: retryMessage }
             : await iterator.next();
           if (itResult.done) {
@@ -1342,7 +1353,7 @@ export class GraffitiDecentralized implements Graffiti {
             // Each continuation keeps its own pending IDs. Another consumer's
             // successful retry must not consume this consumer's delivery.
             return JSON.stringify({
-              version: 1,
+              version: 2,
               scope: recipient ?? null,
               cursor: doneValue,
               pending: [...pending.values()],
@@ -1366,7 +1377,7 @@ export class GraffitiDecentralized implements Graffiti {
           // this queue while a different stream learned that its key was gone.
           if (!("error" in processed.result) && !processed.result.tombstone) {
             const { object, storageBucketKey } = processed.result;
-            if ((await this.messages.read(object.url)).some(entry =>
+            if ((await this.verification.read(object.url)).some(entry =>
               entry.storageKey === storageBucketKey && entry.status === "deleted")) continue;
           }
           yield processed.result;
@@ -1391,9 +1402,14 @@ export class GraffitiDecentralized implements Graffiti {
     );
   }
 
+  protected async digestMessage(message: Message<{}>): Promise<string> {
+    return this.stringEncoder.encode(STRING_ENCODER_METHOD_BASE64URL,
+      await this.contentAddresses.register(CONTENT_ADDRESS_METHOD_SHA256, dagCborEncode(message)));
+  }
+
   protected async processOneMessage<Schema extends JSONSchema>(
     inboxEndpoint: string,
-    message: Announcement<Schema>,
+    message: LabeledMessage<Schema>,
     inboxToken?: string | null,
     recipient?: string | null,
   ): Promise<SingleEndpointQueryItem<Schema> | void> {
@@ -1425,24 +1441,26 @@ export class GraffitiDecentralized implements Graffiti {
         ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY] : undefined,
     };
     const scope = recipient ?? null;
-    const known = await this.messages.read(object.url);
-    const cached = known.find(entry => entry.scope === scope && entry.inbox === inboxEndpoint && entry.message.id === messageId);
+    const digest = await this.digestMessage(message.m);
+    const known = await this.verification.read(object.url);
+    const cached = known.find(entry => entry.scope === scope && entry.inbox === inboxEndpoint && entry.id === messageId);
     if (cached) {
-      // Message IDs are immutable. Never apply an earlier verification to a
-      // different payload, even when the inbox reuses the ID or changes a label.
-      if (!sameAnnouncement(cached.message, message)) {
+      // The shared store keeps message bodies immutable; verification is
+      // scoped to this reader and the same announcement identity. The digest
+      // also protects against an ID being reused after payload eviction.
+      if (cached.digest !== digest) {
         return { error: new Error("Inbox changed an existing announcement"), retryable: false };
       }
       if (cached.status === "invalid") return;
       if (cached.status === "deleted") return tombstonedMessageId ? { ...resultBase, tombstone: true } : undefined;
       if (cached.status === "verified") return resultBase;
     }
-    const remember = (status: MessageState["status"]) => this.messages.remember({
-      scope, inbox: inboxEndpoint, message: { id: messageId, m: message.m }, storageKey: storageBucketKey, status,
+    const remember = (status: MessageState["status"]) => this.verification.remember(object.url, {
+      scope, inbox: inboxEndpoint, id: messageId, digest, storageKey: storageBucketKey, status,
     });
     const retry = async (error: Error): Promise<SingleEndpointQueryItem<Schema> | void> => {
-      // Persist the complete announcement before publishing an advanced cursor.
-      // Another consumer can resolve it without consuming this one's delivery.
+      // InboxHistory has persisted the payload. Save this reader's state
+      // before advancing; each consumer still owns its pending deliveries.
       const status = await remember("pending");
       if (status === "verified") return resultBase;
       if (status === "deleted") return tombstonedMessageId ? { ...resultBase, tombstone: true } : undefined;
@@ -1477,7 +1495,7 @@ export class GraffitiDecentralized implements Graffiti {
       if (tombstonedMessageId) {
         // The protocol already has earlier announcements it processed. There
         // is no need to reach into the inbox cache or fetch /message again.
-        if (known.some(entry => entry.inbox === inboxEndpoint && entry.message.id === tombstonedMessageId && entry.storageKey === storageBucketKey)) {
+        if (known.some(entry => entry.inbox === inboxEndpoint && entry.id === tombstonedMessageId && entry.storageKey === storageBucketKey)) {
           this.labelInboxMessage(inboxEndpoint, tombstonedMessageId, MESSAGE_LABEL_TRASH, inboxToken);
         }
         return { ...resultBase, tombstone: true };
@@ -1540,7 +1558,7 @@ const PendingReadSchema = strictObject({
   retryAt: int().check(nonnegative()),
 });
 const SingleEndpointCursorSchema = strictObject({
-  version: literal(1),
+  version: literal(2),
   scope: nullable(string()),
   cursor: string(),
   pending: array(PendingReadSchema),

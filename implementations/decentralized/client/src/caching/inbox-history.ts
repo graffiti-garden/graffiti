@@ -1,13 +1,9 @@
 import type { JSONSchema } from "@graffiti-garden/api";
-import {
-  getAuthorizationEndpoint,
-  fetchWithErrorHandling,
-  verifyHTTPSEndpoint,
-} from "./utilities";
+import { verifyHTTPSEndpoint } from "../1-services/utilities";
+import { Inboxes } from "../1-services/4-inboxes";
 import {
   compileGraffitiObjectSchema,
   GraffitiErrorCursorExpired,
-  GraffitiErrorNotFound,
 } from "@graffiti-garden/api";
 import {
   encode as dagCborEncode,
@@ -24,17 +20,15 @@ import {
   union,
 } from "zod/mini";
 import {
-  LabeledMessageBaseSchema,
-  SendResponseSchema,
   MessageResultSchema,
   LABELED_MESSAGE_MESSAGE_KEY,
   MESSAGE_OBJECT_KEY,
-} from "./4-inboxes/messages";
+} from "../1-services/4-inboxes/messages";
 import type {
   LabeledMessageBase,
   LabeledMessage,
   Message,
-} from "./4-inboxes/messages";
+} from "../1-services/4-inboxes/messages";
 import {
   canUseIDB,
   createCache,
@@ -42,28 +36,11 @@ import {
   getMessageIdsCacheKey,
   replayQuery,
   storeQueryPage,
-} from "./4-inboxes/cache";
-import type { Cache, CacheQueryValue } from "./4-inboxes/cache";
+} from "./message-store";
+import type { Cache, CacheQueryValue } from "./message-store";
 
-export {
-  Uint8ArraySchema,
-  TagsSchema,
-  MESSAGE_TAGS_KEY,
-  MESSAGE_OBJECT_KEY,
-  MESSAGE_METADATA_KEY,
-  MessageBaseSchema,
-  LABELED_MESSAGE_ID_KEY,
-  LABELED_MESSAGE_MESSAGE_KEY,
-  LABELED_MESSAGE_LABEL_KEY,
-  LabeledMessageBaseSchema,
-} from "./4-inboxes/messages";
-export type { Message, LabeledMessage } from "./4-inboxes/messages";
-
-// One batch may be slow on a mobile connection. This bounds the network request
-// and response-body read, not IndexedDB or time spent yielding messages.
-const INBOX_REQUEST_TIMEOUT_MS = 30_000;
 // A stalled tab should not make peers wait indefinitely. This only bounds
-// lock acquisition; the request above bounds work after acquisition.
+// lock acquisition; the HTTP client's deadline bounds the request afterward.
 const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
 
 export interface InboxReadOptions {
@@ -90,32 +67,21 @@ type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & 
       inboxToken: string;
     });
 
-export class Inboxes {
-  getAuthorizationEndpoint = getAuthorizationEndpoint;
+export class InboxHistory {
+  constructor(
+    protected readonly http = new Inboxes(),
+    private readonly openStore: () => Promise<Cache> = createCache,
+  ) {}
   protected cache_: Promise<Cache> | null = null;
   protected get cache() {
     if (!this.cache_) {
-      this.cache_ = createCache();
+      this.cache_ = this.openStore();
     }
     return this.cache_;
   }
 
-  async send(inboxUrl: string, message: Message<{}>): Promise<string> {
-    verifyHTTPSEndpoint(inboxUrl);
-    const url = `${inboxUrl}/send`;
-
-    const response = await fetchWithErrorHandling(url, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/cbor",
-      },
-      body: new Uint8Array(dagCborEncode({ m: message })),
-    });
-
-    const blob = await response.blob();
-    const cbor = dagCborDecode(await blob.arrayBuffer());
-    const parsed = SendResponseSchema.parse(cbor);
-    return parsed.id;
+  send(inboxUrl: string, message: Message<{}>): Promise<string> {
+    return this.http.send(inboxUrl, message);
   }
 
   async get(
@@ -127,34 +93,9 @@ export class Inboxes {
     const cache = await this.cache;
     const cached = await cache.messages.get(messageCacheKey);
     if (cached !== undefined) return cached;
-
-    const url = `${inboxUrl}/message/${messageId}`;
-    let response: Response | null = null;
-    try {
-      response = await fetchWithErrorHandling(url, {
-        method: "GET",
-        headers: {
-          ...(inboxToken
-            ? {
-                Authorization: `Bearer ${inboxToken}`,
-              }
-            : {}),
-        },
-      });
-    } catch (e) {
-      if (e instanceof GraffitiErrorNotFound) {
-        await cache.messages.set(messageCacheKey, null);
-        return null;
-      }
-      throw e;
-    }
-
-    const blob = await response.blob();
-    const cbor = dagCborDecode(await blob.arrayBuffer());
-    const parsed = LabeledMessageBaseSchema.parse(cbor);
-
-    await cache.messages.set(messageCacheKey, parsed);
-    return parsed;
+    const message = await this.http.get(inboxUrl, messageId, inboxToken);
+    await cache.messages.set(messageCacheKey, message);
+    return message;
   }
 
   async label(
@@ -163,69 +104,15 @@ export class Inboxes {
     label: number,
     inboxToken?: string | null,
   ): Promise<void> {
-    verifyHTTPSEndpoint(inboxUrl);
-
-    if (inboxToken) {
-      const url = `${inboxUrl}/label/${messageId}`;
-
-      await fetchWithErrorHandling(url, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/cbor",
-          Authorization: `Bearer ${inboxToken}`,
-        },
-        body: new Uint8Array(dagCborEncode({ l: label })),
-      });
-    }
-
+    await this.http.label(inboxUrl, messageId, label, inboxToken);
     const cache = await this.cache;
-    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
-    const result = await cache.messages.get(messageCacheKey);
-    if (result) {
-      await cache.messages.set(messageCacheKey, {
-        ...result,
-        l: label,
-      });
-    }
+    const key = getMessageCacheKey(inboxUrl, messageId);
+    const message = await cache.messages.get(key);
+    if (message) await cache.messages.set(key, { ...message, l: label });
   }
 
-  protected async fetchMessageBatch(
-    inboxUrl: string,
-    type: "query" | "export",
-    body: Uint8Array<ArrayBuffer> | undefined,
-    inboxToken?: string | null,
-    cursor?: string,
-    signal?: AbortSignal,
-  ) {
-    // Keep the deadline active while the response body is being read, too.
-    const timeout = AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS);
-    const response = await fetchWithErrorHandling(
-      `${inboxUrl}/${type}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/cbor",
-          ...(inboxToken
-            ? { Authorization: `Bearer ${inboxToken}` }
-            : {}),
-        },
-        body: cursor
-          ? new Uint8Array(dagCborEncode({ cursor }))
-          : body ?? new Uint8Array(dagCborEncode({})),
-        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      },
-    );
-    const retryAfterHeader = response.headers.get("Retry-After");
-    const retryAfter = retryAfterHeader
-      ? parseInt(retryAfterHeader)
-      : undefined;
-
-    const waitTil =
-      retryAfter && Number.isFinite(retryAfter)
-        ? Date.now() + retryAfter * 1000
-        : undefined;
-
-    return { response, waitTil };
+  protected fetchMessageBatch(...args: Parameters<Inboxes["fetchPage"]>) {
+    return this.http.fetchPage(...args);
   }
 
   protected async withQueryLock<T>(

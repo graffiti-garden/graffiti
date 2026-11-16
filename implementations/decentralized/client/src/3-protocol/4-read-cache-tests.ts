@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { GraffitiErrorNotFound, GraffitiErrorSchemaMismatch, type GraffitiSession, type GraffitiObjectStream } from "@graffiti-garden/api";
+import { openDB } from "idb";
 import * as fakeIndexedDB from "fake-indexeddb";
 import { GraffitiDecentralized } from "./4-graffiti";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
@@ -104,6 +105,11 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
         const writer = useGraffiti();
         const url = await writer.postMedia({ data: new Blob(["private"], { type: "text/plain" }), allowed: [] }, owner);
         await writer.getMedia(url, {}, { session: owner });
+        // Dropping query history must leave shared payloads available to
+        // verified getters, even in another instance.
+        const cache = await openDB("graffiti-inbox-cache", 1);
+        await cache.clear("q");
+        cache.close();
         const calls: { url: string; cache?: RequestCache }[] = [];
         globalThis.fetch = (input, init) => {
           calls.push({ url: String(input), cache: init?.cache });

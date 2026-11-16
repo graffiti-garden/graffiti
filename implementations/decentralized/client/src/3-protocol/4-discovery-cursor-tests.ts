@@ -5,7 +5,7 @@ import { GraffitiDecentralized } from "./4-graffiti";
 const inboxEndpoint = "https://example.test/inbox";
 const channel = "discovery-cursors";
 class CursorGraffiti extends GraffitiDecentralized {
-  get inboxService() { return this.inboxes; }
+  get inboxService() { return this.inboxHistory; }
 }
 async function finishDiscovery(stream: GraffitiObjectStream<{}>) {
   while (true) {
