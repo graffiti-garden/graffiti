@@ -1,8 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
 import { looseObject, number, literal } from "zod/mini";
-import { Inboxes } from "./4-inboxes";
-import { MessageResultSchema } from "./4-inboxes/messages";
+import { Inboxes, MessageResultSchema } from "./4-inboxes";
 import { DecentralizedTestEnvironment, decentralizedSharedInbox, decentralizedTestUsers } from "../../test/environment";
 
 const Cursor = looseObject({ version: literal(1), createdAt: number(), sinceSeq: number() });
