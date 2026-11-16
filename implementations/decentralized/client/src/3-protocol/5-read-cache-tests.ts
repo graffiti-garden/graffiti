@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { GraffitiErrorNotFound, GraffitiErrorSchemaMismatch, type GraffitiSession, type GraffitiObjectStream } from "@graffiti-garden/api";
 import { openDB } from "idb";
 import * as fakeIndexedDB from "fake-indexeddb";
-import { GraffitiDecentralized } from "./4-graffiti";
+import { GraffitiDecentralized } from "./5-graffiti";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import { Inboxes } from "../1-services/4-inboxes";
 

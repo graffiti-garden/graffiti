@@ -1,7 +1,7 @@
 import { afterEach, assert, describe, expect, test, vi } from "vitest";
 import { InboxHistory } from "./inbox-history";
-import { LABELED_MESSAGE_LABEL_KEY } from "../1-services/4-inboxes";
-import { GraffitiErrorUnauthorized } from "../1-services/utilities";
+import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "../../1-services/4-inboxes";
+import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { GraffitiErrorCursorExpired, type GraffitiObjectBase } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
@@ -318,15 +318,6 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
 }
 
 class TestInboxHistory extends InboxHistory {
-  requestBatch(
-    endpoint: string,
-    type: "query" | "export",
-    cursor?: string,
-    token?: string,
-    signal?: AbortSignal,
-  ) {
-    return this.fetchMessageBatch(endpoint, type, undefined, token, cursor, signal);
-  }
   async prepareCache() {
     await this.cache;
   }
@@ -335,15 +326,6 @@ class TestInboxHistory extends InboxHistory {
     await (await this.cache).messageIds.del(key);
   }
 
-  async fetchQueryBatch() {
-    const batch = await this.fetchMessageBatch(
-      "https://example.test/inbox",
-      "query",
-      undefined,
-    );
-    await batch.response.arrayBuffer();
-    return batch;
-  }
 }
 
 function enableLockPath(request: unknown) {
@@ -369,11 +351,13 @@ export function inboxUnitTests() {
 
     describe("cursor transport", () => {
       test.each(["query", "export"] as const)("%s cursors use stable URLs and CBOR bodies", async (type) => {
-        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([message], "next"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new TestInboxHistory();
-        await inboxes.requestBatch(inboxUrl, type, "cursor-1", "synthetic-token");
-        await inboxes.requestBatch(inboxUrl, type, "cursor-2", "synthetic-token");
+        const inboxes = new Inboxes();
+        // The HTTP service supplies decoded pages; callers never read Response bodies.
+        expect(await inboxes.fetchPage(inboxUrl, type, undefined, "synthetic-token", "cursor-1"))
+          .toEqual({ results: [message], hasMore: false, cursor: "next", waitTil: undefined });
+        await inboxes.fetchPage(inboxUrl, type, undefined, "synthetic-token", "cursor-2");
         expect(fetch.mock.calls.map((call) => call[0])).toEqual([
           `${inboxUrl}/${type}`, `${inboxUrl}/${type}`,
         ]);
@@ -389,7 +373,7 @@ export function inboxUnitTests() {
       test("initial exports use an empty CBOR object", async () => {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
         vi.stubGlobal("fetch", fetch);
-        await new TestInboxHistory().requestBatch(inboxUrl, "export", undefined, "token");
+        await new Inboxes().fetchPage(inboxUrl, "export", undefined, "token");
         expect(fetch).toHaveBeenCalledOnce();
         expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/export`);
         expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array)).toEqual({});
@@ -397,9 +381,18 @@ export function inboxUnitTests() {
     });
 
     describe("inbox stream lock and network failures", () => {
-      test("backs off for five seconds after an initial request failure", async () => {
+      test.each(["request", "body", "CBOR", "shape"])("backs off after an initial %s failure without caching the failed page", async (stage) => {
         const failure = new Error("offline");
-        const fetch = vi.fn(() => Promise.reject(failure));
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => {
+          if (stage === "body") {
+            return new Response(new ReadableStream({
+              start(controller) { controller.error(failure); },
+            }));
+          }
+          if (stage === "CBOR") return new Response(new Uint8Array([0xff]));
+          if (stage === "shape") return cborResponse({ results: null, hasMore: false, cursor: "invalid" });
+          throw failure;
+        });
         vi.stubGlobal("fetch", fetch);
         vi.spyOn(console, "error").mockImplementation(() => {});
         const realSetTimeout = globalThis.setTimeout;
@@ -412,11 +405,22 @@ export function inboxUnitTests() {
             )) as typeof setTimeout,
         );
 
-        await expect(new InboxHistory().query(inboxUrl, [], {}).next()).rejects.toBe(
-          failure,
-        );
+        const inboxes = new InboxHistory();
+        const next = inboxes.query(inboxUrl, [], {}).next();
+        await expect(next).rejects.toBeInstanceOf(Error);
+        if (stage === "request" || stage === "body") await expect(next).rejects.toBe(failure);
         expect(fetch).toHaveBeenCalledOnce();
         expect(timer).toHaveBeenCalledWith(expect.any(Function), 5000);
+
+        // A later poll can recover, starting from the same position rather
+        // than a cursor from an unreadable or malformed response.
+        fetch.mockImplementation(async () => queryPage([message], "recovered"));
+        const recovered = inboxes.query(inboxUrl, [], {});
+        expect((await recovered.next()).value).toEqual(message);
+        expect((await recovered.next()).done).toBe(true);
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(dagCborDecode(fetch.mock.calls[1][1]!.body as Uint8Array))
+          .toEqual({ tags: [], schema: {} });
       });
 
       test("a rejected lock request rejects the stream", async () => {
@@ -466,7 +470,7 @@ export function inboxUnitTests() {
           ),
         );
 
-        await expect(new TestInboxHistory().fetchQueryBatch()).rejects.toMatchObject({
+        await expect(new Inboxes().fetchPage(inboxUrl, "query", undefined)).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });
@@ -489,7 +493,7 @@ export function inboxUnitTests() {
           }),
         );
 
-        await expect(new TestInboxHistory().fetchQueryBatch()).rejects.toMatchObject({
+        await expect(new Inboxes().fetchPage(inboxUrl, "query", undefined)).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });

@@ -9,7 +9,7 @@ import {
   type Cache,
   type CacheQueryValue,
 } from "./message-store";
-import { type LabeledMessageBase } from "../1-services/4-inboxes/messages";
+import { type LabeledMessageBase } from "../../1-services/4-inboxes";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";

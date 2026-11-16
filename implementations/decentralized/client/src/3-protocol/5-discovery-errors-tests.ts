@@ -7,7 +7,7 @@ import {
   type GraffitiObjectStream,
 } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
-import { GraffitiDecentralized } from "./4-graffiti";
+import { GraffitiDecentralized } from "./5-graffiti";
 import { RECORD_KIND_KEY, RECORD_KIND_MEDIA, type RecordKind } from "./3-object-encoding";
 import type { LabeledMessage } from "../1-services/4-inboxes";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";

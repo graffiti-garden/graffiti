@@ -36,9 +36,9 @@ import {
   type LabeledMessage,
   type Message,
 } from "../1-services/4-inboxes";
-import { InboxHistory, type MessageStream, type InboxReadOptions } from "../caching/inbox-history";
-import { createCache, getMessageCacheKey, type Cache } from "../caching/message-store";
-import { VerificationState, type MessageState } from "./verification-state";
+import { InboxHistory, type MessageStream, type InboxReadOptions } from "./4-discovery/inbox-history";
+import { createCache, getMessageCacheKey, type Cache } from "./4-discovery/message-store";
+import { VerificationState, type MessageState } from "./4-discovery/verification-state";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 import {
@@ -52,7 +52,7 @@ import {
 } from "../2-primitives/3-channel-attestations";
 import { AllowedAttestations } from "../2-primitives/4-allowed-attestations";
 
-import type { LoginAttempt } from "./login-attempt";
+import type { LoginAttempt } from "./1-sessions/login-attempt";
 import { Handles } from "./2-handles";
 import {
   Sessions,
@@ -60,7 +60,7 @@ import {
   DID_SERVICE_TYPE_GRAFFITI_INBOX,
   DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET,
   DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
-} from "./1-sessions";
+} from "./1-sessions/sessions";
 import {
   decodeObjectUrl,
   stripGraffitiUrlAddendums,
