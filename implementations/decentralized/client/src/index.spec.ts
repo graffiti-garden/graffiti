@@ -18,6 +18,7 @@ import { DecentralizedIdentifiers } from "./1-services/2-dids";
 import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
+import { InboxHistory } from "./caching/inbox-history";
 import { discoveryCursorTests } from "./3-protocol/4-discovery-cursor-tests";
 import { Sessions } from "./3-protocol/1-sessions";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
@@ -26,8 +27,8 @@ import { Handles } from "./3-protocol/2-handles";
 import { authorizationTests } from "./1-services/1-authorization-tests";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
-import { inboxTests, inboxUnitTests } from "./1-services/4-inboxes-tests";
-import { inboxCacheTests } from "./1-services/4-inboxes/cache-tests";
+import { inboxTests, inboxUnitTests } from "./caching/inbox-history-tests";
+import { inboxCacheTests } from "./caching/message-store-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
@@ -144,7 +145,7 @@ describe("GraffitiDecentralized Tests", () => {
     const session = sessions[0];
     const object = await writer.post({ value: { text: "rollout check" }, channels: [], allowed: [] }, session);
     const { personalInbox } = sessionMethods.resolveSession(session);
-    const inboxes = new Inboxes();
+    const inboxes = new InboxHistory();
     const messages = [];
     for await (const message of inboxes.query(personalInbox.serviceEndpoint,
       [new TextEncoder().encode(object.url)], {}, personalInbox.token)) {
