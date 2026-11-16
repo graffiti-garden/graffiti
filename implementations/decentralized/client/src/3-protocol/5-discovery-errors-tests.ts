@@ -7,6 +7,7 @@ import {
   type GraffitiObjectStream,
 } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
+import { object, array, string } from "zod/mini";
 import { GraffitiDecentralized } from "./5-graffiti";
 import { RECORD_KIND_KEY, RECORD_KIND_MEDIA, type RecordKind } from "./3-object-encoding";
 import type { InboxMessage } from "../1-services/4-inboxes";
@@ -118,10 +119,17 @@ export function discoveryErrorTests() {
         vi.mocked(fetch).mockResolvedValueOnce(inboxPage([first.message, second.message]));
       }
       const failure = new TypeError("Connection lost");
+      let failFirst = true;
+      // Concurrent verification can reach storage in either order. Associate
+      // the failure and bytes with the requested key, not the call order.
       const read = vi.spyOn(graffiti.services.buckets, "get")
-        .mockRejectedValueOnce(failure)
-        .mockResolvedValueOnce(second.bytes)
-        .mockResolvedValue(first.bytes);
+        .mockImplementation(async (_endpoint, key) => {
+          if (key === first.message.id && failFirst) {
+            failFirst = false;
+            throw failure;
+          }
+          return [first, second, third].find(({ message }) => message.id === key)!.bytes;
+        });
       const result = await collectDiscovery(cursor
         ? graffiti.continueDiscover<{}>(cursor)
         : graffiti.discover<{}>([channel], {}));
@@ -139,7 +147,6 @@ export function discoveryErrorTests() {
       // A poll before the retry is due still returns new objects and completes
       // without waiting or replaying the already delivered second object.
       vi.mocked(fetch).mockResolvedValueOnce(inboxPage([third.message]));
-      read.mockResolvedValueOnce(third.bytes);
       const deferred = await collectDiscovery(graffiti.continueDiscover<{}>(result.cursor));
       expect(deferred.entries).toEqual([
         { object: third.message.m.o },
@@ -199,7 +206,7 @@ export function discoveryErrorTests() {
       // The failed retries are cooling down, so the next poll can attempt the
       // two previously deferred reads. No messages are lost to the retry budget.
       cursor = await finishDiscovery(graffiti.continueDiscover<{}>(cursor));
-      expect(read.mock.calls.slice(-2).map(([, key]) => key)).toEqual(["32", "33"]);
+      expect(read.mock.calls.slice(-2).map(([, key]) => key).sort()).toEqual(["32", "33"]);
       expect(read).toHaveBeenCalledTimes(34 + 34);
       expect(checkpoint(cursor).pending).toHaveLength(34);
     });
@@ -352,10 +359,15 @@ export function discoveryErrorTests() {
       const media = await graffiti.announcement("media", RECORD_KIND_MEDIA);
       const good = await graffiti.announcement("object");
       serveMessages(graffiti, [media.message, good.message]);
+      let failMedia = true;
       const read = vi.spyOn(graffiti.services.buckets, "get")
-        .mockRejectedValueOnce(new TypeError("Connection lost"))
-        .mockResolvedValueOnce(good.bytes)
-        .mockResolvedValue(media.bytes);
+        .mockImplementation(async (_endpoint, key) => {
+          if (key === media.message.id && failMedia) {
+            failMedia = false;
+            throw new TypeError("Connection lost");
+          }
+          return key === media.message.id ? media.bytes : good.bytes;
+        });
 
       // A failed media read is still retryable; it must not stop ordinary objects.
       const initial = await collectDiscovery(graffiti.discover<{}>([channel], {}));
@@ -400,8 +412,11 @@ export function discoveryErrorTests() {
         if (++reads === 1) return new Response(new ReadableStream({
           start(controller) { controller.error(failure); },
         }));
-        return new Response(new Uint8Array(dagCborEncode({ results: [first, second].map(({ bytes }) => ({
-          status: 200, value: bytes,
+        const { keys } = object({ keys: array(string()) }).parse(
+          dagCborDecode(await new Response(init?.body).arrayBuffer()),
+        );
+        return new Response(new Uint8Array(dagCborEncode({ results: keys.map(key => ({
+          status: 200, value: key === first.message.id ? first.bytes : second.bytes,
         })) })));
       }));
 
