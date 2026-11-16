@@ -36,6 +36,7 @@ import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-t
 import { sessionTests } from "./3-protocol/1-sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
 import { readCacheTests } from "./3-protocol/4-read-cache-tests";
+import { protocolMessageTests } from "./3-protocol/messages-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
 import { discoveryAsyncTests } from "./3-protocol/4-discovery-async-tests";
@@ -140,7 +141,7 @@ describe("GraffitiDecentralized Tests", () => {
   objectEncodingTests();
   readCacheTests(() => useGraffiti(), () => sessions);
 
-  test.each([3, 4])("revalidates legacy invalid label 3, but skips current invalid label 4 (label %i)", async (label) => {
+  test.each([3, 4])("verifies records independently of invalid server label %i", async (label) => {
     const writer = useGraffiti();
     const session = sessions[0];
     const object = await writer.post({ value: { text: "rollout check" }, channels: [], allowed: [] }, session);
@@ -156,13 +157,11 @@ describe("GraffitiDecentralized Tests", () => {
     expect(metadata).toHaveProperty("r", 0);
     expect(metadata).not.toHaveProperty("kind");
     const messageId = messages[0].id;
-    // Old clients reject the unknown kind field and persist label 3 on the server.
+    // Labels can come from an older client or another device. Only this
+    // client's verification determines whether the record is valid.
     await inboxes.label(personalInbox.serviceEndpoint, messageId, label, personalInbox.token);
     const read = useGraffiti().get(object.url, {}, { session });
-    if (label === 3) await expect(read).resolves.toEqual(object);
-    else await expect(read).rejects.toBeInstanceOf(GraffitiErrorNotFound);
-    // Restore this known-valid fixture so it can be deleted normally.
-    await inboxes.label(personalInbox.serviceEndpoint, messageId, 1, personalInbox.token);
+    await expect(read).resolves.toEqual(object);
     await writer.delete(object.url, session);
   });
 
@@ -444,5 +443,6 @@ discoveryErrorTests();
 sessionTests();
 
 inboxCacheTests();
+protocolMessageTests();
 
 discoveryAsyncTests();

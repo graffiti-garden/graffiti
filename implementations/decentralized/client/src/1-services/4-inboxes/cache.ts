@@ -1,6 +1,6 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
-import { LABELED_MESSAGE_ID_KEY, MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
+import { LABELED_MESSAGE_ID_KEY, type LabeledMessageBase } from "./messages";
 
 // One record per inbox query. Messages live in the separate message cache;
 // this record tracks their IDs and where to continue fetching from the server.
@@ -44,11 +44,6 @@ export async function canUseIDB(): Promise<boolean> {
   }
 }
 
-export class ReadInvalidated extends Error {}
-// Capture the token before fetching; it must still match when saving the result.
-type ReadInvalidationCheck = { url: string; token: string | undefined };
-const readInvalidationKey = (url: string) => `read-invalidation:${encodeURIComponent(url)}`;
-
 export type Cache = {
   messages: {
     get(k: string): Promise<LabeledMessageBase | null | undefined>;
@@ -59,37 +54,24 @@ export type Cache = {
   };
   messageIds: {
     get(k: string): Promise<CacheQueryValue | undefined>;
-    set(k: string, value: CacheQueryValue, invalidation?: ReadInvalidationCheck): Promise<void>;
-    readInvalidationToken(url: string): Promise<string | undefined>;
+    set(k: string, value: CacheQueryValue): Promise<void>;
     del(k: string): Promise<void>;
-    invalidateReads(url: string): Promise<void>;
   };
 };
-
-export const readCachePrefix = (url: string) => `read:${encodeURIComponent(url)}:`;
 
 export function getMessageCacheKey(inboxUrl: string, messageId: string) {
   return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
 }
 
-export function replayQuery(
+export async function replayQuery(
   cache: Cache,
   inboxUrl: string,
   messageIdsCacheKey: string,
   query: CacheQueryValue,
   numSeen = 0,
 ): Promise<LabeledMessageBase[]> {
-  return readMessages(cache, inboxUrl, messageIdsCacheKey, query.messageIds.slice(numSeen));
-}
-
-export async function readMessages(
-  cache: Cache,
-  inboxUrl: string,
-  messageIdsCacheKey: string,
-  messageIds: string[],
-): Promise<LabeledMessageBase[]> {
   const messages = await cache.messages.getMany(
-    messageIds.map((id) => getMessageCacheKey(inboxUrl, id)),
+    query.messageIds.slice(numSeen).map((id) => getMessageCacheKey(inboxUrl, id)),
   );
   if (messages.some((message) => !message)) {
     // The query refers to messages that are no longer cached.
@@ -111,7 +93,6 @@ export async function storeQueryPage(
     cursor: string;
     hasMore: boolean;
     waitTil?: number;
-    invalidation?: ReadInvalidationCheck;
   },
 ): Promise<CacheQueryValue> {
   // First cache the messages with their labels
@@ -133,7 +114,7 @@ export async function storeQueryPage(
     hasMore: page.hasMore,
     waitTil: page.waitTil,
   };
-  await cache.messageIds.set(messageIdsCacheKey, query, page.invalidation);
+  await cache.messageIds.set(messageIdsCacheKey, query);
   return query;
 }
 
@@ -156,12 +137,6 @@ export async function getMessageIdsCacheKey(
         .map((byte) => byte.toString(16).padStart(2, "0"))
         .join(""),
     );
-}
-
-// A response/validation started before deletion must not resurrect a message
-// in another saved query. Message IDs are immutable, so keep its deletion label.
-function preserveDeletion(previous: LabeledMessageBase | null | undefined, next: LabeledMessageBase | null) {
-  return previous?.l === MESSAGE_LABEL_TRASH ? previous : next;
 }
 
 async function resetCacheDB() {
@@ -215,17 +190,12 @@ export async function createCache(): Promise<Cache> {
             return undefined;
           }
         },
-        set: async (k, v) => {
-          const tx = db.transaction("m", "readwrite");
-          await tx.store.put(preserveDeletion(await tx.store.get(k), v), k);
-          await tx.done;
-        },
+        set: (k, v) => db.put("m", v, k).then(() => {}),
         setMany: async (entries) => {
           if (entries.length === 0) return;
           const tx = db.transaction("m", "readwrite");
           await Promise.all([
-            ...entries.map(async ([k, v]) =>
-              tx.store.put(preserveDeletion(await tx.store.get(k), v), k)),
+            ...entries.map(([k, v]) => tx.store.put(v, k)),
             tx.done,
           ]);
         },
@@ -242,57 +212,29 @@ export async function createCache(): Promise<Cache> {
             return undefined;
           }
         },
-        set: async (k, v, invalidation) => {
-          const tx = db.transaction("q", "readwrite");
-          if (invalidation && await tx.store.get(readInvalidationKey(invalidation.url)) !== invalidation.token) {
-            await tx.done;
-            throw new ReadInvalidated();
-          }
-          await tx.store.put(v, k);
-          await tx.done;
-        },
-        readInvalidationToken: (url) => db.get("q", readInvalidationKey(url)),
+        set: (k, v) => db.put("q", v, k).then(() => {}),
         del: (k) => db.delete("q", k),
-        invalidateReads: async (url) => {
-          const prefix = readCachePrefix(url);
-          const tx = db.transaction("q", "readwrite");
-          await tx.store.delete(IDBKeyRange.bound(prefix, prefix + "\uffff"));
-          await tx.store.put(crypto.randomUUID(), readInvalidationKey(url));
-          await tx.done;
-        },
       },
     };
   }
 
   const m = new Map<string, LabeledMessageBase | null>();
   const q = new Map<string, CacheQueryValue>();
-  const readInvalidationTokens = new Map<string, string>();
 
   return {
     messages: {
       getMany: async (keys) => keys.map((key) => m.get(key)),
       get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, preserveDeletion(m.get(k), v)),
+      set: async (k, v) => void m.set(k, v),
       setMany: async (entries) => {
-        for (const [k, v] of entries) m.set(k, preserveDeletion(m.get(k), v));
+        for (const [k, v] of entries) m.set(k, v);
       },
       del: async (k) => void m.delete(k),
     },
     messageIds: {
       get: async (k) => q.get(k),
-      set: async (k, v, invalidation) => {
-        if (invalidation && readInvalidationTokens.get(invalidation.url) !== invalidation.token) {
-          throw new ReadInvalidated();
-        }
-        q.set(k, v);
-      },
-      readInvalidationToken: async (url) => readInvalidationTokens.get(url),
+      set: async (k, v) => void q.set(k, v),
       del: async (k) => void q.delete(k),
-      invalidateReads: async (url) => {
-        const prefix = readCachePrefix(url);
-        for (const key of q.keys()) if (key.startsWith(prefix)) q.delete(key);
-        readInvalidationTokens.set(url, crypto.randomUUID());
-      },
     },
   };
 }

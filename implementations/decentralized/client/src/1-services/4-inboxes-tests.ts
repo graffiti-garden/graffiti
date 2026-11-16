@@ -495,53 +495,14 @@ export function inboxUnitTests() {
     });
 
     describe("inbox query cache", () => {
-      test("looks up cached messages locally without changing the continuation", async () => {
-        const second = { ...message, id: "second" };
-        const foreign = { ...message, id: "foreign" };
-        const fetch = vi.fn()
-          .mockResolvedValueOnce(queryPage([message, second], "cursor-1"))
-          .mockResolvedValueOnce(queryPage([foreign], "cursor-other"));
-        vi.stubGlobal("fetch", fetch);
-        const inboxes = new TestInboxes();
-        const initial = inboxes.query(inboxUrl, [], {}, "reader");
-        await initial.next();
-        await initial.next();
-        const end = await initial.next();
-        assert(end.done);
-        const cursor = end.value;
-        const other = inboxes.query(inboxUrl, [], {}, "other-reader");
-        await other.next();
-        await other.next();
-        fetch.mockClear();
-
-        // A lookup returns the selected messages in their original inbox order.
-        // It neither requests a page nor adds old messages to the continuation.
-        expect(await inboxes.readCached(inboxUrl, cursor, [second.id, message.id]))
-          .toEqual([message, second]);
-        expect(await inboxes.continueQuery(inboxUrl, cursor, "reader", { refresh: false }).next())
-          .toEqual({ done: true, value: cursor });
-
-        // Being cached is insufficient: the ID must belong to this cursor's
-        // history, including its reader scope and position.
-        await expect(inboxes.readCached(inboxUrl, cursor, [foreign.id]))
-          .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
-        const earlier = JSON.stringify({ ...JSON.parse(cursor), numSeen: 1 });
-        await expect(inboxes.readCached(inboxUrl, earlier, [second.id]))
-          .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
-        await inboxes.deleteCachedQuery(JSON.parse(cursor).messageIdsCacheKey);
-        await expect(inboxes.readCached(inboxUrl, cursor, [message.id]))
-          .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
-        expect(fetch).not.toHaveBeenCalled();
-      });
-
       test("reuses completed queries, including empty results, unless refreshed", async () => {
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);
         const inboxes = new Inboxes();
-        const read = { url: "graffiti:example:object", refresh: false };
-        async function collect(options = read, token = "owner") {
+        const read = { refresh: false };
+        async function collect(options = read, token = "owner", tags: Uint8Array[] = []) {
           const results = [];
-          for await (const result of inboxes.query(inboxUrl, [], {}, token, options)) results.push(result);
+          for await (const result of inboxes.query(inboxUrl, tags, {}, token, options)) results.push(result);
           return results;
         }
         expect(await collect()).toEqual([message]);
@@ -553,9 +514,9 @@ export function inboxUnitTests() {
         expect(fetch).toHaveBeenCalledTimes(3);
 
         fetch.mockImplementation(async () => queryPage([], "empty"));
-        const missing = { ...read, url: "graffiti:example:missing" };
-        expect(await collect(missing)).toEqual([]);
-        expect(await collect(missing)).toEqual([]);
+        const missing = [new Uint8Array([99])];
+        expect(await collect(read, "owner", missing)).toEqual([]);
+        expect(await collect(read, "owner", missing)).toEqual([]);
         expect(fetch).toHaveBeenCalledTimes(4);
       });
 

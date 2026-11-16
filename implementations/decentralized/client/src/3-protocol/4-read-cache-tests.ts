@@ -53,6 +53,46 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       }
     });
 
+    test("a read started before deletion cannot revive the object in another instance", async () => {
+      for (const [name, value] of Object.entries(fakeIndexedDB)) {
+        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
+      }
+      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      const writer = useGraffiti();
+      const reader = useGraffiti();
+      const session = useSessions()[0];
+      let release!: () => void;
+      const blocked = new Promise<void>(resolve => { release = resolve; });
+      const original = StorageBuckets.prototype.get;
+      let read: ReturnType<typeof vi.spyOn> | undefined;
+      let fetched = false;
+      try {
+        const posted = await writer.post<{}>({ value: {}, channels: [] }, session);
+        await writer.get<{}>(posted, {}, { session });
+        // The owner has verified its announcement. An anonymous reader starts
+        // validating a different announcement of the same key before deletion.
+        read = vi.spyOn(StorageBuckets.prototype, "get").mockImplementation(async function (this: StorageBuckets, ...args) {
+          const bytes = await original.apply(this, args);
+          fetched = true;
+          await blocked;
+          return bytes;
+        });
+        const pending = reader.get<{}>(posted, {});
+        // Attach the rejection assertion before allowing the read to settle.
+        const absent = expect(pending).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+        await vi.waitFor(() => expect(fetched).toBe(true));
+        await writer.delete(posted, session);
+        release();
+        await absent;
+        read.mockRestore();
+        await expect(reader.get<{}>(posted, {})).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+      } finally {
+        release();
+        read?.mockRestore();
+        vi.unstubAllGlobals();
+      }
+    });
+
     test("persists media descriptors across instances without sharing private access", async () => {
       for (const [name, value] of Object.entries(fakeIndexedDB)) {
         if (name.startsWith("IDB")) vi.stubGlobal(name, value);

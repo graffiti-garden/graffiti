@@ -41,10 +41,7 @@ import {
   getMessageCacheKey,
   getMessageIdsCacheKey,
   replayQuery,
-  readMessages,
   storeQueryPage,
-  readCachePrefix,
-  ReadInvalidated,
 } from "./4-inboxes/cache";
 import type { Cache, CacheQueryValue } from "./4-inboxes/cache";
 
@@ -71,9 +68,6 @@ const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
 
 export interface InboxReadOptions {
   refresh?: boolean;
-  // Getter histories are keyed separately so deleting one does not expire
-  // discovery cursors. This also guards against stale in-flight getter writes.
-  url?: string;
 }
 
 type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & (
@@ -104,10 +98,6 @@ export class Inboxes {
       this.cache_ = createCache();
     }
     return this.cache_;
-  }
-
-  async invalidateReads(url: string): Promise<void> {
-    await (await this.cache).messageIds.invalidateReads(url);
   }
 
   async send(inboxUrl: string, message: Message<{}>): Promise<string> {
@@ -188,11 +178,6 @@ export class Inboxes {
       });
     }
 
-    await this.cacheLabel(inboxUrl, messageId, label);
-  }
-
-  // A verified local result need not wait for advisory server labeling.
-  async cacheLabel(inboxUrl: string, messageId: string, label: number): Promise<void> {
     const cache = await this.cache;
     const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
     const result = await cache.messages.get(messageCacheKey);
@@ -291,12 +276,10 @@ export class Inboxes {
     ) as Schema;
     const validator = await compileGraffitiObjectSchema(objectSchema);
     const body = source.kind === "query" ? source.body : undefined;
-    const readUrl = source.options?.url;
     const refresh = source.options?.refresh !== false;
     const messageIdsCacheKey = source.kind === "continue"
       ? source.cursor.messageIdsCacheKey
-      : (readUrl ? readCachePrefix(readUrl) : "") +
-        await getMessageIdsCacheKey(inboxUrl, type, body, inboxToken);
+      : await getMessageIdsCacheKey(inboxUrl, type, body, inboxToken);
     const cacheVersion = source.kind === "continue"
       ? source.cursor.version
       : undefined;
@@ -349,9 +332,6 @@ export class Inboxes {
 
             // See if the cursor is still active by requesting the next batch.
             let batch: { response: Response; waitTil?: number };
-            const invalidation = readUrl
-              ? { url: readUrl, token: await cache.messageIds.readInvalidationToken(readUrl) }
-              : undefined;
             try {
               batch = await this.fetchMessageBatch(
                 inboxUrl,
@@ -413,30 +393,23 @@ export class Inboxes {
               },
             );
 
-            try {
-              query = await storeQueryPage(
-                cache,
-                inboxUrl,
-                messageIdsCacheKey,
-                query,
-                {
-                  messages: labeledMessages,
-                  cursor,
-                  hasMore,
-                  waitTil: batch.waitTil,
-                  invalidation,
-                },
-              );
-            } catch (error) {
-              if (error instanceof ReadInvalidated) return { retry: true };
-              throw error;
-            }
+            query = await storeQueryPage(
+              cache,
+              inboxUrl,
+              messageIdsCacheKey,
+              query,
+              {
+                messages: labeledMessages,
+                cursor,
+                hasMore,
+                waitTil: batch.waitTil,
+              },
+            );
             return { query };
           },
           signal,
         );
 
-        if ("retry" in step) continue;
         if ("initialFetchError" in step) {
           console.error(
             "Unexpected error in stream, waiting 5 seconds before continuing...",
@@ -549,21 +522,6 @@ export class Inboxes {
       inboxToken,
       options,
     });
-  }
-
-  // Read only from the saved history; this never fetches or advances its cursor.
-  async readCached(inboxUrl: string, cursor: string, ids: string[]): Promise<LabeledMessageBase[]> {
-    verifyHTTPSEndpoint(inboxUrl);
-    const { messageIdsCacheKey, version, numSeen } = CursorSchema.parse(JSON.parse(cursor));
-    const cache = await this.cache;
-    const query = await cache.messageIds.get(messageIdsCacheKey);
-    if (!query || query.version !== version) throw new GraffitiErrorCursorExpired("Cursor is stale");
-
-    // Restrict lookups to this query's previously returned IDs, in inbox order.
-    const requested = new Set(ids);
-    const selected = query.messageIds.slice(0, numSeen).filter((id) => requested.delete(id));
-    if (requested.size) throw new GraffitiErrorCursorExpired("Message is outside the cursor's history");
-    return readMessages(cache, inboxUrl, messageIdsCacheKey, selected);
   }
 
   export(inboxUrl: string, inboxToken: string): MessageStream<{}> {

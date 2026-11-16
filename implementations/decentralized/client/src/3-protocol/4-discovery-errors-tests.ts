@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import * as fakeIndexedDB from "fake-indexeddb";
+import { openDB } from "idb";
 import {
   GraffitiErrorCursorExpired,
   GraffitiErrorNotFound,
@@ -22,7 +23,7 @@ class CursorGraffiti extends GraffitiDecentralized {
 class ValidationGraffiti extends CursorGraffiti {
   constructor() { super({ defaultInboxEndpoints: [inboxEndpoint] }); }
   get services() {
-    return { buckets: this.storageBuckets, dids: this.dids, sessions: this.sessions };
+    return { buckets: this.storageBuckets, dids: this.dids, sessions: this.sessions, messages: this.messages };
   }
   async announcement(id: string, kind?: RecordKind) {
     const encoded = await this.objectEncoding.encode<{}>({ value: { text: id }, channels: [channel] }, actor, kind);
@@ -51,7 +52,7 @@ function serveMessages(graffiti: ValidationGraffiti, messages: LabeledMessage<{}
     id: actor,
     service: [{ id: "#graffitiStorageBucket", type: "GraffitiStorageBucket", serviceEndpoint: bucketEndpoint }],
   });
-  // Use the real inbox cache so retries exercise the saved message positions.
+  // Use the real transport and protocol stores so retries advance inbox history.
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url !== `${inboxEndpoint}/query`) throw new Error(`Unexpected fetch: ${url}`);
@@ -130,13 +131,8 @@ export function discoveryErrorTests() {
       expect(read).toHaveBeenCalledTimes(2); // No retry during this discovery.
       expect(JSON.parse(checkpoint(result.cursor).cursor).numSeen).toBe(2);
       expect(checkpoint(result.cursor).pending).toEqual([
-        { id: first.message.id, delay: 1000, retryAt: now + 1000 },
+        { id: first.message.id, url: first.message.m.o.url, delay: 1000, retryAt: now + 1000 },
       ]);
-      expect((await graffiti.inboxService.get(inboxEndpoint, first.message.id))?.l).toBe(0);
-      await vi.waitFor(async () => {
-        expect((await graffiti.inboxService.get(inboxEndpoint, second.message.id))?.l).toBe(1);
-      });
-
       // A poll before the retry is due still returns new objects and completes
       // without waiting or replaying the already delivered second object.
       vi.mocked(fetch).mockResolvedValueOnce(inboxPage([third.message]));
@@ -166,7 +162,7 @@ export function discoveryErrorTests() {
 
       for (const delay of [1000, 2000, 4000, 8000, 16000, 32000, 60000, 60000]) {
         const pending = checkpoint(cursor).pending;
-        expect(pending).toEqual([{ id: message.id, delay, retryAt: now + delay }]);
+        expect(pending).toEqual([{ id: message.id, url: message.m.o.url, delay, retryAt: now + delay }]);
         const attempts = read.mock.calls.length;
         // Skipped polls neither wait for the deadline nor increase the backoff.
         now += delay - 1;
@@ -216,7 +212,13 @@ export function discoveryErrorTests() {
       const firstRead = vi.spyOn(first.services.buckets, "get").mockRejectedValue(new TypeError("Offline"));
       const cursor = await finishDiscovery(first.discover<{}>([channel], {}));
 
-      // Only the cursor and ordinary IndexedDB cache survive a reload.
+      // Retries own their payloads: evicting already-consumed transport
+      // messages must not break them or require a /message request.
+      const transport = await openDB("graffiti-inbox-cache", 1);
+      await transport.clear("m");
+      transport.close();
+
+      // Only the cursor and durable protocol/transport stores survive a reload.
       const reloaded = new ValidationGraffiti();
       serveMessages(reloaded, [message]);
       const secondRead = vi.spyOn(reloaded.services.buckets, "get").mockResolvedValue(bytes);
@@ -233,10 +235,96 @@ export function discoveryErrorTests() {
       expect(firstRead).toHaveBeenCalledTimes(1);
       expect(secondRead).toHaveBeenCalledTimes(1);
 
-      // Losing the cache expires the cursor instead of forgetting its reads.
-      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      // Losing only protocol state must expire the cursor even though the
+      // transport cursor still exists, rather than silently dropping a read.
+      const protocol = await openDB("graffiti-protocol-messages-v1", 1);
+      await protocol.clear("objects");
+      protocol.close();
       await expect(finishDiscovery(new ValidationGraffiti().continueDiscover<{}>(cursor)))
         .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+    });
+
+    test.each([1, 2, 3, 4])("verifies announcements independently of inbox label %s", async label => {
+      const graffiti = new ValidationGraffiti();
+      const { message, bytes } = await graffiti.announcement("labeled");
+      message.l = label;
+      serveMessages(graffiti, [message]);
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockResolvedValue(bytes);
+      expect((await collectDiscovery(graffiti.discover<{}>([channel], {}))).entries)
+        .toEqual([{ object: message.m.o }]);
+      expect(read).toHaveBeenCalledTimes(1);
+    });
+
+    test("does not advance past a failed read if its announcement cannot be persisted", async () => {
+      for (const [name, value] of Object.entries(fakeIndexedDB)) {
+        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
+      }
+      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      const graffiti = new ValidationGraffiti();
+      const { message, bytes } = await graffiti.announcement("failed-write");
+      serveMessages(graffiti, [message]);
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockRejectedValueOnce(new TypeError("Offline")).mockResolvedValue(bytes);
+      const original = IDBDatabase.prototype.transaction;
+      let aborted = false;
+      vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (this: IDBDatabase, ...args) {
+        const tx = original.apply(this, args);
+        if (!aborted && this.name === "graffiti-protocol-messages-v1" && args[1] === "readwrite") {
+          aborted = true;
+          queueMicrotask(() => tx.abort());
+        }
+        return tx;
+      });
+      const failed = await collectDiscovery(graffiti.discover<{}>([channel], {}));
+      expect(aborted).toBe(true);
+      expect(failed.entries).toEqual([{ error: expect.any(Error), origin: inboxEndpoint }]);
+      // Without a durable pending payload it is unsafe to advance this inbox.
+      expect(JSON.parse(failed.cursor).cursors).toEqual({});
+      expect((await collectDiscovery(graffiti.continueDiscover<{}>(failed.cursor))).entries)
+        .toEqual([{ object: message.m.o }]);
+      expect(read).toHaveBeenCalledTimes(2);
+    });
+
+    test("does not let another reader resume private pending announcements", async () => {
+      const graffiti = new ValidationGraffiti();
+      const { message } = await graffiti.announcement("private-pending");
+      serveMessages(graffiti, [message]);
+      mockSession(graffiti);
+      vi.spyOn(graffiti.services.buckets, "get").mockRejectedValue(new TypeError("Offline"));
+      const cursor = await finishDiscovery(graffiti.discover<{}>([channel], {}, { actor }));
+      now += 1000;
+      await expect(finishDiscovery(graffiti.continueDiscover<{}>(cursor)))
+        .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+    });
+
+    test("does not yield an already-queued object after learning its deletion", async () => {
+      const graffiti = new ValidationGraffiti();
+      const first = await graffiti.announcement("slow");
+      const second = await graffiti.announcement("cached");
+      serveMessages(graffiti, []);
+      const query = vi.spyOn(graffiti.inboxService, "query").mockImplementation(async function* () {
+        yield second.message;
+        return "completed";
+      });
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockResolvedValue(second.bytes);
+      await graffiti.get<{}>(second.message.m.o.url, {});
+      query.mockImplementation(async function* () {
+        yield first.message;
+        yield second.message;
+        return "completed";
+      });
+      let release!: () => void;
+      const blocked = new Promise<void>(resolve => { release = resolve; });
+      read.mockImplementation(async () => { await blocked; return first.bytes; });
+      const cached = vi.spyOn(graffiti.services.messages, "read");
+      const discovery = collectDiscovery(graffiti.discover<{}>([channel], {}));
+      try {
+        await vi.waitFor(() => expect(cached).toHaveBeenCalledWith(second.message.m.o.url));
+        // Its verification has already completed, but the earlier slow read
+        // prevents delivery. A deletion learned meanwhile must still win.
+        await graffiti.services.messages.deleted(second.message.m.o.url, second.message.id);
+        release();
+        expect((await discovery).entries).toEqual([{ object: first.message.m.o }]);
+      } finally { release(); }
     });
 
     test("keeps media hidden after retrying its failed read", async () => {
@@ -325,9 +413,6 @@ export function discoveryErrorTests() {
         { error: expect.any(Error), origin: inboxEndpoint },
         { object: good.message.m.o },
       ]);
-      await vi.waitFor(async () => {
-        expect((await graffiti.inboxService.get(inboxEndpoint, bad.message.id))?.l).toBe(4);
-      });
       // A proven-invalid message is complete, so it must not keep replaying
       // on every poll and prevent the inbox checkpoint from advancing.
       expect(JSON.parse(result.cursor).cursors[inboxEndpoint]).toEqual(expect.any(String));
