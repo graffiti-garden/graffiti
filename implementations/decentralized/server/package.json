@@ -17,11 +17,14 @@
     "dev": "concurrently --kill-others \"npm run dev:web\" \"npm run dev:api\"",
     "check:web": "vue-tsc --noEmit -p web/tsconfig.json",
     "check:worker": "tsc --noEmit -p worker/tsconfig.json",
-    "check": "npm run check:web && npm run check:worker",
+    "check": "npm run check:web && npm run check:worker && npm run check:audit",
     "build:web": "vite build --config web/vite.config.mts",
     "build:worker": "wrangler deploy --dry-run --config wrangler.toml",
     "build": "npm run build:web && npm run build:worker",
-    "deploy": "npm run build:web && wrangler deploy --config wrangler.toml"
+    "deploy": "npm run build:web && wrangler deploy --config wrangler.toml",
+    "audit:inboxes": "node scripts/run.mjs audit-inboxes.ts",
+    "check:audit": "tsc -p scripts/tsconfig.json",
+    "test": "node scripts/run.mjs inbox-audit.test.ts --test"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
@@ -50,6 +53,7 @@
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vue-tsc": "3.3.11",
-    "wrangler": "^4.59.3"
+    "wrangler": "^4.59.3",
+    "esbuild": "^0.28.1"
   }
 }
