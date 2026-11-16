@@ -30,7 +30,7 @@ export function storageBucketTests(
       const resultBytes = await storageBuckets.get(
         storageBucketEndpoint,
         key,
-        bytes.length,
+        { maxBytes: bytes.length },
       );
       const result = new TextDecoder().decode(resultBytes);
       expect(result).toEqual(input);
@@ -152,10 +152,10 @@ export function storageBucketTests(
         return original(input, init);
       };
       try {
-        await Promise.all([0, 1].map(() => storageBuckets.get(storageBucketEndpoint, key, 3, "default")));
+        await Promise.all([0, 1].map(() => storageBuckets.get(storageBucketEndpoint, key, { maxBytes: 3, cache: "default" })));
         expect(calls).toEqual([0, 1].map(() => ({ url, cache: "default", method: undefined })));
         calls.length = 0;
-        await storageBuckets.get(storageBucketEndpoint, key, 3);
+        await storageBuckets.get(storageBucketEndpoint, key, { maxBytes: 3 });
         expect(calls).toEqual([{ url, cache: "no-cache", method: undefined }]);
         await storageBuckets.delete(storageBucketEndpoint, key, storageBucketToken);
         expect(calls.at(-1)).toMatchObject({ url, method: "DELETE" });
@@ -180,7 +180,7 @@ export function storageBucketTests(
       );
 
       await expect(
-        storageBuckets.get(storageBucketEndpoint, key, bytes.length - 1),
+        storageBuckets.get(storageBucketEndpoint, key, { maxBytes: bytes.length - 1 }),
       ).rejects.toThrow();
     });
 
@@ -209,7 +209,7 @@ export function storageBucketTests(
         vi.stubGlobal("fetch", fetch);
         try {
           const buckets = new StorageBuckets();
-          const reads = Promise.allSettled(Array.from({ length: count }, (_, i) => buckets.get(storageBucketEndpoint, String(i), 32 * 1024)));
+          const reads = Promise.allSettled(Array.from({ length: count }, (_, i) => buckets.get(storageBucketEndpoint, String(i), { maxBytes: 32 * 1024 })));
           await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
           controller.abort(failure);
           expect(await reads).toEqual(Array.from({ length: count }, () => ({ status: "rejected", reason: failure })));
@@ -225,7 +225,7 @@ export function storageBucketTests(
         }, { highWaterMark: 0 });
         vi.stubGlobal("fetch", vi.fn(async () => new Response(body, { headers: { "Content-Length": "1", "Content-Encoding": "gzip" } })));
         const buckets = new StorageBuckets();
-        const results = await Promise.allSettled(["a", "b"].map((key) => buckets.get(storageBucketEndpoint, key, 16)));
+        const results = await Promise.allSettled(["a", "b"].map((key) => buckets.get(storageBucketEndpoint, key, { maxBytes: 16 })));
         for (const result of results) expect(result).toMatchObject({ status: "rejected", reason: { message: "Value exceeds maximum byte limit" } });
         expect(cancel).toHaveBeenCalledOnce();
         expect(body.locked).toBe(false);
@@ -236,8 +236,8 @@ export function storageBucketTests(
         vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array([1]))));
         try {
           const buckets = new StorageBuckets();
-          await buckets.get(storageBucketEndpoint, "large", 1024 * 1024);
-          await buckets.get(storageBucketEndpoint, "media", 32 * 1024, "default");
+          await buckets.get(storageBucketEndpoint, "large", { maxBytes: 1024 * 1024 });
+          await buckets.get(storageBucketEndpoint, "media", { maxBytes: 32 * 1024, cache: "default" });
           expect(timeout).not.toHaveBeenCalled();
         } finally { timeout.mockRestore(); }
       });
@@ -254,7 +254,7 @@ export function storageBucketTests(
         const headers = new Headers({ "Content-Length": String(wireLength) });
         if (encoding) headers.set("Content-Encoding", encoding);
         vi.stubGlobal("fetch", vi.fn(async () => new Response(bytes.slice(), { headers })));
-        expect(await storageBuckets.get(storageBucketEndpoint, "key", bytes.length))
+        expect(await storageBuckets.get(storageBucketEndpoint, "key", { maxBytes: bytes.length }))
           .toEqual(bytes);
       });
 
@@ -268,7 +268,7 @@ export function storageBucketTests(
           },
         });
         vi.stubGlobal("fetch", vi.fn(async () => new Response(body)));
-        expect(await storageBuckets.get(storageBucketEndpoint, "key", size))
+        expect(await storageBuckets.get(storageBucketEndpoint, "key", { maxBytes: size }))
           .toEqual(bytes);
         expect(body.locked).toBe(false);
       });
@@ -288,7 +288,7 @@ export function storageBucketTests(
         vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
           headers: { "Content-Length": "2" },
         })));
-        await expect(storageBuckets.get(storageBucketEndpoint, "key", 3))
+        await expect(storageBuckets.get(storageBucketEndpoint, "key", { maxBytes: 3 }))
           .rejects.toThrow("Value exceeds maximum byte limit");
         expect(cancel).toHaveBeenCalledOnce();
         expect(pulls).toBe(2);
@@ -390,9 +390,9 @@ export function storageBucketTests(
         expect(oversizedResponse.status).toBe(400);
 
         const settled = await Promise.allSettled([
-          storageBuckets.get(storageBucketEndpoint, first, small.length),
-          storageBuckets.get(storageBucketEndpoint, missing, small.length),
-          storageBuckets.get(storageBucketEndpoint, second, small.length),
+          storageBuckets.get(storageBucketEndpoint, first, { maxBytes: small.length }),
+          storageBuckets.get(storageBucketEndpoint, missing, { maxBytes: small.length }),
+          storageBuckets.get(storageBucketEndpoint, second, { maxBytes: small.length }),
         ]);
         expect(settled[0]).toEqual({ status: "fulfilled", value: small });
         expect(settled[1].status).toBe("rejected");
@@ -440,7 +440,7 @@ export function storageBucketTests(
       };
       try {
         expect(await Promise.all(keys.map((key) =>
-          storageBuckets.get(storageBucketEndpoint, key, 1),
+          storageBuckets.get(storageBucketEndpoint, key, { maxBytes: 1 }),
         ))).toEqual(values);
         expect(calls.filter((call) => call === `POST ${storageBucketEndpoint}/values`)).toHaveLength(1);
         expect(calls.filter((call) => call.includes("/value/"))).toHaveLength(0);
@@ -471,10 +471,10 @@ export function storageBucketTests(
       try {
         const legacyBuckets = new StorageBuckets();
         expect(await Promise.all(keys.map((key) =>
-          legacyBuckets.get(storageBucketEndpoint, key, 1),
+          legacyBuckets.get(storageBucketEndpoint, key, { maxBytes: 1 }),
         ))).toEqual([value, value]);
         expect(await Promise.all(keys.map((key) =>
-          legacyBuckets.get(storageBucketEndpoint, key, 1),
+          legacyBuckets.get(storageBucketEndpoint, key, { maxBytes: 1 }),
         ))).toEqual([value, value]);
         expect(batchAttempts).toBe(1);
       } finally {
@@ -501,8 +501,8 @@ export function storageBucketTests(
       try {
         const buckets = new StorageBuckets();
         const readPair = () => Promise.all([
-          buckets.get(storageBucketEndpoint, "a", 1),
-          buckets.get(storageBucketEndpoint, "b", 1),
+          buckets.get(storageBucketEndpoint, "a", { maxBytes: 1 }),
+          buckets.get(storageBucketEndpoint, "b", { maxBytes: 1 }),
         ]);
         await expect(readPair()).rejects.toThrow("Batch limit exceeded");
         await expect(readPair()).rejects.toThrow("Batch limit exceeded");
