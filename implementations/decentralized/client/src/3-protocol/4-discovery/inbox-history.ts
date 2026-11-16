@@ -27,13 +27,11 @@ import type {
 } from "../../1-services/4-inboxes";
 import {
   canUseIDB,
-  createCache,
-  getMessageCacheKey,
-  getMessageIdsCacheKey,
+  createMessageStore,
   replayQuery,
   storeQueryPage,
 } from "./message-store";
-import type { Cache, CacheQueryValue } from "./message-store";
+import type { MessageStore, CacheQueryValue } from "./message-store";
 
 // A stalled tab should not make peers wait indefinitely. This only bounds
 // lock acquisition; the HTTP client's deadline bounds the request afterward.
@@ -66,14 +64,14 @@ type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & 
 export class InboxHistory {
   constructor(
     protected readonly http = new Inboxes(),
-    private readonly openStore: () => Promise<Cache> = createCache,
+    private readonly openStore: () => Promise<MessageStore> = createMessageStore,
   ) {}
-  protected cache_: Promise<Cache> | null = null;
-  protected get cache() {
-    if (!this.cache_) {
-      this.cache_ = this.openStore();
+  protected store_: Promise<MessageStore> | null = null;
+  protected get store() {
+    if (!this.store_) {
+      this.store_ = this.openStore();
     }
-    return this.cache_;
+    return this.store_;
   }
 
   send(inboxUrl: string, message: Message<{}>): Promise<string> {
@@ -85,12 +83,11 @@ export class InboxHistory {
     messageId: string,
     inboxToken?: string | null,
   ): Promise<LabeledMessageBase | null> {
-    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
-    const cache = await this.cache;
-    const cached = await cache.messages.get(messageCacheKey);
+    const store = await this.store;
+    const cached = await store.getMessage(inboxUrl, messageId);
     if (cached !== undefined) return cached;
     const message = await this.http.get(inboxUrl, messageId, inboxToken);
-    await cache.messages.set(messageCacheKey, message);
+    await store.setMessage(inboxUrl, messageId, message);
     return message;
   }
 
@@ -101,10 +98,9 @@ export class InboxHistory {
     inboxToken?: string | null,
   ): Promise<void> {
     await this.http.label(inboxUrl, messageId, label, inboxToken);
-    const cache = await this.cache;
-    const key = getMessageCacheKey(inboxUrl, messageId);
-    const message = await cache.messages.get(key);
-    if (message) await cache.messages.set(key, { ...message, l: label });
+    const store = await this.store;
+    const message = await store.getMessage(inboxUrl, messageId);
+    if (message) await store.setMessage(inboxUrl, messageId, { ...message, l: label });
   }
 
   protected async withQueryLock<T>(
@@ -160,16 +156,16 @@ export class InboxHistory {
     const refresh = source.options?.refresh !== false;
     const messageIdsCacheKey = source.kind === "continue"
       ? source.cursor.messageIdsCacheKey
-      : await getMessageIdsCacheKey(inboxUrl, type, body, inboxToken);
+      : await getQueryKey(inboxUrl, type, body, inboxToken);
     const cacheVersion = source.kind === "continue"
       ? source.cursor.version
       : undefined;
     // Opening IndexedDB can wait on another tab, so do it before holding a lock.
-    const cache = await this.cache;
+    const store = await this.store;
     // TODO: implement locking in node as well, but not
     // high priority since most use will be in browser
     const useLock = typeof window !== "undefined" && (await canUseIDB());
-    const initialQuery = await cache.messageIds.get(messageIdsCacheKey);
+    const initialQuery = await store.getQuery(messageIdsCacheKey);
     // Version identifies a query history; generation changes on each page
     // written to that history, including an empty page.
     let seenGeneration = initialQuery?.generation;
@@ -199,7 +195,7 @@ export class InboxHistory {
           async () => {
             signal?.throwIfAborted();
             // A different tab may have fetched a page while we waited for the lock.
-            let query = await cache.messageIds.get(messageIdsCacheKey);
+            let query = await store.getQuery(messageIdsCacheKey);
             if (cacheVersion !== undefined && cacheVersion !== query?.version) {
               throw new GraffitiErrorCursorExpired("Cursor is stale");
             }
@@ -242,7 +238,7 @@ export class InboxHistory {
               if (!firstPage) throw error;
 
               // The cursor is stale. A continuation must report that to its caller.
-              await cache.messageIds.del(messageIdsCacheKey);
+              await store.deleteQuery(messageIdsCacheKey);
               if (cacheVersion !== undefined) throw error;
               query = undefined;
               numSeen = 0;
@@ -268,7 +264,7 @@ export class InboxHistory {
             );
 
             query = await storeQueryPage(
-              cache,
+              store,
               inboxUrl,
               messageIdsCacheKey,
               query,
@@ -314,7 +310,7 @@ export class InboxHistory {
       const query = result.query;
       // Replay all unseen messages after releasing the lock.
       const messages = await replayQuery(
-        cache,
+        store,
         inboxUrl,
         messageIdsCacheKey,
         query,
@@ -422,4 +418,25 @@ async function waitFor(waitTil?: number) {
       await new Promise((resolve) => setTimeout(resolve, waitFor));
     }
   }
+}
+
+async function getQueryKey(
+  inboxUrl: string,
+  type: "query" | "export",
+  body?: Uint8Array,
+  inboxToken?: string | null,
+): Promise<string> {
+  const cacheIdData = dagCborEncode({
+    inboxUrl,
+    type,
+    body: body ?? null,
+    inboxToken: inboxToken ?? null,
+  });
+  return crypto.subtle
+    .digest("SHA-256", new Uint8Array(cacheIdData))
+    .then((bytes) =>
+      Array.from(new Uint8Array(bytes))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join(""),
+    );
 }

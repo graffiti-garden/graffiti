@@ -319,11 +319,11 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
 
 class TestInboxHistory extends InboxHistory {
   async prepareCache() {
-    await this.cache;
+    await this.store;
   }
 
   async deleteCachedQuery(key: string) {
-    await (await this.cache).messageIds.del(key);
+    await (await this.store).deleteQuery(key);
   }
 
 }

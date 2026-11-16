@@ -37,7 +37,7 @@ import {
   type Message,
 } from "../1-services/4-inboxes";
 import { InboxHistory, type MessageStream, type InboxReadOptions } from "./4-discovery/inbox-history";
-import { createCache, getMessageCacheKey, type Cache } from "./4-discovery/message-store";
+import { createMessageStore, type MessageStore } from "./4-discovery/message-store";
 import { VerificationState, type MessageState } from "./4-discovery/verification-state";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
@@ -161,9 +161,9 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly authorization = new Authorization();
   protected readonly storageBuckets = new StorageBuckets();
   protected readonly inboxes = new Inboxes();
-  private cache_: Promise<Cache> | undefined;
-  protected readonly openCache = () => this.cache_ ??= createCache();
-  protected readonly inboxHistory = new InboxHistory(this.inboxes, this.openCache);
+  private messageStore_: Promise<MessageStore> | undefined;
+  protected readonly openMessageStore = () => this.messageStore_ ??= createMessageStore();
+  protected readonly inboxHistory = new InboxHistory(this.inboxes, this.openMessageStore);
   protected readonly verification = new VerificationState();
 
   protected readonly stringEncoder = new StringEncoder();
@@ -618,7 +618,7 @@ export class GraffitiDecentralized implements Graffiti {
         const entries = await this.verification.read(objectUrl);
         for (const entry of entries) {
           if (entry.scope !== (session?.actor ?? null) || entry.inbox !== service.serviceEndpoint || entry.status !== "verified") continue;
-          const message = await (await this.openCache()).messages.get(getMessageCacheKey(entry.inbox, entry.id));
+          const message = await (await this.openMessageStore()).getMessage(entry.inbox, entry.id);
           // Cache eviction is a miss, not evidence that the object was deleted.
           if (!message || await this.digestMessage(message.m) !== entry.digest) continue;
           const metadata = MessageMetadataSchema.parse(dagCborDecode(message.m.m));
@@ -1276,7 +1276,7 @@ export class GraffitiDecentralized implements Graffiti {
           const entry = (await this.verification.read(retry.url)).find(entry =>
             entry.scope === (recipient ?? null) && entry.inbox === inboxEndpoint && entry.id === retry.id);
           if (!entry) throw new GraffitiErrorCursorExpired("Pending announcement is no longer cached");
-          const message = await (await this.openCache()).messages.get(getMessageCacheKey(entry.inbox, entry.id));
+          const message = await (await this.openMessageStore()).getMessage(entry.inbox, entry.id);
           if (!message || message.m.o.url !== retry.url || await this.digestMessage(message.m) !== entry.digest) {
             throw new GraffitiErrorCursorExpired("Pending announcement is no longer cached");
           }
