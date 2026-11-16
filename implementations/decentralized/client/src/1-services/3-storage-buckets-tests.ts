@@ -209,7 +209,7 @@ export function storageBucketTests(
         vi.stubGlobal("fetch", fetch);
         try {
           const buckets = new StorageBuckets();
-          const reads = Promise.allSettled(Array.from({ length: count }, (_, i) => buckets.get(storageBucketEndpoint, String(i), 32 * 1024)));
+          const reads = Promise.allSettled(Array.from({ length: count }, (_, i) => buckets.get(storageBucketEndpoint, String(i), { maxBytes: 32 * 1024 })));
           await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
           controller.abort(failure);
           expect(await reads).toEqual(Array.from({ length: count }, () => ({ status: "rejected", reason: failure })));
@@ -225,7 +225,7 @@ export function storageBucketTests(
         }, { highWaterMark: 0 });
         vi.stubGlobal("fetch", vi.fn(async () => new Response(body, { headers: { "Content-Length": "1", "Content-Encoding": "gzip" } })));
         const buckets = new StorageBuckets();
-        const results = await Promise.allSettled(["a", "b"].map((key) => buckets.get(storageBucketEndpoint, key, 16)));
+        const results = await Promise.allSettled(["a", "b"].map((key) => buckets.get(storageBucketEndpoint, key, { maxBytes: 16 })));
         for (const result of results) expect(result).toMatchObject({ status: "rejected", reason: { message: "Value exceeds maximum byte limit" } });
         expect(cancel).toHaveBeenCalledOnce();
         expect(body.locked).toBe(false);
@@ -236,8 +236,8 @@ export function storageBucketTests(
         vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array([1]))));
         try {
           const buckets = new StorageBuckets();
-          await buckets.get(storageBucketEndpoint, "large", 1024 * 1024);
-          await buckets.get(storageBucketEndpoint, "media", 32 * 1024, "default");
+          await buckets.get(storageBucketEndpoint, "large", { maxBytes: 1024 * 1024 });
+          await buckets.get(storageBucketEndpoint, "media", { maxBytes: 32 * 1024, cache: "default" });
           expect(timeout).not.toHaveBeenCalled();
         } finally { timeout.mockRestore(); }
       });
