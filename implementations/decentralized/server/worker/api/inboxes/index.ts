@@ -1,3 +1,4 @@
+import { INBOX_RETENTION_MS } from "./retention";
 import { Hono, type Context } from "hono";
 import type { Bindings } from "../../env";
 import { HTTPException } from "hono/http-exception";
@@ -20,7 +21,6 @@ import { bodyLimit } from "hono/body-limit";
 import { TagsSchema } from "./db";
 import { encodeBase64, decodeBase64 } from "../../app/auth/utils";
 
-const MESSAGE_RETENTION_PERIOD_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MAX_MESSAGE_SIZE_BYTES = 32 * 1024; // 32 KiB
 const RATE_LIMIT_SECONDS = 1; // 1 second
 // Inbox returns 10 results for a fast initial response,
@@ -50,12 +50,13 @@ const CursorBodySchema = z.object({ cursor: z.string().min(1) });
 const QueryRequestBodySchema = z.union([QueryBodySchema, CursorBodySchema]);
 
 const QueryCursorSchema = z.object({
+  version: z.literal(1),
   sinceSeq: SinceSeqSchema,
   tags: TagsSchema,
   objectSchema: ObjectSchemaSchema,
   createdAt: z.number(),
   waitTil: z.number().optional(),
-  pageSizeStep: z.int().min(0).max(QUERY_PAGE_LIMITS.length - 1).optional(),
+  pageSizeStep: z.int().min(0).max(QUERY_PAGE_LIMITS.length - 1),
 });
 
 const QueryResultsSchema = z.object({
@@ -238,8 +239,9 @@ inbox.openapi(queryRoute, async (c) => {
   let tags: Uint8Array[] | undefined = undefined;
   let sinceSeq: number | undefined = undefined;
   let pageSizeStep = 0;
+  const scanStartedAt = Date.now();
+  let createdAt = scanStartedAt;
   if ("cursor" in queryBody) {
-    let createdAt: number;
     let waitTil: number | undefined;
     try {
       const cursorBytes = decodeBase64(queryBody.cursor);
@@ -250,12 +252,11 @@ inbox.openapi(queryRoute, async (c) => {
       objectSchema = cursorParsed.objectSchema;
       createdAt = cursorParsed.createdAt;
       waitTil = cursorParsed.waitTil;
-      // Cursors issued before adaptive paging have no page-size step.
-      pageSizeStep = cursorParsed.pageSizeStep ?? QUERY_PAGE_LIMITS.length - 1;
+      pageSizeStep = cursorParsed.pageSizeStep;
     } catch {
       throw new HTTPException(410, { message: "Invalid cursor" });
     }
-    if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
+    if (createdAt + INBOX_RETENTION_MS <= Date.now()) {
       throw new HTTPException(410, { message: "Cursor expired" });
     }
     if (waitTil && waitTil > Date.now()) {
@@ -265,9 +266,6 @@ inbox.openapi(queryRoute, async (c) => {
     tags = queryBody.tags;
     objectSchema = queryBody.schema;
   }
-
-  const createdAt = Date.now();
-
   const { results, hasMore, lastSeq } = await queryMessages(
     c,
     inboxId,
@@ -277,13 +275,20 @@ inbox.openapi(queryRoute, async (c) => {
     sinceSeq,
     QUERY_PAGE_LIMITS[pageSizeStep],
   );
+  // A query that crossed the deadline cannot renew a cursor after unread
+  // entries became eligible for expiration while it was running.
+  if ("cursor" in queryBody && createdAt + INBOX_RETENTION_MS <= Date.now()) {
+    throw new HTTPException(410, { message: "Cursor expired" });
+  }
 
   // Construct a cursor
   const cursorCBOR: z.infer<typeof QueryCursorSchema> = {
+    version: 1,
     tags,
     objectSchema,
     sinceSeq: lastSeq,
-    createdAt,
+    // A slow paged continuation must not renew its own deadline until caught up.
+    createdAt: hasMore ? createdAt : scanStartedAt,
     pageSizeStep: Math.min(pageSizeStep + 1, QUERY_PAGE_LIMITS.length - 1),
     ...(!hasMore
       ? {
@@ -367,7 +372,7 @@ inbox.openapi(exportRoute, async (c) => {
     } catch (error) {
       throw new HTTPException(410, { message: "Invalid cursor." });
     }
-    if (createdAt + MESSAGE_RETENTION_PERIOD_MS < Date.now()) {
+    if (createdAt + INBOX_RETENTION_MS < Date.now()) {
       throw new HTTPException(410, { message: "Cursor expired" });
     }
     if (waitTil && waitTil > Date.now()) {

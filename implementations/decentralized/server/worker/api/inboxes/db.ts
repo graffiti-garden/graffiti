@@ -1,3 +1,4 @@
+import { DATABASE_NOW_MS, EXPIRED_MESSAGE_SQL } from "./retention";
 import type { Context } from "hono";
 import type { Bindings } from "../../env";
 import {
@@ -114,73 +115,28 @@ export async function sendMessage(
     new Uint8Array(operationBytes),
   );
 
-  let messageId = messageId_ ?? randomBase64();
-
-  const inserted = await context.env.DB.prepare(
-    `
-      INSERT INTO inbox_messages (
-        message_id,
-        hash,
-        inbox_seq,
-        tags,
-        object,
-        metadata
-      ) VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(hash) DO NOTHING
-      RETURNING message_seq;
-    `,
-  )
-    .bind(
-      messageId,
-      messageHash,
-      inboxSeq,
-      dagCborEncode(message.t),
-      JSON.stringify(message.o),
-      dagCborEncode(message.m),
-    )
-    .first<{ message_seq: number }>();
-
-  let created: boolean;
-  let messageSeq: number;
-  if (inserted) {
-    created = true;
-    messageSeq = inserted.message_seq;
-  } else {
-    created = false;
-    const result = await context.env.DB.prepare(
-      `SELECT message_seq, message_id FROM inbox_messages WHERE inbox_seq = ? AND hash = ?`,
-    )
-      .bind(inboxSeq, messageHash)
-      .first<{ message_seq: number; message_id: string }>();
-    if (!result) {
-      throw new HTTPException(500, {
-        message: "Duplicate message deleted during send?",
-      });
-    }
-    messageSeq = result.message_seq;
-    messageId = result.message_id;
-  }
-
-  const statements: D1PreparedStatement[] = [];
-
-  if (created) {
-    for (const tag of message.t) {
-      statements.push(
-        context.env.DB.prepare(
-          `
-          INSERT INTO inbox_message_tags (
-            message_seq,
-            inbox_seq,
-            tag
-          ) VALUES (?, ?, ?);
-        `,
-        ).bind(messageSeq, inboxSeq, tag),
-      );
-    }
-    await context.env.DB.batch(statements);
-  }
-
-  return { messageId, created };
+  const messageId = messageId_ ?? randomBase64();
+  const database = context.env.DB;
+  // Arrival, sequence allocation, and tag indexing commit together. A query
+  // cannot advance past a message whose tags have not yet been inserted.
+  const statements = [
+    database.prepare(`DELETE FROM inbox_messages AS m WHERE hash = ? AND ${EXPIRED_MESSAGE_SQL}`).bind(messageHash),
+    database.prepare(`UPDATE inbox_sequence
+      SET value = value + 1 WHERE id = 1`),
+    database.prepare(`INSERT INTO inbox_messages
+      (message_seq, message_id, hash, inbox_seq, tags, object, metadata, created_at)
+      VALUES ((SELECT value FROM inbox_sequence WHERE id = 1), ?, ?, ?, ?, ?, ?, ${DATABASE_NOW_MS})
+      ON CONFLICT(hash) DO NOTHING RETURNING message_id`)
+      .bind(messageId, messageHash, inboxSeq, dagCborEncode(message.t), JSON.stringify(message.o), dagCborEncode(message.m)),
+    ...message.t.map((tag) => database.prepare(`INSERT INTO inbox_message_tags (message_seq, inbox_seq, tag)
+      SELECT message_seq, inbox_seq, ? FROM inbox_messages WHERE hash = ?
+      ON CONFLICT (message_seq, tag) DO NOTHING`).bind(tag, messageHash)),
+    database.prepare("SELECT message_id FROM inbox_messages WHERE hash = ?").bind(messageHash),
+  ];
+  const results = await database.batch<{ message_id: string }>(statements);
+  const stored = results[results.length - 1].results[0];
+  if (!stored) throw new HTTPException(500, { message: "Message was not stored" });
+  return { messageId: stored.message_id, created: results[2].results.length > 0 };
 }
 
 export async function queryMessages(
@@ -228,7 +184,8 @@ export async function queryMessages(
       m.metadata
     FROM message_candidates c
     JOIN inbox_messages m
-      ON m.message_seq = c.message_seq`,
+      ON m.message_seq = c.message_seq
+    WHERE NOT (${EXPIRED_MESSAGE_SQL})`,
     `ORDER BY m.message_seq ASC
     LIMIT ?`,
   ].join("\n");
@@ -306,19 +263,22 @@ export async function setMessagePins(
     return;
   }
 
-  const matching = `SELECT message_seq FROM inbox_messages
-    WHERE inbox_seq = ? AND message_id IN (SELECT value FROM json_each(?))`;
+  const matching = `SELECT m.message_seq FROM inbox_messages m
+    WHERE m.inbox_seq = ? AND m.message_id IN (SELECT value FROM json_each(?))
+      AND NOT (${EXPIRED_MESSAGE_SQL})`;
   // Validate and insert in one transaction. A batch with any missing ID pins
   // nothing; retrying a successful batch leaves the existing pins unchanged.
-  const [count] = await context.env.DB.batch<{ count: number }>([
-    context.env.DB.prepare(`SELECT COUNT(*) AS count FROM (${matching})`)
-      .bind(info.inboxSeq, encodedIds),
+  const [, count] = await context.env.DB.batch<{ count: number }>([
     context.env.DB.prepare(`
       INSERT INTO inbox_message_pins (message_seq, account_id)
       SELECT message_seq, ? FROM (${matching})
       WHERE (SELECT COUNT(*) FROM (${matching})) = ?
       ON CONFLICT (message_seq, account_id) DO NOTHING
     `).bind(accountId, info.inboxSeq, encodedIds, info.inboxSeq, encodedIds, ids.length),
+    // Check after insertion: the deadline can pass between SQL statements.
+    // Successfully pinned entries remain live; expired unpinned ones must fail.
+    context.env.DB.prepare(`SELECT COUNT(*) AS count FROM (${matching})`)
+      .bind(info.inboxSeq, encodedIds),
   ]);
   if (count.results[0]?.count !== ids.length) {
     throw new HTTPException(404, { message: "Message not found" });

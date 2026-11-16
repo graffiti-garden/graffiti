@@ -30,6 +30,7 @@ import { authorizationTests } from "./1-services/1-authorization-tests";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
 import { inboxPinTests } from "./1-services/4-inbox-pins-tests";
+import { inboxRetentionTests } from "./1-services/4-inbox-retention-tests";
 import { inboxTests, inboxUnitTests } from "./3-protocol/4-discovery/inbox-history-tests";
 import { inboxCacheTests } from "./3-protocol/4-discovery/message-store-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
@@ -100,6 +101,7 @@ describe("GraffitiDecentralized Tests", () => {
   );
 
   inboxPinTests(environment);
+  inboxRetentionTests(environment);
 
   // Primitive tests
   stringEncodingTests();
