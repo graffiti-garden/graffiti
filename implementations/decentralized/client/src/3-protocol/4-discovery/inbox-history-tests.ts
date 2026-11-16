@@ -319,11 +319,11 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
 
 class TestInboxHistory extends InboxHistory {
   async prepareCache() {
-    await this.cache;
+    await this.store;
   }
 
   async deleteCachedQuery(key: string) {
-    await (await this.cache).messageIds.del(key);
+    await (await this.store).deleteQuery(key);
   }
 
 }
@@ -519,10 +519,10 @@ export function inboxUnitTests() {
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);
         const inboxes = new InboxHistory();
-        const read = { url: "graffiti:example:object", refresh: false };
-        async function collect(options = read, token = "owner") {
+        const read = { refresh: false };
+        async function collect(options = read, token = "owner", tags: Uint8Array[] = []) {
           const results = [];
-          for await (const result of inboxes.query(inboxUrl, [], {}, token, options)) results.push(result);
+          for await (const result of inboxes.query(inboxUrl, tags, {}, token, options)) results.push(result);
           return results;
         }
         expect(await collect()).toEqual([message]);
@@ -534,9 +534,9 @@ export function inboxUnitTests() {
         expect(fetch).toHaveBeenCalledTimes(3);
 
         fetch.mockImplementation(async () => queryPage([], "empty"));
-        const missing = { ...read, url: "graffiti:example:missing" };
-        expect(await collect(missing)).toEqual([]);
-        expect(await collect(missing)).toEqual([]);
+        const missing = [new Uint8Array([99])];
+        expect(await collect(read, "owner", missing)).toEqual([]);
+        expect(await collect(read, "owner", missing)).toEqual([]);
         expect(fetch).toHaveBeenCalledTimes(4);
       });
 

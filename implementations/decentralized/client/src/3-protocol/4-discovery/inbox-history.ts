@@ -27,25 +27,18 @@ import type {
 } from "../../1-services/4-inboxes";
 import {
   canUseIDB,
-  createCache,
-  getMessageCacheKey,
-  getMessageIdsCacheKey,
+  createMessageStore,
   replayQuery,
   storeQueryPage,
-  readCachePrefix,
-  ReadInvalidated,
 } from "./message-store";
-import type { Cache, CacheQueryValue } from "./message-store";
+import type { MessageStore, CacheQueryValue } from "./message-store";
 
 // A stalled tab should not make peers wait indefinitely. This only bounds
-// lock acquisition; the request above bounds work after acquisition.
+// lock acquisition; the HTTP client's deadline bounds the request afterward.
 const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
 
 export interface InboxReadOptions {
   refresh?: boolean;
-  // Getter histories are keyed separately so deleting one does not expire
-  // discovery cursors. This also guards against stale in-flight getter writes.
-  url?: string;
 }
 
 type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & (
@@ -71,18 +64,14 @@ type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & 
 export class InboxHistory {
   constructor(
     protected readonly http = new Inboxes(),
-    private readonly openStore: () => Promise<Cache> = createCache,
+    private readonly openStore: () => Promise<MessageStore> = createMessageStore,
   ) {}
-  protected cache_: Promise<Cache> | null = null;
-  protected get cache() {
-    if (!this.cache_) {
-      this.cache_ = this.openStore();
+  protected store_: Promise<MessageStore> | null = null;
+  protected get store() {
+    if (!this.store_) {
+      this.store_ = this.openStore();
     }
-    return this.cache_;
-  }
-
-  async invalidateReads(url: string): Promise<void> {
-    await (await this.cache).messageIds.invalidateReads(url);
+    return this.store_;
   }
 
   send(inboxUrl: string, message: Message<{}>): Promise<string> {
@@ -94,13 +83,11 @@ export class InboxHistory {
     messageId: string,
     inboxToken?: string | null,
   ): Promise<LabeledMessageBase | null> {
-    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
-    const cache = await this.cache;
-    const cached = await cache.messages.get(messageCacheKey);
+    const store = await this.store;
+    const cached = await store.getMessage(inboxUrl, messageId);
     if (cached !== undefined) return cached;
-
     const message = await this.http.get(inboxUrl, messageId, inboxToken);
-    await cache.messages.set(messageCacheKey, message);
+    await store.setMessage(inboxUrl, messageId, message);
     return message;
   }
 
@@ -111,20 +98,9 @@ export class InboxHistory {
     inboxToken?: string | null,
   ): Promise<void> {
     await this.http.label(inboxUrl, messageId, label, inboxToken);
-    await this.cacheLabel(inboxUrl, messageId, label);
-  }
-
-  // A verified local result need not wait for advisory server labeling.
-  async cacheLabel(inboxUrl: string, messageId: string, label: number): Promise<void> {
-    const cache = await this.cache;
-    const messageCacheKey = getMessageCacheKey(inboxUrl, messageId);
-    const result = await cache.messages.get(messageCacheKey);
-    if (result) {
-      await cache.messages.set(messageCacheKey, {
-        ...result,
-        l: label,
-      });
-    }
+    const store = await this.store;
+    const message = await store.getMessage(inboxUrl, messageId);
+    if (message) await store.setMessage(inboxUrl, messageId, { ...message, l: label });
   }
 
   protected async withQueryLock<T>(
@@ -167,7 +143,7 @@ export class InboxHistory {
     const { inboxUrl, inboxToken } = source;
     const type = source.kind === "export" ? "export" : "query";
     // Continuations carry their validated schema in the cursor; export uses
-    // the empty schema. Both callers instantiate this stream with Schema = {}.
+    // the empty schema.
     const objectSchema = (
       source.kind === "query"
         ? source.schema
@@ -177,21 +153,19 @@ export class InboxHistory {
     const body = source.kind === "query"
       ? new Uint8Array(dagCborEncode({ tags: source.tags, schema: source.schema }))
       : undefined;
-    const readUrl = source.options?.url;
     const refresh = source.options?.refresh !== false;
     const messageIdsCacheKey = source.kind === "continue"
       ? source.cursor.messageIdsCacheKey
-      : (readUrl ? readCachePrefix(readUrl) : "") +
-        await getMessageIdsCacheKey(inboxUrl, type, body, inboxToken);
+      : await getQueryKey(inboxUrl, type, body, inboxToken);
     const cacheVersion = source.kind === "continue"
       ? source.cursor.version
       : undefined;
     // Opening IndexedDB can wait on another tab, so do it before holding a lock.
-    const cache = await this.cache;
+    const store = await this.store;
     // TODO: implement locking in node as well, but not
     // high priority since most use will be in browser
     const useLock = typeof window !== "undefined" && (await canUseIDB());
-    const initialQuery = await cache.messageIds.get(messageIdsCacheKey);
+    const initialQuery = await store.getQuery(messageIdsCacheKey);
     // Version identifies a query history; generation changes on each page
     // written to that history, including an empty page.
     let seenGeneration = initialQuery?.generation;
@@ -221,7 +195,7 @@ export class InboxHistory {
           async () => {
             signal?.throwIfAborted();
             // A different tab may have fetched a page while we waited for the lock.
-            let query = await cache.messageIds.get(messageIdsCacheKey);
+            let query = await store.getQuery(messageIdsCacheKey);
             if (cacheVersion !== undefined && cacheVersion !== query?.version) {
               throw new GraffitiErrorCursorExpired("Cursor is stale");
             }
@@ -246,9 +220,6 @@ export class InboxHistory {
 
             // See if the cursor is still active by requesting the next batch.
             let batch: Awaited<ReturnType<Inboxes["query"]>>;
-            const invalidation = readUrl
-              ? { url: readUrl, token: await cache.messageIds.readInvalidationToken(readUrl) }
-              : undefined;
             try {
               batch = await requestPage(query?.cursor, signal);
             } catch (error) {
@@ -267,7 +238,7 @@ export class InboxHistory {
               if (!firstPage) throw error;
 
               // The cursor is stale. A continuation must report that to its caller.
-              await cache.messageIds.del(messageIdsCacheKey);
+              await store.deleteQuery(messageIdsCacheKey);
               if (cacheVersion !== undefined) throw error;
               query = undefined;
               numSeen = 0;
@@ -292,30 +263,23 @@ export class InboxHistory {
               },
             );
 
-            try {
-              query = await storeQueryPage(
-                cache,
-                inboxUrl,
-                messageIdsCacheKey,
-                query,
-                {
-                  messages: labeledMessages,
-                  cursor,
-                  hasMore,
-                  waitTil: batch.waitTil,
-                  invalidation,
-                },
-              );
-            } catch (error) {
-              if (error instanceof ReadInvalidated) return { retry: true };
-              throw error;
-            }
+            query = await storeQueryPage(
+              store,
+              inboxUrl,
+              messageIdsCacheKey,
+              query,
+              {
+                messages: labeledMessages,
+                cursor,
+                hasMore,
+                waitTil: batch.waitTil,
+              },
+            );
             return { query };
           },
           signal,
         );
 
-        if ("retry" in step) continue;
         if ("initialFetchError" in step) {
           console.error(
             "Unexpected error in stream, waiting 5 seconds before continuing...",
@@ -346,7 +310,7 @@ export class InboxHistory {
       const query = result.query;
       // Replay all unseen messages after releasing the lock.
       const messages = await replayQuery(
-        cache,
+        store,
         inboxUrl,
         messageIdsCacheKey,
         query,
@@ -407,17 +371,17 @@ export class InboxHistory {
     });
   }
 
-  continueQuery(
+  continueQuery<Schema extends JSONSchema = {}>(
     inboxUrl: string,
     cursor: string,
     inboxToken?: string | null,
     options?: InboxReadOptions,
-  ): MessageStream<{}> {
+  ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
 
     const decodedCursor = JSON.parse(cursor);
     const parsedCursor = CursorSchema.parse(decodedCursor);
-    return this.messageStreamer<{}>({
+    return this.messageStreamer<Schema>({
       kind: "continue",
       inboxUrl,
       cursor: parsedCursor,
@@ -454,4 +418,25 @@ async function waitFor(waitTil?: number) {
       await new Promise((resolve) => setTimeout(resolve, waitFor));
     }
   }
+}
+
+async function getQueryKey(
+  inboxUrl: string,
+  type: "query" | "export",
+  body?: Uint8Array,
+  inboxToken?: string | null,
+): Promise<string> {
+  const cacheIdData = dagCborEncode({
+    inboxUrl,
+    type,
+    body: body ?? null,
+    inboxToken: inboxToken ?? null,
+  });
+  return crypto.subtle
+    .digest("SHA-256", new Uint8Array(cacheIdData))
+    .then((bytes) =>
+      Array.from(new Uint8Array(bytes))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join(""),
+    );
 }

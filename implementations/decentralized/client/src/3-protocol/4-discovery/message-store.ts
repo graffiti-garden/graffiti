@@ -1,8 +1,6 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
+import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
 import { LABELED_MESSAGE_ID_KEY, type LabeledMessageBase } from "../../1-services/4-inboxes";
-
-// A verified deletion is terminal for this immutable message ID.
-export const MESSAGE_LABEL_TRASH = 2;
 
 // One record per inbox query. Messages live in the separate message cache;
 // this record tracks their IDs and where to continue fetching from the server.
@@ -46,61 +44,45 @@ export async function canUseIDB(): Promise<boolean> {
   }
 }
 
-export class ReadInvalidated extends Error {}
-// Capture the token before fetching; it must still match when saving the result.
-type ReadInvalidationCheck = { url: string; token: string | undefined };
-const readInvalidationKey = (url: string) => `read-invalidation:${encodeURIComponent(url)}`;
-
-export type Cache = {
-  messages: {
-    get(k: string): Promise<LabeledMessageBase | null | undefined>;
-    getMany(keys: string[]): Promise<(LabeledMessageBase | null | undefined)[]>;
-    set(k: string, value: LabeledMessageBase | null): Promise<void>;
-    setMany(entries: [string, LabeledMessageBase][]): Promise<void>;
-    del(k: string): Promise<void>;
-  };
-  messageIds: {
-    get(k: string): Promise<CacheQueryValue | undefined>;
-    set(k: string, value: CacheQueryValue, invalidation?: ReadInvalidationCheck): Promise<void>;
-    readInvalidationToken(url: string): Promise<string | undefined>;
-    del(k: string): Promise<void>;
-    invalidateReads(url: string): Promise<void>;
-  };
+// Callers use announcement identities; message key encoding and tables stay private.
+export type MessageStore = {
+  getMessage(inboxUrl: string, messageId: string): Promise<LabeledMessageBase | null | undefined>;
+  getMessages(inboxUrl: string, messageIds: string[]): Promise<(LabeledMessageBase | null | undefined)[]>;
+  setMessage(inboxUrl: string, messageId: string, message: LabeledMessageBase | null): Promise<void>;
+  setMessages(inboxUrl: string, messages: LabeledMessageBase[]): Promise<void>;
+  deleteMessage(inboxUrl: string, messageId: string): Promise<void>;
+  getQuery(key: string): Promise<CacheQueryValue | undefined>;
+  setQuery(key: string, query: CacheQueryValue): Promise<void>;
+  deleteQuery(key: string): Promise<void>;
 };
 
-export const readCachePrefix = (url: string) => `read:${encodeURIComponent(url)}:`;
-
-export function getMessageCacheKey(inboxUrl: string, messageId: string) {
+function getMessageCacheKey(inboxUrl: string, messageId: string) {
   return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
 }
 
 export async function replayQuery(
-  cache: Cache,
+  store: MessageStore,
   inboxUrl: string,
   messageIdsCacheKey: string,
   query: CacheQueryValue,
   numSeen = 0,
 ): Promise<LabeledMessageBase[]> {
-  // Filter out all messageIds before
-  // the number already seen
-  const messageIds = query.messageIds.slice(numSeen);
-
-  // Get all the messages pointed to in the cache
-  const messages = await cache.messages.getMany(
-    messageIds.map((id) => getMessageCacheKey(inboxUrl, id)),
+  const messages = await store.getMessages(
+    inboxUrl,
+    query.messageIds.slice(numSeen),
   );
   if (messages.some((message) => !message)) {
     // The query refers to messages that are no longer cached.
     try {
-      await cache.messageIds.del(messageIdsCacheKey);
+      await store.deleteQuery(messageIdsCacheKey);
     } catch {}
-    throw new Error("Cache out of sync - perhaps clear browser storage");
+    throw new GraffitiErrorCursorExpired("Cache out of sync - restart discovery");
   }
   return messages as LabeledMessageBase[];
 }
 
 export async function storeQueryPage(
-  cache: Cache,
+  store: MessageStore,
   inboxUrl: string,
   messageIdsCacheKey: string,
   previous: CacheQueryValue | undefined,
@@ -109,16 +91,10 @@ export async function storeQueryPage(
     cursor: string;
     hasMore: boolean;
     waitTil?: number;
-    invalidation?: ReadInvalidationCheck;
   },
 ): Promise<CacheQueryValue> {
   // First cache the messages with their labels
-  await cache.messages.setMany(
-    page.messages.map((message) => [
-      getMessageCacheKey(inboxUrl, message[LABELED_MESSAGE_ID_KEY]),
-      message,
-    ]),
-  );
+  await store.setMessages(inboxUrl, page.messages);
   // Then store all the messageids
   const query = {
     cursor: page.cursor,
@@ -131,35 +107,19 @@ export async function storeQueryPage(
     hasMore: page.hasMore,
     waitTil: page.waitTil,
   };
-  await cache.messageIds.set(messageIdsCacheKey, query, page.invalidation);
+  await store.setQuery(messageIdsCacheKey, query);
   return query;
 }
 
-export async function getMessageIdsCacheKey(
-  inboxUrl: string,
-  type: "query" | "export",
-  body?: Uint8Array,
-  inboxToken?: string | null,
-): Promise<string> {
-  const cacheIdData = dagCborEncode({
-    inboxUrl,
-    type,
-    body: body ?? null,
-    inboxToken: inboxToken ?? null,
-  });
-  return crypto.subtle
-    .digest("SHA-256", new Uint8Array(cacheIdData))
-    .then((bytes) =>
-      Array.from(new Uint8Array(bytes))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join(""),
-    );
-}
-
-// A response/validation started before deletion must not resurrect a message
-// in another saved query. Message IDs are immutable, so keep its deletion label.
-function preserveDeletion(previous: LabeledMessageBase | null | undefined, next: LabeledMessageBase | null) {
-  return previous?.l === MESSAGE_LABEL_TRASH ? previous : next;
+// Labels may change; the body of an announcement must not. Keep a retained
+// payload available even if another query supplies a conflicting copy.
+function checkPayload(previous: LabeledMessageBase | null | undefined, next: LabeledMessageBase | null): void {
+  if (!previous || !next) return;
+  const original = dagCborEncode(previous.m);
+  const received = dagCborEncode(next.m);
+  if (previous.id !== next.id || original.length !== received.length || !original.every((byte, i) => byte === received[i])) {
+    throw new Error("Inbox changed an existing announcement");
+  }
 }
 
 async function resetCacheDB() {
@@ -171,9 +131,11 @@ async function resetCacheDB() {
   });
 }
 
-export async function createCache(): Promise<Cache> {
+export async function createMessageStore(): Promise<MessageStore> {
   if (await canUseIDB()) {
     const { openDB } = await import("idb");
+    // The raw payload/query layout is unchanged; existing inbox history can
+    // be reused independently of Graffiti's verification metadata.
     const db = await openDB("graffiti-inbox-cache", 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("m")) db.createObjectStore("m");
@@ -182,115 +144,93 @@ export async function createCache(): Promise<Cache> {
     });
 
     return {
-      messages: {
-        getMany: async (keys) => {
-          if (keys.length <= 1) {
-            return Promise.all(keys.map((key) => db.get("m", key)));
-          }
+      getMessages: async (inboxUrl, messageIds) => {
+        const keys = messageIds.map(id => getMessageCacheKey(inboxUrl, id));
+        if (keys.length <= 1) {
+          return Promise.all(keys.map((key) => db.get("m", key)));
+        }
 
-          const batches: Promise<(LabeledMessageBase | null | undefined)[]>[] = [];
-          // Queue every read before awaiting, so later writes cannot overtake
-          // part of this replay. Bounded transactions avoid both a transaction
-          // per message and one very large transaction for the whole history.
-          for (let start = 0; start < keys.length; start += 128) {
-            const tx = db.transaction("m", "readonly");
-            const reads = keys
-              .slice(start, start + 128)
-              .map((key) => tx.store.get(key));
-            batches.push(
-              Promise.all([Promise.all(reads), tx.done]).then(([values]) => values),
-            );
-          }
-          return (await Promise.all(batches)).flat();
-        },
-        get: async (k) => {
-          try {
-            return db.get("m", k);
-          } catch (error) {
-            console.error("Error getting message from cache:", error);
-            console.error("resetting cache...");
-            await resetCacheDB();
-            return undefined;
-          }
-        },
-        set: async (k, v) => {
-          const tx = db.transaction("m", "readwrite");
-          await tx.store.put(preserveDeletion(await tx.store.get(k), v), k);
-          await tx.done;
-        },
-        setMany: async (entries) => {
-          if (entries.length === 0) return;
-          const tx = db.transaction("m", "readwrite");
-          await Promise.all([
-            ...entries.map(async ([k, v]) =>
-              tx.store.put(preserveDeletion(await tx.store.get(k), v), k)),
-            tx.done,
-          ]);
-        },
-        del: (k) => db.delete("m", k),
+        const batches: Promise<(LabeledMessageBase | null | undefined)[]>[] = [];
+        // Queue every read before awaiting, so later writes cannot overtake
+        // part of this replay. Bounded transactions avoid both a transaction
+        // per message and one very large transaction for the whole history.
+        for (let start = 0; start < keys.length; start += 128) {
+          const tx = db.transaction("m", "readonly");
+          const reads = keys
+            .slice(start, start + 128)
+            .map((key) => tx.store.get(key));
+          batches.push(
+            Promise.all([Promise.all(reads), tx.done]).then(([values]) => values),
+          );
+        }
+        return (await Promise.all(batches)).flat();
       },
-      messageIds: {
-        get: async (k) => {
-          try {
-            return await db.get("q", k);
-          } catch (error) {
-            console.error("Error getting message IDs from cache:", error);
-            console.error("resetting cache...");
-            await resetCacheDB();
-            return undefined;
-          }
-        },
-        set: async (k, v, invalidation) => {
-          const tx = db.transaction("q", "readwrite");
-          if (invalidation && await tx.store.get(readInvalidationKey(invalidation.url)) !== invalidation.token) {
-            await tx.done;
-            throw new ReadInvalidated();
-          }
-          await tx.store.put(v, k);
-          await tx.done;
-        },
-        readInvalidationToken: (url) => db.get("q", readInvalidationKey(url)),
-        del: (k) => db.delete("q", k),
-        invalidateReads: async (url) => {
-          const prefix = readCachePrefix(url);
-          const tx = db.transaction("q", "readwrite");
-          await tx.store.delete(IDBKeyRange.bound(prefix, prefix + "\uffff"));
-          await tx.store.put(crypto.randomUUID(), readInvalidationKey(url));
-          await tx.done;
-        },
+      getMessage: async (inboxUrl, messageId) => {
+        try {
+          return db.get("m", getMessageCacheKey(inboxUrl, messageId));
+        } catch (error) {
+          console.error("Error getting message from cache:", error);
+          console.error("resetting cache...");
+          await resetCacheDB();
+          return undefined;
+        }
       },
+      setMessage: async (inboxUrl, messageId, message) => {
+        const key = getMessageCacheKey(inboxUrl, messageId);
+        const tx = db.transaction("m", "readwrite");
+        const write = async () => {
+          checkPayload(await tx.store.get(key), message);
+          await tx.store.put(message, key);
+        };
+        await Promise.all([write(), tx.done]);
+      },
+      setMessages: async (inboxUrl, messages) => {
+        if (messages.length === 0) return;
+        const tx = db.transaction("m", "readwrite");
+        await Promise.all([
+          ...messages.map(async (message) => {
+            const key = getMessageCacheKey(inboxUrl, message.id);
+            checkPayload(await tx.store.get(key), message);
+            await tx.store.put(message, key);
+          }),
+          tx.done,
+        ]);
+      },
+      deleteMessage: (inboxUrl, messageId) => db.delete("m", getMessageCacheKey(inboxUrl, messageId)),
+      getQuery: async (key) => {
+        try {
+          return await db.get("q", key);
+        } catch (error) {
+          console.error("Error getting message IDs from cache:", error);
+          console.error("resetting cache...");
+          await resetCacheDB();
+          return undefined;
+        }
+      },
+      setQuery: (key, query) => db.put("q", query, key).then(() => {}),
+      deleteQuery: (key) => db.delete("q", key),
     };
   }
 
   const m = new Map<string, LabeledMessageBase | null>();
   const q = new Map<string, CacheQueryValue>();
-  const readInvalidationTokens = new Map<string, string>();
 
   return {
-    messages: {
-      getMany: async (keys) => keys.map((key) => m.get(key)),
-      get: async (k) => m.get(k),
-      set: async (k, v) => void m.set(k, preserveDeletion(m.get(k), v)),
-      setMany: async (entries) => {
-        for (const [k, v] of entries) m.set(k, preserveDeletion(m.get(k), v));
-      },
-      del: async (k) => void m.delete(k),
+    getMessages: async (inboxUrl, messageIds) => messageIds.map(id =>
+      structuredClone(m.get(getMessageCacheKey(inboxUrl, id)))),
+    getMessage: async (inboxUrl, messageId) => structuredClone(m.get(getMessageCacheKey(inboxUrl, messageId))),
+    setMessage: async (inboxUrl, messageId, message) => {
+      const key = getMessageCacheKey(inboxUrl, messageId);
+      checkPayload(m.get(key), message);
+      m.set(key, structuredClone(message));
     },
-    messageIds: {
-      get: async (k) => q.get(k),
-      set: async (k, v, invalidation) => {
-        if (invalidation && readInvalidationTokens.get(invalidation.url) !== invalidation.token) {
-          throw new ReadInvalidated();
-        }
-        q.set(k, v);
-      },
-      readInvalidationToken: async (url) => readInvalidationTokens.get(url),
-      del: async (k) => void q.delete(k),
-      invalidateReads: async (url) => {
-        const prefix = readCachePrefix(url);
-        for (const key of q.keys()) if (key.startsWith(prefix)) q.delete(key);
-        readInvalidationTokens.set(url, crypto.randomUUID());
-      },
+    setMessages: async (inboxUrl, messages) => {
+      for (const message of messages) checkPayload(m.get(getMessageCacheKey(inboxUrl, message.id)), message);
+      for (const message of messages) m.set(getMessageCacheKey(inboxUrl, message.id), structuredClone(message));
     },
+    deleteMessage: async (inboxUrl, messageId) => void m.delete(getMessageCacheKey(inboxUrl, messageId)),
+    getQuery: async (key) => structuredClone(q.get(key)),
+    setQuery: async (key, query) => void q.set(key, structuredClone(query)),
+    deleteQuery: async (key) => void q.delete(key),
   };
 }
