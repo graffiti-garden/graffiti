@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import * as fakeIndexedDB from "fake-indexeddb";
 import {
+  MESSAGE_LABEL_TRASH,
   createCache,
   getMessageCacheKey,
   replayQuery,
@@ -9,8 +10,8 @@ import {
   ReadInvalidated,
   type Cache,
   type CacheQueryValue,
-} from "./cache";
-import { MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
+} from "./message-store";
+import type { LabeledMessageBase } from "../../1-services/4-inboxes";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";

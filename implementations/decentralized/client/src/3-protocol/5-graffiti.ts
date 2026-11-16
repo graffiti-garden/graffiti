@@ -36,10 +36,9 @@ import {
   MESSAGE_OBJECT_KEY,
   MESSAGE_TAGS_KEY,
   type LabeledMessage,
-  type MessageStream,
-  type InboxReadOptions,
 } from "../1-services/4-inboxes";
-import { MESSAGE_LABEL_TRASH } from "../1-services/4-inboxes/messages";
+import { InboxHistory, type MessageStream, type InboxReadOptions } from "./4-discovery/inbox-history";
+import { MESSAGE_LABEL_TRASH } from "./4-discovery/message-store";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 import {
@@ -53,7 +52,7 @@ import {
 } from "../2-primitives/3-channel-attestations";
 import { AllowedAttestations } from "../2-primitives/4-allowed-attestations";
 
-import type { LoginAttempt } from "./login-attempt";
+import type { LoginAttempt } from "./1-sessions/login-attempt";
 import { Handles } from "./2-handles";
 import {
   Sessions,
@@ -61,7 +60,7 @@ import {
   DID_SERVICE_TYPE_GRAFFITI_INBOX,
   DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET,
   DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
-} from "./1-sessions";
+} from "./1-sessions/sessions";
 import {
   decodeObjectUrl,
   stripGraffitiUrlAddendums,
@@ -159,6 +158,7 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly authorization = new Authorization();
   protected readonly storageBuckets = new StorageBuckets();
   protected readonly inboxes = new Inboxes();
+  protected readonly inboxHistory = new InboxHistory(this.inboxes);
 
   protected readonly stringEncoder = new StringEncoder();
   protected readonly contentAddresses = new ContentAddresses();
@@ -571,7 +571,7 @@ export class GraffitiDecentralized implements Graffiti {
       session,
       kind,
     );
-    await this.inboxes.invalidateReads(object.url);
+    await this.inboxHistory.invalidateReads(object.url);
 
     return object;
   }
@@ -644,7 +644,7 @@ export class GraffitiDecentralized implements Graffiti {
 
     // Do not retain a negative lookup: the object may be published or reposted
     // from another device immediately after this request.
-    await this.inboxes.invalidateReads(objectUrl);
+    await this.inboxHistory.invalidateReads(objectUrl);
     throw new GraffitiErrorNotFound("Object not found");
   }
 
@@ -698,7 +698,7 @@ export class GraffitiDecentralized implements Graffiti {
       resolvedSession.storageBucket.token,
     );
 
-    await this.inboxes.invalidateReads(object.url);
+    await this.inboxHistory.invalidateReads(object.url);
 
     // Announce the deletion to all inboxes
     await this.announceObject(
@@ -719,7 +719,7 @@ export class GraffitiDecentralized implements Graffiti {
     );
 
     // A reader may have repopulated its cache while announcements were in flight.
-    await this.inboxes.invalidateReads(object.url);
+    await this.inboxHistory.invalidateReads(object.url);
 
     return object;
   }
@@ -819,8 +819,7 @@ export class GraffitiDecentralized implements Graffiti {
     const data = await this.storageBuckets.get(
       storageBucketEndpoint,
       key,
-      size,
-      refresh ? "no-cache" : "default",
+      { maxBytes: size, cache: refresh ? "no-cache" : "default" },
     );
 
     const blob = new Blob([data.slice()], { type });
@@ -1099,7 +1098,7 @@ export class GraffitiDecentralized implements Graffiti {
             : undefined;
 
           if (tombstonedMessageId) {
-            await this.inboxes.cacheLabel(
+            await this.inboxHistory.cacheLabel(
               personalInbox.serviceEndpoint,
               tombstonedMessageId,
               MESSAGE_LABEL_TRASH,
@@ -1166,7 +1165,7 @@ export class GraffitiDecentralized implements Graffiti {
           };
 
           if (tombstonedMessageId) {
-            await this.inboxes.cacheLabel(
+            await this.inboxHistory.cacheLabel(
               inbox.serviceEndpoint,
               tombstonedMessageId,
               MESSAGE_LABEL_TRASH,
@@ -1206,7 +1205,7 @@ export class GraffitiDecentralized implements Graffiti {
         )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
       : undefined;
     if (tombstonedMessageId) {
-      await this.inboxes.cacheLabel(
+      await this.inboxHistory.cacheLabel(
         resolvedSession.personalInbox.serviceEndpoint,
         tombstonedMessageId,
         MESSAGE_LABEL_TRASH,
@@ -1249,14 +1248,14 @@ export class GraffitiDecentralized implements Graffiti {
   ): SingleEndpointQueryIterator<Schema> {
     const iterator: MessageStream<Schema> =
       "tags" in queryArguments
-        ? this.inboxes.query<Schema>(
+        ? this.inboxHistory.query<Schema>(
             inboxEndpoint,
             queryArguments.tags,
             queryArguments.objectSchema,
             inboxToken,
             options,
           )
-        : (this.inboxes.continueQuery(
+        : (this.inboxHistory.continueQuery(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
@@ -1309,7 +1308,7 @@ export class GraffitiDecentralized implements Graffiti {
           // Discovery/deletion streams report known removals immediately.
           // Getters invalidate after replay so old tombstones can precede a repost.
           if (processed.result.tombstone && !options?.url) {
-            await this.inboxes.invalidateReads(processed.result.object.url);
+            await this.inboxHistory.invalidateReads(processed.result.object.url);
           }
           yield processed.result;
         }
@@ -1327,7 +1326,7 @@ export class GraffitiDecentralized implements Graffiti {
     label: number,
     inboxToken?: string | null,
   ): void {
-    void this.inboxes.label(inboxEndpoint, messageId, label, inboxToken).catch(
+    void this.inboxHistory.label(inboxEndpoint, messageId, label, inboxToken).catch(
       (error) => console.error("Could not label inbox message:", error),
     );
   }
@@ -1397,7 +1396,7 @@ export class GraffitiDecentralized implements Graffiti {
       if (!tombstonedMessageId) return;
 
       // Make sure the tombstone points to a real message
-      const past = await this.inboxes.get(
+      const past = await this.inboxHistory.get(
         inboxEndpoint,
         tombstonedMessageId,
         inboxToken,
@@ -1414,7 +1413,7 @@ export class GraffitiDecentralized implements Graffiti {
       if (past[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH) {
         // Update local snapshots before yielding the deletion; remote labeling
         // can remain in the background.
-        await this.inboxes.cacheLabel(
+        await this.inboxHistory.cacheLabel(
           inboxEndpoint,
           tombstonedMessageId,
           MESSAGE_LABEL_TRASH,
@@ -1456,7 +1455,7 @@ export class GraffitiDecentralized implements Graffiti {
       const objectBytes = await this.storageBuckets.get(
         storageBucketEndpoint,
         storageBucketKey,
-        MAX_OBJECT_SIZE_BYTES,
+        { maxBytes: MAX_OBJECT_SIZE_BYTES },
       );
 
       if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {
@@ -1488,7 +1487,7 @@ export class GraffitiDecentralized implements Graffiti {
     if (tombstonedMessageId) {
       if (validationError instanceof GraffitiErrorNotFound) {
         // Not found == The tombstone is correct
-        await this.inboxes
+        await this.inboxHistory
           // Get the referenced message
           .get(inboxEndpoint, tombstonedMessageId, inboxToken)
           .then(async (result) => {
@@ -1500,7 +1499,7 @@ export class GraffitiDecentralized implements Graffiti {
               // And that the object is not already marked as trash
               result[LABELED_MESSAGE_LABEL_KEY] !== MESSAGE_LABEL_TRASH
             ) {
-              await this.inboxes.cacheLabel(
+              await this.inboxHistory.cacheLabel(
                 inboxEndpoint,
                 tombstonedMessageId,
                 MESSAGE_LABEL_TRASH,
@@ -1514,7 +1513,7 @@ export class GraffitiDecentralized implements Graffiti {
               );
             }
 
-            await this.inboxes.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_TRASH);
+            await this.inboxHistory.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_TRASH);
             // Then, label the tombstone message as trash
             this.labelInboxMessage(
               inboxEndpoint,
@@ -1540,7 +1539,7 @@ export class GraffitiDecentralized implements Graffiti {
       }
     } else {
       if (validationError === undefined) {
-        await this.inboxes.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_VALID);
+        await this.inboxHistory.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_VALID);
         this.labelInboxMessage(
           inboxEndpoint,
           messageId,
@@ -1551,8 +1550,8 @@ export class GraffitiDecentralized implements Graffiti {
       } else if (validationError instanceof GraffitiErrorNotFound) {
         // Item was deleted before we got a chance to
         // validate it. Just label the message as trash.
-        await this.inboxes.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_TRASH);
-        await this.inboxes.invalidateReads(object.url);
+        await this.inboxHistory.cacheLabel(inboxEndpoint, messageId, MESSAGE_LABEL_TRASH);
+        await this.inboxHistory.invalidateReads(object.url);
         this.labelInboxMessage(
           inboxEndpoint,
           messageId,
