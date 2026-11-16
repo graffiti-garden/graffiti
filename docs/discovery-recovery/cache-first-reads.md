@@ -13,8 +13,10 @@ will not identify per-object freshness or a separate cache-complete phase.
 - Replay only verified originals in the current reader scope. Reapply schema,
   channels, masking, record kind, and known deletions. Raw inbox messages are not
   evidence that an object was validated.
-- Advance checkpoints only after completed network work. Transient failures keep
-  the previous checkpoint. Preserve deduplication and stale-write protection.
+- Advance inbox checkpoints after complete pages are cached. A failed page fetch
+  preserves the last completed page; failed object verification keeps its own
+  pending retry without holding the inbox checkpoint. Preserve deduplication and
+  stale-write protection.
 - Handle refresh rejections immediately and cancel work when the consumer closes.
   Preserve personal pin handling on early close.
 - The current queue fills up to 128 messages before yielding. Merely moving raw
@@ -32,8 +34,9 @@ small storage/inbox requests have deadlines, and DID/media reads have their own
 policies. `navigator.onLine` is not proof that a particular service is reachable.
 
 The current five-second initial-failure delay also throttles automatic polling.
-Removing it alone can cause a tight offline loop. Move backoff to future attempts
-and test repeated failures. Vue currently logs yielded discovery errors while its
+Removing it alone can cause a tight offline loop. Keep throttling in this
+implementation layer, applying it to future attempts, and test repeated failures.
+Vue currently logs yielded discovery errors while its
 existing `error` ref handles thrown failures; exposing yielded failures there is
 a separate small change, requiring no public Graffiti API addition.
 
@@ -45,6 +48,6 @@ use the network. Offline writes and durable retry queues are separate work.
 ## Acceptance cases
 
 Verify early cached results with fewer and more than 128 entries; a later network
-error without checkpoint advancement or lost objects; confirmed deletion versus
+error without losing cached pages or pending objects; confirmed deletion versus
 index expiry; session/schema/media isolation; concurrent invalidation; cancellation;
 and bounded automatic polling with partial data plus a visible error.
