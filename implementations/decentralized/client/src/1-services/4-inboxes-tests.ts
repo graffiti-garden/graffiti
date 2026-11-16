@@ -495,6 +495,45 @@ export function inboxUnitTests() {
     });
 
     describe("inbox query cache", () => {
+      test("looks up cached messages locally without changing the continuation", async () => {
+        const second = { ...message, id: "second" };
+        const foreign = { ...message, id: "foreign" };
+        const fetch = vi.fn()
+          .mockResolvedValueOnce(queryPage([message, second], "cursor-1"))
+          .mockResolvedValueOnce(queryPage([foreign], "cursor-other"));
+        vi.stubGlobal("fetch", fetch);
+        const inboxes = new TestInboxes();
+        const initial = inboxes.query(inboxUrl, [], {}, "reader");
+        await initial.next();
+        await initial.next();
+        const end = await initial.next();
+        assert(end.done);
+        const cursor = end.value;
+        const other = inboxes.query(inboxUrl, [], {}, "other-reader");
+        await other.next();
+        await other.next();
+        fetch.mockClear();
+
+        // A lookup returns the selected messages in their original inbox order.
+        // It neither requests a page nor adds old messages to the continuation.
+        expect(await inboxes.readCached(inboxUrl, cursor, [second.id, message.id]))
+          .toEqual([message, second]);
+        expect(await inboxes.continueQuery(inboxUrl, cursor, "reader", { refresh: false }).next())
+          .toEqual({ done: true, value: cursor });
+
+        // Being cached is insufficient: the ID must belong to this cursor's
+        // history, including its reader scope and position.
+        await expect(inboxes.readCached(inboxUrl, cursor, [foreign.id]))
+          .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+        const earlier = JSON.stringify({ ...JSON.parse(cursor), numSeen: 1 });
+        await expect(inboxes.readCached(inboxUrl, earlier, [second.id]))
+          .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+        await inboxes.deleteCachedQuery(JSON.parse(cursor).messageIdsCacheKey);
+        await expect(inboxes.readCached(inboxUrl, cursor, [message.id]))
+          .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+        expect(fetch).not.toHaveBeenCalled();
+      });
+
       test("reuses completed queries, including empty results, unless refreshed", async () => {
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);

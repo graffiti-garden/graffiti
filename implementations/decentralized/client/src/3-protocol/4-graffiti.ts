@@ -907,6 +907,7 @@ export class GraffitiDecentralized implements Graffiti {
           cursor
             ? {
                 cursor,
+                objectSchema: schema,
               }
             : {
                 tags,
@@ -1252,13 +1253,14 @@ export class GraffitiDecentralized implements Graffiti {
         }
       | {
           cursor: string;
+          objectSchema: Schema;
         },
     inboxToken?: string | null,
     recipient?: string | null,
     options?: InboxReadOptions,
   ): SingleEndpointQueryIterator<Schema> {
     let pending = new Map<string, infer_<typeof PendingReadSchema>>();
-    let replayIds: string[] = [];
+    let retryMessages: LabeledMessage<Schema>[] = [];
     let deferred = false;
     if ("cursor" in queryArguments) {
       let checkpoint: infer_<typeof SingleEndpointCursorSchema>;
@@ -1267,17 +1269,26 @@ export class GraffitiDecentralized implements Graffiti {
       } catch {
         throw new GraffitiErrorCursorExpired("Invalid discovery checkpoint");
       }
-      queryArguments = { cursor: checkpoint.cursor };
+      queryArguments = { ...queryArguments, cursor: checkpoint.cursor };
       pending = new Map(checkpoint.pending.map((retry) => [retry.id, retry]));
       // Eligibility is checked once per poll. Never sleep or retry twice in
       // this stream. Oldest due reads go first so a failing read cannot starve others.
       const now = Date.now();
-      replayIds = [...pending.values()]
+      const dueIds = [...pending.values()]
         .filter((retry) => retry.retryAt <= now)
         .sort((a, b) => a.retryAt - b.retryAt)
         .slice(0, MAX_READ_RETRIES_PER_POLL)
         .map((retry) => retry.id);
-      deferred = replayIds.length < pending.size;
+      deferred = dueIds.length < pending.size;
+      if (dueIds.length) {
+        const messages = await this.inboxes.readCached(inboxEndpoint, checkpoint.cursor, dueIds);
+        const matches = await compileGraffitiObjectSchema<Schema>(queryArguments.objectSchema);
+        retryMessages = messages.map((message) => {
+          const object = message.m.o;
+          if (!matches(object)) throw new GraffitiErrorCursorExpired("Cached message no longer matches discovery");
+          return { ...message, m: { ...message.m, o: object } };
+        });
+      }
     }
 
     const iterator: MessageStream<Schema> =
@@ -1294,9 +1305,7 @@ export class GraffitiDecentralized implements Graffiti {
             queryArguments.cursor,
             inboxToken,
             options,
-            replayIds,
           );
-
     const inFlight: Promise<
       | { id: string; result: SingleEndpointQueryItem<Schema> | void }
       | { error: unknown }
@@ -1307,7 +1316,11 @@ export class GraffitiDecentralized implements Graffiti {
       while (true) {
         // Fill up the in-flight queue of queries up to the concurrency limit
         while (doneValue === null && inFlight.length < CONCURRENCY) {
-          const itResult = await iterator.next();
+          // Graffiti supplies due cached reads before the ordinary continuation.
+          const retryMessage = retryMessages.shift();
+          const itResult: IteratorResult<LabeledMessage<Schema>, string> = retryMessage
+            ? { done: false, value: retryMessage }
+            : await iterator.next();
           if (itResult.done) {
             doneValue = itResult.value;
             break;

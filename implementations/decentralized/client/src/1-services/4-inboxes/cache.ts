@@ -72,27 +72,22 @@ export function getMessageCacheKey(inboxUrl: string, messageId: string) {
   return `${encodeURIComponent(inboxUrl)}:${encodeURIComponent(messageId)}`;
 }
 
-export async function replayQuery(
+export function replayQuery(
   cache: Cache,
   inboxUrl: string,
   messageIdsCacheKey: string,
   query: CacheQueryValue,
   numSeen = 0,
-  replayIds: string[] = [],
 ): Promise<LabeledMessageBase[]> {
-  // Replay requested earlier messages without rewinding the continuation.
-  // Keep their inbox order (including deletion hints), and require them to
-  // belong to this query's history, including its schema and reader scope.
-  const requested = new Set(replayIds);
-  const earlierIds = requested.size
-    ? query.messageIds.slice(0, numSeen).filter((id) => requested.delete(id))
-    : [];
-  if (requested.size) {
-    throw new GraffitiErrorCursorExpired("Replay message is outside the cursor's history");
-  }
-  const messageIds = [...earlierIds, ...query.messageIds.slice(numSeen)];
+  return readMessages(cache, inboxUrl, messageIdsCacheKey, query.messageIds.slice(numSeen));
+}
 
-  // Get all the messages pointed to in the cache
+export async function readMessages(
+  cache: Cache,
+  inboxUrl: string,
+  messageIdsCacheKey: string,
+  messageIds: string[],
+): Promise<LabeledMessageBase[]> {
   const messages = await cache.messages.getMany(
     messageIds.map((id) => getMessageCacheKey(inboxUrl, id)),
   );

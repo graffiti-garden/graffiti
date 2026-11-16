@@ -41,6 +41,7 @@ import {
   getMessageCacheKey,
   getMessageIdsCacheKey,
   replayQuery,
+  readMessages,
   storeQueryPage,
   readCachePrefix,
   ReadInvalidated,
@@ -87,7 +88,6 @@ type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & 
       kind: "continue";
       inboxUrl: string;
       cursor: infer_<typeof CursorSchema>;
-      replayIds: string[];
       inboxToken?: string | null;
     }
   | {
@@ -472,7 +472,6 @@ export class Inboxes {
         messageIdsCacheKey,
         query,
         numSeen,
-        firstPage && source.kind === "continue" ? source.replayIds : [],
       );
       numSeen = query.messageIds.length;
       seenGeneration = query.generation;
@@ -538,7 +537,6 @@ export class Inboxes {
     cursor: string,
     inboxToken?: string | null,
     options?: InboxReadOptions,
-    replayIds: string[] = [],
   ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
 
@@ -548,10 +546,24 @@ export class Inboxes {
       kind: "continue",
       inboxUrl,
       cursor: parsedCursor,
-      replayIds,
       inboxToken,
       options,
     });
+  }
+
+  // Read only from the saved history; this never fetches or advances its cursor.
+  async readCached(inboxUrl: string, cursor: string, ids: string[]): Promise<LabeledMessageBase[]> {
+    verifyHTTPSEndpoint(inboxUrl);
+    const { messageIdsCacheKey, version, numSeen } = CursorSchema.parse(JSON.parse(cursor));
+    const cache = await this.cache;
+    const query = await cache.messageIds.get(messageIdsCacheKey);
+    if (!query || query.version !== version) throw new GraffitiErrorCursorExpired("Cursor is stale");
+
+    // Restrict lookups to this query's previously returned IDs, in inbox order.
+    const requested = new Set(ids);
+    const selected = query.messageIds.slice(0, numSeen).filter((id) => requested.delete(id));
+    if (requested.size) throw new GraffitiErrorCursorExpired("Message is outside the cursor's history");
+    return readMessages(cache, inboxUrl, messageIdsCacheKey, selected);
   }
 
   export(inboxUrl: string, inboxToken: string): MessageStream<{}> {
