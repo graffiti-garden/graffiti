@@ -1,7 +1,7 @@
 import { GraffitiErrorNotFound } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
-import { getAuthorizationEndpoint, fetchWithErrorHandling, verifyHTTPSEndpoint } from "./utilities";
-import { LabeledMessageBaseSchema, SendResponseSchema, type LabeledMessageBase, type Message } from "./4-inboxes/messages";
+import { getAuthorizationEndpoint, fetchWithErrorHandling, verifyHTTPSEndpoint } from "../utilities";
+import { LabeledMessageBaseSchema, SendResponseSchema, type LabeledMessageBase, type Message } from "./messages";
 
 export {
   Uint8ArraySchema,
@@ -14,8 +14,8 @@ export {
   LABELED_MESSAGE_MESSAGE_KEY,
   LABELED_MESSAGE_LABEL_KEY,
   LabeledMessageBaseSchema,
-} from "./4-inboxes/messages";
-export type { Message, LabeledMessage } from "./4-inboxes/messages";
+} from "./messages";
+export type { Message, LabeledMessage } from "./messages";
 
 // Keep the deadline active through the response body. Query history and locks
 // are handled by the caller; this client has no persistent state.
