@@ -18,30 +18,31 @@ import { DecentralizedIdentifiers } from "./1-services/2-dids";
 import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
-import { discoveryErrorTests } from "./3-protocol/4-discovery-errors-tests";
-import { verifiedMessageTests } from "./3-protocol/verified-messages-tests";
-import { pinProtocolTests, pinPolicyIntegrationTests } from "./3-protocol/4-pin-protocol-tests";
-import { discoveryCursorTests } from "./3-protocol/4-discovery-cursor-tests";
-import { Sessions } from "./3-protocol/1-sessions";
+import { InboxHistory } from "./3-protocol/4-discovery/inbox-history";
+import { pinProtocolTests, pinPolicyIntegrationTests } from "./3-protocol/5-pin-protocol-tests";
+import { discoveryErrorTests } from "./3-protocol/5-discovery-errors-tests";
+import { discoveryCursorTests } from "./3-protocol/5-discovery-cursor-tests";
+import { Sessions } from "./3-protocol/1-sessions/sessions";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { decode as dagCborDecode, encode as dagCborEncode } from "@ipld/dag-cbor";
 import { Handles } from "./3-protocol/2-handles";
 import { authorizationTests } from "./1-services/1-authorization-tests";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
-import { inboxTests, inboxUnitTests } from "./1-services/4-inboxes-tests";
 import { inboxPinTests } from "./1-services/4-inbox-pins-tests";
-import { inboxCacheTests } from "./1-services/4-inboxes/cache-tests";
+import { inboxTests, inboxUnitTests } from "./3-protocol/4-discovery/inbox-history-tests";
+import { inboxCacheTests } from "./3-protocol/4-discovery/message-store-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
 import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
-import { sessionTests } from "./3-protocol/1-sessions-tests";
+import { sessionTests } from "./3-protocol/1-sessions/sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
-import { readCacheTests } from "./3-protocol/4-read-cache-tests";
+import { readCacheTests } from "./3-protocol/5-read-cache-tests";
+import { verificationStateTests } from "./3-protocol/4-discovery/verification-state-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
-import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
-import { discoveryAsyncTests } from "./3-protocol/4-discovery-async-tests";
+import { GraffitiDecentralized } from "./3-protocol/5-graffiti";
+import { discoveryAsyncTests } from "./3-protocol/5-discovery-async-tests";
 import {
   DecentralizedTestEnvironment,
   decentralizedSharedInbox,
@@ -421,10 +422,11 @@ authorizationTests();
 inboxUnitTests();
 discoveryCursorTests();
 discoveryErrorTests();
-verifiedMessageTests();
-pinProtocolTests();
 sessionTests();
 
 inboxCacheTests();
+verificationStateTests();
 
 discoveryAsyncTests();
+
+pinProtocolTests();

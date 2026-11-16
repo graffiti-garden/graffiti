@@ -33,25 +33,25 @@ import { StorageBuckets } from "../1-services/3-storage-buckets";
 import {
   Inboxes,
   type InboxMessage,
-  type MessageStream,
-  type InboxReadOptions,
+  type Message,
 } from "../1-services/4-inboxes";
-import type { InboxMessageBase } from "../1-services/4-inboxes/messages";
-import { VerifiedMessages } from "./verified-messages";
+import { InboxHistory, type MessageStream, type InboxReadOptions } from "./4-discovery/inbox-history";
+import { createMessageStore, type MessageStore } from "./4-discovery/message-store";
+import { VerificationState, type MessageState } from "./4-discovery/verification-state";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
 import {
   StringEncoder,
   STRING_ENCODER_METHOD_BASE64URL,
 } from "../2-primitives/1-string-encoding";
-import { ContentAddresses } from "../2-primitives/2-content-addresses";
+import { ContentAddresses, CONTENT_ADDRESS_METHOD_SHA256 } from "../2-primitives/2-content-addresses";
 import {
   CHANNEL_ATTESTATION_METHOD_SHA256_ED25519,
   ChannelAttestations,
 } from "../2-primitives/3-channel-attestations";
 import { AllowedAttestations } from "../2-primitives/4-allowed-attestations";
 
-import type { LoginAttempt } from "./login-attempt";
+import type { LoginAttempt } from "./1-sessions/login-attempt";
 import { Handles } from "./2-handles";
 import {
   Sessions,
@@ -59,7 +59,7 @@ import {
   DID_SERVICE_TYPE_GRAFFITI_INBOX,
   DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET,
   DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET,
-} from "./1-sessions";
+} from "./1-sessions/sessions";
 import {
   decodeObjectUrl,
   stripGraffitiUrlAddendums,
@@ -78,8 +78,9 @@ import {
   custom,
   string,
   boolean,
-  literal,
   looseObject,
+  literal,
+  nullable,
   strictObject,
   array,
   int,
@@ -140,6 +141,9 @@ export interface GraffitiDecentralizedOptions {
 }
 
 const CONCURRENCY = 128;
+const INITIAL_READ_RETRY_MS = 1_000;
+const MAX_READ_RETRY_MS = 60_000;
+const MAX_READ_RETRIES_PER_POLL = 32;
 const LOCAL_STORAGE_REMEMBERED_HANDLE_KEY = "graffiti-login-remembered-handle";
 
 // @ts-ignore
@@ -148,9 +152,11 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly authorization = new Authorization();
   protected readonly storageBuckets = new StorageBuckets();
   protected readonly inboxes = new Inboxes();
-  protected readonly verifiedMessages = new VerifiedMessages();
+  private messageStore_: Promise<MessageStore> | undefined;
+  protected readonly openMessageStore = () => this.messageStore_ ??= createMessageStore();
+  protected readonly inboxHistory = new InboxHistory(this.inboxes, this.openMessageStore);
+  protected readonly verification = new VerificationState();
   private readonly confirmedPins = new Set<string>();
-  private readonly firstMissingRead = new Map<string, number>();
 
   protected readonly stringEncoder = new StringEncoder();
   protected readonly contentAddresses = new ContentAddresses();
@@ -570,8 +576,6 @@ export class GraffitiDecentralized implements Graffiti {
           console.error("Could not roll back stored object:", rollbackError));
       throw error;
     }
-    await this.inboxes.invalidateReads(object.url);
-
     return object;
   }
 
@@ -607,6 +611,26 @@ export class GraffitiDecentralized implements Graffiti {
     const objectUrl = stripGraffitiUrlAddendums(unpackObjectUrl(url));
     const tags = [new TextEncoder().encode(objectUrl)];
     for (const service of services) {
+      // Verified objects belong to Graffiti, not to the inbox query cache.
+      // A cache miss (including a known deletion) still queries the inbox.
+      if (!refresh) {
+        const entries = await this.verification.read(objectUrl);
+        for (const entry of entries) {
+          if (entry.scope !== (session?.actor ?? null) || entry.inbox !== service.serviceEndpoint || entry.status !== "verified") continue;
+          const message = await (await this.openMessageStore()).getMessage(entry.inbox, entry.id);
+          // Cache eviction is a miss, not evidence that the object was deleted.
+          if (!message || await this.digestMessage(message.m) !== entry.digest) continue;
+          const metadata = MessageMetadataSchema.parse(dagCborDecode(message.m.m));
+          if (metadata[RECORD_KIND_KEY] !== undefined && metadata[RECORD_KIND_KEY] !== kind) continue;
+          const object = message.m.o;
+          if (!validator(object)) throw new GraffitiErrorSchemaMismatch("Object exists but does not match the supplied schema");
+          if (service.pin && session && service.token && !this.confirmedPins.has(this.pinKey(entry.inbox, session.actor, entry.id))) {
+            await this.inboxes.pin(entry.inbox, [entry.id], service.token);
+            this.confirmedPins.add(this.pinKey(entry.inbox, session.actor, entry.id));
+          }
+          return structuredClone(object);
+        }
+      }
       let object: GraffitiObjectBase | undefined = undefined;
 
       const iterator = this.querySingleEndpoint<{}>(
@@ -617,7 +641,7 @@ export class GraffitiDecentralized implements Graffiti {
         },
         service.token,
         session?.actor,
-        { url: objectUrl, refresh, pin: service.pin },
+        { refresh: true, pin: service.pin },
       );
 
       for await (const result of iterator) {
@@ -642,9 +666,6 @@ export class GraffitiDecentralized implements Graffiti {
       }
     }
 
-    // Do not retain a negative lookup: the object may be published or reposted
-    // from another device immediately after this request.
-    await this.inboxes.invalidateReads(objectUrl);
     throw new GraffitiErrorNotFound("Object not found");
   }
 
@@ -700,8 +721,7 @@ export class GraffitiDecentralized implements Graffiti {
       resolvedSession.storageBucket.token,
     );
 
-    await this.verifiedMessages.missing(object.url, storageBucketKey);
-    await this.inboxes.invalidateReads(object.url);
+    await this.verification.deleted(object.url, storageBucketKey);
 
     // Announce the deletion to all inboxes
     await this.announceObject(
@@ -720,9 +740,6 @@ export class GraffitiDecentralized implements Graffiti {
         },
       ],
     );
-
-    // A reader may have repopulated its cache while announcements were in flight.
-    await this.inboxes.invalidateReads(object.url);
 
     return object;
   }
@@ -829,8 +846,7 @@ export class GraffitiDecentralized implements Graffiti {
     const data = await this.storageBuckets.get(
       storageBucketEndpoint,
       key,
-      size,
-      refresh ? "no-cache" : "default",
+      { maxBytes: size, cache: refresh ? "no-cache" : "default" },
     );
 
     const blob = new Blob([data.slice()], { type });
@@ -869,10 +885,11 @@ export class GraffitiDecentralized implements Graffiti {
     },
     session?: GraffitiSession | null,
     refresh = true,
+    hints: PendingHint[] = [],
+    cursorScope?: string | null,
   ): GraffitiObjectStream<Schema> {
     const lastTombstoneState = new Map<string, boolean>();
-    const scan = newScan(session?.actor);
-    const nextCursors: Record<string, string> = {};
+    const scan = newScan(session?.actor, hints);
     const validator = await compileGraffitiObjectSchema<Schema>(schema);
 
     let allInboxes: { serviceEndpoint: string; token?: string; pin?: boolean }[];
@@ -897,6 +914,10 @@ export class GraffitiDecentralized implements Graffiti {
       }
     }
 
+    if (cursorScope !== undefined && cursorScope !== (session?.actor ?? null)) {
+      throw new GraffitiErrorCursorExpired("Discovery reader changed");
+    }
+
     // Turn the channels into tags
     const tags = await Promise.all(
       channels.map((c) =>
@@ -915,6 +936,7 @@ export class GraffitiDecentralized implements Graffiti {
           cursor
             ? {
                 cursor,
+                objectSchema: schema,
               }
             : {
                 tags,
@@ -977,12 +999,8 @@ export class GraffitiDecentralized implements Graffiti {
           };
           this.tryLogoutIfUnauthorized(next.error, session);
         } else if (next.result.done) {
-          // A retryable object error leaves this inbox's previous checkpoint
-          // intact, even though its other results were delivered successfully.
           const inbox = allInboxes[next.index];
-          if (next.result.value !== undefined) {
-            nextCursors[inbox.serviceEndpoint] = next.result.value;
-          }
+          cursors[inbox.serviceEndpoint] = next.result.value;
           // Remove it from the race
           indexedIteratorNexts[next.index] = new Promise(() => {});
           active--;
@@ -1003,15 +1021,12 @@ export class GraffitiDecentralized implements Graffiti {
           if (visible) yield visible;
         }
       }
-      for await (const { item, origin } of this.checkDeletionHints(scan)) {
+      for await (const { item, origin } of this.checkDeletionHints<Schema>(scan, schema)) {
         if ("error" in item) yield { error: item.error, origin };
         else {
           const visible = render(item);
           if (visible) yield visible;
         }
-      }
-      for (const [endpoint, cursor] of Object.entries(nextCursors)) {
-        if (!scan.retry.has(endpoint)) cursors[endpoint] = cursor;
       }
     } catch (e) {
       this.tryLogoutIfUnauthorized(e, session);
@@ -1026,7 +1041,9 @@ export class GraffitiDecentralized implements Graffiti {
 
     return {
       cursor: JSON.stringify({
-        protocol: 2,
+        protocol: 3,
+        scope: session?.actor ?? null,
+        hints: [...scan.pendingHints.values()],
         channels,
         cursors,
         schema,
@@ -1048,18 +1065,22 @@ export class GraffitiDecentralized implements Graffiti {
     let channels: string[];
     let cursors: { [endpoint: string]: string };
     let schema: JSONSchema;
+    let hints: PendingHint[];
+    let scope: string | null;
     try {
       const json = JSON.parse(cursor);
       const parsed = CursorSchema.parse(json);
       channels = parsed.channels;
       cursors = parsed.cursors;
       schema = parsed.schema;
+      scope = parsed.scope;
+      hints = parsed.hints;
     } catch (error) {
       return (async function* () {
         throw new GraffitiErrorCursorExpired("Invalid cursor");
       })();
     }
-    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh);
+    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh, hints, scope);
   };
 
   protected tryLogoutIfUnauthorized(
@@ -1177,50 +1198,109 @@ export class GraffitiDecentralized implements Graffiti {
         }
       | {
           cursor: string;
+          objectSchema: Schema;
         },
     inboxToken?: string | null,
     recipient?: string | null,
     options?: ProtocolReadOptions,
-  ): SingleEndpointQueryIterator<{}> {
+  ): SingleEndpointQueryIterator<Schema> {
     const scan = options?.scan ?? newScan(recipient);
-    const { pin, scan: _scan, ...readOptions } = options ?? {};
-    const toPin = new Set<string>();
-    const flushPins = async () => {
-      if (!toPin.size || !inboxToken || !recipient) return;
+    const { pin: _pin, scan: _scan, ...readOptions } = options ?? {};
+    let pendingPins: infer_<typeof PendingPinsSchema> | undefined;
+    let pending = new Map<string, infer_<typeof PendingReadSchema>>();
+    let retryMessages: InboxMessage<Schema>[] = [];
+    let deferred = false;
+    if ("cursor" in queryArguments) {
+      let checkpoint: infer_<typeof SingleEndpointCursorSchema>;
+      try {
+        checkpoint = SingleEndpointCursorSchema.parse(JSON.parse(queryArguments.cursor));
+      } catch {
+        throw new GraffitiErrorCursorExpired("Invalid discovery checkpoint");
+      }
+      if (checkpoint.scope !== (recipient ?? null)) throw new GraffitiErrorCursorExpired("Discovery reader changed");
+      queryArguments = { ...queryArguments, cursor: checkpoint.cursor };
+      pending = new Map(checkpoint.pending.map((retry) => [retry.id, retry]));
+      pendingPins = checkpoint.pins;
+      // Eligibility is checked once per poll. Never sleep or retry twice in
+      // this stream. Oldest due reads go first so a failing read cannot starve others.
+      const now = Date.now();
+      const due = [...pending.values()]
+        .filter((retry) => retry.retryAt <= now)
+        .sort((a, b) => a.retryAt - b.retryAt)
+        .slice(0, MAX_READ_RETRIES_PER_POLL);
+      deferred = due.length < pending.size;
+      if (due.length) {
+        const messages = await Promise.all(due.map(async retry => {
+          const entry = (await this.verification.read(retry.url)).find(entry =>
+            entry.scope === (recipient ?? null) && entry.inbox === inboxEndpoint && entry.id === retry.id);
+          if (!entry) throw new GraffitiErrorCursorExpired("Pending announcement is no longer cached");
+          const message = await (await this.openMessageStore()).getMessage(entry.inbox, entry.id);
+          if (!message || message.m.o.url !== retry.url || await this.digestMessage(message.m) !== entry.digest) {
+            throw new GraffitiErrorCursorExpired("Pending announcement is no longer cached");
+          }
+          return message;
+        }));
+        const matches = await compileGraffitiObjectSchema<Schema>(queryArguments.objectSchema);
+        retryMessages = messages.map((message) => {
+          const object = message.m.o;
+          if (!matches(object)) throw new GraffitiErrorCursorExpired("Cached message no longer matches discovery");
+          return { ...message, m: { ...message.m, o: object } };
+        });
+      }
+    }
+
+    const toPin = new Set(pendingPins?.ids);
+    const flushPins = async (): Promise<Error | undefined> => {
+      if (!toPin.size || !options?.pin || !inboxToken || !recipient) return;
       const ids = [...toPin];
-      toPin.clear(); // A failed batch retries on the next poll, not in finally.
-      await this.inboxes.pin(inboxEndpoint, ids, inboxToken);
-      for (const id of ids) this.confirmedPins.add(this.pinKey(inboxEndpoint, recipient, id));
+      toPin.clear(); // Do not retry a failed batch again in finally.
+      if (pendingPins && pendingPins.retryAt > Date.now()) {
+        pendingPins = { ...pendingPins, ids };
+        return new Error("Some message pins are awaiting retry");
+      }
+      try {
+        await this.inboxes.pin(inboxEndpoint, ids, inboxToken);
+        for (const id of ids) this.confirmedPins.add(this.pinKey(inboxEndpoint, recipient, id));
+        pendingPins = undefined;
+      } catch (cause) {
+        pendingPins = { ids, ...nextRetry(pendingPins) };
+        return new Error("Could not pin validated inbox messages", { cause });
+      }
     };
-    if (pin && inboxToken && recipient) scan.personal = { endpoint: inboxEndpoint, token: inboxToken, actor: recipient };
-    const iterator: MessageStream<{}> =
+    if (options?.pin && inboxToken && recipient) {
+      scan.personal = { endpoint: inboxEndpoint, token: inboxToken, actor: recipient };
+    }
+
+    const iterator: MessageStream<Schema> =
       "tags" in queryArguments
-        ? this.inboxes.query<{}>(
+        ? this.inboxHistory.query<Schema>(
             inboxEndpoint,
             queryArguments.tags,
             queryArguments.objectSchema,
             inboxToken,
             readOptions,
           )
-        : this.inboxes.continueQuery(
+        : this.inboxHistory.continueQuery<Schema>(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
             readOptions,
           );
-
     const inFlight: Promise<
-      | { result: SingleEndpointQueryItem<{}> | void }
+      | { id: string; url: string; result: SingleEndpointQueryItem<Schema> | void }
       | { error: unknown }
     >[] = [];
     let doneValue: string | null = null;
-    let retryNeeded = false;
 
     try {
       while (true) {
         // Fill up the in-flight queue of queries up to the concurrency limit
         while (doneValue === null && inFlight.length < CONCURRENCY) {
-          const itResult = await iterator.next();
+          // Graffiti supplies due cached reads before the ordinary continuation.
+          const retryMessage = retryMessages.shift();
+          const itResult: IteratorResult<InboxMessage<Schema>, string> = retryMessage
+            ? { done: false, value: retryMessage }
+            : await iterator.next();
           if (itResult.done) {
             doneValue = itResult.value;
             break;
@@ -1228,13 +1308,13 @@ export class GraffitiDecentralized implements Graffiti {
 
           // Capture rejections immediately, even if another read is pending
           // or the caller closes before reaching this result.
-          const processPromise = this.processOneInboxMessage(
+          const processPromise = this.processOneMessage<Schema>(
             inboxEndpoint,
             itResult.value,
             recipient,
             scan,
           ).then(
-            (result) => ({ result }),
+            (result) => ({ id: itResult.value.id, url: itResult.value.m.o.url, result }),
             (error: unknown) => ({ error }),
           );
 
@@ -1246,16 +1326,24 @@ export class GraffitiDecentralized implements Graffiti {
 
         if (!nextProcessedPromise) {
           if (doneValue !== null) {
-            try {
-              await flushPins();
-            } catch (cause) {
-              retryNeeded = true;
-              yield { error: new Error("Could not pin validated inbox messages", { cause }), retryable: true };
-            }
+            for (const retry of pending.values()) scan.unresolved.add(retry.url);
+            const pinError = await flushPins();
+            if (pinError) yield { error: pinError, retryable: true };
             if (!options?.scan) {
-              for await (const { item } of this.checkDeletionHints(scan)) yield item;
+              for await (const { item } of this.checkDeletionHints<Schema>(scan, queryArguments.objectSchema)) yield item;
             }
-            return retryNeeded || scan.retry.has(inboxEndpoint) ? undefined : doneValue;
+            if (deferred && [...pending.values()].some(retry => !retry.silent)) {
+              yield { error: new Error("Some object reads are awaiting retry"), retryable: true };
+            }
+            // Each continuation keeps its own pending IDs. Another consumer's
+            // successful retry must not consume this consumer's delivery.
+            return JSON.stringify({
+              version: 3,
+              pins: pendingPins,
+              scope: recipient ?? null,
+              cursor: doneValue,
+              pending: [...pending.values()],
+            } satisfies infer_<typeof SingleEndpointCursorSchema>);
           }
 
           throw new Error("Process queue empty but no return value");
@@ -1263,13 +1351,23 @@ export class GraffitiDecentralized implements Graffiti {
 
         const processed = await nextProcessedPromise;
         if ("error" in processed) throw processed.error;
+        if (processed.result && "error" in processed.result && processed.result.retryable) {
+          const previous = pending.get(processed.id);
+          pending.set(processed.id, { id: processed.id, url: processed.url, silent: processed.result.silent, ...nextRetry(previous) });
+        } else {
+          pending.delete(processed.id);
+        }
         if (processed.result) {
-          // Expected object errors are results, not exceptions. Only temporary
-          // failures hold back the checkpoint; invalid content can be passed over.
-          if ("error" in processed.result) {
-            retryNeeded ||= processed.result.retryable;
+          if ("error" in processed.result && processed.result.silent) continue;
+          // A cached/verified result may have waited behind another read in
+          // this queue while a different stream learned that its key was gone.
+          if (!("error" in processed.result) && !processed.result.tombstone) {
+            const { object, storageBucketKey } = processed.result;
+            if ((await this.verification.read(object.url)).some(entry =>
+              entry.storageKey === storageBucketKey && entry.status === "deleted")) continue;
           }
-          else if (pin && recipient && !this.confirmedPins.has(this.pinKey(inboxEndpoint, recipient, processed.result.messageId))) {
+          if (!("error" in processed.result) && !processed.result.tombstone && options?.pin && recipient &&
+            !this.confirmedPins.has(this.pinKey(inboxEndpoint, recipient, processed.result.messageId))) {
             toPin.add(processed.result.messageId);
           }
           yield processed.result;
@@ -1277,162 +1375,226 @@ export class GraffitiDecentralized implements Graffiti {
       }
     } finally {
       await iterator.return("");
-      // A caller may stop after one result. Keep messages already delivered,
-      // even though a closed stream has no place to yield a later pin error.
-      await flushPins().catch((error) => console.error("Could not pin delivered inbox messages:", error));
+      const pinError = await flushPins();
+      if (pinError) console.error("Could not pin delivered inbox messages:", pinError);
     }
   }
 
-  protected async processOneInboxMessage(
+  protected async digestMessage(message: Message<{}>): Promise<string> {
+    return this.stringEncoder.encode(STRING_ENCODER_METHOD_BASE64URL,
+      await this.contentAddresses.register(CONTENT_ADDRESS_METHOD_SHA256, dagCborEncode(message)));
+  }
+
+  protected async processOneMessage<Schema extends JSONSchema>(
     inboxEndpoint: string,
-    result: InboxMessage<{}>,
+    message: InboxMessage<Schema>,
     recipient?: string | null,
     scan: DiscoveryScan = newScan(recipient),
-  ): Promise<SingleEndpointQueryItem<{}> | void> {
-    const object = result.m.o;
-    let decoded: unknown;
-    try { decoded = dagCborDecode(result.m.m); }
-    catch (cause) { return { error: new Error("Invalid inbox message metadata", { cause }), retryable: false }; }
-    // Old deletion announcements used a message ID in `t`. It is only a hint
-    // now: never fetch or trust the referenced message, key, or payload.
-    if (decoded && typeof decoded === "object" &&
-      (("d" in decoded && decoded.d === true) || ("t" in decoded && typeof decoded.t === "string"))) {
-      const origins = scan.hints.get(object.url) ?? new Set<string>();
-      origins.add(inboxEndpoint);
-      scan.hints.set(object.url, origins);
-      return;
-    }
-    const parsed = MessageMetadataSchema.safeParse(decoded);
-    if (!parsed.success) return { error: new Error("Invalid inbox message metadata", { cause: parsed.error }), retryable: false };
-    const metadata = parsed.data;
-    const storageBucketKey = metadata.k;
-    const allowedTickets = "s" in metadata ? metadata.s : undefined;
-    const resultBase: SingleEndpointQueryResult<{}> = {
-      kind: metadata[RECORD_KIND_KEY], messageId: result.id, object,
-      storageBucketKey, allowedTickets, tags: result.m.t,
-      announcements: "n" in metadata ? metadata.n : undefined,
-    };
-    const state = await this.verifiedMessages.read(object.url);
-    const cached = state.messages.find((entry) => entry.scope === (recipient ?? null) &&
-      entry.inbox === inboxEndpoint && entry.message.id === result.id);
-    if (cached && sameMessage(cached.message, result)) {
-      if (cached.missing) return;
-      return resultBase;
-    }
+  ): Promise<SingleEndpointQueryItem<Schema> | void> {
+    const messageId = message.id;
+    const { o: object, m: metadataBytes, t: receivedTags } = message.m;
 
-    let endpoint: string;
-    try { endpoint = await this.storageEndpoint(object.actor); }
-    catch (cause) {
-      scan.unresolved.add(object.url);
-      return { error: new Error("Could not resolve object storage bucket", { cause }), retryable: true };
-    }
-    let bytes: Uint8Array;
-    const readKey = this.pinKey(inboxEndpoint, recipient ?? "", result.id);
-    try { bytes = await this.storageBuckets.get(endpoint, storageBucketKey, MAX_OBJECT_SIZE_BYTES); }
-    catch (cause) {
-      if (cause instanceof GraffitiErrorNotFound) {
-        if (state.messages.some((entry) => entry.scope === (recipient ?? null) && entry.storageKey === storageBucketKey)) {
-          // The original may have been verified through another query/inbox.
-          // Record the absence, then defer the URL-level decision until the scan ends.
-          await this.verifiedMessages.missing(object.url, storageBucketKey);
-          const origins = scan.hints.get(object.url) ?? new Set<string>();
-          origins.add(inboxEndpoint);
-          scan.hints.set(object.url, origins);
-          return;
-        }
-        // A 404 for an unverified announcement proves no deletion. Retry until
-        // normal DID-cache expiry has allowed another resolution; if it is still
-        // absent then, skip it so old missing announcements do not replay forever.
-        const firstMissing = this.firstMissingRead.get(readKey) ?? Date.now();
-        this.firstMissingRead.set(readKey, firstMissing);
-        if (Date.now() - firstMissing < DID_CACHE_TTL_MS) {
-          scan.unresolved.add(object.url);
-          scan.retry.add(inboxEndpoint);
-        }
+    let metadata: MessageMetadata;
+    try {
+      const decoded = dagCborDecode(metadataBytes);
+      // Both old message-ID tombstones and new URL announcements are only hints.
+      if (decoded && typeof decoded === "object" &&
+        (("d" in decoded && decoded.d === true) || ("t" in decoded && typeof decoded.t === "string"))) {
+        addHint(scan, object.url, inboxEndpoint);
         return;
       }
-      scan.unresolved.add(object.url);
-      return { error: new Error("Could not read object from storage bucket", { cause }), retryable: true };
+      metadata = MessageMetadataSchema.parse(decoded);
+    } catch (error) {
+
+      return { error: new Error("Invalid inbox message metadata", { cause: error }), retryable: false };
     }
-    this.firstMissingRead.delete(readKey);
+
+    const {
+      [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
+    } = metadata;
+    const allowedTickets = MESSAGE_DATA_ALLOWED_TICKETS_KEY in metadata
+      ? metadata[MESSAGE_DATA_ALLOWED_TICKETS_KEY] : undefined;
+    const resultBase = {
+      kind: metadata[RECORD_KIND_KEY],
+      messageId,
+      object,
+      storageBucketKey,
+      allowedTickets,
+      tags: receivedTags,
+      announcements: MESSAGE_DATA_ANNOUNCEMENTS_KEY in metadata
+        ? metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY] : undefined,
+    };
+    const scope = recipient ?? null;
+    const digest = await this.digestMessage(message.m);
+    const known = await this.verification.read(object.url);
+    const cached = known.find(entry => entry.scope === scope && entry.inbox === inboxEndpoint && entry.id === messageId);
+    if (cached) {
+      // The shared store keeps message bodies immutable; verification is
+      // scoped to this reader and the same announcement identity. The digest
+      // also protects against an ID being reused after payload eviction.
+      if (cached.digest !== digest) {
+        return { error: new Error("Inbox changed an existing announcement"), retryable: false };
+      }
+      if (cached.status === "invalid") return;
+      if (cached.status === "deleted") {
+        if (cached.verified) addHint(scan, object.url, inboxEndpoint);
+        return;
+      }
+      if (cached.status === "verified") return resultBase;
+    }
+    const remember = (status: MessageState["status"], firstMissing?: number) => this.verification.remember(object.url, {
+      scope, inbox: inboxEndpoint, id: messageId, digest, storageKey: storageBucketKey, status,
+      ...(firstMissing === undefined ? {} : { firstMissing }),
+    });
+    const retry = async (error: Error, firstMissing?: number): Promise<SingleEndpointQueryItem<Schema> | void> => {
+      // InboxHistory has persisted the payload. Save this reader's state
+      // before advancing; each consumer still owns its pending deliveries.
+      const status = await remember("pending", firstMissing);
+      if (status === "verified") return resultBase;
+      if (status === "deleted") { addHint(scan, object.url, inboxEndpoint); return; }
+      if (status === "invalid") return;
+      scan.unresolved.add(object.url);
+      return { error, retryable: true, silent: firstMissing !== undefined || undefined };
+    };
+
+    // DID failures are read failures, never evidence that an object is gone.
+    let storageBucketEndpoint: string;
     try {
-      if ("a" in metadata && !recipient) throw new GraffitiErrorForbidden("An allowed ticket requires a recipient");
-      await this.objectEncoding.validate(object, result.m.t, bytes,
-        allowedTickets ? { allowedTickets }
-          : "a" in metadata ? { recipient: recipient ?? "", allowedTicket: metadata.a, allowedIndex: metadata.i }
-          : undefined,
-        metadata[RECORD_KIND_KEY]);
-    } catch (cause) {
-      return { error: new Error("Invalid inbox object", { cause }), retryable: false };
+      const actorDocument = await this.dids.resolve(object.actor);
+      const service = actorDocument?.service?.find(service =>
+        service.id === DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET &&
+        service.type === DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET);
+      if (!service || typeof service.serviceEndpoint !== "string") {
+        throw new Error(`Actor ${object.actor} has no valid storage bucket service`);
+      }
+      storageBucketEndpoint = service.serviceEndpoint;
+    } catch (error) {
+      return retry(new Error("Could not resolve object storage bucket", { cause: error }));
     }
-    if (!await this.verifiedMessages.remember({
-      scope: recipient ?? null, inbox: inboxEndpoint, message: result, storageKey: storageBucketKey,
-    }, state.generation)) {
-      scan.unresolved.add(object.url);
-      return { error: new Error("Object availability changed during validation"), retryable: true };
+
+    let objectBytes: Uint8Array | undefined;
+    try {
+      objectBytes = await this.storageBuckets.get(storageBucketEndpoint, storageBucketKey, { maxBytes: MAX_OBJECT_SIZE_BYTES });
+    } catch (error) {
+      if (!(error instanceof GraffitiErrorNotFound)) {
+        return retry(new Error("Could not read object from storage bucket", { cause: error }));
+      }
+      if (known.some(entry => entry.scope === scope && entry.verified && entry.storageKey === storageBucketKey)) {
+        await this.verification.deleted(object.url, storageBucketKey);
+        addHint(scan, object.url, inboxEndpoint);
+        return;
+      }
+      // An unknown 404 is not deletion evidence. Allow ordinary DID-cache
+      // expiry before treating a permanently missing announcement as invalid.
+      const firstMissing = cached?.firstMissing ?? Date.now();
+      if (Date.now() - firstMissing < DID_CACHE_TTL_MS) {
+        return retry(new Error("Object is not available at its announced storage key"), firstMissing);
+      }
+      await remember("invalid");
+      return;
     }
+
+    let validationError: Error | undefined;
+    try {
+      if (MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata && !recipient) {
+        throw new GraffitiErrorForbidden("Recipient is required when allowed ticket is present");
+      }
+      const privateObjectInfo = allowedTickets
+        ? { allowedTickets }
+        : MESSAGE_DATA_ALLOWED_TICKET_KEY in metadata
+          ? { recipient: recipient ?? "null", allowedTicket: metadata[MESSAGE_DATA_ALLOWED_TICKET_KEY], allowedIndex: metadata[MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY] }
+          : undefined;
+      await this.objectEncoding.validate(object, receivedTags, objectBytes, privateObjectInfo, metadata[RECORD_KIND_KEY]);
+    } catch (error) {
+      validationError = new Error("Invalid inbox object", { cause: error });
+    }
+    if (validationError) {
+      await remember("invalid");
+
+      return { error: validationError, retryable: false };
+    }
+
+    // A deletion observed while this read was in flight wins atomically over
+    // its late success, including reads from another Graffiti instance/tab.
+    if (await remember("verified") !== "verified") return;
+
     return resultBase;
   }
-
   private async storageEndpoint(actor: string): Promise<string> {
     const document = await this.dids.resolve(actor);
-    const service = document.service?.find((service) =>
+    const service = document.service?.find(service =>
       service.id === DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET && service.type === DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET);
     if (typeof service?.serviceEndpoint !== "string") throw new Error(`Actor ${actor} has no valid storage bucket endpoint`);
     return service.serviceEndpoint;
   }
 
-  private async *checkDeletionHints(scan: DiscoveryScan): AsyncGenerator<{ item: SingleEndpointQueryItem<{}>; origin: string }> {
+  private async *checkDeletionHints<Schema extends JSONSchema>(
+    scan: DiscoveryScan, schema: Schema,
+  ): AsyncGenerator<{ item: SingleEndpointQueryItem<Schema>; origin: string }> {
+    const matches = await compileGraffitiObjectSchema<Schema>(schema);
+    const due = new Set([...scan.pendingHints.values()]
+      .filter(hint => hint.retryAt <= Date.now()).sort((a, b) => a.retryAt - b.retryAt)
+      .slice(0, MAX_READ_RETRIES_PER_POLL).map(hint => hint.url));
     for (const [url, origins] of scan.hints) {
       const origin = origins.values().next().value;
       if (origin === undefined) continue;
-      if (scan.incomplete || scan.unresolved.has(url)) {
-        for (const endpoint of origins) scan.retry.add(endpoint);
+      const previous = scan.pendingHints.get(url);
+      if (previous && !due.has(url)) {
+        yield { origin, item: { error: new Error("Some deletion checks are awaiting retry"), retryable: true } };
         continue;
       }
-      let verified = await this.verifiedMessages.list(url, scan.recipient);
-      if (!verified.length) continue;
       try {
+        let verified = (await this.verification.read(url)).filter(entry => entry.scope === scan.recipient && entry.verified);
+        if (!verified.length) {
+          if (previous) throw new GraffitiErrorCursorExpired("Verified announcement is no longer cached");
+          continue;
+        }
+        if (scan.incomplete || scan.unresolved.has(url)) throw new Error("Deletion check needs a complete object scan");
+        const store = await this.openMessageStore();
+        const original = verified[0];
+        const message = await store.getMessage(original.inbox, original.id);
+        if (!message || await this.digestMessage(message.m) !== original.digest) {
+          throw new GraffitiErrorCursorExpired("Verified announcement is no longer cached");
+        }
         let endpoint: Promise<string> | undefined;
-        const keys = [...new Set(verified.map((entry) => entry.storageKey))];
-        // Check every verified location, rather than trusting a key in the hint.
-        // A rotation can remove one key while another remains available.
-        const checks = await Promise.all(keys.map(async (key) => {
-          if (verified.filter((entry) => entry.storageKey === key).every((entry) => entry.missing)) return true;
+        const checks = await Promise.all([...new Set(verified.map(entry => entry.storageKey))].map(async key => {
+          if (verified.filter(entry => entry.storageKey === key).every(entry => entry.status === "deleted")) return true;
           try {
-            endpoint ??= this.storageEndpoint(verified[0].message.m.o.actor);
-            await this.storageBuckets.get(await endpoint, key, MAX_OBJECT_SIZE_BYTES);
+            endpoint ??= this.storageEndpoint(message.m.o.actor);
+            await this.storageBuckets.get(await endpoint, key, { maxBytes: MAX_OBJECT_SIZE_BYTES });
             return false;
-          }
-          catch (error) {
+          } catch (error) {
             if (!(error instanceof GraffitiErrorNotFound)) throw error;
-            await this.verifiedMessages.missing(url, key);
+            await this.verification.deleted(url, key);
             return true;
           }
         }));
-        if (!checks.every(Boolean)) continue;
-        // Another discovery/tab may have verified a replacement while these
-        // reads waited. A missing old key cannot erase that new location.
-        verified = await this.verifiedMessages.list(url, scan.recipient);
-        if (verified.some((entry) => !entry.missing)) continue;
-        await this.inboxes.invalidateReads(url);
-        const original = verified[0];
-        const metadata = MessageMetadataSchema.parse(dagCborDecode(original.message.m.m));
-        yield { origin, item: {
-          object: original.message.m.o, messageId: original.message.id,
-          storageBucketKey: original.storageKey, tags: original.message.m.t,
-          allowedTickets: "s" in metadata ? metadata.s : undefined,
-          announcements: "n" in metadata ? metadata.n : undefined,
-          kind: metadata[RECORD_KIND_KEY], tombstone: true,
-        } };
+        // Recheck after I/O: another discovery may have verified a rotated key.
+        verified = (await this.verification.read(url)).filter(entry => entry.scope === scan.recipient && entry.verified);
+        if (!checks.every(Boolean) || verified.some(entry => entry.status !== "deleted")) {
+          scan.pendingHints.delete(url);
+          continue;
+        }
+        const object = message.m.o;
+        if (matches(object)) {
+          const metadata = MessageMetadataSchema.parse(dagCborDecode(message.m.m));
+          yield { origin, item: {
+            object, messageId: original.id, storageBucketKey: original.storageKey, tags: message.m.t,
+            allowedTickets: "s" in metadata ? metadata.s : undefined,
+            announcements: "n" in metadata ? metadata.n : undefined,
+            kind: metadata[RECORD_KIND_KEY], tombstone: true,
+          } };
+        }
         if (scan.personal) {
           const personal = scan.personal;
-          const ids = verified.filter((entry) => entry.inbox === personal.endpoint).map((entry) => entry.message.id);
+          const ids = verified.filter(entry => entry.inbox === personal.endpoint).map(entry => entry.id);
           await this.inboxes.unpin(personal.endpoint, ids, personal.token);
           for (const id of ids) this.confirmedPins.delete(this.pinKey(personal.endpoint, personal.actor, id));
         }
+        scan.pendingHints.delete(url);
       } catch (cause) {
-        for (const endpoint of origins) scan.retry.add(endpoint);
+        if (cause instanceof GraffitiErrorCursorExpired) throw cause;
+        scan.pendingHints.set(url, { url, origins: [...origins], ...nextRetry(previous) });
         yield { origin, item: { error: new Error("Could not check deletion hint", { cause }), retryable: true } };
       }
     }
@@ -1453,11 +1615,36 @@ const MEDIA_OBJECT_SCHEMA = {
   },
 } as const satisfies JSONSchema;
 
+const PendingHintSchema = strictObject({
+  url: string(), origins: array(url()),
+  delay: int().check(nonnegative()), retryAt: int().check(nonnegative()),
+});
+type PendingHint = infer_<typeof PendingHintSchema>;
+const PendingPinsSchema = strictObject({
+  ids: array(string()), delay: int().check(nonnegative()), retryAt: int().check(nonnegative()),
+});
 const CursorSchema = strictObject({
-  protocol: literal(2),
+  protocol: literal(3),
+  scope: nullable(string()),
+  hints: array(PendingHintSchema),
   cursors: record(url(), string()),
   channels: array(string()),
   schema: union([looseObject({}), boolean()]),
+});
+
+const PendingReadSchema = strictObject({
+  silent: optional(boolean()),
+  id: string(),
+  url: string(),
+  delay: int().check(nonnegative()),
+  retryAt: int().check(nonnegative()),
+});
+const SingleEndpointCursorSchema = strictObject({
+  version: literal(3),
+  pins: optional(PendingPinsSchema),
+  scope: nullable(string()),
+  cursor: string(),
+  pending: array(PendingReadSchema),
 });
 
 interface SingleEndpointQueryResult<Schema extends JSONSchema> {
@@ -1472,6 +1659,8 @@ interface SingleEndpointQueryResult<Schema extends JSONSchema> {
 }
 interface SingleEndpointQueryError {
   error: Error;
+  // An unverified 404 is absence, not a stream failure, but can be retried.
+  silent?: boolean;
   // A temporary read failure needs another poll; proven invalid content does not.
   retryable: boolean;
 }
@@ -1480,12 +1669,12 @@ type SingleEndpointQueryItem<Schema extends JSONSchema> =
   | SingleEndpointQueryError;
 interface SingleEndpointQueryIterator<
   Schema extends JSONSchema,
-> extends AsyncGenerator<SingleEndpointQueryItem<Schema>, string | undefined> {}
+> extends AsyncGenerator<SingleEndpointQueryItem<Schema>, string> {}
 type IndexedSingleEndpointQueryResult<Schema extends JSONSchema> =
   | {
       index: number;
       error?: undefined;
-      result: IteratorResult<SingleEndpointQueryItem<Schema>, string | undefined>;
+      result: IteratorResult<SingleEndpointQueryItem<Schema>, string>;
     }
   | {
       index: number;
@@ -1516,20 +1705,26 @@ async function indexedSingleEndpointQueryNext<Schema extends JSONSchema>(
 interface DiscoveryScan {
   recipient: string | null;
   hints: Map<string, Set<string>>;
+  pendingHints: Map<string, PendingHint>;
   unresolved: Set<string>;
-  retry: Set<string>;
   incomplete?: boolean;
   personal?: { endpoint: string; token: string; actor: string };
 }
-function newScan(recipient?: string | null): DiscoveryScan {
-  return { recipient: recipient ?? null, hints: new Map(), unresolved: new Set(), retry: new Set() };
+function newScan(recipient?: string | null, pending: PendingHint[] = []): DiscoveryScan {
+  return { recipient: recipient ?? null,
+    hints: new Map(pending.map(hint => [hint.url, new Set(hint.origins)])),
+    pendingHints: new Map(pending.map(hint => [hint.url, hint])), unresolved: new Set() };
+}
+function addHint(scan: DiscoveryScan, url: string, origin: string) {
+  const origins = scan.hints.get(url) ?? new Set<string>();
+  origins.add(origin);
+  scan.hints.set(url, origins);
+}
+function nextRetry(previous?: { delay: number }) {
+  const delay = Math.min(previous ? previous.delay * 2 : INITIAL_READ_RETRY_MS, MAX_READ_RETRY_MS);
+  return { delay, retryAt: Date.now() + delay };
 }
 interface ProtocolReadOptions extends InboxReadOptions {
   pin?: boolean;
   scan?: DiscoveryScan;
-}
-function sameMessage(a: InboxMessageBase, b: InboxMessageBase): boolean {
-  const left = dagCborEncode(a.m);
-  const right = dagCborEncode(b.m);
-  return left.length === right.length && left.every((byte, index) => byte === right[index]);
 }
