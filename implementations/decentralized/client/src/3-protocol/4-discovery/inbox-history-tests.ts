@@ -1,13 +1,14 @@
 import { afterEach, assert, describe, expect, test, vi } from "vitest";
-import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "./4-inboxes";
-import { GraffitiErrorUnauthorized } from "./utilities";
+import { InboxHistory } from "./inbox-history";
+import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "../../1-services/4-inboxes";
+import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { GraffitiErrorCursorExpired, type GraffitiObjectBase } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
 
 export function inboxTests(inboxEndpoint: string, inboxToken: string) {
-  describe("Inboxes", async () => {
-    const inboxes = new Inboxes();
+  describe("InboxHistory", async () => {
+    const inboxes = new InboxHistory();
 
     test("send, get", async () => {
       const tags = [randomBytes(), randomBytes()];
@@ -316,33 +317,15 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
   return cborResponse({ results, hasMore, cursor });
 }
 
-class TestInboxes extends Inboxes {
-  requestBatch(
-    endpoint: string,
-    type: "query" | "export",
-    cursor?: string,
-    token?: string,
-    signal?: AbortSignal,
-  ) {
-    return this.fetchMessageBatch(endpoint, type, undefined, token, cursor, signal);
-  }
+class TestInboxHistory extends InboxHistory {
   async prepareCache() {
-    await this.cache;
+    await this.store;
   }
 
   async deleteCachedQuery(key: string) {
-    await (await this.cache).messageIds.del(key);
+    await (await this.store).deleteQuery(key);
   }
 
-  async fetchQueryBatch() {
-    const batch = await this.fetchMessageBatch(
-      "https://example.test/inbox",
-      "query",
-      undefined,
-    );
-    await batch.response.arrayBuffer();
-    return batch;
-  }
 }
 
 function enableLockPath(request: unknown) {
@@ -360,7 +343,7 @@ function enableLockPath(request: unknown) {
 }
 
 export function inboxUnitTests() {
-  describe("Inboxes unit", () => {
+  describe("InboxHistory unit", () => {
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
@@ -368,11 +351,16 @@ export function inboxUnitTests() {
 
     describe("cursor transport", () => {
       test.each(["query", "export"] as const)("%s cursors use stable URLs and CBOR bodies", async (type) => {
-        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([message], "next"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new TestInboxes();
-        await inboxes.requestBatch(inboxUrl, type, "cursor-1", "synthetic-token");
-        await inboxes.requestBatch(inboxUrl, type, "cursor-2", "synthetic-token");
+        const inboxes = new Inboxes();
+        const query = (cursor: string) => type === "query"
+          ? inboxes.query(inboxUrl, { cursor }, "synthetic-token")
+          : inboxes.export(inboxUrl, "synthetic-token", cursor);
+        // The HTTP service supplies decoded pages; callers never read Response bodies.
+        expect(await query("cursor-1"))
+          .toEqual({ results: [message], hasMore: false, cursor: "next", waitTil: undefined });
+        await query("cursor-2");
         expect(fetch.mock.calls.map((call) => call[0])).toEqual([
           `${inboxUrl}/${type}`, `${inboxUrl}/${type}`,
         ]);
@@ -385,10 +373,22 @@ export function inboxUnitTests() {
         }
       });
 
+      test("initial queries encode their tags and schema", async () => {
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
+        vi.stubGlobal("fetch", fetch);
+        const tags = [new Uint8Array([1, 2])];
+        const schema = { type: "object" } as const;
+        await new Inboxes().query(inboxUrl, { tags, schema });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/query`);
+        expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array))
+          .toEqual({ tags, schema });
+      });
+
       test("initial exports use an empty CBOR object", async () => {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
         vi.stubGlobal("fetch", fetch);
-        await new TestInboxes().requestBatch(inboxUrl, "export", undefined, "token");
+        await new Inboxes().export(inboxUrl, "token");
         expect(fetch).toHaveBeenCalledOnce();
         expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/export`);
         expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array)).toEqual({});
@@ -396,9 +396,18 @@ export function inboxUnitTests() {
     });
 
     describe("inbox stream lock and network failures", () => {
-      test("backs off for five seconds after an initial request failure", async () => {
+      test.each(["request", "body", "CBOR", "shape"])("backs off after an initial %s failure without caching the failed page", async (stage) => {
         const failure = new Error("offline");
-        const fetch = vi.fn(() => Promise.reject(failure));
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => {
+          if (stage === "body") {
+            return new Response(new ReadableStream({
+              start(controller) { controller.error(failure); },
+            }));
+          }
+          if (stage === "CBOR") return new Response(new Uint8Array([0xff]));
+          if (stage === "shape") return cborResponse({ results: null, hasMore: false, cursor: "invalid" });
+          throw failure;
+        });
         vi.stubGlobal("fetch", fetch);
         vi.spyOn(console, "error").mockImplementation(() => {});
         const realSetTimeout = globalThis.setTimeout;
@@ -411,15 +420,26 @@ export function inboxUnitTests() {
             )) as typeof setTimeout,
         );
 
-        await expect(new Inboxes().query(inboxUrl, [], {}).next()).rejects.toBe(
-          failure,
-        );
+        const inboxes = new InboxHistory();
+        const next = inboxes.query(inboxUrl, [], {}).next();
+        await expect(next).rejects.toBeInstanceOf(Error);
+        if (stage === "request" || stage === "body") await expect(next).rejects.toBe(failure);
         expect(fetch).toHaveBeenCalledOnce();
         expect(timer).toHaveBeenCalledWith(expect.any(Function), 5000);
+
+        // A later poll can recover, starting from the same position rather
+        // than a cursor from an unreadable or malformed response.
+        fetch.mockImplementation(async () => queryPage([message], "recovered"));
+        const recovered = inboxes.query(inboxUrl, [], {});
+        expect((await recovered.next()).value).toEqual(message);
+        expect((await recovered.next()).done).toBe(true);
+        expect(fetch).toHaveBeenCalledTimes(2);
+        expect(dagCborDecode(fetch.mock.calls[1][1]!.body as Uint8Array))
+          .toEqual({ tags: [], schema: {} });
       });
 
       test("a rejected lock request rejects the stream", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         const error = new Error("lock request failed");
         enableLockPath(vi.fn(() => Promise.reject(error)));
@@ -430,7 +450,7 @@ export function inboxUnitTests() {
       });
 
       test("waiting for another tab's lock has a deadline", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         const timeoutError = new DOMException("timed out", "TimeoutError");
         vi.spyOn(AbortSignal, "timeout").mockReturnValue(
@@ -465,7 +485,7 @@ export function inboxUnitTests() {
           ),
         );
 
-        await expect(new TestInboxes().fetchQueryBatch()).rejects.toMatchObject({
+        await expect(new Inboxes().query(inboxUrl, { tags: [], schema: {} })).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });
@@ -488,7 +508,7 @@ export function inboxUnitTests() {
           }),
         );
 
-        await expect(new TestInboxes().fetchQueryBatch()).rejects.toMatchObject({
+        await expect(new Inboxes().query(inboxUrl, { tags: [], schema: {} })).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });
@@ -498,11 +518,11 @@ export function inboxUnitTests() {
       test("reuses completed queries, including empty results, unless refreshed", async () => {
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new Inboxes();
-        const read = { url: "graffiti:example:object", refresh: false };
-        async function collect(options = read, token = "owner") {
+        const inboxes = new InboxHistory();
+        const read = { refresh: false };
+        async function collect(options = read, token = "owner", tags: Uint8Array[] = []) {
           const results = [];
-          for await (const result of inboxes.query(inboxUrl, [], {}, token, options)) results.push(result);
+          for await (const result of inboxes.query(inboxUrl, tags, {}, token, options)) results.push(result);
           return results;
         }
         expect(await collect()).toEqual([message]);
@@ -514,14 +534,14 @@ export function inboxUnitTests() {
         expect(fetch).toHaveBeenCalledTimes(3);
 
         fetch.mockImplementation(async () => queryPage([], "empty"));
-        const missing = { ...read, url: "graffiti:example:missing" };
-        expect(await collect(missing)).toEqual([]);
-        expect(await collect(missing)).toEqual([]);
+        const missing = [new Uint8Array([99])];
+        expect(await collect(read, "owner", missing)).toEqual([]);
+        expect(await collect(read, "owner", missing)).toEqual([]);
         expect(fetch).toHaveBeenCalledTimes(4);
       });
 
       test("fetches the next page while the current message is yielded", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let held = 0;
         enableLockPath(vi.fn(async (
@@ -568,7 +588,7 @@ export function inboxUnitTests() {
           .mockResolvedValueOnce(new Response("stale", { status: 410 }));
         vi.stubGlobal("fetch", fetch);
 
-        const iterator = new Inboxes().query(inboxUrl, [new Uint8Array([1])], {});
+        const iterator = new InboxHistory().query(inboxUrl, [new Uint8Array([1])], {});
         expect((await iterator.next()).value).toEqual(message);
         await expect(iterator.next()).rejects.toBeInstanceOf(
           GraffitiErrorCursorExpired,
@@ -577,7 +597,7 @@ export function inboxUnitTests() {
       });
 
       test("does not replay messages after another tab resets the cache", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let markPrefetchStarted!: () => void;
         const prefetchStarted = new Promise<void>((resolve) => {
@@ -618,7 +638,7 @@ export function inboxUnitTests() {
           .mockResolvedValueOnce(queryPage([message], "cursor-1"))
           .mockResolvedValueOnce(queryPage([], "cursor-2"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new Inboxes();
+        const inboxes = new InboxHistory();
         const tags = [new Uint8Array([1])];
 
         const first = inboxes.query(inboxUrl, tags, {});
@@ -635,7 +655,7 @@ export function inboxUnitTests() {
       });
 
       test("does not hold the query lock while a message is yielded", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let held = false;
         enableLockPath(vi.fn(async (
@@ -662,7 +682,7 @@ export function inboxUnitTests() {
       });
 
       test("closing a yielded query leaves no lock held", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let held = false;
         enableLockPath(vi.fn(async (
@@ -687,7 +707,7 @@ export function inboxUnitTests() {
       });
 
       test("concurrent queries reuse a page fetched under the lock", async () => {
-        const inboxes = new TestInboxes();
+        const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
         let releasePrevious = Promise.resolve();
         let requests = 0;
