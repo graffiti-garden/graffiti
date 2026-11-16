@@ -9,8 +9,8 @@ import {
   ReadInvalidated,
   type Cache,
   type CacheQueryValue,
-} from "./cache";
-import { MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "./messages";
+} from "./message-store";
+import { MESSAGE_LABEL_TRASH, type LabeledMessageBase } from "../1-services/4-inboxes/messages";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";
