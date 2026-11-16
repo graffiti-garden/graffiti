@@ -52,7 +52,7 @@ type StreamSource<Schema extends JSONSchema> = { options?: InboxReadOptions } & 
   | {
       kind: "query";
       inboxUrl: string;
-      body: Uint8Array<ArrayBuffer>;
+      tags: Uint8Array[];
       schema: Schema;
       inboxToken?: string | null;
     }
@@ -127,10 +127,6 @@ export class InboxHistory {
     }
   }
 
-  protected fetchMessageBatch(...args: Parameters<Inboxes["fetchPage"]>) {
-    return this.http.fetchPage(...args);
-  }
-
   protected async withQueryLock<T>(
     messageIdsCacheKey: string,
     useLock: boolean,
@@ -178,7 +174,9 @@ export class InboxHistory {
         : source.kind === "continue" ? source.cursor.objectSchema : {}
     ) as Schema;
     const validator = await compileGraffitiObjectSchema(objectSchema);
-    const body = source.kind === "query" ? source.body : undefined;
+    const body = source.kind === "query"
+      ? new Uint8Array(dagCborEncode({ tags: source.tags, schema: source.schema }))
+      : undefined;
     const readUrl = source.options?.url;
     const refresh = source.options?.refresh !== false;
     const messageIdsCacheKey = source.kind === "continue"
@@ -200,6 +198,17 @@ export class InboxHistory {
     let seenVersion = initialQuery?.version;
     let numSeen = source.kind === "continue" ? source.cursor.numSeen : 0;
     let firstPage = true;
+
+    const requestPage = (cursor: string | undefined, signal?: AbortSignal) => {
+      if (source.kind === "export") {
+        return this.http.export(inboxUrl, source.inboxToken, cursor, signal);
+      }
+      if (cursor !== undefined) {
+        return this.http.query(inboxUrl, { cursor }, inboxToken, signal);
+      }
+      if (source.kind !== "query") throw new GraffitiErrorCursorExpired("Cursor is stale");
+      return this.http.query(inboxUrl, { tags: source.tags, schema: source.schema }, inboxToken, signal);
+    };
 
     // Advance one page at most. Recheck the cache under the lock so a tab
     // waiting for another tab's fetch can reuse its result.
@@ -236,19 +245,12 @@ export class InboxHistory {
             }
 
             // See if the cursor is still active by requesting the next batch.
-            let batch: Awaited<ReturnType<Inboxes["fetchPage"]>>;
+            let batch: Awaited<ReturnType<Inboxes["query"]>>;
             const invalidation = readUrl
               ? { url: readUrl, token: await cache.messageIds.readInvalidationToken(readUrl) }
               : undefined;
             try {
-              batch = await this.fetchMessageBatch(
-                inboxUrl,
-                type,
-                firstPage ? body : undefined,
-                inboxToken,
-                query?.cursor,
-                signal,
-              );
+              batch = await requestPage(query?.cursor, signal);
             } catch (error) {
               if (
                 !(error instanceof GraffitiErrorCursorExpired && query?.cursor)
@@ -269,14 +271,7 @@ export class InboxHistory {
               if (cacheVersion !== undefined) throw error;
               query = undefined;
               numSeen = 0;
-              batch = await this.fetchMessageBatch(
-                inboxUrl,
-                type,
-                body,
-                inboxToken,
-                undefined,
-                signal,
-              );
+              batch = await requestPage(undefined, signal);
             }
 
             const { results, hasMore, cursor } = batch;
@@ -402,15 +397,11 @@ export class InboxHistory {
     options?: InboxReadOptions,
   ): MessageStream<Schema> {
     verifyHTTPSEndpoint(inboxUrl);
-    const body = new Uint8Array(dagCborEncode({
-      tags,
-      schema: objectSchema,
-    }));
+    // Snapshot the filters so the cache key and the later HTTP request agree.
     return this.messageStreamer<Schema>({
       kind: "query",
       inboxUrl,
-      body,
-      schema: objectSchema,
+      ...structuredClone({ tags, schema: objectSchema }),
       inboxToken,
       options,
     });

@@ -354,10 +354,13 @@ export function inboxUnitTests() {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([message], "next"));
         vi.stubGlobal("fetch", fetch);
         const inboxes = new Inboxes();
+        const query = (cursor: string) => type === "query"
+          ? inboxes.query(inboxUrl, { cursor }, "synthetic-token")
+          : inboxes.export(inboxUrl, "synthetic-token", cursor);
         // The HTTP service supplies decoded pages; callers never read Response bodies.
-        expect(await inboxes.fetchPage(inboxUrl, type, undefined, "synthetic-token", "cursor-1"))
+        expect(await query("cursor-1"))
           .toEqual({ results: [message], hasMore: false, cursor: "next", waitTil: undefined });
-        await inboxes.fetchPage(inboxUrl, type, undefined, "synthetic-token", "cursor-2");
+        await query("cursor-2");
         expect(fetch.mock.calls.map((call) => call[0])).toEqual([
           `${inboxUrl}/${type}`, `${inboxUrl}/${type}`,
         ]);
@@ -370,10 +373,22 @@ export function inboxUnitTests() {
         }
       });
 
+      test("initial queries encode their tags and schema", async () => {
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
+        vi.stubGlobal("fetch", fetch);
+        const tags = [new Uint8Array([1, 2])];
+        const schema = { type: "object" } as const;
+        await new Inboxes().query(inboxUrl, { tags, schema });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/query`);
+        expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array))
+          .toEqual({ tags, schema });
+      });
+
       test("initial exports use an empty CBOR object", async () => {
         const fetch = vi.fn<typeof globalThis.fetch>(async () => queryPage([], "next"));
         vi.stubGlobal("fetch", fetch);
-        await new Inboxes().fetchPage(inboxUrl, "export", undefined, "token");
+        await new Inboxes().export(inboxUrl, "token");
         expect(fetch).toHaveBeenCalledOnce();
         expect(fetch.mock.calls[0][0]).toBe(`${inboxUrl}/export`);
         expect(dagCborDecode(fetch.mock.calls[0][1]!.body as Uint8Array)).toEqual({});
@@ -470,7 +485,7 @@ export function inboxUnitTests() {
           ),
         );
 
-        await expect(new Inboxes().fetchPage(inboxUrl, "query", undefined)).rejects.toMatchObject({
+        await expect(new Inboxes().query(inboxUrl, { tags: [], schema: {} })).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });
@@ -493,7 +508,7 @@ export function inboxUnitTests() {
           }),
         );
 
-        await expect(new Inboxes().fetchPage(inboxUrl, "query", undefined)).rejects.toMatchObject({
+        await expect(new Inboxes().query(inboxUrl, { tags: [], schema: {} })).rejects.toMatchObject({
           name: "TimeoutError",
         });
       });
