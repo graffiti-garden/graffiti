@@ -548,6 +548,22 @@ export const graffitiDiscoverTests = (
           const returnValue2 = await tombIterator.next();
           assert(returnValue2.done, "value2 is not done");
 
+          // After observing the deletion, neither polling nor fresh discovery
+          // may return the old object as live. A new instance must also see it deleted.
+          // Omitting it or returning a tombstone are both valid.
+          for (const stream of [
+            continueStream<{}>(graffiti, returnValue2.value, continueType),
+            graffiti.discover<{}>(object.channels, {}),
+            useGraffiti().discover<{}>(object.channels, {}),
+          ]) {
+            for await (const result of stream) {
+              assert(!result.error, "result has error");
+              if (!result.tombstone) {
+                expect(result.object.url).not.toEqual(posted.url);
+              }
+            }
+          }
+
           // Post another object
           const posted2 = await graffiti.post<{}>(object, session);
           const doubleContinueIterator = continueStream<{}>(

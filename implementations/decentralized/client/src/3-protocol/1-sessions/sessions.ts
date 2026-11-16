@@ -5,14 +5,14 @@ import type {
   GraffitiSession,
   GraffitiSessionInitializedEvent,
 } from "@graffiti-garden/api";
-import { DecentralizedIdentifiers } from "../1-services/2-dids";
+import { DecentralizedIdentifiers } from "../../1-services/2-dids";
 import {
   InitializedEventDetailSchema,
   LoginEventDetailSchema,
   type Authorization,
-} from "../1-services/1-authorization";
-import { StorageBuckets } from "../1-services/3-storage-buckets";
-import type { Inboxes } from "../1-services/4-inboxes";
+} from "../../1-services/1-authorization";
+import { StorageBuckets } from "../../1-services/3-storage-buckets";
+import type { Inboxes } from "../../1-services/4-inboxes";
 import type { Service } from "did-resolver";
 import {
   readCookie,
@@ -29,7 +29,7 @@ import {
   url,
 } from "zod/mini";
 import { LoginAttempts, AuthorizationProgressSchema, LOGIN_ATTEMPT_PARAM, type LoginAttempt } from "./login-attempt";
-import { GraffitiErrorUnauthorized } from "../1-services/utilities";
+import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
 
 export const DID_SERVICE_TYPE_GRAFFITI_INBOX = "GraffitiInbox";
 export const DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET = "GraffitiStorageBucket";

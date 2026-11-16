@@ -18,26 +18,29 @@ import { DecentralizedIdentifiers } from "./1-services/2-dids";
 import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
-import { discoveryCursorTests } from "./3-protocol/4-discovery-cursor-tests";
-import { Sessions } from "./3-protocol/1-sessions";
+import { InboxHistory } from "./3-protocol/4-discovery/inbox-history";
+import { discoveryErrorTests } from "./3-protocol/5-discovery-errors-tests";
+import { discoveryCursorTests } from "./3-protocol/5-discovery-cursor-tests";
+import { Sessions } from "./3-protocol/1-sessions/sessions";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { decode as dagCborDecode, encode as dagCborEncode } from "@ipld/dag-cbor";
 import { Handles } from "./3-protocol/2-handles";
 import { authorizationTests } from "./1-services/1-authorization-tests";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
-import { inboxTests, inboxUnitTests } from "./1-services/4-inboxes-tests";
-import { inboxCacheTests } from "./1-services/4-inboxes/cache-tests";
+import { inboxTests, inboxUnitTests } from "./3-protocol/4-discovery/inbox-history-tests";
+import { inboxCacheTests } from "./3-protocol/4-discovery/message-store-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
 import { contentAddressesTests } from "./2-primitives/2-content-addresses-tests";
 import { channelAttestationTests } from "./2-primitives/3-channel-attestations-tests";
 import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-tests";
-import { sessionTests } from "./3-protocol/1-sessions-tests";
+import { sessionTests } from "./3-protocol/1-sessions/sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
-import { readCacheTests } from "./3-protocol/4-read-cache-tests";
+import { readCacheTests } from "./3-protocol/5-read-cache-tests";
+import { verificationStateTests } from "./3-protocol/4-discovery/verification-state-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
-import { GraffitiDecentralized } from "./3-protocol/4-graffiti";
-import { discoveryAsyncTests } from "./3-protocol/4-discovery-async-tests";
+import { GraffitiDecentralized } from "./3-protocol/5-graffiti";
+import { discoveryAsyncTests } from "./3-protocol/5-discovery-async-tests";
 import {
   DecentralizedTestEnvironment,
   decentralizedSharedInbox,
@@ -139,12 +142,12 @@ describe("GraffitiDecentralized Tests", () => {
   objectEncodingTests();
   readCacheTests(() => useGraffiti(), () => sessions);
 
-  test.each([3, 4])("revalidates legacy invalid label 3, but skips current invalid label 4 (label %i)", async (label) => {
+  test.each([3, 4])("verifies records independently of invalid server label %i", async (label) => {
     const writer = useGraffiti();
     const session = sessions[0];
     const object = await writer.post({ value: { text: "rollout check" }, channels: [], allowed: [] }, session);
     const { personalInbox } = sessionMethods.resolveSession(session);
-    const inboxes = new Inboxes();
+    const inboxes = new InboxHistory();
     const messages = [];
     for await (const message of inboxes.query(personalInbox.serviceEndpoint,
       [new TextEncoder().encode(object.url)], {}, personalInbox.token)) {
@@ -155,13 +158,11 @@ describe("GraffitiDecentralized Tests", () => {
     expect(metadata).toHaveProperty("r", 0);
     expect(metadata).not.toHaveProperty("kind");
     const messageId = messages[0].id;
-    // Old clients reject the unknown kind field and persist label 3 on the server.
+    // Labels can come from an older client or another device. Only this
+    // client's verification determines whether the record is valid.
     await inboxes.label(personalInbox.serviceEndpoint, messageId, label, personalInbox.token);
     const read = useGraffiti().get(object.url, {}, { session });
-    if (label === 3) await expect(read).resolves.toEqual(object);
-    else await expect(read).rejects.toBeInstanceOf(GraffitiErrorNotFound);
-    // Restore this known-valid fixture so it can be deleted normally.
-    await inboxes.label(personalInbox.serviceEndpoint, messageId, 1, personalInbox.token);
+    await expect(read).resolves.toEqual(object);
     await writer.delete(object.url, session);
   });
 
@@ -439,8 +440,10 @@ describe("GraffitiDecentralized Tests", () => {
 authorizationTests();
 inboxUnitTests();
 discoveryCursorTests();
+discoveryErrorTests();
 sessionTests();
 
 inboxCacheTests();
+verificationStateTests();
 
 discoveryAsyncTests();
