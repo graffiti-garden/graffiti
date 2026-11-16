@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { GraffitiErrorCursorExpired, GraffitiErrorInvalidSchema, type GraffitiObject, type JSONSchema } from "@graffiti-garden/api";
-import { GraffitiDecentralized } from "./4-graffiti";
+import { GraffitiDecentralized } from "./5-graffiti";
 
 const inboxEndpoint = "https://example.test/inbox";
 const channel = "discovery-prefetch";

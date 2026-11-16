@@ -1,7 +1,7 @@
 import { afterEach, assert, describe, expect, test, vi } from "vitest";
 import { InboxHistory } from "./inbox-history";
-import { LABELED_MESSAGE_LABEL_KEY } from "../1-services/4-inboxes";
-import { GraffitiErrorUnauthorized } from "../1-services/utilities";
+import { LABELED_MESSAGE_LABEL_KEY } from "../../1-services/4-inboxes";
+import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { GraffitiErrorCursorExpired, type GraffitiObjectBase } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";

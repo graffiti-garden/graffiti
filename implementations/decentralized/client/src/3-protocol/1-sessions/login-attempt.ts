@@ -1,7 +1,7 @@
 import type { GraffitiLoginEvent } from "@graffiti-garden/api";
 import { array, enum as enum_, object, optional, string, tuple, url, type infer as infer_ } from "zod/mini";
 
-import { PendingLoginStorage } from "../1-services/pending-login-storage";
+import { PendingLoginStorage } from "../../1-services/pending-login-storage";
 
 const pendingAttempts = new PendingLoginStorage("graffiti-pending-attempt:");
 export const LOGIN_ATTEMPT_PARAM = "graffitiLoginAttempt";

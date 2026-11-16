@@ -3,7 +3,7 @@ import { GraffitiRuntimeTypes } from "@graffiti-garden/wrapper-runtime-types";
 import {
   GraffitiDecentralized as GraffitiDecentralized_,
   type GraffitiDecentralizedOptions,
-} from "./3-protocol/4-graffiti";
+} from "./3-protocol/5-graffiti";
 
 /**
  * A decentralized implementation of the

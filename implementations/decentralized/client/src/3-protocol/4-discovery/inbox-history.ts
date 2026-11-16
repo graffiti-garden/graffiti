@@ -1,6 +1,6 @@
 import type { JSONSchema } from "@graffiti-garden/api";
-import { verifyHTTPSEndpoint } from "../1-services/utilities";
-import { Inboxes } from "../1-services/4-inboxes";
+import { verifyHTTPSEndpoint } from "../../1-services/utilities";
+import { Inboxes } from "../../1-services/4-inboxes";
 import {
   compileGraffitiObjectSchema,
   GraffitiErrorCursorExpired,
@@ -23,12 +23,12 @@ import {
   MessageResultSchema,
   LABELED_MESSAGE_MESSAGE_KEY,
   MESSAGE_OBJECT_KEY,
-} from "../1-services/4-inboxes/messages";
+} from "../../1-services/4-inboxes";
 import type {
   LabeledMessageBase,
   LabeledMessage,
   Message,
-} from "../1-services/4-inboxes/messages";
+} from "../../1-services/4-inboxes";
 import {
   canUseIDB,
   createCache,

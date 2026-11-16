@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GraffitiLoginEvent, GraffitiLogoutEvent, GraffitiSessionInitializedEvent } from "@graffiti-garden/api";
-import { Authorization } from "../1-services/1-authorization";
-import { GraffitiErrorUnauthorized } from "../1-services/utilities";
-import { Sessions } from "./1-sessions";
+import { Authorization } from "../../1-services/1-authorization";
+import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
+import { Sessions } from "./sessions";
 import { LOGIN_ATTEMPT_PARAM, type LoginAttempt } from "./login-attempt";
-import { GraffitiDecentralized } from "./4-graffiti";
+import { GraffitiDecentralized } from "../5-graffiti";
 import * as browserStorage from "./browser-storage";
 import * as modal from "@graffiti-garden/modal";
 
