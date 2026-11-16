@@ -18,6 +18,8 @@ import {
   GraffitiErrorCursorExpired,
   GraffitiErrorInvalidSchema,
   type GraffitiObjectStream,
+  type GraffitiObjectStreamEntry,
+  type GraffitiObjectStreamTombstone,
 } from "@graffiti-garden/api";
 import { randomBytes } from "@noble/hashes/utils.js";
 import {
@@ -25,15 +27,12 @@ import {
   decode as dagCborDecode,
 } from "@ipld/dag-cbor";
 
-import { DecentralizedIdentifiers } from "../1-services/2-dids";
+import { DecentralizedIdentifiers, DID_CACHE_TTL_MS } from "../1-services/2-dids";
 import { Authorization } from "../1-services/1-authorization";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import {
   Inboxes,
-  MESSAGE_METADATA_KEY,
-  MESSAGE_OBJECT_KEY,
-  MESSAGE_TAGS_KEY,
-  type LabeledMessage,
+  type InboxMessage,
   type Message,
 } from "../1-services/4-inboxes";
 import { InboxHistory, type MessageStream, type InboxReadOptions } from "./4-discovery/inbox-history";
@@ -97,11 +96,9 @@ const Uint8ArraySchema = custom<Uint8Array>(
   (v): v is Uint8Array => v instanceof Uint8Array,
 );
 const MESSAGE_DATA_STORAGE_BUCKET_KEY = "k";
-const MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY = "t";
 const MessageMetadataBaseSchema = strictObject({
   [RECORD_KIND_KEY]: optional(RecordKindSchema),
   [MESSAGE_DATA_STORAGE_BUCKET_KEY]: string(),
-  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: optional(string()),
 });
 const MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY = "id";
 const MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY = "e";
@@ -136,12 +133,6 @@ type MessageMetadataAnnouncements = infer_<
   typeof MessageMetadataAnnouncementsSchema
 >;
 
-// Advisory labels remain on the wire until pinning replaces them. They are
-// never evidence of verification or deletion in the local protocol cache.
-const MESSAGE_LABEL_VALID = 1;
-const MESSAGE_LABEL_TRASH = 2;
-const MESSAGE_LABEL_INVALID = 4;
-
 export interface GraffitiDecentralizedOptions {
   identityCreatorEndpoint?: string;
   defaultInboxEndpoints?: string[];
@@ -165,6 +156,7 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly openMessageStore = () => this.messageStore_ ??= createMessageStore();
   protected readonly inboxHistory = new InboxHistory(this.inboxes, this.openMessageStore);
   protected readonly verification = new VerificationState();
+  private readonly confirmedPins = new Set<string>();
 
   protected readonly stringEncoder = new StringEncoder();
   protected readonly contentAddresses = new ContentAddresses();
@@ -569,14 +561,21 @@ export class GraffitiDecentralized implements Graffiti {
 
     // Announce the object, its key,
     // and other metadata to appropriate inboxes
-    await this.announceObject(
-      object,
-      tags,
-      allowedTickets,
-      storageBucketKey,
-      session,
-      kind,
-    );
+    try {
+      await this.announceObject(
+        object,
+        tags,
+        allowedTickets,
+        storageBucketKey,
+        session,
+        kind,
+      );
+    } catch (error) {
+      await this.storageBuckets.delete(resolvedSession.storageBucket.serviceEndpoint,
+        storageBucketKey, resolvedSession.storageBucket.token).catch((rollbackError) =>
+          console.error("Could not roll back stored object:", rollbackError));
+      throw error;
+    }
     return object;
   }
 
@@ -589,7 +588,7 @@ export class GraffitiDecentralized implements Graffiti {
   ) {
     const [url, schema, options] = args;
     const { session, refresh = false } = normalizeGraffitiReadOptions(options);
-    let services: { token?: string; serviceEndpoint: string }[];
+    let services: { token?: string; serviceEndpoint: string; pin?: boolean }[];
     const validator = await compileGraffitiObjectSchema(schema);
 
     if (session) {
@@ -597,7 +596,7 @@ export class GraffitiDecentralized implements Graffiti {
       // personal inbox, then any shared inboxes
       const resolvedSession = this.sessions.resolveSession(session);
       services = [
-        resolvedSession.personalInbox,
+        { ...resolvedSession.personalInbox, pin: true },
         ...resolvedSession.sharedInboxes,
       ];
     } else {
@@ -622,10 +621,13 @@ export class GraffitiDecentralized implements Graffiti {
           // Cache eviction is a miss, not evidence that the object was deleted.
           if (!message || await this.digestMessage(message.m) !== entry.digest) continue;
           const metadata = MessageMetadataSchema.parse(dagCborDecode(message.m.m));
-          if (metadata[MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY] ||
-            (metadata[RECORD_KIND_KEY] !== undefined && metadata[RECORD_KIND_KEY] !== kind)) continue;
+          if (metadata[RECORD_KIND_KEY] !== undefined && metadata[RECORD_KIND_KEY] !== kind) continue;
           const object = message.m.o;
           if (!validator(object)) throw new GraffitiErrorSchemaMismatch("Object exists but does not match the supplied schema");
+          if (service.pin && session && service.token && !this.confirmedPins.has(this.pinKey(entry.inbox, session.actor, entry.id))) {
+            await this.inboxes.pin(entry.inbox, [entry.id], service.token);
+            this.confirmedPins.add(this.pinKey(entry.inbox, session.actor, entry.id));
+          }
           return structuredClone(object);
         }
       }
@@ -639,7 +641,7 @@ export class GraffitiDecentralized implements Graffiti {
         },
         service.token,
         session?.actor,
-        { refresh: true },
+        { refresh: true, pin: service.pin },
       );
 
       for await (const result of iterator) {
@@ -765,21 +767,28 @@ export class GraffitiDecentralized implements Graffiti {
     );
 
     // Store the descriptor as media, outside the ordinary object API.
-    const { url } = await this.postRecord<typeof MEDIA_OBJECT_SCHEMA>(
-      RECORD_KIND_MEDIA,
-      {
-        value: {
-          key,
-          type,
-          size: media.data.size,
+    try {
+      const { url } = await this.postRecord<typeof MEDIA_OBJECT_SCHEMA>(
+        RECORD_KIND_MEDIA,
+        {
+          value: {
+            key,
+            type,
+            size: media.data.size,
+          },
+          channels: [],
+          allowed: media.allowed,
         },
-        channels: [],
-        allowed: media.allowed,
-      },
-      session,
-    );
+        session,
+      );
 
-    return url;
+      return url;
+    } catch (error) {
+      await this.storageBuckets.delete(resolvedSession.storageBucket.serviceEndpoint,
+        key, resolvedSession.storageBucket.token).catch((rollbackError) =>
+          console.error("Could not roll back stored media:", rollbackError));
+      throw error;
+    }
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
@@ -876,14 +885,18 @@ export class GraffitiDecentralized implements Graffiti {
     },
     session?: GraffitiSession | null,
     refresh = true,
+    hints: PendingHint[] = [],
+    cursorScope?: string | null,
   ): GraffitiObjectStream<Schema> {
     const lastTombstoneState = new Map<string, boolean>();
+    const scan = newScan(session?.actor, hints);
+    const validator = await compileGraffitiObjectSchema<Schema>(schema);
 
-    let allInboxes: { serviceEndpoint: string; token?: string }[];
+    let allInboxes: { serviceEndpoint: string; token?: string; pin?: boolean }[];
     if (session) {
       const resolvedSession = this.sessions.resolveSession(session);
       allInboxes = [
-        resolvedSession.personalInbox,
+        { ...resolvedSession.personalInbox, pin: true },
         ...resolvedSession.sharedInboxes,
       ];
     } else {
@@ -901,6 +914,10 @@ export class GraffitiDecentralized implements Graffiti {
       }
     }
 
+    if (cursorScope !== undefined && cursorScope !== (session?.actor ?? null)) {
+      throw new GraffitiErrorCursorExpired("Discovery reader changed");
+    }
+
     // Turn the channels into tags
     const tags = await Promise.all(
       channels.map((c) =>
@@ -911,7 +928,7 @@ export class GraffitiDecentralized implements Graffiti {
       ),
     );
 
-    const iterators: SingleEndpointQueryIterator<Schema>[] = allInboxes.map(
+    const iterators: SingleEndpointQueryIterator<{}>[] = allInboxes.map(
       (i) => {
         const cursor = cursors[i.serviceEndpoint];
         return this.querySingleEndpoint<Schema>(
@@ -927,25 +944,52 @@ export class GraffitiDecentralized implements Graffiti {
               },
           i.token,
           session?.actor,
-          { refresh },
+          { refresh, scan, pin: i.pin },
         );
       },
     );
 
+    const render = (item: SingleEndpointQueryResult<{}>): GraffitiObjectStreamEntry<Schema> | GraffitiObjectStreamTombstone | undefined => {
+      if (item.kind === RECORD_KIND_MEDIA) return;
+      const { object, tombstone, tags: receivedTags } = item;
+      // Inbox announcements can omit channel names, so recover the queried
+      // channels from their tags before applying the usual object mask.
+      const matchedChannels = channels.filter((_, index) =>
+        receivedTags.some(
+          (receivedTag) =>
+            tags[index].length === receivedTag.length &&
+            tags[index].every((byte, i) => byte === receivedTag[i]),
+        ),
+      );
+      if (matchedChannels.length === 0 || !validator(object)) return;
+      const maskedObject = maskGraffitiObject(
+        { ...structuredClone(object), channels: matchedChannels },
+        matchedChannels,
+        session?.actor,
+      ) as typeof object;
+      // The same inbox item can arrive through multiple inboxes.
+      const deleted = tombstone === true;
+      if (lastTombstoneState.get(object.url) === deleted) return;
+      lastTombstoneState.set(object.url, deleted);
+      return deleted
+        ? { tombstone: true, object: maskedObject }
+        : { object: maskedObject };
+    };
     const indexedIteratorNexts = iterators.map<
-      Promise<IndexedSingleEndpointQueryResult<Schema>>
-    >((it, index) => indexedSingleEndpointQueryNext<Schema>(it, index));
+      Promise<IndexedSingleEndpointQueryResult<{}>>
+    >((it, index) => indexedSingleEndpointQueryNext<{}>(it, index));
     let active = indexedIteratorNexts.length;
 
     try {
       while (active > 0) {
-        const next: IndexedSingleEndpointQueryResult<Schema> =
+        const next: IndexedSingleEndpointQueryResult<{}> =
           await Promise.race<any>(indexedIteratorNexts);
         if (next.error !== undefined) {
           if (
             next.error instanceof GraffitiErrorCursorExpired ||
             next.error instanceof GraffitiErrorInvalidSchema
           ) throw next.error;
+          scan.incomplete = true;
           // Remove it from the race
           indexedIteratorNexts[next.index] = new Promise(() => {});
           active--;
@@ -963,7 +1007,7 @@ export class GraffitiDecentralized implements Graffiti {
         } else {
           // Re-arm the iterator
           indexedIteratorNexts[next.index] =
-            indexedSingleEndpointQueryNext<Schema>(
+            indexedSingleEndpointQueryNext<{}>(
               iterators[next.index],
               next.index,
             );
@@ -973,36 +1017,15 @@ export class GraffitiDecentralized implements Graffiti {
             yield { error: item.error, origin: allInboxes[next.index].serviceEndpoint };
             continue;
           }
-          if (item.kind === RECORD_KIND_MEDIA) continue;
-          const { object, tombstone, tags: receivedTags } = item;
-          // Inbox announcements can omit channel names, so recover the queried
-          // channels from their tags before applying the usual object mask.
-          const matchedChannels = channels.filter((_, index) =>
-            receivedTags.some(
-              (receivedTag) =>
-                tags[index].length === receivedTag.length &&
-                tags[index].every((byte, i) => byte === receivedTag[i]),
-            ),
-          );
-          if (matchedChannels.length === 0) {
-            yield {
-              error: new Error("Inbox returned object without matching channels"),
-              origin: allInboxes[next.index].serviceEndpoint,
-            };
-            continue;
-          }
-          const maskedObject = maskGraffitiObject(
-            { ...object, channels: matchedChannels },
-            matchedChannels,
-            session?.actor,
-          ) as typeof object;
-          // The same inbox item can arrive through multiple inboxes.
-          const deleted = tombstone === true;
-          if (lastTombstoneState.get(object.url) === deleted) continue;
-          lastTombstoneState.set(object.url, deleted);
-          yield deleted
-            ? { tombstone: true, object: maskedObject }
-            : { object: maskedObject };
+          const visible = render(item);
+          if (visible) yield visible;
+        }
+      }
+      for await (const { item, origin } of this.checkDeletionHints<Schema>(scan, schema)) {
+        if ("error" in item) yield { error: item.error, origin };
+        else {
+          const visible = render(item);
+          if (visible) yield visible;
         }
       }
     } catch (e) {
@@ -1018,6 +1041,9 @@ export class GraffitiDecentralized implements Graffiti {
 
     return {
       cursor: JSON.stringify({
+        protocol: 3,
+        scope: session?.actor ?? null,
+        hints: [...scan.pendingHints.values()],
         channels,
         cursors,
         schema,
@@ -1039,18 +1065,22 @@ export class GraffitiDecentralized implements Graffiti {
     let channels: string[];
     let cursors: { [endpoint: string]: string };
     let schema: JSONSchema;
+    let hints: PendingHint[];
+    let scope: string | null;
     try {
       const json = JSON.parse(cursor);
       const parsed = CursorSchema.parse(json);
       channels = parsed.channels;
       cursors = parsed.cursors;
       schema = parsed.schema;
+      scope = parsed.scope;
+      hints = parsed.hints;
     } catch (error) {
       return (async function* () {
         throw new GraffitiErrorCursorExpired("Invalid cursor");
       })();
     }
-    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh);
+    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh, hints, scope);
   };
 
   protected tryLogoutIfUnauthorized(
@@ -1071,168 +1101,92 @@ export class GraffitiDecentralized implements Graffiti {
     kind?: RecordKind,
     priorAnnouncements?: MessageMetadataAnnouncements,
   ): Promise<void> {
-    const resolvedSession = this.sessions.resolveSession(session);
-
+    const resolved = this.sessions.resolveSession(session);
+    const deleting = priorAnnouncements !== undefined;
     const metadataBase: MessageMetadataBase = {
-      // Retain kind for cached reads and tombstones after the record is gone.
-      // Initial validation checks it against the stored record's kind.
       ...(kind === undefined ? {} : { [RECORD_KIND_KEY]: kind }),
       [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
     };
-
     const announcements: MessageMetadataAnnouncements = [];
-    const allowed = object.allowed;
-    if (Array.isArray(allowed)) {
-      if (!allowedTickets || allowedTickets.length !== allowed.length) {
-        throw new Error(
-          "If allowed actors are specified, there must be a corresponding ticket for each allowed actor",
-        );
+    const ownPins: { endpoint: string; token: string; id: string }[] = [];
+    const send = async (endpoint: string, masked: GraffitiObjectBase, metadata: MessageMetadata, token?: string) => {
+      const id = await this.inboxes.send(endpoint, {
+        t: tags, o: masked,
+        // A hint names the URL in the searchable object envelope. Neither its
+        // metadata nor its object contents are trusted as deletion evidence.
+        m: dagCborEncode(deleting ? { d: true } : metadata),
+      });
+      if (token && !deleting) {
+        // Record the ID before pinning: even a lost response may have added it.
+        ownPins.push({ endpoint, token, id });
+        await this.inboxes.pin(endpoint, [id], token);
+        this.confirmedPins.add(this.pinKey(endpoint, session.actor, id));
       }
+      return id;
+    };
 
-      // Send the object to each allowed recipient's personal inbox
-      const results = await Promise.allSettled(
-        allowed.map(async (recipient, recipientIndex) => {
-          // Mask the object to not include any channels
-          // and only include the recipient actor on the allowed list
-          const copy = JSON.parse(JSON.stringify(object)) as GraffitiObjectBase;
-          const masked = maskGraffitiObject(copy, [], recipient);
-
-          // Get the recipient's inbox
-          const actorDocument = await this.dids.resolve(recipient);
-          const personalInbox = actorDocument.service?.find(
-            (service) =>
-              service.type === DID_SERVICE_TYPE_GRAFFITI_INBOX &&
-              service.id === DID_SERVICE_ID_GRAFFITI_PERSONAL_INBOX,
-          );
-          if (!personalInbox) {
-            throw new Error(
-              `Recipient ${recipient} does not have a personal inbox`,
-            );
-          }
-          if (typeof personalInbox.serviceEndpoint !== "string") {
-            throw new Error(
-              `Recipient ${recipient} does not have a valid personal inbox endpoint`,
-            );
-          }
-
-          const tombstonedMessageId = priorAnnouncements
-            ? priorAnnouncements.find(
-                (a) => a[MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY] === recipient,
-              )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
-            : undefined;
-
-          // Announce to the inbox
-          const privateMetadata: MessageMetadata = {
-            ...metadataBase,
-            ...(tombstonedMessageId
-              ? {
-                  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
-                }
-              : {}),
-            [MESSAGE_DATA_ALLOWED_TICKET_KEY]: allowedTickets[recipientIndex],
-            [MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY]: recipientIndex,
-          };
-          const messageId = await this.inboxes.send(
-            personalInbox.serviceEndpoint,
-            {
-              [MESSAGE_TAGS_KEY]: tags,
-              [MESSAGE_OBJECT_KEY]: masked,
-              [MESSAGE_METADATA_KEY]: dagCborEncode(privateMetadata),
-            },
-          );
-
-          announcements.push({
-            [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: messageId,
-            [MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY]: recipient,
+    try {
+      const allowed = object.allowed;
+      const deliveries = Array.isArray(allowed)
+        ? allowed.filter((recipient) => recipient !== session.actor).map(async (recipient) => {
+            if (!allowedTickets || allowedTickets.length !== allowed.length) {
+              throw new Error("Each allowed actor needs an allowed ticket");
+            }
+            const actorDocument = await this.dids.resolve(recipient);
+            const inbox = actorDocument.service?.find((service) =>
+              service.type === DID_SERVICE_TYPE_GRAFFITI_INBOX && service.id === DID_SERVICE_ID_GRAFFITI_PERSONAL_INBOX);
+            if (typeof inbox?.serviceEndpoint !== "string") throw new Error(`Recipient ${recipient} has no personal inbox`);
+            const index = allowed.indexOf(recipient);
+            const id = await send(inbox.serviceEndpoint, maskGraffitiObject(structuredClone(object), [], recipient), {
+              ...metadataBase, a: allowedTickets[index], i: index,
+            });
+            // Sending to somebody else's personal inbox remains unauthenticated.
+            announcements.push({ id, a: recipient });
+          })
+        : resolved.sharedInboxes.map(async (inbox) => {
+            const id = await send(inbox.serviceEndpoint, maskGraffitiObject(structuredClone(object), []), metadataBase, inbox.token);
+            announcements.push({ id, e: inbox.serviceEndpoint });
           });
-        }),
-      );
-
-      for (const [index, result] of results.entries()) {
-        if (result.status === "rejected") {
-          const recipient = allowed[index];
-          console.error("Error sending to recipient:", recipient);
-          console.error(result.reason);
+      // Settle every send before rolling back; no late successful pin can race
+      // with the rollback of a different destination's failed request.
+      const settled = await Promise.allSettled(deliveries);
+      const failed = settled.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") {
+        if (!Array.isArray(allowed)) throw failed.reason;
+        // Keep existing best-effort delivery to other people's inboxes. The
+        // author's own pinned copy is required even if a recipient has no DID.
+        for (const result of settled) if (result.status === "rejected") {
+          console.error("Could not send to recipient:", result.reason);
         }
       }
-    } else {
-      // Mask the object to not include any channels
-      // and only include the recipient actor on the allowed list
-      const copy = JSON.parse(JSON.stringify(object)) as GraffitiObjectBase;
-      const masked = maskGraffitiObject(copy, []);
-
-      // Send the object to each shared inbox
-      const sharedInboxes = resolvedSession.sharedInboxes;
-      const results = await Promise.allSettled(
-        sharedInboxes.map(async (inbox) => {
-          const tombstonedMessageId = priorAnnouncements
-            ? priorAnnouncements.find(
-                (a) =>
-                  a[MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY] ===
-                  inbox.serviceEndpoint,
-              )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
-            : undefined;
-          const metadata: MessageMetadata = {
-            ...metadataBase,
-            ...(tombstonedMessageId
-              ? {
-                  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
-                }
-              : {}),
-          };
-
-          const messageId = await this.inboxes.send(inbox.serviceEndpoint, {
-            ...(tombstonedMessageId
-              ? {
-                  [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
-                }
-              : {}),
-            [MESSAGE_TAGS_KEY]: tags,
-            [MESSAGE_OBJECT_KEY]: masked,
-            [MESSAGE_METADATA_KEY]: dagCborEncode(metadata),
-          });
-          announcements.push({
-            [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: messageId,
-            [MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY]: inbox.serviceEndpoint,
-          });
-        }),
-      );
-
-      for (const [index, result] of results.entries()) {
-        if (result.status === "rejected") {
-          const inbox = sharedInboxes[index];
-          console.error("Error sending to inbox:", inbox);
-          console.error(result.reason);
-        }
-      }
+      await send(resolved.personalInbox.serviceEndpoint, object, {
+        ...metadataBase, ...(allowedTickets ? { s: allowedTickets } : {}), n: announcements,
+      }, resolved.personalInbox.token);
+    } catch (error) {
+      await Promise.allSettled(ownPins.map(async ({ endpoint, token, id }) => {
+        this.confirmedPins.delete(this.pinKey(endpoint, session.actor, id));
+        await this.inboxes.unpin(endpoint, [id], token);
+      }));
+      throw error;
     }
 
-    // Send the complete object to my own personal inbox
-    // along with its key and allowed tickets
-    const tombstonedMessageId = priorAnnouncements
-      ? priorAnnouncements.find(
-          (a) => a[MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY] === session.actor,
-        )?.[MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]
-      : undefined;
-    const selfMetadata: MessageMetadata = {
-      ...metadataBase,
-      ...(allowedTickets
-        ? {
-            [MESSAGE_DATA_ALLOWED_TICKETS_KEY]: allowedTickets,
-          }
-        : {}),
-      ...(tombstonedMessageId
-        ? {
-            [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
-          }
-        : {}),
-      [MESSAGE_DATA_ANNOUNCEMENTS_KEY]: announcements,
-    };
-    await this.inboxes.send(resolvedSession.personalInbox.serviceEndpoint, {
-      [MESSAGE_TAGS_KEY]: tags,
-      [MESSAGE_OBJECT_KEY]: object,
-      [MESSAGE_METADATA_KEY]: dagCborEncode(selfMetadata),
-    });
+    if (deleting) {
+      // Only remove the author's own sponsorship. Recipient pins are theirs to
+      // release after their clients independently confirm the deletion.
+      await Promise.all(priorAnnouncements.map(async (announcement) => {
+        const inbox = announcement.a === session.actor
+          ? resolved.personalInbox
+          : resolved.sharedInboxes.find((inbox) => inbox.serviceEndpoint === announcement.e);
+        if (inbox) {
+          await this.inboxes.unpin(inbox.serviceEndpoint, [announcement.id], inbox.token);
+          this.confirmedPins.delete(this.pinKey(inbox.serviceEndpoint, session.actor, announcement.id));
+        }
+      }));
+    }
+  }
+
+  private pinKey(inbox: string, actor: string, id: string) {
+    return JSON.stringify([inbox, actor, id]);
   }
 
   protected async *querySingleEndpoint<Schema extends JSONSchema>(
@@ -1248,10 +1202,13 @@ export class GraffitiDecentralized implements Graffiti {
         },
     inboxToken?: string | null,
     recipient?: string | null,
-    options?: InboxReadOptions,
+    options?: ProtocolReadOptions,
   ): SingleEndpointQueryIterator<Schema> {
+    const scan = options?.scan ?? newScan(recipient);
+    const { pin: _pin, scan: _scan, ...readOptions } = options ?? {};
+    let pendingPins: infer_<typeof PendingPinsSchema> | undefined;
     let pending = new Map<string, infer_<typeof PendingReadSchema>>();
-    let retryMessages: LabeledMessage<Schema>[] = [];
+    let retryMessages: InboxMessage<Schema>[] = [];
     let deferred = false;
     if ("cursor" in queryArguments) {
       let checkpoint: infer_<typeof SingleEndpointCursorSchema>;
@@ -1263,6 +1220,7 @@ export class GraffitiDecentralized implements Graffiti {
       if (checkpoint.scope !== (recipient ?? null)) throw new GraffitiErrorCursorExpired("Discovery reader changed");
       queryArguments = { ...queryArguments, cursor: checkpoint.cursor };
       pending = new Map(checkpoint.pending.map((retry) => [retry.id, retry]));
+      pendingPins = checkpoint.pins;
       // Eligibility is checked once per poll. Never sleep or retry twice in
       // this stream. Oldest due reads go first so a failing read cannot starve others.
       const now = Date.now();
@@ -1291,6 +1249,28 @@ export class GraffitiDecentralized implements Graffiti {
       }
     }
 
+    const toPin = new Set(pendingPins?.ids);
+    const flushPins = async (): Promise<Error | undefined> => {
+      if (!toPin.size || !options?.pin || !inboxToken || !recipient) return;
+      const ids = [...toPin];
+      toPin.clear(); // Do not retry a failed batch again in finally.
+      if (pendingPins && pendingPins.retryAt > Date.now()) {
+        pendingPins = { ...pendingPins, ids };
+        return new Error("Some message pins are awaiting retry");
+      }
+      try {
+        await this.inboxes.pin(inboxEndpoint, ids, inboxToken);
+        for (const id of ids) this.confirmedPins.add(this.pinKey(inboxEndpoint, recipient, id));
+        pendingPins = undefined;
+      } catch (cause) {
+        pendingPins = { ids, ...nextRetry(pendingPins) };
+        return new Error("Could not pin validated inbox messages", { cause });
+      }
+    };
+    if (options?.pin && inboxToken && recipient) {
+      scan.personal = { endpoint: inboxEndpoint, token: inboxToken, actor: recipient };
+    }
+
     const iterator: MessageStream<Schema> =
       "tags" in queryArguments
         ? this.inboxHistory.query<Schema>(
@@ -1298,13 +1278,13 @@ export class GraffitiDecentralized implements Graffiti {
             queryArguments.tags,
             queryArguments.objectSchema,
             inboxToken,
-            options,
+            readOptions,
           )
         : this.inboxHistory.continueQuery<Schema>(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
-            options,
+            readOptions,
           );
     const inFlight: Promise<
       | { id: string; url: string; result: SingleEndpointQueryItem<Schema> | void }
@@ -1318,7 +1298,7 @@ export class GraffitiDecentralized implements Graffiti {
         while (doneValue === null && inFlight.length < CONCURRENCY) {
           // Graffiti supplies due cached reads before the ordinary continuation.
           const retryMessage = retryMessages.shift();
-          const itResult: IteratorResult<LabeledMessage<Schema>, string> = retryMessage
+          const itResult: IteratorResult<InboxMessage<Schema>, string> = retryMessage
             ? { done: false, value: retryMessage }
             : await iterator.next();
           if (itResult.done) {
@@ -1331,8 +1311,8 @@ export class GraffitiDecentralized implements Graffiti {
           const processPromise = this.processOneMessage<Schema>(
             inboxEndpoint,
             itResult.value,
-            inboxToken,
             recipient,
+            scan,
           ).then(
             (result) => ({ id: itResult.value.id, url: itResult.value.m.o.url, result }),
             (error: unknown) => ({ error }),
@@ -1346,13 +1326,20 @@ export class GraffitiDecentralized implements Graffiti {
 
         if (!nextProcessedPromise) {
           if (doneValue !== null) {
-            if (deferred && pending.size) {
+            for (const retry of pending.values()) scan.unresolved.add(retry.url);
+            const pinError = await flushPins();
+            if (pinError) yield { error: pinError, retryable: true };
+            if (!options?.scan) {
+              for await (const { item } of this.checkDeletionHints<Schema>(scan, queryArguments.objectSchema)) yield item;
+            }
+            if (deferred && [...pending.values()].some(retry => !retry.silent)) {
               yield { error: new Error("Some object reads are awaiting retry"), retryable: true };
             }
             // Each continuation keeps its own pending IDs. Another consumer's
             // successful retry must not consume this consumer's delivery.
             return JSON.stringify({
-              version: 2,
+              version: 3,
+              pins: pendingPins,
               scope: recipient ?? null,
               cursor: doneValue,
               pending: [...pending.values()],
@@ -1366,12 +1353,12 @@ export class GraffitiDecentralized implements Graffiti {
         if ("error" in processed) throw processed.error;
         if (processed.result && "error" in processed.result && processed.result.retryable) {
           const previous = pending.get(processed.id);
-          const delay = Math.min(previous ? previous.delay * 2 : INITIAL_READ_RETRY_MS, MAX_READ_RETRY_MS);
-          pending.set(processed.id, { id: processed.id, url: processed.url, delay, retryAt: Date.now() + delay });
+          pending.set(processed.id, { id: processed.id, url: processed.url, silent: processed.result.silent, ...nextRetry(previous) });
         } else {
           pending.delete(processed.id);
         }
         if (processed.result) {
+          if ("error" in processed.result && processed.result.silent) continue;
           // A cached/verified result may have waited behind another read in
           // this queue while a different stream learned that its key was gone.
           if (!("error" in processed.result) && !processed.result.tombstone) {
@@ -1379,26 +1366,18 @@ export class GraffitiDecentralized implements Graffiti {
             if ((await this.verification.read(object.url)).some(entry =>
               entry.storageKey === storageBucketKey && entry.status === "deleted")) continue;
           }
+          if (!("error" in processed.result) && !processed.result.tombstone && options?.pin && recipient &&
+            !this.confirmedPins.has(this.pinKey(inboxEndpoint, recipient, processed.result.messageId))) {
+            toPin.add(processed.result.messageId);
+          }
           yield processed.result;
         }
       }
     } finally {
       await iterator.return("");
+      const pinError = await flushPins();
+      if (pinError) console.error("Could not pin delivered inbox messages:", pinError);
     }
-  }
-
-  // Labeling is advisory and should not hold up discovery, but its failure
-  // must be handled even if the caller has already stopped reading the stream.
-  protected labelInboxMessage(
-    inboxEndpoint: string,
-    messageId: string,
-    label: number,
-    inboxToken?: string | null,
-  ): void {
-    if (!inboxToken) return;
-    void this.inboxes.label(inboxEndpoint, messageId, label, inboxToken).catch(
-      (error) => console.error("Could not label inbox message:", error),
-    );
   }
 
   protected async digestMessage(message: Message<{}>): Promise<string> {
@@ -1408,24 +1387,30 @@ export class GraffitiDecentralized implements Graffiti {
 
   protected async processOneMessage<Schema extends JSONSchema>(
     inboxEndpoint: string,
-    message: LabeledMessage<Schema>,
-    inboxToken?: string | null,
+    message: InboxMessage<Schema>,
     recipient?: string | null,
+    scan: DiscoveryScan = newScan(recipient),
   ): Promise<SingleEndpointQueryItem<Schema> | void> {
     const messageId = message.id;
     const { o: object, m: metadataBytes, t: receivedTags } = message.m;
 
     let metadata: MessageMetadata;
     try {
-      metadata = MessageMetadataSchema.parse(dagCborDecode(metadataBytes));
+      const decoded = dagCborDecode(metadataBytes);
+      // Both old message-ID tombstones and new URL announcements are only hints.
+      if (decoded && typeof decoded === "object" &&
+        (("d" in decoded && decoded.d === true) || ("t" in decoded && typeof decoded.t === "string"))) {
+        addHint(scan, object.url, inboxEndpoint);
+        return;
+      }
+      metadata = MessageMetadataSchema.parse(decoded);
     } catch (error) {
-      this.labelInboxMessage(inboxEndpoint, messageId, MESSAGE_LABEL_INVALID, inboxToken);
+
       return { error: new Error("Invalid inbox message metadata", { cause: error }), retryable: false };
     }
 
     const {
       [MESSAGE_DATA_STORAGE_BUCKET_KEY]: storageBucketKey,
-      [MESSAGE_DATA_TOMBSTONED_MESSAGE_ID_KEY]: tombstonedMessageId,
     } = metadata;
     const allowedTickets = MESSAGE_DATA_ALLOWED_TICKETS_KEY in metadata
       ? metadata[MESSAGE_DATA_ALLOWED_TICKETS_KEY] : undefined;
@@ -1451,20 +1436,25 @@ export class GraffitiDecentralized implements Graffiti {
         return { error: new Error("Inbox changed an existing announcement"), retryable: false };
       }
       if (cached.status === "invalid") return;
-      if (cached.status === "deleted") return tombstonedMessageId ? { ...resultBase, tombstone: true } : undefined;
+      if (cached.status === "deleted") {
+        if (cached.verified) addHint(scan, object.url, inboxEndpoint);
+        return;
+      }
       if (cached.status === "verified") return resultBase;
     }
-    const remember = (status: MessageState["status"]) => this.verification.remember(object.url, {
+    const remember = (status: MessageState["status"], firstMissing?: number) => this.verification.remember(object.url, {
       scope, inbox: inboxEndpoint, id: messageId, digest, storageKey: storageBucketKey, status,
+      ...(firstMissing === undefined ? {} : { firstMissing }),
     });
-    const retry = async (error: Error): Promise<SingleEndpointQueryItem<Schema> | void> => {
+    const retry = async (error: Error, firstMissing?: number): Promise<SingleEndpointQueryItem<Schema> | void> => {
       // InboxHistory has persisted the payload. Save this reader's state
       // before advancing; each consumer still owns its pending deliveries.
-      const status = await remember("pending");
+      const status = await remember("pending", firstMissing);
       if (status === "verified") return resultBase;
-      if (status === "deleted") return tombstonedMessageId ? { ...resultBase, tombstone: true } : undefined;
+      if (status === "deleted") { addHint(scan, object.url, inboxEndpoint); return; }
       if (status === "invalid") return;
-      return { error, retryable: true };
+      scan.unresolved.add(object.url);
+      return { error, retryable: true, silent: firstMissing !== undefined || undefined };
     };
 
     // DID failures are read failures, never evidence that an object is gone.
@@ -1489,16 +1479,18 @@ export class GraffitiDecentralized implements Graffiti {
       if (!(error instanceof GraffitiErrorNotFound)) {
         return retry(new Error("Could not read object from storage bucket", { cause: error }));
       }
-      await remember("deleted");
-      this.labelInboxMessage(inboxEndpoint, messageId, MESSAGE_LABEL_TRASH, inboxToken);
-      if (tombstonedMessageId) {
-        // The protocol already has earlier announcements it processed. There
-        // is no need to reach into the inbox cache or fetch /message again.
-        if (known.some(entry => entry.inbox === inboxEndpoint && entry.id === tombstonedMessageId && entry.storageKey === storageBucketKey)) {
-          this.labelInboxMessage(inboxEndpoint, tombstonedMessageId, MESSAGE_LABEL_TRASH, inboxToken);
-        }
-        return { ...resultBase, tombstone: true };
+      if (known.some(entry => entry.scope === scope && entry.verified && entry.storageKey === storageBucketKey)) {
+        await this.verification.deleted(object.url, storageBucketKey);
+        addHint(scan, object.url, inboxEndpoint);
+        return;
       }
+      // An unknown 404 is not deletion evidence. Allow ordinary DID-cache
+      // expiry before treating a permanently missing announcement as invalid.
+      const firstMissing = cached?.firstMissing ?? Date.now();
+      if (Date.now() - firstMissing < DID_CACHE_TTL_MS) {
+        return retry(new Error("Object is not available at its announced storage key"), firstMissing);
+      }
+      await remember("invalid");
       return;
     }
 
@@ -1513,22 +1505,101 @@ export class GraffitiDecentralized implements Graffiti {
           ? { recipient: recipient ?? "null", allowedTicket: metadata[MESSAGE_DATA_ALLOWED_TICKET_KEY], allowedIndex: metadata[MESSAGE_DATA_ALLOWED_TICKET_INDEX_KEY] }
           : undefined;
       await this.objectEncoding.validate(object, receivedTags, objectBytes, privateObjectInfo, metadata[RECORD_KIND_KEY]);
-      if (tombstonedMessageId) validationError = new Error("Tombstone refers to an existing object");
     } catch (error) {
       validationError = new Error("Invalid inbox object", { cause: error });
     }
     if (validationError) {
       await remember("invalid");
-      this.labelInboxMessage(inboxEndpoint, messageId, MESSAGE_LABEL_INVALID, inboxToken);
+
       return { error: validationError, retryable: false };
     }
 
     // A deletion observed while this read was in flight wins atomically over
     // its late success, including reads from another Graffiti instance/tab.
     if (await remember("verified") !== "verified") return;
-    this.labelInboxMessage(inboxEndpoint, messageId, MESSAGE_LABEL_VALID, inboxToken);
+
     return resultBase;
   }
+  private async storageEndpoint(actor: string): Promise<string> {
+    const document = await this.dids.resolve(actor);
+    const service = document.service?.find(service =>
+      service.id === DID_SERVICE_ID_GRAFFITI_STORAGE_BUCKET && service.type === DID_SERVICE_TYPE_GRAFFITI_STORAGE_BUCKET);
+    if (typeof service?.serviceEndpoint !== "string") throw new Error(`Actor ${actor} has no valid storage bucket endpoint`);
+    return service.serviceEndpoint;
+  }
+
+  private async *checkDeletionHints<Schema extends JSONSchema>(
+    scan: DiscoveryScan, schema: Schema,
+  ): AsyncGenerator<{ item: SingleEndpointQueryItem<Schema>; origin: string }> {
+    const matches = await compileGraffitiObjectSchema<Schema>(schema);
+    const due = new Set([...scan.pendingHints.values()]
+      .filter(hint => hint.retryAt <= Date.now()).sort((a, b) => a.retryAt - b.retryAt)
+      .slice(0, MAX_READ_RETRIES_PER_POLL).map(hint => hint.url));
+    for (const [url, origins] of scan.hints) {
+      const origin = origins.values().next().value;
+      if (origin === undefined) continue;
+      const previous = scan.pendingHints.get(url);
+      if (previous && !due.has(url)) {
+        yield { origin, item: { error: new Error("Some deletion checks are awaiting retry"), retryable: true } };
+        continue;
+      }
+      try {
+        let verified = (await this.verification.read(url)).filter(entry => entry.scope === scan.recipient && entry.verified);
+        if (!verified.length) {
+          if (previous) throw new GraffitiErrorCursorExpired("Verified announcement is no longer cached");
+          continue;
+        }
+        if (scan.incomplete || scan.unresolved.has(url)) throw new Error("Deletion check needs a complete object scan");
+        const store = await this.openMessageStore();
+        const original = verified[0];
+        const message = await store.getMessage(original.inbox, original.id);
+        if (!message || await this.digestMessage(message.m) !== original.digest) {
+          throw new GraffitiErrorCursorExpired("Verified announcement is no longer cached");
+        }
+        let endpoint: Promise<string> | undefined;
+        const checks = await Promise.all([...new Set(verified.map(entry => entry.storageKey))].map(async key => {
+          if (verified.filter(entry => entry.storageKey === key).every(entry => entry.status === "deleted")) return true;
+          try {
+            endpoint ??= this.storageEndpoint(message.m.o.actor);
+            await this.storageBuckets.get(await endpoint, key, { maxBytes: MAX_OBJECT_SIZE_BYTES });
+            return false;
+          } catch (error) {
+            if (!(error instanceof GraffitiErrorNotFound)) throw error;
+            await this.verification.deleted(url, key);
+            return true;
+          }
+        }));
+        // Recheck after I/O: another discovery may have verified a rotated key.
+        verified = (await this.verification.read(url)).filter(entry => entry.scope === scan.recipient && entry.verified);
+        if (!checks.every(Boolean) || verified.some(entry => entry.status !== "deleted")) {
+          scan.pendingHints.delete(url);
+          continue;
+        }
+        const object = message.m.o;
+        if (matches(object)) {
+          const metadata = MessageMetadataSchema.parse(dagCborDecode(message.m.m));
+          yield { origin, item: {
+            object, messageId: original.id, storageBucketKey: original.storageKey, tags: message.m.t,
+            allowedTickets: "s" in metadata ? metadata.s : undefined,
+            announcements: "n" in metadata ? metadata.n : undefined,
+            kind: metadata[RECORD_KIND_KEY], tombstone: true,
+          } };
+        }
+        if (scan.personal) {
+          const personal = scan.personal;
+          const ids = verified.filter(entry => entry.inbox === personal.endpoint).map(entry => entry.id);
+          await this.inboxes.unpin(personal.endpoint, ids, personal.token);
+          for (const id of ids) this.confirmedPins.delete(this.pinKey(personal.endpoint, personal.actor, id));
+        }
+        scan.pendingHints.delete(url);
+      } catch (cause) {
+        if (cause instanceof GraffitiErrorCursorExpired) throw cause;
+        scan.pendingHints.set(url, { url, origins: [...origins], ...nextRetry(previous) });
+        yield { origin, item: { error: new Error("Could not check deletion hint", { cause }), retryable: true } };
+      }
+    }
+  }
+
 }
 
 const MEDIA_OBJECT_SCHEMA = {
@@ -1544,20 +1615,33 @@ const MEDIA_OBJECT_SCHEMA = {
   },
 } as const satisfies JSONSchema;
 
+const PendingHintSchema = strictObject({
+  url: string(), origins: array(url()),
+  delay: int().check(nonnegative()), retryAt: int().check(nonnegative()),
+});
+type PendingHint = infer_<typeof PendingHintSchema>;
+const PendingPinsSchema = strictObject({
+  ids: array(string()), delay: int().check(nonnegative()), retryAt: int().check(nonnegative()),
+});
 const CursorSchema = strictObject({
+  protocol: literal(3),
+  scope: nullable(string()),
+  hints: array(PendingHintSchema),
   cursors: record(url(), string()),
   channels: array(string()),
   schema: union([looseObject({}), boolean()]),
 });
 
 const PendingReadSchema = strictObject({
+  silent: optional(boolean()),
   id: string(),
   url: string(),
   delay: int().check(nonnegative()),
   retryAt: int().check(nonnegative()),
 });
 const SingleEndpointCursorSchema = strictObject({
-  version: literal(2),
+  version: literal(3),
+  pins: optional(PendingPinsSchema),
   scope: nullable(string()),
   cursor: string(),
   pending: array(PendingReadSchema),
@@ -1575,6 +1659,8 @@ interface SingleEndpointQueryResult<Schema extends JSONSchema> {
 }
 interface SingleEndpointQueryError {
   error: Error;
+  // An unverified 404 is absence, not a stream failure, but can be retried.
+  silent?: boolean;
   // A temporary read failure needs another poll; proven invalid content does not.
   retryable: boolean;
 }
@@ -1614,4 +1700,31 @@ async function indexedSingleEndpointQueryNext<Schema extends JSONSchema>(
       error: e instanceof Error ? e : new Error(String(e)),
     };
   }
+}
+
+interface DiscoveryScan {
+  recipient: string | null;
+  hints: Map<string, Set<string>>;
+  pendingHints: Map<string, PendingHint>;
+  unresolved: Set<string>;
+  incomplete?: boolean;
+  personal?: { endpoint: string; token: string; actor: string };
+}
+function newScan(recipient?: string | null, pending: PendingHint[] = []): DiscoveryScan {
+  return { recipient: recipient ?? null,
+    hints: new Map(pending.map(hint => [hint.url, new Set(hint.origins)])),
+    pendingHints: new Map(pending.map(hint => [hint.url, hint])), unresolved: new Set() };
+}
+function addHint(scan: DiscoveryScan, url: string, origin: string) {
+  const origins = scan.hints.get(url) ?? new Set<string>();
+  origins.add(origin);
+  scan.hints.set(url, origins);
+}
+function nextRetry(previous?: { delay: number }) {
+  const delay = Math.min(previous ? previous.delay * 2 : INITIAL_READ_RETRY_MS, MAX_READ_RETRY_MS);
+  return { delay, retryAt: Date.now() + delay };
+}
+interface ProtocolReadOptions extends InboxReadOptions {
+  pin?: boolean;
+  scan?: DiscoveryScan;
 }

@@ -50,7 +50,6 @@ export function discoveryAsyncTests() {
 
     const message = {
       id: "announcement",
-      l: 0,
       m: { o: object, t: [], m: new Uint8Array() },
     };
     const processed = {

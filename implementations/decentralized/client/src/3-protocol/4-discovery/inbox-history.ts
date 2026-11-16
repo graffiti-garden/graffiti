@@ -17,13 +17,12 @@ import {
   union,
 } from "zod/mini";
 import {
-  LABELED_MESSAGE_MESSAGE_KEY,
+  INBOX_MESSAGE_MESSAGE_KEY,
   MESSAGE_OBJECT_KEY,
 } from "../../1-services/4-inboxes";
 import type {
-  LabeledMessageBase,
-  LabeledMessage,
-  Message,
+  InboxMessageBase,
+  InboxMessage,
 } from "../../1-services/4-inboxes";
 import {
   canUseIDB,
@@ -72,35 +71,6 @@ export class InboxHistory {
       this.store_ = this.openStore();
     }
     return this.store_;
-  }
-
-  send(inboxUrl: string, message: Message<{}>): Promise<string> {
-    return this.http.send(inboxUrl, message);
-  }
-
-  async get(
-    inboxUrl: string,
-    messageId: string,
-    inboxToken?: string | null,
-  ): Promise<LabeledMessageBase | null> {
-    const store = await this.store;
-    const cached = await store.getMessage(inboxUrl, messageId);
-    if (cached !== undefined) return cached;
-    const message = await this.http.get(inboxUrl, messageId, inboxToken);
-    await store.setMessage(inboxUrl, messageId, message);
-    return message;
-  }
-
-  async label(
-    inboxUrl: string,
-    messageId: string,
-    label: number,
-    inboxToken?: string | null,
-  ): Promise<void> {
-    await this.http.label(inboxUrl, messageId, label, inboxToken);
-    const store = await this.store;
-    const message = await store.getMessage(inboxUrl, messageId);
-    if (message) await store.setMessage(inboxUrl, messageId, { ...message, l: label });
   }
 
   protected async withQueryLock<T>(
@@ -246,17 +216,17 @@ export class InboxHistory {
             }
 
             const { results, hasMore, cursor } = batch;
-            const labeledMessages: LabeledMessage<Schema>[] = results.map(
+            const messages: InboxMessage<Schema>[] = results.map(
               (result) => {
                 const object =
-                  result[LABELED_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
+                  result[INBOX_MESSAGE_MESSAGE_KEY][MESSAGE_OBJECT_KEY];
                 if (!validator(object)) {
                   throw new Error("Server returned data that does not match schema");
                 }
                 return {
                   ...result,
-                  [LABELED_MESSAGE_MESSAGE_KEY]: {
-                    ...result[LABELED_MESSAGE_MESSAGE_KEY],
+                  [INBOX_MESSAGE_MESSAGE_KEY]: {
+                    ...result[INBOX_MESSAGE_MESSAGE_KEY],
                     [MESSAGE_OBJECT_KEY]: object,
                   },
                 };
@@ -269,7 +239,7 @@ export class InboxHistory {
               messageIdsCacheKey,
               query,
               {
-                messages: labeledMessages,
+                messages: messages,
                 cursor,
                 hasMore,
                 waitTil: batch.waitTil,
@@ -334,7 +304,7 @@ export class InboxHistory {
       let consumedPage = false;
       try {
         for (const message of messages) {
-          yield message as LabeledMessage<Schema>;
+          yield message as InboxMessage<Schema>;
         }
         consumedPage = true;
       } finally {
@@ -409,7 +379,7 @@ const CursorSchema = strictObject({
 
 export interface MessageStream<
   Schema extends JSONSchema,
-> extends AsyncGenerator<LabeledMessage<Schema>, string> {}
+> extends AsyncGenerator<InboxMessage<Schema>, string> {}
 
 async function waitFor(waitTil?: number) {
   if (waitTil !== undefined) {

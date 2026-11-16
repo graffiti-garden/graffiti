@@ -30,7 +30,7 @@ export function verificationStateTests() {
       expect(await first.remember(url, entry)).toBe("verified");
       const snapshot = await first.read(url);
       snapshot[0].storageKey = "mutated";
-      expect(await second.read(url)).toEqual([{ ...entry, status: "verified" }]);
+      expect(await second.read(url)).toEqual([{ ...entry, status: "verified", verified: true }]);
     });
 
     test("keeps deletion ahead of late verification without deleting a different storage key", async () => {
@@ -46,13 +46,24 @@ export function verificationStateTests() {
       expect((await first.read(url)).map(m => m.status)).toEqual(["deleted", "deleted", "verified"]);
     });
 
+    test("deletion does not turn an unverified announcement into evidence", async () => {
+      const cache = new VerificationState();
+      await cache.remember(url, entry);
+      await cache.remember(url, { ...entry, id: "verified-original", status: "verified" });
+      await cache.deleted(url, entry.storageKey);
+      // Both reads must stay deleted, but only validated content can form a tombstone.
+      const messages = await cache.read(url);
+      expect(messages.every(message => message.status === "deleted")).toBe(true);
+      expect(messages.filter(message => message.verified).map(message => message.id)).toEqual(["verified-original"]);
+    });
+
     test("does not apply a cached verification to a changed message with the same ID", async () => {
       const cache = new VerificationState();
       await cache.remember(url, { ...entry, status: "verified" });
       const forged = structuredClone(entry);
       forged.digest = "different-body";
       await expect(cache.remember(url, forged)).rejects.toThrow("Inbox changed an existing announcement");
-      expect(await cache.read(url)).toEqual([{ ...entry, status: "verified" }]);
+      expect(await cache.read(url)).toEqual([{ ...entry, status: "verified", verified: true }]);
     });
   });
 }

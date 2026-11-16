@@ -6,6 +6,9 @@ export type MessageState = {
   id: string;
   digest: string;
   storageKey: string;
+  // Retain validation evidence after deletion; a failed read alone is not proof.
+  verified?: true;
+  firstMissing?: number;
   status: "pending" | "verified" | "invalid" | "deleted";
 };
 
@@ -23,7 +26,7 @@ export class VerificationState {
     return this.database ??= (async () => {
       if (!globalThis.indexedDB) return undefined;
       const { openDB } = await import("idb");
-      return openDB<VerificationDB>("graffiti-verification-state-v1", 1, {
+      return openDB<VerificationDB>("graffiti-verification-state-v2", 1, {
         upgrade(db) { db.createObjectStore("objects"); },
       });
     })().catch(() => undefined);
@@ -70,8 +73,12 @@ export class VerificationState {
       const deleted = messages.some(m => m.storageKey === entry.storageKey && m.status === "deleted");
       const status = deleted ? "deleted"
         : previous && previous.status !== "pending" ? previous.status : entry.status;
-      if (previous) previous.status = status;
-      else messages.push({ ...entry, status });
+      const verified = entry.status === "verified" || previous?.verified;
+      if (previous) {
+        previous.status = status;
+        if (verified) previous.verified = true;
+        if (entry.firstMissing !== undefined) previous.firstMissing ??= entry.firstMissing;
+      } else messages.push({ ...entry, status, ...(verified ? { verified: true } : {}) });
       return status;
     });
   }

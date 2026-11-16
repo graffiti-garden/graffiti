@@ -1,4 +1,4 @@
-import { GraffitiErrorNotFound, type JSONSchema, type GraffitiObject } from "@graffiti-garden/api";
+import { type JSONSchema, type GraffitiObject } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
 import { getAuthorizationEndpoint, fetchWithErrorHandling, verifyHTTPSEndpoint } from "./utilities";
 import {
@@ -11,7 +11,6 @@ import {
   strictObject,
   looseObject,
   custom,
-  number,
   boolean,
 } from "zod/mini";
 
@@ -40,56 +39,23 @@ export class Inboxes {
     return parsed.id;
   }
 
-  async get(
-    inboxUrl: string,
-    messageId: string,
-    inboxToken?: string | null,
-  ): Promise<LabeledMessageBase | null> {
-    const url = `${inboxUrl}/message/${messageId}`;
-    let response: Response | null = null;
-    try {
-      response = await fetchWithErrorHandling(url, {
-        method: "GET",
-        headers: {
-          ...(inboxToken
-            ? {
-                Authorization: `Bearer ${inboxToken}`,
-              }
-            : {}),
-        },
-      });
-    } catch (e) {
-      if (e instanceof GraffitiErrorNotFound) {
-        return null;
-      }
-      throw e;
-    }
-
-    const blob = await response.blob();
-    const cbor = dagCborDecode(await blob.arrayBuffer());
-    const parsed = LabeledMessageBaseSchema.parse(cbor);
-
-    return parsed;
+  async pin(inboxUrl: string, ids: string[], inboxToken: string): Promise<void> {
+    await this.updatePins(inboxUrl, "pin", ids, inboxToken);
   }
 
-  async label(
-    inboxUrl: string,
-    messageId: string,
-    label: number,
-    inboxToken?: string | null,
-  ): Promise<void> {
+  async unpin(inboxUrl: string, ids: string[], inboxToken: string): Promise<void> {
+    await this.updatePins(inboxUrl, "unpin", ids, inboxToken);
+  }
+
+  private async updatePins(inboxUrl: string, operation: "pin" | "unpin", ids: string[], inboxToken: string) {
     verifyHTTPSEndpoint(inboxUrl);
-
-    if (inboxToken) {
-      const url = `${inboxUrl}/label/${messageId}`;
-
-      await fetchWithErrorHandling(url, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/cbor",
-          Authorization: `Bearer ${inboxToken}`,
-        },
-        body: new Uint8Array(dagCborEncode({ l: label })),
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += 100) {
+      await fetchWithErrorHandling(`${inboxUrl}/${operation}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/cbor", Authorization: `Bearer ${inboxToken}` },
+        body: dagCborEncode({ ids: unique.slice(i, i + 100) }).slice(),
+        signal: AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS),
       });
     }
   }
@@ -173,21 +139,19 @@ export const MessageBaseSchema = strictObject({
 });
 type MessageBase = infer_<typeof MessageBaseSchema>;
 
-export const LABELED_MESSAGE_ID_KEY = "id";
-export const LABELED_MESSAGE_MESSAGE_KEY = "m";
-export const LABELED_MESSAGE_LABEL_KEY = "l";
-export const LabeledMessageBaseSchema = strictObject({
-  [LABELED_MESSAGE_ID_KEY]: string(),
-  [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
-  [LABELED_MESSAGE_LABEL_KEY]: number(),
+export const INBOX_MESSAGE_ID_KEY = "id";
+export const INBOX_MESSAGE_MESSAGE_KEY = "m";
+export const InboxMessageBaseSchema = strictObject({
+  [INBOX_MESSAGE_ID_KEY]: string(),
+  [INBOX_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
 });
-export type LabeledMessageBase = infer_<typeof LabeledMessageBaseSchema>;
+export type InboxMessageBase = infer_<typeof InboxMessageBaseSchema>;
 
 export type Message<Schema extends JSONSchema> = MessageBase & {
   [MESSAGE_OBJECT_KEY]: GraffitiObject<Schema>;
 };
-export type LabeledMessage<Schema extends JSONSchema> = LabeledMessageBase & {
-  [LABELED_MESSAGE_MESSAGE_KEY]: {
+export type InboxMessage<Schema extends JSONSchema> = InboxMessageBase & {
+  [INBOX_MESSAGE_MESSAGE_KEY]: {
     [MESSAGE_OBJECT_KEY]: GraffitiObject<Schema>;
   };
 };
@@ -195,7 +159,7 @@ export type LabeledMessage<Schema extends JSONSchema> = LabeledMessageBase & {
 export const SendResponseSchema = strictObject({ id: string() });
 
 export const MessageResultSchema = strictObject({
-  results: array(LabeledMessageBaseSchema),
+  results: array(InboxMessageBaseSchema),
   hasMore: boolean(),
   cursor: string(),
 });

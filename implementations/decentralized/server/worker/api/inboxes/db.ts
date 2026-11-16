@@ -50,10 +50,9 @@ export const MessageSchema = z
     m: Uint8ArraySchema,
   })
   .strict();
-export const LabeledMessageSchema = z.object({
+export const InboxMessageSchema = z.object({
   id: z.string(),
   m: MessageSchema,
-  l: z.number(),
 });
 
 const inboxInfoCache = new LRUCache<
@@ -101,8 +100,7 @@ export async function sendMessage(
   message: z.infer<typeof MessageSchema>,
   messageId_?: string,
 ) {
-  // Determine if the inbox is under the account's control,
-  // which we will later use to determine if we can label the message
+  // Check that the target inbox exists.
   const info = await getInboxInfo(context, inboxId);
   if (!info) {
     throw new HTTPException(404, { message: "Inbox not found" });
@@ -185,63 +183,6 @@ export async function sendMessage(
   return { messageId, created };
 }
 
-export async function getMessage(
-  context: Context<{ Bindings: Bindings }>,
-  inboxId: string,
-  messageId: string,
-  accountId?: number,
-) {
-  const info = await getInboxInfo(context, inboxId);
-
-  if (!info || !(info.accountId === accountId || info.accountId === 0)) {
-    throw new HTTPException(403, {
-      message: "Cannot read someone else's inbox",
-    });
-  }
-  const inboxSeq = info.inboxSeq;
-
-  const res = await context.env.DB.prepare(
-    `
-  SELECT
-    tags,
-    object,
-    metadata,
-    l.label AS label
-  FROM inbox_messages m
-  LEFT JOIN inbox_message_labels l
-    ON m.message_seq = l.message_seq AND l.account_id = ?
-  WHERE inbox_seq = ? AND message_id = ?
-  `,
-  )
-    .bind(accountId, inboxSeq, messageId)
-    .first<{
-      tags: ArrayBuffer;
-      object: string;
-      metadata: ArrayBuffer;
-      label: number | null;
-    }>();
-
-  if (!res) {
-    throw new HTTPException(404, { message: "Message not found" });
-  }
-
-  const messageRaw = {
-    t: dagCborDecode(new Uint8Array(res.tags)),
-    o: JSON.parse(res.object),
-    m: dagCborDecode(new Uint8Array(res.metadata)),
-  };
-
-  const message = MessageSchema.parse(messageRaw);
-
-  const out: z.infer<typeof LabeledMessageSchema> = {
-    id: messageId,
-    m: message,
-    l: res.label ?? 0,
-  };
-
-  return out;
-}
-
 export async function queryMessages(
   context: Context<{ Bindings: Bindings }>,
   inboxId: string,
@@ -284,15 +225,10 @@ export async function queryMessages(
       m.message_id,
       m.tags,
       m.object,
-      m.metadata,`,
-    accountId ? `l.label AS label` : `NULL as label`,
-    `FROM message_candidates c
+      m.metadata
+    FROM message_candidates c
     JOIN inbox_messages m
       ON m.message_seq = c.message_seq`,
-    accountId
-      ? `LEFT JOIN inbox_message_labels l
-      ON c.message_seq = l.message_seq AND l.account_id = ?`
-      : ``,
     `ORDER BY m.message_seq ASC
     LIMIT ?`,
   ].join("\n");
@@ -301,7 +237,6 @@ export async function queryMessages(
     inboxSeq,
     ...tags,
     sinceSeq,
-    ...(accountId ? [accountId] : []),
     limit + 1,
   ];
 
@@ -313,7 +248,6 @@ export async function queryMessages(
       tags: ArrayBuffer;
       object: string;
       metadata: ArrayBuffer;
-      label: number | null;
     }>();
 
   const hasMore = res.results.length === limit + 1;
@@ -331,12 +265,11 @@ export async function queryMessages(
         m: dagCborDecode(new Uint8Array(r.metadata)),
       };
       const message = MessageSchema.parse(messageRaw);
-      const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
+      const envelope: z.infer<typeof InboxMessageSchema> = {
         id: r.message_id,
         m: message,
-        l: r.label ?? 0,
       };
-      return messageWithLabel;
+      return envelope;
     })
     .filter((r) => objectValidator.validate(r.m.o).valid);
 
@@ -345,48 +278,6 @@ export async function queryMessages(
     hasMore,
     lastSeq,
   };
-}
-
-export async function labelMessage(
-  context: Context<{ Bindings: Bindings }>,
-  inboxId: string,
-  messageId: string,
-  label: number,
-  accountId: number,
-) {
-  const info = await getInboxInfo(context, inboxId);
-  if (!info || !(info.accountId === accountId || info.accountId === 0)) {
-    throw new HTTPException(403, {
-      message: "Cannot label a message in someone else's inbox",
-    });
-  }
-  const inboxSeq = info.inboxSeq;
-
-  // Make sure the message is in the indbox
-  const result = await context.env.DB.prepare(
-    `SELECT message_seq FROM inbox_messages WHERE inbox_seq = ? AND message_id = ?`,
-  )
-    .bind(inboxSeq, messageId)
-    .first<{ message_seq: number }>();
-  if (!result) {
-    throw new HTTPException(404, {
-      message: "Message not found",
-    });
-  }
-  const messageSeq = result.message_seq;
-
-  await context.env.DB.prepare(
-    `
-    INSERT INTO inbox_message_labels (
-      message_seq,
-      account_id,
-      label
-    ) VALUES (?, ?, ?)
-    ON CONFLICT (message_seq, account_id) DO UPDATE SET label = EXCLUDED.label;
-  `,
-  )
-    .bind(messageSeq, accountId, label)
-    .run();
 }
 
 export async function setMessagePins(
@@ -460,24 +351,20 @@ export async function exportMessages(
       message_id,
       tags,
       object,
-      metadata,
-      l.label AS label
+      metadata
     FROM inbox_messages
-    LEFT JOIN inbox_message_labels l
-      ON inbox_messages.message_seq = l.message_seq AND l.account_id = ?
     WHERE inbox_seq = ? AND inbox_messages.message_seq > ?
     ORDER BY inbox_messages.message_seq ASC
     LIMIT ?
   `,
   )
-    .bind(accountId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
+    .bind(inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
       message_seq: number;
       message_id: string;
       tags: ArrayBuffer;
       object: string;
       metadata: ArrayBuffer;
-      label: number | null;
     }>();
 
   const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
@@ -494,12 +381,11 @@ export async function exportMessages(
       m: dagCborDecode(new Uint8Array(r.metadata)),
     };
     const message = MessageSchema.parse(messageRaw);
-    const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
+    const envelope: z.infer<typeof InboxMessageSchema> = {
       id: r.message_id,
       m: message,
-      l: r.label ?? 0,
     };
-    return messageWithLabel;
+    return envelope;
   });
 
   return {

@@ -98,9 +98,10 @@ when other accounts also pin the message. Pinning a batch containing a missing
 message returns 404 and adds no pins. Unpinning missing messages succeeds.
 Apply migration `0009_inbox_pins.sql` before deploying these routes.
 
-This additive step retains the existing query/export format and label/message
-routes. The client protocol migration removes those routes; expiration is a
-separate step. Adding a pin does not yet enable garbage collection.
+Query/export entries are `{ id, m }`; labels and individual message lookup are
+removed. See the [inbox protocol](../INBOX-PROTOCOL.md) for client policy, verified
+deletion, and the coordinated client/server migration. Expiration is a separate
+step; adding a pin does not itself enable garbage collection.
 
 ## OAuth TODOs
 

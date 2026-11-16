@@ -19,6 +19,7 @@ import { Authorization } from "./1-services/1-authorization";
 import { StorageBuckets } from "./1-services/3-storage-buckets";
 import { Inboxes } from "./1-services/4-inboxes";
 import { InboxHistory } from "./3-protocol/4-discovery/inbox-history";
+import { pinProtocolTests, pinPolicyIntegrationTests } from "./3-protocol/5-pin-protocol-tests";
 import { discoveryErrorTests } from "./3-protocol/5-discovery-errors-tests";
 import { discoveryCursorTests } from "./3-protocol/5-discovery-cursor-tests";
 import { Sessions } from "./3-protocol/1-sessions/sessions";
@@ -144,30 +145,7 @@ describe("GraffitiDecentralized Tests", () => {
 
   objectEncodingTests();
   readCacheTests(() => useGraffiti(), () => sessions);
-
-  test.each([3, 4])("verifies records independently of invalid server label %i", async (label) => {
-    const writer = useGraffiti();
-    const session = sessions[0];
-    const object = await writer.post({ value: { text: "rollout check" }, channels: [], allowed: [] }, session);
-    const { personalInbox } = sessionMethods.resolveSession(session);
-    const inboxes = new InboxHistory();
-    const messages = [];
-    for await (const message of inboxes.query(personalInbox.serviceEndpoint,
-      [new TextEncoder().encode(object.url)], {}, personalInbox.token)) {
-      messages.push(message);
-    }
-    expect(messages).toHaveLength(1);
-    const metadata = dagCborDecode(messages[0].m.m);
-    expect(metadata).toHaveProperty("r", 0);
-    expect(metadata).not.toHaveProperty("kind");
-    const messageId = messages[0].id;
-    // Labels can come from an older client or another device. Only this
-    // client's verification determines whether the record is valid.
-    await inboxes.label(personalInbox.serviceEndpoint, messageId, label, personalInbox.token);
-    const read = useGraffiti().get(object.url, {}, { session });
-    await expect(read).resolves.toEqual(object);
-    await writer.delete(object.url, session);
-  });
+  pinPolicyIntegrationTests(environment, () => useGraffiti(), () => sessions);
 
   test("keeps new media records separate from ordinary objects", async () => {
     const graffiti = useGraffiti();
@@ -450,3 +428,5 @@ inboxCacheTests();
 verificationStateTests();
 
 discoveryAsyncTests();
+
+pinProtocolTests();

@@ -7,29 +7,30 @@ import {
   type GraffitiObjectStream,
 } from "@graffiti-garden/api";
 import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor";
+import { object, array, string } from "zod/mini";
 import { GraffitiDecentralized } from "./5-graffiti";
 import { RECORD_KIND_KEY, RECORD_KIND_MEDIA, type RecordKind } from "./3-object-encoding";
-import type { LabeledMessage } from "../1-services/4-inboxes";
+import type { InboxMessage } from "../1-services/4-inboxes";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
-const inboxEndpoint = "https://example.test/inbox";
-const channel = "discovery-errors";
-const bucketEndpoint = "https://example.test/bucket";
-const actor = "did:web:example.test";
+export const inboxEndpoint = "https://example.test/inbox";
+export const channel = "discovery-errors";
+export const bucketEndpoint = "https://example.test/bucket";
+export const actor = "did:web:example.test";
 class CursorGraffiti extends GraffitiDecentralized {
   get inboxService() { return this.inboxes; }
   get history() { return this.inboxHistory; }
 }
 
-class ValidationGraffiti extends CursorGraffiti {
-  constructor() { super({ defaultInboxEndpoints: [inboxEndpoint] }); }
+export class ValidationGraffiti extends CursorGraffiti {
+  constructor(defaultInboxEndpoints = [inboxEndpoint]) { super({ defaultInboxEndpoints }); }
   get services() {
     return { buckets: this.storageBuckets, dids: this.dids, sessions: this.sessions, verification: this.verification };
   }
   async announcement(id: string, kind?: RecordKind) {
     const encoded = await this.objectEncoding.encode<{}>({ value: { text: id }, channels: [channel] }, actor, kind);
-    const message: LabeledMessage<{}> = {
-      id, l: 0,
+    const message: InboxMessage<{}> = {
+      id,
       m: { o: encoded.object, t: encoded.tags, m: dagCborEncode({
         k: id, ...(kind === undefined ? {} : { [RECORD_KIND_KEY]: kind }),
       }) },
@@ -38,7 +39,7 @@ class ValidationGraffiti extends CursorGraffiti {
   }
 }
 
-function inboxPage(messages: LabeledMessage<{}>[]) {
+export function inboxPage(messages: InboxMessage<{}>[]) {
   return new Response(new Uint8Array(dagCborEncode({
     results: messages, cursor: "after-messages", hasMore: false,
   })));
@@ -48,7 +49,7 @@ function checkpoint(cursor: string) {
   return JSON.parse(JSON.parse(cursor).cursors[inboxEndpoint]);
 }
 
-function serveMessages(graffiti: ValidationGraffiti, messages: LabeledMessage<{}>[]) {
+export function serveMessages(graffiti: ValidationGraffiti, messages: InboxMessage<{}>[]) {
   vi.spyOn(graffiti.services.dids, "resolve").mockResolvedValue({
     id: actor,
     service: [{ id: "#graffitiStorageBucket", type: "GraffitiStorageBucket", serviceEndpoint: bucketEndpoint }],
@@ -62,7 +63,9 @@ function serveMessages(graffiti: ValidationGraffiti, messages: LabeledMessage<{}
   }));
 }
 
-function mockSession(graffiti: ValidationGraffiti) {
+export function mockSession(graffiti: ValidationGraffiti) {
+  vi.spyOn(graffiti.inboxService, "pin").mockResolvedValue();
+  vi.spyOn(graffiti.inboxService, "unpin").mockResolvedValue();
   const service = { token: "session-token", authorizationEndpoint: "https://example.test/auth" };
   vi.spyOn(graffiti.services.sessions, "resolveSession").mockReturnValue({
     actor, tokens: [], servicesByAuthorization: [],
@@ -73,7 +76,7 @@ function mockSession(graffiti: ValidationGraffiti) {
   return vi.spyOn(graffiti.services.sessions, "forget").mockImplementation(() => {});
 }
 
-async function collectDiscovery(stream: GraffitiObjectStream<{}>) {
+export async function collectDiscovery(stream: GraffitiObjectStream<{}>) {
   const entries = [];
   while (true) {
     const next = await stream.next();
@@ -116,10 +119,17 @@ export function discoveryErrorTests() {
         vi.mocked(fetch).mockResolvedValueOnce(inboxPage([first.message, second.message]));
       }
       const failure = new TypeError("Connection lost");
+      let failFirst = true;
+      // Concurrent verification can reach storage in either order. Associate
+      // the failure and bytes with the requested key, not the call order.
       const read = vi.spyOn(graffiti.services.buckets, "get")
-        .mockRejectedValueOnce(failure)
-        .mockResolvedValueOnce(second.bytes)
-        .mockResolvedValue(first.bytes);
+        .mockImplementation(async (_endpoint, key) => {
+          if (key === first.message.id && failFirst) {
+            failFirst = false;
+            throw failure;
+          }
+          return [first, second, third].find(({ message }) => message.id === key)!.bytes;
+        });
       const result = await collectDiscovery(cursor
         ? graffiti.continueDiscover<{}>(cursor)
         : graffiti.discover<{}>([channel], {}));
@@ -137,7 +147,6 @@ export function discoveryErrorTests() {
       // A poll before the retry is due still returns new objects and completes
       // without waiting or replaying the already delivered second object.
       vi.mocked(fetch).mockResolvedValueOnce(inboxPage([third.message]));
-      read.mockResolvedValueOnce(third.bytes);
       const deferred = await collectDiscovery(graffiti.continueDiscover<{}>(result.cursor));
       expect(deferred.entries).toEqual([
         { object: third.message.m.o },
@@ -197,7 +206,7 @@ export function discoveryErrorTests() {
       // The failed retries are cooling down, so the next poll can attempt the
       // two previously deferred reads. No messages are lost to the retry budget.
       cursor = await finishDiscovery(graffiti.continueDiscover<{}>(cursor));
-      expect(read.mock.calls.slice(-2).map(([, key]) => key)).toEqual(["32", "33"]);
+      expect(read.mock.calls.slice(-2).map(([, key]) => key).sort()).toEqual(["32", "33"]);
       expect(read).toHaveBeenCalledTimes(34 + 34);
       expect(checkpoint(cursor).pending).toHaveLength(34);
     });
@@ -232,22 +241,11 @@ export function discoveryErrorTests() {
 
       // Either half being lost must expire the cursor, rather than silently
       // dropping a retry or applying verification to unknown content.
-      const db = await openDB(missing === "payload" ? "graffiti-inbox-cache" : "graffiti-verification-state-v1", 1);
+      const db = await openDB(missing === "payload" ? "graffiti-inbox-cache-v2" : "graffiti-verification-state-v2", 1);
       await db.clear(missing === "payload" ? "m" : "objects");
       db.close();
       await expect(finishDiscovery(new ValidationGraffiti().continueDiscover<{}>(cursor)))
         .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
-    });
-
-    test.each([1, 2, 3, 4])("verifies announcements independently of inbox label %s", async label => {
-      const graffiti = new ValidationGraffiti();
-      const { message, bytes } = await graffiti.announcement("labeled");
-      message.l = label;
-      serveMessages(graffiti, [message]);
-      const read = vi.spyOn(graffiti.services.buckets, "get").mockResolvedValue(bytes);
-      expect((await collectDiscovery(graffiti.discover<{}>([channel], {}))).entries)
-        .toEqual([{ object: message.m.o }]);
-      expect(read).toHaveBeenCalledTimes(1);
     });
 
     test("stores one payload and does not reuse verification for a replacement after eviction", async () => {
@@ -264,9 +262,9 @@ export function discoveryErrorTests() {
       const state = await graffiti.services.verification.read(message.m.o.url);
       expect(state).toEqual([{
         scope: null, inbox: inboxEndpoint, id: message.id,
-        digest: expect.any(String), storageKey: message.id, status: "verified",
+        digest: expect.any(String), storageKey: message.id, status: "verified", verified: true,
       }]);
-      const cache = await openDB("graffiti-inbox-cache", 1);
+      const cache = await openDB("graffiti-inbox-cache-v2", 1);
       expect(await cache.count("m")).toBe(1);
       // Only the payload is lost. The surviving verification must remain
       // bound to its original body, even if a server later reuses the ID.
@@ -297,7 +295,7 @@ export function discoveryErrorTests() {
       let aborted = false;
       vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (this: IDBDatabase, ...args) {
         const tx = original.apply(this, args);
-        if (!aborted && this.name === "graffiti-verification-state-v1" && args[1] === "readwrite") {
+        if (!aborted && this.name === "graffiti-verification-state-v2" && args[1] === "readwrite") {
           aborted = true;
           queueMicrotask(() => tx.abort());
         }
@@ -361,10 +359,15 @@ export function discoveryErrorTests() {
       const media = await graffiti.announcement("media", RECORD_KIND_MEDIA);
       const good = await graffiti.announcement("object");
       serveMessages(graffiti, [media.message, good.message]);
+      let failMedia = true;
       const read = vi.spyOn(graffiti.services.buckets, "get")
-        .mockRejectedValueOnce(new TypeError("Connection lost"))
-        .mockResolvedValueOnce(good.bytes)
-        .mockResolvedValue(media.bytes);
+        .mockImplementation(async (_endpoint, key) => {
+          if (key === media.message.id && failMedia) {
+            failMedia = false;
+            throw new TypeError("Connection lost");
+          }
+          return key === media.message.id ? media.bytes : good.bytes;
+        });
 
       // A failed media read is still retryable; it must not stop ordinary objects.
       const initial = await collectDiscovery(graffiti.discover<{}>([channel], {}));
@@ -386,12 +389,10 @@ export function discoveryErrorTests() {
       const resolve = vi.mocked(graffiti.services.dids.resolve);
       if (failure === "DID lookup") resolve.mockRejectedValueOnce(new GraffitiErrorNotFound("Resolver offline"));
       else resolve.mockResolvedValueOnce({ id: actor });
-      const label = vi.spyOn(graffiti.inboxService, "label");
       vi.spyOn(graffiti.services.buckets, "get").mockResolvedValue(bytes);
 
       const initial = await collectDiscovery(graffiti.discover<{}>([channel], {}));
       expect(initial.entries).toEqual([{ error: expect.any(Error), origin: inboxEndpoint }]);
-      expect(label).not.toHaveBeenCalled();
       now += 1000;
       expect((await collectDiscovery(graffiti.continueDiscover<{}>(initial.cursor))).entries)
         .toEqual([{ object: message.m.o }]);
@@ -411,8 +412,11 @@ export function discoveryErrorTests() {
         if (++reads === 1) return new Response(new ReadableStream({
           start(controller) { controller.error(failure); },
         }));
-        return new Response(new Uint8Array(dagCborEncode({ results: [first, second].map(({ bytes }) => ({
-          status: 200, value: bytes,
+        const { keys } = object({ keys: array(string()) }).parse(
+          dagCborDecode(await new Response(init?.body).arrayBuffer()),
+        );
+        return new Response(new Uint8Array(dagCborEncode({ results: keys.map(key => ({
+          status: 200, value: key === first.message.id ? first.bytes : second.bytes,
         })) })));
       }));
 
@@ -427,12 +431,12 @@ export function discoveryErrorTests() {
       expect(reads).toBe(2);
     });
 
-    test.each(["contents", "metadata", "false deletion"])("reports invalid %s without stopping discovery or holding its checkpoint", async (invalid) => {
+    test.each(["contents", "metadata"])("reports invalid %s without stopping discovery or holding its checkpoint", async (invalid) => {
       const graffiti = new ValidationGraffiti();
       const bad = await graffiti.announcement("bad");
       const good = await graffiti.announcement("good");
       if (invalid === "contents") bad.message.m.o.value = { forged: true };
-      else bad.message.m.m = dagCborEncode(invalid === "metadata" ? {} : { k: "bad", t: "original" });
+      else bad.message.m.m = dagCborEncode({});
       serveMessages(graffiti, [bad.message, good.message]);
       vi.spyOn(graffiti.services.buckets, "get").mockImplementation(async (_endpoint, key) =>
         key === "bad" ? bad.bytes : good.bytes);
@@ -469,7 +473,6 @@ export function discoveryErrorTests() {
       const { message, bytes } = await graffiti.announcement("object");
       serveMessages(graffiti, [message]);
       const forget = mockSession(graffiti);
-      vi.spyOn(graffiti.inboxService, "label").mockResolvedValue();
       const queryFetch = globalThis.fetch;
       let reads = 0;
       vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

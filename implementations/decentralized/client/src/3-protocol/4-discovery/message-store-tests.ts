@@ -8,15 +8,14 @@ import {
   type MessageStore,
   type CacheQueryValue,
 } from "./message-store";
-import type { LabeledMessageBase } from "../../1-services/4-inboxes";
+import type { InboxMessageBase } from "../../1-services/4-inboxes";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";
 
-function message(index: number): LabeledMessageBase {
+function message(index: number): InboxMessageBase {
   return {
     id: `message-${index}`,
-    l: 1,
     m: {
       t: [new Uint8Array([index % 256])],
       m: new Uint8Array([1, 2, 3]),
@@ -70,13 +69,10 @@ export function inboxCacheTests() {
       const store = await createMessageStore();
       const query = await seed(store, 300);
       const firstReplay = replayQuery(store, inboxUrl, queryKey, query);
-      const updated = message(299);
-      updated.l = 2;
-      const write = store.setMessage(inboxUrl, updated.id, updated);
-
-      expect((await firstReplay)[299].l).toBe(1);
+      const write = store.deleteMessage(inboxUrl, "message-299");
+      expect((await firstReplay)[299]).toEqual(message(299));
       await write;
-      expect((await replayQuery(store, inboxUrl, queryKey, query))[299].l).toBe(2);
+      await expect(replayQuery(store, inboxUrl, queryKey, query)).rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
     });
 
     test.each(["indexeddb", "memory"])("mutating returned messages cannot change later replays (%s)", async storage => {
@@ -99,25 +95,22 @@ export function inboxCacheTests() {
       // Expiring a query must not erase a message still referenced by Graffiti.
       await store.deleteQuery(queryKey);
       expect(await store.getMessage(inboxUrl, messageId)).toEqual(message(0));
-      // Labels are mutable server metadata; the announcement body is immutable.
-      const relabeled = { ...message(0), l: 42 };
-      await store.setMessages(inboxUrl, [relabeled]);
-      expect(await store.getMessage(inboxUrl, messageId)).toEqual(relabeled);
+      // Identical messages can be reused; changing their body is rejected.
+      await store.setMessages(inboxUrl, [message(0)]);
       const changed = message(0);
       changed.m.o.value.index = -1;
       await expect(storeQueryPage(store, inboxUrl, queryKey, undefined, {
         messages: [changed], cursor: "changed-body", hasMore: false,
       })).rejects.toThrow("Inbox changed an existing announcement");
       expect(await store.getQuery(queryKey)).toBeUndefined();
-      expect(await store.getMessage(inboxUrl, messageId)).toEqual(relabeled);
+      expect(await store.getMessage(inboxUrl, messageId)).toEqual(message(0));
     });
 
-    test.each(["deleted", "null"])("invalidates a %s cached message", async (kind) => {
+    test("invalidates a missing cached message", async () => {
       const store = await createMessageStore();
       const query = await seed(store, 129);
       const messageId = "message-128";
-      if (kind === "deleted") await store.deleteMessage(inboxUrl, messageId);
-      else await store.setMessage(inboxUrl, messageId, null);
+      await store.deleteMessage(inboxUrl, messageId);
 
       // Missing payloads invalidate their history rather than looking like
       // an empty result.

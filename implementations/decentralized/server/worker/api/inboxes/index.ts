@@ -5,12 +5,10 @@ import { getHeaderToken, verifySessionHeader } from "../../app/auth/session";
 import {
   sendMessage,
   setMessagePins,
-  labelMessage,
   queryMessages,
   exportMessages,
   MessageSchema,
-  LabeledMessageSchema,
-  getMessage,
+  InboxMessageSchema,
 } from "./db";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { augmentService, ExportBodySchema, getId } from "../shared";
@@ -41,15 +39,6 @@ const ObjectSchemaSchema = z
     description: "A JSON Schema to filter the message data by.",
   });
 
-const LabelSchema = z.int().min(0).openapi({
-  description:
-    "An integer label for the message indicating whether it is worth keeping",
-  example: 1,
-});
-const LabelBodySchema = z.object({
-  l: LabelSchema.min(1),
-});
-
 const SinceSeqSchema = z.int().min(0);
 
 const QueryBodySchema = z.object({
@@ -70,7 +59,7 @@ const QueryCursorSchema = z.object({
 });
 
 const QueryResultsSchema = z.object({
-  results: z.array(LabeledMessageSchema),
+  results: z.array(InboxMessageSchema),
   hasMore: z.boolean(),
   cursor: z.string(),
 });
@@ -151,102 +140,12 @@ inbox.openapi(sendRoute, async (c) => {
     throw new HTTPException(400, { message: "Invalid message format" });
   }
   // TODO: allow user's to assign message IDs in their own inbox
-  // for portability... and perhaps assign labels too
+  // for portability.
   const { messageId, created } = await sendMessage(c, inboxId, message.m);
   const output = { id: messageId };
   return c.body(dagCborEncode(output).slice(), created ? 201 : 200, {
     "Content-Type": "application/cbor",
   });
-});
-
-const messageRoute = createRoute({
-  method: "get",
-  description: "Get a message from the inbox via its message ID",
-  tags: ["Inbox"],
-  path: "/message/{messageId}",
-  request: {
-    params: z.object({
-      messageId: z.string(),
-    }),
-  },
-  security: [{ oauth2: [] }],
-  responses: {
-    200: {
-      description: "Message retrieved",
-      content: {
-        "application/cbor": {
-          schema: LabeledMessageSchema,
-        },
-      },
-    },
-    401: { description: "Invalid authorization" },
-    403: {
-      description: "Cannot label an message in someone else's inbox",
-    },
-    404: { description: "Message not found" },
-  },
-});
-inbox.openapi(messageRoute, async (c) => {
-  let token: string | undefined = undefined;
-  try {
-    token = await getHeaderToken(c);
-  } catch {} // Not to worry if not present
-  const accountId = token ? (await verifySessionHeader(c)).accountId : undefined;
-  const inboxId = getInboxId(c);
-
-  const { messageId } = c.req.valid("param");
-
-  const message = await getMessage(c, inboxId, messageId, accountId);
-  return c.body(dagCborEncode(message).slice(), 200, {
-    "Content-Type": "application/cbor",
-  });
-});
-
-const labelRoute = createRoute({
-  method: "put",
-  description:
-    "Label an message in the inbox as 'ok', 'expired', 'incorrect', 'junk', etc.",
-  tags: ["Inbox"],
-  path: "/label/{messageId}",
-  request: {
-    params: z.object({
-      messageId: z.string(),
-    }),
-    body: {
-      content: {
-        "application/cbor": {
-          schema: LabelBodySchema,
-        },
-      },
-      required: true,
-    },
-  },
-  security: [{ oauth2: [] }],
-  responses: {
-    200: { description: "Message labeled successfully" },
-    401: { description: "Invalid authorization" },
-    403: {
-      description: "Cannot label an message in someone else's inbox",
-    },
-    404: { description: "Message not found" },
-  },
-});
-
-inbox.openapi(labelRoute, async (c) => {
-  const { accountId } = await verifySessionHeader(c);
-  const inboxId = getInboxId(c);
-  const { messageId } = c.req.valid("param");
-  const bodyBlob = await c.req.blob();
-  const bodyBytes = await bodyBlob.arrayBuffer();
-  let labelBody: z.infer<typeof LabelBodySchema>;
-  try {
-    const bodyDecoded = dagCborDecode(bodyBytes);
-    labelBody = LabelBodySchema.parse(bodyDecoded);
-  } catch (e) {
-    throw new HTTPException(400, { message: "Invalid label body format" });
-  }
-  await labelMessage(c, inboxId, messageId, labelBody.l, accountId);
-  return c.body(null, 200);
 });
 
 const PinBodySchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(100) }).strict();

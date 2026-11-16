@@ -1,6 +1,6 @@
 import { afterEach, assert, describe, expect, test, vi } from "vitest";
 import { InboxHistory } from "./inbox-history";
-import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "../../1-services/4-inboxes";
+import { Inboxes } from "../../1-services/4-inboxes";
 import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { GraffitiErrorCursorExpired, type GraffitiObjectBase } from "@graffiti-garden/api";
@@ -8,9 +8,10 @@ import { encode as dagCborEncode, decode as dagCborDecode } from "@ipld/dag-cbor
 
 export function inboxTests(inboxEndpoint: string, inboxToken: string) {
   describe("InboxHistory", async () => {
-    const inboxes = new InboxHistory();
+    const http = new Inboxes();
+    const inboxes = new InboxHistory(http);
 
-    test("send, get", async () => {
+    test("send, query", async () => {
       const tags = [randomBytes(), randomBytes()];
       const metadata = randomBytes();
       const object: GraffitiObjectBase = {
@@ -30,21 +31,12 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         o: object,
         t: tags,
       };
-      const messageId = await inboxes.send(inboxEndpoint, sending);
-
-      // Get the message back
-      const message = await inboxes.get(inboxEndpoint, messageId, inboxToken);
-      assert(message !== null);
-      expect(message.m).toEqual(sending);
-      expect(message.l).toEqual(0);
+      const messageId = await http.send(inboxEndpoint, sending);
 
       const iterator = inboxes.query<{}>(inboxEndpoint, tags, {}, inboxToken);
 
       const result = await iterator.next();
       assert(!result.done);
-
-      // No label yet so it must be zero
-      expect(result.value.l).toEqual(0);
 
       expect(result.value.m.t).toEqual(tags);
       expect(result.value.m.o).toEqual(object);
@@ -53,21 +45,6 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       const endResult = await iterator.next();
       expect(endResult.done).toBe(true);
 
-      // Label the message
-      await inboxes.label(inboxEndpoint, messageId, 42, inboxToken);
-
-      const iterator2 = inboxes.query<{}>(inboxEndpoint, tags, {}, inboxToken);
-
-      const result2 = await iterator2.next();
-      assert(!result2.done);
-      expect(result2.value.l).toEqual(42);
-      const endResult2 = await iterator2.next();
-      expect(endResult2.done).toBe(true);
-
-      const message2 = await inboxes.get(inboxEndpoint, messageId, inboxToken);
-      assert(message2 !== null);
-      expect(message2.m).toEqual(sending);
-      expect(message2.l).toEqual(42);
     });
 
     test("query with continue", async () => {
@@ -81,7 +58,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
 
       const metadata = randomBytes();
 
-      const messageId = await inboxes.send(inboxEndpoint, {
+      const messageId = await http.send(inboxEndpoint, {
         o: {
           url: "url:example",
           actor: "did:example",
@@ -111,7 +88,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
         inboxes.query(inboxEndpoint, tags, {}, "invalid-token").next(),
       ).rejects.toThrowError(GraffitiErrorUnauthorized);
       await expect(
-        inboxes.label(inboxEndpoint, "1", 1, "invalid-token"),
+        http.pin(inboxEndpoint, ["1"], "invalid-token"),
       ).rejects.toThrowError(GraffitiErrorUnauthorized);
       await expect(
         inboxes.export(inboxEndpoint, "invalid-token").next(),
@@ -190,7 +167,7 @@ export function inboxTests(inboxEndpoint: string, inboxToken: string) {
       const numSends = 211;
       const sentIds = new Set<string>();
       for (let i = 0; i < numSends; i++) {
-        sentIds.add(await inboxes.send(inboxEndpoint, {
+        sentIds.add(await http.send(inboxEndpoint, {
           t: tags,
           m: randomBytes(),
           o: {
@@ -304,7 +281,6 @@ const message = {
     },
     m: new Uint8Array([2]),
   },
-  l: 0,
 };
 
 function cborResponse(value: unknown) {
@@ -420,7 +396,8 @@ export function inboxUnitTests() {
             )) as typeof setTimeout,
         );
 
-        const inboxes = new InboxHistory();
+        const http = new Inboxes();
+    const inboxes = new InboxHistory(http);
         const next = inboxes.query(inboxUrl, [], {}).next();
         await expect(next).rejects.toBeInstanceOf(Error);
         if (stage === "request" || stage === "body") await expect(next).rejects.toBe(failure);
@@ -518,7 +495,8 @@ export function inboxUnitTests() {
       test("reuses completed queries, including empty results, unless refreshed", async () => {
         const fetch = vi.fn(async () => queryPage([message], "cursor"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new InboxHistory();
+        const http = new Inboxes();
+    const inboxes = new InboxHistory(http);
         const read = { refresh: false };
         async function collect(options = read, token = "owner", tags: Uint8Array[] = []) {
           const results = [];
@@ -638,7 +616,8 @@ export function inboxUnitTests() {
           .mockResolvedValueOnce(queryPage([message], "cursor-1"))
           .mockResolvedValueOnce(queryPage([], "cursor-2"));
         vi.stubGlobal("fetch", fetch);
-        const inboxes = new InboxHistory();
+        const http = new Inboxes();
+    const inboxes = new InboxHistory(http);
         const tags = [new Uint8Array([1])];
 
         const first = inboxes.query(inboxUrl, tags, {});
