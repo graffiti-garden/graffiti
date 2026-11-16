@@ -837,8 +837,7 @@ export class GraffitiDecentralized implements Graffiti {
     const data = await this.storageBuckets.get(
       storageBucketEndpoint,
       key,
-      size,
-      refresh ? "no-cache" : "default",
+      { maxBytes: size, cache: refresh ? "no-cache" : "default" },
     );
 
     const blob = new Blob([data.slice()], { type });
@@ -1485,7 +1484,7 @@ export class GraffitiDecentralized implements Graffiti {
 
     let objectBytes: Uint8Array | undefined;
     try {
-      objectBytes = await this.storageBuckets.get(storageBucketEndpoint, storageBucketKey, MAX_OBJECT_SIZE_BYTES);
+      objectBytes = await this.storageBuckets.get(storageBucketEndpoint, storageBucketKey, { maxBytes: MAX_OBJECT_SIZE_BYTES });
     } catch (error) {
       if (!(error instanceof GraffitiErrorNotFound)) {
         return retry(new Error("Could not read object from storage bucket", { cause: error }));
