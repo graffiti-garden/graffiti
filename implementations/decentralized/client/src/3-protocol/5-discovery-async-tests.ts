@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { GraffitiErrorCursorExpired, GraffitiErrorInvalidSchema, type GraffitiObject, type JSONSchema } from "@graffiti-garden/api";
-import { GraffitiDecentralized } from "./4-graffiti";
+import { GraffitiDecentralized } from "./5-graffiti";
 
 const inboxEndpoint = "https://example.test/inbox";
 const channel = "discovery-prefetch";
@@ -36,12 +36,12 @@ class PrefetchGraffiti extends GraffitiDecentralized {
 }
 
 class CursorGraffiti extends GraffitiDecentralized {
-  get inboxService() { return this.inboxes; }
+  get inboxService() { return this.inboxHistory; }
 }
 
 class QueueGraffiti extends CursorGraffiti {
   override querySingleEndpoint = super.querySingleEndpoint;
-  override processOneInboxMessage = super.processOneInboxMessage;
+  override processOneMessage = super.processOneMessage;
 }
 
 export function discoveryAsyncTests() {
@@ -50,7 +50,6 @@ export function discoveryAsyncTests() {
 
     const message = {
       id: "announcement",
-
       m: { o: object, t: [], m: new Uint8Array() },
     };
     const processed = {
@@ -76,7 +75,7 @@ export function discoveryAsyncTests() {
         // the second must be handled before the queue reaches it.
         let release!: () => void;
         const pending = new Promise<void>((resolve) => { release = resolve; });
-        const process = vi.spyOn(graffiti, "processOneInboxMessage")
+        const process = vi.spyOn(graffiti, "processOneMessage")
           .mockImplementationOnce(async () => {
             await pending;
             if (failed === "first") throw failure;
@@ -120,7 +119,7 @@ export function discoveryAsyncTests() {
         throw failure;
       });
       // The abandoned validation must not produce an unhandled rejection.
-      vi.spyOn(graffiti, "processOneInboxMessage")
+      vi.spyOn(graffiti, "processOneMessage")
         .mockRejectedValueOnce(new Error("Validation read failed"))
         .mockResolvedValueOnce(processed);
 

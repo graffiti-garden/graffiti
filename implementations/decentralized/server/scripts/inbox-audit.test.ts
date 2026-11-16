@@ -89,6 +89,10 @@ test("uses real object/ticket validation and distinguishes storage absence from 
   const missing = new FixtureAuditor();
   missing.readError = new GraffitiErrorNotFound("Gone");
   assert.equal(await check(missing), "missing");
+  // A previously missing key can become available; absence is not invalidity.
+  missing.readError = undefined;
+  missing.bytes = valid.bytes;
+  assert.equal(await check(missing), "verified");
   const offline = new FixtureAuditor();
   offline.readError = new TypeError("Network down");
   assert.equal(await check(offline), "unavailable");

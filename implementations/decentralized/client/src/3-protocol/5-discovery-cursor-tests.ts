@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { GraffitiErrorCursorExpired, type GraffitiObjectStream, type JSONSchema } from "@graffiti-garden/api";
-import { GraffitiDecentralized } from "./4-graffiti";
+import { GraffitiDecentralized } from "./5-graffiti";
 
 const inboxEndpoint = "https://example.test/inbox";
 const channel = "discovery-cursors";
 class CursorGraffiti extends GraffitiDecentralized {
-  get inboxService() { return this.inboxes; }
+  get inboxService() { return this.inboxHistory; }
 }
 async function finishDiscovery(stream: GraffitiObjectStream<{}>) {
   while (true) {

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
-import { GraffitiErrorNotFound } from "@graffiti-garden/api";
-import { ValidationGraffiti, serveMessages, inboxPage, collectDiscovery, mockSession, inboxEndpoint, actor, channel } from "./4-discovery-errors-tests";
+import { GraffitiErrorCursorExpired, GraffitiErrorNotFound } from "@graffiti-garden/api";
+import { ValidationGraffiti, serveMessages, inboxPage, collectDiscovery, mockSession, inboxEndpoint, actor, channel } from "./5-discovery-errors-tests";
 import type { InboxMessage } from "../1-services/4-inboxes";
 import type { GraffitiSession } from "@graffiti-garden/api";
-import type { GraffitiDecentralized } from "./4-graffiti";
+import type { GraffitiDecentralized } from "./5-graffiti";
 import type { DecentralizedTestEnvironment } from "../../test/environment";
 
 function hint(message: InboxMessage<{}>): InboxMessage<{}> {
@@ -37,6 +37,7 @@ export function pinProtocolTests() {
 
     test("retries a failed deletion check and emits the verified original, not the hint payload", async () => {
       const graffiti = new ValidationGraffiti();
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now());
       const original = await graffiti.announcement("original");
       serveMessages(graffiti, [original.message]);
       const read = vi.spyOn(graffiti.services.buckets, "get").mockResolvedValue(original.bytes);
@@ -45,7 +46,13 @@ export function pinProtocolTests() {
       read.mockRejectedValueOnce(new TypeError("Offline"));
       const failed = await collectDiscovery(graffiti.continueDiscover(initial.cursor));
       expect(failed.entries).toEqual([{ error: expect.any(Error), origin: inboxEndpoint }]);
-      expect(JSON.parse(failed.cursor).cursors).toEqual(JSON.parse(initial.cursor).cursors);
+      // Inbox progress is committed; only the failed URL check remains pending.
+      expect(JSON.parse(failed.cursor).cursors).not.toEqual(JSON.parse(initial.cursor).cursors);
+      expect(JSON.parse(failed.cursor).hints).toHaveLength(1);
+      const attempts = read.mock.calls.length;
+      await collectDiscovery(graffiti.continueDiscover(failed.cursor));
+      expect(read).toHaveBeenCalledTimes(attempts);
+      clock.mockReturnValue(Date.now() + 1000);
 
       read.mockRejectedValue(new GraffitiErrorNotFound("Gone"));
       const deleted = await collectDiscovery(graffiti.continueDiscover(failed.cursor));
@@ -53,6 +60,34 @@ export function pinProtocolTests() {
       // A raw cached page cannot resurrect the verified missing location.
       expect((await collectDiscovery(graffiti.discover([channel], {}, { refresh: false }))).entries)
         .toEqual([{ tombstone: true, object: original.message.m.o }]);
+      // Losing evidence while a check is pending must expire the cursor,
+      // not silently discard the deletion that this consumer still needs.
+      vi.spyOn(graffiti.services.verification, "read").mockResolvedValue([]);
+      await expect(collectDiscovery(graffiti.continueDiscover(failed.cursor)))
+        .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+    });
+
+    test("bounds deferred deletion checks without replaying healthy announcements", async () => {
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now());
+      const graffiti = new ValidationGraffiti();
+      const originals = await Promise.all(Array.from({ length: 34 }, (_, i) => graffiti.announcement(`object-${i}`)));
+      serveMessages(graffiti, originals.map(original => original.message));
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockImplementation(async (_endpoint, key) =>
+        originals.find(original => original.message.id === key)!.bytes);
+      const initial = await collectDiscovery(graffiti.discover([channel], {}));
+      vi.mocked(fetch).mockResolvedValueOnce(inboxPage(originals.map(({ message }) => ({ ...hint(message), id: `hint-${message.id}` }))));
+      read.mockRejectedValue(new TypeError("Offline"));
+      const failed = await collectDiscovery(graffiti.continueDiscover(initial.cursor));
+      expect(JSON.parse(failed.cursor).hints).toHaveLength(34);
+      read.mockClear();
+      clock.mockReturnValue(Date.now() + 1000);
+      const retry = await collectDiscovery(graffiti.continueDiscover(failed.cursor));
+      expect(read).toHaveBeenCalledTimes(32);
+      expect(retry.entries.every(entry => entry.error)).toBe(true);
+      // The two skipped checks are still due; repeated failures back off.
+      read.mockClear();
+      await collectDiscovery(graffiti.continueDiscover(retry.cursor));
+      expect(read).toHaveBeenCalledTimes(2);
     });
 
     test("holds an early hint through validation and keeps a rotated storage key", async () => {
@@ -74,6 +109,7 @@ export function pinProtocolTests() {
     });
 
     test("an unverified 404 remains retryable without manufacturing a tombstone", async () => {
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now());
       const graffiti = new ValidationGraffiti();
       const original = await graffiti.announcement("original");
       serveMessages(graffiti, [original.message]);
@@ -82,7 +118,8 @@ export function pinProtocolTests() {
         .mockResolvedValue(original.bytes);
       const first = await collectDiscovery(graffiti.discover([channel], {}));
       expect(first.entries).toEqual([]);
-      expect(JSON.parse(first.cursor).cursors).toEqual({});
+      expect(JSON.parse(JSON.parse(first.cursor).cursors[inboxEndpoint]).pending).toHaveLength(1);
+      clock.mockReturnValue(Date.now() + 1000);
       expect((await collectDiscovery(graffiti.continueDiscover(first.cursor))).entries).toEqual([{ object: original.message.m.o }]);
     });
 
@@ -153,6 +190,7 @@ export function pinProtocolTests() {
     });
 
     test("batches personal pins, reports failure after valid results, and retries next poll", async () => {
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now());
       const graffiti = new ValidationGraffiti();
       const first = await graffiti.announcement("first");
       const second = await graffiti.announcement("second");
@@ -163,9 +201,13 @@ export function pinProtocolTests() {
       const initial = await collectDiscovery(graffiti.discover([channel], {}, { session: { actor } }));
       expect(initial.entries).toEqual([{ object: first.message.m.o }, { object: second.message.m.o }, { error: expect.any(Error), origin: inboxEndpoint }]);
       expect(pin).toHaveBeenCalledExactlyOnceWith(inboxEndpoint, ["first", "second"], "session-token");
-      expect(JSON.parse(initial.cursor).cursors).toEqual({});
+      expect(JSON.parse(JSON.parse(initial.cursor).cursors[inboxEndpoint]).pins.ids).toEqual(["first", "second"]);
+      // A fast poll neither repeats the failed pin nor replays healthy objects.
+      await collectDiscovery(graffiti.continueDiscover(initial.cursor, { session: { actor } }));
+      expect(pin).toHaveBeenCalledTimes(1);
+      clock.mockReturnValue(Date.now() + 1000);
       const recovered = await collectDiscovery(graffiti.continueDiscover(initial.cursor, { session: { actor } }));
-      expect(recovered.entries).toEqual([{ object: first.message.m.o }, { object: second.message.m.o }]);
+      expect(recovered.entries).toEqual([]);
       expect(pin).toHaveBeenCalledTimes(2);
       await collectDiscovery(graffiti.discover([channel], {}, { session: { actor } }));
       expect(pin).toHaveBeenCalledTimes(2); // Sticky pins do not need renewal.

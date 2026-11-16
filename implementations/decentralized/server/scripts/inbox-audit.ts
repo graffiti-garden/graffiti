@@ -1,7 +1,7 @@
 import { decode as dagCborDecode } from "@ipld/dag-cbor";
 import { z } from "zod";
-import { InboxMessageBaseSchema, type InboxMessageBase } from "../../client/src/1-services/4-inboxes/messages";
-import { GraffitiDecentralized } from "../../client/src/3-protocol/4-graffiti";
+import { InboxMessageBaseSchema, type InboxMessageBase } from "../../client/src/1-services/4-inboxes";
+import { GraffitiDecentralized } from "../../client/src/3-protocol/5-graffiti";
 
 const Hex = z.string().regex(/^(?:[0-9a-f]{2})*$/i);
 export const AuditRow = z.object({
@@ -26,9 +26,12 @@ export class InboxAuditor extends GraffitiDecentralized {
   readonly verify: Verify = async (inbox, message, recipient) => {
     // Reuse the client's validation, including private tickets, record kinds,
     // DID resolution, and bounded storage reads. This path never sends or pins.
-    const result = await this.processOneInboxMessage(inbox, message, recipient);
+    const result = await this.processOneMessage<{}>(inbox, message, recipient);
     if (!result) return "missing";
-    return "error" in result ? result.retryable ? "unavailable" : "invalid" : "verified";
+    if (!("error" in result)) return "verified";
+    // Discovery silently retries an unverified 404; the audit still reports
+    // that absence separately from network failures, without claiming deletion.
+    return result.silent ? "missing" : result.retryable ? "unavailable" : "invalid";
   };
 }
 

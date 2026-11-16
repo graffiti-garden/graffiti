@@ -20,10 +20,8 @@ import {
 } from "zod/mini";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Socket } from "node:net";
-import { PendingLoginStorage } from "./pending-login-storage";
 
 const AUTHORIZATION_ENDPOINT_METHOD_PREFIX_OAUTH2 = "oauth2:";
-const pendingOAuth = new PendingLoginStorage("graffiti-pending-oauth:");
 
 export class Authorization {
   eventTarget: EventTarget = new EventTarget();
@@ -217,6 +215,8 @@ export class Authorization {
     }
   }
 
+  // Invalidate an ended attempt so in-flight OAuth work cannot redirect or emit
+  // a login result later. Also discard any saved redirect state for that attempt.
   endLogin(loginId: string) {
     if (this.activeLoginId !== loginId) return;
     this.activeLoginId = undefined;
@@ -386,3 +386,46 @@ const OAuth2LoginDataSchema = object({
   state: string(),
   serviceEndpoints: array(url()),
 });
+
+const maxAge = 10 * 60 * 1000;
+
+/** Redirect state keyed by an unpredictable ID, independent of a tab's sessionStorage. */
+export class PendingLoginStorage {
+  constructor(private prefix: string) {}
+
+  save(id: string, value: unknown) {
+    if (typeof window === "undefined") return;
+    const storage = window.localStorage;
+    // Expired, abandoned redirects must not accumulate indefinitely.
+    for (let i = storage.length - 1; i >= 0; i--) {
+      const key = storage.key(i);
+      if (key?.startsWith(this.prefix)) this.read(key);
+    }
+    storage.setItem(this.prefix + id, JSON.stringify({
+      expiresAt: Date.now() + maxAge, value,
+    }));
+  }
+
+  load(id: string): unknown {
+    if (typeof window === "undefined") return;
+    return this.read(this.prefix + id);
+  }
+
+  remove(id: string) {
+    if (typeof window !== "undefined") window.localStorage.removeItem(this.prefix + id);
+  }
+
+  private read(key: string): unknown {
+    const saved = window.localStorage.getItem(key);
+    if (!saved) return;
+    try {
+      const record = JSON.parse(saved);
+      if (Number.isFinite(record?.expiresAt) && record.expiresAt > Date.now()) {
+        return record.value;
+      }
+    } catch { /* Discard malformed or expired state. */ }
+    window.localStorage.removeItem(key);
+  }
+}
+
+const pendingOAuth = new PendingLoginStorage("graffiti-pending-oauth:");

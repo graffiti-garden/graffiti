@@ -33,8 +33,8 @@ missing IDs succeeds. Retrying either operation is safe.
   as before. The recipient pins validated messages in batches. Initially, valid
   means wanted. Shared readers do not automatically sponsor other authors' posts.
 - Read-side pin failures preserve valid results, report a stream error, and retain
-  the checkpoint for a later retry. A consumer closing early still triggers an
-  attempt to pin delivered messages; failures after closure are logged.
+  failed pin IDs for a later poll while the inbox checkpoint advances. Closing a
+  stream early still attempts to pin delivered messages; failures are logged.
 - Confirmed deletion releases the caller's own pins. It cannot release another
   account's sponsorship. There are no author signatures or cross-server sender pins.
 
@@ -43,11 +43,11 @@ automatic rescue of abandoned shared posts in this change.
 
 ## Verification and deletion
 
-The inbox cache stores raw messages and pagination only. A separate protocol cache
-stores verified originals, scoped to the reader, and known missing storage keys.
-An atomic generation check prevents validation started before a deletion from
-resurrecting that cached location. Query cache invalidation and batched replay from
-the upstream optimization remain in place.
+The shared message store holds each announcement body once. Inbox history owns
+pagination; Graffiti owns reader-scoped verification metadata and retries. Atomic
+updates prevent late validation from reviving a key observed missing. A retained
+validation flag distinguishes verified originals from unverified missing entries.
+Message keys and database tables stay private to the store; batched replay remains.
 
 A deletion hint has metadata `{ d: true }` and a searchable object envelope naming
 the URL. Its contents, storage key, and alleged original message ID are not proof.
@@ -59,13 +59,18 @@ Unknown originals are ignored. For known originals, check the opaque keys agains
 the actor's normally cached DID endpoint. Only a storage 404 removes a verified
 location. Another live key keeps the object live. A tombstone uses the verified
 original's contents and the query's filtering/masking, never the hint's payload.
-Incomplete scans and transient failures defer this decision and retain the affected
-checkpoints. Later verified announcements can restore the URL.
+Incomplete scans and transient failures retain pending URL checks in the discovery
+cursor while inbox checkpoints advance. Reads, pins, and hint checks use capped
+time-based backoff on later polls, never background retry timers. Each poll retries
+at most 32 object reads per inbox and 32 deferred URL checks across the scan.
+Later verified announcements can restore the URL.
 
 An unverified 404 produces no tombstone. It remains retryable for one DID cache
-lifetime; a continuing 404 after normal resolution can refresh lets the checkpoint
-advance. Fresh queries may check it again. This avoids both permanently rejecting a
-new rotated key and replaying old missing announcements forever. Keep old storage
+lifetime; a continuing 404 after normal resolution can refresh marks that
+announcement invalid. Pending 404s stay silent because absence is not a network
+failure. Their retry references do not prevent the inbox checkpoint from advancing.
+This avoids permanently rejecting a new rotated key or replaying old missing
+announcements forever. Keep old storage
 keys/endpoints available for roughly a day after publishing replacements; DID
 documents normally expire after one hour. Storage failures never bypass that cache.
 

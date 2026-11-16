@@ -76,13 +76,12 @@ export class StorageBuckets {
   async get(
     storageBucketEndpoint: string,
     key: string,
-    maxBytes?: number,
-    cache?: "default" | "no-cache",
+    { maxBytes, cache }: StorageReadOptions = {},
   ): Promise<Uint8Array> {
     verifyHTTPSEndpoint(storageBucketEndpoint);
     // Direct reads use individual GETs so the native HTTP cache owns the bytes.
     // Verification remains fresh and can still share a batched storage request.
-    if (cache !== undefined) return this.getOne(storageBucketEndpoint, key, maxBytes, cache);
+    if (cache !== undefined) return this.getOne(storageBucketEndpoint, key, { maxBytes, cache });
     if (
       maxBytes !== undefined &&
       Number.isSafeInteger(maxBytes) &&
@@ -112,7 +111,7 @@ export class StorageBuckets {
         }
       });
     }
-    return this.getOne(storageBucketEndpoint, key, maxBytes);
+    return this.getOne(storageBucketEndpoint, key, { maxBytes });
   }
 
   private flush(endpoint: string, maxBytes: number, queue: BatchQueue) {
@@ -123,7 +122,7 @@ export class StorageBuckets {
     if (queuesByMaxBytes.size === 0) this.queues.delete(endpoint);
     if (requests.length === 1 || this.unsupportedBatchEndpoints.has(endpoint)) {
       requests.forEach(({ key, resolve, reject }) => {
-        void this.getOne(endpoint, key, maxBytes).then(resolve, reject);
+        void this.getOne(endpoint, key, { maxBytes }).then(resolve, reject);
       });
     } else {
       void this.getBatch(endpoint, maxBytes, requests);
@@ -147,7 +146,7 @@ export class StorageBuckets {
         this.unsupportedBatchEndpoints.add(endpoint);
         await Promise.all(requests.map(async ({ key, resolve, reject }) => {
           try {
-            resolve(await this.getOne(endpoint, key, maxBytes));
+            resolve(await this.getOne(endpoint, key, { maxBytes }));
           } catch (error) {
             reject(error);
           }
@@ -190,8 +189,7 @@ export class StorageBuckets {
   private async getOne(
     storageBucketEndpoint: string,
     key: string,
-    maxBytes?: number,
-    cache?: "default" | "no-cache",
+    { maxBytes, cache }: StorageReadOptions = {},
   ): Promise<Uint8Array> {
     const url = `${storageBucketEndpoint}/value/${encodeURIComponent(key)}`;
     const response = await fetchWithErrorHandling(url, {
@@ -294,3 +292,8 @@ const ExportSchema = object({
   keys: array(string()),
   cursor: optional(nullable(string())),
 });
+
+type StorageReadOptions = {
+  maxBytes?: number;
+  cache?: "default" | "no-cache";
+};
