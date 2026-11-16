@@ -181,6 +181,7 @@ export class Inboxes {
         ? Date.now() + retryAfter * 1000
         : undefined;
 
-    return { response, waitTil };
+    const decoded = dagCborDecode(new Uint8Array(await response.arrayBuffer()));
+    return { ...MessageResultSchema.parse(decoded), waitTil };
   }
 }

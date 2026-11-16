@@ -5,10 +5,7 @@ import {
   compileGraffitiObjectSchema,
   GraffitiErrorCursorExpired,
 } from "@graffiti-garden/api";
-import {
-  encode as dagCborEncode,
-  decode as dagCborDecode,
-} from "@ipld/dag-cbor";
+import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import {
   type infer as infer_,
   string,
@@ -20,7 +17,6 @@ import {
   union,
 } from "zod/mini";
 import {
-  MessageResultSchema,
   LABELED_MESSAGE_MESSAGE_KEY,
   MESSAGE_OBJECT_KEY,
 } from "../../1-services/4-inboxes";
@@ -240,7 +236,7 @@ export class InboxHistory {
             }
 
             // See if the cursor is still active by requesting the next batch.
-            let batch: { response: Response; waitTil?: number };
+            let batch: Awaited<ReturnType<Inboxes["fetchPage"]>>;
             const invalidation = readUrl
               ? { url: readUrl, token: await cache.messageIds.readInvalidationToken(readUrl) }
               : undefined;
@@ -257,8 +253,8 @@ export class InboxHistory {
               if (
                 !(error instanceof GraffitiErrorCursorExpired && query?.cursor)
               ) {
-                // Preserve the old initial-page error backoff, but wait only
-                // after releasing the Web Lock.
+                // Throttle failed initial pages, including body/decode failures,
+                // so callers cannot poll in a tight loop. Release the lock first.
                 if (firstPage && !signal?.aborted) {
                   return { initialFetchError: error };
                 }
@@ -283,11 +279,7 @@ export class InboxHistory {
               );
             }
 
-            const decoded = dagCborDecode(
-              new Uint8Array(await batch.response.arrayBuffer()),
-            );
-            const { results, hasMore, cursor } =
-              MessageResultSchema.parse(decoded);
+            const { results, hasMore, cursor } = batch;
             const labeledMessages: LabeledMessage<Schema>[] = results.map(
               (result) => {
                 const object =
