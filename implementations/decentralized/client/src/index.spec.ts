@@ -28,6 +28,7 @@ import { Handles } from "./3-protocol/2-handles";
 import { authorizationTests } from "./1-services/1-authorization-tests";
 import { didTests } from "./1-services/2-dids-tests";
 import { storageBucketTests } from "./1-services/3-storage-buckets-tests";
+import { inboxPinTests } from "./1-services/4-inbox-pins-tests";
 import { inboxTests, inboxUnitTests } from "./3-protocol/4-discovery/inbox-history-tests";
 import { inboxCacheTests } from "./3-protocol/4-discovery/message-store-tests";
 import { stringEncodingTests } from "./2-primitives/1-string-encoding-tests";
@@ -96,6 +97,8 @@ describe("GraffitiDecentralized Tests", () => {
     decentralizedTestUsers[0].inboxEndpoint,
     decentralizedTestUsers[0].token,
   );
+
+  inboxPinTests(environment);
 
   // Primitive tests
   stringEncodingTests();

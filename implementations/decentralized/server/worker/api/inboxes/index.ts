@@ -4,6 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { getHeaderToken, verifySessionHeader } from "../../app/auth/session";
 import {
   sendMessage,
+  setMessagePins,
   labelMessage,
   queryMessages,
   exportMessages,
@@ -48,6 +49,12 @@ const LabelSchema = z.int().min(0).openapi({
 const LabelBodySchema = z.object({
   l: LabelSchema.min(1),
 });
+
+const PinBodySchema = z
+  .object({
+    ids: z.array(z.string().min(1)).min(1).max(100),
+  })
+  .strict();
 
 const SinceSeqSchema = z.int().min(0);
 
@@ -247,6 +254,38 @@ inbox.openapi(labelRoute, async (c) => {
   await labelMessage(c, inboxId, messageId, labelBody.l, accountId);
   return c.body(null, 200);
 });
+
+for (const operation of ["pin", "unpin"] as const) {
+  inbox.use(`/${operation}`, bodyLimit({ maxSize: MAX_MESSAGE_SIZE_BYTES }));
+  inbox.openapi(createRoute({
+    method: "post",
+    path: `/${operation}`,
+    tags: ["Inbox"],
+    description: operation === "pin"
+      ? "Keep up to 100 messages on behalf of the authenticated account"
+      : "Remove the authenticated account's pins from up to 100 messages",
+    security: [{ oauth2: [] }],
+    request: { body: { required: true, content: { "application/cbor": { schema: PinBodySchema } } } },
+    responses: {
+      204: { description: "Pins updated" },
+      400: { description: "Invalid message IDs" },
+      401: { description: "Invalid authorization" },
+      403: { description: "Cannot pin messages in someone else's inbox" },
+      404: { description: "A message to pin does not exist; no pins were added" },
+      413: { description: "Body too large" },
+    },
+  }), async (c) => {
+    const { accountId } = await verifySessionHeader(c);
+    let body: z.infer<typeof PinBodySchema>;
+    try {
+      body = PinBodySchema.parse(dagCborDecode(await c.req.arrayBuffer()));
+    } catch {
+      throw new HTTPException(400, { message: "Invalid pin body" });
+    }
+    await setMessagePins(c, getInboxId(c), body.ids, accountId, operation === "pin");
+    return c.body(null, 204);
+  });
+}
 
 const queryRoute = createRoute({
   method: "post",
