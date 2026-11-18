@@ -16,8 +16,8 @@ import type { Inboxes } from "../../1-services/4-inboxes";
 import type { Service } from "did-resolver";
 import {
   readCookie,
-  readLocalStorage,
-  writeLocalStorage,
+  readSavedLogin,
+  writeSavedLogin,
   writeCookie,
 } from "./browser-storage";
 import {
@@ -132,7 +132,7 @@ export class Sessions {
 
       // Announce changed logins before restoring identity. Wrappers can then
       // discard state belonging to the previous login, even for the same actor.
-      const previous = parseSessions(readLocalStorage(SESSION_STORAGE_KEY));
+      const previous = parseSessions(readSavedLogin(SESSION_STORAGE_KEY));
       const current = this.loggedInSessions;
       if (typeof window !== "undefined") {
         for (const actor of new Set([...previous, ...current].map(s => s.actor))) {
@@ -141,7 +141,7 @@ export class Sessions {
           }
         }
         // Save a copy for the next load, when shared cookies may be unavailable.
-        writeLocalStorage(SESSION_STORAGE_KEY, JSON.stringify(current));
+        writeSavedLogin(SESSION_STORAGE_KEY, JSON.stringify(current));
       }
       // Restore immediately, including offline. A revoked token is discarded
       // when an authenticated operation receives an unauthorized response.
@@ -415,7 +415,7 @@ export class Sessions {
     if (typeof window === "undefined") return loggedInSessions_;
     const shared = readCookie(SESSION_STORAGE_KEY);
     if (!this.browserSessions) {
-      this.browserSessions = parseSessions(shared ?? readLocalStorage(SESSION_STORAGE_KEY));
+      this.browserSessions = parseSessions(shared ?? readSavedLogin(SESSION_STORAGE_KEY));
     } else if (shared !== undefined) {
       // Re-read accessible cookies on each operation, so another site's logout
       // takes effect locally. An empty list is authoritative, not a fallback.
@@ -424,7 +424,7 @@ export class Sessions {
       if (removed.length) {
         // End replaced logins; do not switch an open instance to new credentials.
         this.browserSessions = this.browserSessions.filter(s => !removed.includes(s));
-        writeLocalStorage(SESSION_STORAGE_KEY, JSON.stringify(current));
+        writeSavedLogin(SESSION_STORAGE_KEY, JSON.stringify(current));
         for (const { actor } of removed) {
           this.sessionEvents.dispatchEvent(new CustomEvent("logout", { detail: { actor } }));
         }
@@ -447,8 +447,8 @@ export class Sessions {
     if (shared !== undefined || !remove) {
       writeCookie(SESSION_STORAGE_KEY, JSON.stringify(update(parseSessions(shared))));
     }
-    const local = readLocalStorage(SESSION_STORAGE_KEY);
-    writeLocalStorage(SESSION_STORAGE_KEY, JSON.stringify(update(parseSessions(local))));
+    const saved = readSavedLogin(SESSION_STORAGE_KEY);
+    writeSavedLogin(SESSION_STORAGE_KEY, JSON.stringify(update(parseSessions(saved))));
   }
 
   resolveSession(session: GraffitiSession): StoredSession {
