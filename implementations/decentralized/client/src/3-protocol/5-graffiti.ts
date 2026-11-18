@@ -569,14 +569,23 @@ export class GraffitiDecentralized implements Graffiti {
 
     // Announce the object, its key,
     // and other metadata to appropriate inboxes
-    await this.announceObject(
-      object,
-      tags,
-      allowedTickets,
-      storageBucketKey,
-      session,
-      kind,
-    );
+    try {
+      await this.announceObject(
+        object,
+        tags,
+        allowedTickets,
+        storageBucketKey,
+        session,
+        kind,
+      );
+    } catch (error) {
+      await this.storageBuckets.delete(
+        resolvedSession.storageBucket.serviceEndpoint,
+        storageBucketKey,
+        resolvedSession.storageBucket.token,
+      ).catch((rollbackError) => console.error("Could not roll back stored object:", rollbackError));
+      throw error;
+    }
     return object;
   }
 
@@ -765,21 +774,29 @@ export class GraffitiDecentralized implements Graffiti {
     );
 
     // Store the descriptor as media, outside the ordinary object API.
-    const { url } = await this.postRecord<typeof MEDIA_OBJECT_SCHEMA>(
-      RECORD_KIND_MEDIA,
-      {
-        value: {
-          key,
-          type,
-          size: media.data.size,
+    try {
+      const { url } = await this.postRecord<typeof MEDIA_OBJECT_SCHEMA>(
+        RECORD_KIND_MEDIA,
+        {
+          value: {
+            key,
+            type,
+            size: media.data.size,
+          },
+          channels: [],
+          allowed: media.allowed,
         },
-        channels: [],
-        allowed: media.allowed,
-      },
-      session,
-    );
-
-    return url;
+        session,
+      );
+      return url;
+    } catch (error) {
+      await this.storageBuckets.delete(
+        resolvedSession.storageBucket.serviceEndpoint,
+        key,
+        resolvedSession.storageBucket.token,
+      ).catch((rollbackError) => console.error("Could not roll back stored media:", rollbackError));
+      throw error;
+    }
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
@@ -1081,6 +1098,7 @@ export class GraffitiDecentralized implements Graffiti {
     };
 
     const announcements: MessageMetadataAnnouncements = [];
+    const toPin: { endpoint: string; token: string; id: string }[] = [];
     const allowed = object.allowed;
     if (Array.isArray(allowed)) {
       if (!allowedTickets || allowedTickets.length !== allowed.length) {
@@ -1195,9 +1213,16 @@ export class GraffitiDecentralized implements Graffiti {
             [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: messageId,
             [MESSAGE_DATA_ANNOUNCEMENT_ENDPOINT_KEY]: inbox.serviceEndpoint,
           });
+          toPin.push({ endpoint: inbox.serviceEndpoint, token: inbox.token, id: messageId });
         }),
       );
 
+      // Publication requires every shared announcement. Recipient deliveries
+      // and deletion announcements retain their existing best-effort behavior.
+      const failed = results.find((result) => result.status === "rejected");
+      if (priorAnnouncements === undefined && failed?.status === "rejected") {
+        throw failed.reason;
+      }
       for (const [index, result] of results.entries()) {
         if (result.status === "rejected") {
           const inbox = sharedInboxes[index];
@@ -1228,11 +1253,29 @@ export class GraffitiDecentralized implements Graffiti {
         : {}),
       [MESSAGE_DATA_ANNOUNCEMENTS_KEY]: announcements,
     };
-    await this.inboxes.send(resolvedSession.personalInbox.serviceEndpoint, {
+    const personalMessageId = await this.inboxes.send(resolvedSession.personalInbox.serviceEndpoint, {
       [MESSAGE_TAGS_KEY]: tags,
       [MESSAGE_OBJECT_KEY]: object,
       [MESSAGE_METADATA_KEY]: dagCborEncode(selfMetadata),
     });
+    if (priorAnnouncements !== undefined) return;
+
+    toPin.push({
+      endpoint: resolvedSession.personalInbox.serviceEndpoint,
+      token: resolvedSession.personalInbox.token,
+      id: personalMessageId,
+    });
+    // All required sends have succeeded. Settle every pin before rollback so
+    // another destination cannot finish pinning after its cleanup has run.
+    const results = await Promise.allSettled(toPin.map(({ endpoint, token, id }) =>
+      this.inboxes.pin(endpoint, [id], token)));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed?.status === "rejected") {
+      // Include failed requests: a lost response may still have created a pin.
+      await Promise.allSettled(toPin.map(({ endpoint, token, id }) =>
+        this.inboxes.unpin(endpoint, [id], token)));
+      throw failed.reason;
+    }
   }
 
   protected async *querySingleEndpoint<Schema extends JSONSchema>(
