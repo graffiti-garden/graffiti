@@ -1,0 +1,10 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "Graffiti Realtime",
+  "readme": "README.md",
+  "searchInDocuments": true,
+  "searchInComments": true,
+  "excludeInternal": true,
+  "excludePrivate": true
+}

@@ -17,6 +17,7 @@
     "wrappers/runtime-types",
     "implementations/utils/modal",
     "implementations/local",
+    "extras/realtime",
     "implementations/decentralized/client",
     "wrappers/synchronize",
     "wrappers/iframe-rpc",
