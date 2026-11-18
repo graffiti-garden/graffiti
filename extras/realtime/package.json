@@ -1,0 +1,72 @@
+{
+  "name": "@graffiti-garden/realtime",
+  "version": "0.0.0",
+  "description": "Live messages and media streams over WebRTC, with Graffiti signaling and actors",
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "browser": "./dist/browser/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "npm run test:unit && npm run test:browser",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:browser": "node --import tsx test/browser/run.mjs",
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "build:js": "tsx esbuild.config.mts",
+    "build:docs": "typedoc --options typedoc.json",
+    "build": "rm -rf dist && npm run build:types && npm run build:js && npm run build:docs",
+    "validate": "npm run build && npm run check && npm test",
+    "prepublishOnly": "npm run validate"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "extras/realtime"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
+  },
+  "dependencies": {
+    "@trystero-p2p/core": "0.27.0",
+    "json-schema-to-ts": "^3.1.1"
+  },
+  "peerDependencies": {
+    "@graffiti-garden/api": "^1.4.0"
+  },
+  "devDependencies": {
+    "@graffiti-garden/api": "^1.4.0",
+    "@graffiti-garden/implementation-local": "^1.5.0",
+    "@types/node": "^26.4.0",
+    "esbuild": "^0.28.2",
+    "playwright": "1.62.1",
+    "tsx": "^4.21.0",
+    "typedoc": "^0.28.16",
+    "typescript": "~6.0.0",
+    "vitest": "^4.0.17"
+  }
+}
