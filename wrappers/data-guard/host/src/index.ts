@@ -13,6 +13,7 @@ import {
   isStorageSetup,
 } from "./bootstrap/storage_setup.js";
 import { LoginAccess } from "./core/login-access.js";
+import { loginStorage } from "./core/login-storage.js";
 import { sourceFromContext } from "./core/source.js";
 import { activateStorageAccess, restoreStorageAccess, getLocalStorage } from "./bootstrap/storage_access.js";
 import { GuardedGraffiti } from "./core/graffiti.js";
@@ -63,7 +64,7 @@ if (standalone) {
     const graffiti = new GraffitiDecentralized();
     app.use(GraffitiPlugin, { graffiti });
     ruleStore.activate();
-    const access = new LoginAccess(getLocalStorage());
+    const access = new LoginAccess(loginStorage(getLocalStorage()));
     const guard = new Guard(graffiti, ruleStore, origin, ask, access);
     // This untrusted return can only report failure. Success still requires the
     // guard's origin-bound cookie, and neither identity nor consent comes from a URL.

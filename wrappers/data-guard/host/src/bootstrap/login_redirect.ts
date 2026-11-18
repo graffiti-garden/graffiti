@@ -1,5 +1,6 @@
 import type { Graffiti, GraffitiLoginEvent, GraffitiSessionInitializedEvent } from "@graffiti-garden/api";
 import { LoginAccess } from "../core/login-access.js";
+import { loginStorage } from "../core/login-storage.js";
 import { sourceFromContext, type Source } from "../core/source.js";
 import { prepareStorage } from "./storage_setup.js";
 import { storeLoginResult } from "./login-result.js";
@@ -78,7 +79,7 @@ export function handleLoginRedirect(
       return;
     }
     if (!result.error && redirect.source && redirect.initialActors) {
-      const access = new LoginAccess(localStorage);
+      const access = new LoginAccess(loginStorage(localStorage));
       if (!redirect.initialActors.includes(result.session.actor)) {
         access.clear(result.session.actor);
       }

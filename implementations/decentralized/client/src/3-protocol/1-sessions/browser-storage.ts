@@ -1,9 +1,9 @@
 import Cookies from "js-cookie";
 
 // Cookies share a login with a newly visited embedding site after storage access.
-// A local copy lets that site resume the same login without cookie access later.
-// Both stores stay on the implementation's origin. In browsers with partitioned
-// storage, each embedding site keeps its own local copy.
+// A partitioned cookie backs up the local copy: Safari can discard an iframe's
+// localStorage on exit, but keeps this cookie without renewed cross-site access.
+// Both copies stay on the implementation's origin, partitioned by embedding site.
 
 const BROWSER_STORAGE_EXPIRATION_DAYS = 365;
 
@@ -15,13 +15,27 @@ export function readCookie(key: string): string | undefined {
   try { return Cookies.get(key); } catch {}
 }
 
-export function readLocalStorage(key: string): string | undefined {
-  try { return window.localStorage.getItem(key) ?? undefined; } catch {}
+export function readSavedLogin(key: string): string | undefined {
+  // Missing data (not an exception) is the Safari case. The existing catch is
+  // for browsers that block storage access altogether.
+  try {
+    const local = window.localStorage.getItem(key);
+    if (local !== null) return local;
+  } catch {}
+  return readCookie(key + "-partitioned");
 }
 
-export function writeLocalStorage(key: string, value: string): void {
-  // Cookie-based login still works if the browser cannot retain a local copy.
+export function writeSavedLogin(key: string, value: string): void {
   try { window.localStorage.setItem(key, value); } catch {}
+  try {
+    if (window.location.protocol !== "https:") return;
+    const name = key + "-partitioned";
+    // An oversized cookie write can silently leave the previous value intact.
+    // Empty the backup instead; the full login still lives in localStorage.
+    const encoded = Cookies.converter.write(value, name);
+    const stored = encodeURIComponent(name).length + encoded.length > 3800 ? "" : value;
+    Cookies.set(name, stored, { ...cookieOptions(), partitioned: true });
+  } catch {}
 }
 
 function cookieOptions(): Cookies.CookieAttributes {

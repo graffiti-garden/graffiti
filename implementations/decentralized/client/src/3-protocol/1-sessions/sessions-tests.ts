@@ -12,6 +12,8 @@ export function sessionTests() {
   describe("Sessions", () => {
     const mocks = {
       cookies: new Map<string, string>(),
+      partitioned: new Map<string, string>(),
+      cookieWrites: [] as string[],
       close: vi.fn(),
       cancel: undefined as (() => void) | undefined,
     };
@@ -29,6 +31,8 @@ export function sessionTests() {
 
     beforeEach(() => {
       mocks.cookies.clear();
+      mocks.partitioned.clear();
+      mocks.cookieWrites = [];
       mocks.close.mockClear();
       mocks.cancel = undefined;
       vi.spyOn(browserStorage, "readCookie").mockImplementation(key => mocks.cookies.get(key));
@@ -41,6 +45,15 @@ export function sessionTests() {
       vi.stubGlobal("window", {
         sessionStorage: storage(), localStorage: storage(),
         location: new URL("https://app.example/"), history: { replaceState: vi.fn() },
+      });
+      vi.stubGlobal("document", {
+        get cookie() { return [...mocks.partitioned].map(([key, value]) => `${key}=${value}`).join("; "); },
+        set cookie(value: string) {
+          mocks.cookieWrites.push(value);
+          const [pair] = value.split(";");
+          const index = pair.indexOf("=");
+          if (value.length <= 4096) mocks.partitioned.set(pair.slice(0, index), pair.slice(index + 1));
+        },
       });
     });
     afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -174,6 +187,53 @@ export function sessionTests() {
       expect(restored.sessions.resolveSession({ actor: "did:example:alice" }).tokens).toEqual(["saved-token"]);
       expect(restored.events).toEqual([{ session: { actor: "did:example:alice" } }]);
       expect(logout).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])("restores after Safari loses localStorage without ending the same login (shared cookies: %s)", async shared => {
+      await savedLogin();
+      const key = "graffiti-sessions-logged-in";
+      window.localStorage.removeItem(key);
+      if (!shared) mocks.cookies.clear();
+      const network = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Offline"));
+      const restored = sessionFixture();
+      const logout = vi.fn();
+      restored.sessions.sessionEvents.addEventListener("logout", logout);
+      await restored.ready;
+
+      expect(restored.sessions.resolveSession({ actor: "did:example:alice" }).tokens).toEqual(["saved-token"]);
+      expect(restored.events).toEqual([{ session: { actor: "did:example:alice" } }]);
+      // A spurious logout here would erase the guard's restored site approval.
+      expect(logout).not.toHaveBeenCalled();
+      expect(network).not.toHaveBeenCalled();
+      expect(mocks.cookieWrites.at(-1)).toMatch(/; secure; partitioned$/i);
+      expect(mocks.cookieWrites.at(-1)).toMatch(/; sameSite=none;/i);
+    });
+
+    it("does not restore a partitioned login after explicit logout and localStorage loss", async () => {
+      const current = await savedLogin();
+      mocks.cookies.clear();
+      await current.sessions.logout("did:example:alice");
+      window.localStorage.removeItem("graffiti-sessions-logged-in");
+      const restored = sessionFixture();
+      await restored.ready;
+      expect(restored.events).toEqual([]);
+      expect(current.authorization.logout).toHaveBeenCalledOnce();
+    });
+
+    it("falls back locally for an oversized replacement instead of restoring the old cookie", async () => {
+      await savedLogin();
+      const key = "graffiti-sessions-logged-in";
+      const replacement = mocks.cookies.get(key)!.replaceAll("saved-token", "x".repeat(4000));
+      mocks.cookies.set(key, replacement);
+      const current = sessionFixture();
+      await current.ready;
+      expect(current.sessions.resolveSession({ actor: "did:example:alice" }).tokens).toEqual(["x".repeat(4000)]);
+      expect(mocks.partitioned.get(key + "-partitioned")).toBe("");
+      mocks.cookies.clear();
+      window.localStorage.removeItem(key);
+      const restored = sessionFixture();
+      await restored.ready;
+      expect(restored.events).toEqual([]);
     });
 
     it("ends the old login before importing different credentials for the same actor", async () => {
