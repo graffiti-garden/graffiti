@@ -8,8 +8,8 @@ A list of the external repositories is maintained in [`pages-sites.json`](../../
 
 ### Setup This Repository
 
-1. [Create a fine-grained GitHub token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
-   that can access the repositories in
+1. Open your personal [fine-grained token settings](https://github.com/settings/personal-access-tokens)
+   and create a token that can access the repositories in
    [`pages-sites.json`](../../.github/pages-sites.json) with the permissions 
    **Contents: Read and write**.
 2. In the monorepo, open **Settings -> Secrets and variables ->
@@ -34,9 +34,10 @@ For every new Pages site:
    }
    ```
 
-4. Give `PAGES_DISPATCH_TOKEN` access to the external repository with
-   **Contents: Read and write**. No secret needs to be added to the external
-   repository.
+4. Open your personal [fine-grained token settings](https://github.com/settings/personal-access-tokens)
+   and edit the token you created in setup. Add the external
+   repository under **Repository access**, keeping the existing repositories selected,
+   and set **Contents** to **Read and write**.
 5. Copy [`deploy.yml`](./deploy.yml) from this repository to `.github/workflows/deploy.yml` in the
    external repository.
 6. In the external repository set up Github Pages as usual by going to **Settings -> Pages**, then selecting **GitHub Actions** as the source. Set its custom domain and make sure to configure that domain's DNS CNAME to `graffiti-garden.github.io` and enable HTTPS.
