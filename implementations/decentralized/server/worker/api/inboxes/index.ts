@@ -10,6 +10,7 @@ import {
   exportMessages,
   MessageSchema,
   LabeledMessageSchema,
+  QueryMessageSchema,
   getMessage,
 } from "./db";
 import { z, createRoute, OpenAPIHono } from "@hono/zod-openapi";
@@ -76,7 +77,7 @@ const QueryCursorSchema = z.object({
 });
 
 const QueryResultsSchema = z.object({
-  results: z.array(LabeledMessageSchema),
+  results: z.array(QueryMessageSchema),
   hasMore: z.boolean(),
   cursor: z.string(),
 });
