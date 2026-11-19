@@ -26,5 +26,9 @@
   {
     "repository": "guard",
     "output": "wrappers/data-guard/host/dist"
+  },
+  {
+    "repository": "graffiti-garden.github.io",
+    "output": "website/dist"
   }
 ]

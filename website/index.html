@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Graffiti</title>
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="color-scheme" content="light dark" />
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+            }
+
+            #app:has(.page-loading) {
+                background: #ffffffcc;
+            }
+
+            #app > .page-loading {
+                min-height: 100svh;
+                padding: 1rem;
+                margin: 0;
+                display: grid;
+                place-content: center;
+                text-align: center;
+                font-family:
+                    Inter,
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    Roboto,
+                    Oxygen,
+                    Ubuntu,
+                    Cantarell,
+                    "Fira Sans",
+                    "Droid Sans",
+                    "Helvetica Neue",
+                    sans-serif;
+                font-size: 50px;
+                font-weight: 300;
+                color: #8b3f8e;
+                animation: page-loading-pulse 2s ease-in-out infinite;
+            }
+
+            @keyframes page-loading-pulse {
+                0%,
+                to {
+                    opacity: 0.5;
+                }
+
+                50% {
+                    opacity: 1;
+                }
+            }
+
+            @media (prefers-color-scheme: dark) {
+                #app:has(.page-loading) {
+                    background: #000000cc;
+                }
+
+                #app > .page-loading {
+                    color: #ca7acc;
+                }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                #app > .page-loading::before {
+                    animation: none;
+                }
+            }
+        </style>
+        <script>
+            // A redirect from a 404 page (see public/404.html)
+            const redirectAddress = sessionStorage.redirectAddress;
+            delete sessionStorage.redirectAddress;
+            if (redirectAddress) {
+                history.replaceState(null, null, redirectAddress);
+            }
+        </script>
+        <link rel="stylesheet" href="./style.css" />
+        <script type="module" src="./src/main.ts"></script>
+    </head>
+    <body>
+        <div id="app">
+            <p class="page-loading" role="status" aria-live="polite">
+                Loading Graffiti...
+            </p>
+        </div>
+    </body>
+</html>

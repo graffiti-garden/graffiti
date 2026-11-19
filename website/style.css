@@ -1,0 +1,138 @@
+:root {
+    --blurpix: 4px;
+    --highlight: #8b3f8e;
+    --highlight-hover: #ca7acc;
+    --within-highlight: #fff;
+    --background-color: #ffffffcc;
+    --solid-background: #ccc;
+    --text-color: #222;
+    --title-color: #000;
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --background-color: #000000cc;
+        --text-color: #ddd;
+        --title-color: #ffffff;
+        --highlight: #ca7acc;
+        --highlight-hover: #a95bac;
+        --within-highlight: #000;
+        --solid-background: #444;
+    }
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    word-break: break-word;
+    word-wrap: break-word;
+}
+
+html::before {
+    content: "";
+    position: fixed;
+    inset: calc(-1 * var(--blurpix));
+    z-index: -1;
+    background-image: url("/assets/graffiti.avif");
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    filter: blur(var(--blurpix));
+}
+
+@font-face {
+    font-family: "Rock Salt";
+    font-style: normal;
+    font-weight: 400;
+    src: url("./assets/rock-salt.woff2") format("woff2");
+    font-display: swap;
+}
+
+#app {
+    font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Oxygen,
+        Ubuntu,
+        Cantarell,
+        "Fira Sans",
+        "Droid Sans",
+        "Helvetica Neue",
+        sans-serif;
+    font-weight: 300;
+    font-size: 120%;
+    text-rendering: optimizeLegibility;
+    line-height: 1.7;
+    word-break: break-word;
+    scroll-behavior: smooth;
+    color: var(--text-color);
+}
+
+a {
+    color: var(--highlight);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+a:hover,
+a:focus-within {
+    text-decoration: underline;
+}
+
+a > img {
+    display: inline-block;
+    vertical-align: center;
+    height: 0.9em;
+}
+
+.graffiti {
+    font-family: "Rock Salt", sans-serif;
+    color: var(--title-color);
+
+    a {
+        color: inherit;
+    }
+}
+
+strong {
+    font-weight: 700;
+    color: var(--title-color);
+}
+
+button,
+a[role="button"],
+.button-like {
+    display: inline-block;
+    padding: 0.6em 0.8em;
+    background-color: var(--highlight);
+    color: var(--within-highlight);
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    text-decoration: none;
+    line-height: 1;
+    font-size: inherit;
+    text-align: center;
+    transition: background-color 0.2s ease;
+
+    &:hover,
+    &:focus-within {
+        background-color: var(--highlight-hover);
+    }
+
+    &:disabled {
+        background-color: color-mix(
+            in srgb,
+            var(--highlight) 50%,
+            var(--solid-background)
+        );
+        color: var(--text-color);
+        cursor: not-allowed;
+    }
+}

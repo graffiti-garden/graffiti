@@ -1,0 +1,73 @@
+<!-- "Discover" any waves related to this page -->
+<GraffitiDiscover
+    v-slot="{ objects: waves, isFirstPoll }"
+    :channels="[ 'graffiti.garden' ]"
+    :schema="{ properties: { value: {
+        required: ['activity'],
+        properties: {
+            activity: { const: 'Wave' }
+        }
+}}}">
+    <button
+        v-if="!$graffitiSession.value"
+        @click="$graffiti.login()"
+    >
+        Log in to wave! 👋
+    </button>
+
+    <template v-else>
+        <button
+            v-if="isFirstPoll || processingWave"
+        disabled>
+            👋 Loading…
+        </button>
+
+        <!-- If you haven't waved yet,-->
+        <!-- show "Wave" button -->
+        <button
+            v-else-if="!waves.some(wave =>
+                wave.actor ===
+                $graffitiSession.value.actor
+            )"
+            @click="
+                processingWave = true;
+                $graffiti.post(
+                    {
+                        value: { activity: 'Wave' },
+                        channels: ['graffiti.garden'],
+                    },
+                    $graffitiSession.value
+                ).finally(() => {
+                    processingWave = false;
+                });
+        ">
+            👋 Wave!
+        </button>
+
+        <!-- If you have already waved, -->
+        <!-- show "Unwave" button -->
+        <button v-else
+            @click="waves
+                .filter(wave =>
+                    wave.actor ===
+                    $graffitiSession.value.actor
+                )
+                .forEach(wave => {
+                    processingWave = true;
+                    $graffiti.delete(
+                        wave,
+                        $graffitiSession.value
+                    ).finally(() => {
+                        processingWave = false;
+                    });
+                });
+        ">
+            <span class="waving">👋</span> Unwave
+        </button>
+    </template>
+
+    <p>
+        {{ new Set(waves.map(w => w.actor)).size }}
+        people have waved from this page.
+    </p>
+</GraffitiDiscover>
