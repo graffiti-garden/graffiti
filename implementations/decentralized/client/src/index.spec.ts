@@ -38,6 +38,7 @@ import { allowedAttestationTests } from "./2-primitives/4-allowed-attestations-t
 import { sessionTests } from "./3-protocol/1-sessions/sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
 import { readCacheTests } from "./3-protocol/5-read-cache-tests";
+import { publicationPinTests, publicationPinIntegrationTests } from "./3-protocol/5-publication-pin-tests";
 import { verificationStateTests } from "./3-protocol/4-discovery/verification-state-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 import { GraffitiDecentralized } from "./3-protocol/5-graffiti";
@@ -144,6 +145,7 @@ describe("GraffitiDecentralized Tests", () => {
 
   objectEncodingTests();
   readCacheTests(() => useGraffiti(), () => sessions);
+  publicationPinIntegrationTests(environment, () => useGraffiti(), () => sessions);
 
   test.each([3, 4])("verifies records independently of invalid server label %i", async (label) => {
     const writer = useGraffiti();
@@ -444,6 +446,7 @@ authorizationTests();
 inboxUnitTests();
 discoveryCursorTests();
 discoveryErrorTests();
+publicationPinTests();
 sessionTests();
 
 inboxCacheTests();

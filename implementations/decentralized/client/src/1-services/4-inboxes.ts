@@ -40,6 +40,27 @@ export class Inboxes {
     return parsed.id;
   }
 
+  async pin(inboxUrl: string, ids: string[], inboxToken: string): Promise<void> {
+    await this.updatePins(inboxUrl, "pin", ids, inboxToken);
+  }
+
+  async unpin(inboxUrl: string, ids: string[], inboxToken: string): Promise<void> {
+    await this.updatePins(inboxUrl, "unpin", ids, inboxToken);
+  }
+
+  private async updatePins(inboxUrl: string, operation: "pin" | "unpin", ids: string[], inboxToken: string) {
+    verifyHTTPSEndpoint(inboxUrl);
+    const unique = [...new Set(ids)];
+    for (let i = 0; i < unique.length; i += 100) {
+      await fetchWithErrorHandling(`${inboxUrl}/${operation}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/cbor", Authorization: `Bearer ${inboxToken}` },
+        body: dagCborEncode({ ids: unique.slice(i, i + 100) }).slice(),
+        signal: AbortSignal.timeout(INBOX_REQUEST_TIMEOUT_MS),
+      });
+    }
+  }
+
   async get(
     inboxUrl: string,
     messageId: string,
