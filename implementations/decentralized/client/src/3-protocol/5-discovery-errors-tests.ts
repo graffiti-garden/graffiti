@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import * as fakeIndexedDB from "fake-indexeddb";
-import { openDB } from "idb";
+import { mockCacheStorage } from "./4-discovery/cache-tests";
 import {
   GraffitiErrorCursorExpired,
   GraffitiErrorNotFound,
@@ -203,10 +202,7 @@ export function discoveryErrorTests() {
     });
 
     test.each(["payload", "verification"])("preserves pending reads across instances and detects missing %s state", async (missing) => {
-      for (const [name, value] of Object.entries(fakeIndexedDB)) {
-        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
-      }
-      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      const caches = mockCacheStorage();
       const first = new ValidationGraffiti();
       const { message, bytes } = await first.announcement("shared");
       serveMessages(first, [message]);
@@ -232,9 +228,7 @@ export function discoveryErrorTests() {
 
       // Either half being lost must expire the cursor, rather than silently
       // dropping a retry or applying verification to unknown content.
-      const db = await openDB(missing === "payload" ? "graffiti-inbox-cache" : "graffiti-verification-state-v1", 1);
-      await db.clear(missing === "payload" ? "m" : "objects");
-      db.close();
+      caches(missing === "payload" ? "graffiti-inbox-messages-v1" : "graffiti-verification-state-v2").entries.clear();
       await expect(finishDiscovery(new ValidationGraffiti().continueDiscover<{}>(cursor)))
         .rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
     });
@@ -251,10 +245,7 @@ export function discoveryErrorTests() {
     });
 
     test("stores one payload and does not reuse verification for a replacement after eviction", async () => {
-      for (const [name, value] of Object.entries(fakeIndexedDB)) {
-        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
-      }
-      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      const caches = mockCacheStorage();
       const graffiti = new ValidationGraffiti();
       const { message, bytes } = await graffiti.announcement("retained");
       serveMessages(graffiti, [message]);
@@ -266,12 +257,11 @@ export function discoveryErrorTests() {
         scope: null, inbox: inboxEndpoint, id: message.id,
         digest: expect.any(String), storageKey: message.id, status: "verified",
       }]);
-      const cache = await openDB("graffiti-inbox-cache", 1);
-      expect(await cache.count("m")).toBe(1);
+      const cache = caches("graffiti-inbox-messages-v1");
+      expect(cache.entries.size).toBe(1);
       // Only the payload is lost. The surviving verification must remain
       // bound to its original body, even if a server later reuses the ID.
-      await cache.clear("m");
-      cache.close();
+      cache.entries.clear();
       const forged = structuredClone(message);
       forged.m.o.value = { forged: true };
       vi.mocked(fetch).mockResolvedValueOnce(inboxPage([forged]));
@@ -285,26 +275,15 @@ export function discoveryErrorTests() {
     });
 
     test("does not advance past a failed read if its retry reference cannot be persisted", async () => {
-      for (const [name, value] of Object.entries(fakeIndexedDB)) {
-        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
-      }
-      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      const caches = mockCacheStorage();
       const graffiti = new ValidationGraffiti();
       const { message, bytes } = await graffiti.announcement("failed-write");
       serveMessages(graffiti, [message]);
       const read = vi.spyOn(graffiti.services.buckets, "get").mockRejectedValueOnce(new TypeError("Offline")).mockResolvedValue(bytes);
-      const original = IDBDatabase.prototype.transaction;
-      let aborted = false;
-      vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (this: IDBDatabase, ...args) {
-        const tx = original.apply(this, args);
-        if (!aborted && this.name === "graffiti-verification-state-v1" && args[1] === "readwrite") {
-          aborted = true;
-          queueMicrotask(() => tx.abort());
-        }
-        return tx;
-      });
+      const write = caches("graffiti-verification-state-v2").put;
+      write.mockRejectedValueOnce(new DOMException("Write failed", "QuotaExceededError"));
       const failed = await collectDiscovery(graffiti.discover<{}>([channel], {}));
-      expect(aborted).toBe(true);
+      expect(write).toHaveBeenCalled();
       expect(failed.entries).toEqual([{ error: expect.any(Error), origin: inboxEndpoint }]);
       // Without a durable retry reference it is unsafe to advance this inbox.
       expect(JSON.parse(failed.cursor).cursors).toEqual({});

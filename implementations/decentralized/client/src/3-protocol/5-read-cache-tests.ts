@@ -1,7 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { GraffitiErrorNotFound, GraffitiErrorSchemaMismatch, type GraffitiSession, type GraffitiObjectStream } from "@graffiti-garden/api";
-import { openDB } from "idb";
-import * as fakeIndexedDB from "fake-indexeddb";
+import { mockCacheStorage } from "./4-discovery/cache-tests";
 import { GraffitiDecentralized } from "./5-graffiti";
 import { StorageBuckets } from "../1-services/3-storage-buckets";
 import { Inboxes } from "../1-services/4-inboxes";
@@ -55,10 +54,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
     });
 
     test("a read started before deletion cannot revive the object in another instance", async () => {
-      for (const [name, value] of Object.entries(fakeIndexedDB)) {
-        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
-      }
-      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      mockCacheStorage();
       const writer = useGraffiti();
       const reader = useGraffiti();
       const session = useSessions()[0];
@@ -95,10 +91,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
     });
 
     test("persists media descriptors across instances without sharing private access", async () => {
-      for (const [name, value] of Object.entries(fakeIndexedDB)) {
-        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
-      }
-      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      const caches = mockCacheStorage();
       const original = globalThis.fetch;
       try {
         const [owner, other] = useSessions();
@@ -107,9 +100,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
         await writer.getMedia(url, {}, { session: owner });
         // Dropping query history must leave shared payloads available to
         // verified getters, even in another instance.
-        const cache = await openDB("graffiti-inbox-cache", 1);
-        await cache.clear("q");
-        cache.close();
+        caches("graffiti-inbox-queries-v1").entries.clear();
         const calls: { url: string; cache?: RequestCache }[] = [];
         globalThis.fetch = (input, init) => {
           calls.push({ url: String(input), cache: init?.cache });

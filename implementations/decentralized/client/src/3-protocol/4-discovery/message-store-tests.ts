@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import * as fakeIndexedDB from "fake-indexeddb";
+import { mockCacheStorage } from "./cache-tests";
 import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
 import {
   createMessageStore,
@@ -40,11 +40,9 @@ async function seed(store: MessageStore, count: number): Promise<CacheQueryValue
 
 export function inboxCacheTests() {
   describe("Inbox cache replay", () => {
+    let caches: ReturnType<typeof mockCacheStorage>;
     beforeEach(() => {
-      for (const [name, value] of Object.entries(fakeIndexedDB)) {
-        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
-      }
-      vi.stubGlobal("indexedDB", new fakeIndexedDB.IDBFactory());
+      caches = mockCacheStorage();
     });
 
     afterEach(() => {
@@ -79,8 +77,8 @@ export function inboxCacheTests() {
       expect((await replayQuery(store, inboxUrl, queryKey, query))[299].l).toBe(2);
     });
 
-    test.each(["indexeddb", "memory"])("mutating returned messages cannot change later replays (%s)", async storage => {
-      if (storage === "memory") vi.stubGlobal("indexedDB", undefined);
+    test.each(["cache", "memory"])("mutating returned messages cannot change later replays (%s)", async storage => {
+      if (storage === "memory") vi.stubGlobal("caches", undefined);
       const store = await createMessageStore();
       const query = await seed(store, 129);
       const result = await replayQuery(store, inboxUrl, queryKey, query);
@@ -91,8 +89,8 @@ export function inboxCacheTests() {
       );
     });
 
-    test.each(["indexeddb", "memory"])("retains payloads independently of query histories and rejects changed bodies (%s)", async storage => {
-      if (storage === "memory") vi.stubGlobal("indexedDB", undefined);
+    test.each(["cache", "memory"])("retains payloads independently of query histories and rejects changed bodies (%s)", async storage => {
+      if (storage === "memory") vi.stubGlobal("caches", undefined);
       const store = await createMessageStore();
       await seed(store, 1);
       const messageId = "message-0";
@@ -126,22 +124,10 @@ export function inboxCacheTests() {
       expect(await store.getQuery(queryKey)).toBeUndefined();
     });
 
-    test("rejects read transaction aborts without partial results", async () => {
+    test("rejects failed reads without partial results", async () => {
       const store = await createMessageStore();
       const query = await seed(store, 129);
-      const original = IDBDatabase.prototype.transaction;
-      let aborted = false;
-      vi.spyOn(IDBDatabase.prototype, "transaction").mockImplementation(function (
-        this: IDBDatabase,
-        ...args: Parameters<IDBDatabase["transaction"]>
-      ) {
-        const tx = original.apply(this, args);
-        if (!aborted && args[0] === "m" && args[1] === "readonly") {
-          aborted = true;
-          queueMicrotask(() => tx.abort());
-        }
-        return tx;
-      });
+      caches("graffiti-inbox-messages-v1").match.mockRejectedValueOnce(new DOMException("Read failed", "AbortError"));
 
       await expect(replayQuery(store, inboxUrl, queryKey, query)).rejects.toMatchObject({
         name: "AbortError",
@@ -149,8 +135,29 @@ export function inboxCacheTests() {
       expect(await store.getQuery(queryKey)).toEqual(query);
     });
 
+    test("keeps the previous cursor when only part of a page can be saved", async () => {
+      const store = await createMessageStore();
+      const previous = await seed(store, 1);
+      const page = { messages: [message(1), message(2)], cursor: "next-page", hasMore: false };
+      caches("graffiti-inbox-messages-v1").put.mockRejectedValueOnce(
+        new DOMException("Cache full", "QuotaExceededError"),
+      );
+
+      await expect(storeQueryPage(store, inboxUrl, queryKey, previous, page))
+        .rejects.toMatchObject({ name: "QuotaExceededError" });
+      expect(await store.getQuery(queryKey)).toEqual(previous);
+      // The other write finished before releasing the lock. Retrying the
+      // same page must safely reuse it and then advance the query.
+      expect(await store.getMessage(inboxUrl, "message-2")).toEqual(message(2));
+      const retried = await storeQueryPage(store, inboxUrl, queryKey, previous, page);
+      expect(await replayQuery(store, inboxUrl, queryKey, retried)).toEqual([
+        message(0), message(1), message(2),
+      ]);
+      expect((await store.getQuery(queryKey))?.cursor).toBe("next-page");
+    });
+
     test("supports replay and missing records in the memory fallback", async () => {
-      vi.stubGlobal("indexedDB", undefined);
+      vi.stubGlobal("caches", undefined);
       const store = await createMessageStore();
       const query = await seed(store, 300);
       const result = await replayQuery(store, inboxUrl, queryKey, query, 128);

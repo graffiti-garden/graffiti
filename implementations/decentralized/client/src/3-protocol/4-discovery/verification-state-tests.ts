@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import * as fakeIndexedDB from "fake-indexeddb";
+import { mockCacheStorage } from "./cache-tests";
 import { VerificationState, type MessageState } from "./verification-state";
 
 const url = "graffiti:object";
@@ -13,12 +13,10 @@ const entry: MessageState = {
 };
 
 export function verificationStateTests() {
-  describe.each(["indexeddb", "memory"])("Verification state (%s)", storage => {
+  describe.each(["cache", "memory"])("Verification state (%s)", storage => {
     beforeEach(() => {
-      for (const [name, value] of Object.entries(fakeIndexedDB)) {
-        if (name.startsWith("IDB")) vi.stubGlobal(name, value);
-      }
-      vi.stubGlobal("indexedDB", storage === "memory" ? undefined : new fakeIndexedDB.IDBFactory());
+      if (storage === "cache") mockCacheStorage();
+      else vi.stubGlobal("caches", undefined);
     });
     afterEach(() => vi.unstubAllGlobals());
 
@@ -53,6 +51,17 @@ export function verificationStateTests() {
       forged.digest = "different-body";
       await expect(cache.remember(url, forged)).rejects.toThrow("Inbox changed an existing announcement");
       expect(await cache.read(url)).toEqual([{ ...entry, status: "verified" }]);
+    });
+
+    test("does not lose deletion during a concurrent verification update", async () => {
+      const first = new VerificationState();
+      const second = storage === "memory" ? first : new VerificationState();
+      await first.remember(url, { ...entry, status: "verified" });
+      await Promise.all([
+        first.deleted(url, entry.storageKey),
+        second.remember(url, { ...entry, scope: "another reader", status: "verified" }),
+      ]);
+      expect((await first.read(url)).map(message => message.status)).toEqual(["deleted", "deleted"]);
     });
   });
 }
