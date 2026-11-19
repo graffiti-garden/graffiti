@@ -55,6 +55,12 @@ export const LabeledMessageSchema = z.object({
   m: MessageSchema,
   l: z.number(),
 });
+export const PINNED_BY_ME = "p";
+export const QueryMessageSchema = LabeledMessageSchema.extend({
+  [PINNED_BY_ME]: z.boolean().openapi({
+    description: "Whether the authenticated account pins this entry. False for anonymous queries.",
+  }),
+});
 
 const inboxInfoCache = new LRUCache<
   string,
@@ -285,6 +291,10 @@ export async function queryMessages(
       m.tags,
       m.object,
       m.metadata,`,
+    accountId
+      ? `EXISTS (SELECT 1 FROM inbox_message_pins p
+          WHERE p.message_seq = m.message_seq AND p.account_id = ?) AS pinned_by_me,`
+      : `0 AS pinned_by_me,`,
     accountId ? `l.label AS label` : `NULL as label`,
     `FROM message_candidates c
     JOIN inbox_messages m
@@ -301,7 +311,7 @@ export async function queryMessages(
     inboxSeq,
     ...tags,
     sinceSeq,
-    ...(accountId ? [accountId] : []),
+    ...(accountId ? [accountId, accountId] : []),
     limit + 1,
   ];
 
@@ -314,6 +324,7 @@ export async function queryMessages(
       object: string;
       metadata: ArrayBuffer;
       label: number | null;
+      pinned_by_me: number;
     }>();
 
   const hasMore = res.results.length === limit + 1;
@@ -331,10 +342,11 @@ export async function queryMessages(
         m: dagCborDecode(new Uint8Array(r.metadata)),
       };
       const message = MessageSchema.parse(messageRaw);
-      const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
+      const messageWithLabel: z.infer<typeof QueryMessageSchema> = {
         id: r.message_id,
         m: message,
         l: r.label ?? 0,
+        [PINNED_BY_ME]: r.pinned_by_me === 1,
       };
       return messageWithLabel;
     })
@@ -461,6 +473,8 @@ export async function exportMessages(
       tags,
       object,
       metadata,
+      EXISTS (SELECT 1 FROM inbox_message_pins p
+        WHERE p.message_seq = inbox_messages.message_seq AND p.account_id = ?) AS pinned_by_me,
       l.label AS label
     FROM inbox_messages
     LEFT JOIN inbox_message_labels l
@@ -470,7 +484,7 @@ export async function exportMessages(
     LIMIT ?
   `,
   )
-    .bind(accountId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
+    .bind(accountId, accountId, inboxSeq, sinceSeq, INBOX_QUERY_LIMIT + 1)
     .all<{
       message_seq: number;
       message_id: string;
@@ -478,6 +492,7 @@ export async function exportMessages(
       object: string;
       metadata: ArrayBuffer;
       label: number | null;
+      pinned_by_me: number;
     }>();
 
   const hasMore = res.results.length === INBOX_QUERY_LIMIT + 1;
@@ -494,10 +509,11 @@ export async function exportMessages(
       m: dagCborDecode(new Uint8Array(r.metadata)),
     };
     const message = MessageSchema.parse(messageRaw);
-    const messageWithLabel: z.infer<typeof LabeledMessageSchema> = {
+    const messageWithLabel: z.infer<typeof QueryMessageSchema> = {
       id: r.message_id,
       m: message,
       l: r.label ?? 0,
+      [PINNED_BY_ME]: r.pinned_by_me === 1,
     };
     return messageWithLabel;
   });

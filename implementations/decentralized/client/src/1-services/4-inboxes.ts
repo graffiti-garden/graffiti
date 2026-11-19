@@ -197,10 +197,13 @@ type MessageBase = infer_<typeof MessageBaseSchema>;
 export const LABELED_MESSAGE_ID_KEY = "id";
 export const LABELED_MESSAGE_MESSAGE_KEY = "m";
 export const LABELED_MESSAGE_LABEL_KEY = "l";
+export const PINNED_BY_ME = "p";
 export const LabeledMessageBaseSchema = strictObject({
   [LABELED_MESSAGE_ID_KEY]: string(),
   [LABELED_MESSAGE_MESSAGE_KEY]: MessageBaseSchema,
   [LABELED_MESSAGE_LABEL_KEY]: number(),
+  // Absent on older servers, cached announcements, and the legacy /message route.
+  [PINNED_BY_ME]: optional(boolean()),
 });
 export type LabeledMessageBase = infer_<typeof LabeledMessageBaseSchema>;
 
