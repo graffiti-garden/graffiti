@@ -26,7 +26,6 @@ import type {
   Message,
 } from "../../1-services/4-inboxes";
 import {
-  canUseIDB,
   createMessageStore,
   replayQuery,
   storeQueryPage,
@@ -160,11 +159,11 @@ export class InboxHistory {
     const cacheVersion = source.kind === "continue"
       ? source.cursor.version
       : undefined;
-    // Opening IndexedDB can wait on another tab, so do it before holding a lock.
+    // Open the store before holding a query lock.
     const store = await this.store;
     // TODO: implement locking in node as well, but not
     // high priority since most use will be in browser
-    const useLock = typeof window !== "undefined" && (await canUseIDB());
+    const useLock = typeof window !== "undefined" && store.shared;
     const initialQuery = await store.getQuery(messageIdsCacheKey);
     // Version identifies a query history; generation changes on each page
     // written to that history, including an empty page.

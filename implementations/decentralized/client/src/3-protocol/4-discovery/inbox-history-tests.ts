@@ -1,5 +1,6 @@
 import { afterEach, assert, describe, expect, test, vi } from "vitest";
 import { InboxHistory } from "./inbox-history";
+import { createMessageStore } from "./message-store";
 import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "../../1-services/4-inboxes";
 import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
@@ -318,6 +319,11 @@ function queryPage(results: (typeof message)[], cursor: string, hasMore = false)
 }
 
 class TestInboxHistory extends InboxHistory {
+  constructor() {
+    // Exercise query locking with a local store standing in for shared storage.
+    super(undefined, async () => ({ ...await createMessageStore(), shared: true }));
+  }
+
   async prepareCache() {
     await this.store;
   }
@@ -329,16 +335,6 @@ class TestInboxHistory extends InboxHistory {
 }
 
 function enableLockPath(request: unknown) {
-  vi.stubGlobal("indexedDB", {
-    open: () => {
-      const probe: { result?: { close: () => void }; onsuccess?: () => void } = {};
-      queueMicrotask(() => {
-        probe.result = { close() {} };
-        probe.onsuccess?.();
-      });
-      return probe;
-    },
-  });
   vi.stubGlobal("window", { navigator: { locks: { request } } });
 }
 

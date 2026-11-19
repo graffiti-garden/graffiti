@@ -1,4 +1,4 @@
-import type { DBSchema, IDBPDatabase } from "idb";
+import { createCache } from "./cache";
 
 export type MessageState = {
   scope: string | null;
@@ -9,52 +9,23 @@ export type MessageState = {
   status: "pending" | "verified" | "invalid" | "deleted";
 };
 
-interface VerificationDB extends DBSchema {
-  objects: { key: string; value: MessageState[] };
-}
-
 // Only Graffiti assigns verification/deletion state. Payloads live in the
 // shared message store; these reader-scoped records contain references only.
 export class VerificationState {
-  private memory = new Map<string, MessageState[]>();
-  private database?: Promise<IDBPDatabase<VerificationDB> | undefined>;
-
-  private db() {
-    return this.database ??= (async () => {
-      if (!globalThis.indexedDB) return undefined;
-      const { openDB } = await import("idb");
-      return openDB<VerificationDB>("graffiti-verification-state-v1", 1, {
-        upgrade(db) { db.createObjectStore("objects"); },
-      });
-    })().catch(() => undefined);
-  }
+  private store = createCache<MessageState[]>("graffiti-verification-state-v2");
 
   async read(url: string): Promise<MessageState[]> {
-    const db = await this.db();
-    if (!db) return structuredClone(this.memory.get(url) ?? []);
-    const tx = db.transaction("objects", "readonly");
-    const [messages] = await Promise.all([tx.store.get(url), tx.done]);
-    return messages ?? [];
+    return (await (await this.store).get(url)) ?? [];
   }
 
   private async update<T>(url: string, change: (messages: MessageState[]) => T): Promise<T> {
-    const db = await this.db();
-    if (db) {
-      const tx = db.transaction("objects", "readwrite");
-      const write = async () => {
-        const messages = (await tx.store.get(url)) ?? [];
-        const result = change(messages);
-        await tx.store.put(messages, url);
-        return result;
-      };
-      // Handle both request and transaction failures, even if one rejects first.
-      const [result] = await Promise.all([write(), tx.done]);
+    const store = await this.store;
+    return store.lock(async () => {
+      const messages = (await store.get(url)) ?? [];
+      const result = change(messages);
+      await store.set(url, messages);
       return result;
-    }
-    const messages = structuredClone(this.memory.get(url) ?? []);
-    const result = change(messages);
-    this.memory.set(url, structuredClone(messages));
-    return result;
+    });
   }
 
   async remember(url: string, entry: MessageState): Promise<MessageState["status"]> {
