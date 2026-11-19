@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
-import { Inboxes, PINNED_BY_ME } from "./4-inboxes";
+import { Inboxes, PINNED_BY_ME_KEY } from "./4-inboxes";
 import { DecentralizedTestEnvironment, decentralizedSharedInbox, decentralizedTestUsers } from "../../test/environment";
 
 export function inboxPinTests(environment: DecentralizedTestEnvironment) {
@@ -32,7 +32,7 @@ export function inboxPinTests(environment: DecentralizedTestEnvironment) {
         while (exported.hasMore && !exported.results.some(message => message.id === id)) {
           exported = await inboxes.export(owner.inboxEndpoint, owner.token, exported.cursor);
         }
-        return [query, exported].map(page => page.results.find(message => message.id === id)?.[PINNED_BY_ME]);
+        return [query, exported].map(page => page.results.find(message => message.id === id)?.[PINNED_BY_ME_KEY]);
       };
       // Delivery to another person's inbox requires neither read access nor a pin.
       expect((await pins(id)).results).toEqual([]);
@@ -52,7 +52,7 @@ export function inboxPinTests(environment: DecentralizedTestEnvironment) {
       const id = await send(decentralizedSharedInbox, tag);
       const reportedPins = async (token?: string) => {
         const page = await inboxes.query(decentralizedSharedInbox, { tags: [tag], schema: {} }, token);
-        return page.results.map(message => ({ id: message.id, p: message[PINNED_BY_ME] }));
+        return page.results.map(message => ({ id: message.id, p: message[PINNED_BY_ME_KEY] }));
       };
       expect(await reportedPins(owner.token)).toEqual([{ id, p: false }]);
       const db = await environment.database();

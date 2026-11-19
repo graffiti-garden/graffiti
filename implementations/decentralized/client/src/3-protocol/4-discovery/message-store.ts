@@ -1,6 +1,6 @@
 import { encode as dagCborEncode } from "@ipld/dag-cbor";
 import { GraffitiErrorCursorExpired } from "@graffiti-garden/api";
-import { LABELED_MESSAGE_ID_KEY, PINNED_BY_ME, type LabeledMessageBase } from "../../1-services/4-inboxes";
+import { LABELED_MESSAGE_ID_KEY, PINNED_BY_ME_KEY, type LabeledMessageBase } from "../../1-services/4-inboxes";
 import { cacheBatch, createCache } from "./cache";
 
 // One record per inbox query. Messages live in the separate message cache;
@@ -115,9 +115,9 @@ export async function createMessageStore(): Promise<MessageStore> {
       entries.forEach((entry, i) => checkPayload(previous[i], entry.value));
       await cacheBatch(entries, ({ key, value }) => {
         if (!value) return messages.set(key, value);
-        // Bodies are shared across accounts. Pin state needs account-scoped
-        // storage before discovery can use it; do not replay another account's pin.
-        const { [PINNED_BY_ME]: _pinnedByMe, ...message } = value;
+        // Bodies are shared across accounts; pin status is only a hint for the
+        // current reader. Retries without it can safely repeat an idempotent pin.
+        const { [PINNED_BY_ME_KEY]: _pinnedByMe, ...message } = value;
         return messages.set(key, message);
       });
     });

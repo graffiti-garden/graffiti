@@ -8,7 +8,7 @@ import {
   type MessageStore,
   type CacheQueryValue,
 } from "./message-store";
-import { PINNED_BY_ME, type LabeledMessageBase } from "../../1-services/4-inboxes";
+import { PINNED_BY_ME_KEY, type LabeledMessageBase } from "../../1-services/4-inboxes";
 
 const inboxUrl = "https://example.test/inbox";
 const queryKey = "test-query";
@@ -80,14 +80,14 @@ export function inboxCacheTests() {
     test("does not retain account-specific pin state in the shared message cache", async () => {
       const store = await createMessageStore();
       const original = message(0);
-      const pinned = { ...original, [PINNED_BY_ME]: true };
+      const pinned = { ...original, [PINNED_BY_ME_KEY]: true };
       const query = await storeQueryPage(store, inboxUrl, queryKey, undefined, {
         messages: [pinned], cursor: "server-cursor", hasMore: false,
       });
       // Another account can replay these bodies, but must not inherit this pin.
       expect(await replayQuery(store, inboxUrl, queryKey, query)).toEqual([original]);
-      expect(pinned[PINNED_BY_ME]).toBe(true);
-      await store.setMessage(inboxUrl, original.id, { ...original, [PINNED_BY_ME]: false });
+      expect(pinned[PINNED_BY_ME_KEY]).toBe(true);
+      await store.setMessage(inboxUrl, original.id, { ...original, [PINNED_BY_ME_KEY]: false });
       expect(await store.getMessage(inboxUrl, original.id)).toEqual(original);
     });
 

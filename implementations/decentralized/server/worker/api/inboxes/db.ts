@@ -55,9 +55,9 @@ export const LabeledMessageSchema = z.object({
   m: MessageSchema,
   l: z.number(),
 });
-export const PINNED_BY_ME = "p";
+export const PINNED_BY_ME_KEY = "p";
 export const QueryMessageSchema = LabeledMessageSchema.extend({
-  [PINNED_BY_ME]: z.boolean().openapi({
+  [PINNED_BY_ME_KEY]: z.boolean().openapi({
     description: "Whether the authenticated account pins this entry. False for anonymous queries.",
   }),
 });
@@ -346,7 +346,7 @@ export async function queryMessages(
         id: r.message_id,
         m: message,
         l: r.label ?? 0,
-        [PINNED_BY_ME]: r.pinned_by_me === 1,
+        [PINNED_BY_ME_KEY]: r.pinned_by_me === 1,
       };
       return messageWithLabel;
     })
@@ -513,7 +513,7 @@ export async function exportMessages(
       id: r.message_id,
       m: message,
       l: r.label ?? 0,
-      [PINNED_BY_ME]: r.pinned_by_me === 1,
+      [PINNED_BY_ME_KEY]: r.pinned_by_me === 1,
     };
     return messageWithLabel;
   });
