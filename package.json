@@ -28,7 +28,8 @@
     "implementations/decentralized/server",
     "examples/glitter",
     "examples/parallax",
-    "examples/wikiffiti"
+    "examples/wikiffiti",
+    "website"
   ],
   "scripts": {
     "changeset": "changeset",
