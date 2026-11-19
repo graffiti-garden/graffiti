@@ -1,6 +1,6 @@
 {
   "name": "@graffiti-garden/realtime",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Live messages and media streams over WebRTC, with Graffiti signaling and actors",
   "type": "module",
   "types": "./dist/index.d.ts",
