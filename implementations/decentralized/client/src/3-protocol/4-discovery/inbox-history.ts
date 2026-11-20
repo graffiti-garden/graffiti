@@ -183,9 +183,10 @@ export class InboxHistory {
       return this.http.query(inboxUrl, { tags: source.tags, schema: source.schema }, inboxToken, signal);
     };
 
+    type Page = { query: CacheQueryValue; fresh?: LabeledMessage<Schema>[] };
     // Advance one page at most. Recheck the cache under the lock so a tab
     // waiting for another tab's fetch can reuse its result.
-    const fetchPage = async (signal?: AbortSignal): Promise<CacheQueryValue> => {
+    const fetchPage = async (signal?: AbortSignal): Promise<Page> => {
       while (true) {
         signal?.throwIfAborted();
         const step = await this.withQueryLock(
@@ -274,7 +275,7 @@ export class InboxHistory {
                 waitTil: batch.waitTil,
               },
             );
-            return { query };
+            return { query, fresh: labeledMessages };
           },
           signal,
         );
@@ -290,23 +291,23 @@ export class InboxHistory {
           await waitFor(step.waitTil);
           continue;
         }
-        return step.query;
+        return step;
       }
     };
 
-    type PageResult = { query: CacheQueryValue } | { error: unknown };
+    type PageResult = Page | { error: unknown };
     let nextPage: Promise<PageResult> | undefined;
     while (true) {
       const result = nextPage
         ? await nextPage
-        : await fetchPage().then(
-            (query) => ({ query }),
-            (error) => ({ error }),
-          );
+        : await fetchPage().catch((error: unknown) => ({ error }));
       nextPage = undefined;
       if ("error" in result) throw result.error;
 
       const query = result.query;
+      // Fresh response metadata belongs to this request, not the shared cache.
+      // Keep it only until this page is delivered to the protocol caller.
+      const fresh = new Map(result.fresh?.map(message => [message.id, message]));
       // Replay all unseen messages after releasing the lock.
       const messages = await replayQuery(
         store,
@@ -325,15 +326,12 @@ export class InboxHistory {
       if (query.hasMore) {
         // The caller may close before awaiting this request; handle rejection
         // here so an aborted prefetch does not become unhandled.
-        nextPage = fetchPage(prefetchController.signal).then(
-          (query) => ({ query }),
-          (error) => ({ error }),
-        );
+        nextPage = fetchPage(prefetchController.signal).catch((error: unknown) => ({ error }));
       }
       let consumedPage = false;
       try {
         for (const message of messages) {
-          yield message as LabeledMessage<Schema>;
+          yield fresh.get(message.id) ?? message as LabeledMessage<Schema>;
         }
         consumedPage = true;
       } finally {

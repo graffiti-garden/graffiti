@@ -33,6 +33,7 @@ import {
   MESSAGE_METADATA_KEY,
   MESSAGE_OBJECT_KEY,
   MESSAGE_TAGS_KEY,
+  PINNED_BY_ME_KEY,
   type LabeledMessage,
   type Message,
 } from "../1-services/4-inboxes";
@@ -150,9 +151,9 @@ export interface GraffitiDecentralizedOptions {
 }
 
 const CONCURRENCY = 128;
-const INITIAL_READ_RETRY_MS = 1_000;
-const MAX_READ_RETRY_MS = 60_000;
-const MAX_READ_RETRIES_PER_POLL = 32;
+const INITIAL_RETRY_MS = 1_000;
+const MAX_RETRY_MS = 60_000;
+const MAX_RETRIES_PER_POLL = 32;
 const LOCAL_STORAGE_REMEMBERED_HANDLE_KEY = "graffiti-login-remembered-handle";
 
 // @ts-ignore
@@ -599,12 +600,14 @@ export class GraffitiDecentralized implements Graffiti {
     const [url, schema, options] = args;
     const { session, refresh = false } = normalizeGraffitiReadOptions(options);
     let services: { token?: string; serviceEndpoint: string }[];
+    let personalInbox: string | undefined;
     const validator = await compileGraffitiObjectSchema(schema);
 
     if (session) {
       // If logged in, first search one's
       // personal inbox, then any shared inboxes
       const resolvedSession = this.sessions.resolveSession(session);
+      personalInbox = resolvedSession.personalInbox.serviceEndpoint;
       services = [
         resolvedSession.personalInbox,
         ...resolvedSession.sharedInboxes,
@@ -648,7 +651,7 @@ export class GraffitiDecentralized implements Graffiti {
         },
         service.token,
         session?.actor,
-        { refresh: true },
+        { refresh: true, pin: service.serviceEndpoint === personalInbox },
       );
 
       for await (const result of iterator) {
@@ -897,8 +900,10 @@ export class GraffitiDecentralized implements Graffiti {
     const lastTombstoneState = new Map<string, boolean>();
 
     let allInboxes: { serviceEndpoint: string; token?: string }[];
+    let personalInbox: string | undefined;
     if (session) {
       const resolvedSession = this.sessions.resolveSession(session);
+      personalInbox = resolvedSession.personalInbox.serviceEndpoint;
       allInboxes = [
         resolvedSession.personalInbox,
         ...resolvedSession.sharedInboxes,
@@ -944,7 +949,7 @@ export class GraffitiDecentralized implements Graffiti {
               },
           i.token,
           session?.actor,
-          { refresh },
+          { refresh, pin: i.serviceEndpoint === personalInbox },
         );
       },
     );
@@ -1291,9 +1296,13 @@ export class GraffitiDecentralized implements Graffiti {
         },
     inboxToken?: string | null,
     recipient?: string | null,
-    options?: InboxReadOptions,
+    options?: InboxReadOptions & { pin?: boolean },
   ): SingleEndpointQueryIterator<Schema> {
-    let pending = new Map<string, infer_<typeof PendingReadSchema>>();
+    const { pin, ...readOptions } = options ?? {};
+    // The caller identifies its personal inbox from the session. A token alone
+    // is insufficient: shared inboxes can use the same credentials.
+    const personalToken = pin && recipient ? inboxToken : undefined;
+    let pending = new Map<string, infer_<typeof PendingMessageSchema>>();
     let retryMessages: LabeledMessage<Schema>[] = [];
     let deferred = false;
     if ("cursor" in queryArguments) {
@@ -1305,14 +1314,16 @@ export class GraffitiDecentralized implements Graffiti {
       }
       if (checkpoint.scope !== (recipient ?? null)) throw new GraffitiErrorCursorExpired("Discovery reader changed");
       queryArguments = { ...queryArguments, cursor: checkpoint.cursor };
-      pending = new Map(checkpoint.pending.map((retry) => [retry.id, retry]));
+      pending = new Map(checkpoint.pending
+        .filter(retry => !retry.pin || personalToken)
+        .map(retry => [retry.id, retry]));
       // Eligibility is checked once per poll. Never sleep or retry twice in
-      // this stream. Oldest due reads go first so a failing read cannot starve others.
+      // this stream. Oldest due operations go first so failures cannot starve others.
       const now = Date.now();
       const due = [...pending.values()]
         .filter((retry) => retry.retryAt <= now)
         .sort((a, b) => a.retryAt - b.retryAt)
-        .slice(0, MAX_READ_RETRIES_PER_POLL);
+        .slice(0, MAX_RETRIES_PER_POLL);
       deferred = due.length < pending.size;
       if (due.length) {
         const messages = await Promise.all(due.map(async retry => {
@@ -1334,6 +1345,25 @@ export class GraffitiDecentralized implements Graffiti {
       }
     }
 
+    const postpone = (id: string, url: string, pin = false) => {
+      const previous = pending.get(id);
+      const delay = Math.min(previous && !!previous.pin === pin ? previous.delay * 2 : INITIAL_RETRY_MS, MAX_RETRY_MS);
+      pending.set(id, { id, url, delay, retryAt: Date.now() + delay, ...(pin ? { pin: true } : {}) });
+    };
+    const toPin = new Map<string, string>();
+    const flushPins = async (): Promise<SingleEndpointQueryError | undefined> => {
+      if (!personalToken || !toPin.size) return;
+      const batch = [...toPin];
+      toPin.clear(); // A failed batch must not be attempted again in finally.
+      try {
+        await this.inboxes.pin(inboxEndpoint, batch.map(([id]) => id), personalToken);
+        for (const [id] of batch) pending.delete(id);
+      } catch (cause) {
+        for (const [id, url] of batch) postpone(id, url, true);
+        return { error: new Error("Could not pin validated inbox messages", { cause }), retryable: true };
+      }
+    };
+
     const iterator: MessageStream<Schema> =
       "tags" in queryArguments
         ? this.inboxHistory.query<Schema>(
@@ -1341,16 +1371,16 @@ export class GraffitiDecentralized implements Graffiti {
             queryArguments.tags,
             queryArguments.objectSchema,
             inboxToken,
-            options,
+            readOptions,
           )
         : this.inboxHistory.continueQuery<Schema>(
             inboxEndpoint,
             queryArguments.cursor,
             inboxToken,
-            options,
+            readOptions,
           );
     const inFlight: Promise<
-      | { id: string; url: string; result: SingleEndpointQueryItem<Schema> | void }
+      | { id: string; url: string; pinRetry: boolean; pinnedByMe: boolean; result: SingleEndpointQueryItem<Schema> | void }
       | { error: unknown }
     >[] = [];
     let doneValue: string | null = null;
@@ -1368,6 +1398,7 @@ export class GraffitiDecentralized implements Graffiti {
             doneValue = itResult.value;
             break;
           }
+          const pinRetry = !!(retryMessage && pending.get(retryMessage.id)?.pin);
 
           // Capture rejections immediately, even if another read is pending
           // or the caller closes before reaching this result.
@@ -1377,7 +1408,10 @@ export class GraffitiDecentralized implements Graffiti {
             inboxToken,
             recipient,
           ).then(
-            (result) => ({ id: itResult.value.id, url: itResult.value.m.o.url, result }),
+            (result) => ({
+              id: itResult.value.id, url: itResult.value.m.o.url,
+              pinRetry, pinnedByMe: itResult.value[PINNED_BY_ME_KEY] === true, result,
+            }),
             (error: unknown) => ({ error }),
           );
 
@@ -1389,13 +1423,15 @@ export class GraffitiDecentralized implements Graffiti {
 
         if (!nextProcessedPromise) {
           if (doneValue !== null) {
+            const pinError = await flushPins();
+            if (pinError) yield pinError;
             if (deferred && pending.size) {
-              yield { error: new Error("Some object reads are awaiting retry"), retryable: true };
+              yield { error: new Error("Some object reads or pins are awaiting retry"), retryable: true };
             }
             // Each continuation keeps its own pending IDs. Another consumer's
             // successful retry must not consume this consumer's delivery.
             return JSON.stringify({
-              version: 2,
+              version: 3,
               scope: recipient ?? null,
               cursor: doneValue,
               pending: [...pending.values()],
@@ -1408,11 +1444,10 @@ export class GraffitiDecentralized implements Graffiti {
         const processed = await nextProcessedPromise;
         if ("error" in processed) throw processed.error;
         if (processed.result && "error" in processed.result && processed.result.retryable) {
-          const previous = pending.get(processed.id);
-          const delay = Math.min(previous ? previous.delay * 2 : INITIAL_READ_RETRY_MS, MAX_READ_RETRY_MS);
-          pending.set(processed.id, { id: processed.id, url: processed.url, delay, retryAt: Date.now() + delay });
-        } else {
+          postpone(processed.id, processed.url, processed.pinRetry);
+        } else if (!processed.result || "error" in processed.result || processed.result.tombstone) {
           pending.delete(processed.id);
+          toPin.delete(processed.id);
         }
         if (processed.result) {
           // A cached/verified result may have waited behind another read in
@@ -1420,13 +1455,34 @@ export class GraffitiDecentralized implements Graffiti {
           if (!("error" in processed.result) && !processed.result.tombstone) {
             const { object, storageBucketKey } = processed.result;
             if ((await this.verification.read(object.url)).some(entry =>
-              entry.storageKey === storageBucketKey && entry.status === "deleted")) continue;
+              entry.storageKey === storageBucketKey && entry.status === "deleted")) {
+              pending.delete(processed.id);
+              toPin.delete(processed.id);
+              continue;
+            }
+            if (personalToken && !processed.pinnedByMe) toPin.set(processed.id, processed.url);
+            else {
+              pending.delete(processed.id);
+              toPin.delete(processed.id);
+            }
           }
-          yield processed.result;
+          // Pin retries reuse verification but must not redeliver the object.
+          if (!processed.pinRetry || "error" in processed.result || processed.result.tombstone) yield processed.result;
+          if (toPin.size >= 100) {
+            const pinError = await flushPins();
+            if (pinError) yield pinError;
+          }
         }
       }
     } finally {
-      await iterator.return("");
+      try {
+        await iterator.return("");
+      } finally {
+        // Early closure still sponsors objects already delivered. Without a
+        // returned cursor, a later discovery can safely try these pins again.
+        const pinError = await flushPins();
+        if (pinError) console.error("Could not pin delivered inbox messages:", pinError.error);
+      }
     }
   }
 
@@ -1593,17 +1649,19 @@ const CursorSchema = strictObject({
   schema: union([looseObject({}), boolean()]),
 });
 
-const PendingReadSchema = strictObject({
+const PendingMessageSchema = strictObject({
   id: string(),
   url: string(),
   delay: int().check(nonnegative()),
   retryAt: int().check(nonnegative()),
+  // A pin retry must not redeliver an object the caller already received.
+  pin: optional(literal(true)),
 });
 const SingleEndpointCursorSchema = strictObject({
-  version: literal(2),
+  version: literal(3),
   scope: nullable(string()),
   cursor: string(),
-  pending: array(PendingReadSchema),
+  pending: array(PendingMessageSchema),
 });
 
 interface SingleEndpointQueryResult<Schema extends JSONSchema> {
@@ -1618,7 +1676,7 @@ interface SingleEndpointQueryResult<Schema extends JSONSchema> {
 }
 interface SingleEndpointQueryError {
   error: Error;
-  // A temporary read failure needs another poll; proven invalid content does not.
+  // Temporary failures need another poll; proven invalid content does not.
   retryable: boolean;
 }
 type SingleEndpointQueryItem<Schema extends JSONSchema> =

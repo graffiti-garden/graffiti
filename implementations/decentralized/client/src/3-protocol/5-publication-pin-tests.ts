@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { GraffitiSession } from "@graffiti-garden/api";
 import { GraffitiDecentralized } from "./5-graffiti";
+import { Inboxes } from "../1-services/4-inboxes";
 import { decentralizedTestUsers, type DecentralizedTestEnvironment } from "../../test/environment";
 
 const actor = "did:web:author.test";
@@ -124,27 +125,42 @@ export function publicationPinIntegrationTests(
   sessions: () => GraffitiSession[],
 ) {
   describe("Publication pin policy", () => {
-    test.each([false, true])("only sponsors the author's inboxes (private: %s)", async privateObject => {
+    test.each([false, true])("sponsors author inboxes before recipient validation (private: %s)", async privateObject => {
       const [author, recipient] = sessions();
       const writer = useGraffiti();
       const object = await writer.post({
         value: {}, channels: [crypto.randomUUID()],
         ...(privateObject ? { allowed: [recipient.actor] } : {}),
       }, author);
-      const pins = await (await environment.database()).prepare(`
+      const db = await environment.database();
+      const pins = () => db.prepare(`
         SELECT i.account_id AS owner, p.account_id AS sponsor
         FROM inbox_message_pins p JOIN inbox_messages m ON m.message_seq = p.message_seq
         JOIN inboxes i ON i.inbox_seq = m.inbox_seq
         WHERE json_extract(m.object, '$.url') = ? ORDER BY owner
       `).bind(object.url).all<{ owner: number; sponsor: number }>();
       const sponsor = decentralizedTestUsers[0].accountId;
-      expect(pins.results).toEqual([
+      expect((await pins()).results).toEqual([
         ...(!privateObject ? [{ owner: 0, sponsor }] : []),
         { owner: sponsor, sponsor },
       ]);
       // Existing reads/deletion still use the current announcement format.
       expect((await writer.get(object.url, {}, { session: author })).url).toBe(object.url);
-      await writer.delete(object, author);
+      if (privateObject) {
+        // Delivery itself is anonymous. The recipient sponsors its own entry
+        // only after verifying the object and its private access ticket.
+        expect((await useGraffiti().get(object.url, {}, { session: recipient })).url).toBe(object.url);
+        const recipientId = decentralizedTestUsers[1].accountId;
+        expect((await pins()).results).toEqual([
+          { owner: sponsor, sponsor }, { owner: recipientId, sponsor: recipientId },
+        ]);
+      }
+      const pin = vi.spyOn(Inboxes.prototype, "pin");
+      try {
+        await writer.delete(object, author);
+        // Authors send deletion announcements without sponsoring them either.
+        expect(pin).not.toHaveBeenCalled();
+      } finally { pin.mockRestore(); }
     });
   });
 }

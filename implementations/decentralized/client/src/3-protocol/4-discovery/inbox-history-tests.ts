@@ -1,7 +1,7 @@
 import { afterEach, assert, describe, expect, test, vi } from "vitest";
 import { InboxHistory } from "./inbox-history";
 import { createMessageStore } from "./message-store";
-import { Inboxes, LABELED_MESSAGE_LABEL_KEY } from "../../1-services/4-inboxes";
+import { Inboxes, LABELED_MESSAGE_LABEL_KEY, PINNED_BY_ME_KEY, type LabeledMessageBase } from "../../1-services/4-inboxes";
 import { GraffitiErrorUnauthorized } from "../../1-services/utilities";
 import { randomBytes } from "@noble/hashes/utils.js";
 import { GraffitiErrorCursorExpired, type GraffitiObjectBase } from "@graffiti-garden/api";
@@ -314,7 +314,7 @@ function cborResponse(value: unknown) {
   });
 }
 
-function queryPage(results: (typeof message)[], cursor: string, hasMore = false) {
+function queryPage(results: LabeledMessageBase[], cursor: string, hasMore = false) {
   return cborResponse({ results, hasMore, cursor });
 }
 
@@ -343,6 +343,28 @@ export function inboxUnitTests() {
     afterEach(() => {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
+    });
+
+    test.each(["query", "export"] as const)("%s passes fresh pin hints through without caching them", async kind => {
+      const first = { ...message, [PINNED_BY_ME_KEY]: true };
+      const second = { ...message, id: "message-2", [PINNED_BY_ME_KEY]: false };
+      const fetch = vi.fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(queryPage([first], "first", true))
+        .mockResolvedValueOnce(queryPage([second], "second"))
+        .mockResolvedValueOnce(queryPage([], "third"));
+      vi.stubGlobal("fetch", fetch);
+      const history = new InboxHistory();
+      const stream = () => kind === "query"
+        ? history.query(inboxUrl, message.m.t, {}, "token")
+        : history.export(inboxUrl, "token");
+      const fresh = [];
+      for await (const item of stream()) fresh.push(item);
+      expect(fresh).toEqual([first, second]);
+      // A later replay retains both bodies, but neither account-specific hint.
+      const replayed = [];
+      for await (const item of stream()) replayed.push(item);
+      expect(replayed).toEqual([message, { ...message, id: "message-2" }]);
+      expect(fetch).toHaveBeenCalledTimes(3);
     });
 
     describe("cursor transport", () => {

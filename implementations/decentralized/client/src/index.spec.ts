@@ -39,6 +39,7 @@ import { sessionTests } from "./3-protocol/1-sessions/sessions-tests";
 import { handleTests } from "./3-protocol/2-handles-tests";
 import { readCacheTests } from "./3-protocol/5-read-cache-tests";
 import { publicationPinTests, publicationPinIntegrationTests } from "./3-protocol/5-publication-pin-tests";
+import { personalInboxPinTests } from "./3-protocol/5-personal-inbox-pin-tests";
 import { verificationStateTests } from "./3-protocol/4-discovery/verification-state-tests";
 import { objectEncodingTests } from "./3-protocol/3-object-encoding-tests";
 import { GraffitiDecentralized } from "./3-protocol/5-graffiti";
@@ -447,6 +448,7 @@ inboxUnitTests();
 discoveryCursorTests();
 discoveryErrorTests();
 publicationPinTests();
+personalInboxPinTests();
 sessionTests();
 
 inboxCacheTests();
