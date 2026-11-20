@@ -62,6 +62,7 @@ function serveMessages(graffiti: ValidationGraffiti, messages: LabeledMessage<{}
 }
 
 function mockSession(graffiti: ValidationGraffiti) {
+  vi.spyOn(graffiti.inboxService, "pin").mockResolvedValue();
   const service = { token: "session-token", authorizationEndpoint: "https://example.test/auth" };
   vi.spyOn(graffiti.services.sessions, "resolveSession").mockReturnValue({
     actor, tokens: [], servicesByAuthorization: [],
