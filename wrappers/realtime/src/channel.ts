@@ -12,7 +12,7 @@ import { GraffitiRelay, joinTransport } from "@graffiti-garden/realtime/signalin
 import { encode, decode } from "@ipld/dag-cbor";
 
 export type Change = { object: GraffitiObjectBase; tombstone?: true };
-const protocol = "graffiti-implementation-realtime/v1";
+const protocol = "graffiti-wrapper-realtime/v1";
 
 /**
  * One channel's direct Trystero connections. Graffiti authenticates each endpoint
@@ -22,14 +22,13 @@ const protocol = "graffiti-implementation-realtime/v1";
 export class Channel {
   private relay: GraffitiRelay;
   private room;
-  private identity;
   private changes;
   private media;
   private peers = new Map<string, Promise<string | undefined>>();
   private closed = false;
 
   constructor(
-    private graffiti: Graffiti,
+    graffiti: Graffiti,
     readonly channel: string,
     readonly session: GraffitiSession,
     receive: (change: Change) => void,
@@ -37,18 +36,19 @@ export class Channel {
   ) {
     this.relay = new GraffitiRelay(graffiti, session, report);
     this.room = joinTransport({ appId: protocol, identity: "none", password: channel, relay: this.relay }, channel);
-    this.identity = this.room.makeAction<null, string>("identity", { kind: "request" });
+    const identity = this.room.makeAction<null, string>("identity", { kind: "request" });
     this.changes = this.room.makeAction<string>("objects");
     this.media = this.room.makeAction<string, Uint8Array | null>("media", { kind: "request" });
     const validate = compileGraffitiObjectSchema(GraffitiObjectJSONSchema);
+    void validate.catch(report);
     const binding = this.room.getSelf().then(({ peerId, userId }) =>
       this.relay.post({ protocol, peerId, userId }, []));
-    this.identity.onRequest(async () => (await binding).url);
+    identity.onRequest(async () => (await binding).url);
     void binding.catch(report);
     this.room.onError(error => report(new Error(error.message, { cause: error })));
 
     this.room.onPeerJoin(({ peerId, userId }) => {
-      const verified = this.identity.request(null, { target: peerId }).then(async url => {
+      const verified = identity.request(null, { target: peerId }).then(async url => {
         const object = await graffiti.get(url, {
           properties: { value: {
             properties: { protocol: { const: protocol }, peerId: { const: peerId }, userId: { const: userId } },
@@ -134,7 +134,7 @@ export class Channel {
   async close() {
     this.closed = true;
     this.peers.clear();
-    await this.room.leave();
-    await this.relay.close();
+    try { await this.room.leave(); }
+    finally { await this.relay.close(); }
   }
 }

@@ -7,4 +7,3 @@ The abstraction *also* makes it possible to swap out very different implementati
 The implementations are:
 - The [local implementation](./local) is a simple implementation of the API that can be used test and develop Graffiti apps in isolation without polluting a real server with test data.
 - The [decentralized implementation](./decentralized) describes a client-server protocol so that clients can retrieve data from multiple generic Graffiti servers, allowing users to store and serve their data from the server of their choice.
-- The [realtime implementation](./realtime) adds live peer delivery to another implementation, while retaining the ordinary Graffiti API.

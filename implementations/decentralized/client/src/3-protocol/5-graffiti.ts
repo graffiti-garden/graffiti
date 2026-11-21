@@ -567,7 +567,7 @@ export class GraffitiDecentralized implements Graffiti {
       kind: kind ?? null,
       allowedTickets: allowedTickets ?? null,
       mediaBytes: mediaBytes ?? null,
-      tombstone: false, pending: true, started: false, modified: 0,
+      tombstone: false, pending: true, started: false,
       due: Date.now() + this.writeGracePeriod,
     });
     await this.acceptWrite(object.url, session);
@@ -810,7 +810,7 @@ export class GraffitiDecentralized implements Graffiti {
         tags: existing.tags, allowedTickets: existing.allowedTickets ?? null,
         storageBucketKey: existing.storageBucketKey,
         objectBytes: null, mediaBytes: null, tombstone: false,
-        pending: false, started: true, modified: 0, due: 0,
+        pending: false, started: true, due: 0,
       });
     }
     const deleted = await this.outbox.delete(objectUrl);

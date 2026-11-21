@@ -44,12 +44,12 @@ export class Outbox {
     }), "shared");
   }
 
-  async put(write: PendingWrite) {
+  async put(write: Omit<PendingWrite, "modified">) {
     const store = await this.store;
     await store.lock(async () => {
-      write.modified = ((await store.get("clock") as number | undefined) ?? 0) + 1;
-      await store.set("clock", write.modified);
-      await store.set(write.object.url, write);
+      const modified = ((await store.get("clock") as number | undefined) ?? 0) + 1;
+      await store.set("clock", modified);
+      await store.set(write.object.url, { ...write, modified });
     });
   }
 
@@ -73,9 +73,9 @@ export class Outbox {
 
   /** Serialize uploads of a URL, including across tabs, without blocking local deletes. */
   async sync(url: string, persist: (write: PendingWrite) => Promise<void>): Promise<void> {
+    const store = await this.store;
     const existing = this.syncing.get(url);
     if (existing) return existing;
-    const store = await this.store;
     const work = async () => {
       while (true) {
         const write = await store.lock(async () => {

@@ -50,7 +50,7 @@ async function setup() {
   const end = await initial.next();
   if (!end.done) throw new Error("Expected an empty initial discovery");
   const binding = await local.post({ value: {
-    protocol: "graffiti-implementation-realtime/v1", peerId: "peer", userId: "key",
+    protocol: "graffiti-wrapper-realtime/v1", peerId: "peer", userId: "key",
   }, channels: [] }, peer);
   raw.identity.request.mockResolvedValue(binding.url);
   raw.connect();
@@ -59,7 +59,7 @@ async function setup() {
     await (await new GraffitiLocalObjects(options).db).destroy();
     await rm(directory, { recursive: true, force: true });
   });
-  return { graffiti, local, raw, session, peer, cursor: end.value.cursor };
+  return { graffiti, local, raw, session, peer, binding, cursor: end.value.cursor };
 }
 
 test("discovers authenticated live objects absent from storage and preserves deletions", async () => {
@@ -94,6 +94,33 @@ test("rejects forged actors and sends only the peer's allowed and channel view",
   raw.changes.send.mockClear();
   const secret = await graffiti.post({ value: { secret: true }, channels: ["game"], allowed: [] }, session);
   expect(raw.changes.send.mock.calls.some(([text]) => JSON.parse(text).object.url === secret.url)).toBe(false);
+});
+
+test("shares channel views without exposing unrequested channels", async () => {
+  const { graffiti, raw, session, peer, binding } = await setup();
+  const other = transport();
+  factory.mockReturnValueOnce(other);
+  for await (const _ of graffiti.discover(["other"], {}, session)) { /* Open the second channel. */ }
+  other.identity.request.mockResolvedValue(binding.url);
+  other.connect();
+  const object = { url: "test:both-channels", actor: peer.actor, channels: ["game"], value: { x: 1 } };
+  await raw.receive({ object });
+  await other.receive({ object: { ...object, channels: ["other"] } });
+  const one = [];
+  for await (const result of graffiti.discover(["game"], {}, session)) one.push(result);
+  expect(one).toEqual([{ object }]);
+  const both = [];
+  for await (const result of graffiti.discover(["game", "other"], {}, session)) both.push(result);
+  expect(both).toEqual([{ object: { ...object, channels: ["game", "other"] } }]);
+  await raw.receive({ object, tombstone: true });
+  await expect(graffiti.get(object, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+});
+
+test("changing a returned object does not change the live cache", async () => {
+  const { graffiti, session } = await setup();
+  const object = await graffiti.post({ value: { x: 1 }, channels: ["game"] }, session);
+  Object.assign(object.value, { x: 2 });
+  expect((await graffiti.get(object, {}, session)).value).toEqual({ x: 1 });
 });
 
 test("live discovery advances while persistent discovery is waiting", async () => {

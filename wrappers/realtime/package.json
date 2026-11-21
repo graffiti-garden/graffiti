@@ -1,7 +1,7 @@
 {
-  "name": "@graffiti-garden/implementation-realtime",
+  "name": "@graffiti-garden/wrapper-realtime",
   "version": "0.0.0",
-  "description": "A Graffiti implementation combining local-first storage with live peer connections",
+  "description": "Live peer delivery layered over the Graffiti API",
   "type": "module",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -43,7 +43,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/graffiti.git",
-    "directory": "implementations/realtime"
+    "directory": "wrappers/realtime"
   },
   "bugs": {
     "url": "https://github.com/graffiti-garden/graffiti/issues"

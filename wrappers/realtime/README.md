@@ -1,10 +1,10 @@
-# Graffiti Realtime Implementation
+# Graffiti Realtime Wrapper
 
 Use the Graffiti API for live objects and Blob media, backed by another Graffiti implementation. Trystero handles the WebRTC connections; Graffiti handles signaling and actor identity.
 
 ```ts
 import { GraffitiDecentralized } from "@graffiti-garden/implementation-decentralized";
-import { GraffitiRealtime } from "@graffiti-garden/implementation-realtime";
+import { GraffitiRealtime } from "@graffiti-garden/wrapper-realtime";
 
 const storage = new GraffitiDecentralized({ writeGracePeriod: 1000 });
 const graffiti = new GraffitiRealtime(storage);
@@ -28,6 +28,9 @@ For explicit storage confirmation, such as before sharing a link outside the app
 ```ts
 const note = await graffiti.post({ value: { text: "Hello" }, channels: ["notes"] }, session);
 await graffiti.flush({ urls: [note.url] }, session);
+
+// Or wait for everything currently pending for this session:
+await graffiti.flush({}, session);
 ```
 
 | Operation | Behavior |
