@@ -17,6 +17,16 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/cjs/index.js"
       }
+    },
+    "./signaling": {
+      "import": {
+        "types": "./dist/signaling.d.ts",
+        "default": "./dist/esm/signaling.js"
+      },
+      "require": {
+        "types": "./dist/signaling.d.ts",
+        "default": "./dist/cjs/signaling.js"
+      }
     }
   },
   "files": [

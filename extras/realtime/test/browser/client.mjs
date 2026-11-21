@@ -15,6 +15,7 @@ async function rpc(method, ...args) {
   return result.value;
 }
 const graffiti = {
+  flush: (...args) => rpc("flush", ...args),
   post: (...args) => rpc("post", ...args),
   get: (...args) => rpc("get", ...args),
   delete: (...args) => rpc("delete", ...args),

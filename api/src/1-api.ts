@@ -9,6 +9,7 @@ import type {
   GraffitiMedia,
   GraffitiPostMedia,
   GraffitiMediaAccept,
+  GraffitiFlushOptions,
 } from "./2-types.js";
 import type { JSONSchema } from "json-schema-to-ts";
 
@@ -111,7 +112,22 @@ import type { JSONSchema } from "json-schema-to-ts";
  */
 export abstract class Graffiti {
   /**
+   * Immediately synchronize the selected pending writes with the implementation's
+   * storage. Captures writes when called; later writes do not extend the batch.
+   * A post deleted before upload is settled without being published.
+   * Failures reject this call but leave unfinished writes available for retry.
+   * This confirms storage, not delivery to every reader. Local implementations
+   * may already have completed the writes and resolve immediately.
+   *
+   * @group 1 - Single-Object Methods
+   */
+  abstract flush(options: GraffitiFlushOptions, session: GraffitiSession): Promise<void>;
+
+  /**
    * Creates a new {@link GraffitiObjectBase | object}.
+   * Resolves once the object is accepted into durable local storage or by the
+   * implementation's storage service. Other devices may not see it yet.
+   * Use {@link flush} when confirmation from the storage service is needed.
    *
    * @returns Returns the object that has been posted, complete with its
    * assigned {@link GraffitiObjectBase.url | `url`} and
@@ -182,6 +198,8 @@ export abstract class Graffiti {
   /**
    * Deletes an object from a given {@link GraffitiObjectBase.url | `url`}
    * that had previously been {@link post | `post`ed}.
+   * Resolves after accepting the deletion locally; use {@link flush} to confirm
+   * that it has reached the implementation's storage service.
    * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
@@ -289,6 +307,8 @@ export abstract class Graffiti {
 
   /**
    * Uploads media data, such as an image or video.
+   * Resolves after durable local acceptance, with the final URL. Use {@link flush}
+   * to confirm completion at the implementation's storage service.
    *
    * Unlike structured {@link GraffitiObjectBase | objects},
    * media is not indexed for {@link discover | `discover`y} and
@@ -314,6 +334,8 @@ export abstract class Graffiti {
 
   /**
    * Deletes media previously {@link postMedia | `post`ed} to a given URL.
+   * Resolves after accepting the deletion locally; use {@link flush} for storage
+   * service confirmation.
    *
    * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
    *

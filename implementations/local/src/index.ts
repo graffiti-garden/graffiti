@@ -21,6 +21,8 @@ export class GraffitiLocal extends GraffitiRuntimeTypes {
 }
 
 class GraffitiLocal_ implements Graffiti {
+  /** Local writes have reached their storage before their promises resolve. */
+  flush: Graffiti["flush"] = async () => {};
   protected graffitiLocalIdentity = new GraffitiLocalIdentity();
   login = this.graffitiLocalIdentity.login.bind(this.graffitiLocalIdentity);
   logout = this.graffitiLocalIdentity.logout.bind(this.graffitiLocalIdentity);

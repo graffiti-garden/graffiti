@@ -50,15 +50,16 @@ export class GraffitiRelay {
   ) {
     if (this.closed) throw new Error("The realtime room has been left.");
     const object = await this.graffiti.post({ value, channels }, this.session);
+    this.records.set(
+      object.url,
+      ttl ? setTimeout(() => void this.remove(object.url), ttl) : undefined,
+    );
+    await this.graffiti.flush({ urls: [object.url] }, this.session);
     // Graffiti requests are not abortable; clean up a write that finishes late.
     if (this.closed) {
       await this.remove(object.url);
       throw new Error("The realtime room has been left.");
     }
-    this.records.set(
-      object.url,
-      ttl ? setTimeout(() => void this.remove(object.url), ttl) : undefined,
-    );
     return object;
   }
 

@@ -1,6 +1,7 @@
 import type { JSONSchema } from "json-schema-to-ts";
 import {
   normalizeGraffitiReadOptions,
+  isActorAllowedGraffitiObject,
   GraffitiErrorNotFound,
   maskGraffitiObject,
   type Graffiti,
@@ -38,6 +39,8 @@ import {
 } from "../1-services/4-inboxes";
 import { InboxHistory, type MessageStream, type InboxReadOptions } from "./4-discovery/inbox-history";
 import { createMessageStore, type MessageStore } from "./4-discovery/message-store";
+import { Outbox, type PendingWrite } from "./outbox";
+import { cacheBatch } from "./4-discovery/cache";
 import { VerificationState, type MessageState } from "./4-discovery/verification-state";
 import { GraffitiErrorUnauthorized } from "../1-services/utilities";
 
@@ -143,6 +146,8 @@ const MESSAGE_LABEL_TRASH = 2;
 const MESSAGE_LABEL_INVALID = 4;
 
 export interface GraffitiDecentralizedOptions {
+  /** Milliseconds to wait before uploading a new local write. Defaults to 1000. */
+  writeGracePeriod?: number;
   identityCreatorEndpoint?: string;
   defaultInboxEndpoints?: string[];
   /** For login hosts that already have the application in the preceding history entry. */
@@ -157,6 +162,10 @@ const LOCAL_STORAGE_REMEMBERED_HANDLE_KEY = "graffiti-login-remembered-handle";
 
 // @ts-ignore
 export class GraffitiDecentralized implements Graffiti {
+  protected readonly outbox = new Outbox();
+  private readonly writeGracePeriod: number;
+  private writeTimer?: ReturnType<typeof setTimeout>;
+  private writeTimerAt = Infinity;
   protected readonly dids = new DecentralizedIdentifiers();
   protected readonly authorization = new Authorization();
   protected readonly storageBuckets = new StorageBuckets();
@@ -204,6 +213,11 @@ export class GraffitiDecentralized implements Graffiti {
   protected readonly identityCreatorEndpoint: string;
   protected readonly replaceInitialLoginHistoryEntry: boolean;
   constructor(options?: GraffitiDecentralizedOptions) {
+    this.writeGracePeriod = options?.writeGracePeriod ?? 1000;
+    if (!Number.isFinite(this.writeGracePeriod) || this.writeGracePeriod < 0) {
+      throw new TypeError("writeGracePeriod must be a nonnegative number of milliseconds");
+    }
+    this.sessionEvents.addEventListener("login", () => void this.scheduleWrites(0).catch(console.error));
     this.replaceInitialLoginHistoryEntry =
       options?.replaceInitialLoginHistoryEntry ?? false;
     if (this.replaceInitialLoginHistoryEntry) {
@@ -251,6 +265,7 @@ export class GraffitiDecentralized implements Graffiti {
     // log out the used session
     for (const method of [
       "post",
+      "flush",
       "get",
       "delete",
       "postMedia",
@@ -538,55 +553,116 @@ export class GraffitiDecentralized implements Graffiti {
 
   protected async postRecord<Schema extends JSONSchema>(
     kind: RecordKind | undefined,
-    ...args: Parameters<typeof Graffiti.prototype.post<Schema>>
+    ...args: [...Parameters<typeof Graffiti.prototype.post<Schema>>, Uint8Array?]
   ) {
-    const [partialObject, session] = args;
-    const resolvedSession = this.sessions.resolveSession(session);
-
-    // Encode the object
+    const [partialObject, session, mediaBytes] = args;
+    this.sessions.resolveSession(session);
     const { object, tags, objectBytes, allowedTickets } =
       await this.objectEncoding.encode<Schema>(partialObject, session.actor, kind);
-
-    // Generate a random key under which to store the object
-    // If the object is private, this means no one will be able to
-    // fetch the object, even if they know its URL.
-    // If the object is public but in some secret channel, the storage
-    // location means the object can be moved around or "rotated"
-    // without changing its URL.
-    const storageBucketKeyBytes = randomBytes();
     const storageBucketKey = await this.stringEncoder.encode(
-      STRING_ENCODER_METHOD_BASE64URL,
-      storageBucketKeyBytes,
+      STRING_ENCODER_METHOD_BASE64URL, randomBytes(),
     );
+    await this.outbox.put({
+      object, tags, objectBytes, storageBucketKey,
+      kind: kind ?? null,
+      allowedTickets: allowedTickets ?? null,
+      mediaBytes: mediaBytes ?? null,
+      tombstone: false, pending: true, started: false, modified: 0,
+      due: Date.now() + this.writeGracePeriod,
+    });
+    await this.acceptWrite(object.url, session);
+    return structuredClone(object);
+  }
 
-    // Store the object at the random key
-    await this.storageBuckets.put(
-      resolvedSession.storageBucket.serviceEndpoint,
-      storageBucketKey,
-      objectBytes,
-      resolvedSession.storageBucket.token,
-    );
+  /** Synchronize a snapshot of the selected writes, keeping failures retryable. */
+  flush: Graffiti["flush"] = (...args) => this.flushWrites(...args);
 
-    // Announce the object, its key,
-    // and other metadata to appropriate inboxes
-    try {
-      await this.announceObject(
-        object,
-        tags,
-        allowedTickets,
-        storageBucketKey,
-        session,
-        kind,
-      );
-    } catch (error) {
-      await this.storageBuckets.delete(
-        resolvedSession.storageBucket.serviceEndpoint,
-        storageBucketKey,
-        resolvedSession.storageBucket.token,
-      ).catch((rollbackError) => console.error("Could not roll back stored object:", rollbackError));
-      throw error;
+  private async flushWrites({ urls }: Parameters<Graffiti["flush"]>[0], session: GraffitiSession) {
+    this.sessions.resolveSession(session);
+    const selected = urls && new Set(urls.map(stripGraffitiUrlAddendums));
+    const { writes } = await this.outbox.read();
+    await cacheBatch(writes.filter(write => write.pending &&
+      write.object.actor === session.actor && (!selected || selected.has(write.object.url))),
+    write => this.outbox.sync(write.object.url, current => this.persistWrite(current)));
+  }
+
+  private async acceptWrite(url: string, session: GraffitiSession) {
+    if (!(await this.outbox.store).shared) {
+      // Storage may be blocked, or this may be a Node client. Do not acknowledge
+      // an in-memory write until the storage service has accepted it.
+      await this.flushWrites({ urls: [url] }, session);
+    } else {
+      await this.scheduleWrites();
     }
-    return object;
+  }
+
+  /** Resume durable work after login, and retry failed uploads while the page is open. */
+  private async scheduleWrites(delay = this.writeGracePeriod) {
+    if (!(await this.outbox.store).shared) return;
+    const at = Date.now() + delay;
+    if (this.writeTimer !== undefined && this.writeTimerAt <= at) return;
+    clearTimeout(this.writeTimer);
+    this.writeTimerAt = at;
+    this.writeTimer = setTimeout(async () => {
+      this.writeTimer = undefined;
+      this.writeTimerAt = Infinity;
+      try {
+        const { writes } = await this.outbox.read();
+        const pending = writes.filter(write => {
+          if (!write.pending) return false;
+          try { this.sessions.resolveSession({ actor: write.object.actor }); return true; }
+          catch { return false; } // Login will resume this account's writes.
+        });
+        await cacheBatch(pending.filter(write => write.due <= Date.now()), async write => {
+          try { await this.outbox.sync(write.object.url, current => this.persistWrite(current)); }
+          catch (error) {
+            this.tryLogoutIfUnauthorized(error, { actor: write.object.actor });
+            console.error("Graffiti write is pending; flush can retry it:", error);
+          }
+        });
+        const remaining = (await this.outbox.read()).writes.filter(write => write.pending && pending.some(old => old.object.url === write.object.url));
+        if (remaining.length) await this.scheduleWrites(Math.max(0, Math.min(...remaining.map(write => write.due)) - Date.now()));
+      } catch (error) { console.error("Could not read Graffiti's pending writes:", error); }
+    }, delay);
+  }
+
+  private async persistWrite(write: PendingWrite) {
+    const session = { actor: write.object.actor };
+    const resolved = this.sessions.resolveSession(session);
+    const bucket = resolved.storageBucket;
+    if (write.tombstone) {
+      // Read announcement IDs without fetching the possibly already deleted
+      // bytes. This also lets a retry complete after a lost DELETE response.
+      const announcements: MessageMetadataAnnouncements = [];
+      for await (const message of this.inboxHistory.query(
+        resolved.personalInbox.serviceEndpoint,
+        [new TextEncoder().encode(write.object.url)], {}, resolved.personalInbox.token,
+      )) {
+        const metadata = MessageMetaDataSelfSchema.parse(dagCborDecode(message.m.m));
+        if (metadata[MESSAGE_DATA_STORAGE_BUCKET_KEY] !== write.storageBucketKey) continue;
+        announcements.push(...metadata[MESSAGE_DATA_ANNOUNCEMENTS_KEY], {
+          [MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY]: session.actor,
+          [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: message.id,
+        });
+      }
+      await this.storageBuckets.delete(bucket.serviceEndpoint, write.storageBucketKey, bucket.token);
+      if (write.kind === RECORD_KIND_MEDIA && "key" in write.object.value && typeof write.object.value.key === "string") {
+        await this.storageBuckets.delete(bucket.serviceEndpoint, write.object.value.key, bucket.token);
+      }
+      await this.verification.deleted(write.object.url, write.storageBucketKey);
+      if (announcements.length) await this.announceObject(
+        write.object, write.tags, write.allowedTickets ?? undefined,
+        write.storageBucketKey, session, write.kind ?? undefined, announcements,
+      );
+    } else {
+      if (write.mediaBytes !== null && "key" in write.object.value && typeof write.object.value.key === "string") {
+        await this.storageBuckets.put(bucket.serviceEndpoint, write.object.value.key, write.mediaBytes, bucket.token);
+      }
+      await this.storageBuckets.put(bucket.serviceEndpoint, write.storageBucketKey, write.objectBytes!, bucket.token);
+      // Keep the bytes on a partial failure: the same queued identity is retried.
+      await this.announceObject(write.object, write.tags, write.allowedTickets ?? undefined,
+        write.storageBucketKey, session, write.kind ?? undefined);
+    }
   }
 
   get = <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.get<Schema>>) =>
@@ -619,6 +695,20 @@ export class GraffitiDecentralized implements Graffiti {
     // Search the inboxes for all objects
     // matching the tag, object.url
     const objectUrl = stripGraffitiUrlAddendums(unpackObjectUrl(url));
+    const local = await this.outbox.get(objectUrl);
+    if (local) {
+      if (local.tombstone || (local.kind !== null && local.kind !== kind) ||
+          !isActorAllowedGraffitiObject(local.object, session)) throw new GraffitiErrorNotFound("Object not found");
+      const masked = maskGraffitiObject(local.object, [], session?.actor);
+      if (!validator(masked)) throw new GraffitiErrorSchemaMismatch("Object does not match the supplied schema");
+      // Pending data has not reached the service yet; refreshing cannot fetch it
+      // there. Completed data still honors explicit remote freshness checks.
+      const known = await this.verification.read(objectUrl);
+      if (known.some(entry => entry.storageKey === local.storageBucketKey && entry.status === "deleted")) {
+        throw new GraffitiErrorNotFound("Object has been deleted");
+      }
+      if (local.pending || !refresh) return structuredClone(masked);
+    }
     const tags = [new TextEncoder().encode(objectUrl)];
     for (const service of services) {
       // Verified objects belong to Graffiti, not to the inbox query cache.
@@ -635,6 +725,7 @@ export class GraffitiDecentralized implements Graffiti {
             (metadata[RECORD_KIND_KEY] !== undefined && metadata[RECORD_KIND_KEY] !== kind)) continue;
           const object = message.m.o;
           if (!validator(object)) throw new GraffitiErrorSchemaMismatch("Object exists but does not match the supplied schema");
+          if ((await this.outbox.get(objectUrl))?.tombstone) throw new GraffitiErrorNotFound("Object has been deleted");
           return structuredClone(object);
         }
       }
@@ -669,6 +760,7 @@ export class GraffitiDecentralized implements Graffiti {
           );
         }
 
+        if ((await this.outbox.get(objectUrl))?.tombstone) throw new GraffitiErrorNotFound("Object has been deleted");
         return structuredClone(object);
       }
     }
@@ -680,123 +772,61 @@ export class GraffitiDecentralized implements Graffiti {
 
   protected async deleteRecord(kind: RecordKind, ...[url, session]: Parameters<Graffiti["delete"]>) {
     const resolvedSession = this.sessions.resolveSession(session);
-
     const objectUrl = stripGraffitiUrlAddendums(unpackObjectUrl(url));
-
-    const { actor } = decodeObjectUrl(objectUrl);
-    if (actor !== session.actor) {
-      throw new GraffitiErrorForbidden("Cannot delete someone else's actor");
+    if (decodeObjectUrl(objectUrl).actor !== session.actor) {
+      throw new GraffitiErrorForbidden("Cannot delete another actor's object");
     }
-
-    // Look in one's personal inbox for the object
-    const iterator = this.querySingleEndpoint<{}>(
-      resolvedSession.personalInbox.serviceEndpoint,
-      {
-        tags: [new TextEncoder().encode(objectUrl)],
-        objectSchema: {},
-      },
-      resolvedSession.personalInbox.token,
-      session.actor,
-    );
-    let existing: SingleEndpointQueryResult<{}> | undefined;
-    for await (const result of iterator) {
-      if ("error" in result) throw result.error;
-      if (result.object.url !== objectUrl) continue;
-      if (result.kind !== undefined && result.kind !== kind) continue;
-      if (result.tombstone) {
-        existing = undefined;
-      } else {
-        existing = result;
-      }
+    const local = await this.outbox.get(objectUrl);
+    if (local && (local.tombstone || (local.kind !== null && local.kind !== kind))) {
+      throw new GraffitiErrorNotFound("Object not found");
     }
-    if (!existing) {
-      throw new GraffitiErrorNotFound(`Object ${objectUrl} not found`);
-    }
-    const {
-      object,
-      storageBucketKey,
-      tags,
-      allowedTickets,
-      announcements,
-      messageId,
-    } = existing;
-
-    // Delete the object from the actor's own storage bucket
-    await this.storageBuckets.delete(
-      resolvedSession.storageBucket.serviceEndpoint,
-      storageBucketKey,
-      resolvedSession.storageBucket.token,
-    );
-
-    await this.verification.deleted(object.url, storageBucketKey);
-
-    // Announce the deletion to all inboxes
-    await this.announceObject(
-      object,
-      tags,
-      allowedTickets,
-      storageBucketKey,
-      session,
-      existing.kind,
-      [
-        ...(announcements ?? []),
-        // Make sure we delete from our own inbox too
+    if (!local) {
+      // Look in one's personal inbox for the object
+      const iterator = this.querySingleEndpoint<{}>(
+        resolvedSession.personalInbox.serviceEndpoint,
         {
-          [MESSAGE_DATA_ANNOUNCEMENT_ACTOR_KEY]: session.actor,
-          [MESSAGE_DATA_ANNOUNCEMENT_MESSAGE_ID_KEY]: messageId,
+          tags: [new TextEncoder().encode(objectUrl)],
+          objectSchema: {},
         },
-      ],
-    );
-
-    return object;
+        resolvedSession.personalInbox.token,
+        session.actor,
+      );
+      let existing: SingleEndpointQueryResult<{}> | undefined;
+      for await (const result of iterator) {
+        if ("error" in result) throw result.error;
+        if (result.object.url !== objectUrl) continue;
+        if (result.kind !== undefined && result.kind !== kind) continue;
+        if (result.tombstone) {
+          existing = undefined;
+        } else {
+          existing = result;
+        }
+      }
+      if (!existing) {
+        throw new GraffitiErrorNotFound(`Object ${objectUrl} not found`);
+      }
+      await this.outbox.put({
+        object: existing.object, kind: existing.kind ?? null,
+        tags: existing.tags, allowedTickets: existing.allowedTickets ?? null,
+        storageBucketKey: existing.storageBucketKey,
+        objectBytes: null, mediaBytes: null, tombstone: false,
+        pending: false, started: true, modified: 0, due: 0,
+      });
+    }
+    const deleted = await this.outbox.delete(objectUrl);
+    await this.acceptWrite(objectUrl, session);
+    return structuredClone(deleted.object);
   }
 
-  postMedia: Graffiti["postMedia"] = async (...args) => {
-    const [media, session] = args;
-
-    const type = media.data.type;
-
-    const resolvedSession = this.sessions.resolveSession(session);
-
-    // Generate a random storage key
-    const keyBytes = randomBytes();
-    const key = await this.stringEncoder.encode(
-      STRING_ENCODER_METHOD_BASE64URL,
-      keyBytes,
+  postMedia: Graffiti["postMedia"] = async (media, session) => {
+    this.sessions.resolveSession(session);
+    const key = await this.stringEncoder.encode(STRING_ENCODER_METHOD_BASE64URL, randomBytes());
+    const { url } = await this.postRecord<typeof MEDIA_OBJECT_SCHEMA>(
+      RECORD_KIND_MEDIA,
+      { value: { key, type: media.data.type, size: media.data.size }, channels: [], allowed: media.allowed },
+      session, new Uint8Array(await media.data.arrayBuffer()),
     );
-
-    // Store the media at that key
-    await this.storageBuckets.put(
-      resolvedSession.storageBucket.serviceEndpoint,
-      key,
-      new Uint8Array(await media.data.arrayBuffer()),
-      resolvedSession.storageBucket.token,
-    );
-
-    // Store the descriptor as media, outside the ordinary object API.
-    try {
-      const { url } = await this.postRecord<typeof MEDIA_OBJECT_SCHEMA>(
-        RECORD_KIND_MEDIA,
-        {
-          value: {
-            key,
-            type,
-            size: media.data.size,
-          },
-          channels: [],
-          allowed: media.allowed,
-        },
-        session,
-      );
-      return url;
-    } catch (error) {
-      await this.storageBuckets.delete(
-        resolvedSession.storageBucket.serviceEndpoint,
-        key,
-        resolvedSession.storageBucket.token,
-      ).catch((rollbackError) => console.error("Could not roll back stored media:", rollbackError));
-      throw error;
-    }
+    return url;
   };
 
   getMedia: Graffiti["getMedia"] = async (...args) => {
@@ -830,6 +860,11 @@ export class GraffitiDecentralized implements Graffiti {
           `Unacceptable media type, ${type}`,
         );
       }
+    }
+
+    const local = await this.outbox.get(object.url);
+    if (local?.mediaBytes !== null && local?.mediaBytes !== undefined) {
+      return { data: new Blob([local.mediaBytes.slice()], { type }), actor: object.actor, allowed: object.allowed };
     }
 
     // Get the actor's storage bucket endpoint
@@ -866,23 +901,8 @@ export class GraffitiDecentralized implements Graffiti {
     };
   };
 
-  deleteMedia: Graffiti["deleteMedia"] = async (...args) => {
-    const [mediaUrl, session] = args;
-
-    const resolvedSession = this.sessions.resolveSession(session);
-
-    const result = await this.deleteRecord(RECORD_KIND_MEDIA, mediaUrl, session);
-
-    if (!("key" in result.value && typeof result.value.key === "string"))
-      throw new Error(
-        "Deleted object was not media: " + JSON.stringify(result, null, 2),
-      );
-
-    await this.storageBuckets.delete(
-      resolvedSession.storageBucket.serviceEndpoint,
-      result.value.key,
-      resolvedSession.storageBucket.token,
-    );
+  deleteMedia: Graffiti["deleteMedia"] = async (url, session) => {
+    await this.deleteRecord(RECORD_KIND_MEDIA, url, session);
   };
 
   async *discoverMeta<Schema extends JSONSchema>(
@@ -893,6 +913,7 @@ export class GraffitiDecentralized implements Graffiti {
     },
     session?: GraffitiSession | null,
     refresh = true,
+    localSince = 0,
   ): GraffitiObjectStream<Schema> {
     const lastTombstoneState = new Map<string, boolean>();
 
@@ -916,6 +937,19 @@ export class GraffitiDecentralized implements Graffiti {
           "Cursor does not match actor's inboxes",
         );
       }
+    }
+
+    const validate = await compileGraffitiObjectSchema(schema);
+    const local = await this.outbox.read();
+    for (const write of local.writes) {
+      if (write.modified <= localSince || (!write.pending && !write.tombstone) ||
+          (write.kind !== null && write.kind !== RECORD_KIND_OBJECT) ||
+          !write.object.channels.some(channel => channels.includes(channel)) ||
+          !isActorAllowedGraffitiObject(write.object, session)) continue;
+      const object = maskGraffitiObject(write.object, channels, session?.actor);
+      if (!validate(object)) continue;
+      lastTombstoneState.set(object.url, write.tombstone);
+      yield write.tombstone ? { object, tombstone: true } : { object };
     }
 
     // Turn the channels into tags
@@ -992,6 +1026,8 @@ export class GraffitiDecentralized implements Graffiti {
           }
           if (item.kind === RECORD_KIND_MEDIA) continue;
           const { object, tombstone, tags: receivedTags } = item;
+          const own = await this.outbox.get(object.url);
+          if (own?.tombstone && !tombstone) continue;
           // Inbox announcements can omit channel names, so recover the queried
           // channels from their tags before applying the usual object mask.
           const matchedChannels = channels.filter((_, index) =>
@@ -1038,6 +1074,7 @@ export class GraffitiDecentralized implements Graffiti {
         channels,
         cursors,
         schema,
+        local: local.clock,
       } satisfies infer_<typeof CursorSchema>),
     };
   }
@@ -1056,18 +1093,20 @@ export class GraffitiDecentralized implements Graffiti {
     let channels: string[];
     let cursors: { [endpoint: string]: string };
     let schema: JSONSchema;
+    let localSince: number;
     try {
       const json = JSON.parse(cursor);
       const parsed = CursorSchema.parse(json);
       channels = parsed.channels;
       cursors = parsed.cursors;
       schema = parsed.schema;
+      localSince = parsed.local ?? 0;
     } catch (error) {
       return (async function* () {
         throw new GraffitiErrorCursorExpired("Invalid cursor");
       })();
     }
-    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh);
+    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh, localSince);
   };
 
   protected tryLogoutIfUnauthorized(
@@ -1588,6 +1627,7 @@ const MEDIA_OBJECT_SCHEMA = {
 } as const satisfies JSONSchema;
 
 const CursorSchema = strictObject({
+  local: optional(int().check(nonnegative())),
   cursors: record(url(), string()),
   channels: array(string()),
   schema: union([looseObject({}), boolean()]),

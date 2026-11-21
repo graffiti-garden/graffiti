@@ -16,6 +16,10 @@ export async function createCache<T>(name: string) {
 
   return {
     shared: cache !== undefined,
+    async keys(): Promise<string[]> {
+      if (!cache) return [...memory.keys()];
+      return (await cache.keys()).map(request => new URL(request.url).searchParams.get("key")!);
+    },
     async get(key: string): Promise<T | undefined> {
       if (!cache) return structuredClone(memory.get(key));
       const response = await cache.match(url(key));

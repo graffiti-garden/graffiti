@@ -192,6 +192,12 @@ export interface GraffitiSession {
   actor: string;
 }
 
+/** Select the pending writes to synchronize with the implementation's storage. */
+export interface GraffitiFlushOptions {
+  /** Restrict synchronization to these object or media URLs. Omit to flush all pending writes for the session. */
+  urls?: string[];
+}
+
 /** Options shared by object reads, media reads, and discovery. */
 export interface GraffitiReadOptions {
   /** Authenticate this read. Omit or use null to read only public data. */
