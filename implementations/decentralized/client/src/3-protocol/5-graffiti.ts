@@ -533,6 +533,11 @@ export class GraffitiDecentralized implements Graffiti {
     await this.sessions.logout(session.actor, options);
   };
 
+  /** Writes already reach the storage service before resolving. */
+  flush: Graffiti["flush"] = async (_urls, session) => {
+    this.sessions.resolveSession(session);
+  };
+
   post = <Schema extends JSONSchema>(...args: Parameters<typeof Graffiti.prototype.post<Schema>>) =>
     this.postRecord<Schema>(RECORD_KIND_OBJECT, ...args);
 

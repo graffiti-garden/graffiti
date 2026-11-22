@@ -68,6 +68,14 @@ export class GraffitiRuntimeTypes implements Graffiti {
     this.sessionEvents = this.graffiti.sessionEvents;
   }
 
+  flush: Graffiti["flush"] = (...args) => {
+    const typedArgs = tuple([
+      array(url()),
+      GraffitiSessionSchema,
+    ]).parse(args);
+    return this.graffiti.flush(...typedArgs);
+  };
+
   login: Graffiti["login"] = (...args) => {
     const typedArgs = tuple([
       optional(extend(requestOptionsSchema, { actor: optional(url()) })),

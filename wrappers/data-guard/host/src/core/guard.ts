@@ -309,6 +309,8 @@ export class Guard {
       }
       return this.prepareDelete(subject, from, source, [url, session], { media });
     }
+    // Synchronization completes writes which have already passed authorization.
+    if (method === "flush") return { args: [structuredClone(args[0]), session], subject: {} };
     if (method === "logout") {
       return {
         args: [session, structuredClone(args[1])],

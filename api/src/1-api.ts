@@ -111,10 +111,27 @@ import type { JSONSchema } from "json-schema-to-ts";
  */
 export abstract class Graffiti {
   /**
+   * Synchronize pending writes for the supplied object or media URLs with the
+   * implementation's storage. Await each write before flushing its URL.
+   * Other URLs are not included; an empty array does no work. This is not an
+   * atomic transaction, and successful writes are not rolled back on failure.
+   * A post deleted before upload is settled without being published.
+   * Failures reject this call but leave unfinished writes available for retry.
+   * This confirms storage, not delivery to every reader. Local implementations
+   * may already have completed the writes and resolve immediately.
+   *
+   * @group 2 - Multi-Object Methods
+   */
+  abstract flush(urls: string[], session: GraffitiSession): Promise<void>;
+
+  /**
    * Creates a new {@link GraffitiObjectBase | object}.
+   * Resolves once the object is accepted into durable local storage or by the
+   * implementation's storage service. Other devices may not see it yet.
+   * Use {@link flush} when confirmation from the storage service is needed.
    *
    * @returns Returns the object that has been posted, complete with its
-   * assigned {@link GraffitiObjectBase.url | `url`} and
+   * final {@link GraffitiObjectBase.url | `url`} and
    * {@link GraffitiObjectBase.actor | `actor`}.
    *
    * @group 1 - Single-Object Methods
@@ -182,6 +199,8 @@ export abstract class Graffiti {
   /**
    * Deletes an object from a given {@link GraffitiObjectBase.url | `url`}
    * that had previously been {@link post | `post`ed}.
+   * Resolves after durable local acceptance or storage-service confirmation.
+   * Use {@link flush} to confirm completion at the storage service.
    * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
@@ -289,6 +308,8 @@ export abstract class Graffiti {
 
   /**
    * Uploads media data, such as an image or video.
+   * Resolves after durable local acceptance or storage-service confirmation,
+   * with the final URL. Use {@link flush} to confirm completion at the storage service.
    *
    * Unlike structured {@link GraffitiObjectBase | objects},
    * media is not indexed for {@link discover | `discover`y} and
@@ -314,6 +335,8 @@ export abstract class Graffiti {
 
   /**
    * Deletes media previously {@link postMedia | `post`ed} to a given URL.
+   * Resolves after durable local acceptance or storage-service confirmation.
+   * Use {@link flush} to confirm completion at the storage service.
    *
    * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
    *

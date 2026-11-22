@@ -14,7 +14,7 @@ import { randomString, randomUrl } from "./utils.js";
 import { randomPostObject } from "@graffiti-garden/api/tests";
 
 export const graffitiCRUDTests = (
-  useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete">,
+  useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete" | "flush">,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
@@ -326,6 +326,7 @@ export const graffitiCRUDTests = (
 
         const prepost = randomPostObject();
         const posted = await graffiti1.post<{}>(prepost, session1);
+        await graffiti1.flush([posted.url], session1);
 
         const gotten1 = await graffiti1.get(posted, {}, { session: session1 });
         const gotten2 = await graffiti2.get(posted, {}, { session: session1 });
@@ -333,6 +334,7 @@ export const graffitiCRUDTests = (
         expect(gotten2).toEqual(posted);
 
         await graffiti1.delete(posted, session1);
+        await graffiti1.flush([posted.url], session1);
 
         await expect(graffiti1.get(posted, {}, { session: session1 })).rejects.toThrow(
           GraffitiErrorNotFound,

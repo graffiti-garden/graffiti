@@ -21,7 +21,7 @@ import {
 export const graffitiDiscoverTests = (
   useGraffiti: () => Pick<
     Graffiti,
-    "discover" | "post" | "get" | "delete" | "continueDiscover"
+    "discover" | "post" | "get" | "delete" | "continueDiscover" | "flush"
   >,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
@@ -673,6 +673,7 @@ export const graffitiDiscoverTests = (
       const writer = useGraffiti();
       const reader = useGraffiti();
       const first = await writer.post<{}>(randomPostObject(), session);
+      await writer.flush([first.url], session);
 
       // A cache miss should still fetch results even without a refresh.
       const initial = reader.discover<{}>(first.channels, {}, { session, refresh: false });
@@ -693,6 +694,7 @@ export const graffitiDiscoverTests = (
         session,
       );
       await writer.delete(first, session);
+      await writer.flush([first.url, second.url], session);
 
       const added: string[] = [];
       const deleted: string[] = [];

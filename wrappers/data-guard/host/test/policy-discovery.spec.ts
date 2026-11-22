@@ -41,7 +41,7 @@ it("uses one policy discovery per site and actor, and writes no policy for ordin
   const unused = vi.fn();
   const sync = new GraffitiSynchronize({
     sessionEvents: new EventTarget(), login: unused, logout: unused,
-    postMedia: unused, getMedia: unused, deleteMedia: unused,
+    postMedia: unused, getMedia: unused, deleteMedia: unused, flush: unused,
     actorToHandle: unused, handleToActor: unused, discover, post,
     get: async (url: string) => values.get(url)!,
     delete: unused,
@@ -109,7 +109,7 @@ it("loads once despite a partial discovery and synchronizes later rule changes",
   const unused = vi.fn();
   const graffiti = new GraffitiSynchronize({
     sessionEvents: new EventTarget(),
-    login: unused, logout: unused, postMedia: unused, getMedia: unused,
+    login: unused, logout: unused, postMedia: unused, getMedia: unused, flush: unused,
     deleteMedia: unused, actorToHandle: unused, handleToActor: unused,
     discover,
     post: async (object: object) => (posted = {
