@@ -27,7 +27,7 @@ const server = createServer(async (request, response) => {
       for await (const part of request) body += part;
       const { method, args } = JSON.parse(body);
       if (
-        !["post", "get", "delete", "discover", "continueDiscover"].includes(
+        !["post", "get", "delete", "discover", "continueDiscover", "flush"].includes(
           method,
         )
       )

@@ -45,7 +45,7 @@ export class DecentralizedTestEnvironment {
   private temporaryDirectory?: string;
   private readonly mocks: MockInstance[] = [];
 
-  async start() {
+  async start({ mocks = true } = {}) {
     this.temporaryDirectory = await mkdtemp(
       join(tmpdir(), "graffiti-decentralized-test-"),
     );
@@ -131,7 +131,13 @@ export class DecentralizedTestEnvironment {
         .run();
     }
 
-    this.installMocks();
+    if (mocks) this.installMocks();
+  }
+
+  /** Route an isolated browser's requests to the same real worker used by unit tests. */
+  async fetch(url: string, init: Parameters<Miniflare["dispatchFetch"]>[1]) {
+    if (!this.miniflare) throw new Error("Miniflare did not start");
+    return this.miniflare.dispatchFetch(url, init);
   }
 
   async stop() {

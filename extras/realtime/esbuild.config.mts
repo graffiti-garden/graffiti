@@ -14,7 +14,7 @@ await esbuild.build({
 
 for (const format of ["esm", "cjs"] as const) {
   await esbuild.build({
-    entryPoints: ["src/index.ts"],
+    entryPoints: ["src/index.ts", "src/signaling.ts"],
     platform: "neutral",
     bundle: true,
     packages: "external",

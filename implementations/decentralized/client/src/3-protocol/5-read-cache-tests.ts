@@ -11,6 +11,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       const graffiti = useGraffiti();
       const session = useSessions()[0];
       const posted = await graffiti.post({ value: { n: 1 }, channels: [] }, session);
+      await graffiti.flush({ urls: [posted.url] }, session);
       await graffiti.get(posted, {}, { session });
       const original = globalThis.fetch;
       const calls: string[] = [];
@@ -65,6 +66,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       let fetched = false;
       try {
         const posted = await writer.post<{}>({ value: {}, channels: [] }, session);
+        await writer.flush({ urls: [posted.url] }, session);
         await writer.get<{}>(posted, {}, { session });
         // The owner has verified its announcement. An anonymous reader starts
         // validating a different announcement of the same key before deletion.
@@ -74,7 +76,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
           await blocked;
           return bytes;
         });
-        const pending = reader.get<{}>(posted, {});
+        const pending = reader.get<{}>(posted, {}, { refresh: true });
         // Attach the rejection assertion before allowing the read to settle.
         const absent = expect(pending).rejects.toBeInstanceOf(GraffitiErrorNotFound);
         await vi.waitFor(() => expect(fetched).toBe(true));
@@ -97,6 +99,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
         const [owner, other] = useSessions();
         const writer = useGraffiti();
         const url = await writer.postMedia({ data: new Blob(["private"], { type: "text/plain" }), allowed: [] }, owner);
+        await writer.flush({ urls: [url] }, owner);
         await writer.getMedia(url, {}, { session: owner });
         // Dropping query history must leave shared payloads available to
         // verified getters, even in another instance.

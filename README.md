@@ -56,7 +56,7 @@ The repository also contains three relatively simple example apps that demonstra
                       └──────────┘ └──────────┘ └──────────┘
 ```
 
-[Extras](./extras/) provide additional capabilities alongside the Graffiti API. [Realtime](./extras/realtime/) uses Graffiti for signaling to set up direct peer-to-peer connections between clients for synchronous, ephemeral, low-latency, and high-bandwidth communication.
+[Extras](./extras/) provide additional capabilities alongside the Graffiti API. [Realtime](./extras/realtime/) uses Graffiti for signaling to set up direct peer-to-peer connections between clients for synchronous, ephemeral, low-latency, and high-bandwidth communication. [Streaming](./extras/streaming/) publishes and plays live audio/video through ordinary Graffiti objects, over any implementation.
 
 ## Development
 

@@ -1,0 +1,70 @@
+{
+  "name": "@graffiti-garden/wrapper-realtime",
+  "version": "0.0.0",
+  "description": "Live peer delivery layered over the Graffiti API",
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/esm/index.js",
+  "main": "./dist/cjs/index.js",
+  "browser": "./dist/browser/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "author": "Theia Henderson",
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test": "npm run test:unit && npm run test:browser",
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "build:js": "tsx esbuild.config.mts",
+    "build": "rm -rf dist && npm run build:types && npm run build:js",
+    "prepublishOnly": "npm run build && npm run check && npm test",
+    "test:unit": "vitest run",
+    "test:browser": "vitest run --config vitest.browser.config.mts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/graffiti-garden/graffiti.git",
+    "directory": "wrappers/realtime"
+  },
+  "bugs": {
+    "url": "https://github.com/graffiti-garden/graffiti/issues"
+  },
+  "dependencies": {
+    "@graffiti-garden/realtime": "^0.0.0",
+    "@graffiti-garden/wrapper-runtime-types": "^0.2.2",
+    "@ipld/dag-cbor": "^10.0.1"
+  },
+  "peerDependencies": {
+    "@graffiti-garden/api": "^1.6.0"
+  },
+  "devDependencies": {
+    "@graffiti-garden/api": "^1.6.0",
+    "@graffiti-garden/implementation-local": "^1.6.0",
+    "@types/node": "^26.6.2",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.21.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.17",
+    "@vitest/browser-playwright": "^4.0.17",
+    "playwright": "1.62.1"
+  }
+}

@@ -27,7 +27,7 @@ export const readOptionsArgumentIndex: Readonly<Record<string, number>> = {
 };
 
 export const sessionArgumentIndex: Readonly<Record<string, number>> = {
-  post: 1, delete: 1,
+  post: 1, delete: 1, flush: 1,
   postMedia: 1, deleteMedia: 1, logout: 0,
 };
 

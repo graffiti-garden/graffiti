@@ -19,6 +19,8 @@
     "implementations/local",
     "extras/realtime",
     "implementations/decentralized/client",
+    "wrappers/realtime",
+    "extras/streaming",
     "wrappers/synchronize",
     "wrappers/iframe-rpc",
     "plugins/vue",

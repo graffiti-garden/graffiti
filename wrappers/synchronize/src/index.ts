@@ -100,6 +100,7 @@ export class GraffitiSynchronize implements Graffiti {
   protected readonly options: GraffitiSynchronizeOptions;
 
   login: Graffiti["login"];
+  flush: Graffiti["flush"];
   logout: Graffiti["logout"];
   sessionEvents: Graffiti["sessionEvents"];
   postMedia: Graffiti["postMedia"];
@@ -124,6 +125,7 @@ export class GraffitiSynchronize implements Graffiti {
     this.options = options ?? {};
     this.graffiti = graffiti;
     this.login = graffiti.login.bind(graffiti);
+    this.flush = graffiti.flush.bind(graffiti);
     this.logout = graffiti.logout.bind(graffiti);
     this.sessionEvents = graffiti.sessionEvents;
     this.postMedia = graffiti.postMedia.bind(graffiti);

@@ -55,7 +55,7 @@ export function publicationPinTests() {
       expect(remove).not.toHaveBeenCalled();
     });
 
-    test.each(["object", "media"])("settles all pins before rolling back failed %s publication", async kind => {
+    test.each(["object", "media"])("settles and unpins failed %s publication, retaining its bytes for retry", async kind => {
       const { graffiti, pin, unpin, put, remove } = setup();
       const failure = new Error("Pin response lost");
       let finishShared!: () => void;
@@ -63,10 +63,8 @@ export function publicationPinTests() {
         if (endpoint === personal) throw failure;
         await new Promise<void>(resolve => { finishShared = resolve; });
       });
-      // Cleanup is best effort: one failed unpin/delete must not prevent the
-      // other cleanup attempts or replace the original publication error.
+      // Unpinning is best effort; a failure must not hide the original error.
       unpin.mockRejectedValueOnce(new Error("Unpin offline"));
-      remove.mockRejectedValueOnce(new Error("Delete offline"));
       vi.spyOn(console, "error").mockImplementation(() => {});
       const pending = kind === "object"
         ? graffiti.post({ value: {}, channels: [] }, { actor })
@@ -84,10 +82,10 @@ export function publicationPinTests() {
       expect(unpin).toHaveBeenCalledWith(shared, [shared], "token");
       expect(unpin).toHaveBeenCalledWith(personal, [personal], "token");
       expect(put).toHaveBeenCalledTimes(kind === "media" ? 2 : 1);
-      expect(remove.mock.calls.map(([, key]) => key).sort()).toEqual(put.mock.calls.map(([, key]) => key).sort());
+      expect(remove).not.toHaveBeenCalled();
     });
 
-    test.each([shared, personal])("a failed required send to %s cleans up storage before pinning", async endpoint => {
+    test.each([shared, personal])("a failed required send to %s retains storage for retry without pinning", async endpoint => {
       const { graffiti, send, pin, put, remove } = setup();
       const failure = new Error("Send failed");
       send.mockImplementation(async target => {
@@ -96,7 +94,7 @@ export function publicationPinTests() {
       });
       await expect(graffiti.post({ value: {}, channels: [] }, { actor })).rejects.toBe(failure);
       expect(pin).not.toHaveBeenCalled();
-      expect(remove).toHaveBeenCalledWith(bucket, put.mock.calls[0][1], "token");
+      expect(remove).not.toHaveBeenCalled();
     });
 
     test("recipient delivery remains best effort and never uses the author's pin credentials", async () => {

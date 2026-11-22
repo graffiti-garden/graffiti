@@ -26,3 +26,4 @@ graffitiWrapped.post(...)
 | [Synchronize](./synchronize/) | Routes changes made or received in one part of an application to other parts of the application. A building block to implementing reactivity for [plugins](../plugins/). |
 | [Data Guard](./data-guard/) | Asks for permission before a site accesses or modifies Graffiti data and provides tools for reviewing access history. |
 | [iframe RPC](./iframe-rpc/) | Passes a Graffiti implementation between a host page and an iframe. |
+| [Realtime](./realtime/) | Delivers live objects and Blob media through authenticated peers while the underlying implementation handles persistence. |
