@@ -1,7 +1,7 @@
 {
   "name": "@graffiti-garden/realtime",
   "version": "0.0.0",
-  "description": "Live messages and media streams over WebRTC, with Graffiti signaling and actors",
+  "description": "Live peer delivery layered over the Graffiti API",
   "type": "module",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",
@@ -33,40 +33,38 @@
   "scripts": {
     "check": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "npm run test:unit && npm run test:browser",
-    "test:unit": "vitest run",
-    "test:watch": "vitest",
-    "test:browser": "node --import tsx test/browser/run.mjs",
     "build:types": "tsc --declaration --emitDeclarationOnly",
     "build:js": "tsx esbuild.config.mts",
-    "build:docs": "typedoc --options typedoc.json",
-    "build": "rm -rf dist && npm run build:types && npm run build:js && npm run build:docs",
-    "validate": "npm run build && npm run check && npm test",
-    "prepublishOnly": "npm run validate"
+    "build": "rm -rf dist && npm run build:types && npm run build:js",
+    "prepublishOnly": "npm run build && npm run check && npm test",
+    "test:unit": "vitest run",
+    "test:browser": "vitest run --config vitest.browser.config.mts"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/graffiti-garden/graffiti.git",
-    "directory": "extras/realtime"
+    "directory": "wrappers/realtime"
   },
   "bugs": {
     "url": "https://github.com/graffiti-garden/graffiti/issues"
   },
   "dependencies": {
-    "@trystero-p2p/core": "0.27.0",
-    "json-schema-to-ts": "^3.1.1"
+    "@graffiti-garden/wrapper-runtime-types": "^0.2.2",
+    "@ipld/dag-cbor": "^10.0.1",
+    "@trystero-p2p/core": "0.27.0"
   },
   "peerDependencies": {
-    "@graffiti-garden/api": "^1.4.0"
+    "@graffiti-garden/api": "^1.6.0"
   },
   "devDependencies": {
-    "@graffiti-garden/api": "^1.4.0",
-    "@graffiti-garden/implementation-local": "^1.5.0",
-    "@types/node": "^26.4.0",
+    "@graffiti-garden/api": "^1.6.0",
+    "@graffiti-garden/implementation-local": "^1.6.0",
+    "@types/node": "^26.6.2",
     "esbuild": "^0.28.2",
-    "playwright": "1.62.1",
     "tsx": "^4.21.0",
-    "typedoc": "^0.28.16",
-    "typescript": "~6.0.0",
-    "vitest": "^4.0.17"
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.17",
+    "@vitest/browser-playwright": "^4.0.17",
+    "playwright": "1.62.1"
   }
 }
