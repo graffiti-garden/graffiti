@@ -14,6 +14,10 @@ const MAX_CACHED_ACTOR_LENGTH = 2048;
 
 export class ChannelAttestations {
   private readonly validations = new Map<string, Promise<boolean>>();
+  private readonly attestations = new Map<string, Promise<{
+    attestation: Uint8Array;
+    channelPublicId: Uint8Array;
+  }>>();
 
   async register(
     channelAttestationMethod: string,
@@ -69,13 +73,25 @@ export class ChannelAttestations {
         `Unsupported channel attestation method: ${channelAttestationMethod}`,
       );
     }
-    const privateKey = await this.channelToPrivateKey(channel);
-    const channelPublicId =
-      await this.channelPublicIdFromPrivateKey(privateKey);
-
-    const actorBytes = new TextEncoder().encode(actor);
-    const attestation = await signAsync(actorBytes, privateKey);
-    return { attestation, channelPublicId };
+    // This signature proves knowledge of the channel, not the object's value.
+    // Reuse it for the same actor/channel instead of signing every media frame.
+    const key = JSON.stringify([actor, channel]);
+    let pending = this.attestations.get(key);
+    if (!pending) {
+      pending = (async () => {
+        const privateKey = await this.channelToPrivateKey(channel);
+        const channelPublicId = await this.channelPublicIdFromPrivateKey(privateKey);
+        const attestation = await signAsync(new TextEncoder().encode(actor), privateKey);
+        return { attestation, channelPublicId };
+      })();
+      this.attestations.set(key, pending);
+      if (this.attestations.size > 128) this.attestations.delete(this.attestations.keys().next().value!);
+      void pending.catch(() => {
+        if (this.attestations.get(key) === pending) this.attestations.delete(key);
+      });
+    }
+    // Callers own their arrays; mutating one result must not poison later posts.
+    return structuredClone(await pending);
   }
 
   async validate(

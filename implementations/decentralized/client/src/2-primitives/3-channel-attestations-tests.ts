@@ -88,6 +88,49 @@ export function channelAttestationTests() {
           expect(channelPublicId).toEqual(channelPublicIdSeperate);
         });
 
+        test("reuses actor/channel attestations without sharing mutable output", async () => {
+          class CountingAttestations extends ChannelAttestations {
+            derivations = 0;
+            protected async channelToPrivateKey(channel: string) {
+              this.derivations++;
+              return super.channelToPrivateKey(channel);
+            }
+          }
+          const attestations = new CountingAttestations();
+          const actor = await randomActor();
+          const channel = await randomChannel();
+          const [first, second] = await Promise.all([
+            attestations.attest(method, actor, channel),
+            attestations.attest(method, actor, channel),
+          ]);
+          expect(first).toEqual(second);
+          expect(attestations.derivations).toBe(1);
+          first.attestation.fill(0);
+          first.channelPublicId.fill(0);
+          expect(await attestations.attest(method, actor, channel)).toEqual(second);
+          const otherActor = await attestations.attest(method, await randomActor(), channel);
+          const otherChannel = await attestations.attest(method, actor, await randomChannel());
+          expect(otherActor.attestation).not.toEqual(second.attestation);
+          expect(otherChannel.channelPublicId).not.toEqual(second.channelPublicId);
+          expect(attestations.derivations).toBe(3);
+        });
+
+        test("an attestation failure can be retried", async () => {
+          class InterruptedAttestations extends ChannelAttestations {
+            interrupted = true;
+            protected async channelToPrivateKey(channel: string) {
+              if (this.interrupted) { this.interrupted = false; throw new Error("interrupted"); }
+              return super.channelToPrivateKey(channel);
+            }
+          }
+          const attestations = new InterruptedAttestations();
+          const actor = await randomActor();
+          const channel = await randomChannel();
+          await expect(attestations.attest(method, actor, channel)).rejects.toThrow("interrupted");
+          const { attestation, channelPublicId } = await attestations.attest(method, actor, channel);
+          expect(await attestations.validate(attestation, actor, channelPublicId)).toBe(true);
+        });
+
         test("Invalid attestation with wrong actor", async () => {
           const actor = await randomActor();
           const wrongActor = await randomActor();
