@@ -21,7 +21,11 @@ previousUrl = next.url;
 await graffiti.close();
 ```
 
-Readers use `discover` and `continueDiscover` with their usual schemas. Repeated continuation receives live updates while storage queries are in flight. The existing Vue discovery helpers can do this polling.
+Readers use `discover` and `continueDiscover` with their usual schemas. Repeated activity within one second opens a peer room; a one-off or infrequent read uses storage. Repeated continuation receives live updates while storage queries are in flight. The existing Vue discovery helpers can do this polling.
+
+The [99-line cursor demo](demo/index.html) includes login, live positions, and actor-to-username lookup. Run it with the [shared demo server](../../extras/streaming/demo/README.md).
+
+Live cursors expire after five seconds, or sooner if their reader falls behind the 1,024-entry live window. Catch `GraffitiErrorCursorExpired` and restart discovery. Infrequent storage-only reads keep the underlying implementation's cursor lifetime and caches.
 
 For explicit storage confirmation, such as before sharing a link outside the app:
 
@@ -43,8 +47,8 @@ await graffiti.flush({}, session);
 | `flush({ urls }, session)` | Synchronize selected writes with storage. Omit `urls` to capture all outstanding writes for that session. |
 | `close()` | Close this instance's peer connections and signaling. Accepted writes remain with the underlying implementation. |
 
-Decentralized saves pending writes in browser Cache storage. `writeGracePeriod` is in milliseconds, defaults to 1000, and applies to each new write independently. Deleting a write before upload cancels that upload. Failed uploads retain their URL and bytes for retry; `flush` reports failures directly. If persistent browser storage is unavailable, writes wait for storage-service confirmation instead. Local already completes its writes locally, so its `flush` resolves immediately.
+Decentralized saves pending writes in browser Cache storage and removes them after upload or cancellation. A separate bounded change log supports continued discovery; older cursors expire normally. `writeGracePeriod` is in milliseconds, defaults to 1000, and starts after acquiring the write lock. Deleting a write before upload cancels that upload. Failed uploads retain their URL and bytes for retry; `flush` reports failures directly. If persistent browser storage is unavailable, writes wait for storage-service confirmation instead. Local already completes its writes locally, so its `flush` resolves immediately.
 
-This first version uses one direct room per channel and account, retained until logout or `close()`. Live delivery requires a logged-in session and WebRTC; anonymous reads still use storage. TURN, connection pooling across channels, local-history compaction, and audio/video streaming helpers are future work. `postMedia` accepts Blobs, not MediaStreams. Direct peer content is trusted as that authenticated actor's view; content-address verification remains with the persistent implementation.
+This first version uses one direct room per active channel and account. Idle rooms close after five seconds. Recent live changes expire after five seconds and are capped at 1,024 entries per account. A slow peer gets at most one send in flight; old live updates are not queued behind it. Storage remains responsible for durable history. Live delivery requires a logged-in session and WebRTC; anonymous reads still use storage. TURN and connection pooling across channels are future work. [Streaming](../../extras/streaming/) provides MoQ audio/video helpers over ordinary Graffiti objects. Direct peer content is trusted as that authenticated actor's view; content-address verification remains with the persistent implementation.
 
 For tests, use `new GraffitiRealtime(new GraffitiLocal())`.

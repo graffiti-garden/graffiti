@@ -54,13 +54,17 @@ export class GraffitiRelay {
       object.url,
       ttl ? setTimeout(() => void this.remove(object.url), ttl) : undefined,
     );
-    await this.graffiti.flush({ urls: [object.url] }, this.session);
-    // Graffiti requests are not abortable; clean up a write that finishes late.
-    if (this.closed) {
+    try {
+      // Graffiti requests are not abortable; a write can finish after leave.
+      if (this.closed) throw new Error("The realtime room has been left.");
+      await this.graffiti.flush({ urls: [object.url] }, this.session);
+      if (this.closed) throw new Error("The realtime room has been left.");
+      return object;
+    } catch (error) {
+      // Failed attempts must not leave identity records behind when retried.
       await this.remove(object.url);
-      throw new Error("The realtime room has been left.");
+      throw error;
     }
-    return object;
   }
 
   async publish(topic: string, message: StrategyMessage) {
@@ -121,7 +125,9 @@ export class GraffitiRelay {
           if (next.value.tombstone) continue;
           const value = next.value.object.value;
           if (value.expires <= Date.now()) continue;
-          void Promise.resolve()
+          // Finish processing an SDP message before delivering the next signal.
+          // Trystero's async decryption can otherwise let a candidate overtake it.
+          await Promise.resolve()
             .then(() => {
               if (!stopped) return receive(topic, value.payload);
             })
@@ -150,7 +156,7 @@ export class GraffitiRelay {
 
   private async remove(url: string) {
     clearTimeout(this.records.get(url));
-    this.records.delete(url);
+    if (!this.records.delete(url)) return;
     try {
       await this.graffiti.delete(url, this.session);
     } catch (error) {

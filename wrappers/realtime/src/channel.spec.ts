@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { encode } from "@ipld/dag-cbor";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { GraffitiLocalObjects } from "@graffiti-garden/implementation-local/objects";
-import { GraffitiErrorNotFound, type GraffitiObjectBase } from "@graffiti-garden/api";
+import { GraffitiErrorCursorExpired, GraffitiErrorNotFound, type GraffitiObjectBase } from "@graffiti-garden/api";
 
 const factory = vi.hoisted(() => vi.fn());
 vi.mock("@graffiti-garden/realtime/signaling", async original => ({
@@ -15,18 +15,26 @@ import { GraffitiRealtime } from "./index.js";
 
 type Handler = (...args: any[]) => any;
 function transport() {
-  let onJoin: Handler, onMessage: Handler;
+  let onJoin: Handler, onMessage: Handler, onReceive: Handler, onReady: Handler;
   const identity = { request: vi.fn(), onRequest: vi.fn() };
-  const changes = { send: vi.fn(async (_data: string, _options: { target: string }) => {}), onMessage: (fn: Handler) => { onMessage = fn; } };
+  const changes = { send: vi.fn(async (_data: string, _options: { target: string }) => {}),
+    onMessage: (fn: Handler) => { onMessage = fn; }, onReceive: (fn: Handler) => { onReceive = fn; } };
   const media = { request: vi.fn(async () => null as Uint8Array | null), onRequest: vi.fn() };
+  const ready = { send: vi.fn(async () => {}), onMessage: (fn: Handler) => { onReady = fn; } };
   return {
     identity, changes, media,
-    makeAction: (name: string) => name === "identity" ? identity : name === "objects" ? changes : media,
+    makeAction: (name: string) => name === "identity" ? identity : name === "objects" ? changes : name === "ready" ? ready : media,
     getSelf: async () => ({ peerId: "self", userId: "self-key" }),
     onPeerJoin: (fn: Handler) => { onJoin = fn; },
     onPeerLeave: vi.fn(), onError: vi.fn(), leave: vi.fn(async () => {}),
-    connect: () => onJoin({ peerId: "peer", userId: "key" }),
-    receive: (change: unknown) => onMessage(JSON.stringify(change), { peerId: "peer" }),
+    connect: () => {
+      const connecting = onJoin({ peerId: "peer", userId: "key" });
+      onReady(null, { peerId: "peer" });
+      return connecting;
+    },
+    receive: async (change: unknown) => {
+      if (await onReceive({ peerId: "peer" })) await onMessage(JSON.stringify(change), { peerId: "peer" });
+    },
   };
 }
 
@@ -36,7 +44,7 @@ afterEach(async () => {
   vi.restoreAllMocks(); vi.unstubAllGlobals(); factory.mockReset();
 });
 
-async function setup() {
+async function setup(active = true) {
   const directory = await mkdtemp(join(tmpdir(), "graffiti-realtime-peer-"));
   const options = { pouchDBOptions: { name: join(directory, "db") }, continueBuffer: 0 };
   const local = new GraffitiLocal(options);
@@ -49,18 +57,56 @@ async function setup() {
   const initial = graffiti.discover(["game"], {}, session);
   const end = await initial.next();
   if (!end.done) throw new Error("Expected an empty initial discovery");
+  const polling = active ? await graffiti.continueDiscover(end.value.cursor, session).next() : end;
+  if (!polling.done) throw new Error("Expected an empty continuation");
   const binding = await local.post({ value: {
     protocol: "graffiti-wrapper-realtime/v1", peerId: "peer", userId: "key",
   }, channels: [] }, peer);
   raw.identity.request.mockResolvedValue(binding.url);
-  raw.connect();
+  if (active) await raw.connect();
   cleanups.push(async () => {
     await graffiti.close();
     await (await new GraffitiLocalObjects(options).db).destroy();
     await rm(directory, { recursive: true, force: true });
   });
-  return { graffiti, local, raw, session, peer, binding, cursor: end.value.cursor };
+  return { graffiti, local, raw, session, peer, binding, cursor: polling.value.cursor };
 }
+
+test("a new peer receives recent live writes without replaying persistent history", async () => {
+  const { graffiti, local, raw, session } = await setup();
+  const durable = await local.post({ value: { note: "persistent history" }, channels: ["game"] }, session);
+  const live = await graffiti.post({ value: { x: 1 }, channels: ["game"] }, session);
+  const discover = vi.spyOn(local, "discover");
+  raw.changes.send.mockClear();
+  raw.connect();
+  await vi.waitFor(() => expect(raw.changes.send.mock.calls.some(([text]) =>
+    JSON.parse(text).object.url === live.url)).toBe(true));
+  expect(raw.changes.send.mock.calls.some(([text]) => JSON.parse(text).object.url === durable.url)).toBe(false);
+  expect(discover).not.toHaveBeenCalled();
+});
+
+test("an already connected peer recovers from a failed identity lookup", async () => {
+  const { graffiti, local, raw, session, peer } = await setup();
+  const get = vi.spyOn(local, "get").mockRejectedValueOnce(new GraffitiErrorCursorExpired("Cache out of sync"));
+  raw.connect();
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  const object = { url: "test:after-recovery", actor: peer.actor, channels: ["game"], value: { x: 1 } };
+  await raw.receive({ object });
+  expect(await graffiti.get(object, {}, session)).toMatchObject({ value: { x: 1 } });
+});
+
+test("identity publication can be retried without keeping failed records", async () => {
+  const { local, raw, session } = await setup();
+  const failure = new Error("Storage temporarily unavailable");
+  vi.spyOn(local, "flush").mockRejectedValueOnce(failure);
+  const post = vi.spyOn(local, "post");
+  const identity = raw.identity.onRequest.mock.calls[0][0];
+  await expect(identity()).rejects.toBe(failure);
+  const failed = await post.mock.results[0].value;
+  await expect(local.get(failed, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+  const url = await identity();
+  expect(await local.get(url, {}, session)).toMatchObject({ actor: session.actor });
+});
 
 test("discovers authenticated live objects absent from storage and preserves deletions", async () => {
   const { graffiti, local, raw, session, peer, cursor } = await setup();
@@ -101,8 +147,9 @@ test("shares channel views without exposing unrequested channels", async () => {
   const other = transport();
   factory.mockReturnValueOnce(other);
   for await (const _ of graffiti.discover(["other"], {}, session)) { /* Open the second channel. */ }
+  for await (const _ of graffiti.discover(["other"], {}, session)) { /* Frequent reads activate it. */ }
   other.identity.request.mockResolvedValue(binding.url);
-  other.connect();
+  await other.connect();
   const object = { url: "test:both-channels", actor: peer.actor, channels: ["game"], value: { x: 1 } };
   await raw.receive({ object });
   await other.receive({ object: { ...object, channels: ["other"] } });
@@ -135,6 +182,14 @@ test("live discovery advances while persistent discovery is waiting", async () =
   try {
     await raw.receive({ object: { url: "test:during-poll", actor: peer.actor, channels: ["game"], value: { x: 1 } } });
     await expect(next).resolves.toMatchObject({ value: { object: { url: "test:during-poll" } } });
+    // Keep delivering live changes while this single storage request waits.
+    for (let frame = 0; frame < 100; frame++) {
+      const next = stream.next();
+      await raw.receive({ object: { url: `test:waiting-${frame}`, actor: peer.actor, channels: ["game"], value: { frame } } });
+      await expect(next).resolves.toMatchObject({ value: { object: { value: { frame } } } });
+    }
+    release.resolve();
+    await expect(stream.next()).resolves.toMatchObject({ done: true, value: expect.objectContaining({ cursor: expect.any(String) }) });
   } finally { release.resolve(); await stream.return({ cursor: "" }); }
 });
 
@@ -150,6 +205,14 @@ test("a deletion learned from storage invalidates the live cache", async () => {
   await expect(graffiti.get(object.url, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
 });
 
+test("an explicit refresh checks storage despite an ephemeral tombstone", async () => {
+  const { graffiti, local, raw, session, peer } = await setup();
+  const object = await local.post({ value: { x: 1 }, channels: ["game"] }, peer);
+  await raw.receive({ object, tombstone: true });
+  await expect(graffiti.get(object, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+  expect(await graffiti.get(object, {}, { session, refresh: true })).toMatchObject({ value: { x: 1 } });
+});
+
 test("retrieves Blob bytes over the existing authenticated connection", async () => {
   const { graffiti, raw, session, peer } = await setup();
   raw.media.request.mockResolvedValue(encode({ data: new TextEncoder().encode("hello"), type: "text/plain", allowed: [session.actor] }));
@@ -157,4 +220,58 @@ test("retrieves Blob bytes over the existing authenticated connection", async ()
   expect(media.actor).toBe(peer.actor);
   expect(media.data.type).toBe("text/plain");
   expect(await media.data.text()).toBe("hello");
+});
+
+test("one-off and infrequent discovery keep storage cursors without opening rooms", async () => {
+  const { graffiti, local, session, cursor } = await setup(false);
+  expect(factory).not.toHaveBeenCalled();
+  vi.spyOn(Date, "now").mockReturnValue(Date.now() + 60_000);
+  const object = await local.post({ value: { note: "durable" }, channels: ["game"] }, session);
+  const entries = [];
+  for await (const entry of graffiti.continueDiscover(cursor, session)) entries.push(entry);
+  expect(entries).toEqual([{ object }]);
+  expect(factory).not.toHaveBeenCalled();
+});
+
+test("live cursors and objects expire, and idle rooms close", async () => {
+  const { graffiti, raw, session, peer, cursor } = await setup();
+  const object = { url: "test:temporary", actor: peer.actor, channels: ["game"], value: { x: 1 } };
+  await raw.receive({ object });
+  vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6000);
+  await expect(graffiti.continueDiscover(cursor, session).next()).rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+  await expect(graffiti.get(object, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+  for await (const _ of graffiti.discover(["game"], {}, session)) { /* A new ordinary read. */ }
+  expect(raw.leave).toHaveBeenCalledOnce();
+  expect(factory).toHaveBeenCalledOnce();
+});
+
+test("a burst cannot retain an unbounded live history", async () => {
+  const { graffiti, raw, session, peer, cursor } = await setup();
+  vi.spyOn(Date, "now").mockReturnValue(Date.now());
+  for (let frame = 0; frame < 2500; frame++) {
+    const object = { url: `test:frame-${frame}`, actor: peer.actor, channels: ["game"], value: { frame } };
+    await raw.receive({ object });
+    await raw.receive({ object, tombstone: true });
+  }
+  await expect(graffiti.continueDiscover(cursor, session).next()).rejects.toBeInstanceOf(GraffitiErrorCursorExpired);
+  // Looking up a forgotten tombstone falls through to storage instead of
+  // retaining its payload indefinitely merely to remember that it was deleted.
+  const account = [...(graffiti as any).accounts.values()][0];
+  expect(account.entries.size).toBeLessThanOrEqual(1024);
+  expect(account.entries.has("test:frame-0")).toBe(false);
+});
+
+test("a slow peer does not queue every live update", async () => {
+  const { graffiti, raw, session, peer } = await setup();
+  await raw.receive({ object: { url: "test:ready", actor: peer.actor, channels: ["game"], value: {} } });
+  const release = Promise.withResolvers<void>();
+  raw.changes.send.mockImplementationOnce(() => release.promise);
+  try {
+    for (let frame = 0; frame < 50; frame++) await graffiti.post({ value: { frame }, channels: ["game"] }, session);
+    expect(raw.changes.send).toHaveBeenCalledTimes(1);
+  } finally { release.resolve(); }
+  await vi.waitFor(async () => {
+    await graffiti.post({ value: { latest: true }, channels: ["game"] }, session);
+    expect(raw.changes.send.mock.calls.some(([text]) => JSON.parse(text).object.value.latest)).toBe(true);
+  });
 });

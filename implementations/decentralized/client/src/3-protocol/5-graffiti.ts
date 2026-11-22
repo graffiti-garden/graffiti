@@ -155,6 +155,9 @@ export interface GraffitiDecentralizedOptions {
 }
 
 const CONCURRENCY = 128;
+// Uploads briefly acquire the outbox lock before and after network work. Keep
+// that queue short so a large backlog cannot starve new posts or local cleanup.
+const WRITE_CONCURRENCY = 4;
 const INITIAL_READ_RETRY_MS = 1_000;
 const MAX_READ_RETRY_MS = 60_000;
 const MAX_READ_RETRIES_PER_POLL = 32;
@@ -568,8 +571,7 @@ export class GraffitiDecentralized implements Graffiti {
       allowedTickets: allowedTickets ?? null,
       mediaBytes: mediaBytes ?? null,
       tombstone: false, pending: true, started: false,
-      due: Date.now() + this.writeGracePeriod,
-    });
+    }, this.writeGracePeriod);
     await this.acceptWrite(object.url, session);
     return structuredClone(object);
   }
@@ -579,11 +581,10 @@ export class GraffitiDecentralized implements Graffiti {
 
   private async flushWrites({ urls }: Parameters<Graffiti["flush"]>[0], session: GraffitiSession) {
     this.sessions.resolveSession(session);
-    const selected = urls && new Set(urls.map(stripGraffitiUrlAddendums));
-    const { writes } = await this.outbox.read();
-    await cacheBatch(writes.filter(write => write.pending &&
-      write.object.actor === session.actor && (!selected || selected.has(write.object.url))),
-    write => this.outbox.sync(write.object.url, current => this.persistWrite(current)));
+    const selected = urls && [...new Set(urls.map(stripGraffitiUrlAddendums))];
+    const writes = await this.outbox.pending(selected);
+    await cacheBatch(writes.filter(write => write.actor === session.actor),
+    write => this.outbox.sync(write.url, current => this.persistWrite(current)), WRITE_CONCURRENCY);
   }
 
   private async acceptWrite(url: string, session: GraffitiSession) {
@@ -604,25 +605,29 @@ export class GraffitiDecentralized implements Graffiti {
     clearTimeout(this.writeTimer);
     this.writeTimerAt = at;
     this.writeTimer = setTimeout(async () => {
-      this.writeTimer = undefined;
-      this.writeTimerAt = Infinity;
+      // Keep this pass scheduled until it finishes. New writes are included in
+      // the final deadline check, without starting overlapping upload passes.
+      this.writeTimerAt = -Infinity;
+      let nextDelay: number | undefined;
+      const pendingForSessions = async () => (await this.outbox.pending()).filter(write => {
+        try { this.sessions.resolveSession({ actor: write.actor }); return true; }
+        catch { return false; } // Login will resume this account's writes.
+      });
       try {
-        const { writes } = await this.outbox.read();
-        const pending = writes.filter(write => {
-          if (!write.pending) return false;
-          try { this.sessions.resolveSession({ actor: write.object.actor }); return true; }
-          catch { return false; } // Login will resume this account's writes.
-        });
+        const pending = await pendingForSessions();
         await cacheBatch(pending.filter(write => write.due <= Date.now()), async write => {
-          try { await this.outbox.sync(write.object.url, current => this.persistWrite(current)); }
+          try { await this.outbox.sync(write.url, current => this.persistWrite(current)); }
           catch (error) {
-            this.tryLogoutIfUnauthorized(error, { actor: write.object.actor });
+            this.tryLogoutIfUnauthorized(error, { actor: write.actor });
             console.error("Graffiti write is pending; flush can retry it:", error);
           }
-        });
-        const remaining = (await this.outbox.read()).writes.filter(write => write.pending && pending.some(old => old.object.url === write.object.url));
-        if (remaining.length) await this.scheduleWrites(Math.max(0, Math.min(...remaining.map(write => write.due)) - Date.now()));
+        }, WRITE_CONCURRENCY);
+        const remaining = await pendingForSessions();
+        if (remaining.length) nextDelay = Math.max(0, Math.min(...remaining.map(write => write.due)) - Date.now());
       } catch (error) { console.error("Could not read Graffiti's pending writes:", error); }
+      this.writeTimer = undefined;
+      this.writeTimerAt = Infinity;
+      if (nextDelay !== undefined) void this.scheduleWrites(nextDelay).catch(console.error);
     }, delay);
   }
 
@@ -770,7 +775,7 @@ export class GraffitiDecentralized implements Graffiti {
 
   delete: Graffiti["delete"] = (...args) => this.deleteRecord(RECORD_KIND_OBJECT, ...args);
 
-  protected async deleteRecord(kind: RecordKind, ...[url, session]: Parameters<Graffiti["delete"]>) {
+  protected async deleteRecord(kind: RecordKind, ...[url, session]: Parameters<Graffiti["delete"]>): Promise<GraffitiObjectBase> {
     const resolvedSession = this.sessions.resolveSession(session);
     const objectUrl = stripGraffitiUrlAddendums(unpackObjectUrl(url));
     if (decodeObjectUrl(objectUrl).actor !== session.actor) {
@@ -780,6 +785,7 @@ export class GraffitiDecentralized implements Graffiti {
     if (local && (local.tombstone || (local.kind !== null && local.kind !== kind))) {
       throw new GraffitiErrorNotFound("Object not found");
     }
+    let deleted: GraffitiObjectBase;
     if (!local) {
       // Look in one's personal inbox for the object
       const iterator = this.querySingleEndpoint<{}>(
@@ -809,13 +815,21 @@ export class GraffitiDecentralized implements Graffiti {
         object: existing.object, kind: existing.kind ?? null,
         tags: existing.tags, allowedTickets: existing.allowedTickets ?? null,
         storageBucketKey: existing.storageBucketKey,
-        objectBytes: null, mediaBytes: null, tombstone: false,
-        pending: false, started: true, due: 0,
+        objectBytes: null, mediaBytes: null, tombstone: true,
+        pending: true, started: true,
       });
+      deleted = existing.object;
+    } else {
+      try { deleted = (await this.outbox.delete(objectUrl)).object; }
+      catch (error) {
+        // Upload may have finished and removed the queued post since our read.
+        // Retry through the inbox, where its now-persistent metadata lives.
+        if (error instanceof GraffitiErrorNotFound) return this.deleteRecord(kind, url, session);
+        throw error;
+      }
     }
-    const deleted = await this.outbox.delete(objectUrl);
     await this.acceptWrite(objectUrl, session);
-    return structuredClone(deleted.object);
+    return structuredClone(deleted);
   }
 
   postMedia: Graffiti["postMedia"] = async (media, session) => {
@@ -913,7 +927,8 @@ export class GraffitiDecentralized implements Graffiti {
     },
     session?: GraffitiSession | null,
     refresh = true,
-    localSince = 0,
+    localSince?: number,
+    localPending = false,
   ): GraffitiObjectStream<Schema> {
     const lastTombstoneState = new Map<string, boolean>();
 
@@ -940,14 +955,25 @@ export class GraffitiDecentralized implements Graffiti {
     }
 
     const validate = await compileGraffitiObjectSchema(schema);
-    const local = await this.outbox.read();
+    // A fresh query needs current writes; continuations also need deletions.
+    let local;
+    try {
+      local = await this.outbox.read({ channels, since: localSince, pending: localSince === undefined });
+    } catch (error) {
+      if (!(error instanceof GraffitiErrorCursorExpired) || localPending) throw error;
+      // This reader never observed pending local objects. Losing unrelated
+      // ephemeral history must not invalidate its persistent inbox cursors.
+      localSince = undefined;
+      local = await this.outbox.read({ channels, pending: true });
+    }
     for (const write of local.writes) {
-      if (write.modified <= localSince || (!write.pending && !write.tombstone) ||
+      if (write.modified <= (localSince ?? 0) || (!write.pending && !write.tombstone) ||
           (write.kind !== null && write.kind !== RECORD_KIND_OBJECT) ||
           !write.object.channels.some(channel => channels.includes(channel)) ||
           !isActorAllowedGraffitiObject(write.object, session)) continue;
       const object = maskGraffitiObject(write.object, channels, session?.actor);
       if (!validate(object)) continue;
+      if (write.pending && !write.tombstone) localPending = true;
       lastTombstoneState.set(object.url, write.tombstone);
       yield write.tombstone ? { object, tombstone: true } : { object };
     }
@@ -1075,6 +1101,7 @@ export class GraffitiDecentralized implements Graffiti {
         cursors,
         schema,
         local: local.clock,
+        ...(localPending ? { localPending: true } : {}),
       } satisfies infer_<typeof CursorSchema>),
     };
   }
@@ -1094,6 +1121,7 @@ export class GraffitiDecentralized implements Graffiti {
     let cursors: { [endpoint: string]: string };
     let schema: JSONSchema;
     let localSince: number;
+    let localPending: boolean;
     try {
       const json = JSON.parse(cursor);
       const parsed = CursorSchema.parse(json);
@@ -1101,12 +1129,13 @@ export class GraffitiDecentralized implements Graffiti {
       cursors = parsed.cursors;
       schema = parsed.schema;
       localSince = parsed.local ?? 0;
+      localPending = parsed.localPending ?? false;
     } catch (error) {
       return (async function* () {
         throw new GraffitiErrorCursorExpired("Invalid cursor");
       })();
     }
-    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh, localSince);
+    return this.discoverMeta<JSONSchema>(channels, schema, cursors, session, refresh, localSince, localPending);
   };
 
   protected tryLogoutIfUnauthorized(
@@ -1628,6 +1657,7 @@ const MEDIA_OBJECT_SCHEMA = {
 
 const CursorSchema = strictObject({
   local: optional(int().check(nonnegative())),
+  localPending: optional(boolean()),
   cursors: record(url(), string()),
   channels: array(string()),
   schema: union([looseObject({}), boolean()]),

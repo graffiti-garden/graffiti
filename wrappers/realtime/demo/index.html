@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graffiti live cursors</title>
+<style>
+  body { max-width: 960px; margin: 24px auto; padding: 0 16px; font: 16px system-ui; }
+  #pad { position: relative; height: 70vh; overflow: hidden; touch-action: none;
+    background: #f1f5f9; border: 1px solid #94a3b8; border-radius: 12px; }
+  #pad span { position: absolute; pointer-events: none; color: #4338ca; white-space: nowrap; }
+  #status { min-height: 1.5em; }
+</style>
+<h1>Live cursors</h1>
+<p>Open this same link on two devices, sign in, then move or drag inside the box.</p>
+<button id="login">Sign in</button> <button id="copy">Copy room link</button>
+<p id="status">Sign in to share your cursor.</p>
+<div id="pad"></div>
+<script type="module">
+import { GraffitiDecentralized } from "/decentralized/index.js";
+import { GraffitiRealtime } from "/realtime/index.js";
+const graffiti = new GraffitiRealtime(new GraffitiDecentralized());
+const channel = location.hash.slice(1) || `cursors:${crypto.randomUUID()}`;
+location.hash = channel;
+const device = crypto.randomUUID();
+const pad = document.querySelector("#pad"), status = document.querySelector("#status");
+const peers = new Map();
+const pause = () => new Promise(resolve => setTimeout(resolve, 50));
+const showError = error => { status.textContent = error.message; };
+let session, position;
+document.querySelector("#login").onclick = () => graffiti.login().catch(showError);
+document.querySelector("#copy").onclick = () => navigator.clipboard.writeText(location.href).catch(showError);
+pad.onpointermove = pad.onpointerdown = event => {
+  const box = pad.getBoundingClientRect();
+  position = { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height };
+};
+graffiti.sessionEvents.addEventListener("login", event => {
+  if (event.detail.error) return showError(event.detail.error);
+  if (session) return;
+  session = event.detail.session;
+  document.querySelector("#login").disabled = true;
+  status.textContent = "Sharing live positions; waiting for other cursors…";
+  Promise.all([publish(), receive()]).catch(showError);
+});
+
+async function publish() {
+  let previous;
+  while (true) {
+    if (position) {
+      const { url } = await graffiti.post({
+        value: { ...position, device, expires: Date.now() + 3000 }, channels: [channel],
+      }, session);
+      if (previous) await graffiti.delete(previous, session);
+      previous = url;
+    }
+    await pause();
+  }
+}
+
+async function receive() {
+  const schema = { properties: { value: { properties: {
+    x: { type: "number" }, y: { type: "number" },
+    device: { type: "string" }, expires: { type: "number" },
+  }, required: ["x", "y", "device", "expires"] } } };
+  let cursor;
+  while (true) {
+    try {
+      const results = cursor === undefined ? graffiti.discover([channel], schema, session)
+        : graffiti.continueDiscover(cursor, session);
+      while (true) {
+        const result = await results.next();
+        if (result.done) { cursor = result.value.cursor; break; }
+        const { object, tombstone, error } = result.value;
+        if (error) { showError(error); continue; }
+        const { x, y, device: sender, expires } = object.value;
+        if (sender === device || expires <= Date.now()) continue;
+        const key = JSON.stringify([object.actor, sender]), old = peers.get(key);
+        if (tombstone) {
+          if (old?.url === object.url) { old.label.remove(); peers.delete(key); }
+          continue;
+        }
+        if (old && old.expires > expires) continue;
+        const label = old?.label ?? pad.appendChild(document.createElement("span"));
+        if (!old) {
+          label.textContent = `➤ ${object.actor}`;
+          graffiti.actorToHandle(object.actor).then(name => { label.textContent = `➤ ${name}`; }).catch(() => {});
+        }
+        label.style.left = `${Math.max(0, Math.min(1, x)) * 100}%`;
+        label.style.top = `${Math.max(0, Math.min(1, y)) * 100}%`;
+        peers.set(key, { label, expires, url: object.url });
+      }
+    } catch (error) { if (error.name === "GraffitiErrorCursorExpired") cursor = undefined; else throw error; }
+    await pause();
+  }
+}
+setInterval(() => {
+  for (const [key, peer] of peers) if (peer.expires <= Date.now()) { peer.label.remove(); peers.delete(key); }
+}, 250);
+</script>
+</html>

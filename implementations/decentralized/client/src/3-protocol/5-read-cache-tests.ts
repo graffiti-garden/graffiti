@@ -66,6 +66,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       let fetched = false;
       try {
         const posted = await writer.post<{}>({ value: {}, channels: [] }, session);
+        await writer.flush({ urls: [posted.url] }, session);
         await writer.get<{}>(posted, {}, { session });
         // The owner has verified its announcement. An anonymous reader starts
         // validating a different announcement of the same key before deletion.
@@ -75,7 +76,6 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
           await blocked;
           return bytes;
         });
-        await writer.flush({ urls: [posted.url] }, session);
         const pending = reader.get<{}>(posted, {}, { refresh: true });
         // Attach the rejection assertion before allowing the read to settle.
         const absent = expect(pending).rejects.toBeInstanceOf(GraffitiErrorNotFound);

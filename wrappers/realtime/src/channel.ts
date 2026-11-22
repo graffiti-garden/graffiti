@@ -1,5 +1,6 @@
 import {
   GraffitiObjectJSONSchema,
+  GraffitiErrorSchemaMismatch,
   compileGraffitiObjectSchema,
   isActorAllowedGraffitiObject,
   maskGraffitiObject,
@@ -12,6 +13,7 @@ import { GraffitiRelay, joinTransport } from "@graffiti-garden/realtime/signalin
 import { encode, decode } from "@ipld/dag-cbor";
 
 export type Change = { object: GraffitiObjectBase; tombstone?: true };
+type Peer = { actor?: string; ready: boolean; sending?: Promise<void> };
 const protocol = "graffiti-wrapper-realtime/v1";
 
 /**
@@ -24,7 +26,7 @@ export class Channel {
   private room;
   private changes;
   private media;
-  private peers = new Map<string, Promise<string | undefined>>();
+  private peers = new Map<string, Peer>();
   private closed = false;
 
   constructor(
@@ -33,46 +35,76 @@ export class Channel {
     readonly session: GraffitiSession,
     receive: (change: Change) => void,
     private report: (error: unknown) => void,
+    current: () => Iterable<Change>,
   ) {
     this.relay = new GraffitiRelay(graffiti, session, report);
     this.room = joinTransport({ appId: protocol, identity: "none", password: channel, relay: this.relay }, channel);
     const identity = this.room.makeAction<null, string>("identity", { kind: "request" });
+    const ready = this.room.makeAction<null>("ready");
     this.changes = this.room.makeAction<string>("objects");
     this.media = this.room.makeAction<string, Uint8Array | null>("media", { kind: "request" });
     const validate = compileGraffitiObjectSchema(GraffitiObjectJSONSchema);
     void validate.catch(report);
-    const binding = this.room.getSelf().then(({ peerId, userId }) =>
-      this.relay.post({ protocol, peerId, userId }, []));
-    identity.onRequest(async () => (await binding).url);
-    void binding.catch(report);
+    let binding: Promise<GraffitiObjectBase> | undefined;
+    identity.onRequest(async () => {
+      binding ??= this.room.getSelf().then(({ peerId, userId }) =>
+        this.relay.post({ protocol, peerId, userId }, []));
+      try { return (await binding).url; }
+      catch (error) { binding = undefined; throw error; }
+    });
     this.room.onError(error => report(new Error(error.message, { cause: error })));
 
-    this.room.onPeerJoin(({ peerId, userId }) => {
-      const verified = identity.request(null, { target: peerId }).then(async url => {
-        const object = await graffiti.get(url, {
-          properties: { value: {
-            properties: { protocol: { const: protocol }, peerId: { const: peerId }, userId: { const: userId } },
-            required: ["protocol", "peerId", "userId"],
-          } },
-        }, session);
-        if (this.closed || this.peers.get(peerId) !== verified) return;
-        return object.actor;
-      }).catch(error => { report(error); return undefined; });
-      this.peers.set(peerId, verified);
-      // A newly connected reader also needs writes accepted before it arrived.
-      void verified.then(async actor => {
-        if (!actor) return;
-        for await (const result of graffiti.discover([channel], {}, { session, refresh: false })) {
-          if (this.closed) break;
-          if (result.error) { report(result.error); continue; }
-          if (result.object.actor === session.actor) await this.sendTo(result, peerId, actor);
+    // Each endpoint acknowledges actor verification before either sends data.
+    // Otherwise the faster endpoint could lose its one-time catalog at the
+    // slower endpoint's receive gate. No frame queue is needed during setup.
+    const replay = async (peerId: string, peer: Peer) => {
+      const until = Date.now() + 1000;
+      for (const change of current()) {
+        if (this.closed || this.peers.get(peerId) !== peer || Date.now() >= until) break;
+        if (change.object.actor !== session.actor || !change.object.channels.includes(channel)) continue;
+        if (peer.sending) break; // Current live delivery takes priority over replay.
+        await this.deliver(change, peerId, peer);
+      }
+    };
+    ready.onMessage((_value, { peerId }) => {
+      const peer = this.peers.get(peerId);
+      if (!peer || peer.ready || this.closed) return;
+      peer.ready = true;
+      if (peer.actor) void replay(peerId, peer).catch(report);
+    });
+
+    this.room.onPeerJoin(async ({ peerId, userId }) => {
+      const peer: Peer = { ready: false };
+      this.peers.set(peerId, peer);
+      // A connected transport is not yet an authenticated actor. Retry transient
+      // storage failures, but never accumulate live objects behind this lookup.
+      while (!this.closed && this.peers.get(peerId) === peer && !peer.actor) {
+        try {
+          const url = await identity.request(null, { target: peerId, timeoutMs: 5000 });
+          const object = await graffiti.get(url, {
+            properties: { value: {
+              properties: { protocol: { const: protocol }, peerId: { const: peerId }, userId: { const: userId } },
+              required: ["protocol", "peerId", "userId"],
+            } },
+          }, session);
+          if (this.closed || this.peers.get(peerId) !== peer) return;
+          peer.actor = object.actor;
+          void ready.send(null, { target: peerId }).catch(report);
+          // Replay only the short live window, never persistent history.
+          if (peer.ready) void replay(peerId, peer).catch(report);
+        } catch (error) {
+          if (this.closed || this.peers.get(peerId) !== peer) return;
+          report(error);
+          if (error instanceof GraffitiErrorSchemaMismatch) return;
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      }).catch(report);
+      }
     });
     this.room.onPeerLeave(({ peerId }) => this.peers.delete(peerId));
+    this.changes.onReceive(({ peerId }) => !!this.peers.get(peerId)?.actor && !this.closed);
     this.changes.onMessage(async (text, { peerId }) => {
       try {
-        const actor = await this.peers.get(peerId);
+        const actor = this.peers.get(peerId)?.actor;
         if (!actor || this.closed) return;
         const change = JSON.parse(text) as Change;
         if (!(await validate)(change.object) || change.object.actor !== actor ||
@@ -84,7 +116,7 @@ export class Channel {
       } catch (error) { report(error); }
     });
     this.media.onRequest(async (request, { peerId }) => {
-      const actor = await this.peers.get(peerId);
+      const actor = this.peers.get(peerId)?.actor;
       if (!actor || this.closed) return null;
       const { url, accept, refresh } = JSON.parse(request) as { url: string; accept: GraffitiMediaAccept; refresh: boolean };
       try {
@@ -99,23 +131,33 @@ export class Channel {
     });
   }
 
-  private sendTo(change: Change, peerId: string, actor: string) {
+  private async sendTo(change: Change, peerId: string, actor: string) {
     if (this.closed || !isActorAllowedGraffitiObject(change.object, { actor })) return;
-    return this.changes.send(JSON.stringify({ ...change,
+    return this.changes.send(JSON.stringify({
       object: maskGraffitiObject(change.object, [this.channel], actor),
+      ...(change.tombstone ? { tombstone: true } : {}),
     }), { target: peerId });
+  }
+
+  private deliver(change: Change, peerId: string, peer: Peer) {
+    const sending = this.sendTo(change, peerId, peer.actor!).catch(error => {
+      if (!this.closed) this.report(error);
+    }).finally(() => { if (peer.sending === sending) peer.sending = undefined; });
+    return peer.sending = sending;
   }
 
   /** Delivery runs independently of the durable local write acknowledgment. */
   send(change: Change) {
     for (const [peerId, peer] of this.peers) {
-      void peer.then(actor => { if (actor) return this.sendTo(change, peerId, actor); }).catch(this.report);
+      // No queue behind verification or a slow connection. New live changes
+      // resume as soon as this peer drains; durable delivery belongs to storage.
+      if (peer.actor && peer.ready && !peer.sending) void this.deliver(change, peerId, peer);
     }
   }
 
   async getMedia(url: string, accept: GraffitiMediaAccept, refresh: boolean) {
     for (const [peerId, peer] of this.peers) {
-      const actor = await peer;
+      const actor = peer.actor;
       if (!actor || this.closed) continue;
       try {
         const bytes = await this.media.request(JSON.stringify({ url, accept, refresh }), { target: peerId, timeoutMs: 2000 });
