@@ -448,22 +448,25 @@ export function inboxUnitTests() {
       test("waiting for another tab's lock has a deadline", async () => {
         const inboxes = new TestInboxHistory();
         await inboxes.prepareCache();
-        const timeoutError = new DOMException("timed out", "TimeoutError");
-        vi.spyOn(AbortSignal, "timeout").mockReturnValue(
-          AbortSignal.abort(timeoutError),
-        );
+        vi.useFakeTimers();
         const request = vi.fn(
           (
             _key: string,
             _options: { signal?: AbortSignal },
-          ) => Promise.reject(timeoutError),
+          ) => new Promise((_resolve, reject) => {
+            _options.signal!.addEventListener("abort", () => reject(_options.signal!.reason), { once: true });
+          }),
         );
         enableLockPath(request);
 
-        await expect(
-          inboxes.query("https://example.test/inbox", [], {}).next(),
-        ).rejects.toThrow("Timed out waiting for another tab's inbox query");
-        expect(request).toHaveBeenCalledOnce();
+        try {
+          const rejected = expect(inboxes.query("https://example.test/inbox", [], {}).next())
+            .rejects.toThrow("Timed out waiting for another tab's Graffiti storage lock");
+          await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+          await vi.advanceTimersByTimeAsync(30_000);
+          await rejected;
+          expect(request).toHaveBeenCalledOnce();
+        } finally { vi.useRealTimers(); }
       });
 
       test("a stalled request is aborted", async () => {

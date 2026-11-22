@@ -7,6 +7,7 @@ export function mockCacheStorage() {
     const entries = new Map<string, Response>();
     return {
       entries,
+      keys: vi.fn(async () => [...entries.keys()].map(key => new Request(key))),
       match: vi.fn(async (key: string) => entries.get(key)?.clone()),
       put: vi.fn(async (key: string, response: Response) => { entries.set(key, response.clone()); }),
       delete: vi.fn(async (key: string) => entries.delete(key)),

@@ -31,10 +31,7 @@ import {
   storeQueryPage,
 } from "./message-store";
 import type { MessageStore, CacheQueryValue } from "./message-store";
-
-// A stalled tab should not make peers wait indefinitely. This only bounds
-// lock acquisition; the HTTP client's deadline bounds the request afterward.
-const INBOX_LOCK_WAIT_TIMEOUT_MS = 30_000;
+import { withLock } from "./cache";
 
 export interface InboxReadOptions {
   refresh?: boolean;
@@ -112,28 +109,7 @@ export class InboxHistory {
 
     // The lock follows one page of network and cache work; yielding cannot
     // prolong it.
-    const timeout = AbortSignal.timeout(INBOX_LOCK_WAIT_TIMEOUT_MS);
-    let acquired = false;
-    try {
-      return await window.navigator.locks.request(
-        `graffiti:inbox:${messageIdsCacheKey}`,
-        {
-          mode: "exclusive",
-          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-        },
-        async () => {
-          acquired = true;
-          return work();
-        },
-      );
-    } catch (error) {
-      if (!acquired && timeout.aborted) {
-        throw new Error("Timed out waiting for another tab's inbox query", {
-          cause: error,
-        });
-      }
-      throw error;
-    }
+    return withLock(window.navigator.locks, `graffiti:inbox:${messageIdsCacheKey}`, work, { signal });
   }
 
   protected async *messageStreamer<Schema extends JSONSchema>(

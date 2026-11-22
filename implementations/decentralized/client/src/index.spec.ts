@@ -186,7 +186,7 @@ describe("GraffitiDecentralized Tests", () => {
     class LegacyWriter extends GraffitiDecentralized {
       protected override postRecord<Schema extends JSONSchema>(
         _kind: RecordKind | undefined,
-        ...args: Parameters<typeof Graffiti.prototype.post<Schema>>
+        ...args: [...Parameters<typeof Graffiti.prototype.post<Schema>>, Uint8Array?]
       ) {
         return super.postRecord<Schema>(undefined, ...args);
       }
@@ -212,7 +212,7 @@ describe("GraffitiDecentralized Tests", () => {
     await graffiti.delete(fake.url, session);
     await graffiti.delete(object.url, session);
     await graffiti.deleteMedia(url, session);
-  });
+  }, 15_000); // Several independent inbox reads honor the server's Retry-After.
 
   const useGraffiti = () =>
     new GraffitiDecentralized({
