@@ -1,7 +1,7 @@
 {
   "name": "@graffiti-garden/streaming",
   "version": "0.0.0",
-  "description": "Live audio and video over the Graffiti object and media API",
+  "description": "Live audio and video over the Graffiti object API",
   "type": "module",
   "types": "./dist/index.d.ts",
   "module": "./dist/esm/index.js",

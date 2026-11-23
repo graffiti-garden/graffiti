@@ -301,7 +301,7 @@ storage.flush = async (...args) => {
   try { return await flush(...args); }
   finally {
     const ms = Math.round(performance.now() - start);
-    if (ms > 1000) log("Slow flush", { ms, urls: args[0].length });
+    if (ms > 1000) log("Slow flush", { ms });
   }
 };
 const graffiti = new GraffitiRealtime(storage);

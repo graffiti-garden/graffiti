@@ -139,7 +139,7 @@ export async function publishStream(
     while (true) {
       // Announcements must survive the underlying write grace period. Frames
       // continue independently while this small presence record is flushed.
-      await graffiti.flush([object.url], session);
+      await graffiti.flush(object.url, session);
       if (previous) owned.set(previous, 0);
       await abortable(new Promise(resolve => setTimeout(resolve, 10_000)), signal);
       const next = await graffiti.post<typeof streamSchema>({

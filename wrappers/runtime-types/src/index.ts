@@ -69,10 +69,7 @@ export class GraffitiRuntimeTypes implements Graffiti {
   }
 
   flush: Graffiti["flush"] = (...args) => {
-    const typedArgs = tuple([
-      array(url()),
-      GraffitiSessionSchema,
-    ]).parse(args);
+    const typedArgs = tuple([url(), GraffitiSessionSchema]).parse(args);
     return this.graffiti.flush(...typedArgs);
   };
 

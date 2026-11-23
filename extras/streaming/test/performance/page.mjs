@@ -307,6 +307,8 @@ globalThis.lab = {
     await graffiti.close();
     // Test teardown also settles writes restored from an earlier fixture run.
     const pending = await storage.graffiti.outbox.pending();
-    await storage.flush(pending.filter(write => write.actor === session.actor).map(write => write.url), session);
+    for (const write of pending) {
+      if (write.actor === session.actor) await storage.flush(write.url, session);
+    }
   },
 };
