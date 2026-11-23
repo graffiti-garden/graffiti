@@ -111,18 +111,17 @@ import type { JSONSchema } from "json-schema-to-ts";
  */
 export abstract class Graffiti {
   /**
-   * Synchronize pending writes for the supplied object or media URLs with the
-   * implementation's storage. Await each write before flushing its URL.
-   * Other URLs are not included; an empty array does no work. This is not an
-   * atomic transaction, and successful writes are not rolled back on failure.
+   * Synchronize a pending write at an object or media URL with the
+   * implementation's storage. Await the post or deletion before flushing its URL.
+   * Resolves immediately if this session has no pending write at that URL.
    * A post deleted before upload is settled without being published.
-   * Failures reject this call but leave unfinished writes available for retry.
+   * Failures reject this call but leave the write available for retry.
    * This confirms storage, not delivery to every reader. Local implementations
-   * may already have completed the writes and resolve immediately.
+   * may already have completed the write and resolve immediately.
    *
-   * @group 2 - Multi-Object Methods
+   * @group 1 - Single-Object Methods
    */
-  abstract flush(urls: string[], session: GraffitiSession): Promise<void>;
+  abstract flush(url: string, session: GraffitiSession): Promise<void>;
 
   /**
    * Creates a new {@link GraffitiObjectBase | object}.

@@ -8,7 +8,7 @@
 "@graffiti-garden/wrapper-data-guard": minor
 ---
 
-Add `flush(urls, session)` with a required array of object or media URLs. It confirms pending writes with storage without flushing unrelated work. Empty arrays do no work; batches are not transactions. Failed writes remain available for retry.
+Add `flush(url, session)` to confirm a pending object or media write with storage. It resolves immediately when the session has no pending write at that URL. Failed writes remain available for retry.
 
 Permit write methods to resolve after durable local acceptance, retaining their final URLs. Use flush before depending on visibility to other devices. Local and the existing synchronous Decentralized implementation already persist before returning, so their flush completes immediately. The queued Decentralized implementation is a separate change.
 

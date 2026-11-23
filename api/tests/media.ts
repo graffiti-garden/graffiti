@@ -58,13 +58,13 @@ export const graffitiMediaTests = (
         const reader = useGraffiti();
         const data = new Blob([randomString()], { type: "text/plain" });
         const url = await writer.postMedia({ data }, session);
-        await writer.flush([url], session);
+        await writer.flush(url, session);
         expect(await (await reader.getMedia(url, {})).data.text()).toEqual(await data.text());
 
         await writer.deleteMedia(url, session);
-        await writer.flush([url], session);
+        await writer.flush(url, session);
         await expect(reader.getMedia(url, {}, { refresh: true })).rejects.toThrow(GraffitiErrorNotFound);
-        await expect(writer.flush([], session)).resolves.toBeUndefined();
+        await expect(writer.flush(url, session)).resolves.toBeUndefined();
       });
 
       it("acceptable type", async () => {
