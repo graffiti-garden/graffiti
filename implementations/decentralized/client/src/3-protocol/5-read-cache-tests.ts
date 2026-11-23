@@ -11,7 +11,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       const graffiti = useGraffiti();
       const session = useSessions()[0];
       const posted = await graffiti.post({ value: { n: 1 }, channels: [] }, session);
-      await graffiti.flush([posted.url], session);
+      await graffiti.flush(posted.url, session);
       await graffiti.get(posted, {}, { session });
       const original = globalThis.fetch;
       const calls: string[] = [];
@@ -66,7 +66,7 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       let fetched = false;
       try {
         const posted = await writer.post<{}>({ value: {}, channels: [] }, session);
-        await writer.flush([posted.url], session);
+        await writer.flush(posted.url, session);
         await writer.get<{}>(posted, {}, { session });
         // The owner has verified its announcement. An anonymous reader starts
         // validating a different announcement of the same key before deletion.
@@ -92,6 +92,45 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
       }
     });
 
+    test.each(["upload", "deletion"])("media %s bypasses the object outbox and waits for storage", async operation => {
+      const caches = mockCacheStorage();
+      const writer = useGraffiti();
+      const reader = useGraffiti();
+      const session = useSessions()[0];
+      const media = { data: new Blob(["confirmed"], { type: "text/plain" }) };
+      const reachedStorage = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const original = globalThis.fetch;
+      try {
+        const url = operation === "deletion" ? await writer.postMedia(media, session) : undefined;
+        globalThis.fetch = async (input, init) => {
+          if (init?.method === (operation === "upload" ? "PUT" : "DELETE")) {
+            reachedStorage.resolve();
+            await release.promise;
+          }
+          return original(input, init);
+        };
+        let complete = false;
+        const pending = (url === undefined ? writer.postMedia(media, session) : writer.deleteMedia(url, session))
+          .then(result => { complete = true; return result; });
+        await reachedStorage.promise;
+        expect(complete).toBe(false);
+        expect(caches("graffiti-outbox-v1").entries.size).toBe(0);
+        release.resolve();
+        const result = await pending;
+        if (typeof result === "string") {
+          expect(await (await reader.getMedia(result, {}, { refresh: true })).data.text()).toBe("confirmed");
+          await writer.deleteMedia(result, session);
+        } else {
+          await expect(reader.getMedia(url!, {}, { refresh: true })).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+        }
+      } finally {
+        release.resolve();
+        globalThis.fetch = original;
+        vi.unstubAllGlobals();
+      }
+    });
+
     test("persists media descriptors across instances without sharing private access", async () => {
       const caches = mockCacheStorage();
       const original = globalThis.fetch;
@@ -99,7 +138,6 @@ export function readCacheTests(useGraffiti: () => GraffitiDecentralized, useSess
         const [owner, other] = useSessions();
         const writer = useGraffiti();
         const url = await writer.postMedia({ data: new Blob(["private"], { type: "text/plain" }), allowed: [] }, owner);
-        await writer.flush([url], owner);
         await writer.getMedia(url, {}, { session: owner });
         // Dropping query history must leave shared payloads available to
         // verified getters, even in another instance.

@@ -42,7 +42,7 @@ async function page(iterator: GraffitiObjectStream<{}>) {
   }
 }
 
-test("recovers locally accepted writes and flushes only selected URLs", async () => {
+test("recovers locally accepted writes and flushes only the requested URL", async () => {
   const { graffiti, put } = client();
   const first = await graffiti.post({ value: { x: 1 }, channels: ["game"], allowed: [] }, session);
   const second = await graffiti.post({ value: { x: 2 }, channels: ["game"] }, session);
@@ -50,9 +50,9 @@ test("recovers locally accepted writes and flushes only selected URLs", async ()
   const restored = client();
   expect(await restored.graffiti.get(first, {}, session)).toEqual(first);
   await expect(restored.graffiti.get(first, {})).rejects.toBeInstanceOf(GraffitiErrorNotFound);
-  await restored.graffiti.flush([first.url], session);
+  await restored.graffiti.flush(first.url, session);
   expect(restored.put).toHaveBeenCalledTimes(1);
-  await restored.graffiti.flush([second.url], session);
+  await restored.graffiti.flush(second.url, session);
   expect(restored.put).toHaveBeenCalledTimes(2);
   expect((await restored.graffiti.localWrites.read()).writes).toEqual([]);
 });
@@ -63,7 +63,7 @@ test("pending uploads do not depend on the discovery clock", async () => {
   await graffiti.post({ value: { signal: 2 }, channels: [] }, session);
   // The failed Safari reload could read pending records but not this key.
   await (await graffiti.localWrites.store).delete("clock");
-  await graffiti.flush([first.url], session);
+  await graffiti.flush(first.url, session);
   expect(put).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(1000);
   await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(2));
@@ -77,7 +77,7 @@ test("deletion cancels an unstarted upload and appears in continued local discov
   const end = await initial.next();
   if (!end.done) throw new Error("Expected the discovery cursor");
   await graffiti.delete(object, session);
-  await graffiti.flush([object.url], session);
+  await graffiti.flush(object.url, session);
   expect(put).not.toHaveBeenCalled();
   expect(remove).not.toHaveBeenCalled();
   await expect(graffiti.get(object, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
@@ -90,25 +90,25 @@ test("retrying a failed flush reuses the exact storage key and encoded bytes", a
   const { graffiti, put } = client();
   const object = await graffiti.post({ value: { text: "keep me" }, channels: [] }, session);
   put.mockRejectedValueOnce(new Error("offline"));
-  await expect(graffiti.flush([object.url], session)).rejects.toThrow("offline");
+  await expect(graffiti.flush(object.url, session)).rejects.toThrow("offline");
   expect(await graffiti.get(object, {}, session)).toEqual(object);
-  await graffiti.flush([object.url], session);
+  await graffiti.flush(object.url, session);
   expect(put.mock.calls[1]).toEqual(put.mock.calls[0]);
   expect(await graffiti.localWrites.get(object.url)).toBeUndefined();
 });
 
-test("flush confirms selected URLs without waiting for later posts", async () => {
+test("flush confirms one URL without waiting for later posts", async () => {
   const { graffiti, put } = client();
   const first = await graffiti.post({ value: { x: 1 }, channels: [] }, session);
   const upload = Promise.withResolvers<void>();
   put.mockImplementationOnce(() => upload.promise);
-  const flushing = graffiti.flush([first.url], session);
+  const flushing = graffiti.flush(first.url, session);
   await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(1));
   const later = await graffiti.post({ value: { x: 2 }, channels: [] }, session);
   upload.resolve();
   await flushing;
   expect(put).toHaveBeenCalledTimes(1);
-  await graffiti.flush([later.url], session);
+  await graffiti.flush(later.url, session);
   expect(put).toHaveBeenCalledTimes(2);
 });
 
@@ -117,7 +117,7 @@ test("a delete accepted during upload runs after that upload", async () => {
   const object = await graffiti.post({ value: {}, channels: [] }, session);
   const upload = Promise.withResolvers<void>();
   put.mockImplementationOnce(() => upload.promise);
-  const flushing = graffiti.flush([object.url], session);
+  const flushing = graffiti.flush(object.url, session);
   await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(1));
   // Upload correctness must not depend on the discovery sequence surviving.
   await (await graffiti.localWrites.store).delete("clock");
@@ -129,15 +129,15 @@ test("a delete accepted during upload runs after that upload", async () => {
   expect(put).toHaveBeenCalledTimes(1);
 });
 
-test("media survives reopening and the configured grace period triggers upload", async () => {
+test("an object survives reopening and the configured grace period triggers upload", async () => {
   const { graffiti, put } = client(1000);
-  const url = await graffiti.postMedia({ data: new Blob(["hello"], { type: "text/plain" }) }, session);
+  const object = await graffiti.post({ value: { text: "hello" }, channels: [] }, session);
   const restored = client();
-  expect(await (await restored.graffiti.getMedia(url, {}, session)).data.text()).toBe("hello");
+  expect(await restored.graffiti.get(object, {}, session)).toEqual(object);
   await vi.advanceTimersByTimeAsync(999);
   expect(put).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
-  await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(put).toHaveBeenCalledTimes(1));
 });
 
 test("background uploads stay bounded and include writes accepted during a pass", async () => {
@@ -213,7 +213,7 @@ test("flushing a signaling URL does not read unrelated frame payloads", async ()
   const signal = await graffiti.post({ value: { payload: "offer" }, channels: ["signaling"] }, session);
   const cache = cacheStores("graffiti-outbox-v1");
   cache.match.mockClear();
-  await graffiti.flush([signal.url], session);
+  await graffiti.flush(signal.url, session);
   expect(cache.match.mock.calls.some(([key]) => new URL(key).searchParams.get("key") === frame.url)).toBe(false);
 });
 
@@ -225,7 +225,7 @@ test("scheduling preserves retry deadlines and discovery filters unrelated chann
   ]);
   expect((await page(graffiti.discover(["signaling"], {}, session))).entries).toEqual([]);
   put.mockRejectedValueOnce(new Error("offline"));
-  await expect(graffiti.flush([frame.url], session)).rejects.toThrow("offline");
+  await expect(graffiti.flush(frame.url, session)).rejects.toThrow("offline");
   expect((await graffiti.localWrites.pending())[0].due).toBe(Date.now() + 5000);
 });
 
@@ -248,7 +248,7 @@ test("continued discovery and flushing do not reread deleted frame history", asy
   await graffiti.delete(current, session);
   const removed = await page(graffiti.continueDiscover(updates.cursor, session));
   expect(removed.entries).toEqual([{ object: current, tombstone: true }]);
-  await graffiti.flush([current.url], session);
+  await graffiti.flush(current.url, session);
   expect(put).not.toHaveBeenCalled();
   expect(cache.match.mock.calls.some(([key]) => history.has(new URL(key).searchParams.get("key")!))).toBe(false);
   expect((await graffiti.localWrites.read()).writes).toEqual([]);

@@ -10,7 +10,6 @@ export type PendingWrite = {
   allowedTickets: Uint8Array[] | null;
   storageBucketKey: string;
   objectBytes: Uint8Array | null;
-  mediaBytes: Uint8Array | null;
   tombstone: boolean;
   pending: boolean;
   started: boolean;
@@ -18,7 +17,7 @@ export type PendingWrite = {
   due: number;
 };
 
-type Change = Pick<PendingWrite, "object" | "kind" | "tombstone" | "pending" | "modified">;
+type Change = Pick<PendingWrite, "object" | "tombstone" | "pending" | "modified">;
 // Discovery needs recent deletions, not an archive of every canceled frame.
 // Older cursors expire just as they do when an inbox drops cached history.
 const CHANGE_WINDOW = 1024;
@@ -43,9 +42,9 @@ export class Outbox {
   }
 
   private async journal(write: PendingWrite) {
-    const { object, kind, tombstone, pending, modified } = write;
+    const { object, tombstone, pending, modified } = write;
     try {
-      const change = { object, kind, tombstone, pending, modified };
+      const change = { object, tombstone, pending, modified };
       await (await this.changes).set(changeKey(modified), change);
       this.remember(change);
     } catch {
@@ -62,22 +61,22 @@ export class Outbox {
     return change;
   }
 
-  private async current(urls?: string[]) {
+  private async current() {
     const store = await this.store;
-    const keys = urls ?? (await store.keys()).filter(key => key !== "clock");
+    const keys = (await store.keys()).filter(key => key !== "clock");
     const records = await cacheBatch(keys, key => this.get(key), READ_CONCURRENCY);
     return records.filter((write): write is PendingWrite => write !== undefined);
   }
 
   /** Uploads depend only on pending records, never on discovery's change log. */
-  async pending(urls?: string[]) {
-    const writes = await this.current(urls);
+  async pending() {
+    const writes = await this.current();
     return writes.filter(write => write.pending).map(write => ({
       url: write.object.url, actor: write.object.actor, due: write.due,
     }));
   }
 
-  async read({ urls, since, pending, channels }: { urls?: string[]; since?: number; pending?: boolean; channels?: string[] } = {}) {
+  async read({ since, pending, channels }: { since?: number; pending?: boolean; channels?: string[] } = {}) {
     const store = await this.store;
     const clock = await store.lock(async () => (await store.get("clock") as number | undefined) ?? 0, "shared");
     let writes: Change[];
@@ -97,7 +96,7 @@ export class Outbox {
       );
       writes = [...new Map(changes.map(write => [write.object.url, write])).values()];
     } else {
-      writes = (await this.current(urls)).filter(write => write.modified <= clock);
+      writes = (await this.current()).filter(write => write.modified <= clock);
     }
     return { clock, writes: structuredClone(writes.filter(write => (!pending || write.pending) &&
       (!channels || write.object.channels.some(channel => channels.includes(channel))))) };
@@ -124,7 +123,6 @@ export class Outbox {
       // Once an upload starts, its deletion must reach the service too.
       write.pending = write.started;
       write.objectBytes = null;
-      write.mediaBytes = null;
       write.due = Date.now();
       write.modified = ((await store.get("clock") as number | undefined) ?? 0) + 1;
       await store.set("clock", write.modified);

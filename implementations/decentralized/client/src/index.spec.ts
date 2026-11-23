@@ -186,7 +186,7 @@ describe("GraffitiDecentralized Tests", () => {
     class LegacyWriter extends GraffitiDecentralized {
       protected override postRecord<Schema extends JSONSchema>(
         _kind: RecordKind | undefined,
-        ...args: [...Parameters<typeof Graffiti.prototype.post<Schema>>, Uint8Array?]
+        ...args: Parameters<typeof Graffiti.prototype.post<Schema>>
       ) {
         return super.postRecord<Schema>(undefined, ...args);
       }
