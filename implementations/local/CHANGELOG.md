@@ -1,5 +1,21 @@
 # @graffiti-garden/implementation-local
 
+## 1.7.0
+
+### Minor Changes
+
+- 8e135ed: Add `flush(url, session)` to confirm a pending object write with storage. It resolves immediately when the session has no pending write at that URL. Failed writes remain available for retry.
+  
+  Permit object write methods to resolve after durable local acceptance, retaining their final URLs. Use flush before depending on object visibility to other devices. Media methods are unchanged. Local and the existing synchronous Decentralized implementation already persist before returning, so their flush completes immediately. The queued Decentralized implementation is a separate change.
+  
+  Forward flush through the runtime, synchronization, iframe RPC, and data-guard wrappers. Extend conformance tests to flush object changes before cross-instance reads.
+
+### Patch Changes
+
+- Updated dependencies [8e135ed]
+  - @graffiti-garden/api@1.7.0
+  - @graffiti-garden/wrapper-runtime-types@0.3.0
+
 ## 1.6.0
 
 ### Minor Changes
