@@ -620,20 +620,23 @@ export class GraffitiDecentralized implements Graffiti {
   }
 
   /** Synchronize one URL, keeping a failed write retryable. */
-  flush: Graffiti["flush"] = async (url, session) => {
+  flush: Graffiti["flush"] = (...args) => this.flushWrite(...args);
+
+  private async flushWrite(url: string, session: GraffitiSession) {
     this.sessions.resolveSession(session);
     url = stripGraffitiUrlAddendums(url);
     const write = await this.outbox.get(url);
     if (write?.pending && write.object.actor === session.actor) {
       await this.outbox.sync(url, current => this.persistWrite(current));
     }
-  };
+  }
 
   private async acceptWrite(url: string, session: GraffitiSession) {
     if (!(await this.outbox.store).shared) {
       // Storage may be blocked, or this may be a Node client. Do not acknowledge
       // an in-memory write until the storage service has accepted it.
-      await this.flush(url, session);
+      // Use the internal method so the public post/delete reports errors once.
+      await this.flushWrite(url, session);
     } else {
       await this.scheduleWrites();
     }

@@ -55,7 +55,7 @@ export function publicationPinTests() {
       expect(remove).not.toHaveBeenCalled();
     });
 
-    test.each(["object", "media"])("settles and unpins failed %s publication, retaining its bytes for retry", async kind => {
+    test.each(["object", "media"])("settles and unpins failed %s publication", async kind => {
       const { graffiti, pin, unpin, put, remove } = setup();
       const failure = new Error("Pin response lost");
       let finishShared!: () => void;
@@ -66,6 +66,7 @@ export function publicationPinTests() {
       // Unpinning is best effort; a failure must not hide the original error.
       unpin.mockRejectedValueOnce(new Error("Unpin offline"));
       vi.spyOn(console, "error").mockImplementation(() => {});
+      if (kind === "media") remove.mockRejectedValueOnce(new Error("Delete offline"));
       const pending = kind === "object"
         ? graffiti.post({ value: {}, channels: [] }, { actor })
         : graffiti.postMedia({ data: new Blob(["media"]) }, { actor });
@@ -82,7 +83,12 @@ export function publicationPinTests() {
       expect(unpin).toHaveBeenCalledWith(shared, [shared], "token");
       expect(unpin).toHaveBeenCalledWith(personal, [personal], "token");
       expect(put).toHaveBeenCalledTimes(kind === "media" ? 2 : 1);
-      expect(remove).not.toHaveBeenCalled();
+      // Objects retain their queued bytes for retry; media keeps its existing rollback.
+      if (kind === "media") {
+        expect(remove.mock.calls.map(([, key]) => key).sort()).toEqual(put.mock.calls.map(([, key]) => key).sort());
+      } else {
+        expect(remove).not.toHaveBeenCalled();
+      }
     });
 
     test.each([shared, personal])("a failed required send to %s retains storage for retry without pinning", async endpoint => {
