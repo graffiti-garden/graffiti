@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graffiti streaming test</title>
+  <style>
+    :root { color-scheme: light dark; font: 16px/1.5 system-ui, sans-serif; }
+    body { max-width: 960px; margin: auto; padding: 24px 16px 60px; }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; }
+    h2 { font-size: 1.1rem; margin: 0 0 12px; }
+    p { margin: 8px 0; }
+    button, input, select { font: inherit; padding: 10px 14px; border: 1px solid #8888; border-radius: 8px; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .5; cursor: default; }
+    input { min-width: 0; flex: 1; }
+    section, article, details { border: 1px solid #8886; border-radius: 12px; padding: 16px; margin-top: 16px; }
+    .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; }
+    .muted { opacity: .7; font-size: .9rem; }
+    .videos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+    .videos article { min-width: 0; }
+    video, canvas { display: block; width: 100%; aspect-ratio: 16/9; background: #15171a; border-radius: 8px; object-fit: contain; }
+    #error { white-space: pre-wrap; color: light-dark(#a00, #ffaaaa); }
+    #identity { overflow-wrap: anywhere; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; font-size: 12px; }
+    summary { cursor: pointer; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Graffiti streaming test</h1>
+  <p>Open the same link on two devices, sign in on each, then share a camera or microphone. Either device can send and receive.</p>
+  <p class="muted">MoQ audio/video over the Graffiti API. Use headphones when both devices are nearby.</p>
+  <section aria-label="Connection">
+    <div class="row"><button id="login" disabled>Sign in</button><span id="identity">Loading libraries…</span></div>
+    <label for="channel">Channel</label>
+    <div class="row"><input id="channel" readonly><button id="copy-link">Copy test link</button></div>
+    <p id="listening" role="status">Waiting for sign-in.</p>
+  </section>
+  <div class="row">
+    <label for="mode">Share</label>
+    <select id="mode"><option value="video">Camera + microphone</option><option value="audio">Microphone only</option><option value="camera">Camera only</option></select>
+    <button id="start" disabled>Start sharing</button>
+    <button id="stop" disabled>Stop sharing</button>
+  </div>
+  <p id="publishing" role="status">Camera and microphone are off.</p>
+  <p id="error" role="alert"></p>
+  <div class="videos">
+    <article id="local-card" hidden><h2>You — local preview</h2><video id="local" muted autoplay playsinline></video></article>
+  </div>
+  <div id="remote" class="videos"></div>
+  <details>
+    <summary>Diagnostics (v12)</summary>
+    <p id="recovered"></p>
+    <label><input type="checkbox" id="preview-only"> Preview only — skip encoding and publishing</label>
+    <p id="connections">No WebRTC connections yet.</p>
+    <p id="traffic"></p>
+    <p id="outbox"></p>
+    <p id="persistence"></p>
+    <p class="muted">The demo uses the realtime wrapper over Decentralized, with a 5-second write grace period. No TURN service is configured; some network pairs may not connect directly.</p>
+    <button id="copy-log">Copy diagnostics</button>
+    <pre id="log"></pre>
+  </details>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

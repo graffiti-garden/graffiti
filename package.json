@@ -18,6 +18,7 @@
     "implementations/utils/modal",
     "implementations/local",
     "extras/realtime",
+    "extras/streaming",
     "implementations/decentralized/client",
     "wrappers/synchronize",
     "wrappers/iframe-rpc",
