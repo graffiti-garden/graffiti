@@ -8,8 +8,8 @@
 "@graffiti-garden/wrapper-data-guard": minor
 ---
 
-Add `flush(url, session)` to confirm a pending object or media write with storage. It resolves immediately when the session has no pending write at that URL. Failed writes remain available for retry.
+Add `flush(url, session)` to confirm a pending object write with storage. It resolves immediately when the session has no pending write at that URL. Failed writes remain available for retry.
 
-Permit write methods to resolve after durable local acceptance, retaining their final URLs. Use flush before depending on visibility to other devices. Local and the existing synchronous Decentralized implementation already persist before returning, so their flush completes immediately. The queued Decentralized implementation is a separate change.
+Permit object write methods to resolve after durable local acceptance, retaining their final URLs. Use flush before depending on object visibility to other devices. Media uploads and deletions continue to wait for storage confirmation; no flushMedia method is added. Local and the existing synchronous Decentralized implementation already persist before returning, so their flush completes immediately. The queued Decentralized implementation is a separate change.
 
-Forward flush through the runtime, synchronization, iframe RPC, and data-guard wrappers. Extend conformance tests to confirm object and media publication/deletion before reading from another instance.
+Forward flush through the runtime, synchronization, iframe RPC, and data-guard wrappers. Extend conformance tests to flush object changes before cross-instance reads and verify that media writes are storage-confirmed when they resolve.

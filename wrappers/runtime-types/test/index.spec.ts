@@ -128,8 +128,6 @@ describe("GraffitiRuntimeTypes", () => {
 
     await expect(wrapper.flush(objectUrl, session)).resolves.toBeUndefined();
     expect(methods.flush).toHaveBeenCalledWith(objectUrl, session);
-    await expect(wrapper.flush(mediaUrl, session)).resolves.toBeUndefined();
-    expect(methods.flush).toHaveBeenCalledWith(mediaUrl, session);
 
     await expect(wrapper.login({ actor })).resolves.toBeUndefined();
     await expect(wrapper.login({ actor, state: "request-1" })).resolves.toBeUndefined();

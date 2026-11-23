@@ -111,7 +111,7 @@ import type { JSONSchema } from "json-schema-to-ts";
  */
 export abstract class Graffiti {
   /**
-   * Synchronize a pending write at an object or media URL with the
+   * Synchronize a pending write at an object URL with the
    * implementation's storage. Await the post or deletion before flushing its URL.
    * Resolves immediately if this session has no pending write at that URL.
    * A post deleted before upload is settled without being published.
@@ -307,8 +307,7 @@ export abstract class Graffiti {
 
   /**
    * Uploads media data, such as an image or video.
-   * Resolves after durable local acceptance or storage-service confirmation,
-   * with the final URL. Use {@link flush} to confirm completion at the storage service.
+   * Resolves with the final URL once the implementation's storage confirms the upload.
    *
    * Unlike structured {@link GraffitiObjectBase | objects},
    * media is not indexed for {@link discover | `discover`y} and
@@ -334,8 +333,7 @@ export abstract class Graffiti {
 
   /**
    * Deletes media previously {@link postMedia | `post`ed} to a given URL.
-   * Resolves after durable local acceptance or storage-service confirmation.
-   * Use {@link flush} to confirm completion at the storage service.
+   * Resolves once the implementation's storage confirms the deletion.
    *
    * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
    *
