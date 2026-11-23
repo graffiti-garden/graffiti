@@ -71,9 +71,9 @@ describe("GraffitiRuntimeTypes", () => {
       ]
     > = [
       ["flush", methods.flush, [{}, session]],
-      ["flush", methods.flush, [objectUrl, session]],
-      ["flush", methods.flush, [["not a URL"], session]],
-      ["flush", methods.flush, [[objectUrl], {}]],
+      ["flush", methods.flush, [[objectUrl], session]],
+      ["flush", methods.flush, ["not a URL", session]],
+      ["flush", methods.flush, [objectUrl, {}]],
       ["login", methods.login, [actor]],
       ["login", methods.login, [{ actor: "not a URL" }]],
       ["login", methods.login, [{ state: 3 }]],
@@ -126,9 +126,8 @@ describe("GraffitiRuntimeTypes", () => {
     const postMedia = { data: blob, allowed: [actor] };
     const accept = { types: ["text/plain"], maxBytes: 100 };
 
-    await expect(wrapper.flush([], session)).resolves.toBeUndefined();
-    await expect(wrapper.flush([objectUrl, mediaUrl], session)).resolves.toBeUndefined();
-    expect(methods.flush).toHaveBeenCalledWith([objectUrl, mediaUrl], session);
+    await expect(wrapper.flush(objectUrl, session)).resolves.toBeUndefined();
+    expect(methods.flush).toHaveBeenCalledWith(objectUrl, session);
 
     await expect(wrapper.login({ actor })).resolves.toBeUndefined();
     await expect(wrapper.login({ actor, state: "request-1" })).resolves.toBeUndefined();

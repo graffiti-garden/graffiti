@@ -2,7 +2,6 @@ import { afterEach, expect, test, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encode } from "@ipld/dag-cbor";
 import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { GraffitiLocalObjects } from "@graffiti-garden/implementation-local/objects";
 import { GraffitiErrorCursorExpired, GraffitiErrorNotFound, type GraffitiObjectBase } from "@graffiti-garden/api";
@@ -19,11 +18,10 @@ function transport() {
   const identity = { request: vi.fn(), onRequest: vi.fn() };
   const changes = { send: vi.fn(async (_data: string, _options: { target: string }) => {}),
     onMessage: (fn: Handler) => { onMessage = fn; }, onReceive: (fn: Handler) => { onReceive = fn; } };
-  const media = { request: vi.fn(async () => null as Uint8Array | null), onRequest: vi.fn() };
   const ready = { send: vi.fn(async () => {}), onMessage: (fn: Handler) => { onReady = fn; } };
   return {
-    identity, changes, media,
-    makeAction: (name: string) => name === "identity" ? identity : name === "objects" ? changes : name === "ready" ? ready : media,
+    identity, changes,
+    makeAction: (name: string) => name === "identity" ? identity : name === "objects" ? changes : ready,
     getSelf: async () => ({ peerId: "self", userId: "self-key" }),
     onPeerJoin: (fn: Handler) => { onJoin = fn; },
     onPeerLeave: vi.fn(), onError: vi.fn(), leave: vi.fn(async () => {}),
@@ -235,13 +233,20 @@ test("an explicit refresh checks storage despite an ephemeral tombstone", async 
   expect(await graffiti.get(object, {}, { session, refresh: true })).toMatchObject({ value: { x: 1 } });
 });
 
-test("retrieves Blob bytes over the existing authenticated connection", async () => {
-  const { graffiti, raw, session, peer } = await setup();
-  raw.media.request.mockResolvedValue(encode({ data: new TextEncoder().encode("hello"), type: "text/plain", allowed: [session.actor] }));
-  const media = await graffiti.getMedia("test:live-blob", { types: ["text/*"], maxBytes: 5 }, session);
-  expect(media.actor).toBe(peer.actor);
-  expect(media.data.type).toBe("text/plain");
-  expect(await media.data.text()).toBe("hello");
+test("media stays in the underlying implementation even with connected peers", async () => {
+  const { graffiti, local, session } = await setup();
+  const post = vi.spyOn(local, "postMedia");
+  const get = vi.spyOn(local, "getMedia");
+  const remove = vi.spyOn(local, "deleteMedia");
+  const input = { data: new Blob(["hello"], { type: "text/plain" }) };
+  const url = await graffiti.postMedia(input, session);
+  const accept = { types: ["text/*"], maxBytes: 5 };
+  const options = { session, refresh: true };
+  expect(await (await graffiti.getMedia(url, accept, options)).data.text()).toBe("hello");
+  await graffiti.deleteMedia(url, session);
+  expect(post).toHaveBeenCalledWith(input, session);
+  expect(get).toHaveBeenCalledWith(url, accept, options);
+  expect(remove).toHaveBeenCalledWith(url, session);
 });
 
 test("one-off and infrequent discovery keep storage cursors without opening rooms", async () => {

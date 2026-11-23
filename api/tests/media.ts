@@ -9,7 +9,7 @@ import { it, expect, describe, beforeAll } from "vitest";
 import { randomString, randomUrl } from "./utils.js";
 
 export const graffitiMediaTests = (
-  useGraffiti: () => Pick<Graffiti, "postMedia" | "getMedia" | "deleteMedia" | "flush">,
+  useGraffiti: () => Pick<Graffiti, "postMedia" | "getMedia" | "deleteMedia">,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
@@ -51,20 +51,6 @@ export const graffitiMediaTests = (
         await expect(graffiti.getMedia(mediaUrl, {})).rejects.toThrow(
           GraffitiErrorNotFound,
         );
-      });
-
-      it("flush confirms media writes and deletions for another instance", async () => {
-        const writer = useGraffiti();
-        const reader = useGraffiti();
-        const data = new Blob([randomString()], { type: "text/plain" });
-        const url = await writer.postMedia({ data }, session);
-        await writer.flush([url], session);
-        expect(await (await reader.getMedia(url, {})).data.text()).toEqual(await data.text());
-
-        await writer.deleteMedia(url, session);
-        await writer.flush([url], session);
-        await expect(reader.getMedia(url, {}, { refresh: true })).rejects.toThrow(GraffitiErrorNotFound);
-        await expect(writer.flush([], session)).resolves.toBeUndefined();
       });
 
       it("acceptable type", async () => {

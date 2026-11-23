@@ -57,7 +57,7 @@ export class GraffitiRelay {
     try {
       // Graffiti requests are not abortable; a write can finish after leave.
       if (this.closed) throw new Error("The realtime room has been left.");
-      await this.graffiti.flush([object.url], this.session);
+      await this.graffiti.flush(object.url, this.session);
       if (this.closed) throw new Error("The realtime room has been left.");
       return object;
     } catch (error) {

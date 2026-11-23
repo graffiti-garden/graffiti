@@ -4,9 +4,6 @@ import {
   GraffitiErrorForbidden,
   GraffitiErrorNotFound,
   GraffitiErrorSchemaMismatch,
-  GraffitiErrorNotAcceptable,
-  GraffitiErrorTooLarge,
-  isMediaAcceptable,
   maskGraffitiObject,
   normalizeGraffitiReadOptions,
   unpackObjectUrl,
@@ -194,24 +191,6 @@ export class GraffitiRealtime extends GraffitiRuntimeTypes {
       return structuredClone(object);
     }
     return this.graffiti.get<Schema>(url, schema, options);
-  };
-
-  getMedia: Graffiti["getMedia"] = async (url, accept, options) => {
-    const { session, refresh = false } = normalizeGraffitiReadOptions(options);
-    if (accept.maxBytes !== undefined && (!Number.isSafeInteger(accept.maxBytes) || accept.maxBytes < 0)) {
-      throw new TypeError("maxBytes must be a nonnegative safe integer");
-    }
-    const account = session && this.accounts.get(session.actor);
-    for (const connection of account?.connections.values() ?? []) {
-      if (!connection.room) continue;
-      connection.used = Date.now();
-      const media = await connection.room.getMedia(url, accept, refresh);
-      if (!media) continue;
-      if (accept.maxBytes !== undefined && media.data.size > accept.maxBytes) throw new GraffitiErrorTooLarge("File size exceeds limit");
-      if (accept.types && !isMediaAcceptable(media.data.type, accept.types)) throw new GraffitiErrorNotAcceptable("Unacceptable media type");
-      return media;
-    }
-    return this.graffiti.getMedia(url, accept, options);
   };
 
   discover: Graffiti["discover"] = (channels, schema, options) =>

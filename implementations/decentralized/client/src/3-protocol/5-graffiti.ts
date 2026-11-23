@@ -534,7 +534,7 @@ export class GraffitiDecentralized implements Graffiti {
   };
 
   /** Writes already reach the storage service before resolving. */
-  flush: Graffiti["flush"] = async (_urls, session) => {
+  flush: Graffiti["flush"] = async (_url, session) => {
     this.sessions.resolveSession(session);
   };
 

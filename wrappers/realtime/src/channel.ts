@@ -6,11 +6,9 @@ import {
   maskGraffitiObject,
   type Graffiti,
   type GraffitiObjectBase,
-  type GraffitiMediaAccept,
   type GraffitiSession,
 } from "@graffiti-garden/api";
 import { GraffitiRelay, joinTransport } from "./signaling.js";
-import { encode, decode } from "@ipld/dag-cbor";
 
 export type Change = { object: GraffitiObjectBase; tombstone?: true };
 type Peer = { actor?: string; ready: boolean; sending?: Promise<void> };
@@ -25,7 +23,6 @@ export class Channel {
   private relay: GraffitiRelay;
   private room;
   private changes;
-  private media;
   private peers = new Map<string, Peer>();
   private closed = false;
 
@@ -42,7 +39,6 @@ export class Channel {
     const identity = this.room.makeAction<null, string>("identity", { kind: "request" });
     const ready = this.room.makeAction<null>("ready");
     this.changes = this.room.makeAction<string>("objects");
-    this.media = this.room.makeAction<string, Uint8Array | null>("media", { kind: "request" });
     const validate = compileGraffitiObjectSchema(GraffitiObjectJSONSchema);
     void validate.catch(report);
     let binding: Promise<GraffitiObjectBase> | undefined;
@@ -115,20 +111,6 @@ export class Channel {
           ...(change.tombstone ? { tombstone: true } : {}) });
       } catch (error) { report(error); }
     });
-    this.media.onRequest(async (request, { peerId }) => {
-      const actor = this.peers.get(peerId)?.actor;
-      if (!actor || this.closed) return null;
-      const { url, accept, refresh } = JSON.parse(request) as { url: string; accept: GraffitiMediaAccept; refresh: boolean };
-      try {
-        const media = await graffiti.getMedia(url, accept, { session, refresh });
-        if (media.actor !== session.actor || (Array.isArray(media.allowed) &&
-            actor !== media.actor && !media.allowed.includes(actor))) return null;
-        return encode({
-          data: new Uint8Array(await media.data.arrayBuffer()), type: media.data.type,
-          allowed: Array.isArray(media.allowed) ? (actor === media.actor ? media.allowed : [actor]) : null,
-        });
-      } catch { return null; } // A peer must not learn whether an inaccessible URL exists.
-    });
   }
 
   private async sendTo(change: Change, peerId: string, actor: string) {
@@ -152,24 +134,6 @@ export class Channel {
       // No queue behind verification or a slow connection. New live changes
       // resume as soon as this peer drains; durable delivery belongs to storage.
       if (peer.actor && peer.ready && !peer.sending) void this.deliver(change, peerId, peer);
-    }
-  }
-
-  async getMedia(url: string, accept: GraffitiMediaAccept, refresh: boolean) {
-    for (const [peerId, peer] of this.peers) {
-      const actor = peer.actor;
-      if (!actor || this.closed) continue;
-      try {
-        const bytes = await this.media.request(JSON.stringify({ url, accept, refresh }), { target: peerId, timeoutMs: 2000 });
-        if (!bytes) continue;
-        const value = decode<{ data: Uint8Array; type: string; allowed: string[] | null }>(bytes);
-        if (!(value.data instanceof Uint8Array) || typeof value.type !== "string" ||
-            (value.allowed !== null && (!Array.isArray(value.allowed) ||
-              !value.allowed.every(actor => typeof actor === "string") ||
-              (actor !== this.session.actor && !value.allowed.includes(this.session.actor))))) continue;
-        return { data: new Blob([value.data.slice()], { type: value.type }), actor,
-          ...(value.allowed === null ? {} : { allowed: value.allowed }) };
-      } catch (error) { this.report(error); }
     }
   }
 
