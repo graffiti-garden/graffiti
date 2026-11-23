@@ -115,19 +115,25 @@ export function discoveryErrorTests() {
         vi.mocked(fetch).mockResolvedValueOnce(inboxPage([first.message, second.message]));
       }
       const failure = new TypeError("Connection lost");
-      const read = vi.spyOn(graffiti.services.buckets, "get")
-        .mockRejectedValueOnce(failure)
-        .mockResolvedValueOnce(second.bytes)
-        .mockResolvedValue(first.bytes);
+      const payloads = new Map([first, second, third].map(({ message, bytes }) => [message.id, bytes]));
+      let failed = false;
+      const read = vi.spyOn(graffiti.services.buckets, "get").mockImplementation(async (_endpoint, key) => {
+        if (key === first.message.id && !failed) {
+          failed = true;
+          throw failure;
+        }
+        return payloads.get(key)!;
+      });
       const result = await collectDiscovery(cursor
         ? graffiti.continueDiscover<{}>(cursor)
         : graffiti.discover<{}>([channel], {}));
 
-      // Report the failed object in place, then continue the same inbox.
-      expect(result.entries).toEqual([
+      // Discovery does not guarantee order; reads may complete independently.
+      expect(result.entries).toHaveLength(2);
+      expect(result.entries).toEqual(expect.arrayContaining([
         { error: expect.objectContaining({ cause: failure }), origin: inboxEndpoint },
         { object: second.message.m.o },
-      ]);
+      ]));
       expect(read).toHaveBeenCalledTimes(2); // No retry during this discovery.
       expect(JSON.parse(checkpoint(result.cursor).cursor).numSeen).toBe(2);
       expect(checkpoint(result.cursor).pending).toEqual([
@@ -136,12 +142,12 @@ export function discoveryErrorTests() {
       // A poll before the retry is due still returns new objects and completes
       // without waiting or replaying the already delivered second object.
       vi.mocked(fetch).mockResolvedValueOnce(inboxPage([third.message]));
-      read.mockResolvedValueOnce(third.bytes);
       const deferred = await collectDiscovery(graffiti.continueDiscover<{}>(result.cursor));
-      expect(deferred.entries).toEqual([
+      expect(deferred.entries).toHaveLength(2);
+      expect(deferred.entries).toEqual(expect.arrayContaining([
         { object: third.message.m.o },
         { error: expect.any(Error), origin: inboxEndpoint },
-      ]);
+      ]));
       expect(checkpoint(deferred.cursor).pending).toEqual(checkpoint(result.cursor).pending);
       expect(read).toHaveBeenCalledTimes(3);
 
@@ -196,8 +202,9 @@ export function discoveryErrorTests() {
       // The failed retries are cooling down, so the next poll can attempt the
       // two previously deferred reads. No messages are lost to the retry budget.
       cursor = await finishDiscovery(graffiti.continueDiscover<{}>(cursor));
-      expect(read.mock.calls.slice(-2).map(([, key]) => key)).toEqual(["32", "33"]);
       expect(read).toHaveBeenCalledTimes(34 + 34);
+      expect(new Set(read.mock.calls.slice(34).map(([, key]) => key)))
+        .toEqual(new Set(announcements.map(({ message }) => message.id)));
       expect(checkpoint(cursor).pending).toHaveLength(34);
     });
 
