@@ -36,6 +36,8 @@ class GraffitiLocal_ implements Graffiti {
   post: Graffiti["post"];
   get: Graffiti["get"];
   delete: Graffiti["delete"];
+  /** Local writes have reached their storage before their promises resolve. */
+  flush: Graffiti["flush"] = async () => {};
   discover: Graffiti["discover"];
   continueDiscover: Graffiti["continueDiscover"];
 

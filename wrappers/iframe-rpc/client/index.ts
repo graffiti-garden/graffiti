@@ -49,6 +49,7 @@ const simpleMethods = [
   "post",
   "get",
   "delete",
+  "flush",
   "deleteMedia",
   "login",
   "logout",

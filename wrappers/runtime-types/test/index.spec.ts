@@ -45,6 +45,7 @@ function createSubject() {
     post: vi.fn().mockResolvedValue(object),
     get: vi.fn().mockResolvedValue(object),
     delete: vi.fn().mockResolvedValue(object),
+    flush: vi.fn().mockResolvedValue(undefined),
     postMedia: vi.fn().mockResolvedValue(mediaUrl),
     getMedia: vi.fn().mockResolvedValue(media),
     deleteMedia: vi.fn().mockResolvedValue(undefined),
@@ -69,6 +70,10 @@ describe("GraffitiRuntimeTypes", () => {
         unknown[],
       ]
     > = [
+      ["flush", methods.flush, [{}, session]],
+      ["flush", methods.flush, [[objectUrl], session]],
+      ["flush", methods.flush, ["not a URL", session]],
+      ["flush", methods.flush, [objectUrl, {}]],
       ["login", methods.login, [actor]],
       ["login", methods.login, [{ actor: "not a URL" }]],
       ["login", methods.login, [{ state: 3 }]],
@@ -120,6 +125,9 @@ describe("GraffitiRuntimeTypes", () => {
     const blob = new Blob(["hello"], { type: "text/plain" });
     const postMedia = { data: blob, allowed: [actor] };
     const accept = { types: ["text/plain"], maxBytes: 100 };
+
+    await expect(wrapper.flush(objectUrl, session)).resolves.toBeUndefined();
+    expect(methods.flush).toHaveBeenCalledWith(objectUrl, session);
 
     await expect(wrapper.login({ actor })).resolves.toBeUndefined();
     await expect(wrapper.login({ actor, state: "request-1" })).resolves.toBeUndefined();

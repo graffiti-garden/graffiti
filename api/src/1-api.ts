@@ -113,6 +113,11 @@ export abstract class Graffiti {
   /**
    * Creates a new {@link GraffitiObjectBase | object}.
    *
+   * Resolves optimistically once its {@link GraffitiObjectBase.url | `url`} and
+   * {@link GraffitiObjectBase.actor | `actor`} have been assigned, but possibly
+   * before it has been stored remotely. Other devices may not see it yet.
+   * Use {@link flush} when remote storage confirmation is needed.
+   *
    * @returns Returns the object that has been posted, complete with its
    * assigned {@link GraffitiObjectBase.url | `url`} and
    * {@link GraffitiObjectBase.actor | `actor`}.
@@ -185,6 +190,10 @@ export abstract class Graffiti {
    * The deleting {@link GraffitiObjectBase.actor | `actor`} must be the same as the
    * `actor` that created the object.
    *
+   * Resolves optimistically, possibly before the deletion has been acknowledged
+   * by remote storage. Other devices may still see the object.
+   * Use {@link flush} when remote storage confirmation is needed.
+   *
    * @throws {@link GraffitiErrorNotFound} if the object does not exist, has already been deleted,
    * or the actor is not {@link GraffitiObjectBase.allowed | `allowed`} to access it.
    *
@@ -204,6 +213,31 @@ export abstract class Graffiti {
      */
     session: GraffitiSession,
   ): Promise<GraffitiObjectBase>;
+
+  /**
+   * Await confirmation from remote storage that a pending
+   * {@link post | `post`} or {@link delete | `delete`} has completed
+   * successfully.
+   *
+   * Await the preceding post or deletion before calling flush.
+   *
+   * If the flush fails (e.g. due to a network error), it can
+   * be retried without re-posting or re-deleting the object.
+   *
+   * @group 1 - Single-Object Methods
+   */
+  abstract flush(
+    /**
+     * The location of the object to await the write acknowledgement for.
+     * If there is no pending write at that URL, flush resolves immediately.
+     */
+    url: string,
+    /**
+     * An implementation-specific object with information to authenticate the
+     * {@link GraffitiObjectBase.actor | `actor`}.
+     */
+    session: GraffitiSession
+  ): Promise<void>;
 
   /**
    * Discovers objects created by any actor that are contained

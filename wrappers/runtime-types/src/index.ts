@@ -123,6 +123,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
     return this.graffiti.delete(...typedArgs);
   };
 
+  flush: Graffiti["flush"] = (...args) => {
+    const typedArgs = tuple([url(), GraffitiSessionSchema]).parse(args);
+    return this.graffiti.flush(...typedArgs);
+  };
+
   postMedia: Graffiti["postMedia"] = (...args) => {
     const typedArgs = tuple([
       GraffitiPostMediaSchema,

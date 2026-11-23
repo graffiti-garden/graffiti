@@ -30,6 +30,7 @@ const simpleMethods = [
   "post",
   "get",
   "delete",
+  "flush",
   "deleteMedia",
   "actorToHandle",
   "handleToActor",

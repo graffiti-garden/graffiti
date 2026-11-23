@@ -14,7 +14,7 @@ import { randomString, randomUrl } from "./utils.js";
 import { randomPostObject } from "@graffiti-garden/api/tests";
 
 export const graffitiCRUDTests = (
-  useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete">,
+  useGraffiti: () => Pick<Graffiti, "post" | "get" | "delete" | "flush">,
   useSession1: () => GraffitiSession | Promise<GraffitiSession>,
   useSession2: () => GraffitiSession | Promise<GraffitiSession>,
 ) => {
@@ -328,6 +328,10 @@ export const graffitiCRUDTests = (
         const posted = await graffiti1.post<{}>(prepost, session1);
 
         const gotten1 = await graffiti1.get(posted, {}, { session: session1 });
+
+        // Flush before getting from graffiti2 to ensure that
+        // the post has propagated to the other instance.
+        await graffiti1.flush(posted.url, session1);
         const gotten2 = await graffiti2.get(posted, {}, { session: session1 });
         expect(gotten1).toEqual(posted);
         expect(gotten2).toEqual(posted);
@@ -338,9 +342,11 @@ export const graffitiCRUDTests = (
           GraffitiErrorNotFound,
         );
 
-        // Wait for "labels" to propogate
+        // Wait for "labels" to propagate
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
+        // Flush to ensure that the delete has propagated to the other instance.
+        await graffiti1.flush(posted.url, session1);
         // Since these are different graffiti instances, a refresh may
         // be needed to see the deletion.
         await expect(graffiti2.get(posted, {}, { session: session1, refresh: true })).rejects.toThrow(
