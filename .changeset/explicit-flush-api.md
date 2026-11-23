@@ -1,5 +1,5 @@
 ---
-"@graffiti-garden/api": major
+"@graffiti-garden/api": minor
 "@graffiti-garden/implementation-local": minor
 "@graffiti-garden/implementation-decentralized": minor
 "@graffiti-garden/wrapper-runtime-types": minor

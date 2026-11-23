@@ -68,11 +68,6 @@ export class GraffitiRuntimeTypes implements Graffiti {
     this.sessionEvents = this.graffiti.sessionEvents;
   }
 
-  flush: Graffiti["flush"] = (...args) => {
-    const typedArgs = tuple([url(), GraffitiSessionSchema]).parse(args);
-    return this.graffiti.flush(...typedArgs);
-  };
-
   login: Graffiti["login"] = (...args) => {
     const typedArgs = tuple([
       optional(extend(requestOptionsSchema, { actor: optional(url()) })),
@@ -126,6 +121,11 @@ export class GraffitiRuntimeTypes implements Graffiti {
       GraffitiSessionSchema,
     ]).parse(args);
     return this.graffiti.delete(...typedArgs);
+  };
+
+  flush: Graffiti["flush"] = (...args) => {
+    const typedArgs = tuple([url(), GraffitiSessionSchema]).parse(args);
+    return this.graffiti.flush(...typedArgs);
   };
 
   postMedia: Graffiti["postMedia"] = (...args) => {

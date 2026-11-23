@@ -46,10 +46,10 @@ type RPCMethods = MethodsOf<Graffiti> & {
 };
 
 const simpleMethods = [
-  "flush",
   "post",
   "get",
   "delete",
+  "flush",
   "deleteMedia",
   "login",
   "logout",

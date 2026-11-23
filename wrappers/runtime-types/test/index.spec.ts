@@ -38,7 +38,6 @@ function createSubject() {
   const continueStream = stream();
   const methods = {
     sessionEvents,
-    flush: vi.fn().mockResolvedValue(undefined),
     login: vi.fn().mockResolvedValue(undefined),
     logout: vi.fn().mockResolvedValue(undefined),
     handleToActor: vi.fn().mockResolvedValue(actor),
@@ -46,6 +45,7 @@ function createSubject() {
     post: vi.fn().mockResolvedValue(object),
     get: vi.fn().mockResolvedValue(object),
     delete: vi.fn().mockResolvedValue(object),
+    flush: vi.fn().mockResolvedValue(undefined),
     postMedia: vi.fn().mockResolvedValue(mediaUrl),
     getMedia: vi.fn().mockResolvedValue(media),
     deleteMedia: vi.fn().mockResolvedValue(undefined),

@@ -27,10 +27,10 @@ type SerializedPostMedia = Omit<GraffitiPostMedia, "data"> & {
 };
 
 const simpleMethods = [
-  "flush",
   "post",
   "get",
   "delete",
+  "flush",
   "deleteMedia",
   "actorToHandle",
   "handleToActor",
