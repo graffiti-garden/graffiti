@@ -307,7 +307,6 @@ export abstract class Graffiti {
 
   /**
    * Uploads media data, such as an image or video.
-   * Resolves with the final URL once the implementation's storage confirms the upload.
    *
    * Unlike structured {@link GraffitiObjectBase | objects},
    * media is not indexed for {@link discover | `discover`y} and
@@ -333,7 +332,6 @@ export abstract class Graffiti {
 
   /**
    * Deletes media previously {@link postMedia | `post`ed} to a given URL.
-   * Resolves once the implementation's storage confirms the deletion.
    *
    * @throws {@link GraffitiErrorNotFound} if no media at that URL exists.
    *

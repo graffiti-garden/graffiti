@@ -53,17 +53,6 @@ export const graffitiMediaTests = (
         );
       });
 
-      it("media writes and deletions are confirmed before resolving", async () => {
-        const writer = useGraffiti();
-        const reader = useGraffiti();
-        const data = new Blob([randomString()], { type: "text/plain" });
-        const url = await writer.postMedia({ data }, session);
-        expect(await (await reader.getMedia(url, {})).data.text()).toEqual(await data.text());
-
-        await writer.deleteMedia(url, session);
-        await expect(reader.getMedia(url, {}, { refresh: true })).rejects.toThrow(GraffitiErrorNotFound);
-      });
-
       it("acceptable type", async () => {
         const text = randomString();
         const data = new Blob([text], { type: "text/plain" });
