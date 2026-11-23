@@ -16,7 +16,7 @@ The heart of Graffiti is its [API](./api/), which defines the methods that can b
 
 "Below" the API, this monorepo provides two [implementations](./implementations/): a [local implementation](./implementations/local/) for testing and development, and a [decentralized implementation](./implementations/decentralized/) for production. The decentralized implementation defines a client-server protocol that allows clients to retrieve data from multiple generic Graffiti servers so that each user can store and serve their data from the server of their choice.
 
-"Above" the API, this monorepo provides several utilities to make it easier to build apps which we classify as wrappers and plugins. [Wrappers](./wrappers/) add layers of functionality to an existing implementation such as [runtime type-checking](./wrappers/runtime-types/) and [inter-app synchronization](./wrappers/synchronize/). [Plugins](./plugins/) integrate Graffiti with frontend frameworks---currently only [Vue](./plugins/vue/) is supported but other frameworks like React and Solid.js will be available in the near future..
+"Above" the API, this monorepo provides several utilities to make it easier to build apps which we classify as wrappers and plugins. [Wrappers](./wrappers/) add layers of functionality to an existing implementation such as [runtime type-checking](./wrappers/runtime-types/) and [inter-app synchronization](./wrappers/synchronize/), and [live peer delivery](./wrappers/realtime/). [Plugins](./plugins/) integrate Graffiti with frontend frameworks---currently only [Vue](./plugins/vue/) is supported but other frameworks like React and Solid.js will be available in the near future..
 
 The repository also contains three relatively simple example apps that demonstrate how the API could be used to create apps like [Twitter](./examples/glitter/), [Messenger](./examples/parallax/), and [Wikipedia](./examples/wikiffiti/).
 
@@ -56,7 +56,7 @@ The repository also contains three relatively simple example apps that demonstra
                       └──────────┘ └──────────┘ └──────────┘
 ```
 
-[Extras](./extras/) provide additional capabilities alongside the Graffiti API. [Realtime](./extras/realtime/) uses Graffiti for signaling to set up direct peer-to-peer connections between clients for synchronous, ephemeral, low-latency, and high-bandwidth communication.
+[Extras](./extras/) provide additional capabilities alongside the Graffiti API.
 
 ## Development
 

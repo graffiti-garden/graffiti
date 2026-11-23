@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graffiti live cursors</title>
+<script type="importmap">
+{ "imports": { "vue": "/vue/vue.esm-browser.prod.js", "@graffiti-garden/wrapper-vue": "/vue-plugin/plugin.mjs" } }
+</script>
+<style>
+  body { max-width: 960px; margin: 24px auto; padding: 0 16px; font: 16px system-ui; }
+  #pad { position: relative; height: 70vh; overflow: hidden; touch-action: none;
+    background: #f1f5f9; border: 1px solid #94a3b8; border-radius: 12px; }
+  .cursor { position: absolute; pointer-events: none; color: #4338ca; white-space: nowrap; }
+</style>
+<div id="app">Loading…</div>
+<template id="app-template">
+  <h1>Live cursors</h1>
+  <p>Open this link on two devices, sign in, then move or drag inside the box.</p>
+  <p v-if="session === undefined">Checking your account…</p>
+  <button v-else-if="!session" @click="graffiti.login().catch(showError)">Sign in</button>
+  <button v-else @click="graffiti.logout(session).catch(showError)">Sign out</button>
+  <button @click="copyLink">Copy room link</button>
+  <p v-if="error" role="alert">{{ error }}</p>
+  <graffiti-discover v-if="session" :channels="[channel]" :schema="schema" :session="session" autopoll
+    v-slot="{ objects, error, isFirstPoll }">
+    <p v-if="error" role="status">{{ error.message }}. Retrying…</p>
+    <p v-else-if="isFirstPoll">Connecting…</p>
+    <div id="pad" @pointermove="move" @pointerdown="move">
+      <span v-for="cursor in latest(objects)" :key="cursor.actor + cursor.value.device" class="cursor"
+        :style="{ left: `${cursor.value.x * 100}%`, top: `${cursor.value.y * 100}%` }">
+        ➤ <graffiti-actor-to-handle :actor="cursor.actor"></graffiti-actor-to-handle>
+      </span>
+    </div>
+  </graffiti-discover>
+</template>
+<script type="module">
+import { createApp, ref, onUnmounted } from "vue";
+import { GraffitiPlugin, useGraffiti, useGraffitiSession } from "@graffiti-garden/wrapper-vue";
+import { GraffitiDecentralized } from "/decentralized/index.js";
+import { GraffitiRealtime } from "/realtime/index.js";
+const realtime = new GraffitiRealtime(new GraffitiDecentralized());
+// This standalone demo shares a channel through its URL; Social.Wiki supplies routing and imports.
+const channel = location.hash.slice(1) || `cursors:${crypto.randomUUID()}`;
+location.hash = channel;
+const schema = { properties: { value: { properties: {
+  x: { type: "number", minimum: 0, maximum: 1 }, y: { type: "number", minimum: 0, maximum: 1 },
+  device: { type: "string" }, expires: { type: "number" },
+}, required: ["x", "y", "device", "expires"] } } };
+createApp({
+  template: "#app-template",
+  setup() {
+    const graffiti = useGraffiti(), session = useGraffitiSession();
+    const now = ref(Date.now()), error = ref("");
+    const device = crypto.randomUUID();
+    const showError = reason => { error.value = reason.message; };
+    let position, previous, stopped = false;
+    const clock = setInterval(() => { now.value = Date.now(); }, 250);
+    onUnmounted(() => { stopped = true; clearInterval(clock); });
+    function move(event) {
+      const box = event.currentTarget.getBoundingClientRect();
+      position = { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height };
+    }
+    // Derive the newest unexpired position from discovery, without a second peer cache.
+    function latest(objects) {
+      const active = objects.filter(({ value }) => value.device !== device && value.expires > now.value);
+      return active.filter(object => !active.some(other => other.actor === object.actor &&
+        other.value.device === object.value.device && other.value.expires > object.value.expires));
+    }
+    async function publish() {
+      while (!stopped) {
+        const author = session.value;
+        try {
+          if (author && position) {
+            const next = await graffiti.post({ value: { ...position, device, expires: Date.now() + 3000 }, channels: [channel] }, author);
+            const old = previous;
+            previous = { url: next.url, session: author };
+            if (old) await graffiti.delete(old.url, old.session);
+          } else if (previous) {
+            const old = previous;
+            previous = undefined;
+            await graffiti.delete(old.url, old.session);
+          }
+        } catch (reason) { showError(reason); }
+        // Limit publishing to 20 Hz. Discovery is paced by Graffiti, not the app.
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      if (previous) await graffiti.delete(previous.url, previous.session);
+    }
+    void publish().catch(showError);
+    const copyLink = () => navigator.clipboard.writeText(location.href).catch(showError);
+    return { graffiti, session, channel, schema, error, move, latest, copyLink, showError };
+  },
+}).use(GraffitiPlugin, { graffiti: realtime }).mount("#app");
+</script>
+</html>

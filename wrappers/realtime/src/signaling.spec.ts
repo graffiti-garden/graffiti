@@ -122,6 +122,57 @@ describe("Graffiti signaling", () => {
     expect(report).toHaveBeenCalledWith(error);
   });
 
+  it("removes a write that completes after the relay was closed", async () => {
+    const { relay, graffiti } = await setup();
+    const posted = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const post = graffiti.post.bind(graffiti);
+    let url = "";
+    vi.spyOn(graffiti, "post").mockImplementationOnce(async (...args) => {
+      const object = await post(...args);
+      url = object.url;
+      posted.resolve();
+      await release.promise;
+      return object;
+    });
+    const pending = relay.post({ identity: true }, []);
+    const rejected = expect(pending).rejects.toThrow("left");
+    await posted.promise;
+    await relay.close();
+    release.resolve();
+    await rejected;
+    await expect(graffiti.get(url, {}, session)).rejects.toBeInstanceOf(GraffitiErrorNotFound);
+  });
+
+  it("finishes an async offer handler before delivering its candidates", async () => {
+    const { relay, graffiti, report } = await setup();
+    const offer = await relay.post({ protocol: PROTOCOL, payload: "offer", expires: Date.now() + 1000 }, ["realtime:peer"]);
+    const candidate = await relay.post({ protocol: PROTOCOL, payload: "candidate", expires: Date.now() + 1000 }, ["realtime:peer"]);
+    graffiti.discover = async function* () {
+      yield { object: offer };
+      yield { object: candidate };
+      return { cursor: "unused" };
+    } as typeof graffiti.discover;
+    const started = Promise.withResolvers<void>();
+    const decrypted = Promise.withResolvers<void>();
+    let ready = false;
+    const receive = vi.fn(async (_topic, payload) => {
+      if (payload === "offer") {
+        started.resolve();
+        await decrypted.promise;
+        ready = true;
+      } else if (!ready) throw new Error("Candidate arrived before the peer existed");
+    });
+    const stop = relay.subscribe("peer", receive);
+    await started.promise;
+    // Let all independently scheduled callbacks run while offer processing waits.
+    await new Promise(resolve => setTimeout(resolve, 10));
+    decrypted.resolve();
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    stop();
+    expect(report).not.toHaveBeenCalled();
+  });
+
   it("expires signaling records while retaining identity until leave", async () => {
     const { relay, graffiti } = await setup();
     const signal = await relay.post(
