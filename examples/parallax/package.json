@@ -12,8 +12,8 @@
   "author": "Theia Henderson",
   "license": "GPL-3.0-or-later",
   "dependencies": {
-    "@graffiti-garden/api": "^1.6.0",
-    "@graffiti-garden/implementation-decentralized": "^0.6.1",
+    "@graffiti-garden/api": "^1.7.0",
+    "@graffiti-garden/implementation-decentralized": "^0.7.0",
     "@graffiti-garden/wrapper-vue": "^1.5.1",
     "vue": "^3.5.38",
     "vue-router": "^5.1.0"

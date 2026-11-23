@@ -1,5 +1,42 @@
 # @graffiti-garden/implementation-decentralized
 
+## 0.7.0
+
+### Minor Changes
+
+- 8e135ed: Add `flush(url, session)` to confirm a pending object write with storage. It resolves immediately when the session has no pending write at that URL. Failed writes remain available for retry.
+  
+  Permit object write methods to resolve after durable local acceptance, retaining their final URLs. Use flush before depending on object visibility to other devices. Media methods are unchanged. Local and the existing synchronous Decentralized implementation already persist before returning, so their flush completes immediately. The queued Decentralized implementation is a separate change.
+  
+  Forward flush through the runtime, synchronization, iframe RPC, and data-guard wrappers. Extend conformance tests to flush object changes before cross-instance reads.
+
+### Patch Changes
+
+- 471bdb7: Expire successful DID lookups after one hour so clients learn rotated service endpoints. Concurrent lookups still share one request, failures remain retryable, and storage errors do not bypass the DID cache.
+- 05b4619: Report object validation failures and temporary DID/storage read failures as discovery errors while continuing the same inbox. Advance discovery checkpoints while retaining announcements once in a shared message store; Graffiti keeps reader-scoped verification metadata and retry references. Later polls retry only due reads with capped backoff, without replaying healthy results or waiting for retry timers. Temporary failures never mark objects invalid or deleted. Verification and getter caching no longer depend on inbox labels or private HTTP-client caches. Single-object get and delete operations propagate read errors. The public API is unchanged; older discovery cursors expire and must be restarted.
+- 8f23383: Decode inbox query and export responses in the HTTP service. Apply the existing initial-page failure throttle to interrupted bodies, invalid CBOR, and malformed responses as well as request failures, preventing rapid polling loops without advancing the cached cursor.
+- 8d6c71f: Accept the authenticated account's pin status (`p`) in inbox query/export results. Keep this account-specific metadata out of the shared announcement cache. Servers always return the new field; deploy only after clients accept it, since older clients reject unknown fields. Automatic pinning and the public Graffiti API are unchanged.
+- bfe4723: Back up saved browser logins in Secure, partitioned cookies so a site can restore
+  the same login after Safari discards iframe localStorage, without requesting
+  cross-site cookie access again. Shared cookies still propagate logout when
+  available, and unauthorized responses clear the saved copy as before.
+  
+  Keep localStorage for HTTP, blocked cookies, and records exceeding the cookie size
+  limit. Oversized replacements invalidate the old cookie rather than restoring
+  stale credentials. No server or public API changes are required.
+- d69651a: Store discovery history and verification state in the Cache API so Safari can
+  retain them when it discards iframe IndexedDB on browser exit. Cached records
+  remain partitioned by embedding site. Web Locks preserve concurrent update
+  ordering, with in-memory storage when browser caching is unavailable.
+  
+  Existing IndexedDB caches are not migrated; the first read refetches the data.
+  Public APIs, servers, and the data guard are unchanged.
+- fd06fe5: Await the author's personal and shared inbox pins before publishing objects or media. Failed required sends or pins trigger best-effort cleanup of pins and uploaded data. Sending to other actors' personal inboxes remains unauthenticated and best effort. Requires inbox servers with pin/unpin support; the public Graffiti API is unchanged.
+- 6b50468: Bound small storage validation requests, including response bodies, to 30 seconds. Apply streaming byte limits to batched responses as well as individual reads, preserving compressed-body support and the existing large-media read policy.
+- Updated dependencies [8e135ed]
+  - @graffiti-garden/api@1.7.0
+  - @graffiti-garden/wrapper-runtime-types@0.3.0
+
 ## 0.6.1
 
 ### Patch Changes
