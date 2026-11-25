@@ -43,13 +43,13 @@
     "@cloudflare/workers-types": "^5.20260830.1",
     "@types/http-proxy": "^1.17.17",
     "@vitejs/plugin-basic-ssl": "2.3.0",
-    "@vitejs/plugin-vue": "6.0.8",
-    "@vue/typescript-plugin": "3.3.11",
+    "@vitejs/plugin-vue": "6.0.11",
+    "@vue/typescript-plugin": "3.3.14",
     "concurrently": "^10.0.5",
     "http-proxy": "^1.18.1",
     "typescript": "7.0.2",
-    "vite": "8.2.2",
-    "vue-tsc": "3.3.11",
+    "vite": "8.3.8",
+    "vue-tsc": "3.3.14",
     "wrangler": "^4.59.3"
   }
 }
